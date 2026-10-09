@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Opções do imagexex. Title ID e a seção com nome/ícone vêm da linha de comando (Makefile).
+     Nunca pôr <dvdxgd2/> em mediatypes: o console recusa o .xex fora de um disco de jogo. -->
+<xex>
+  <format>
+    <compressed/>
+  </format>
+  <mediatypes>
+    <harddisk/>
+    <usbmass/>
+    <network/>
+    <allpackages/>
+  </mediatypes>
+</xex>
