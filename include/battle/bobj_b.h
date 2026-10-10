@@ -39,8 +39,14 @@ typedef struct BObjModel {
 
 /* The same header for the one byte the original reads as a plain char (bit 0 of it is flags bit 24). */
 typedef struct BObjModelBytes {
-    /* 0x00 */ u8 unk00[0xF];
+#ifdef PORT_BIG_ENDIAN /* flags is a u32 in the file: on a big-endian host its top byte comes first */
+    /* 0x00 */ u8 pad00[0xC];
+    /* 0x0C */ char flagsTop;
+    /* 0x0D */ u8 pad0D[3];
+#else
+    /* 0x00 */ u8 pad00[0xF];
     /* 0x0F */ char flagsTop;
+#endif
 } BObjModelBytes;
 
 #define BOBJ_MODEL_FADE 0x1            /* distance fade: object flag 8 at init */

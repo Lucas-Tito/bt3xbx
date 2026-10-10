@@ -21,6 +21,7 @@ PERMUTADAS = {
     "OtPrim": "include/sys/gfx_ot.h: etiqueta DMA gravada como u32, qwc lido como u16",
     "EftPart9Arg": "include/battle/eft_x.h: objId gravado como s32 pelo criador, lido como u8",
     "BtlCapiBPose": "include/battle/btl_capi_b.h: groundFlags gravado como s32, lido como campo de bits de u8",
+    "BObjModelBytes": "include/battle/bobj_b.h: flags do cabeçalho do modelo (u32 no arquivo), byte alto lido como char",
 }
 DIE = re.compile(r"^(0x[0-9a-f]+):(\s+)(DW_TAG_\w+|NULL)")
 ATTR = re.compile(r"^\s+(DW_AT_\w+)\s+\((.*)\)\s*$")
