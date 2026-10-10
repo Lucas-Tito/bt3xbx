@@ -309,3 +309,23 @@ Aberto:
 
 Resultado nos quatro arquivos de personagem da luta de demonstração (01473, 01481, 01793, 01801): cobertura
 de 100% dos bytes, e as 223.200 posições que o rastreio viu batem com a largura do conversor.
+
+## 13. Tabelas do executável: tipagem estática gerada no build, aplicada na carga (10/10/2026)
+
+As tabelas de dados do executável chegam little-endian do SLUS do usuário (`Port_LoadGameData` as copia para o
+esqueleto `port/data` na partida). O tipo de cada posição sai das declarações C da decomp (AST do clang de todos os
+`.i`, layout pelo DWARF de uma sonda compilada com as flags da build): `port/x360/tools/elftipos.py`,
+projeto e resultados em `docs/x360/formatos/elf.md`.
+
+- **Gerado no build, sem bytes do jogo:** o mapa sai idêntico rodado sobre o esqueleto versionado do upstream e
+  sobre as tabelas do usuário (49.629 posições): depende só de rótulos, ponteiros e código.
+- **Aplicado na carga:** em `Port_LoadGameData`, depois da cópia e da conferência do hash (que segue sobre os bytes
+  originais), cada posição troca de ordem pela largura. Recusado: converter no instalador (seria um segundo formato
+  em disco e o hash teria de mudar).
+- **Só o vivo:** rótulos que o C do port não alcança (tabelas da Sony, do CRI e da libc usadas só pelo assembly não
+  compilado) ficam como vieram; o build deve falhar se um rótulo vivo ficar sem tipo.
+- **Contra o rastreio:** 1.490 diretivas concordam, nenhuma discorda, e 494 diretivas vivas que a luta não leu
+  sairiam erradas no 360 sem isso.
+
+Em aberto: o esqueleto no `cl`/`link` do XDK (F2), o microcódigo da VU1 como u32 e o u64 de `TexBltPacket` (F3), o
+layout contra o compilador do 360, e declarar no C os poucos rótulos que só o splat tipou.
