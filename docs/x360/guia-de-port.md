@@ -98,6 +98,7 @@ própria só para isso). Para cá só volta texto.
 | `headless/inverter.c` | aplica o mapa na PPC (na leitura do arquivo e na saída da descompressão) |
 | detector de visões (`BT3_VISOES` no `rastreio.c`, `visoes.py`) | acusa memória gravada com uma largura e lida com outra (u8 de um s32, u64 sobre dois u32). A lista de pares já tratados fica em `visoes_resolvidas.tsv` |
 | `tipos.py` | liga cada leitura do rastreio a struct e campo do código (coluna do DWARF + AST JSON do clang) |
+| `port/x360/conv/` (`conv_tool`) | conversores por formato em C89, para o instalador do 360 e para o PC: troca in-place com limite conferido e cada byte marcado; `conv_tool --mapa` confere contra o rastreio e mede a cobertura (decisão 12) |
 | `elfdados.py` | retipa as tabelas de dados do executável (o splat põe `.long` em tudo) pela largura lida |
 | `bitfields.py` | reescreve os campos de bits do C pré-processado para o GCC big-endian ter a ordem do PS2 (no 360 é `#pragma bitfield_order(lsb_to_msb)`) |
 | `headless/chamadas.c`, `chamadas.py` | sequência de funções chamadas nas duas builds, para achar onde a execução se separa |
@@ -231,7 +232,20 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 - Carimbe cada build com a origem (commit, hash da diferença incluindo arquivos novos, hash do
   rastreio usado), e só compare builds do mesmo carimbo.
 
-### 5.5 Ligar leitura a tipo (`tipos.py`)
+### 5.5 Conversores por formato
+
+- Especificação antes do código (`docs/x360/formatos/`), escrita do código da decomp por um agente e
+  conferida contra o rastreio por entrada. O conversor segue a especificação seção a seção.
+- Contêiner com tabela de deslocamentos: valide a tabela (contagem, ordem, fim igual ao tamanho do arquivo)
+  antes de confiar nela.
+- Exija zero no enchimento: foi assim que apareceram bytes não nulos no alinhamento depois das malhas e
+  depois do fluxo BPE. Só se libera um trecho depois de confirmar que o jogo não o lê, e com comentário.
+- Dado comprimido não se converte no arquivo: converta o resultado da descompressão, no caminho de quem usa
+  aquele formato (não no descompressor, que serve a vários formatos).
+- A validação contra o rastreio tem três números: posições iguais, com outra largura, não trocadas. Todos os
+  três importam; a cobertura de bytes diz o que o rastreio não viu.
+
+### 5.6 Ligar leitura a tipo (`tipos.py`)
 
 A coluna que o clang grava no DWARF para um acesso é o "local da expressão": o nome do membro em
 `a->b`, o operador em `*p`, o local da base em `v[i]`. O AST JSON do clang

@@ -282,3 +282,30 @@ cima: depende da ordem dos bytes. A luta não esbarra nisso; fica como risco con
 Aberto:
 - `tipos.py` (decisão 8) liga 99% das leituras de um modelo de personagem a struct e campo; é a base dos
   conversores por formato.
+
+## 12. Conversores por formato em C, no instalador e na ferramenta de PC (10/10/2026)
+
+- **Onde:** `port/x360/conv/`, em C89 (o mesmo código compila no `cl -TC` do 360 e no PC). O instalador do
+  `.xex` (pesquisa 02, seção 8.5) converte os arquivos do usuário uma vez; a ferramenta de PC `conv_tool` faz o
+  mesmo e é o teste: converte, mede a cobertura e confere contra o mapa do rastreio.
+- **Como:** troca in-place (nada muda de tamanho nem de lugar), todo acesso com limite conferido, cada byte
+  marcado (trocar duas vezes é erro), enchimento tem de ser zero (exceto trechos que o jogo comprovadamente
+  não lê, nomeados no código). Formato que não bate é erro com mensagem, não chute.
+- **Especificação antes do código:** cada formato ganha um documento em `docs/x360/formatos/`, escrito do
+  código da decomp e conferido contra o rastreio (`personagem.md`: file[0], file[1] e file[2] do slot do
+  lutador).
+- **Animações comprimidas (BPE):** os números só existem depois de descomprimir, então a conversão é em
+  tempo de jogo, no caminho das animações (`BtlObjAnim_Load` chama `Port_ConvertAnim` logo depois de
+  `Bpe_Decode`, em `#ifdef PORT_BIG_ENDIAN`). Recusados: recomprimir no instalador (muda tamanhos e a tabela)
+  e guardar descomprimido (muda tamanhos e o caminho de carga). Cada descompressão é um buffer novo: não há
+  conversão dupla. O gancho não é em `Bpe_Decode` em geral porque o mesmo decodificador serve a outros
+  formatos (`Sprite_Unpack`).
+- **Pacotes da GPU (DMA/VIF/GIF):** toda palavra como u32; um valor de 64 bits fica como duas palavras, a
+  baixa primeiro. É como o código C lê o fluxo VIF do modelo (`MdlTex_RebaseChain`), e vale também para o
+  cabeçalho e o fim dos pacotes de textura, que nenhum código C lê: uma convenção só para a F3 decodificar.
+  Campo de struct declarado u64 (TEX0 de `TexEntry`, da costura) se converte como u64.
+- **`flagsTop`:** o byte alto das flags do cabeçalho do modelo, lido como `char` por uma struct de visão.
+  `BObjModelBytes` ganhou a ordem big-endian em `#ifdef PORT_BIG_ENDIAN` e entrou em `layout.PERMUTADAS`.
+
+Resultado nos quatro arquivos de personagem da luta de demonstração (01473, 01481, 01793, 01801): cobertura
+de 100% dos bytes, e as 223.200 posições que o rastreio viu batem com a largura do conversor.
