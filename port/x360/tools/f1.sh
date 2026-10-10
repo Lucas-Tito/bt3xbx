@@ -6,6 +6,8 @@
 #   F1_QUADRO=4428   quadro do dump de memória comparado no fim (o último da luta de demonstração)
 #   F1_SEM_BUILD=1   não recompila (só roda e compara)
 #   F1_SEM_RASTREIO=1  reaproveita o rastreio e o mapa que já estão em port/build (o rastreio leva ~1 h)
+#   F1_COM_MAPA=1    a PPC também aplica o mapa do rastreio aos arquivos sem conversor (por padrão não: os dados
+#                    vêm só dos conversores por formato e do mapa estático das tabelas do executável)
 set -euo pipefail
 export BT3_DEMO=1 BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1
 Q=${F1_QUADRO:-4428}
@@ -20,6 +22,7 @@ if [ -z "${F1_SEM_BUILD:-}" ]; then
     fi
 fi
 # referência; o rastreio com o endereço da pilha fixo (setarch -R), para o resultado não depender do ASLR
+rm -f $B/x86/hash.txt
 BT3_SAVES=$T/x86 BT3_HASH=$B/x86/hash.txt timeout 900 $B/x86/bt3_x86 > $B/x86/run.txt 2>&1
 if [ -z "${F1_SEM_RASTREIO:-}" ]; then
     BT3_SAVES=$T/x86r BT3_HASH=$B/x86r/hash.txt BT3_VISOES=$B/x86r/visoes.tsv BT3_RASTREIO=$B/x86r/rastreio.tsv \
@@ -41,13 +44,17 @@ touch $B/dados_ppc/mods/convertidos.txt
 export BT3_CONVERTIDOS=$B/dados_ppc/mods/convertidos.txt
 echo "carimbos: x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO) | ppc $(cat $B/ppc/CARIMBO) | $(cat $B/ppc/ENTRADAS)"
 echo "mapa sha1:$(sha1sum < $B/mapa.tsv | cut -c1-10)"
-BT3_SAVES=$T/ppc BT3_DATA=$B/dados_ppc BT3_MAPA=$B/mapa.tsv BT3_HASH=$B/ppc/hash.txt timeout 1800 qemu-ppc $B/ppc/bt3_ppc > $B/ppc/run.txt 2>&1 ||
+MAPA=()
+[ -z "${F1_COM_MAPA:-}" ] || MAPA=(BT3_MAPA=$B/mapa.tsv)
+# os resultados de uma rodada anterior não podem passar por desta (uma PPC que nem roda deixaria o hash.txt velho)
+rm -f $B/ppc/hash.txt $B/ppc/q.txt $B/ppc/q.txt.dump $B/x86/q.txt $B/x86/q.txt.dump
+env BT3_SAVES=$T/ppc BT3_DATA=$B/dados_ppc "${MAPA[@]}" BT3_HASH=$B/ppc/hash.txt timeout 1800 qemu-ppc $B/ppc/bt3_ppc > $B/ppc/run.txt 2>&1 ||
     { echo "ppc saiu com $?"; tail -5 $B/ppc/run.txt; }
 python3 port/x360/tools/compara.py $B/x86/hash.txt $B/ppc/hash.txt --big --ref-rastreio $B/x86r/hash.txt || true
 # memória no último quadro
 # memória no último quadro (os dumps ficam em port/build/<alvo>/q.txt.dump para olhar com memdiff.py sem --resumo)
 BT3_SAVES=$T/mx BT3_HASH_AT=$Q BT3_HASH=$B/x86/q.txt timeout 900 $B/x86/bt3_x86 > /dev/null 2>&1
-BT3_SAVES=$T/mp BT3_HASH_AT=$Q BT3_DATA=$B/dados_ppc BT3_MAPA=$B/mapa.tsv BT3_HASH=$B/ppc/q.txt timeout 1800 qemu-ppc $B/ppc/bt3_ppc > /dev/null 2>&1 || true
+env BT3_SAVES=$T/mp BT3_HASH_AT=$Q BT3_DATA=$B/dados_ppc "${MAPA[@]}" BT3_HASH=$B/ppc/q.txt timeout 1800 qemu-ppc $B/ppc/bt3_ppc > /dev/null 2>&1 || true
 python3 port/x360/tools/memdiff.py $B/x86/q.txt.dump $B/ppc/q.txt.dump $B/x86/bt3_x86 $B/ppc/bt3_ppc --resumo
 python3 port/x360/tools/visoes.py $B/x86r/visoes.tsv $B/x86r/bt3_x86r --linhas > $B/x86r/visoes.txt
 echo "visões: $(wc -l < $B/x86r/visoes.txt) combinações em $B/x86r/visoes.txt"

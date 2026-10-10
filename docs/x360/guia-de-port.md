@@ -236,6 +236,10 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 - "Igual sem inverter" é uma classe à parte: é certo para bytes e errado para u32.
 - Confira o layout de toda struct pelo DWARF. O clang só grava os tipos usados por variáveis:
   compile com `-fno-eliminate-unused-debug-types`.
+- Apague as saídas de uma rodada antes da seguinte: um comando que nem chegou a rodar (127) deixou o
+  `hash.txt` velho no lugar, e a comparação "passou" com o resultado anterior.
+- Atribuição de variável no começo de um comando não pode vir de expansão (`${X:+VAR=...}`): o bash a trata
+  como nome do comando. Use `env` com um vetor.
 - Carimbe cada build com a origem (commit, hash da diferença incluindo arquivos novos, hash do
   rastreio usado), e só compare builds do mesmo carimbo.
 

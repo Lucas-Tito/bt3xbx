@@ -332,3 +332,18 @@ fica idêntica; nenhum byte copiado fora do mapa difere da x86. `elfdados.py` (r
 
 Em aberto: o esqueleto no `cl`/`link` do XDK (F2), o microcódigo da VU1 como u32 e o u64 de `TexBltPacket` (F3), o
 layout contra o compilador do 360, e declarar no C os poucos rótulos que só o splat tipou.
+
+## 14. A luta de demonstração em big-endian sem o mapa do rastreio (10/10/2026)
+
+A build PowerPC da F1 roda a luta de demonstração **sem nenhuma informação tirada do rastreio**: os 20 arquivos do
+disco que ela lê vêm dos conversores por formato (personagem, comuns, cenário, som, tela de carregamento, rostos;
+decisão 12), as animações e a folha da tela de carregamento se convertem depois da descompressão, as tabelas do
+executável vêm do esqueleto com o mapa estático aplicado na carga (decisão 13), e as visões de outra largura estão
+corrigidas no código. Resultado: idêntica à x86 nos 4.242 quadros, 1.964 structs com o mesmo layout, os 180 blocos
+do heap no lugar. `conv_tool --disco`: 2.380 arquivos do disco convertidos sem erro, com 100% de cobertura.
+
+O rastreio e o mapa por posição ficam como ferramenta de teste (`F1_COM_MAPA=1` aplica o mapa aos arquivos sem
+conversor) e de catálogo para os formatos que faltam.
+
+Falta para o produto: os formatos que a demo não usa (menus, cenas, modos de jogo), os pacotes da GPU (F3), o
+áudio (F6), e levar tudo isso ao 360 (F2: o mesmo jogo sem janela no console, com o float do 360).
