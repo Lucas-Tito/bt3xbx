@@ -3,6 +3,8 @@
 Fork do [Tenkaichi3Decomp](https://github.com/z3xox/Tenkaichi3Decomp) (port de PC sobre a decomp
 BT3-Decompiled) com um backend de Xbox 360 (RGH, `.xex` de título). Plano em `docs/x360/plano.md`,
 decisões numeradas em `docs/x360/decisoes.md`, estudos em `docs/x360/pesquisa/01..03`.
+**`docs/x360/guia-de-port.md`**: setup, ferramentas, processo, método com agentes e aprendizados, para
+acelerar outros ports. Todo aprendizado que custou uma rodada entra lá no mesmo commit da correção.
 O que vem do upstream (`src/`, `include/`, `port/` fora de `port/x360/`, `docs/` fora de `docs/x360/`)
 segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
 
