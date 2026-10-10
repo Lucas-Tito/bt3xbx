@@ -46,8 +46,13 @@ typedef struct GfxPostSpritePkt {
     /* 0x00 */ union {
         u32 w; /* 0x20000005 */
         struct {
+#ifdef PORT_BIG_ENDIAN /* the two halves of w as numbers: on a big-endian host the high one comes first */
+            u16 id;
+            u16 qwc;
+#else
             u16 qwc;
             u16 id;
+#endif
         } h;
     } tag;
     /* 0x04 */ void *next;
