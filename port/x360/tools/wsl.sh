@@ -23,8 +23,9 @@ case "${1:-}" in
         dif=$(git diff HEAD | sha1sum | cut -c1-10)
         carimbo="$(git rev-parse --short HEAD) diff:$dif (${#arquivos[@]} alterados, ${#apagados[@]} apagados)"
         { echo "cd ~/bt3xbx || exit 1"
-          echo "git fetch -q origin && git checkout -q --detach $sha && git reset -q --hard $sha || exit 1"
-          echo "git clean -fdq -- port/x360 src include port/src port/tools docs"
+          # o clone de lá não guarda nada próprio fora de port/build e gamedata (ignorados): descarta e alinha
+          echo "git fetch -q origin && git reset -q --hard && git clean -fdq -- port/x360 src include port/src port/tools docs || exit 1"
+          echo "git checkout -q --detach $sha && git reset -q --hard $sha || exit 1"
           for a in "${apagados[@]}"; do printf 'rm -f -- %q\n' "$a"; done
           if [ ${#arquivos[@]} -gt 0 ]; then
               echo "base64 -d <<'FIM' | tar -xz"
