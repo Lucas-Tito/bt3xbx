@@ -10,7 +10,7 @@ tc = types.ModuleType("toolchain")
 tc.ROOT, tc.EXE, tc.OBJ, tc.DATA = ROOT, exe, exe.parent / "obj", exe.parent / "obj_data"
 sys.modules["toolchain"] = tc
 fonte = (ROOT / "port/tools/make_state.py").read_text().rsplit("\nmain()", 1)[0]
-ns = {"__name__": "make_state"}
+ns = {"__name__": "make_state", "__file__": str(ROOT / "port/tools/make_state.py")}
 exec(compile(fonte, "make_state.py", "exec"), ns)
 original = ns["is_game"]
 # os arquivos da F1 (sem janela, rastreio, chamadas, inversão) e os stubs não são estado do jogo

@@ -49,6 +49,41 @@ def simbolos(prog, nm="nm"):
     return syms
 
 
+def por_simbolo(prog, nm):
+    out = {}
+    for l in subprocess.run([nm, "-S", prog], capture_output=True, text=True).stdout.splitlines():
+        q = l.split()
+        if len(q) == 4 and q[2] in "bBdD":
+            out[q[3]] = (int(q[0], 16), int(q[1], 16))
+    return out
+
+
+def ler_endereco(regioes, addr, n):
+    for _, a, d in regioes:
+        if a <= addr and addr + n <= a + len(d):
+            return d[addr - a:addr - a + n]
+    return None
+
+
+def globais(x, p, px, pp):
+    """Uma "região" por variável global do jogo presente nos dois programas com o mesmo tamanho."""
+    sx, sp = por_simbolo(px, "nm"), por_simbolo(pp, "powerpc-linux-gnu-nm")
+    gx = [r for r in x if r[0].startswith("global")]
+    gp = [r for r in p if r[0].startswith("global")]
+    out, faltam = [], 0
+    for nome, (ax, n) in sorted(sx.items(), key=lambda kv: kv[1][0]):
+        if nome not in sp or sp[nome][1] != n or n < 4:
+            continue
+        dx, dp = ler_endereco(gx, ax, n), ler_endereco(gp, sp[nome][0], n)
+        if dx is None or dp is None:
+            faltam += 1
+            continue
+        out.append(((nome, ax, dx), (nome, sp[nome][0], dp)))
+    if faltam:
+        print(f"({faltam} globais fora das regiões do .mem)")
+    return out
+
+
 def main():
     args, opc, it = [], {}, iter(sys.argv[1:])
     for a in it:
@@ -65,10 +100,13 @@ def main():
     fx, fp = faixa_do_programa(args[2]), faixa_do_programa(args[3], "powerpc-linux-gnu-nm")
     syms = simbolos(args[2])
     sa = [s[0] for s in syms]
-    if len(x) != len(p):
-        print(f"AVISO: {len(x)} regiões na x86 e {len(p)} na ppc; comparando pela ordem")
     tot = Counter()
-    for (nx, ax, dx), (np_, ap, dp) in zip(x, p):
+    # heap e scratchpad: mesmo endereço nos dois (alocador determinístico)
+    fixas = {n: (a, d) for n, a, d in p if not n.startswith("global")}
+    pares = [((n, a, d), (n, *fixas[n])) for n, a, d in x if n in fixas]
+    # globais: cada programa as põe num lugar; pareadas por símbolo (nome e tamanho do nm -S)
+    pares += globais(x, p, args[2], args[3])
+    for (nx, ax, dx), (np_, ap, dp) in pares:
         n = min(len(dx), len(dp)) // 4 * 4
         classes = Counter()
         trechos, ini, fim = [], None, None
@@ -96,6 +134,8 @@ def main():
         if ini is not None:
             trechos.append((ini, fim))
         tot.update(classes)
+        if not nx.startswith(("heap", "scratchpad")) and not trechos:
+            continue
         print(f"região {nx} x86 {ax:08x} ppc {ap:08x} (+{n:x}): " + ", ".join(f"{k} {v}" for k, v in classes.most_common()) +
               f"; {len(trechos)} trechos a olhar")
         if faixa:
