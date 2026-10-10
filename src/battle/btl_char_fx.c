@@ -1303,11 +1303,19 @@ void BtlFx_UpdateObjFlag80(FxChr *chr) {
         on = BtlMember_HasAbility(chr, 0x79) != 0;
     }
     if (on) {
+#ifdef PORT_BIG_ENDIAN /* the original tests the word through a 64-bit load: its low word is the flags only on little-endian */
+        if ((obj->flags & 0x82) != 0x82) {
+#else
         if ((*(u64 *)&obj->flags & 0x82) != 0x82) {
+#endif
             obj->flags |= 0x80;
         }
     } else {
+#ifdef PORT_BIG_ENDIAN
+        if ((obj->flags & 0x82) == 0x82) {
+#else
         if ((*(u64 *)&obj->flags & 0x82) == 0x82) {
+#endif
             obj->flags &= ~0x80;
         }
     }

@@ -11,6 +11,13 @@
 #include "sys/ramp.h"
 #include "sys/randf.h"
 
+/* The colour in the high word of color01 (the low word is read as `(u32)color01`). */
+#ifdef PORT_BIG_ENDIAN /* the high word of a u64 comes first in memory on a big-endian host */
+#define STGBLUR_COLOR1(b) (((u32 *)&(b)->color01)[0])
+#else
+#define STGBLUR_COLOR1(b) (((u32 *)&(b)->color01)[1])
+#endif
+
 /*
  * Battle screen effects, 0x245F58..0x248F28. See include/battle/stg_c.h for the overview.
  * Everything here is drawing: no function reads or writes a fighter, a hit record, a rigid body or
@@ -1188,13 +1195,13 @@ void StgBlur_Draw(s32 split, s32 view, Mtx44 *viewMtx) {
             StgBlur_PutStripTag(&d, 10, 1);
             for (i = 0; i < 5; i++) {
                 StgBlur_PutVertex(&d, (u32)blur->color01, cx + xOffset, cy, hx, hy);
-                StgBlur_PutVertex(&d, ((u32 *)&blur->color01)[1], in[i % 4][0] + xOffset, in[i % 4][1], in[i % 4][2],
+                StgBlur_PutVertex(&d, STGBLUR_COLOR1(blur), in[i % 4][0] + xOffset, in[i % 4][1], in[i % 4][2],
                                   in[i % 4][3]);
             }
             StgBlur_Nop(&d);
             StgBlur_PutStripTag(&d, 10, 1);
             for (i = 0; i < 5; i++) {
-                StgBlur_PutVertex(&d, ((u32 *)&blur->color01)[1], in[i % 4][0] + xOffset, in[i % 4][1], in[i % 4][2],
+                StgBlur_PutVertex(&d, STGBLUR_COLOR1(blur), in[i % 4][0] + xOffset, in[i % 4][1], in[i % 4][2],
                                   in[i % 4][3]);
                 StgBlur_PutVertex(&d, blur->color2, out[i % 4][0] + xOffset, out[i % 4][1], out[i % 4][2],
                                   out[i % 4][3]);
@@ -1256,7 +1263,11 @@ void StgBlur_SetColor0Rgba(s32 view, u8 r, u8 g, u8 b, u8 a) {
 
 /* Corner colour 0. */
 void StgBlur_SetColor0(s32 view, u32 rgba) {
+#ifdef PORT_BIG_ENDIAN /* the low word of the u64: second in memory on a big-endian host */
+    ((u32 *)&gStgBlur[view].color01)[1] = rgba;
+#else
     *(u32 *)&gStgBlur[view].color01 = rgba;
+#endif
 }
 
 /* Corner colour 1 from components. */
@@ -1266,7 +1277,11 @@ void StgBlur_SetColor1Rgba(s32 view, u8 r, u8 g, u8 b, u8 a) {
 
 /* Corner colour 1. */
 void StgBlur_SetColor1(s32 view, u32 rgba) {
+#ifdef PORT_BIG_ENDIAN /* the high word: first in memory on a big-endian host */
+    ((u32 *)&gStgBlur[view].color01)[0] = rgba;
+#else
     ((u32 *)&gStgBlur[view].color01)[1] = rgba;
+#endif
 }
 
 /* Corner colour 2 from components. */

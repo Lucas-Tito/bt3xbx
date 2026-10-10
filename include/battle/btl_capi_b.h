@@ -44,8 +44,14 @@ typedef struct BtlCapiBPose {
     /* 0x00 */ Vec4 pos;
     /* 0x10 */ Vec4 rot;
     /* 0x20 */ u8 unk20[0xD0 - 0x20];
+#ifdef PORT_BIG_ENDIAN /* the collision code writes this word as s32 groundFlags: on a big-endian host its low byte is last */
+    /* 0xD0 */ u8 unkD0_pad[3];
+    /* 0xD3 */ u8 unkD0_0 : 7;
+    /* 0xD3 */ u8 unkD0_7 : 1;
+#else
     /* 0xD0 */ u8 unkD0_0 : 7;
     /* 0xD0 */ u8 unkD0_7 : 1; /* bit 0x80: read by BtlCharApi_TestPoseBit80 */
+#endif
 } BtlCapiBPose;
 
 /* Fighter (0x1600 bytes). */
