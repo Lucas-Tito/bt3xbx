@@ -37,6 +37,9 @@ class Alvo:
     def __init__(self, nome, rastreio, chamadas=False):
         self.nome, self.rastreio, self.chamadas = nome, rastreio, chamadas
         self.be = nome == "ppc"  # big-endian: campos de bits na ordem do PS2 (bitfields.py)
+        # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
+        # diverge no quadro 2755).
+        self.opt = "-O2"
         pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "")
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
@@ -64,7 +67,10 @@ class Alvo:
         # componente dali (o ASan pularia por "provar" o acesso seguro).
         self.instr = ["-fsanitize=kernel-address", "-mllvm", "-asan-instrumentation-with-call-threshold=0",
                       "-mllvm", "-asan-stack=0", "-mllvm", "-asan-globals=0",
-                      "-mllvm", "-asan-skip-promotable-allocas=0", "-mllvm", "-asan-use-stack-safety=0"] if rastreio else []
+                      "-mllvm", "-asan-skip-promotable-allocas=0", "-mllvm", "-asan-use-stack-safety=0",
+                      # sem isto o clang junta leituras de bytes vizinhos numa só (um RGBA de u8 vira um load de 4) e
+                      # a largura anotada deixa de ser a do tipo no código
+                      "-mllvm", "-aggressive-instcombine-max-scan-instrs=0"] if rastreio else []
 
 
 def run(cmd, **kw):
@@ -95,7 +101,7 @@ def jogo(args):
     alvo, f = args
     o = alvo.obj / (str(f.relative_to(ROOT / "src")).replace("/", "_")[:-2] + ".o")
     src, _, _ = portsrc.prepare(f)
-    cmd = alvo.cc + ["-std=gnu89", "-c", "-O2", "-g", "-fno-strict-aliasing", "-ffp-contract=off", "-fcommon", "-w",
+    cmd = alvo.cc + ["-std=gnu89", "-c", alvo.opt, "-g", "-fno-strict-aliasing", "-ffp-contract=off", "-fcommon", "-w",
                      "-fno-pic", "-fno-builtin"] + alvo.soft + alvo.instr + (["-finstrument-functions"] if alvo.chamadas else []) + \
         ["-include", "port_libm.h", "-Iinclude", "-Iport/include", "-include", "port_compat.h", f"-I{f.parent}"]
     return o, f, compile_ee(cmd, src, o, be=alvo.be)
@@ -121,7 +127,7 @@ def construir(alvo):
     # biblioteca matemática do PS2 (software)
     for f in sorted((ROOT / "port/third_party/newlib_libm").glob("*.c")):
         o = alvo.obj / ("nl_" + f.stem + ".o")
-        junta(f, o, compile_ee(alvo.cc + ["-std=gnu89", "-c", "-O2", "-g", "-fno-pic"] + alvo.soft +
+        junta(f, o, compile_ee(alvo.cc + ["-std=gnu89", "-c", alvo.opt, "-g", "-fno-pic"] + alvo.soft +
                                ["-fno-strict-aliasing", "-ffp-contract=off", "-fno-builtin", "-w", "-Iport/include",
                                 f"-I{f.parent}", "-include", "newlib_shim.h"], f, o, be=alvo.be))
 
@@ -129,7 +135,7 @@ def construir(alvo):
     for f in sorted((ROOT / "port/src/gs").glob("*.c")):
         if f.stem in GS_SEM_SDL:
             o = alvo.obj / ("gs_" + f.stem + ".o")
-            junta(f, o, compile_ee(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-fno-strict-aliasing", "-w"] +
+            junta(f, o, compile_ee(alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w"] +
                                    alvo.hard + (alvo.instr if f.stem != "state" else []) +  # o checksum lê tudo em blocos de 8
                                    ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], f, o, ee=False, be=alvo.be))
 
@@ -140,7 +146,7 @@ def construir(alvo):
         ponte = f.name in ("plat_libm.c", "plat_fastvec.c")
         soft = alvo.hard if ponte else \
             alvo.soft + ["-DSF_FAST_CALLS", "-include", "math.h", "-include", "stdlib.h", "-include", "port_libm.h"]
-        cmd = alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-fno-strict-aliasing", "-ffp-contract=off",
+        cmd = alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-ffp-contract=off",
                          "-fno-builtin", "-w", "-Iinclude", "-Iport/include", "-Iport/src", "-Iport/x360/headless"] + \
             soft + nomes + alvo.instr + \
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo

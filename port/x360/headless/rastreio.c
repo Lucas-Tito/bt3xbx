@@ -16,7 +16,7 @@
  *   - a saída do Bpe_Decode (descompressão) vira um arquivo virtual "<origem>#bpe";
  *   - cada leitura de um byte com origem é anotada: (arquivo, deslocamento) -> tamanhos usados.
  * No fim (atexit), BT3_RASTREIO=<arquivo> recebe uma linha por (arquivo, deslocamento):
- *     arquivo  deslocamento  tamanhos  usos  escritas  pc  cópias
+ *     arquivo  deslocamento  tamanhos  usos  escritas  pcs  cópias  ímpar  desalinhada
  * tamanhos é uma máscara: 1, 2, 4, 8, 16 bytes. port/x360/tools/rastreio.py resume e gera o mapa.
  *
  * Não é usado em nenhuma build que vá para o console.
@@ -43,6 +43,7 @@ static uint32_t arquivo(const char *nome) {
         }
     }
     if (sArqs == MAX_ARQ) {
+        fprintf(stderr, "rastreio: mais de %d arquivos; os seguintes ficam sem origem\n", MAX_ARQ);
         return 0;
     }
     sNome[sArqs] = strdup(nome);
@@ -86,14 +87,17 @@ static void marcar(uint32_t a, uint64_t o) {
 
 typedef struct Uso {
     uint64_t chave; /* origem do primeiro byte lido */
-    uint32_t usos, escritas, pc;
-    uint8_t tamanhos;
-    uint8_t copias; /* larguras com que a posição foi copiada (evidência fraca: vale se não houver uso) */
+    uint32_t usos, escritas;
+    uint32_t pcs[4];  /* até 4 funções diferentes que leram (o catálogo precisa de todas, não só da primeira) */
+    uint8_t tamanhos; /* máscara das larguras 1, 2, 4, 8, 16 lidas aqui */
+    uint8_t copias;   /* larguras com que a posição foi copiada (vai para o relatório, não decide largura) */
+    uint8_t impar;    /* lida num tamanho que não é largura de número (3, 5, 6, 12...): trecho, não campo */
+    uint8_t desal;    /* lida como número num endereço de memória desalinhado para a largura */
 } Uso;
 
 #define TAB (1u << 23)
 static Uso *sTab;
-static uint32_t sTabN;
+static uint32_t sTabN, sPerdidos;
 
 static Uso *uso(uint64_t chave) {
     uint32_t h = (uint32_t)((chave * 0x9E3779B97F4A7C15ull) >> 40) & (TAB - 1);
@@ -122,6 +126,23 @@ static struct { uint32_t addr, size, pc; int vivo; } sAnel[ANEL];
 static int sAnelPos;
 static struct { uint32_t dst, src, size, pc; int vivo; } sPend;
 
+static int largura(uint32_t size) {
+    return size == 1 || size == 2 || size == 4 || size == 8 || size == 16;
+}
+
+static void anotar_pc(Uso *u, uint32_t pc) {
+    int k;
+    for (k = 0; k < 4; k++) {
+        if (u->pcs[k] == pc) {
+            return;
+        }
+        if (u->pcs[k] == 0) {
+            u->pcs[k] = pc;
+            return;
+        }
+    }
+}
+
 static void anotar_uso(uint32_t addr, uint32_t size, uint32_t pc) {
     uint64_t o = origem(addr);
     Uso *u;
@@ -129,13 +150,20 @@ static void anotar_uso(uint32_t addr, uint32_t size, uint32_t pc) {
         return;
     }
     u = uso(o);
-    if (u != NULL) {
-        u->usos++;
+    if (u == NULL) {
+        sPerdidos++;
+        return;
+    }
+    u->usos++;
+    if (!largura(size)) {
+        u->impar = 1;
+    } else {
         u->tamanhos |= (uint8_t)size;
-        if (u->pc == 0) {
-            u->pc = pc;
+        if (size > 1 && size <= 8 && (addr & (size - 1)) != 0) {
+            u->desal = 1;
         }
     }
+    anotar_pc(u, pc);
 }
 
 static void anotar_escrita(uint32_t addr, uint32_t size, uint32_t pc) {
@@ -146,10 +174,10 @@ static void anotar_escrita(uint32_t addr, uint32_t size, uint32_t pc) {
     u = uso(origem(addr));
     if (u != NULL) {
         u->escritas++;
-        u->tamanhos |= (uint8_t)size;
-        if (u->pc == 0) {
-            u->pc = pc;
+        if (largura(size)) {
+            u->tamanhos |= (uint8_t)size;
         }
+        anotar_pc(u, pc);
     }
 }
 
@@ -231,7 +259,7 @@ NAO_RASTREAR static void gravar(uint32_t addr, uint32_t size, uint32_t pc) {
 #define LOAD(n) NAO_RASTREAR void __asan_load##n##_noabort(uintptr_t a) { ler((uint32_t)a, n, PC); } \
                 NAO_RASTREAR void __asan_store##n##_noabort(uintptr_t a) { gravar((uint32_t)a, n, PC); }
 LOAD(1) LOAD(2) LOAD(4) LOAD(8) LOAD(16)
-NAO_RASTREAR void __asan_loadN_noabort(uintptr_t a, size_t n) { ler((uint32_t)a, (uint32_t)(n > 16 ? 16 : n), PC); }
+NAO_RASTREAR void __asan_loadN_noabort(uintptr_t a, size_t n) { ler((uint32_t)a, (uint32_t)n, PC); }
 NAO_RASTREAR void __asan_storeN_noabort(uintptr_t a, size_t n) {
     size_t i;
     resolver();
@@ -351,12 +379,14 @@ NAO_RASTREAR static void despejar(void) {
     for (i = 0; i < TAB; i++) {
         Uso *u = &sTab[i];
         if (u->chave != 0) {
-            fprintf(fp, "%s\t%llu\t%u\t%u\t%u\t%08x\t%u\n", sNome[u->chave >> 40], (unsigned long long)(u->chave & 0xFFFFFFFFFFull),
-                    u->tamanhos, u->usos, u->escritas, u->pc, u->copias);
+            fprintf(fp, "%s\t%llu\t%u\t%u\t%u\t%08x,%08x,%08x,%08x\t%u\t%u\t%u\n", sNome[u->chave >> 40],
+                    (unsigned long long)(u->chave & 0xFFFFFFFFFFull), u->tamanhos, u->usos, u->escritas, u->pcs[0], u->pcs[1],
+                    u->pcs[2], u->pcs[3], u->copias, u->impar, u->desal);
         }
     }
     fclose(fp);
-    fprintf(stderr, "rastreio: %u posições de %u arquivos em %s\n", sTabN, sArqs - 1, caminho);
+    fprintf(stderr, "rastreio: %u posições de %u arquivos em %s%s\n", sTabN, sArqs - 1, caminho,
+            sPerdidos || sArqs == MAX_ARQ ? " (TABELA CHEIA: usos ou arquivos perdidos)" : "");
 }
 
 __attribute__((constructor)) NAO_RASTREAR static void iniciar(void) {
