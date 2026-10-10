@@ -517,7 +517,12 @@ typedef struct EftPart9Arg {
     /* 0x20 */ EftXVec dir;
     /* 0x30 */ f32 size;
     /* 0x34 */ f32 life;                        /* seconds */
+#ifdef PORT_BIG_ENDIAN /* the creator writes objId as an s32 (EftQuadArg of battle/eft_y.h): its low byte comes last */
+    /* 0x38 */ u8 pad38[3];
+    /* 0x3B */ u8 objId;
+#else
     /* 0x38 */ u8 objId;
+#endif
 } EftPart9Arg;
 
 /* eft_x.c */
