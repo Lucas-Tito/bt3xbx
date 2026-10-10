@@ -3,12 +3,15 @@
 
     visoes.py VISOES.tsv PROGRAMA_X86R [--tudo] [--linhas]   (--linhas: arquivo:linha das duas pontas)
 
+Os pares já resolvidos (port/x360/tools/visoes_resolvidas.tsv: função que leu, função que gravou, motivo) ficam
+de fora e são contados no fim; --tudo mostra todos.
+
 Sem --tudo, ficam de fora as leituras de 16 bytes de palavras gravadas uma a uma (cópia de vetor: não lê número).
 
 Cada linha: função que gravou, função que leu, largura gravada -> largura lida, posição do byte lido dentro da
 gravação, quantas vezes. Num host big-endian cada caso lê outro valor: é a classe 3 da decisão 7 (uma struct
 vista com campos de larguras diferentes, union, número montado byte a byte...). Ordenado por função que leu."""
-import bisect, signal, subprocess, sys
+import bisect, os, signal, subprocess, sys
 
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
@@ -31,7 +34,19 @@ def linhas_de(prog, pcs):
     return {pc: out[i].split("/bt3xbx/")[-1].split(" ")[0] for i, pc in enumerate(pcs) if i < len(out)}
 
 
+def resolvidas():
+    caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), "visoes_resolvidas.tsv")
+    out = {}
+    for l in open(caminho, encoding="utf-8"):
+        if l.strip() and not l.startswith("#"):
+            c = l.rstrip("\n").split("\t")
+            out[(c[0], c[1])] = c[2]
+    return out
+
+
 def main():
+    res = {} if "--tudo" in sys.argv else resolvidas()
+    fora = 0
     if "--linhas" in sys.argv:
         prog = sys.argv[2]
         bruto = [l.split() for l in open(sys.argv[1])]
@@ -41,10 +56,14 @@ def main():
         por = {}
         for g, r, gw, lw, pos, n in bruto:
             g, r = int(g, 16), int(r, 16)
+            if (nome(r), nome(g)) in res:
+                fora += 1
+                continue
             k = (lin.get(r, "?"), lin.get(g, "?"), gw, lw)
             por[k] = por.get(k, 0) + int(n)
         for (lr, lg, gw, lw), n in sorted(por.items()):
             print(f"leu {lw} em {lr:42s} <- gravou {gw} em {lg:42s} ({n}x)")
+        print(f"({fora} pares já resolvidos: visoes_resolvidas.tsv)")
         return
     nome = simbolos(sys.argv[2])
     linhas = []
@@ -55,9 +74,12 @@ def main():
     for leu, gravou, gw, lw, pos, n in linhas:
         if lw == 16 and "--tudo" not in sys.argv:
             continue
+        if (leu, gravou) in res:
+            fora += 1
+            continue
         k = (leu, gravou, gw, lw)
         agrup[k] = agrup.get(k, 0) + n
-    print(f"{len(agrup)} combinações (leu <- gravou)")
+    print(f"{len(agrup)} combinações (leu <- gravou); {fora} pares já resolvidos (visoes_resolvidas.tsv)")
     for (leu, gravou, gw, lw), n in sorted(agrup.items()):
         print(f"{leu:40s} <- {gravou:40s} gravou {gw} leu {lw}  ({n}x)")
 

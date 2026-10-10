@@ -1,0 +1,56 @@
+# Pares do detector de visões (rastreio.c, BT3_VISOES) já tratados: função que leu, função que gravou, motivo.
+# visoes.py os deixa de fora. O detector roda na x86, onde as correções #ifdef PORT_BIG_ENDIAN não valem: o par
+# continua aparecendo e é aqui que se registra que foi resolvido (ou adiado, com a fase).
+Ot_Send	EftAura_DrawFlames	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftBolt_Draw	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftChain_DrawStrand	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftGfx_DrawSprite	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftGlow_DrawParts	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftGndDust_DrawQuad	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftPrim_DrawTriangle	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftPtcl_DrawAxisQuads	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftQuad_DrawSprite	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftShotFx_DrawQuad	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftSprAnim_DrawLayerAt	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftSprAnim_DrawTriClip	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	EftSpr_DrawRot	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+Ot_Send	Ot_InitLayers	etiqueta DMA gravada como u32, qwc lido como u16: OtPrim permutado em include/sys/gfx_ot.h
+StgPanBlur_DrawView	StgPanBlur_DrawView	etiqueta DMA de GfxPostSpritePkt lida por metades: #ifdef em src/sys/gfxm_a.c
+StgBlur_Draw	StgBlur_SetColor0Rgba	duas cores em metades de um u64: STGBLUR_COLOR1 e #ifdef em src/battle/stg_c.c
+EftQuad_Draw	EftEmit_SpawnType9	objId gravado como s32 e lido como u8: EftPart9Arg permutado em include/battle/eft_x.h
+EftQuad_Init	EftEmit_SpawnType9	objId gravado como s32 e lido como u8: EftPart9Arg permutado em include/battle/eft_x.h
+EftQuad_Update	EftEmit_SpawnType9	objId gravado como s32 e lido como u8: EftPart9Arg permutado em include/battle/eft_x.h
+EftPrim_DrawTriangle	EftAura_DrawFlames	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftBolt_Draw	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftBolt_UpdateTex	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftChain_DrawStrand	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftChain_Update	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftGfx_DrawSprite	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftGlow_DrawParts	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftGlow_UpdateTextures	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftPrim_DrawTriangle	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftPtcl_DrawAxisQuads	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftPtcl_Update	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftQuad_DrawSprite	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftQuad_LoadTex	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftShotFx_DrawQuad	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftSprAnim_DrawLayerAt	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftSprAnim_DrawTriClip	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftSpr_DrawRot	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftAura_DrawFlames	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftBolt_Draw	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftBolt_UpdateTex	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftChain_DrawStrand	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftChain_Update	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftGfx_DrawSprite	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftGlow_DrawParts	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftGlow_UpdateTextures	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftPrim_DrawTriangle	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftPtcl_DrawAxisQuads	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftPtcl_Update	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftQuad_DrawSprite	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftQuad_LoadTex	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftShotFx_DrawQuad	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftSprAnim_DrawLayerAt	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftSprAnim_DrawTriClip	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftSprAnim_DrawTriClip	EftSpr_DrawRot	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos

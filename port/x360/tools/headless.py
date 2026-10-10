@@ -70,7 +70,9 @@ class Alvo:
                       "-mllvm", "-asan-skip-promotable-allocas=0", "-mllvm", "-asan-use-stack-safety=0",
                       # sem isto o clang junta leituras de bytes vizinhos numa só (um RGBA de u8 vira um load de 4) e
                       # a largura anotada deixa de ser a do tipo no código
-                      "-mllvm", "-aggressive-instcombine-max-scan-instrs=0"] if rastreio else []
+                      "-mllvm", "-aggressive-instcombine-max-scan-instrs=0",
+                      # nem o vetorizador (o código do port, em SSE2, juntava leituras de int32 numa de 8)
+                      "-fno-slp-vectorize", "-fno-vectorize"] if rastreio else []
 
 
 def run(cmd, **kw):
@@ -101,7 +103,9 @@ def jogo(args):
     alvo, f = args
     o = alvo.obj / (str(f.relative_to(ROOT / "src")).replace("/", "_")[:-2] + ".o")
     src, _, _ = portsrc.prepare(f)
-    cmd = alvo.cc + ["-std=gnu89", "-c", alvo.opt, "-g", "-fno-strict-aliasing", "-ffp-contract=off", "-fcommon", "-w",
+    # -fno-eliminate-unused-debug-types: todas as structs no DWARF (o clang só grava as que alguma variável usa), para
+    # layout.py comparar todas
+    cmd = alvo.cc + ["-std=gnu89", "-c", alvo.opt, "-g", "-fno-eliminate-unused-debug-types", "-fno-strict-aliasing", "-ffp-contract=off", "-fcommon", "-w",
                      "-fno-pic", "-fno-builtin"] + alvo.soft + alvo.instr + (["-finstrument-functions"] if alvo.chamadas else []) + \
         ["-include", "port_libm.h", "-Iinclude", "-Iport/include", "-include", "port_compat.h", f"-I{f.parent}"]
     return o, f, compile_ee(cmd, src, o, be=alvo.be)
@@ -126,21 +130,25 @@ def construir(alvo):
         rastreio = pathlib.Path(os.environ.get("BT3_RASTREIO_ELF", ROOT / "port/build/x86r/rastreio.tsv"))
         if rastreio.exists():
             larg_elf = elfdados.larguras_elf(rastreio)
+            import hashlib
+            (alvo.b / "ENTRADAS").write_text(f"rastreio {rastreio} sha1:{hashlib.sha1(rastreio.read_bytes()).hexdigest()[:10]}\n")
         else:
             print(f"AVISO: sem {rastreio}: tabelas de dados do executável com os tipos do splat (erradas no big-endian)")
-    trocas = collections.Counter()
+    trocas, conflitos = collections.Counter(), []
     for s in sorted((ROOT / "port/build/gen/data").glob("*.s")):
         o = dados / (s.name[:-2] + ".o")
         fonte = s
         if alvo.be:
-            texto, t = elfdados.retipar(s.read_text(), larg_elf.get(s.name[:-2], {}))
+            texto, t, c = elfdados.retipar(s.read_text(), larg_elf.get(s.name[:-2], {}))
             trocas.update(t)
+            conflitos += [f"{s.name[:-2]}\t{ofs}\t{d}\t{m}" for ofs, d, m in c]
             fonte = alvo.b / "gen_data" / s.name
             fonte.parent.mkdir(exist_ok=True)
             fonte.write_text(texto)
         junta(s, o, run(alvo.asm + [fonte, "-o", o]))
     if trocas:
         print("tabelas do executável retipadas: " + ", ".join(f"{k} {v}" for k, v in trocas.most_common()))
+        (alvo.b / "elfdados.conflitos").write_text("".join(c + "\n" for c in conflitos))
 
     # biblioteca matemática do PS2 (software)
     for f in sorted((ROOT / "port/third_party/newlib_libm").glob("*.c")):
@@ -227,6 +235,19 @@ def ligar(alvo, objs):
         sys.exit(1)
     # carimbo: de que commit (e diferença) este programa saiu, para não comparar builds de origens diferentes
     (alvo.b / "CARIMBO").write_text(carimbo())
+    # big-endian: as structs do jogo têm de ter o mesmo layout da referência x86 (bitfields.py, #ifdef do jogo)
+    if alvo.be:
+        ref = ROOT / "port/build/x86/bt3_x86"
+        if not ref.exists():
+            print("AVISO: sem port/build/x86/bt3_x86: layout das structs não conferido")
+            return
+        if (ref.parent / "CARIMBO").read_text() != carimbo():
+            print("AVISO: a referência x86 é de outra origem: refaça-a antes de confiar no layout")
+        r = run([sys.executable, ROOT / "port/x360/tools/layout.py", ref, alvo.exe])
+        print(r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr.strip()[-300:])
+        if r.returncode:
+            print("\n".join(r.stdout.strip().splitlines()[:-1][:60]))
+            sys.exit(1)
 
 
 def carimbo():
@@ -235,8 +256,12 @@ def carimbo():
     except OSError:
         h = run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()
         d = run(["git", "diff", "HEAD"]).stdout
+        novos = run(["git", "ls-files", "-o", "--exclude-standard"]).stdout.split()
         import hashlib
-        return f"{h} diff:{hashlib.sha1(d.encode()).hexdigest()[:10]}\n"
+        sha = hashlib.sha1(d.encode())
+        for n in novos:
+            sha.update((ROOT / n).read_bytes())
+        return f"{h} diff:{sha.hexdigest()[:10]}\n"
 
 
 def main():

@@ -16,7 +16,7 @@
  *   - a saída do Bpe_Decode (descompressão) vira um arquivo virtual "<origem>#bpe";
  *   - cada leitura de um byte com origem é anotada: (arquivo, deslocamento) -> tamanhos usados.
  * No fim (atexit), BT3_RASTREIO=<arquivo> recebe uma linha por (arquivo, deslocamento):
- *     arquivo  deslocamento  tamanhos  usos  escritas  pcs  cópias  ímpar  desalinhada
+ *     arquivo  deslocamento  tamanhos  usos  escritas  pcs  cópias  ímpar  desalinhada  pcs-de-byte
  * tamanhos é uma máscara: 1, 2, 4, 8, 16 bytes. port/x360/tools/rastreio.py resume e gera o mapa.
  *
  * Não é usado em nenhuma build que vá para o console.
@@ -90,6 +90,7 @@ typedef struct Uso {
     uint64_t chave; /* origem do primeiro byte lido */
     uint32_t usos, escritas;
     uint32_t pcs[4];  /* até 4 funções diferentes que leram (o catálogo precisa de todas, não só da primeira) */
+    uint32_t pcb[4];  /* até 4 que leram como byte (rastreio.py vê se são campos de structs já corrigidas) */
     uint8_t tamanhos; /* máscara das larguras 1, 2, 4, 8, 16 lidas aqui */
     uint8_t copias;   /* larguras com que a posição foi copiada (vai para o relatório, não decide largura) */
     uint8_t impar;    /* lida num tamanho que não é largura de número (3, 5, 6, 12...): trecho, não campo */
@@ -122,51 +123,79 @@ static Uso *uso(uint64_t chave) {
 
    Acha a classe 3 da decisão 7 sem esperar crash: memória gravada com uma largura e lida com outra (s32 gravado,
    u8 lido no mesmo byte; dois u16 gravados, um u32 lido). Num host big-endian o resultado muda. Para cada byte,
-   a "forma" da última gravação: largura e posição dentro dela; cópias levam a forma junto; dado do disco, das
-   tabelas do executável e memset ficam neutros (são tratados por conversão). Cada leitura com forma diferente da
-   gravação é anotada por (função que gravou, função que leu). */
+   a "forma" da última gravação (largura e posição dentro dela), o valor gravado e a função que gravou; cópias
+   levam os três junto; dado do disco, das tabelas do executável e memset ficam neutros (são tratados por
+   conversão). Byte cujo valor atual não é o gravado foi escrito por código sem instrumentação (struct passada por
+   valor, libc, port): também neutro. Cada leitura com forma diferente da gravação é anotada por (função que
+   gravou, função que leu). */
 static int sVisoes;
-static uint32_t sPilhaLo, sPilhaHi; /* a pilha fica neutra: struct passada por valor é copiada para lá sem instrumentação */
-static uint8_t *sForma[1u << (32 - BLOCO)];
+static int sSemPedaco; /* BT3_VISOES_SEM_PEDACO: desliga a forma por pedaço de vetor (para medir o efeito) */
+static uint16_t *sForma[1u << (32 - BLOCO)]; /* valor gravado << 8 | forma */
 static uint32_t *sQuem[1u << (32 - BLOCO)];
 
 static uint8_t forma(uint32_t a) {
-    uint8_t *b;
-    if (a >= sPilhaLo && a < sPilhaHi) {
+    uint16_t *b = sForma[a >> BLOCO];
+    uint16_t f;
+    if (b == NULL) {
         return 0;
     }
-    b = sForma[a >> BLOCO];
-    return b != NULL ? b[a & ((1u << BLOCO) - 1)] : 0;
+    f = b[a & ((1u << BLOCO) - 1)];
+    if ((f & 0xFF) == 0 || (f >> 8) != *(volatile uint8_t *)(uintptr_t)a) {
+        return 0;
+    }
+    return (uint8_t)f;
 }
 
-static void por_forma(uint32_t a, uint8_t v) {
-    uint8_t **b = &sForma[a >> BLOCO];
+/* v = forma; o valor é o byte que está (ou vai estar, numa cópia) na memória: fixado depois (fixar_valor). */
+static void por_forma(uint32_t a, uint8_t v, uint8_t valor) {
+    uint16_t **b = &sForma[a >> BLOCO];
     if (*b == NULL) {
         if (v == 0) {
             return;
         }
-        *b = calloc(1u << BLOCO, 1);
+        *b = calloc(1u << BLOCO, sizeof(uint16_t));
         if (*b == NULL) {
             return;
         }
     }
-    (*b)[a & ((1u << BLOCO) - 1)] = v;
+    (*b)[a & ((1u << BLOCO) - 1)] = (uint16_t)(valor << 8 | v);
 }
 
 static uint32_t quem(uint32_t a) {
     uint32_t *b = sQuem[a >> BLOCO];
-    return b != NULL ? b[(a & ((1u << BLOCO) - 1)) >> 2] : 0;
+    return b != NULL ? b[a & ((1u << BLOCO) - 1)] : 0;
 }
 
 static void por_quem(uint32_t a, uint32_t pc) {
     uint32_t **b = &sQuem[a >> BLOCO];
     if (*b == NULL) {
-        *b = calloc(1u << (BLOCO - 2), sizeof(uint32_t));
+        if (pc == 0) {
+            return;
+        }
+        *b = calloc(1u << BLOCO, sizeof(uint32_t));
         if (*b == NULL) {
             return;
         }
     }
-    (*b)[(a & ((1u << BLOCO) - 1)) >> 2] = pc;
+    (*b)[a & ((1u << BLOCO) - 1)] = pc;
+}
+
+/* A gravação ainda não aconteceu quando o callback roda: o valor de cada byte é lido no callback seguinte. */
+static struct { uint32_t addr, size; int vivo; } sGravada;
+
+NAO_RASTREAR static void fixar_valor(void) {
+    uint32_t k;
+    if (!sGravada.vivo) {
+        return;
+    }
+    sGravada.vivo = 0;
+    for (k = 0; k < sGravada.size; k++) {
+        uint32_t a = sGravada.addr + k;
+        uint16_t *b = sForma[a >> BLOCO];
+        if (b != NULL && (b[a & ((1u << BLOCO) - 1)] & 0xFF) != 0) {
+            b[a & ((1u << BLOCO) - 1)] = (uint16_t)(*(volatile uint8_t *)(uintptr_t)a << 8 | (b[a & ((1u << BLOCO) - 1)] & 0xFF));
+        }
+    }
 }
 
 static int log2w(uint32_t n) {
@@ -180,12 +209,14 @@ static void forma_gravada(uint32_t addr, uint32_t size, uint32_t pc) {
     if (!sVisoes) {
         return;
     }
+    fixar_valor();
     for (k = 0; k < size; k++) {
-        por_forma(addr + k, l < 0 ? 0 : (uint8_t)(0x80 | l << 4 | k));
-        if (((addr + k) & 3) == 0 || k == 0) {
-            por_quem(addr + k, pc);
-        }
+        por_forma(addr + k, l < 0 ? 0 : (uint8_t)(0x80 | l << 4 | k), 0);
+        por_quem(addr + k, l < 0 ? 0 : pc);
     }
+    sGravada.addr = addr;
+    sGravada.size = size;
+    sGravada.vivo = l >= 0;
 }
 
 typedef struct Visao { uint32_t gravou, leu; uint8_t lw, gw, pos; uint32_t n; } Visao;
@@ -218,12 +249,32 @@ NAO_RASTREAR static int forma_lida(uint32_t addr, uint32_t size, uint32_t pc, Vi
     }
     gw = 1u << ((f0 >> 4) & 7);
     if (gw > size) {
-        /* leitura dentro de uma gravação mais larga: no big-endian cada byte lido vira o do lado oposto da
-           gravação; se forem iguais (0, 0xFFFFFFFF...) não muda nada */
-        base = addr - (f0 & 15);
-        for (k = 0; k < size; k++) {
-            uint32_t i = (f0 & 15) + k;
-            if (*(uint8_t *)(uintptr_t)(base + i) != *(uint8_t *)(uintptr_t)(base + gw - 1 - i)) {
+        /* leitura de s bytes na posição p de uma gravação de gw: no big-endian ela vale o número que o
+           little-endian monta com os bytes [gw-p-s, gw-p) da gravação; se forem os mesmos bytes de [p, p+s),
+           na mesma ordem (0, 0xFFFFFFFF...), não muda nada */
+        uint32_t p = f0 & 15;
+        base = addr - p;
+        if (p + size <= gw) {
+            for (k = 0; k < size; k++) {
+                if (*(uint8_t *)(uintptr_t)(base + p + k) != *(uint8_t *)(uintptr_t)(base + gw - p - size + k)) {
+                    simetrico = 0;
+                }
+            }
+            if (simetrico) {
+                return 0;
+            }
+        }
+    } else if ((f0 & 15) == 0 && size % gw == 0) {
+        /* leitura larga sobre gravações inteiras de gw (dois u16 lidos como u32): no big-endian os pedaços
+           aparecem em ordem inversa; se o pedaço i for igual ao n-1-i, o número é o mesmo */
+        uint32_t n = size / gw, i;
+        for (i = 0; i < n; i++) {
+            if (forma(addr + i * gw) != (uint8_t)(f0 & 0xF0)) {
+                simetrico = 0; /* não são gravações inteiras da mesma largura: não dá para comparar pedaços */
+            }
+        }
+        for (i = 0; simetrico && i < n / 2; i++) {
+            if (memcmp((const void *)(uintptr_t)(addr + i * gw), (const void *)(uintptr_t)(addr + (n - 1 - i) * gw), gw) != 0) {
                 simetrico = 0;
             }
         }
@@ -255,18 +306,26 @@ NAO_RASTREAR static void anotar_visao(const Visao *v) {
     }
 }
 
+/* Antes da cópia (memcpy) ou depois dela (cópia em laço já gravada): o valor de cada byte é o da origem. */
+NAO_RASTREAR static void copiar_um(uint32_t d, uint32_t s) {
+    uint8_t f = forma(s);
+    por_forma(d, f, *(volatile uint8_t *)(uintptr_t)s);
+    por_quem(d, f ? quem(s) : 0);
+}
+
 NAO_RASTREAR static void copiar_forma(uint32_t dst, uint32_t src, size_t n) {
     size_t i;
     if (!sVisoes) {
         return;
     }
+    fixar_valor();
     if (dst > src && dst < src + n) {
         for (i = n; i-- > 0;) {
-            por_forma(dst + (uint32_t)i, forma(src + (uint32_t)i));
+            copiar_um(dst + (uint32_t)i, src + (uint32_t)i);
         }
     } else {
         for (i = 0; i < n; i++) {
-            por_forma(dst + (uint32_t)i, forma(src + (uint32_t)i));
+            copiar_um(dst + (uint32_t)i, src + (uint32_t)i);
         }
     }
 }
@@ -276,8 +335,9 @@ NAO_RASTREAR static void neutro(uint32_t dst, size_t n) {
     if (!sVisoes) {
         return;
     }
+    fixar_valor();
     for (i = 0; i < n; i++) {
-        por_forma(dst + (uint32_t)i, 0);
+        por_forma(dst + (uint32_t)i, 0, 0);
     }
 }
 
@@ -285,7 +345,7 @@ NAO_RASTREAR static void neutro(uint32_t dst, size_t n) {
    gravando o MESMO valor em outro lugar, foi uma cópia (laço do jogo), e a origem passa para o destino.
    A escrita ainda não aconteceu quando o callback roda; a conferência do valor fica para o callback
    seguinte (pendente). Valor diferente: era uma conta, e a leitura é uso de verdade. */
-#define ANEL 8
+#define ANEL 32
 static struct { uint32_t addr, size, pc; int vivo, sus; Visao v; } sAnel[ANEL];
 static int sAnelPos;
 static struct { uint32_t dst, size, pc; int vivo; } sPend;
@@ -294,17 +354,21 @@ static int largura(uint32_t size) {
     return size == 1 || size == 2 || size == 4 || size == 8 || size == 16;
 }
 
-static void anotar_pc(Uso *u, uint32_t pc) {
+static void anotar_em(uint32_t *pcs, uint32_t pc) {
     int k;
     for (k = 0; k < 4; k++) {
-        if (u->pcs[k] == pc) {
+        if (pcs[k] == pc) {
             return;
         }
-        if (u->pcs[k] == 0) {
-            u->pcs[k] = pc;
+        if (pcs[k] == 0) {
+            pcs[k] = pc;
             return;
         }
     }
+}
+
+static void anotar_pc(Uso *u, uint32_t pc) {
+    anotar_em(u->pcs, pc);
 }
 
 static void anotar_uso(uint32_t addr, uint32_t size, uint32_t pc) {
@@ -325,6 +389,9 @@ static void anotar_uso(uint32_t addr, uint32_t size, uint32_t pc) {
         u->tamanhos |= (uint8_t)size;
         if (size > 1 && size <= 8 && (addr & (size - 1)) != 0) {
             u->desal = 1;
+        }
+        if (size == 1) {
+            anotar_em(u->pcb, pc);
         }
     }
     anotar_pc(u, pc);
@@ -348,6 +415,7 @@ static void anotar_escrita(uint32_t addr, uint32_t size, uint32_t pc) {
 NAO_RASTREAR static void resolver(void) {
     uint32_t b;
     int k, i;
+    fixar_valor();
     if (!sPend.vivo) {
         return;
     }
@@ -365,9 +433,34 @@ NAO_RASTREAR static void resolver(void) {
             for (b = 0; b < sPend.size; b++) {
                 marcar(sPend.dst + b, origem(sAnel[i].addr + b));
             }
-            copiar_forma(sPend.dst, sAnel[i].addr, sPend.size);
+            if (sAnel[i].sus && sAnel[i].v.gw > sAnel[i].v.lw) {
+                /* copiou um valor lido mais estreito que a gravação (u8 de dentro de um s32): no big-endian a
+                   leitura já pega outro byte; o destino fica com a forma da própria gravação */
+                anotar_visao(&sAnel[i].v);
+            } else {
+                /* cópia de bytes, inclusive de uma leitura mais larga que as gravações (struct de dois floats
+                   copiada como 8 bytes): não muda valor nenhum, a forma vai junto */
+                copiar_forma(sPend.dst, sAnel[i].addr, sPend.size);
+            }
             sAnel[i].vivo = 0;
             return;
+        }
+    }
+    /* Só para o detector: um pedaço de um vetor lido inteiro e gravado componente a componente (a componente w
+       que as operações de vetor do port copiam de volta), na mesma posição do bloco alinhado. Leva a forma, não a
+       origem do disco: casar pedaço só pelo valor (zeros) espalhou origens erradas e multiplicou os conflitos. */
+    for (k = 1; sVisoes && !sSemPedaco && k <= ANEL; k++) {
+        uint32_t larga, d;
+        i = (sAnelPos - k + ANEL) % ANEL;
+        larga = sAnel[i].size;
+        if (!sAnel[i].vivo || larga <= sPend.size || (larga & (larga - 1)) != 0 || (sAnel[i].addr & (larga - 1)) != 0) {
+            continue;
+        }
+        d = sPend.dst & (larga - 1);
+        if (d % sPend.size == 0 &&
+            memcmp((const void *)(uintptr_t)sPend.dst, (const void *)(uintptr_t)(sAnel[i].addr + d), sPend.size) == 0) {
+            copiar_forma(sPend.dst, sAnel[i].addr + d, sPend.size);
+            break;
         }
     }
     /* gravou uma conta, não um dado lido: a memória deixa de ser do disco */
@@ -561,9 +654,9 @@ NAO_RASTREAR static void despejar(void) {
     for (i = 0; i < TAB; i++) {
         Uso *u = &sTab[i];
         if (u->chave != 0) {
-            fprintf(fp, "%s\t%llu\t%u\t%u\t%u\t%08x,%08x,%08x,%08x\t%u\t%u\t%u\n", sNome[u->chave >> 40],
+            fprintf(fp, "%s\t%llu\t%u\t%u\t%u\t%08x,%08x,%08x,%08x\t%u\t%u\t%u\t%08x,%08x,%08x,%08x\n", sNome[u->chave >> 40],
                     (unsigned long long)(u->chave & 0xFFFFFFFFFFull), u->tamanhos, u->usos, u->escritas, u->pcs[0], u->pcs[1],
-                    u->pcs[2], u->pcs[3], u->copias, u->impar, u->desal);
+                    u->pcs[2], u->pcs[3], u->copias, u->impar, u->desal, u->pcb[0], u->pcb[1], u->pcb[2], u->pcb[3]);
         }
     }
     fclose(fp);
@@ -629,12 +722,7 @@ NAO_RASTREAR static void despejar_visoes(void) {
 __attribute__((constructor)) NAO_RASTREAR static void iniciar(void) {
     sAtivo = getenv("BT3_RASTREIO") != NULL;
     sVisoes = getenv("BT3_VISOES") != NULL;
-    {
-        /* a thread do jogo roda na pilha do processo (x86 de 32 bits): 16 MB abaixo daqui */
-        volatile uint32_t aqui = (uint32_t)(uintptr_t)&aqui;
-        sPilhaHi = (aqui | 0xFFFFF) + 1;
-        sPilhaLo = sPilhaHi - 0x01000000u;
-    }
+    sSemPedaco = getenv("BT3_VISOES_SEM_PEDACO") != NULL;
     if (sAtivo) {
         marcar_elf();
         atexit(despejar);

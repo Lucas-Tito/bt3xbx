@@ -7,18 +7,20 @@
                                                           mapa "arquivo deslocamento largura repetições" e,
                                                           ao lado, MAPA.tsv.conflitos (para olhar à mão)
 
-Regras (o rastreio vem de uma build sem junção de leituras: cada leitura tem a largura do tipo no código):
+Regras (o rastreio vem de uma build sem junção de leituras: cada leitura tem a largura do tipo no código).
+Conflito NUNCA gera inversão (nem do trecho de que faz parte): vai para MAPA.tsv.conflitos, para o conversor do
+formato (decisão 8) ou uma correção no código decidir.
   - largura de uma posição = a única largura > 1 com que o jogo a leu como número;
-  - lida também como byte: NÃO inverte (leitura byte a byte de dado little-endian, ou punning: classe 3 da
-    decisão 7, que pede correção no código); vai para os conflitos;
-  - lida com duas larguras > 1: vai para os conflitos e o mapa usa a menor;
-  - lida num endereço desalinhado ou num tamanho que não é de número (3, 5...): fora do mapa, nos conflitos;
-  - só copiada, nunca lida como número: usa a largura da cópia (o jogo lê um campo e guarda o valor noutro
-    lugar, e o uso fica nos registradores: o tamanho no cabeçalho da descompressão é assim); nunca vence uma
-    leitura como byte;
-  - leitura de 16 bytes (vetor) espalha a menor largura conhecida da posição pelo trecho, e 4 se não houver;
-    uma de 8 com largura menor conhecida também; 8 sozinha fica u64/double;
-  - uma palavra com campo menor lido dentro dela se divide pela largura menor.
+  - lida também como byte, ou com duas larguras > 1: conflito; a não ser que todas as leituras como byte sejam de
+    campos de structs que o código já arruma para big-endian (layout.PERMUTADAS, campo pelo tipos.py): aí o
+    byte lido é o certo e a posição se inverte pelo número;
+  - lida num endereço desalinhado ou num tamanho que não é de número (3, 5...): conflito;
+  - só copiada, nunca lida: usa a largura da cópia, se for uma só (o jogo lê um campo e guarda o valor noutro
+    lugar, e o uso fica nos registradores: o tamanho no cabeçalho da descompressão é assim);
+  - qualquer leitura que comece dentro de um número de 2, 4 ou 8 bytes (inclusive de um byte só): conflito
+    para as duas posições;
+  - leitura de 16 bytes (vetor): o elemento é a largura das leituras de dentro, se todas forem iguais e
+    alinhadas, e 4 se não houver nenhuma; senão, conflito.
 """
 import bisect, collections, subprocess, sys
 
@@ -29,13 +31,16 @@ def larguras(tam):
     return [w for w in LARG if tam & w]
 
 
-def ler(caminho):
-    """(arquivo, deslocamento, larguras, usos, escritas, pcs, cópias, ímpar, desalinhada)."""
+def ler(caminho, com_pcb=False):
+    """(arquivo, deslocamento, larguras, usos, escritas, pcs, cópias, ímpar, desalinhada[, pcs de byte])."""
     for l in open(caminho, encoding="utf-8", errors="replace"):
         c = l.rstrip("\n").split("\t")
         pcs = [int(p, 16) for p in c[5].split(",") if int(p, 16)]
-        yield (c[0], int(c[1]), int(c[2]), int(c[3]), int(c[4]), pcs,
-               int(c[6]) if len(c) > 6 else 0, int(c[7]) if len(c) > 7 else 0, int(c[8]) if len(c) > 8 else 0)
+        r = (c[0], int(c[1]), int(c[2]), int(c[3]), int(c[4]), pcs,
+             int(c[6]) if len(c) > 6 else 0, int(c[7]) if len(c) > 7 else 0, int(c[8]) if len(c) > 8 else 0)
+        if com_pcb:
+            r += ([int(p, 16) for p in c[9].split(",") if int(p, 16)] if len(c) > 9 else None,)
+        yield r
 
 
 def simbolos(programa):
@@ -76,9 +81,15 @@ def resumo(caminho, programa=None):
 def mapa(caminhos, saida, programa=None):
     nome = simbolos(programa) if programa else (lambda pc: f"{pc:08x}")
     pos, pcs_de, desal, impar, copia = {}, collections.defaultdict(set), set(), set(), {}
+    pcb_de = collections.defaultdict(set)
+    sem_pcb = False
     for c in caminhos:
-        for arq, ofs, tam, usos, esc, pcs, cop, imp, des in ler(c):
+        for arq, ofs, tam, usos, esc, pcs, cop, imp, des, pcb in ler(c, com_pcb=True):
             k = (arq, ofs)
+            if pcb is None:
+                sem_pcb = True
+            else:
+                pcb_de[k].update(pcb)
             pos[k] = pos.get(k, 0) | tam
             copia[k] = copia.get(k, 0) | cop
             pcs_de[k].update(pcs)
@@ -86,43 +97,95 @@ def mapa(caminhos, saida, programa=None):
                 desal.add(k)
             if imp:
                 impar.add(k)
-    conflitos, larg = [], {}
-    so_copia = 0
+    conflitos = {}
+
+    def conflito(k, motivo):
+        conflitos.setdefault(k, motivo)
+
+    # Leitura como byte feita por um campo de struct que o código já arruma para big-endian (layout.PERMUTADAS):
+    # o jogo copiou o número do disco para essa struct e lê lá um byte dele; com a struct permutada o byte lido é
+    # o certo, e a posição se inverte pela largura do número. Precisa saber o campo de cada leitura (tipos.py).
+    resolvidos = collections.Counter()
+    campo_de = {}
+    if programa and not sem_pcb:
+        import layout, tipos
+        suspeitos = {pc for k, tam in pos.items() if tam & 1 and tam & 0xE for pc in pcb_de[k]}
+        campo_de = tipos.campos(programa, suspeitos) if suspeitos else {}
+
+    def byte_resolvido(k):
+        pcb = pcb_de.get(k)
+        if not pcb or len(pcb) >= 4:  # 4 = a lista encheu: pode haver outro leitor de byte não anotado
+            return None
+        structs = {campo_de[pc][0].split(".")[0] if pc in campo_de else None for pc in pcb}
+        if None in structs or not structs <= set(layout.PERMUTADAS):
+            return None
+        return ", ".join(sorted(structs))
+
+    # 1. cada posição sozinha: a largura que pede, ou conflito
+    trecho, so_copia = {}, 0  # (arq, ofs) -> (largura do trecho, largura do elemento)
     for k, tam in pos.items():
-        if not larguras(tam) and not tam & 1 and larguras(copia[k]):
-            tam = copia[k]  # só copiada: a largura da cópia
-            so_copia += 1
-        ls = [w for w in larguras(tam) if w < 16]
         if k in desal:
-            conflitos.append((k, tam, "endereço desalinhado"))
+            conflito(k, "endereço desalinhado")
             continue
-        if not ls:
-            if tam & 16:
-                larg[k] = 4  # vetor lido inteiro: 4 floats (ver a regra no topo)
+        if k in impar:
+            conflito(k, "também lida num tamanho que não é de número (trecho)")
             continue
+        ls = [w for w in larguras(tam) if w < 16]
+        if not ls and not tam & 1 and not tam & 16 and len(larguras(copia[k])) == 1:
+            ls = larguras(copia[k])  # só copiada: a largura da cópia
+            so_copia += 1
         if tam & 1:
-            conflitos.append((k, tam, "lida como byte e como número: não inverte (punning ou leitura byte a byte)"))
-            continue
+            if not ls:
+                continue
+            r = byte_resolvido(k) if campo_de else None
+            if r is None:
+                conflito(k, "lida como byte e como número: não inverte (punning ou leitura byte a byte)")
+                continue
+            resolvidos[r] += 1
         if len(ls) > 1:
-            conflitos.append((k, tam, f"larguras {sorted(ls)}: usa a menor"))
-        larg[k] = ls[-1]
-        for larga in (16, 8):  # leituras largas cobrem várias posições
-            if tam & larga and ls[-1] < larga:
-                for o in range(k[1] + ls[-1], k[1] + larga, ls[-1]):
-                    larg.setdefault((k[0], o), ls[-1])
-    for k in impar - set(c[0] for c in conflitos):
-        conflitos.append((k, pos[k], "também lida num tamanho que não é de número (trecho)"))
-    divididas = 0
-    for (arq, ofs), w in sorted(larg.items()):
-        if larg.get((arq, ofs)) != w:
+            conflito(k, f"larguras {sorted(ls)}: não inverte")
             continue
-        dentro = [larg[(arq, o)] for o in range(ofs + 1, ofs + w) if (arq, o) in larg]
-        if dentro:
-            u = min(dentro + [w])
-            larg[(arq, ofs)] = u
-            for o in range(ofs + u, ofs + w, u):
-                larg[(arq, o)] = min(larg.get((arq, o), u), u)
-            divididas += 1
+        if ls:
+            trecho[k] = (ls[0], ls[0])
+        elif tam & 16:
+            trecho[k] = (16, 0)  # vetor: o elemento sai das leituras de dentro (4 se não houver)
+    # 2. trechos que se sobrepõem a outra leitura
+    por_arq = collections.defaultdict(list)
+    for (arq, ofs) in pos:
+        por_arq[arq].append(ofs)
+    for arq in por_arq:
+        por_arq[arq].sort()
+    for (arq, ofs), (w, e) in list(trecho.items()):
+        lista = por_arq[arq]
+        i = bisect.bisect_right(lista, ofs)
+        dentro = []
+        while i < len(lista) and lista[i] < ofs + w:
+            dentro.append(lista[i])
+            i += 1
+        if w == 16:
+            ws = {trecho[(arq, o)][0] for o in dentro if (arq, o) in trecho}
+            ruins = [o for o in dentro if (arq, o) not in trecho or (arq, o) in conflitos]
+            el = ws.pop() if len(ws) == 1 else (4 if not ws else None)
+            if el is None or ruins or any((o - ofs) % el for o in dentro):
+                conflito((arq, ofs), "vetor com leituras de larguras diferentes dentro")
+                continue
+            trecho[(arq, ofs)] = (16, el)
+            continue
+        for o in dentro:  # um número não tem campo dentro: quem lê no meio dele lê outra coisa
+            conflito((arq, ofs), f"leitura dentro de um número de {w} bytes (em +{o - ofs}): não inverte")
+            conflito((arq, o), f"começa dentro de um número de {w} bytes lido em {ofs}: não inverte")
+    # 3. conflito não inverte nada, nem o trecho de que faz parte
+    larg = {}
+    for (arq, ofs), (w, e) in trecho.items():
+        if (arq, ofs) in conflitos:
+            continue
+        if w == 16:
+            for o in range(ofs, ofs + 16, e):
+                larg.setdefault((arq, o), e)
+        else:
+            larg[(arq, ofs)] = w
+    for k in conflitos:
+        larg.pop(k, None)
     linhas, ant = [], None
     for (arq, ofs) in sorted(larg):
         w = larg[(arq, ofs)]
@@ -138,14 +201,21 @@ def mapa(caminhos, saida, programa=None):
         for arq, ofs, w, n in linhas:
             f.write(f"{arq}\t{ofs}\t{w}\t{n}\n")
     with open(saida + ".conflitos", "w") as f:
-        for (arq, ofs), tam, motivo in sorted(conflitos):
+        for (arq, ofs), motivo in sorted(conflitos.items()):
+            tam = pos.get((arq, ofs), 0)
             funcs = ", ".join(sorted({nome(pc) for pc in pcs_de[(arq, ofs)]}))
             ws = sorted(larguras(tam) + ([1] if tam & 1 else []))
             f.write(f"{arq}\t{ofs}\tlarguras={ws}\t{motivo}\t{funcs}\n")
-    porque = collections.Counter(m.split(":")[0] for _, _, m in conflitos)
-    print(f"{len(linhas)} trechos de {len({l[0] for l in linhas})} arquivos em {saida}; {divididas} palavras divididas; "
+    porque = collections.Counter(m.split(":")[0].split(" (em")[0] for m in conflitos.values())
+    print(f"{len(linhas)} trechos de {len({l[0] for l in linhas})} arquivos em {saida}; "
           f"{so_copia} posições pela largura da cópia")
-    print(f"{len(conflitos)} conflitos em {saida}.conflitos: " + ", ".join(f"{m} {n}" for m, n in porque.most_common()))
+    print(f"{len(conflitos)} conflitos (não invertidos) em {saida}.conflitos: " +
+          ", ".join(f"{m} {n}" for m, n in porque.most_common()))
+    if resolvidos:
+        print("lidas como byte por struct já corrigida no código (invertidas pelo número): " +
+              ", ".join(f"{m} {n}" for m, n in resolvidos.most_common()))
+    elif sem_pcb:
+        print("(rastreio sem as funções que leram como byte: os conflitos de byte não puderam ser resolvidos)")
 
 
 def main():
