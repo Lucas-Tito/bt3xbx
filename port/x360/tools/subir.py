@@ -16,7 +16,7 @@ USUARIO, SENHA = "xbox", "xbox"
 DESTINO = "/Hdd1/HOMEBREW/bt3xbx"
 
 
-def porta_aberta(ip, porta=21, espera=0.6):
+def porta_aberta(ip, porta=21, espera=2.0):
     try:
         with socket.create_connection((ip, porta), timeout=espera):
             return True
@@ -50,6 +50,12 @@ def mac_microsoft(ip):
 def achar():
     if os.environ.get("XBOX_IP"):
         return os.environ["XBOX_IP"]
+    # Atalho: quem já está na tabela de vizinhos com MAC da Microsoft. A primeira conexão ao
+    # console demora; uma varredura com espera curta não o vê.
+    vizinhos = subprocess.run(["ip", "neigh"], capture_output=True, text=True).stdout
+    for l in vizinhos.splitlines():
+        if "4c:0b:be" in l.lower() and porta_aberta(l.split()[0], espera=5):
+            return l.split()[0]
     for prefixo in redes_locais():
         candidatos = [f"{prefixo}.{i}" for i in range(1, 255)]
         with concurrent.futures.ThreadPoolExecutor(64) as ex:
