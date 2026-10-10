@@ -193,10 +193,10 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
   - byte cujo valor atual não é o gravado foi escrito por código sem instrumentação (struct passada
     por valor, libc, código do port): trate como neutro. Isso substitui "pilha neutra", que dependia
     do endereço da pilha e se desligava por ASLR;
-  - cópia em laço (lê N, grava N do mesmo valor) leva a forma junto. A gravação pode ser um pedaço
-    de uma leitura mais larga (vetor de 16 bytes regravado componente a componente), mas só na mesma
-    posição dentro do bloco alinhado, e levando só a forma, nunca a origem do disco: casar pedaço pelo
-    valor espalhou origens erradas (zeros coincidem) e multiplicou os conflitos do mapa por 7 a 13;
+  - cópia em laço (lê N, grava N do mesmo valor, mesma largura) leva a forma junto. Não tente casar
+    a gravação com um pedaço de uma leitura mais larga (vetor regravado componente a componente):
+    zeros coincidem, e isso espalhou origens erradas (conflitos do mapa de 266 para 3.585) e, mesmo
+    levando só a forma, multiplicou os falsos do detector (de 18 para 326 combinações);
   - copiar um valor lido mais estreito que a gravação é o próprio erro; copiar mais largo (dois
     floats como 8 bytes) não muda nada;
   - o teste de "simétrico" (a leitura dá o mesmo valor nas duas ordens) compara o trecho

@@ -261,14 +261,24 @@ A terceira revisão independente mostrou que a decisão 10 era prematura (nota n
 - **Ciclo versionado:** `f1.sh` e `compara.py`; carimbo com os arquivos novos e o hash do rastreio usado;
   rastreio com `setarch -R`.
 - **Erro no caminho:** casar cópia por pedaço de vetor só pelo valor espalhou origens erradas (zeros
-  coincidem): conflitos de 266 para 3.585, e a PPC caiu. O pedaço agora só leva a forma do detector.
+  coincidem): conflitos de 266 para 3.585, e a PPC caiu. Levando só a forma do detector, os falsos foram de
+  18 para 326 combinações. Removido.
 
 Estado com tudo no mesmo carimbo: luta PPC idêntica à x86 nos 4.242 quadros; 1.964 structs com o mesmo
 layout; os 180 blocos do heap no mesmo lugar e tamanho; mapa com 20 conflitos, nenhum invertido.
 
+Memória no último quadro (cerca de 89 mil palavras "diferentes", todas em blocos do heap):
+- pacotes da GPU (blocos de 1 MB em dobro, `gOt`, um de 256 KB com etiquetas GIF em u64 gravado por
+  metades): F3;
+- dados de modelo e textura que a luta não leu, com u16 sem inverter: é o que a conversão por formato
+  cobre;
+- um bloco (o 91, 0x12054 bytes) com `ffffffff` na x86 onde a PPC tem um ponteiro: a investigar.
+
+Detector: 18 combinações, todas do mesmo caso real. As operações de vetor do port (`Vec4_Add` em 16 bytes)
+gravam a componente w como float sobre campos u16 que vêm depois de um Vec3 no registro dos golpes de ki, e
+o jogo os relê como u16. No PS2 o float desnormal vira zero, e se é desnormal depende de qual metade fica em
+cima: depende da ordem dos bytes. A luta não esbarra nisso; fica como risco conhecido.
+
 Aberto:
-- A memória no último quadro ainda tem palavras "diferentes" (cerca de 89 mil, fora do que a luta usa) a
-  classificar.
-- O detector voltou a listar muitos pares "gravou 4, leu 1" de funções sem relação: falta medir de onde vêm.
 - `tipos.py` (decisão 8) liga 99% das leituras de um modelo de personagem a struct e campo; é a base dos
   conversores por formato.

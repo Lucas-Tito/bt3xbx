@@ -129,7 +129,6 @@ static Uso *uso(uint64_t chave) {
    valor, libc, port): também neutro. Cada leitura com forma diferente da gravação é anotada por (função que
    gravou, função que leu). */
 static int sVisoes;
-static int sSemPedaco; /* BT3_VISOES_SEM_PEDACO: desliga a forma por pedaço de vetor (para medir o efeito) */
 static uint16_t *sForma[1u << (32 - BLOCO)]; /* valor gravado << 8 | forma */
 static uint32_t *sQuem[1u << (32 - BLOCO)];
 
@@ -446,23 +445,6 @@ NAO_RASTREAR static void resolver(void) {
             return;
         }
     }
-    /* Só para o detector: um pedaço de um vetor lido inteiro e gravado componente a componente (a componente w
-       que as operações de vetor do port copiam de volta), na mesma posição do bloco alinhado. Leva a forma, não a
-       origem do disco: casar pedaço só pelo valor (zeros) espalhou origens erradas e multiplicou os conflitos. */
-    for (k = 1; sVisoes && !sSemPedaco && k <= ANEL; k++) {
-        uint32_t larga, d;
-        i = (sAnelPos - k + ANEL) % ANEL;
-        larga = sAnel[i].size;
-        if (!sAnel[i].vivo || larga <= sPend.size || (larga & (larga - 1)) != 0 || (sAnel[i].addr & (larga - 1)) != 0) {
-            continue;
-        }
-        d = sPend.dst & (larga - 1);
-        if (d % sPend.size == 0 &&
-            memcmp((const void *)(uintptr_t)sPend.dst, (const void *)(uintptr_t)(sAnel[i].addr + d), sPend.size) == 0) {
-            copiar_forma(sPend.dst, sAnel[i].addr + d, sPend.size);
-            break;
-        }
-    }
     /* gravou uma conta, não um dado lido: a memória deixa de ser do disco */
     for (b = 0; b < sPend.size; b++) {
         marcar(sPend.dst + b, 0);
@@ -722,7 +704,6 @@ NAO_RASTREAR static void despejar_visoes(void) {
 __attribute__((constructor)) NAO_RASTREAR static void iniciar(void) {
     sAtivo = getenv("BT3_RASTREIO") != NULL;
     sVisoes = getenv("BT3_VISOES") != NULL;
-    sSemPedaco = getenv("BT3_VISOES_SEM_PEDACO") != NULL;
     if (sAtivo) {
         marcar_elf();
         atexit(despejar);
