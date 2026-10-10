@@ -126,11 +126,16 @@ static Uso *uso(uint64_t chave) {
    tabelas do executável e memset ficam neutros (são tratados por conversão). Cada leitura com forma diferente da
    gravação é anotada por (função que gravou, função que leu). */
 static int sVisoes;
+static uint32_t sPilhaLo, sPilhaHi; /* a pilha fica neutra: struct passada por valor é copiada para lá sem instrumentação */
 static uint8_t *sForma[1u << (32 - BLOCO)];
 static uint32_t *sQuem[1u << (32 - BLOCO)];
 
 static uint8_t forma(uint32_t a) {
-    uint8_t *b = sForma[a >> BLOCO];
+    uint8_t *b;
+    if (a >= sPilhaLo && a < sPilhaHi) {
+        return 0;
+    }
+    b = sForma[a >> BLOCO];
     return b != NULL ? b[a & ((1u << BLOCO) - 1)] : 0;
 }
 
@@ -283,7 +288,7 @@ NAO_RASTREAR static void neutro(uint32_t dst, size_t n) {
 #define ANEL 8
 static struct { uint32_t addr, size, pc; int vivo, sus; Visao v; } sAnel[ANEL];
 static int sAnelPos;
-static struct { uint32_t dst, src, size, pc; int vivo, sus; Visao v; } sPend;
+static struct { uint32_t dst, size, pc; int vivo; } sPend;
 
 static int largura(uint32_t size) {
     return size == 1 || size == 2 || size == 4 || size == 8 || size == 16;
@@ -342,27 +347,32 @@ static void anotar_escrita(uint32_t addr, uint32_t size, uint32_t pc) {
 
 NAO_RASTREAR static void resolver(void) {
     uint32_t b;
+    int k, i;
     if (!sPend.vivo) {
         return;
     }
     sPend.vivo = 0;
-    if (memcmp((const void *)(uintptr_t)sPend.dst, (const void *)(uintptr_t)sPend.src, sPend.size) == 0) {
-        Uso *u = origem(sPend.src) != 0 ? uso(origem(sPend.src)) : NULL;
-        if (u != NULL) {
-            u->copias |= (uint8_t)sPend.size;
+    /* a gravação já aconteceu: procura no anel, da mais nova para a mais velha, a leitura do mesmo tamanho cujo
+       valor é o que foi gravado; achou, é cópia (a origem e a forma passam para o destino) */
+    for (k = 1; k <= ANEL; k++) {
+        i = (sAnelPos - k + ANEL) % ANEL;
+        if (sAnel[i].vivo && sAnel[i].size == sPend.size &&
+            memcmp((const void *)(uintptr_t)sPend.dst, (const void *)(uintptr_t)sAnel[i].addr, sPend.size) == 0) {
+            Uso *u = origem(sAnel[i].addr) != 0 ? uso(origem(sAnel[i].addr)) : NULL;
+            if (u != NULL) {
+                u->copias |= (uint8_t)sPend.size;
+            }
+            for (b = 0; b < sPend.size; b++) {
+                marcar(sPend.dst + b, origem(sAnel[i].addr + b));
+            }
+            copiar_forma(sPend.dst, sAnel[i].addr, sPend.size);
+            sAnel[i].vivo = 0;
+            return;
         }
-        for (b = 0; b < sPend.size; b++) {
-            marcar(sPend.dst + b, origem(sPend.src + b));
-        }
-        copiar_forma(sPend.dst, sPend.src, sPend.size);
-    } else {
-        anotar_uso(sPend.src, sPend.size, sPend.pc);
-        if (sPend.sus) {
-            anotar_visao(&sPend.v);
-        }
-        for (b = 0; b < sPend.size; b++) {
-            marcar(sPend.dst + b, 0); /* gravou uma conta, não o dado do disco */
-        }
+    }
+    /* gravou uma conta, não um dado lido: a memória deixa de ser do disco */
+    for (b = 0; b < sPend.size; b++) {
+        marcar(sPend.dst + b, 0);
     }
 }
 
@@ -371,7 +381,9 @@ NAO_RASTREAR static void ler(uint32_t addr, uint32_t size, uint32_t pc) {
     Visao v;
     resolver();
     sus = forma_lida(addr, size, pc, &v);
-    if ((!sAtivo || origem(addr) == 0) && !sus) {
+    /* com o detector ligado, toda leitura entra no anel: é assim que uma cópia (struct inteira copiada palavra
+       a palavra) leva a forma da origem, inclusive a parte neutra, em vez de virar "gravação de 4" */
+    if ((!sAtivo || origem(addr) == 0) && !sus && !sVisoes) {
         return;
     }
     /* a leitura mais velha do anel que não virou cópia é uso de verdade */
@@ -392,7 +404,7 @@ NAO_RASTREAR static void ler(uint32_t addr, uint32_t size, uint32_t pc) {
 }
 
 NAO_RASTREAR static void gravar(uint32_t addr, uint32_t size, uint32_t pc) {
-    int k, i;
+    int k;
     resolver();
     forma_gravada(addr, size, pc);
     if (!sAtivo && !sVisoes) {
@@ -410,25 +422,11 @@ NAO_RASTREAR static void gravar(uint32_t addr, uint32_t size, uint32_t pc) {
             return;
         }
     }
-    /* candidata a cópia: a leitura mais velha do mesmo tamanho; confere o valor no próximo callback */
-    for (k = 0; k < ANEL; k++) {
-        i = (sAnelPos + k) % ANEL;
-        if (sAnel[i].vivo && sAnel[i].size == size) {
-            sPend.dst = addr;
-            sPend.src = sAnel[i].addr;
-            sPend.size = size;
-            sPend.pc = sAnel[i].pc;
-            sPend.vivo = 1;
-            sPend.sus = sAnel[i].sus;
-            sPend.v = sAnel[i].v;
-            sAnel[i].vivo = 0;
-            return;
-        }
-    }
-    /* escrita de outro dado: a memória deixa de ser do disco (o heap é reaproveitado depois que o arquivo sai) */
-    for (k = 0; k < (int)size; k++) {
-        marcar(addr + (uint32_t)k, 0);
-    }
+    /* candidata a cópia: decide no próximo callback, quando o valor gravado já está na memória (resolver) */
+    sPend.dst = addr;
+    sPend.size = size;
+    sPend.pc = pc;
+    sPend.vivo = 1;
 }
 
 #define PC ((uint32_t)(uintptr_t)__builtin_return_address(0))
@@ -631,6 +629,12 @@ NAO_RASTREAR static void despejar_visoes(void) {
 __attribute__((constructor)) NAO_RASTREAR static void iniciar(void) {
     sAtivo = getenv("BT3_RASTREIO") != NULL;
     sVisoes = getenv("BT3_VISOES") != NULL;
+    {
+        /* a thread do jogo roda na pilha do processo (x86 de 32 bits): 16 MB abaixo daqui */
+        volatile uint32_t aqui = (uint32_t)(uintptr_t)&aqui;
+        sPilhaHi = (aqui | 0xFFFFF) + 1;
+        sPilhaLo = sPilhaHi - 0x01000000u;
+    }
     if (sAtivo) {
         marcar_elf();
         atexit(despejar);

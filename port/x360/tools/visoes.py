@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """F1: resume o detector de visões (port/x360/headless/rastreio.c, BT3_VISOES=<arquivo>).
 
-    visoes.py VISOES.tsv PROGRAMA_X86R [--tudo]
+    visoes.py VISOES.tsv PROGRAMA_X86R [--tudo] [--linhas]   (--linhas: arquivo:linha das duas pontas)
 
 Sem --tudo, ficam de fora as leituras de 16 bytes de palavras gravadas uma a uma (cópia de vetor: não lê número).
 
@@ -24,7 +24,28 @@ def simbolos(programa):
     return nome
 
 
+def linhas_de(prog, pcs):
+    """pc -> 'arquivo:linha' (addr2line; o pc é o retorno da chamada de instrumentação, logo depois do acesso)."""
+    pcs = sorted(pc for pc in pcs if pc)
+    out = subprocess.run(["addr2line", "-e", prog] + [f"0x{pc - 1:x}" for pc in pcs], capture_output=True, text=True).stdout.split("\n")
+    return {pc: out[i].split("/bt3xbx/")[-1].split(" ")[0] for i, pc in enumerate(pcs) if i < len(out)}
+
+
 def main():
+    if "--linhas" in sys.argv:
+        prog = sys.argv[2]
+        bruto = [l.split() for l in open(sys.argv[1])]
+        bruto = [b for b in bruto if int(b[3]) != 16 or "--tudo" in sys.argv]
+        lin = linhas_de(prog, {int(b[0], 16) for b in bruto} | {int(b[1], 16) for b in bruto})
+        nome = simbolos(prog)
+        por = {}
+        for g, r, gw, lw, pos, n in bruto:
+            g, r = int(g, 16), int(r, 16)
+            k = (lin.get(r, "?"), lin.get(g, "?"), gw, lw)
+            por[k] = por.get(k, 0) + int(n)
+        for (lr, lg, gw, lw), n in sorted(por.items()):
+            print(f"leu {lw} em {lr:42s} <- gravou {gw} em {lg:42s} ({n}x)")
+        return
     nome = simbolos(sys.argv[2])
     linhas = []
     for l in open(sys.argv[1]):
