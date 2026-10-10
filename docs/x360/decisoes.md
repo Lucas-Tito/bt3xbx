@@ -183,3 +183,30 @@ textura, animação comprimida, colisão do cenário, banco de som, fonte, faixa
 partir das structs da decomp, aplicados na carga do arquivo (ou no instalador). O rastreio continua
 servindo de catálogo (que arquivo é lido por que função, com que largura) e de teste: mapa e conversor
 têm de concordar em cada posição que o rastreio viu.
+
+## 9. Revisão da F1 e o que mudou na base de comparação (10/10/2026)
+
+Uma revisão independente apontou que as ferramentas aceitavam como "igual" justamente os erros que a
+conversão vai produzir. Corrigido antes de seguir:
+- PowerPC com `-fsigned-char`; `.mem` gerado (globais no dump); `memdiff` com ponteiro do port pela faixa
+  real de cada programa, larguras ambíguas contadas à parte, globais pareadas por símbolo.
+- Rastreio sem junção de leituras de bytes (`-aggressive-instcombine-max-scan-instrs=0`; em `-O0` o jogo
+  diverge por comportamento indefinido), tamanhos exatos, alinhamento pelo endereço, até 4 leitores por
+  posição, conflitos em arquivo à parte.
+- A referência x86 de 32 bits bate com a build oficial de 64 bits do upstream nos 4.242 quadros.
+- `wsl.sh enviar` põe o clone no mesmo commit; cada build carimba a origem.
+
+Achados novos:
+- **Tabelas de dados do executável** (decisão 7 não listava): o `gen_data.py` repassa os tipos do splat
+  (`.long` para tudo). O rastreio agora marca esses bytes (`ELF:<objeto>`) e `elfdados.py` reescreve cada
+  diretiva com a largura lida. No produto elas chegam little-endian do SLUS do usuário e são mais um
+  formato da conversão.
+- **Ordem de avaliação de argumentos**: seis funções do golpe de ki liam `chr`/`kind` na mesma chamada que
+  os preenche. Clang e GCC escolhem ordens diferentes; corrigido com `#ifdef PORT` (vale para o PC também).
+- **Detector de visões** (`BT3_VISOES`, `visoes.py`): grava a largura de cada escrita na memória e acusa
+  leitura com outra largura ou posição. Acha a classe 3 sistematicamente (231 combinações na luta de
+  demonstração), em vez de um crash por vez.
+
+Estado: a PowerPC roda a luta de demonstração inteira; vida, posições e relógio iguais nos 4.242 quadros;
+o gerador aleatório diverge a partir do quadro 2.751 (efeitos visuais) e há um crash no quadro ~3.979
+depois das últimas correções. A lista do detector é o que falta resolver da classe 3.

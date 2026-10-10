@@ -118,14 +118,172 @@ static Uso *uso(uint64_t chave) {
     return &sTab[h];
 }
 
+/* ------------------------------------------------------------------ detector de visões (BT3_VISOES)
+
+   Acha a classe 3 da decisão 7 sem esperar crash: memória gravada com uma largura e lida com outra (s32 gravado,
+   u8 lido no mesmo byte; dois u16 gravados, um u32 lido). Num host big-endian o resultado muda. Para cada byte,
+   a "forma" da última gravação: largura e posição dentro dela; cópias levam a forma junto; dado do disco, das
+   tabelas do executável e memset ficam neutros (são tratados por conversão). Cada leitura com forma diferente da
+   gravação é anotada por (função que gravou, função que leu). */
+static int sVisoes;
+static uint8_t *sForma[1u << (32 - BLOCO)];
+static uint32_t *sQuem[1u << (32 - BLOCO)];
+
+static uint8_t forma(uint32_t a) {
+    uint8_t *b = sForma[a >> BLOCO];
+    return b != NULL ? b[a & ((1u << BLOCO) - 1)] : 0;
+}
+
+static void por_forma(uint32_t a, uint8_t v) {
+    uint8_t **b = &sForma[a >> BLOCO];
+    if (*b == NULL) {
+        if (v == 0) {
+            return;
+        }
+        *b = calloc(1u << BLOCO, 1);
+        if (*b == NULL) {
+            return;
+        }
+    }
+    (*b)[a & ((1u << BLOCO) - 1)] = v;
+}
+
+static uint32_t quem(uint32_t a) {
+    uint32_t *b = sQuem[a >> BLOCO];
+    return b != NULL ? b[(a & ((1u << BLOCO) - 1)) >> 2] : 0;
+}
+
+static void por_quem(uint32_t a, uint32_t pc) {
+    uint32_t **b = &sQuem[a >> BLOCO];
+    if (*b == NULL) {
+        *b = calloc(1u << (BLOCO - 2), sizeof(uint32_t));
+        if (*b == NULL) {
+            return;
+        }
+    }
+    (*b)[(a & ((1u << BLOCO) - 1)) >> 2] = pc;
+}
+
+static int log2w(uint32_t n) {
+    return n == 1 ? 0 : n == 2 ? 1 : n == 4 ? 2 : n == 8 ? 3 : n == 16 ? 4 : -1;
+}
+
+/* forma = 0x80 | log2(largura) << 4 | posição */
+static void forma_gravada(uint32_t addr, uint32_t size, uint32_t pc) {
+    int l = log2w(size);
+    uint32_t k;
+    if (!sVisoes) {
+        return;
+    }
+    for (k = 0; k < size; k++) {
+        por_forma(addr + k, l < 0 ? 0 : (uint8_t)(0x80 | l << 4 | k));
+        if (((addr + k) & 3) == 0 || k == 0) {
+            por_quem(addr + k, pc);
+        }
+    }
+}
+
+typedef struct Visao { uint32_t gravou, leu; uint8_t lw, gw, pos; uint32_t n; } Visao;
+#define VTAB (1u << 16)
+static Visao *sVis;
+
+/* 1 se a leitura não tem a forma da gravação (preenche *v); 0 se está certa ou não dá para julgar. */
+NAO_RASTREAR static int forma_lida(uint32_t addr, uint32_t size, uint32_t pc, Visao *v) {
+    uint8_t f0, f;
+    uint32_t k, gw, base;
+    int igual = 1, simetrico = 1;
+    if (!sVisoes || log2w(size) < 0) {
+        return 0;
+    }
+    f0 = forma(addr);
+    if (f0 == 0) {
+        return 0;
+    }
+    for (k = 0; k < size; k++) {
+        f = forma(addr + k);
+        if (f == 0) {
+            return 0; /* parte neutra: não dá para julgar */
+        }
+        if (f != (uint8_t)(0x80 | log2w(size) << 4 | k)) {
+            igual = 0;
+        }
+    }
+    if (igual) {
+        return 0;
+    }
+    gw = 1u << ((f0 >> 4) & 7);
+    if (gw > size) {
+        /* leitura dentro de uma gravação mais larga: no big-endian cada byte lido vira o do lado oposto da
+           gravação; se forem iguais (0, 0xFFFFFFFF...) não muda nada */
+        base = addr - (f0 & 15);
+        for (k = 0; k < size; k++) {
+            uint32_t i = (f0 & 15) + k;
+            if (*(uint8_t *)(uintptr_t)(base + i) != *(uint8_t *)(uintptr_t)(base + gw - 1 - i)) {
+                simetrico = 0;
+            }
+        }
+        if (simetrico) {
+            return 0;
+        }
+    }
+    v->gravou = quem(addr);
+    v->leu = pc;
+    v->lw = (uint8_t)size;
+    v->gw = (uint8_t)gw;
+    v->pos = f0 & 15;
+    return 1;
+}
+
+NAO_RASTREAR static void anotar_visao(const Visao *v) {
+    uint32_t h;
+    if (sVis == NULL) {
+        sVis = calloc(VTAB, sizeof(Visao));
+    }
+    h = ((v->gravou * 2654435761u) ^ (v->leu * 40503u) ^ v->lw) & (VTAB - 1);
+    while (sVis[h].n != 0 && !(sVis[h].gravou == v->gravou && sVis[h].leu == v->leu && sVis[h].lw == v->lw)) {
+        h = (h + 1) & (VTAB - 1);
+    }
+    {
+        uint32_t n = sVis[h].n;
+        sVis[h] = *v;
+        sVis[h].n = n + 1;
+    }
+}
+
+NAO_RASTREAR static void copiar_forma(uint32_t dst, uint32_t src, size_t n) {
+    size_t i;
+    if (!sVisoes) {
+        return;
+    }
+    if (dst > src && dst < src + n) {
+        for (i = n; i-- > 0;) {
+            por_forma(dst + (uint32_t)i, forma(src + (uint32_t)i));
+        }
+    } else {
+        for (i = 0; i < n; i++) {
+            por_forma(dst + (uint32_t)i, forma(src + (uint32_t)i));
+        }
+    }
+}
+
+NAO_RASTREAR static void neutro(uint32_t dst, size_t n) {
+    size_t i;
+    if (!sVisoes) {
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        por_forma(dst + (uint32_t)i, 0);
+    }
+}
+
 /* Uma leitura com origem, guardada por um instante: se uma escrita do mesmo tamanho vier logo depois
    gravando o MESMO valor em outro lugar, foi uma cópia (laço do jogo), e a origem passa para o destino.
    A escrita ainda não aconteceu quando o callback roda; a conferência do valor fica para o callback
    seguinte (pendente). Valor diferente: era uma conta, e a leitura é uso de verdade. */
 #define ANEL 8
-static struct { uint32_t addr, size, pc; int vivo; } sAnel[ANEL];
+static struct { uint32_t addr, size, pc; int vivo, sus; Visao v; } sAnel[ANEL];
 static int sAnelPos;
-static struct { uint32_t dst, src, size, pc; int vivo; } sPend;
+static struct { uint32_t dst, src, size, pc; int vivo, sus; Visao v; } sPend;
 
 static int largura(uint32_t size) {
     return size == 1 || size == 2 || size == 4 || size == 8 || size == 16;
@@ -196,8 +354,12 @@ NAO_RASTREAR static void resolver(void) {
         for (b = 0; b < sPend.size; b++) {
             marcar(sPend.dst + b, origem(sPend.src + b));
         }
+        copiar_forma(sPend.dst, sPend.src, sPend.size);
     } else {
         anotar_uso(sPend.src, sPend.size, sPend.pc);
+        if (sPend.sus) {
+            anotar_visao(&sPend.v);
+        }
         for (b = 0; b < sPend.size; b++) {
             marcar(sPend.dst + b, 0); /* gravou uma conta, não o dado do disco */
         }
@@ -205,33 +367,44 @@ NAO_RASTREAR static void resolver(void) {
 }
 
 NAO_RASTREAR static void ler(uint32_t addr, uint32_t size, uint32_t pc) {
-    int i;
+    int i, sus;
+    Visao v;
     resolver();
-    if (!sAtivo || origem(addr) == 0) {
+    sus = forma_lida(addr, size, pc, &v);
+    if ((!sAtivo || origem(addr) == 0) && !sus) {
         return;
     }
     /* a leitura mais velha do anel que não virou cópia é uso de verdade */
     i = sAnelPos;
     if (sAnel[i].vivo) {
         anotar_uso(sAnel[i].addr, sAnel[i].size, sAnel[i].pc);
+        if (sAnel[i].sus) {
+            anotar_visao(&sAnel[i].v);
+        }
     }
     sAnel[i].addr = addr;
     sAnel[i].size = size;
     sAnel[i].pc = pc;
     sAnel[i].vivo = 1;
+    sAnel[i].sus = sus;
+    sAnel[i].v = v;
     sAnelPos = (sAnelPos + 1) % ANEL;
 }
 
 NAO_RASTREAR static void gravar(uint32_t addr, uint32_t size, uint32_t pc) {
     int k, i;
     resolver();
-    if (!sAtivo) {
+    forma_gravada(addr, size, pc);
+    if (!sAtivo && !sVisoes) {
         return;
     }
     /* no mesmo lugar: o jogo reescrevendo o campo (deslocamento do arquivo virando ponteiro) */
     for (k = 0; k < ANEL; k++) {
         if (sAnel[k].vivo && sAnel[k].addr == addr) {
             anotar_uso(sAnel[k].addr, sAnel[k].size, sAnel[k].pc);
+            if (sAnel[k].sus) {
+                anotar_visao(&sAnel[k].v);
+            }
             sAnel[k].vivo = 0;
             anotar_escrita(addr, size, pc);
             return;
@@ -246,6 +419,8 @@ NAO_RASTREAR static void gravar(uint32_t addr, uint32_t size, uint32_t pc) {
             sPend.size = size;
             sPend.pc = sAnel[i].pc;
             sPend.vivo = 1;
+            sPend.sus = sAnel[i].sus;
+            sPend.v = sAnel[i].v;
             sAnel[i].vivo = 0;
             return;
         }
@@ -264,6 +439,7 @@ NAO_RASTREAR void __asan_loadN_noabort(uintptr_t a, size_t n) { ler((uint32_t)a,
 NAO_RASTREAR void __asan_storeN_noabort(uintptr_t a, size_t n) {
     size_t i;
     resolver();
+    neutro((uint32_t)a, n);
     for (i = 0; i < n; i++) {
         marcar((uint32_t)a + (uint32_t)i, 0);
     }
@@ -299,15 +475,18 @@ NAO_RASTREAR static void copiar_origem(uint32_t dst, uint32_t src, size_t n) {
 
 NAO_RASTREAR void *__wrap_memcpy(void *d, const void *s, size_t n) {
     copiar_origem((uint32_t)(uintptr_t)d, (uint32_t)(uintptr_t)s, n);
+    copiar_forma((uint32_t)(uintptr_t)d, (uint32_t)(uintptr_t)s, n);
     return __real_memcpy(d, s, n);
 }
 NAO_RASTREAR void *__wrap_memmove(void *d, const void *s, size_t n) {
     copiar_origem((uint32_t)(uintptr_t)d, (uint32_t)(uintptr_t)s, n);
+    copiar_forma((uint32_t)(uintptr_t)d, (uint32_t)(uintptr_t)s, n);
     return __real_memmove(d, s, n);
 }
 NAO_RASTREAR void *__wrap_memset(void *d, int c, size_t n) {
     size_t i;
     resolver();
+    neutro((uint32_t)(uintptr_t)d, n);
     if (sAtivo) {
         for (i = 0; i < n; i++) {
             marcar((uint32_t)(uintptr_t)d + (uint32_t)i, 0);
@@ -325,6 +504,7 @@ NAO_RASTREAR size_t __wrap_Port_FileReadAt(const char *rel, long offset, void *b
     uint64_t f;
     resolver();
     got = __real_Port_FileReadAt(rel, offset, buf, bytes);
+    neutro((uint32_t)(uintptr_t)buf, got);
     if (sAtivo && got > 0) {
         f = (uint64_t)arquivo(rel) << 40;
         for (i = 0; i < got; i++) {
@@ -343,6 +523,9 @@ NAO_RASTREAR void *__wrap_Bpe_Decode(void *src, void *dst, int32_t *rawSize) {
         rawSize = &tam; /* quem chama nem sempre pede o tamanho; aqui ele é preciso */
     }
     out = __real_Bpe_Decode(src, dst, rawSize);
+    if (out != NULL && *rawSize > 0) {
+        neutro((uint32_t)(uintptr_t)out, (size_t)*rawSize);
+    }
     if (sAtivo && o != 0 && out != NULL && rawSize != NULL && *rawSize > 0) {
         char nome[256];
         uint64_t f;
@@ -421,10 +604,38 @@ NAO_RASTREAR static void marcar_elf(void) {
     fclose(fp);
 }
 
+NAO_RASTREAR static void despejar_visoes(void) {
+    const char *caminho = getenv("BT3_VISOES");
+    FILE *fp;
+    uint32_t i, n = 0;
+    resolver();
+    for (i = 0; i < ANEL; i++) {
+        if (sAnel[i].vivo && sAnel[i].sus) {
+            anotar_visao(&sAnel[i].v);
+        }
+    }
+    sVisoes = 0;
+    if (caminho == NULL || (fp = fopen(caminho, "w")) == NULL) {
+        return;
+    }
+    for (i = 0; sVis != NULL && i < VTAB; i++) {
+        if (sVis[i].n) {
+            fprintf(fp, "%08x\t%08x\t%u\t%u\t%u\t%u\n", sVis[i].gravou, sVis[i].leu, sVis[i].gw, sVis[i].lw, sVis[i].pos, sVis[i].n);
+            n++;
+        }
+    }
+    fclose(fp);
+    fprintf(stderr, "visões: %u pares (função que gravou, função que leu) em %s\n", n, caminho);
+}
+
 __attribute__((constructor)) NAO_RASTREAR static void iniciar(void) {
     sAtivo = getenv("BT3_RASTREIO") != NULL;
+    sVisoes = getenv("BT3_VISOES") != NULL;
     if (sAtivo) {
         marcar_elf();
         atexit(despejar);
+    }
+    if (sVisoes) {
+        atexit(despejar_visoes);
     }
 }
