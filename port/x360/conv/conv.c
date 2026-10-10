@@ -177,6 +177,10 @@ void Conv_Comum3(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Comum4(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Hud(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Cenario(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_BancoSom(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_FolhaBpe(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_Folha(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_Rosto(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
@@ -189,6 +193,10 @@ static const Formato sFormatos[] = {
     {"comum3", Conv_Comum3},                   /* 00003, personagens e itens */
     {"comum4", Conv_Comum4},                   /* 00004, fontes, ícones, avisos do controle */
     {"hud", Conv_Hud},                         /* 00005 e 00006, HUD e menu de pausa por idioma */
+    {"som", Conv_BancoSom},                    /* som-e-sprites.md 1: banco de som */
+    {"folha_bpe", Conv_FolhaBpe},              /* 2: folha da tela de carregamento (só o cabeçalho BPE) */
+    {"folha", Conv_Folha},                     /* 2.3: a folha descomprimida (em tempo de jogo) */
+    {"rosto", Conv_Rosto},                     /* 3: rosto de membro */
     {"cenario", Conv_Cenario},                 /* cenario.md: pacote de 25 entradas do cenário da luta */
 };
 
@@ -212,6 +220,17 @@ static const char *formato_de(const char *nome) {
     case 4: return "comum4";
     case 5: case 6: return "hud";
     default: break;
+    }
+    /* som-e-sprites.md 4: rostos dos membros (id 8 + chara*2 + lado), bancos de som (comuns, menu, cenários,
+       vozes), folhas da tela de carregamento (id 0x3C1 + tipo) */
+    if (i >= 7 && i <= 328) {
+        return "rosto";
+    }
+    if ((i >= 329 && i <= 367) || (i >= 3033 && i <= 3354)) {
+        return "som";
+    }
+    if (i >= 960 && i <= 962) {
+        return "folha_bpe";
     }
     /* cenários (cenario.md, seção 1): BtlLoad_* pedem 0x171 + cenário (BTL_FILE_STAGE) ou 0x198 + cenário em tela
        dividida (BTL_FILE_STAGE_SPLIT), ShenScene 0x194 + dragão e ChrView 0x197; ids 0x171..0x1BE, índices

@@ -164,6 +164,12 @@ void Load_InitScreen(void) {
     (*&gProgress->lastLoadType) = gLoadScreen.type + 1;
     (*&gProgress->loadPack) = File_LoadSync(gLoadScreen.type + LOAD_FILE_FIRST, gProgress->loadPack, LOAD_PACK_MAX);
     Sprite_Unpack(gProgress->loadPack, gProgress->loadRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* the sheet's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertLoadSheet(void *buf, s32 size);
+        Port_ConvertLoadSheet(gProgress->loadRes, ((s32 *)gProgress->loadPack)[0]);
+    }
+#endif
     gLoadScreen.res = gProgress->loadRes;
     Res_RelocateOffsets(&gLoadScreen.res, gLoadScreen.res, gLoadScreen.res);
     switch (gLoadScreen.type) {

@@ -89,6 +89,13 @@ extern SDL_AudioDeviceID Port_AudioDevice(void); /* snd_adx.c */
 
 static uint32_t le32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
 static uint32_t le16(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8; }
+/* The few bank words the game reads too (the file header, Vagi's maxNumber): a big-endian host gets the bank with
+   just these converted to its order (docs/x360/formatos/som-e-sprites.md 1.8); the rest stays little-endian. */
+#ifdef PORT_BIG_ENDIAN
+static uint32_t bank32(const uint8_t *p) { return (uint32_t)p[3] | (uint32_t)p[2] << 8 | (uint32_t)p[1] << 16 | (uint32_t)p[0] << 24; }
+#else
+#define bank32 le32
+#endif
 
 /* The chunk "SCEI<name>" inside a table (searched over at most `limit` bytes). */
 static const uint8_t *chunk(const uint8_t *p, const char *name, uint32_t limit) {
@@ -121,7 +128,7 @@ static int lookup(const Bank *b, int id, uint32_t *start, uint32_t *rate) {
     if (setb != NULL && timbre <= setb[0x22]) {
         vag = le16(setb + 0x24 + timbre * setb[0x20]);
     }
-    if (vag > le32(vagi + 0x0C)) {
+    if (vag > bank32(vagi + 0x0C)) {
         return 0;
     }
     o = le32(vagi + 0x10 + 4 * vag);
@@ -349,14 +356,14 @@ static uint8_t *bank_file(int flid, long *size) {
 /* The three parts of a bank file: a count and the parts' offsets at its start. Which is which is told by the chunk
    names. 0 = not such a file. */
 static int bank_parts(const uint8_t *b, long size, uint32_t *hd, uint32_t *hdSize, uint32_t *sq, uint32_t *sqSize, uint32_t *smp, uint32_t *smpSize) {
-    uint32_t n = le32(b), i;
+    uint32_t n = bank32(b), i;
     int have = 0;
 
     if (n != 3) {
         return 0;
     }
     for (i = 0; i < 3; i++) {
-        uint32_t o = le32(b + 4 + 4 * i), e = le32(b + 8 + 4 * i);
+        uint32_t o = bank32(b + 4 + 4 * i), e = bank32(b + 8 + 4 * i);
         if (o >= e || e > (uint32_t)size) {
             return 0;
         }
