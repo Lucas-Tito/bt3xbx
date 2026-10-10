@@ -1,24 +1,32 @@
 #!/usr/bin/env python3
 """F1: compara a memória do jogo de duas builds de ordem de bytes diferente num mesmo quadro.
 
-    memdiff.py X86.dump PPC.dump PROG_X86 PROG_PPC [--max N] [--faixa INI-FIM] [--estrito]
+    memdiff.py X86.dump PPC.dump PROG_X86 PROG_PPC [--max N] [--faixa INI-FIM] [--estrito] [--resumo]
 
 Os .dump são os de port/src/gs/state.c (BT3_HASH=<arq> BT3_HASH_AT=<quadro> -> <arq>.dump): heap,
-scratchpad e as variáveis globais do jogo (<programa>.mem, escrito por tools/mem.py). O heap do jogo é
-determinístico (o mesmo alocador nos dois); as globais ficam em endereços diferentes em cada programa e são
-pareadas pela ordem das regiões.
+scratchpad e as variáveis globais do jogo (<programa>.mem, escrito por tools/mem.py).
+  - heap: pareado pelos blocos do alocador do jogo (HeapBlock, magic 'TBHS', include/sys/heap.h), na ordem em
+    que aparecem; bloco de tamanho diferente nos dois lados é listado (struct com layout diferente) e
+    comparado só até o menor;
+  - scratchpad: pelo endereço (é fixo);
+  - globais: cada programa as põe num lugar; pareadas pelo nome, com o tamanho até o símbolo seguinte (as
+    tabelas definidas em assembly não têm tamanho no nm -S).
 
 Cada palavra de 4 bytes alinhada cai numa classe:
-  igual           igual byte a byte ou com os 4 bytes invertidos (u32/float/ponteiro do jogo)
-  ponteiro-port   endereço dentro da imagem ou do heap do próprio programa em cada lado (as faixas vêm do nm)
-  2xu16           cada metade invertida: certo se forem dois u16, ERRADO se for um u32
-  u64             o par de palavras trocado: certo se for u64/double, ERRADO se forem dois u32
-  diferente       o resto
-Sem largura gravada não dá para separar 2xu16 e u64 de erro; elas são contadas à parte e, com --estrito,
-listadas como diferenças.
+  igual            os 4 bytes invertidos (u32/float/ponteiro do jogo), ou iguais e palíndromos (0, 0xFFFFFFFF)
+  igual-sem-inverter  iguais byte a byte sem ser palíndromo: certo para bytes/strings, ERRADO para u32
+  ponteiro-port    endereço da imagem (a partir da base de ligação, 0x20000000) ou do heap do C, nos dois lados
+  2xu16            cada metade invertida: certo se forem dois u16, ERRADO se for um u32
+  u64              o par de palavras trocado (sem zero): certo se for u64/double, ERRADO se forem dois u32
+  u64-com-zero     idem, mas uma das palavras é 0: também pode ser coincidência
+  diferente        o resto
+Sem largura gravada não dá para separar as classes ambíguas de erro; com --estrito elas são listadas.
 """
 import bisect, struct, subprocess, sys
 from collections import Counter
+
+BASE = 0x20000000  # -Ttext-segment de headless.py
+MAGIC = 0x53484254
 
 
 def ler(caminho):
@@ -33,28 +41,33 @@ def ler(caminho):
     return out
 
 
-def faixa_do_programa(prog, nm="nm"):
-    """Do menor ao maior símbolo do programa, mais 128 MB de heap do C depois dele."""
-    ad = [int(l.split()[0], 16) for l in subprocess.run([nm, prog], capture_output=True, text=True).stdout.splitlines()
-          if len(l.split()) == 3 and l.split()[1] in "tTdDbBrR"]
+def nm(prog, ppc):
+    return subprocess.run(["powerpc-linux-gnu-nm" if ppc else "nm", "-n", "-S", prog], capture_output=True,
+                          text=True).stdout.splitlines()
+
+
+def faixa_do_programa(linhas):
+    """Da base de ligação ao maior símbolo, mais 128 MB de heap do C."""
+    ad = [int(q[0], 16) for q in (l.split() for l in linhas) if len(q) >= 3 and q[-2] in "tTdDbBrR"]
+    ad = [a for a in ad if a >= BASE]
     return min(ad), max(ad) + 0x08000000
 
 
-def simbolos(prog, nm="nm"):
-    syms = []
-    for l in subprocess.run([nm, "-n", prog], capture_output=True, text=True).stdout.splitlines():
+def dados(linhas):
+    """{nome: (endereço, tamanho)} das variáveis, tamanho até o símbolo seguinte (ou o do nm -S, se menor)."""
+    tab = []
+    for l in linhas:
         q = l.split()
-        if len(q) == 3 and q[1] in "bBdDCsS":
-            syms.append((int(q[0], 16), q[2]))
-    return syms
-
-
-def por_simbolo(prog, nm):
+        if len(q) == 4 and q[2] in "bBdDrR":
+            tab.append((int(q[0], 16), int(q[1], 16), q[3]))
+        elif len(q) == 3 and q[1] in "bBdDrR":
+            tab.append((int(q[0], 16), None, q[2]))
     out = {}
-    for l in subprocess.run([nm, "-S", prog], capture_output=True, text=True).stdout.splitlines():
-        q = l.split()
-        if len(q) == 4 and q[2] in "bBdD":
-            out[q[3]] = (int(q[0], 16), int(q[1], 16))
+    for i, (a, n, nome) in enumerate(tab):
+        viz = tab[i + 1][0] - a if i + 1 < len(tab) else 0
+        t = min(n, viz) if n is not None and viz else (n if n is not None else viz)
+        if a >= BASE and t:
+            out[nome] = (a, t)
     return out
 
 
@@ -65,22 +78,54 @@ def ler_endereco(regioes, addr, n):
     return None
 
 
-def globais(x, p, px, pp):
-    """Uma "região" por variável global do jogo presente nos dois programas com o mesmo tamanho."""
-    sx, sp = por_simbolo(px, "nm"), por_simbolo(pp, "powerpc-linux-gnu-nm")
+def globais(x, p, lx, lp):
+    """Uma "região" por variável presente nos dois programas (tamanho: o menor dos dois)."""
+    sx, sp = dados(lx), dados(lp)
     gx = [r for r in x if r[0].startswith("global")]
     gp = [r for r in p if r[0].startswith("global")]
-    out, faltam = [], 0
+    out, fora, diferentes = [], 0, 0
     for nome, (ax, n) in sorted(sx.items(), key=lambda kv: kv[1][0]):
-        if nome not in sp or sp[nome][1] != n or n < 4:
+        if nome not in sp:
             continue
+        diferentes += sp[nome][1] != n
+        n = min(n, sp[nome][1])
         dx, dp = ler_endereco(gx, ax, n), ler_endereco(gp, sp[nome][0], n)
         if dx is None or dp is None:
-            faltam += 1
+            fora += 1
             continue
         out.append(((nome, ax, dx), (nome, sp[nome][0], dp)))
-    if faltam:
-        print(f"({faltam} globais fora das regiões do .mem)")
+    print(f"globais: {len(out)} pareadas pelo nome ({diferentes} com espaço diferente até o vizinho; "
+          f"{fora} fora das regiões do .mem)")
+    return out
+
+
+def blocos(d, be):
+    """[(deslocamento, tamanho)] dos blocos do alocador do jogo no heap, em ordem de endereço."""
+    fmt = ">" if be else "<"
+    out, o = [], 0
+    while o + 0x20 <= len(d):
+        m, = struct.unpack_from(fmt + "I", d, o)
+        if m == MAGIC:
+            tam, = struct.unpack_from(fmt + "i", d, o + 0x10)
+            if 0x20 <= tam and o + tam <= len(d) and struct.unpack_from(fmt + "i", d, o + tam - 4)[0] == tam:
+                out.append((o, tam))
+                o += tam
+                continue
+        o += 4
+    return out
+
+
+def pares_heap(nome, ax, dx, ap, dp):
+    bx, bp = blocos(dx, False), blocos(dp, True)
+    out, ruins = [], 0
+    for i, ((ox, tx), (op, tp)) in enumerate(zip(bx, bp)):
+        if tx != tp or ox != op:
+            ruins += 1
+            if ruins <= 10:
+                print(f"heap: bloco {i} x86 {ax + ox:08x} +{tx:x}  ppc {ap + op:08x} +{tp:x}")
+        n = min(tx, tp)
+        out.append(((f"{nome}#{i}", ax + ox, dx[ox:ox + n]), (f"{nome}#{i}", ap + op, dp[op:op + n])))
+    print(f"heap: {len(bx)} blocos na x86, {len(bp)} na ppc, {ruins} em lugar ou tamanho diferente")
     return out
 
 
@@ -97,15 +142,22 @@ def main():
     faixa = [int(v, 16) for v in opc["--faixa"].split("-")] if "--faixa" in opc else None
     estrito = "--estrito" in opc
     x, p = ler(args[0]), ler(args[1])
-    fx, fp = faixa_do_programa(args[2]), faixa_do_programa(args[3], "powerpc-linux-gnu-nm")
-    syms = simbolos(args[2])
+    lx, lp = nm(args[2], False), nm(args[3], True)
+    fx, fp = faixa_do_programa(lx), faixa_do_programa(lp)
+    syms = sorted((int(q[0], 16), q[-1]) for q in (l.split() for l in lx) if len(q) >= 3 and q[-2] in "bBdDCsSrR")
     sa = [s[0] for s in syms]
     tot = Counter()
-    # heap e scratchpad: mesmo endereço nos dois (alocador determinístico)
-    fixas = {n: (a, d) for n, a, d in p if not n.startswith("global")}
-    pares = [((n, a, d), (n, *fixas[n])) for n, a, d in x if n in fixas]
-    # globais: cada programa as põe num lugar; pareadas por símbolo (nome e tamanho do nm -S)
-    pares += globais(x, p, args[2], args[3])
+    rp = {n: (a, d) for n, a, d in p if not n.startswith("global")}
+    pares = []
+    for n, a, d in x:
+        if n.startswith("global") or n not in rp:
+            continue
+        if n.startswith("heap"):
+            pares += pares_heap(n, a, d, *rp[n])
+        else:
+            pares.append(((n, a, d), (n, *rp[n])))
+    pares += globais(x, p, lx, lp)
+    listar = {"diferente"} | ({"2xu16", "u64", "u64-com-zero", "igual-sem-inverter"} if estrito else set())
     for (nx, ax, dx), (np_, ap, dp) in pares:
         n = min(len(dx), len(dp)) // 4 * 4
         classes = Counter()
@@ -113,18 +165,20 @@ def main():
         for o in range(0, n, 4):
             a, b = dx[o:o + 4], dp[o:o + 4]
             va, vb = struct.unpack("<I", a)[0], struct.unpack(">I", b)[0]
-            if a == b or a == b[::-1]:
+            if a == b[::-1]:
                 c = "igual"
+            elif a == b:
+                c = "igual-sem-inverter"
             elif fx[0] <= va < fx[1] and fp[0] <= vb < fp[1]:
                 c = "ponteiro-port"
             elif a[:2] == b[1::-1] and a[2:] == b[:1:-1]:
                 c = "2xu16"
             elif o ^ 4 < n and dx[o:o + 4] == dp[(o ^ 4):(o ^ 4) + 4][::-1]:
-                c = "u64"
+                c = "u64-com-zero" if va == 0 or dx[o ^ 4:(o ^ 4) + 4] == bytes(4) else "u64"
             else:
                 c = "diferente"
             classes[c] += 1
-            if c == "diferente" or (estrito and c in ("2xu16", "u64")):
+            if c in listar:
                 if ini is not None and o - fim <= 16:
                     fim = o + 4
                 else:
@@ -134,7 +188,7 @@ def main():
         if ini is not None:
             trechos.append((ini, fim))
         tot.update(classes)
-        if not nx.startswith(("heap", "scratchpad")) and not trechos:
+        if not trechos or "--resumo" in opc:
             continue
         print(f"região {nx} x86 {ax:08x} ppc {ap:08x} (+{n:x}): " + ", ".join(f"{k} {v}" for k, v in classes.most_common()) +
               f"; {len(trechos)} trechos a olhar")
