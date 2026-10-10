@@ -17,8 +17,13 @@
 
 /* Header of every packet in a chain: a source-chain DMA tag whose address word links to the next packet. */
 typedef struct OtPrim {
+#ifdef PORT_BIG_ENDIAN /* the packet builders write the tag as one word: on a big-endian host its high half comes first */
+    /* 0x00 */ u16 tagId;
+    /* 0x02 */ u16 qwc;
+#else
     /* 0x00 */ u16 qwc;          /* quadwords of GIF data that follow this header */
     /* 0x02 */ u16 tagId;        /* upper half of the DMA tag (NEXT) */
+#endif
     /* 0x04 */ struct OtPrim *next;
     /* 0x08 */ u32 vif[2];       /* VIF codes of the tag; not sent (Ot_Send copies only the GIF data) */
 } OtPrim; /* 0x10, GIF data follows */
