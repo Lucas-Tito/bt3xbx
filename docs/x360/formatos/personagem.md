@@ -204,8 +204,22 @@ pai-primeiro. Visões: `ObjMdlMesh` (gfxm_e.h:52), `ObjDrawPart` (gfxm_d_c.h:74)
 
 Delimitação: registro desabilitado tem 0x40 bytes (next = 0x40; não tem center, extent nem fluxo).
 Registro habilitado vai até o fim do pacote DMA mais 16 bytes (a etiqueta de fim, abaixo); em todos os
-habilitados da demo, next = (fim do pacote + 16) menos o início do registro. O último registro
-(desabilitado nos dois arquivos) é seguido de enchimento até o alinhamento da entrada.
+habilitados da demo, next = (fim do pacote + 16) menos o início do registro.
+
+O último registro (`last` diferente de zero) é desabilitado e tem next = 0x40 em todos os 698 modelos do
+disco (os file[0] com tabela de 0xFC entradas). O que vem depois dele depende de `seamOfs` (cabeçalho +
+0x70), e é esse o critério do conversor:
+
+| `seamOfs` | Depois dos 0x40 bytes do último registro | Modelos no disco | Conversão |
+|---|---|---|---|
+| 0 | 0x40 bytes até o fim da entrada; em todos os 625 modelos há palavras não nulas entre +0x08 e +0x3F desse trecho (não têm a forma de uma seção de costura); ninguém lê (o laço das malhas para no registro com `last`, e nenhum leitor soma `next` ao último) | 625 | bytes, sem exigir zero (trecho comprovadamente não lido) |
+| diferente de 0 | a seção de costura (4.2.2), que começa exatamente aí: `seamOfs` = início do último registro + 0x40 menos o início da entrada, nos 73 casos | 73 (nenhum na demo) | 4.2.2; depois do último triângulo, zeros até o fim da entrada (exigir zero) |
+
+Era isso que o conversor não previa: ele marcava como bytes tudo o que vinha depois do último registro e
+só então convertia a costura, que está nesse mesmo trecho ("convertido duas vezes (marca 1, agora 4)",
+os 73 erros da entrada 3). A ordem certa é: percorrer as malhas, guardar o fim do último registro; se
+`seamOfs` = 0, o resto é bytes; senão, conferir `seamOfs` = fim do último registro, converter a costura e
+exigir zero no que sobrar.
 
 #### 4.2.1 Pacote DMA/VIF de malha (registro + 0x60, e entradas 4..11)
 
@@ -256,29 +270,44 @@ muda TBP0/CBP das palavras 5, 6, 9 e 10 de cada lote. A conversão tem de vir an
 
 #### 4.2.2 Seção de costura (entrada 3 + seamOfs)
 
-Não existe na demo (seamOfs = 0 nos dois modelos). Pelo código (gfxm_d_c.h:20..48 e
-src/sys/gfxm_d_c.c:73..200):
+Não existe na demo (seamOfs = 0 nos dois modelos), mas existe em 73 file[0] do disco (por exemplo 01454,
+01458, 01464; 23 personagens). Leitores: `ObjSeam_Transform` e
+`ObjSeam_Draw` (src/sys/gfxm_d_c.c:73 e :95), structs em include/sys/gfxm_d_c.h:20..48. A rotina VU0
+`ObjSeam_TransformVtx` (em assembly, antes de gfxm_d_c.c) lê posição, normal e uv de cada vértice e grava
+xyz, stBase e stShade.
+
+Arranjo, conferido nos 73 (sem trazer bytes): seção em `seamOfs` = fim do último registro de malha;
+vértices logo depois do cabeçalho da seção (`vtxOfs` = `seamOfs` + 0x10); triângulos logo depois dos
+vértices (`triOfs` = `vtxOfs` + vtxCount x 0x70); depois do último triângulo, zeros até o fim da entrada.
+vtxCount vai de 12 a 120 e triCount = vtxCount / 3 em todos (3.186 vértices, 1.062 triângulos); todo
+índice de triângulo é menor que vtxCount.
 
 `ObjSeamSec` (16 bytes): s32 vtxCount, s32 triCount, s32 vtxOfs, s32 triOfs. Os deslocamentos são em
 bytes **a partir do início da entrada (cabeçalho do modelo)**, somados a cada uso, sem virar ponteiro.
 
 `ObjSeamVtx` (0x70 bytes, vtxCount registros):
 
-| Desl. | Tipo | Largura | Significado |
-|---|---|---|---|
-| 0x00 | f32[4] | 4 | posição; w = peso do primeiro nó |
-| 0x10 | f32[3] | 4 | normal |
-| 0x1C | s32 | 4 | node |
-| 0x20 | f32[4] | 4 | uv da textura base |
-| 0x30 | s32[4] | 4 | xyz: gravado pela rotina VU0 (12.4; bit 15 da palavra 3 = não desenhar) |
-| 0x40 | ? | | 16 bytes não lidos: não determinado |
-| 0x50 | u128 | | stBase: gravado (uv / w') |
-| 0x60 | u128 | | stShade: gravado |
+| Desl. | Tipo | Largura | Significado | Nos 3.186 vértices do disco |
+|---|---|---|---|---|
+| 0x00 | f32[4] | 4 | posição; w = peso do primeiro nó | float ou zero |
+| 0x10 | f32[3] | 4 | normal | float ou zero |
+| 0x1C | s32 | 4 | node (argumento de `BtlObj_FindBound` / `BtlObj_GetNode`) | inteiro pequeno (até 87) |
+| 0x20 | f32[4] | 4 | uv da textura base | x, y, z float; w zero |
+| 0x30 | s32[4] | 4 | xyz: gravado pela rotina VU0 (12.4; bit 15 da palavra 3 = não desenhar) | zero |
+| 0x40 | ? | | 16 bytes não lidos: não determinado | zero |
+| 0x50 | u128 | | stBase: gravado (uv / w') | zero |
+| 0x60 | u128 | | stShade: gravado | zero |
 
-`ObjSeamTri` (0x20 bytes, triCount registros): s32 idx[3], s32 pad, u64 tex0Base, u64 tex0Shade. Aqui
-o TEX0 é lido como **u64 inteiro** (`tri->tex0Base`, gfxm_d_c.c:127), ao contrário do fluxo VIF: inverter
-como u64. As áreas gravadas (xyz, stBase, stShade) são escritas antes da leitura; como os quadwords são
-copiados para o pacote GIF, convém tratá-los como 4 x 32 bits.
+`ObjSeamTri` (0x20 bytes, triCount registros): s32 idx[3], s32 pad (zero nos 1.062), u64 tex0Base, u64
+tex0Shade. Aqui o TEX0 é lido como **u64 inteiro** (`tri->tex0Base`, gfxm_d_c.c:127; só o primeiro
+triângulo tem o TEX0 usado, os outros têm o mesmo tipo), ao contrário do fluxo VIF: inverter como u64. As
+áreas gravadas (xyz, stBase, stShade) são escritas antes da leitura e chegam zeradas no arquivo; como os
+quadwords são copiados para o pacote GIF, convém tratá-los como 4 x 32 bits. O trecho 0x40..0x4F, sem
+leitor e zero, pode ir como 4 x u32 ou como bytes (indiferente).
+
+Critério do conversor: `seamOfs` diferente de zero; conferir `seamOfs` = fim do último registro,
+`vtxOfs` e `triOfs` dentro da entrada; converter vértices e triângulos como acima e exigir zero no resto
+(4.2, tabela do fim do último registro).
 
 ### 4.3 Corpo (entrada 2)
 
@@ -993,14 +1022,75 @@ conjunto de emissores a partir da 4:
 
 | Sub | Papel | Formato | Quem lê |
 |---|---|---|---|
-| 1 | opcional, depende do tipo de efeito da técnica: modelo (`EftObj_Create`, um arquivo no formato do file[0], `include/battle/eft_ad.h:302`), pacote de modelos por traje (`eft_j.c:1097`), conjunto de texturas F2.5 (`eft_j.c:614`) ou "extra" do tipo 1 com a flag 0x20000 (`eft_h.c:881`) | varia | `eft_h.c`, `eft_j.c`, `eft_k.c` |
-| 2 | não determinado (nenhum leitor com índice constante 2 num pacote de técnica) | | |
+| 1 | opcional; o formato depende do tipo de efeito da técnica, das suas flags e do id (7.4.1): modelo no formato do file[0], pacote de modelos por traje, anel (malha F2.12 + texturas) ou conjunto de texturas F2.5 | 7.4.1 | `eft_h.c`, `eft_j.c`, `eft_k.c` |
+| 2 | não determinado (nenhum leitor com índice constante 2 num pacote de técnica); vazia nos 805 pacotes de técnica do disco | | |
 | 3 | tabela de posicionamento da cena da técnica (só espaços 2..4) | F2.9 | `BtlSuper_GetStagePlacement` (`src/battle/btl_tech_b.c:1438`) |
 | 4 | cabeçalho do conjunto de emissores | F2.4 | `EftEmit_LoadSet(..., pacote, 0, 4)` (`src/battle/eft_h.c:928`) |
 | 5.. | recursos dos grupos, na ordem que F2.4 define | F2.5 / F2.6 / F2.8 | `EftEmit_LoadSet` e módulos de partícula |
 
 Nos dois arquivos da demo as subentradas 1 e 2 estão vazias em todos os pacotes de técnica, e a 3 só existe em
 01482 entrada 4 (0xB00 bytes). `BtlChar_BindObject` calcula `FILE_TABLE(pacote, 3)` sem testar se está vazia.
+
+#### 7.4.1 Subentrada 1: as variantes, por tipo de efeito
+
+Quem lê a subentrada 1 é o "gerenciador" da técnica: `EftShot_CreateSlotTask` (`src/battle/eft_h.c:302`)
+cria a tarefa da classe `gEftShotClass[tipo + 1]` (tipo -1 usa a linha 0), e o init dessa classe pega
+`BtlScene_GetPackEntry(pacote, 1)` conforme o tipo, as flags e o id da técnica. Esses três valores vêm do
+file[0] do mesmo personagem, copiados por `EftShot_BuildParam` (`src/battle/eft_h.c:132`) para
+`EftShotParam`:
+
+| Espaço (entrada do topo) | Fonte no file[0] | tipo (u8) | flags (u32) | id (u16) |
+|---|---|---|---|---|
+| 0, 1 (entradas 1, 2), n = espaço | entrada 0x19, `EftSkillSrc` (`include/battle/eft_h.h:155`) | 0x60 + n | 0x00 + 4n (`flagsA` de 5.9) | 0x10 + 2n |
+| 2..4 (entradas 3..5), n = espaço - 2 | entrada 0x18, `EftSuperSrc` (`include/battle/eft_h.h:181`) | 0x138 + n | 0x000 + 4n (`flagsA` de 5.8) | 0x018 + 2n |
+
+No disco os três valores são iguais em todos os trajes de cada personagem (conferido nos file[0] de
+trajes 0..3 e variantes 4..7 que existem).
+
+| Tipo | Módulo (init do gerenciador) | Condição | Formato da sub 1 | Quem usa | No disco |
+|---|---|---|---|---|---|
+| -1 | nenhum (`EftShotNull*`, `eft_h.c`) | | não lida | | sempre vazia (68) |
+| 0 | `EftBlastMgr_Init` (`src/battle/eft_j.c:1484`) | | não lida | | sempre vazia (480) |
+| 1 | `EftVolleyGroup_Init` (`src/battle/eft_h.c:873`) | flags & 0x20000 | modelo no formato do file[0] (`set->extra`) | `EftBlastObj_CreateWithModel` (`eft_h.c:536`) → `EftObj_Create` (`src/battle/eft_o_b.c:187`) | 2 com a flag (técnicas 0x26E, 0x26F: 01922 e 02592, entrada 5), modelo; 59 sem a flag, vazia |
+| 2 | `EftShotTechMgr_Init` (`src/battle/eft_k.c:618`) | flags & 0x20000 | modelo (`modelPack`) | `EftShotTech_InitModel` (`src/battle/eft_j.c:1510`) → `EftObj_Create` | 1 com a flag (02912, entrada 5), modelo; 126 sem, vazia |
+| 3 | `EftSweepGroup_Init` (`src/battle/eft_i.c:1706`) | | não lida | | sempre vazia (11) |
+| 4 | `EftRingShotMgr_Init` (`src/battle/eft_l_b.c:897`) | | não lida | | sempre vazia (9) |
+| 5 | `EftMultiMgr_Init` (`src/battle/eft_j.c:608`) | id = 0x158 ou 0x202 | conjunto de texturas F2.5 (`EftTexSet_Load32`) | o próprio init | 2 (02392 entrada 4, 03002 entrada 3; 2 texturas cada); as 6 de outro id, vazias |
+| 6 | `EftPropShotMgr_Init` (`src/battle/eft_j.c:1089`) | sempre; id = 0x19A muda o formato | id 0x19A: pacote F2.1 de modelos por traje (entrada traje + 1, traje = `BtlCharApi_GetCostume`); outros ids: modelo | `EftPropShot` (`eft_j.c:686`) → `EftObj_Create` | 12: 11 modelos e 1 pacote por traje (02432 entrada 3, N = 2, dois modelos) |
+| 7 | `EftFollowGroup_Init` (`src/battle/eft_j.c:201`) | | não lida | | sempre vazia (11) |
+| 8 | `EftObjTechMgr_Init` (`src/battle/eft_k.c:1718`) | flags & 0x20000: modelo; flags & 0x40000: anel | 0x20000: modelo (`modelPack`); 0x40000: pacote F2.1 com sub 1 = malha de efeito F2.12 (`EftMesh_Init`) e sub 2 = conjunto de texturas F2.5 (`EftTexSet_Load32`) | `EftObjTech_CreateModel` (`eft_k.c:1106`) → `EftObj_Create`; o anel em `EftObjTech_DrawRings` (`eft_k.c:1206`) | 3 com 0x20000 (modelo), 2 com 0x40000 (01922 entrada 4, 02582 entrada 3: anel de 1 grupo, 96 triângulos, 192 vértices, 1 textura), 1 sem flag (vazia); nenhuma com as duas flags |
+| 9 | `EftRushShotMgr_Init` (`src/battle/eft_k.c:2467`) | flags & 0x20000 | modelo (`sub[0]`) | `EftRushShot_CreateModels` (`eft_k.c:1798`) → `EftObj_Create` | 1 com a flag (02372 entrada 4, técnica 0x19D), modelo; 11 sem, vazia |
+
+"Modelo" é um arquivo inteiro no formato do file[0] (tabela de 0xFC entradas, 3.1), entregue a
+`BtlObj_Create(1, res, 1)` por `EftObj_Create` (`src/battle/eft_ad_b.c:752`, `EftObjRes` em
+`include/battle/eft_ad.h:304`, só o file[0] preenchido). Esse objeto passa por `BtlObj_BindTables` e
+`BtlObjMdl_BindFiles` como um lutador: os deslocamentos da tabela são relativos ao início da subentrada,
+as entradas são as do file[0] (seções 4 a 6) e as mesmas escritas na ligação acontecem no buffer do
+file[2] (8). Nos 25 modelos que o file[2] traz no disco (18 subentradas 1 de técnica, 2 dentro do pacote
+por traje, 5 no pacote do personagem, 7.5.1), as entradas presentes são só 3 e 12 (23 modelos) ou 3, 12 e
+29..33 (os dois modelos do tipo 1, com animações do próprio modelo tocadas por `EftObj_PlayAnim`); nenhum
+tem costura. O conversor do file[0] passa neles com 100% de cobertura.
+
+Concordância: nos 805 pacotes de técnica do disco, a subentrada 1 existe exatamente quando a tabela acima
+diz que alguém a lê (23 casos), e o formato encontrado é o que a tabela diz em todos os 23.
+
+**Como o conversor decide.** Há dois critérios, que dão o mesmo resultado no disco inteiro:
+
+1. Pelo código (exato): ler tipo, flags e id do file[0] do personagem (qualquer traje) e aplicar a tabela.
+   Exige que o conversor do file[2] receba o file[0].
+2. Pela forma (o que o teste usou; só o próprio file[2]), com w0 e w1 as duas primeiras palavras u32 da
+   subentrada 1 lidas em little-endian:
+
+   | Teste | Formato |
+   |---|---|
+   | w0 = 0xFC e w1 = 0x400 (tabela de 0xFC entradas com a entrada 1 em 0x400) | modelo |
+   | w1 = 8 (`TexFile.entOfs` em palavras; w0 = número de texturas) | conjunto de texturas F2.5 |
+   | senão: pacote F2.1 (w0 = N, w1 = 0x40) cuja entrada 1 começa com 0xFC, 0x400 | modelos por traje (cada entrada não vazia é um modelo) |
+   | senão: pacote F2.1 com N = 2 | anel: entrada 1 malha F2.12, entrada 2 conjunto de texturas |
+   | qualquer outra coisa | erro (formato não especificado) |
+
+   No disco: 18 modelos, 2 conjuntos de texturas, 1 pacote por traje e 2 anéis. Os testes não se
+   confundem: um pacote F2.1 tem w1 = (N + 2) x 4 arredondado a 0x40, nunca 8; um `TexFile` tem w1 = 8.
 
 ### 7.5 F2.3 Pacote do personagem (entrada 6)
 
@@ -1010,8 +1100,8 @@ Pacote F2.1 com N = 11 (idêntico em estrutura nos dois arquivos, exceto a 8):
 |---|---|---|---|---|
 | 1 | bits de "tem efeito" por tipo de efeito do lutador | F2.10 | `BtlScene_TestCharPackBit` (`btl_scene.c:244`), chamado por `eft_q.c:789` | sim |
 | 2 | conjunto de emissores da carga de ki | F2.1 com cabeçalho F2.4 na sub 1 | `EftChargeMgr_Init` (`eft_r.c:932`): `EftEmit_LoadSet(..., pacote, 2, 1)` | sim |
-| 3 | rajadas de ki (tipo 1) | idem | `eft_r.c:1306` com idx 3; `EftKiObjMgr_Init` (`eft_s.c:120`) lê a mesma sub como modelo (sub 1) + texturas `Load4` (sub 2), o que não casa com a demo (lá a sub 1 é cabeçalho F2.4): qual leitor vale para qual personagem é não determinado | sim (como conjunto) |
-| 4 | rajadas de ki (outro tipo) / carga de rajada | idem | `eft_r.c:1306` idx 4, `eft_r.c:1477`; `EftKiBombMgr_Init` (`eft_r.c:1673`) lê a sub 1 como modelo | sim (como conjunto) |
+| 3 | rajadas de ki (tipo 1) | conjunto (F2.1 + F2.4 na sub 1) ou, se o lutador tem rajada de tipo 2, pacote {modelo, texturas} (7.5.1) | `EftKiBlastMgr_Init` (`eft_r.c:1288`, idx 3) ou `EftKiObjMgr_Init` (`eft_s.c:111`) | sim (como conjunto) |
+| 4 | rajadas de ki (outro tipo) / carga de rajada | conjunto ou, se o lutador tem rajada de tipo 3, pacote {modelo} (7.5.1) | `EftKiBlastMgr_Init` (idx 4) e `EftBlastChargeMgr_Init` (`eft_r.c:1468`), ou `EftKiBombMgr_Init` (`eft_r.c:1664`) | sim (como conjunto) |
 | 5 | não determinado (nenhum leitor com índice constante 5) | | | vazia nas duas |
 | 6 | onda de choque: sub 1 = pacote de sprites "V000" (F2.8), sub 2 = pacote de texturas (F2.5) | F2.1 | `EftShockMgr_Init` (`eft_ad.c:491`) | sim |
 | 7 | conjunto de emissores da explosão do rush | F2.1 + F2.4 na sub 1 | `EftRushBurstMgr_Init` (`eft_q.c:636`) | sim |
@@ -1022,6 +1112,39 @@ Pacote F2.1 com N = 11 (idêntico em estrutura nos dois arquivos, exceto a 8):
 
 A sub 4 da 8 nunca é lida (o laço vai de 1 a 3). Os conjuntos do pacote do personagem usam `common = 2` e `idx = 1`:
 cabeçalho na sub 1 e recursos a partir da 2, na mesma ordem de F2.4.
+
+#### 7.5.1 Subentradas 3 e 4: conjunto de emissores ou modelo
+
+`EftChar_Init` (`src/battle/eft_q.c:776`) cria, para cada "tipo" k de efeito do lutador (k = 0..10), o
+gerenciador da classe `gEftCharKindClass[k]` quando o bit do bloco F2.10 está ligado; os tipos 1 e 2 leem
+as subentradas 3 e 4. Duas exceções trocam a classe, "seja qual for o pacote":
+
+| Condição (file[0] do lutador) | Efeito | Leitor | Formato da subentrada |
+|---|---|---|---|
+| alguma das 13 rajadas da entrada 0x14 tem `type` (+0x02, s8) = 2: `BtlCharApi_HasKiBlastType2` (`src/battle/btl_capi_a.c:197`) | o tipo 1 vira a classe `D_002C3E00` (`EftChar_CreateKind`, `eft_q.c:842`), mesmo com o bit desligado | `EftKiObjMgr_Init` (`src/battle/eft_s.c:111`) | sub 3 = pacote F2.1: entrada 1 modelo no formato do file[0] (`res->model`, ligado por `EftObj_Create`), entrada 2 conjunto de texturas F2.5 (`EftTexSet_Load4`) |
+| alguma rajada com `type` = 3: `BtlCharApi_HasKiBlastType3` (`btl_capi_a.c:218`) | o tipo 2 vira `gEftKiBombMgrClass` e o tipo 3 (carga de rajada) é desligado | `EftKiBombMgr_Init` (`src/battle/eft_r.c:1664`) | sub 4 = pacote F2.1: entrada 1 modelo |
+| nenhuma das duas | tipos 1, 2 e 3 normais | `EftKiBlastMgr_Init` (`eft_r.c:1288`, idx 3 para o tipo 1 e 4 para o 2), `EftBlastChargeMgr_Init` (`eft_r.c:1468`, idx 4) | conjunto de emissores (F2.1 com F2.4 na entrada 1) |
+
+No disco (161 pacotes do personagem): rajada de tipo 2 em 3 lutadores (file[2] 01552, 01982, 02032), e
+nos três a sub 3 é {modelo, texturas}; rajada de tipo 3 só em 01982, e a sub 4 dele é {modelo} (N = 1).
+Nas outras 158 subs 3 e 159 subs 4, conjunto de emissores.
+
+Exceção não explicada: em 01552 a sub 4 também é {modelo, texturas} (N = 2), mas o lutador não tem rajada
+de tipo 3 e o efeito 3 do bloco F2.10 está ligado (bit 2 da palavra, o que `EftChar_Init` testa para os tipos 2 e 3). Pelo código, quem a lê são `EftKiBlastMgr_Init` (idx 4) e
+`EftBlastChargeMgr_Init`, como conjunto de emissores: a tabela do modelo seria tomada por cabeçalho F2.4
+(máscara 0xFC, `nGroups` = byte 4 = 0, nenhum recurso consumido), e `EftKiBlast_SpawnParts`
+(`eft_r.c:1090`) percorreria os bits 2..7 da máscara com grupos que `EftEmit_LoadSet` nunca preencheu.
+Isso sugere dado sem uso (nenhuma rajada desse tipo disparada por esse lutador), mas não foi provado. Se
+o conversor tratar essa sub como modelo (critério pela forma, abaixo), só os bytes do cabeçalho
+0x04..0x07 e 0x20..0x27 ficariam numa ordem diferente da que o PS2 vê, caso sejam lidos: não determinado.
+
+**Como o conversor decide.** Pelo código (exato): os tipos das 13 rajadas do file[0] (no disco, a condição
+dá o mesmo resultado em todos os trajes de cada lutador). Pela forma (só o file[2], o que o teste usou): se a entrada 1 do pacote da sub 3
+ou 4 começa com as palavras 0xFC e 0x400 (tabela de file[0]), a sub é {modelo, e texturas se houver
+entrada 2}; senão é conjunto de emissores. As máscaras de cabeçalho de emissores do disco só usam os bits
+0, 2, 5, 9, 10, 14..18 (75 máscaras diferentes): 0xFC (bits 2..7) nunca é máscara, e a entrada 1 de um
+cabeçalho F2.4 nunca começa com 0xFC. Os dois critérios concordam em todos os casos, menos a sub 4 de 01552
+(acima).
 
 ### 7.6 F2.4 Conjunto de emissores (cabeçalho de efeito)
 
@@ -1105,8 +1228,10 @@ intervalo; os tamanhos das entradas no pacote são arredondados a 0x40.
 | 0 | luz | sem entradas | | | | |
 | 2 | raios (`EftRays`) | `EftRaysDef` (`include/battle/eft_o.h:166`), 10 x `EftRaysRayDef` (`:151`, 0x78) + 0x4B0 s32 `count`, 0x4B4 s32 `flags` | por raio: 0x00..0x2F 3 x {f32, f32, f32, u8[4] cor}; 0x30..0x6F f32; 0x70 u16 `delay`; 0x72 s8; 0x73..0x77 u8 | não tem | | presente, nunca lido |
 | 5 | partículas (`EftPtcl`) | `EftUPtclDef` (`include/battle/eft_u.h:172`; view menor `EftPtclDef`, `eft_v.h:137`) | 0x00 s32 `flags`; 0x04..0x0F u8; 0x10..0x1B f32; **0x1C..0x27 s16 x6** (`count[3]`, `countRange[3]`); 0x28..0x2AF f32 | `EftUPtclDef2` (`eft_u.h:160`) | 0x00..0x113 f32 (cores Vec4 x12, pulsos, tempos) | lido |
-| 9 | quads (`EftQuad`) | `EftQuadDef` (`include/battle/eft_y.h:100`) e `EftPart9Def` (`include/battle/eft_x.h:374`) | 0x000..0x233 f32; 0x234 s32 `flags`; 0x238..0x242 u8 | `EftQuadDef2` (`eft_y.h:140`) | 0x00..0x12B f32 | lido |
-| 10, 12, 15 | partículas 2, "zap", corrente de sprites | não presentes na demo; structs em `eft_x.h`, `eft_ad.h`, `eft_v.h` não conferidos | | | | ausentes |
+| 9 | quads (`EftQuad`) | `EftQuadDef` (`include/battle/eft_y.h:100`) e `EftPart9Def` (`include/battle/eft_x.h:374`) | 0x000..0x233 f32; 0x234 s32 `flags`; 0x238..0x242 u8; **0x243 até o fim da entrada: sem leitor** (nota abaixo) | `EftQuadDef2` (`eft_y.h:140`) | 0x00..0x12B f32 | lido |
+| 10 | partículas em anéis (`EftPart10`, `src/battle/eft_w.c` e `eft_x.c`) | `EftPart10Def` (`include/battle/eft_x.h:104`; view parcial `include/battle/eft_w.h:254`), 0x20E bytes | 0x000..0x1F3 f32 (chaves de tamanho, ângulo, giro, velocidade, vida, escala, contagem, tempos); 0x1F4 s32 `flags`; 0x1F8..0x1FB u8 (`texCols`, `texRows`, `texStep`, `layer`/`blend`); 0x1FC..0x20B f32 (`ringFrom`, `ringTo`, `yaw`, `pitch`); 0x20C u8 `drawMode`; 0x20D u8 (`eft_x.c:300` compara com 1 e 2) | `EftPart10Def2` (`eft_x.h:161`), 0x12C | 0x000..0x12B f32 (cores Vec4 x12, estiramento, tempos) | 83 partes no disco, nenhuma na demo |
+| 12 | "zap": linhas (`EftZap`, `src/battle/eft_ab_c.c`, `src/battle/eft_ad.c`) | `EftZapDef` (`include/battle/eft_ac.h:222`; view `EftZapPrm`, `include/battle/eft_ad.h:93`, só `flags`), 0xB8 bytes | 0x00..0x9F f32; 0xA0 s32 `ptsMin`; 0xA4 s32 `ptsRange`; 0xA8..0xB3 u8 (`blend`, `facing`, seis modos, `interval`, `count`, 2 sem leitor); 0xB4 s32 `flags` | `EftZapKeyTbl` (`eft_ac.h:266`; view `EftZapKeys`, `eft_ad.h:99`), 0x12C | 0x000..0x12B f32 | **ausente do disco** (nenhum grupo de tipo 12 e nenhuma máscara com o bit 12): layout só pelo código, não conferido com dados |
+| 15 | corrente de sprites entre dois pontos (`EftLink`, `src/battle/eft_v_c.c` e `eft_w.c`) | `EftLinkDef` (`include/battle/eft_v.h:361`) e `EftWLinkDef` (`include/battle/eft_w.h:65`), 0x1A4 bytes | 0x000..0x19B f32; 0x19C..0x19F u8 (`cols`, `rows`, `texStep`, `layer`); 0x1A0 s32 `flags` | `EftLinkDef2` (`eft_v.h:402`) e `EftWLinkKey` (`eft_w.h:101`), 0x12C | 0x000..0x12B f32 | 37 partes no disco, nenhuma na demo |
 | 14 | objeto animado | pacote de sprites "V000" (F2.8) | ver F2.8 | não tem | | lido |
 | 16 | sprite (`EftBill`) e linha (`EftLine`) | `EftBillDef` (`include/battle/eft_z.h:46`) e `EftLineDef` (`eft_y.h:430`) | 0x00 s32 `flags`; 0x04..0x07 u8; 0x08..0x0B ver abaixo; 0x0C..0x8F f32 | `EftLineDef2` (`eft_y.h:452`) / `EftVec` | 0x00..0x83 f32 | lido |
 | 17 | fita (`EftRibbon`) | `EftRibbonPrm` (`include/battle/eft_ac.h:108`) e `EftRbnPrm` (`include/battle/eft_ab.h:356`) | 0x00 s32; 0x04..0x07 u8; 0x08..0x5F f32 | `EftRbnAnim` (`eft_ab.h:374`) | 0x00..0xB3 f32 | lido |
@@ -1120,6 +1245,27 @@ intervalo; os tamanhos das entradas no pacote são arredondados a 0x40.
 - Tipo 5: os conflitos de `mapa.tsv.conflitos` (01482 +0x6329C e +0x7A49C; 01802 +0x41D9C, +0x5D4DC, +0x955DC,
   +0xAC7DC) caem todos em `EftUPtclDef` + 0x19C (`radiusRange[0..2]` e `ring[0]`): `Port_FastMtxApply` lê 16 bytes
   de uma vez e outras leituras pegam f32 dentro. Pelo layout são quatro f32: inverter de 4 em 4.
+- **Tipo 9, entrada a maior que a struct** (a causa dos 60 erros "parte de efeito: byte N não reconhecido" do
+  disco; o arquivo para no primeiro erro, por isso eles aparecem em entradas 1..5 e nas subs 2, 3, 4 do pacote do
+  personagem). `EftQuadDef`/`EftPart9Def` terminam em 0x242 e nenhum código lê além disso: o módulo de quads
+  inteiro está em C casado (`src/battle/eft_x_c.c`, `src/battle/eft_y.c`, sem `INCLUDE_ASM`) e só lê a
+  definição pelos campos nomeados. Nos dados, das 1.250 partes de tipo 9 do disco, 196 têm bytes não nulos
+  depois de 0x242 (o último em até 0x25B): o byte 0x243 é sempre zero e as palavras 0x244..0x258 são f32
+  plausíveis ou zero (nenhum inteiro pequeno). Parece uma versão maior da struct com campos que este
+  executável não usa. Largura não determinada pelo código; como ninguém lê, o conversor deixa 0x243 até o fim
+  da entrada como bytes, sem exigir zero (inverter como u32 seria igualmente inofensivo). Nenhum outro tipo
+  passa do tamanho da struct: o último byte não nulo fica dentro dela em todas as partes do disco (tipo 2:
+  0x4B4; 5: 0x2AF e 0x113; 10: 0x20D e 0x12B; 14: dentro do pacote "V000"; 15: 0x1A1, dentro de `flags`, e
+  0x12B; 16: 0x8F e 0x83; 17: 0x5F e 0xB3; 18: 0x1E7 e 0x113; e a entrada b do tipo 9: 0x12B).
+- Tipos 10 e 15: onde as views discordam, todas leem a mesma largura. Tipo 10: `eft_w.h` deixa
+  0x000..0x17F, 0x184..0x1CB e 0x1D0..0x1E7 como `u8[]` sem leitura, `eft_x.h` os tipa como f32 e o código de
+  `eft_x.c` os lê como f32. Tipo 15: `EftLinkDef` declara 0x164..0x16F como `u8[0xC]`, mas `EftWLinkDef` lê
+  f32 em 0x164 (`fadeIn`), 0x168 (`fadeOut`) e 0x16C (`sizeSplit`) (`src/battle/eft_w.c:439`, `:466`): são f32.
+  Nos dados, o último byte não nulo da entrada a do tipo 15 é 0x1A1 nas 37 partes, o segundo byte de `flags`
+  (bits 0x200 e 0x400 citados no header): confirma `flags` como s32.
+- Critério do conversor: o tipo do grupo (byte 0 do registro de grupo, F2.4) escolhe o layout da entrada a e
+  da b; com os layouts desta tabela, toda entrada a/b do disco fecha (resto zero até o alinhamento, salvo o
+  tipo 9 acima).
 
 ### 7.9 F2.8 Pacote de sprites "V000" (tipo 14 e pacote do personagem 6.1)
 
@@ -1177,8 +1323,34 @@ registros). O número de cenários não está no arquivo (vem de `Battle_GetStag
 ### 7.13 Escritas no file[2] na carga
 
 `Res_RelocateOffsets` (TexFile +0x10, TexEntry +0x38 e +0x3C), `EftSprPack_Bind` (camada +0x14),
-`DemoCam_FixupAnim` (+0x04, +0x08, +0x18, +0x1C, canais +0x04). Como esses campos são lidos como deslocamento antes
-de virar ponteiro, a conversão tem de rodar uma vez, antes de qualquer ligação, e nunca sobre um buffer já ligado.
+`DemoCam_FixupAnim` (+0x04, +0x08, +0x18, +0x1C, canais +0x04). Os modelos no formato do file[0] que o file[2]
+traz (7.4.1, 7.5.1) são ligados no próprio buffer por `EftObj_Create` → `BtlObj_Create`, com as mesmas escritas do
+file[0] (seção 8: bit `bound`, TBP/CBP do fluxo VIF por `MdlTex_RebaseChain`, ponteiros de textura). Como esses
+campos são lidos como deslocamento antes de virar ponteiro, a conversão tem de rodar uma vez, antes de qualquer
+ligação, e nunca sobre um buffer já ligado.
+
+### 7.14 F2.12 Malha de efeito (`EftMeshData`; sub 1 do anel do tipo de efeito 8)
+
+Structs `EftMeshData` / `EftMeshGroup` / `EftMeshTri` / `EftMeshVtx` (`include/battle/eft_ad.h:248`, `:230`,
+`:237`, `:242`). `EftMesh_Init` (`src/battle/eft_ad_b.c:160`) guarda ponteiros para os grupos, os triângulos e os
+vértices **na instância** (`EftMesh`), sem escrever no arquivo; `EftMesh_DrawClip`/`DrawPlain`/`DrawNow*`
+(`eft_ad_b.c:291` em diante) leem. O mesmo formato serve a `EftDisc` (`src/battle/eft_o_c.c:313`) e ao cenário
+(`src/battle/eft_b.c:1382`), fora do slot do lutador.
+
+| Desl. | Tipo | Larg. | Significado |
+|---|---|---|---|
+| 0x00 | 4 caracteres | 1 | `unk0`: assinatura ASCII de 4 letras (a mesma nos dois anéis do disco); ninguém lê: bytes |
+| 0x04 | s32 | 4 | `numGroups` |
+| 0x08 | s32 | 4 | `trisOfs`: deslocamento em bytes dos triângulos, a partir do início da malha (= 0x10 + 0x10 x numGroups) |
+| 0x0C | s32 | 4 | `vtxOfs`: deslocamento em bytes dos vértices |
+| 0x10 | `EftMeshGroup` x numGroups | 4 | s32 `numTris`, s32 `unk4` (sem leitor), s32 `firstTri`, s32 `unkC` (sem leitor) |
+| `trisOfs` | `EftMeshTri` (0x10) | 4 | s32 `v[3]` (índices de vértice), s32 `tex` (< 0 = sem textura) |
+| `vtxOfs` | `EftMeshVtx` (0x30) | 4 | f32 x4 `pos`, f32 x4 `color`, f32 x4 `uv` |
+
+Delimitação: triângulos = maior `firstTri + numTris` dos grupos; vértices = maior índice + 1 (o arquivo não diz
+a contagem). Nos dois anéis do disco (01922 e 02582): 1 grupo, 96 triângulos que enchem exatamente
+`[trisOfs, vtxOfs)`, 192 vértices, e zeros depois até o fim da entrada. Tudo palavra de 4 bytes, salvo a
+assinatura.
 
 ## 8. O que o jogo grava nos arquivos, e quando converter
 
@@ -1197,6 +1369,7 @@ ligação**, e nunca sobre um buffer já ligado:
 | file[0] entradas 29..36 | `BtlObjAnim_Retarget` | chaves alteradas no lugar (floats) |
 | file[0] entradas 37..43 e file[2] entrada 6 sub 8 | `DemoCam_FixupAnim` (btl_demo_cam.c:31) | deslocamentos viram ponteiros e `needsFixup` zera, na primeira vez que a câmera toca |
 | file[2] | `Res_RelocateOffsets`, `EftSprPack_Bind` | ponteiros de textura e de chaves de sprite |
+| file[2], modelos (sub 1 de técnica, subs 3 e 4 do pacote do personagem; 7.4.1, 7.5.1) | `EftObj_Create` → `BtlObj_Create` → `BtlObjMdl_BindFiles`, `MdlTex_RebaseChain`, `Res_RelocateOffsets` | as mesmas escritas do file[0] entradas 3 e 12, no buffer do file[2], quando o efeito cria o objeto |
 
 Pontos que a conversão in-place sozinha não resolve:
 
@@ -1218,8 +1391,11 @@ Pontos que a conversão in-place sozinha não resolve:
 file[0], gráficos:
 - Cabeçalho do modelo: 0x00..0x0B, 0x3C..0x4B, 0x55..0x57 e 0x74..0x8F nunca são lidos.
 - Registro de malha + 0x0E (u16 sem leitor, pela visão `ObjDrawPart`).
-- Seção de costura: não existe nos dois modelos da demo; o layout vem só do código, e +0x40..0x4F de cada
-  vértice não é lido.
+- Seção de costura: não existe nos dois modelos da demo (existe em 73 file[0] do disco, 4.2.2: layout
+  conferido nos dados, mas nenhuma leitura no rastreio); +0x40..0x4F de cada vértice não é lido (zero nos
+  dados).
+- Os 0x40 bytes depois do último registro de malha nos 625 modelos sem costura: não nulos entre +0x08 e
+  +0x3F, sem leitor; conteúdo não determinado (tratado como bytes).
 - Corpo: cabeçalho 0x00 (s32 sem leitor), 0x08..0x0F, e 0x034..0x03F de cada parte.
 - `TexFile` 0x08..0x0F (não zero nos dados, nunca lido; provavelmente 2 x u32).
 - Quem usa a entrada 1 (textura em objeto + 0x50) além da relocação.
@@ -1241,17 +1417,21 @@ Animações (seção 6):
 - O significado do byte constante unk00 do cabeçalho de animação.
 
 file[2] (seção 7):
-- Subentrada 2 dos pacotes de técnica e subentradas 5 e 10 do pacote do personagem: nenhum leitor com
-  índice constante; vazias na demo.
-- Subentrada 1 dos pacotes de técnica: o formato depende do tipo de efeito (modelo no formato do file[0],
-  modelos por traje, conjunto de texturas ou "extra"); vazia na demo.
-- Subentradas 3 e 4 do pacote do personagem: `EftKiObjMgr_Init` e `EftKiBombMgr_Init` leem a sub 1 como
-  modelo, os gerenciadores de rajada como cabeçalho de emissores; na demo é cabeçalho de emissores. Qual
-  vale depende do personagem.
+- Subentrada 2 dos pacotes de técnica (vazia nos 805 do disco) e subentradas 5 e 10 do pacote do
+  personagem: nenhum leitor com índice constante; vazias na demo.
+- Subentrada 4 do pacote do personagem em 01552: traz {modelo, texturas} sem rajada de tipo 3; pelo código
+  só seria lida como conjunto de emissores (7.5.1). Se o jogo chega a ler os bytes 0x04..0x07 e 0x20..0x27
+  desse "cabeçalho": não determinado.
+- Tipo de grupo 9, entrada a, de 0x243 até o fim: sem leitor; 196 das 1.250 partes do disco têm palavras com
+  cara de f32 em 0x244..0x258 (7.8). Largura não determinada.
+- Tipo de grupo 12: ausente do disco; layout só pelo código (7.8).
+- `EftMeshGroup` +0x04 e +0x0C e a assinatura de `EftMeshData`: sem leitor (7.14).
 - Tipo 16, bytes 0x08..0x0B (f32 numa visão, bytes na outra; sem leitura no rastreio).
 - Bytes sem leitura: `EftSetGroupDef` 0x03..0x1F, `EftEmitDef` 0x38..0x3F, cabeçalho de emissores 0x07,
   "V000" 0x06..0x07 e 0x0C..0x1F, bloco de bits 0x08..0x3F.
-- Tipos de grupo 10, 12 e 15 (e os que o despachante não trata) não aparecem nos dois arquivos.
+- Tipos de grupo 10 e 15 não aparecem nos dois arquivos da demo (só no disco: 83 e 37 partes) e o 12 em
+  arquivo nenhum; os tipos que o despachante não trata (1, 3, 4, 6, 7, 8, 11, 13) não aparecem em máscara
+  nenhuma do disco.
 
 Também fica fora deste documento: a relação entre o id do arquivo e o número no AFS, e os erros de visão
 nos headers da decomp que a parte de efeitos encontrou (`EftSetDef` 0x0C..0x0F e 0x20..0x33 são f32;
@@ -1355,3 +1535,33 @@ flags, node, offset, raio e nos cantos `local[8]` da caixa de cada uma das 22 pa
   partes das entradas 1, 2 e 5 e a câmera (sub 8 vazia); nos dois, no pacote do personagem, 9 partes de
   tipo 5, 5 de tipo 14, 3 de tipo 16, 2 de tipo 18 e 1 de tipo 9 (com suas entradas b), e as subentradas
   5, 9, 10 e 11 (vazias); os tipos 2 (raios) e 17 só existem em partes não lidas de 01482.
+
+### 10.4 O disco inteiro (`conv_tool --disco`)
+
+Os 1.610 arquivos de slot dos 161 lutadores (file[0], file[1] e file[2]) convertidos sem gravar, no WSL.
+Com o conversor de `port/x360/conv/` antes desta revisão: 1.412 sem erro e 198 com erro, todos de formato
+não especificado (o conversor para no primeiro erro de cada arquivo):
+
+| Erro | Arquivos | Causa | Seção |
+|---|---|---|---|
+| "convertido duas vezes (marca 1, agora 4) [entrada 3]" | 73 file[0] | seção de costura logo depois do último registro de malha, já marcada como bytes | 4.2, 4.2.2 |
+| "tipo de grupo 10 não especificado" | 38 file[2] | layout do tipo 10 | 7.8 |
+| "tipo de grupo 15 não especificado" | 15 file[2] | layout do tipo 15 | 7.8 |
+| "parte de efeito: byte N não reconhecido" | 60 file[2] | entrada a do tipo 9 maior que a struct | 7.8 |
+| "técnica: subentrada 1 não suportada" | 12 file[2] | variantes da sub 1 | 7.4.1 |
+
+Escondidos atrás desses (aparecem só depois de resolvê-los): a sub 3 de 01552, 01982 e 02032 e a sub 4 de
+01552 e 01982 do pacote do personagem, que são modelos (7.5.1).
+
+Teste da especificação: uma cópia do conversor no /tmp do WSL, com as regras desta revisão (costura depois do
+percurso das malhas, tipos 10, 12 e 15, tipo 9 com o fim sem leitor em bytes, sub 1 de técnica e subs 3 e 4
+do pacote do personagem pelo critério da forma, malha F2.12). Resultado:
+
+- `--disco`: 1.610 sem erro, 0 com erro; os 198 resolvidos, nenhum dos 1.412 que passavam passou a falhar;
+  cobertura de 100% dos bytes em todos os 1.610;
+- `--mapa port/build/mapa.tsv` nos seis arquivos da demo (01473, 01481, 01482, 01793, 01801, 01802): todas as
+  posições iguais (121.146, 551, 4.216, 100.922, 581 e 9.292), 0 com outra largura, 0 não trocadas.
+
+O que esse teste não prova: nenhuma posição das partes novas (costura, tipos 10 e 15, sub 1 de técnica,
+modelos do pacote do personagem, malha) foi lida pela luta de demonstração; a largura vem só do código e da
+forma dos dados.
