@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # F1, ciclo inteiro (no WSL, na raiz do repositório): referência x86, rastreio, mapa, PowerPC com o mapa, e as
-# comparações. Cada passo para o ciclo se falhar.
+# comparações. Cada passo para o ciclo se falhar. A PowerPC liga as tabelas do executável do esqueleto port/data e as
+# preenche como o produto (decisão 13): cópia do SLUS de BT3_DATA na partida e troca pelo mapa estático
+# (bt3_ppc.dat e bt3_ppc.swap, que headless.py grava a partir da build x86 feita antes).
 #   F1_QUADRO=4428   quadro do dump de memória comparado no fim (o último da luta de demonstração)
 #   F1_SEM_BUILD=1   não recompila (só roda e compara)
 #   F1_SEM_RASTREIO=1  reaproveita o rastreio e o mapa que já estão em port/build (o rastreio leva ~1 h)

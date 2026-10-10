@@ -269,6 +269,92 @@ static void data_fail(const char *what, const char *path) {
     exit(2);
 }
 
+#ifdef PORT_BIG_ENDIAN
+/* A big-endian host (the Xbox 360; the F1 PowerPC build, port/x360/tools/headless.py): the list, the ELF's headers and
+   the tables' values are little-endian, as on the PS2. */
+static void swap_bytes(void *p, uint32_t n) {
+    uint8_t *b = p, t;
+    uint32_t i;
+    for (i = 0; i < n / 2; i++) {
+        t = b[i];
+        b[i] = b[n - 1 - i];
+        b[n - 1 - i] = t;
+    }
+}
+
+static uint32_t le32(const uint8_t *p) {
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+typedef struct { uint32_t start, end; } DataRun;
+
+static int run_cmp(const void *a, const void *b) {
+    uint32_t x = ((const DataRun *)a)->start, y = ((const DataRun *)b)->start;
+    return x < y ? -1 : x > y;
+}
+
+/* After the copy and the checksum: every number in the live tables gets the host's byte order. <program>.swap lists
+   their addresses and widths ("BT3S", count, then address and width per position, little-endian), made at build time
+   from the decompilation's declarations (port/x360/tools/elftipos.py, decision 13); it holds no game data. Only bytes
+   that were just copied may be touched: the addresses the linker wrote (`.long symbol`) are in the host's order
+   already, and the dead tables (used only by PS2 code the port does not compile) stay as they came. */
+static void Port_SwapGameData(const char *exe, const uint8_t *list, uint32_t count) {
+    char path[1200];
+    uint8_t *map;
+    size_t mapSize = 0;
+    DataRun *runs;
+    uint32_t n, i, k, lo, hi, addr, width;
+
+    snprintf(path, sizeof(path), "%s.swap", exe);
+    map = read_file(path, &mapSize);
+    if (map == NULL) {
+        data_fail("this program needs the file that came with it", path);
+    }
+    if (mapSize < 8 || memcmp(map, "BT3S", 4) != 0 || (mapSize - 8) % 8 != 0 || le32(map + 4) != (mapSize - 8) / 8) {
+        data_fail("damaged file", path);
+    }
+    n = le32(map + 4);
+    runs = malloc(((size_t)count + 1) * sizeof(DataRun));
+    if (runs == NULL) {
+        data_fail("out of memory", NULL);
+    }
+    for (i = 0; i < count; i++) { /* the runs the list copied, sorted and joined where they touch */
+        runs[i].start = le32(list + 16 + (size_t)i * 16);
+        runs[i].end = runs[i].start + le32(list + 16 + (size_t)i * 16 + 12);
+    }
+    qsort(runs, count, sizeof(DataRun), run_cmp);
+    for (i = 0, k = 0; i < count; i++) {
+        if (k > 0 && runs[i].start <= runs[k - 1].end) {
+            if (runs[i].end > runs[k - 1].end) {
+                runs[k - 1].end = runs[i].end;
+            }
+        } else {
+            runs[k++] = runs[i];
+        }
+    }
+    for (i = 0; i < n; i++) {
+        addr = le32(map + 8 + (size_t)i * 8);
+        width = le32(map + 12 + (size_t)i * 8);
+        lo = 0;
+        hi = k;
+        while (lo < hi) { /* the last run that starts at or before addr */
+            uint32_t mid = (lo + hi) / 2;
+            if (runs[mid].start <= addr) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        if ((width != 2 && width != 4 && width != 8) || lo == 0 || addr + width > runs[lo - 1].end || addr + width < addr) {
+            data_fail("damaged file (a position outside the game's data it lists)", path);
+        }
+        swap_bytes((void *)(uintptr_t)addr, width);
+    }
+    free(runs);
+    free(map);
+}
+#endif
+
 static void Port_LoadGameData(void) {
     char exe[1024], path[1200];
     const char *root = getenv("BT3_DATA") != NULL ? getenv("BT3_DATA") : "gamedata";
@@ -330,6 +416,10 @@ static void Port_LoadGameData(void) {
     }
     memcpy(&count, list + 4, 4);
     memcpy(&want, list + 8, 8);
+#ifdef PORT_BIG_ENDIAN
+    swap_bytes(&count, 4);
+    swap_bytes(&want, 8);
+#endif
     if (listSize < 16 + (size_t)count * 16) {
         data_fail("damaged file", path);
     }
@@ -344,10 +434,20 @@ static void Port_LoadGameData(void) {
         memcpy(&shoff, elf + 0x20, 4);
         memcpy(&shentsize, elf + 0x2E, 2);
         memcpy(&shnum, elf + 0x30, 2);
+#ifdef PORT_BIG_ENDIAN
+        swap_bytes(&shoff, 4);
+        swap_bytes(&shentsize, 2);
+        swap_bytes(&shnum, 2);
+#endif
         srcSize[0] = ROM_END - ROM_BASE;
         src[0] = calloc(1, srcSize[0]);
         for (i = 0; i < shnum && (size_t)shoff + (size_t)(i + 1) * shentsize <= elfSize; i++) {
             memcpy(sh, elf + shoff + (size_t)i * shentsize, sizeof(sh)); /* name, type, flags, addr, offset, size */
+#ifdef PORT_BIG_ENDIAN
+            for (k = 0; k < 6; k++) {
+                swap_bytes(&sh[k], 4);
+            }
+#endif
             if ((sh[2] & 2) && sh[1] != 8 && sh[5] != 0 && sh[3] >= ROM_BASE && sh[3] + sh[5] <= ROM_END &&
                 (size_t)sh[4] + sh[5] <= elfSize) {
                 memcpy(src[0] + (sh[3] - ROM_BASE), elf + sh[4], sh[5]);
@@ -364,6 +464,11 @@ static void Port_LoadGameData(void) {
         uint32_t r[4]; /* address in this program, source, offset in it, length */
         const uint8_t *from;
         memcpy(r, list + 16 + (size_t)i * 16, 16);
+#ifdef PORT_BIG_ENDIAN
+        for (k = 0; k < 4; k++) {
+            swap_bytes(&r[k], 4);
+        }
+#endif
         if (r[1] > 1 || (size_t)r[2] + r[3] > srcSize[r[1]]) {
             data_fail("damaged file (list of the game's data)", NULL);
         }
@@ -375,10 +480,16 @@ static void Port_LoadGameData(void) {
     }
     free(src[0]);
     free(src[1]);
+#ifndef PORT_BIG_ENDIAN
     free(list);
+#endif
     if (hash != want) {
         data_fail("the game's programs in your game data are not the unmodified USA release (SLUS-21678)", NULL);
     }
+#ifdef PORT_BIG_ENDIAN
+    Port_SwapGameData(exe, list, count);
+    free(list);
+#endif
 }
 
 #if defined(__x86_64__)

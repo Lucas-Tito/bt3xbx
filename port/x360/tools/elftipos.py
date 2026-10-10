@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tipagem estática das tabelas de dados do executável (protótipo; revisão nº 3, achado 8).
 
-    elftipos.py [--saida DIR] [-j N] [--sem-rastreio]
+    elftipos.py [--dados DIR] [--saida DIR] [-j N] [--sem-rastreio] [--trocas ARQ]
 
 Roda no WSL, na raiz do clone, depois de headless.py --alvo x86 (precisa de port/build/gen/data/*.s e dos .i de
 port/build/x86/obj). Projeto e resultados em docs/x360/formatos/elf.md.
@@ -36,6 +36,9 @@ que só cobre o que uma luta leu. Aqui a largura de cada posição sai do CÓDIG
    `.asciz` ficam como o .s diz.
 7. Comparação com o rastreio: a decisão que elfdados.retipar tomaria em cada diretiva, pela mesma regra dele.
 
+Com --trocas ARQ (e --dados port/data): o mapa que o host big-endian aplica na carga (decisão 13; headless.py o
+grava ao lado da build PPC), as posições vivas de número que vêm do disco, por objeto. Ver exportar_trocas.
+
 Saída em DIR (padrão /tmp/elftipos): mapa.tsv (objeto, deslocamento, largura, tipo, origem, caminho do campo:
 posições e larguras, nenhum byte do jogo), diretivas.tsv (decisão estática e do rastreio por diretiva) e
 relatorio.txt (cobertura por objeto, rótulos, conflitos, comparação). Dos dados, só a marca "valor zero" por diretiva.
@@ -68,6 +71,7 @@ class Objeto:
     def __init__(self, caminho):
         self.nome = caminho.name[:-2]
         self.rotulos, self.dirs, ofs = {}, [], 0
+        self.copia = []  # (deslocamento, tamanho) dos `.space` do esqueleto port/data: os valores que vêm do disco
         for l in caminho.read_text(errors="replace").splitlines():
             m = ROTULO.match(l.strip())
             if m:
@@ -85,6 +89,8 @@ class Objeto:
             elif d in (".space", ".zero"):  # .zero: o esqueleto do upstream (port/data, make_skeleton.py)
                 n = int(arg.split(",")[0], 0)
                 self.dirs.append(Diretiva(ofs, n, "space", zero=True))
+                if d == ".space":
+                    self.copia.append((ofs, n))
                 ofs += n
             elif d in (".asciz", ".string", ".ascii"):
                 n = elfdados._asciz_tamanho(arg, d != ".ascii")
@@ -815,6 +821,63 @@ def compara(est, ras):
 
 # --------------------------------------------------------------------------------------------------- main
 
+def exportar_trocas(objetos, mapas, vivo_byte, caminho):
+    """O mapa do host big-endian (decisão 13): cada posição viva de número com mais de um byte cujo valor vem do
+    disco (`.space` do esqueleto port/data, que Port_LoadGameData copia do SLUS), uma por linha: objeto,
+    deslocamento, largura. Só posições e larguras, nenhum byte do jogo. Ficam de fora: o morto, o que é zero no PC
+    (`.zero`) e os `.long Símbolo`, que o linker escreve na ordem do host. Em ARQ.sem_tipo, os trechos vivos que vêm
+    do disco sem tipo no C (ficam como vieram). Devolve (contagens, erros)."""
+    cont, erros = collections.Counter(), []
+    with open(caminho, "w") as f, open(str(caminho) + ".sem_tipo", "w") as fs:
+        for o in objetos.values():
+            mp, vivo = mapas[o.nome], vivo_byte[o.nome]
+            marca = bytearray(o.tam)  # 0 zero no PC (.zero, alinhamento), 1 vem do disco, 2 ponteiro do linker
+            for ofs, n in o.copia:
+                marca[ofs:ofs + n] = b"\x01" * n
+            for d in o.dirs:
+                if d.tipo == "ptr":
+                    marca[d.ofs:d.ofs + 4] = b"\x02" * 4
+            cf = sorted(b for b in mp.conflitos if vivo[b] and marca[b] == 1)
+            if cf:  # larguras diferentes no mesmo byte vivo que vem do disco: não há troca certa
+                erros.append(f"{o.nome}+{cf[0]:#x}: {len(cf)} bytes vivos em conflito ({sorted(mp.conflitos[cf[0]])[0][:160]})")
+            coberto = bytearray(o.tam)
+            for a, w, kk, desc, fonte, _ in sorted(mp.esc):
+                coberto[a:a + w] = b"\x01" * w
+                if w < 2:
+                    continue
+                if not any(vivo[a:a + w]):
+                    cont["morto"] += 1
+                    continue
+                m = set(marca[a:a + w])
+                if m == {0}:
+                    cont["zero no PC (.zero)"] += 1
+                elif m == {2}:
+                    cont["ponteiro do linker (.long Símbolo)"] += 1
+                elif m != {1}:
+                    erros.append(f"{o.nome}+{a:#x} [{w}] {desc}: parte vem do disco, parte não ({sorted(m)})")
+                elif kk not in ("int", "float", "bits", "ptr") or w not in (2, 4, 8):
+                    erros.append(f"{o.nome}+{a:#x} [{w}] {desc}: tipo {kk}")
+                else:
+                    f.write(f"{o.nome}\t{a}\t{w}\n")
+                    cont[f"trocar: {w} bytes ({'ponteiro numérico' if kk == 'ptr' else kk})"] += 1
+            # o que fica como veio sem o C dizer o tipo, em trechos (ARQ.sem_tipo: objeto, deslocamento, tamanho, rótulo)
+            rot = sorted(o.rotulos.items(), key=lambda x: x[1])
+            b = 0
+            while b < o.tam:
+                if vivo[b] and marca[b] == 1 and not coberto[b]:
+                    e = b
+                    while e < o.tam and vivo[e] and marca[e] == 1 and not coberto[e]:
+                        e += 1
+                    i = bisect.bisect_right([x[1] for x in rot], b) - 1
+                    lugar = f"{rot[i][0]}+{b - rot[i][1]:#x}" if i >= 0 else ""
+                    fs.write(f"{o.nome}\t{b}\t{e - b}\t{lugar}\n")
+                    cont["bytes vivos do disco sem tipo (ficam como vieram)"] += e - b
+                    b = e
+                else:
+                    b += 1
+    return cont, erros
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--dados", default=str(ROOT / "port/build/gen/data"))
@@ -825,6 +888,8 @@ def main():
     ap.add_argument("--saida", default="/tmp/elftipos")
     ap.add_argument("-j", type=int, default=max(1, (os.cpu_count() or 2) - 2))
     ap.add_argument("--sem-rastreio", action="store_true")
+    ap.add_argument("--trocas", help="grava o mapa do host big-endian (com --dados port/data): objeto, deslocamento, "
+                    "largura de cada posição viva que vem do disco; falha se houver posição sem troca certa")
     a = ap.parse_args()
     saida = pathlib.Path(a.saida)
     (saida / "sondas").mkdir(parents=True, exist_ok=True)
@@ -1150,6 +1215,13 @@ def main():
             for x in detalhes[cat][:300]:
                 p("  " + x)
     print(open(saida / "relatorio.txt").read())
+    if a.trocas:
+        cont, erros = exportar_trocas(objetos, mapas, vivo_byte, a.trocas)
+        print("trocas: " + ", ".join(f"{k} {v}" for k, v in sorted(cont.items())))
+        for e in erros[:40]:
+            print("ERRO trocas: " + e)
+        if erros:
+            sys.exit(f"{len(erros)} posições sem troca certa (o mapa {a.trocas} está incompleto)")
 
 
 if __name__ == "__main__":

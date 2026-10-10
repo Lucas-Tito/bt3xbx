@@ -327,5 +327,8 @@ projeto e resultados em `docs/x360/formatos/elf.md`.
 - **Contra o rastreio:** 1.490 diretivas concordam, nenhuma discorda, e 494 diretivas vivas que a luta não leu
   sairiam erradas no 360 sem isso.
 
+Validado na F1 (elf.md 6.8): a PPC segue esse caminho (esqueleto, cópia do SLUS, troca pelo mapa estático) e a luta
+fica idêntica; nenhum byte copiado fora do mapa difere da x86. `elfdados.py` (retipagem pelo rastreio) saiu da PPC.
+
 Em aberto: o esqueleto no `cl`/`link` do XDK (F2), o microcódigo da VU1 como u32 e o u64 de `TexBltPacket` (F3), o
 layout contra o compilador do 360, e declarar no C os poucos rótulos que só o splat tipou.

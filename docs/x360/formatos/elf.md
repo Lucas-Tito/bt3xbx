@@ -233,9 +233,15 @@ Pendências:
 7. **Layout do compilador do 360.** O mapa usa o layout do clang x86 (`-malign-double`), que `layout.py` garante
    igual ao da PowerPC GCC. Falta a mesma conferência contra o `cl` do XDK (alinhamento de u64 e double em 8, campos
    de bits com o pragma).
-8. **Validação na F1.** Trocar o `elfdados.py` (rastreio) pelo mapa estático na build PPC (`headless.py`) e rodar o
-   `f1.sh`: a luta tem de continuar idêntica e o `memdiff.py` deve mostrar menos palavras diferentes na área de
-   dados. Não feito aqui (sem recompilar). A comparação da seção 5 pode virar teste de regressão do ciclo.
+8. **Validação na F1: feita.** A build PPC monta as tabelas do esqueleto `port/data`, grava ao lado do programa
+   a lista de cópias (`.dat`, como o release do upstream) e o mapa por endereço (`.swap`: só endereços e larguras,
+   `elftipos.py --trocas`), e `Port_LoadGameData` (em `#ifdef PORT_BIG_ENDIAN`) troca cada posição depois da cópia e
+   do hash, conferindo que ela cai num trecho copiado. Mapa: 69 tabelas, 210.773 bytes do disco, 3.166 posições
+   (624 de 2 bytes, 2.538 de 4, 4 de 8). Ciclo: luta idêntica nos 4.242 quadros; no último quadro 3.157 das 3.166
+   posições com o valor da x86 (as 9 restantes são valores gravados em execução) e nenhum byte copiado fora do
+   mapa diferente da x86 (eram 14.707 com a retipagem pelo rastreio). Ficam 688 bytes vivos do disco sem tipo (192
+   não nulos: textos que só o splat tipou, 16 bytes depois de `D_002EC2C0`, 4 trechos de 2 bytes em `gFontTags`),
+   nenhum lido como número pela luta.
 9. **Registro.** Se a proposta for aceita, ela entra como decisão numerada em `docs/x360/decisoes.md`.
 
 ## 7. Como rodar

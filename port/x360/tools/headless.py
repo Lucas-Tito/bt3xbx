@@ -3,6 +3,9 @@
 
     --alvo ppc   PowerPC 32 bits big-endian (Linux), roda no qemu-ppc: mesmo processador e mesma ordem de
                  bytes do Xbox 360                                        -> port/build/ppc/bt3_ppc
+                 As tabelas do executável seguem o caminho do produto (decisão 13): esqueleto port/data, valores
+                 copiados do SLUS na partida (bt3_ppc.dat) e trocados pelo mapa estático (bt3_ppc.swap, de
+                 elftipos.py sobre os .i da build x86, que tem de existir e ser da mesma origem).
     --alvo x86   x86 32 bits (clang -m32): a referência little-endian, com ponteiros de 32 bits como o 360
                                                                           -> port/build/x86/bt3_x86
     --chamadas   registra a sequência de funções do jogo chamadas (port/x360/headless/chamadas.c), para
@@ -15,16 +18,16 @@ diferença entre elas só pode vir da ordem dos bytes. Reaproveita portsrc e eec
 janela, controle e rede são trocados por port/x360/headless/sem_janela.c.
 
 Uso (no WSL, na raiz do repositório, depois do install.py):
-    port/x360/tools/headless.py --alvo ppc
+    port/x360/tools/headless.py --alvo x86 && port/x360/tools/headless.py --alvo ppc
     BT3_DEMO=1 BT3_GS=none BT3_SOUND_TICKS=1 BT3_SETTINGS= qemu-ppc port/build/ppc/bt3_ppc
 """
-import argparse, collections, concurrent.futures, os, pathlib, re, subprocess, sys
+import argparse, bisect, collections, concurrent.futures, os, pathlib, re, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "port/tools"))
 import eeconst, portsrc  # noqa: E402
 sys.path.insert(0, str(ROOT / "port/x360/tools"))
-import bitfields, elfdados  # noqa: E402
+import bitfields  # noqa: E402
 
 # Sem janela: desenho na GPU, controle, rede e a janela de opções ficam de fora, trocados por
 # port/x360/headless/sem_janela.c (o que eles devolvem rodando sem janela). O som e o checksum de estado
@@ -121,34 +124,21 @@ def construir(alvo):
     def junta(f, o, r):
         (falhas.append((f, r)) if r.returncode else objs.append(o))
 
-    # tabelas de dados do jogo (do disco do usuário, gen_data.py); na PowerPC o assembler grava big-endian
+    # tabelas de dados do jogo. x86: com os valores (port/build/gen/data, do gen_data.py sobre o disco do usuário).
+    # PowerPC: o caminho do produto (decisão 13), o esqueleto versionado do upstream (port/data, make_skeleton.py:
+    # rótulos, `.space` onde entram os valores, `.long Símbolo`); na partida Port_LoadGameData copia os valores do SLUS
+    # pela lista <programa>.dat, confere o hash e troca a ordem de cada posição viva pelo mapa <programa>.swap
+    # (esqueleto(), depois da ligação).
     dados = alvo.b / "obj_data"
     dados.mkdir(exist_ok=True)
-    # No big-endian, cada diretiva com a largura que o jogo lê (elfdados.py, a partir do rastreio da x86).
-    larg_elf = {}
-    if alvo.be:
-        rastreio = pathlib.Path(os.environ.get("BT3_RASTREIO_ELF", ROOT / "port/build/x86r/rastreio.tsv"))
-        if rastreio.exists():
-            larg_elf = elfdados.larguras_elf(rastreio)
-            import hashlib
-            (alvo.b / "ENTRADAS").write_text(f"rastreio {rastreio} sha1:{hashlib.sha1(rastreio.read_bytes()).hexdigest()[:10]}\n")
-        else:
-            print(f"AVISO: sem {rastreio}: tabelas de dados do executável com os tipos do splat (erradas no big-endian)")
-    trocas, conflitos = collections.Counter(), []
-    for s in sorted((ROOT / "port/build/gen/data").glob("*.s")):
+    origem = ROOT / ("port/data" if alvo.be else "port/build/gen/data")
+    if alvo.be:  # restos de quando a PowerPC retipava gen/data pelo rastreio (elfdados.py)
+        import shutil
+        shutil.rmtree(alvo.b / "gen_data", ignore_errors=True)
+        (alvo.b / "elfdados.conflitos").unlink(missing_ok=True)
+    for s in sorted(origem.glob("*.s")):
         o = dados / (s.name[:-2] + ".o")
-        fonte = s
-        if alvo.be:
-            texto, t, c = elfdados.retipar(s.read_text(), larg_elf.get(s.name[:-2], {}))
-            trocas.update(t)
-            conflitos += [f"{s.name[:-2]}\t{ofs}\t{d}\t{m}" for ofs, d, m in c]
-            fonte = alvo.b / "gen_data" / s.name
-            fonte.parent.mkdir(exist_ok=True)
-            fonte.write_text(texto)
-        junta(s, o, run(alvo.asm + [fonte, "-o", o]))
-    if trocas:
-        print("tabelas do executável retipadas: " + ", ".join(f"{k} {v}" for k, v in trocas.most_common()))
-        (alvo.b / "elfdados.conflitos").write_text("".join(c + "\n" for c in conflitos))
+        junta(s, o, run(alvo.asm + [s, "-o", o]))
 
     # biblioteca matemática do PS2 (software)
     for f in sorted((ROOT / "port/third_party/newlib_libm").glob("*.c")):
@@ -235,6 +225,8 @@ def ligar(alvo, objs):
         if int(m.group(3), 16):
             faixas.append(f"{m.group(4)}{m.group(1)} {m.group(2)} {m.group(3)}")
     pathlib.Path(str(alvo.exe) + ".elfdata").write_text("\n".join(faixas) + "\n")
+    if alvo.be:
+        esqueleto(alvo)
     # as variáveis globais do jogo no programa, para o checksum e o dump de estado (state.c)
     r = run([sys.executable, ROOT / "port/x360/tools/mem.py", alvo.exe])
     if r.returncode:
@@ -255,6 +247,106 @@ def ligar(alvo, objs):
         if r.returncode:
             print("\n".join(r.stdout.strip().splitlines()[:-1][:60]))
             sys.exit(1)
+
+
+def esqueleto(alvo):
+    """PowerPC, ligada do esqueleto port/data (decisão 13): grava ao lado do programa o que o produto leva junto.
+      <programa>.dat   a lista de make_dat.py do upstream (endereço no programa, arquivo do disco, deslocamento,
+                       tamanho de cada `.space`) e o hash de port/data/index.txt; little-endian, o formato do upstream;
+      <programa>.swap  o mapa estático do host big-endian: endereço e largura de cada posição viva de número que vem do
+                       disco (elftipos.py --trocas, das declarações C da decomp sobre os .i da build x86), que
+                       Port_LoadGameData troca de ordem depois da cópia e da conferência do hash.
+    Nenhum dos dois tem byte do jogo. O programa é marcado (gPortDataStripped = 1) como um que não roda sem a lista."""
+    import hashlib, struct
+    mapa_ld = pathlib.Path(str(alvo.exe) + ".map").read_text(errors="replace")
+    lugar = {}
+    for m in re.finditer(r"^\s*\.data\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+\S*/obj_data/(\S+)\.o\s*$", mapa_ld, re.M):
+        if int(m.group(2), 16):
+            lugar[m.group(3)] = (int(m.group(1), 16), int(m.group(2), 16))
+    # a lista, como make_dat.py
+    onde, checksum = {}, None
+    for l in (ROOT / "port/data/index.txt").read_text().splitlines():
+        p = l.split()
+        if len(p) == 3 and not l.startswith("#"):
+            onde[p[0]] = (int(p[1]), int(p[2], 16))
+        elif len(p) == 2 and p[0] == "checksum":
+            checksum = int(p[1], 16)
+    regs = []
+    for nome in sorted(onde):
+        if nome not in lugar:
+            sys.exit(f"{nome}: fora do mapa do linker (o programa não saiu de port/data?)")
+        qual, so = onde[nome]
+        ini, tam = lugar[nome]
+        off = 0
+        for l in (ROOT / "port/data" / (nome + ".s")).read_text().splitlines():
+            p = l.split()
+            if not p or p[0].startswith("#"):
+                continue
+            if p[0] == ".space":
+                regs.append((ini + off, qual, so + off, int(p[1])))
+                off += int(p[1])
+            elif p[0] == ".zero":
+                off += int(p[1])
+            elif p[0] == ".long":
+                off += 4
+        if not off <= tam < off + 16:
+            sys.exit(f"{nome}: {off} bytes em port/data, {tam} no programa")
+    dat = pathlib.Path(str(alvo.exe) + ".dat")
+    dat.write_bytes(struct.pack("<4sIQ", b"BT3D", len(regs), checksum) + b"".join(struct.pack("<IIII", *r) for r in regs))
+    # a marca, na ordem do host (big-endian)
+    secs, linhas = [], run(["powerpc-linux-gnu-objdump", "-h", alvo.exe]).stdout.splitlines()
+    for k, l in enumerate(linhas):
+        m = re.match(r"\s*\d+\s+(\S+)\s+([0-9a-f]+)\s+([0-9a-f]+)\s+([0-9a-f]+)\s+([0-9a-f]+)", l)
+        if m and k + 1 < len(linhas) and "CONTENTS" in linhas[k + 1]:
+            secs.append((int(m.group(3), 16), int(m.group(5), 16), int(m.group(2), 16)))
+    marca = next((int(l.split()[0], 16) for l in run(["powerpc-linux-gnu-nm", alvo.exe]).stdout.splitlines()
+                  if l.endswith(" gPortDataStripped")), None)
+    pos = next((o + marca - va for va, o, t in secs if marca is not None and va <= marca < va + t), None)
+    if pos is None:
+        sys.exit("gPortDataStripped não está nos dados do programa")
+    img = bytearray(alvo.exe.read_bytes())
+    img[pos:pos + 4] = struct.pack(">I", 1)
+    alvo.exe.write_bytes(img)
+    # o mapa das trocas: do código (a build x86 dá os .i e os símbolos que o port usa), sem disco
+    x86 = ROOT / "port/build/x86"
+    if not any((x86 / "obj").glob("*.i")):
+        sys.exit("sem port/build/x86/obj/*.i: o mapa das tabelas (elftipos.py) sai da build x86; faça-a antes")
+    if (x86 / "CARIMBO").read_text() != carimbo():
+        sys.exit("a build x86 é de outra origem: refaça-a antes (o mapa das tabelas sai dos .i dela)")
+    sai = alvo.b / "elftipos"
+    r = run([sys.executable, ROOT / "port/x360/tools/elftipos.py", "--dados", ROOT / "port/data", "--obj", x86 / "obj",
+             "--sem-rastreio", "--saida", sai, "--trocas", sai / "trocas.tsv"])
+    for l in r.stdout.splitlines():
+        if l.startswith(("trocas:", "ERRO")):
+            print(l)
+    if r.returncode:
+        print(r.stderr.strip()[-600:])
+        sys.exit(1)
+    # cada posição tem de cair inteira no que a lista copia (os `.long Símbolo` o linker já escreveu big-endian)
+    faixas = []
+    for a, _, _, n in sorted(regs):
+        if faixas and a <= faixas[-1][1]:
+            faixas[-1][1] = max(faixas[-1][1], a + n)
+        else:
+            faixas.append([a, a + n])
+    inicios = [f[0] for f in faixas]
+    pos = []
+    for l in (sai / "trocas.tsv").read_text().splitlines():
+        nome, ofs, w = l.split("\t")
+        if nome not in lugar:
+            sys.exit(f"trocas: {nome} não está no mapa do linker")
+        a, w = lugar[nome][0] + int(ofs), int(w)
+        i = bisect.bisect_right(inicios, a) - 1
+        if i < 0 or a + w > faixas[i][1]:
+            sys.exit(f"trocas: {nome}+{int(ofs):#x} [{w}] fora do que a lista copia")
+        pos.append((a, w))
+    pos.sort()
+    corpo = b"".join(struct.pack("<II", a, w) for a, w in pos)
+    pathlib.Path(str(alvo.exe) + ".swap").write_bytes(struct.pack("<4sI", b"BT3S", len(pos)) + corpo)
+    (alvo.b / "ENTRADAS").write_text(f"esqueleto port/data {checksum:#018x}, {len(regs)} trechos; "
+                                     f"trocas {len(pos)} posições sha1:{hashlib.sha1(corpo).hexdigest()[:10]}\n")
+    print(f"tabelas: {len(lugar)} do esqueleto, {sum(r[3] for r in regs)} bytes do disco em {len(regs)} trechos; "
+          f"{len(pos)} posições a trocar ({', '.join(f'{w} bytes {n}' for w, n in sorted(collections.Counter(w for _, w in pos).items()))})")
 
 
 def carimbo():
