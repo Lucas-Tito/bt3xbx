@@ -195,8 +195,8 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
     do endereço da pilha e se desligava por ASLR;
   - cópia em laço (lê N, grava N do mesmo valor) leva a forma junto. A gravação pode ser um pedaço
     de uma leitura mais larga (vetor de 16 bytes regravado componente a componente), mas só na mesma
-    posição dentro do bloco alinhado: casar pedaço só pelo valor espalhou origens erradas (zeros
-    coincidem) e multiplicou os conflitos do mapa por 13;
+    posição dentro do bloco alinhado, e levando só a forma, nunca a origem do disco: casar pedaço pelo
+    valor espalhou origens erradas (zeros coincidem) e multiplicou os conflitos do mapa por 7 a 13;
   - copiar um valor lido mais estreito que a gravação é o próprio erro; copiar mais largo (dois
     floats como 8 bytes) não muda nada;
   - o teste de "simétrico" (a leitura dá o mesmo valor nas duas ordens) compara o trecho

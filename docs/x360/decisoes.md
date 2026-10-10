@@ -226,3 +226,49 @@ O que a F1 NÃO prova: outras lutas, personagens, cenários e os menus (o mapa p
 esta luta usou: decisão 8); o caminho do som e o da GPU (a build roda sem janela e sem áudio); e a FPU do
 360 (as duas builds usam a aritmética do PS2 em software). Ainda falta: o detector de visões tem resíduos
 na pilha a entender, e os pacotes da GPU ficam para a F3.
+
+**Nota (revisão nº 3, decisão 11):** a afirmação valia para as 11 palavras comparadas, não para a memória.
+A PPC tinha 10 structs com layout diferente da x86 (`bitfields.py` corrompia structs aninhadas) e o heap
+deslocado a partir da HUD; as ferramentas que deviam mostrar isso aceitavam a diferença. Refeita na
+decisão 11.
+
+## 11. Revisão nº 3: ferramentas rigorosas e a F1 refeita (10/10/2026)
+
+A terceira revisão independente mostrou que a decisão 10 era prematura (nota nela). Corrigido:
+
+- **Campos de bits:** `bitfields.py` reescreve cada corpo de struct uma vez só (o de dentro vira marcador
+  opaco para o de fora) e mantém as linhas do arquivo. `layout.py` compara pelo DWARF o layout de toda
+  struct do jogo entre x86 e PPC (offset, tamanho, posição do campo de bits no valor da unidade), e a build
+  PPC falha se divergir. O clang só gravava as structs usadas por variáveis: `-fno-eliminate-unused-debug-types`.
+  As três structs permutadas de propósito por `#ifdef PORT_BIG_ENDIAN` estão em `layout.PERMUTADAS`, com o
+  motivo, e delas se exige permutação (mesmo tamanho, mesmos campos).
+- **`memdiff.py`:** heap pareado pelos blocos do alocador do jogo (`HeapBlock`, 'TBHS'), não pelo endereço;
+  globais pelo nome com tamanho até o símbolo vizinho (as tabelas em assembly entravam sem tamanho);
+  ponteiro do port a partir da base de ligação (os símbolos TLS valem 0); classes "igual sem inverter" e
+  "u64 com zero" à parte.
+- **Detector de visões:** sombra do valor gravado no lugar da "pilha neutra" (que dependia do endereço da
+  pilha e se desligava em ~1 de cada 10 execuções por ASLR); simetria pelo trecho certo; quem gravou vai junto
+  nas cópias; leitura mais estreita que a gravação e depois copiada é o erro (`objId`); cópia mais larga só
+  leva a forma; sem vetorização na build instrumentada; pares tratados em `visoes_resolvidas.tsv`.
+- **Mapa:** conflito nunca inverte, e leitura que começa dentro de um número é conflito. Um conflito de byte se
+  resolve quando todas as leituras como byte são campos de structs já permutadas: o rastreio guarda quem leu
+  como byte e `tipos.py` diz o campo. Assim se resolveram as 246 posições de flags de polígono do cenário
+  (s32 no disco, lidas como byte numa cópia dentro de `BtlCapiBPose`).
+- **Código do jogo:** varredura estática de casts achou mais 7 visões (u64 sobre flags e botões, u16 de um
+  u32, u8 de um u16). Correção com as macros `PS2_LOW(T, x)` e `PS2_LD64(x)` (`include/types.h`; na build
+  de matching expandem para a expressão original, não compilado aqui porque o WSL não tem a toolchain de
+  matching; o port as redefine em `port_compat.h`).
+- **Ciclo versionado:** `f1.sh` e `compara.py`; carimbo com os arquivos novos e o hash do rastreio usado;
+  rastreio com `setarch -R`.
+- **Erro no caminho:** casar cópia por pedaço de vetor só pelo valor espalhou origens erradas (zeros
+  coincidem): conflitos de 266 para 3.585, e a PPC caiu. O pedaço agora só leva a forma do detector.
+
+Estado com tudo no mesmo carimbo: luta PPC idêntica à x86 nos 4.242 quadros; 1.964 structs com o mesmo
+layout; os 180 blocos do heap no mesmo lugar e tamanho; mapa com 20 conflitos, nenhum invertido.
+
+Aberto:
+- A memória no último quadro ainda tem palavras "diferentes" (cerca de 89 mil, fora do que a luta usa) a
+  classificar.
+- O detector voltou a listar muitos pares "gravou 4, leu 1" de funções sem relação: falta medir de onde vêm.
+- `tipos.py` (decisão 8) liga 99% das leituras de um modelo de personagem a struct e campo; é a base dos
+  conversores por formato.
