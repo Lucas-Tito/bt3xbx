@@ -24,12 +24,25 @@ apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
     git ca-certificates openssh-client curl python3 python3-venv python3-pip \
     build-essential binutils pkg-config cmake ninja-build \
-    clang llvm python3-clang p7zip-full glslc \
+    p7zip-full glslc gnupg \
     gcc-powerpc-linux-gnu g++-powerpc-linux-gnu binutils-powerpc-linux-gnu \
     qemu-user \
     libx11-dev libxext-dev libwayland-dev libxkbcommon-dev libegl-dev libgl-dev \
     libasound2-dev libpulse-dev libudev-dev libdbus-1-dev libvulkan-dev \
     >/dev/null
+
+# clang/LLVM 22: a versão para a qual o ptr32.py e o irfix.py do upstream foram escritos (é a do
+# container de release, port/release/Dockerfile). Com o clang 18 do Ubuntu, 3 arquivos falham.
+if ! command -v clang-22 >/dev/null; then
+    curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm.gpg
+    echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" \
+        > /etc/apt/sources.list.d/llvm.list
+    apt-get update -qq
+    apt-get remove -y -qq python3-clang python3-clang-18 >/dev/null 2>&1 || true
+    apt-get install -y -qq --no-install-recommends clang-22 llvm-22 libclang-22-dev python3-clang-22 >/dev/null
+fi
+ln -sf /usr/bin/clang-22 /usr/local/bin/clang
+ln -sf /usr/bin/llc-22 /usr/local/bin/llc
 
 # SDL3: o Ubuntu 24.04 não tem pacote. O port de PC exige (janela, som, controle); compila do
 # fonte, numa versão fixa, para 64 bits.
@@ -44,4 +57,4 @@ if ! pkg-config --exists sdl3 2>/dev/null; then
     rm -rf "$tmp"
 fi
 
-echo "pronto: usuário $USUARIO, $(gcc --version | head -1), $(powerpc-linux-gnu-gcc --version | head -1), $(qemu-ppc --version | head -1), SDL3 $(pkg-config --modversion sdl3)"
+echo "pronto: usuário $USUARIO, $(gcc --version | head -1), $(clang --version | head -1), $(powerpc-linux-gnu-gcc --version | head -1), $(qemu-ppc --version | head -1), SDL3 $(pkg-config --modversion sdl3)"

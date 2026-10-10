@@ -129,3 +129,20 @@ Exatidão do hardware contra o PS2 (sob o PCSX2), 1 milhão de pares por caso:
 Conclusão para a F1: FPU de hardware em truncamento. Falta decidir quanto da exatidão vale o custo:
 a soma com máscara (44 ns contra 2,4 ns), a divisão ao mais próximo, os denormais e o estouro. Sem
 eles o jogo roda, mas o replay de validação deixa de bater bit a bit com o PCSX2.
+
+## 6. A F1 roda no Windows do Lucas, pelo WSL, comandada daqui por SSH (10/10/2026)
+
+Este computador não pode receber o ISO nem rodar os testes com os dados do jogo. O Windows dele
+(`192.168.0.5`) tem o OpenSSH Server (porta 22 liberada só para `192.168.0.0/24`) e o Ubuntu 24.04
+no WSL. Daqui: `ssh bt3win "wsl -d Ubuntu-24.04 -u lucas -- bash -lc '...'"` (alias em
+`~/.ssh/config`, chave só para isso). O ISO, os dados extraídos e os builds ficam lá; para cá só
+voltam texto e logs.
+
+- Preparo versionado: `port/x360/tools/preparar-wsl.sh` (roda como root, idempotente).
+- O repositório lá é clonado com uma deploy key **só de leitura**; o código se edita aqui e se
+  puxa lá.
+- Sem `gcc-multilib`: conflita com o `gcc-powerpc-linux-gnu` no Ubuntu. A referência x86 é a build
+  de 64 bits do upstream, que exige **clang/LLVM 22** (o do container de release dele); com o
+  clang 18 do Ubuntu, 3 arquivos falham no `ptr32.py`.
+- Resultado em 10/10/2026: o ISO confere com os hashes do lançamento americano, 68.611 arquivos
+  extraídos, `port/build/bt3_64` compilado e a luta de demonstração rodou até o fim.
