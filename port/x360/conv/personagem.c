@@ -76,16 +76,21 @@ void Conv_PacoteImagem(ConvCtx *c, conv_ofs ofs, conv_ofs tam) {
     Conv_U32s(c, ofs + tam - 0x20, 0x20 / 4);
 }
 
-/* §4.4: arquivo de textura (TexFile + TexEntry[count] + pacotes) */
-void Conv_TexFile(ConvCtx *c, conv_ofs a, conv_ofs b, int hud) {
-    conv_u32 n = Conv_U32(c, a), ent = Conv_U32(c, a + 4) * 4, i;
+/* §4.4: arquivo de textura (TexFile + TexEntry[count] + pacotes) em [a, b), com os deslocamentos (entOfs, pixOfs,
+   clutOfs, em palavras) contados a partir de base. No personagem base = a; no cenário (cenario.md 4.11) a base é o
+   início da entrada 1, que contém o TexFile. */
+void Conv_TexFileEm(ConvCtx *c, conv_ofs base, conv_ofs a, conv_ofs b, int hud) {
+    conv_u32 n = Conv_U32(c, a), ent = Conv_U32(c, a + 4), i;
+    conv_ofs e0;
     Conv_U32s(c, a + 8, 3); /* 0x08 não determinado (2 x u32 provável), 0x10 ponteiro gravado na carga */
-    if (c->erro || ent < 0x14 || n > 256 || a + ent + n * 0x40 > b) {
-        Conv_Erro(c, "texturas em 0x%lX: %lu registros em +0x%lX", (unsigned long)a, (unsigned long)n, (unsigned long)ent);
+    if (c->erro || n > 256 || ent > (b - base) / 4 || base + ent * 4 < a + 0x14 || base + ent * 4 + n * 0x40 > b) {
+        Conv_Erro(c, "texturas em 0x%lX: %lu registros em +0x%lX", (unsigned long)a, (unsigned long)n,
+                  (unsigned long)ent * 4);
         return;
     }
+    e0 = base + ent * 4;
     for (i = 0; i < n && !c->erro; i++) {
-        conv_ofs e = a + ent + i * 0x40;
+        conv_ofs e = e0 + i * 0x40;
         conv_u32 pix = Conv_U32(c, e), clut = Conv_U32(c, e + 4);
         conv_u32 ptam = Conv_U32(c, e + 8), ctam = Conv_U32(c, e + 12);
         Conv_U32s(c, e + 0x10, 6);
@@ -97,13 +102,18 @@ void Conv_TexFile(ConvCtx *c, conv_ofs a, conv_ofs b, int hud) {
         Conv_U64(c, e + 0x30); /* tex0: campo u64 de struct */
         Conv_U32s(c, e + 0x38, 2);
         if (pix != 0) {
-            Conv_PacoteImagem(c, a + pix * 4, ptam);
+            Conv_PacoteImagem(c, base + pix * 4, ptam);
         }
         if (clut != 0) {
-            Conv_PacoteImagem(c, a + clut * 4, ctam);
+            Conv_PacoteImagem(c, base + clut * 4, ctam);
         }
     }
     Conv_Zeros(c, a, b, "texturas");
+}
+
+/* §4.4: arquivo de textura com a base no próprio TexFile */
+void Conv_TexFile(ConvCtx *c, conv_ofs a, conv_ofs b, int hud) {
+    Conv_TexFileEm(c, a, a, b, hud);
 }
 
 /* o que sobrou sem marca em [a, b) fica como está (Conv_BytesEntrada), sem exigir zero: só para trechos que o código nunca lê */

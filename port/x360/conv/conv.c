@@ -176,6 +176,7 @@ void Conv_Comum2(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Comum3(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Comum4(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Hud(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_Cenario(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
@@ -188,6 +189,7 @@ static const Formato sFormatos[] = {
     {"comum3", Conv_Comum3},                   /* 00003, personagens e itens */
     {"comum4", Conv_Comum4},                   /* 00004, fontes, ícones, avisos do controle */
     {"hud", Conv_Hud},                         /* 00005 e 00006, HUD e menu de pausa por idioma */
+    {"cenario", Conv_Cenario},                 /* cenario.md: pacote de 25 entradas do cenário da luta */
 };
 
 /* Que formato tem cada arquivo do disco. Os arquivos não dizem o próprio formato: vem de como o jogo escolhe o
@@ -210,6 +212,12 @@ static const char *formato_de(const char *nome) {
     case 4: return "comum4";
     case 5: case 6: return "hud";
     default: break;
+    }
+    /* cenários (cenario.md, seção 1): BtlLoad_* pedem 0x171 + cenário (BTL_FILE_STAGE) ou 0x198 + cenário em tela
+       dividida (BTL_FILE_STAGE_SPLIT), ShenScene 0x194 + dragão e ChrView 0x197; ids 0x171..0x1BE, índices
+       368..445, todos com a tabela de 25 entradas (conferida no conversor) */
+    if (i >= 0x171 - 1 && i <= 0x1BE - 1) {
+        return "cenario";
     }
     k = i + 1 - 0x590;
     if (k >= 0 && k < 161 * 10) { /* 161 personagens (SAVE_CHARA_COUNT); depois disso a faixa é de outros formatos */

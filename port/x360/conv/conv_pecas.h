@@ -13,6 +13,8 @@ conv_ofs Conv_PacoteVif(ConvCtx *c, conv_ofs ofs, conv_ofs fim);
 void Conv_PacoteImagem(ConvCtx *c, conv_ofs ofs, conv_ofs tam);
 /* §4.4: TexFile; hud = 1 trata TexEntry +0x28 como 2 x u32 (folhas do HUD, comuns.md 6.3) */
 void Conv_TexFile(ConvCtx *c, conv_ofs a, conv_ofs b, int hud);
+/* §4.4 com os deslocamentos a partir de base (Conv_TexFile é base = a; o cenário usa a entrada 1, cenario.md 4.11) */
+void Conv_TexFileEm(ConvCtx *c, conv_ofs base, conv_ofs a, conv_ofs b, int hud);
 /* o que sobrou sem marca fica como bytes, sem exigir zero (só trechos que o código não lê) */
 void Conv_RestoBytes(ConvCtx *c, conv_ofs a, conv_ofs b);
 void Conv_Cortes(ConvCtx *c, conv_ofs a, conv_ofs b);       /* §5.11 ChrCamCutDef */
