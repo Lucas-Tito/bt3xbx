@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Prepara o Ubuntu 24.04 do WSL (no Windows do Lucas) para a F1: o port de PC de referência
 # (x86, 64 bits) e a build PowerPC big-endian rodando no qemu. O ISO e os dados do jogo ficam só lá.
-# Sem gcc-multilib: ele conflita com o gcc-powerpc-linux-gnu no Ubuntu, e a referência é a build
-# padrão de 64 bits do port.
+# Sem gcc-multilib: ele conflita com o gcc-powerpc-linux-gnu no Ubuntu (e entra como recomendação do
+# lib32gcc: por isso o --no-install-recommends). A referência x86 de 32 bits compila com clang -m32,
+# que só precisa da libc e da libgcc de 32 bits.
 #
 # Roda como root dentro do WSL. Daqui do Linux de trabalho, pelo SSH:
 #   ssh bt3win "wsl -d Ubuntu-24.04 -u root -- bash -s" < port/x360/tools/preparar-wsl.sh
@@ -26,7 +27,7 @@ apt-get install -y -qq --no-install-recommends \
     build-essential binutils pkg-config cmake ninja-build \
     p7zip-full glslc gnupg \
     gcc-powerpc-linux-gnu g++-powerpc-linux-gnu binutils-powerpc-linux-gnu \
-    qemu-user \
+    qemu-user libc6-dev-i386 lib32gcc-13-dev \
     libx11-dev libxext-dev libwayland-dev libxkbcommon-dev libegl-dev libgl-dev \
     libasound2-dev libpulse-dev libudev-dev libdbus-1-dev libvulkan-dev \
     >/dev/null
