@@ -7,6 +7,9 @@
  *
  * Para a F1 é o jeito mais curto de saber se o mapa basta; no 360 a mesma informação vira conversão de
  * dados (no instalador ou na carga), com formatos de verdade em vez de posições soltas.
+ *
+ * BT3_CONVERTIDOS=<lista>: arquivos que já vêm convertidos por formato (port/x360/conv, conv_tool --saida);
+ * neles o mapa não se aplica. Assim os conversores entram um formato por vez, e o mapa cobre o resto.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -19,6 +22,18 @@ typedef struct Mapa { char *nome; Trecho *t; uint32_t n, cap; } Mapa;
 static Mapa *sMapas;
 static uint32_t sN, sCap;
 static int sLido;
+static char **sConv;
+static uint32_t sConvN;
+
+static int convertido(const char *nome) {
+    uint32_t i;
+    for (i = 0; i < sConvN; i++) {
+        if (strcmp(sConv[i], nome) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 static Mapa *achar(const char *nome, int criar) {
     uint32_t i;
@@ -47,6 +62,14 @@ static void carregar(void) {
     uint32_t trechos = 0;
 
     sLido = 1;
+    if (getenv("BT3_CONVERTIDOS") != NULL && (fp = fopen(getenv("BT3_CONVERTIDOS"), "r")) != NULL) {
+        while (fscanf(fp, "%511s", nome) == 1) {
+            sConv = realloc(sConv, (sConvN + 1) * sizeof(char *));
+            sConv[sConvN++] = strdup(nome);
+        }
+        fclose(fp);
+        fprintf(stderr, "inverter: %u arquivos convertidos por formato (sem mapa)\n", sConvN);
+    }
     if (caminho == NULL || (fp = fopen(caminho, "r")) == NULL) {
         fprintf(stderr, "inverter: sem mapa (BT3_MAPA)\n");
         return;
@@ -84,7 +107,7 @@ static void aplicar(const char *nome, uint32_t ofs, uint8_t *buf, uint32_t size)
         carregar();
     }
     m = achar(nome, 0);
-    if (m == NULL) {
+    if (m == NULL || convertido(nome)) {
         return;
     }
     for (i = 0; i < m->n; i++) {
