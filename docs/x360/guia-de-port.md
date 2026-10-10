@@ -151,6 +151,13 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 
   As três revisões da F1 acharam problemas reais. O padrão que mais se repetiu: **ferramenta de
   comparação que aceita como igual justamente o erro que ela devia achar.**
+- **Formatos em linha de produção:** um agente escreve a especificação de um formato a partir do código
+  (com o rastreio e o disco inteiro como conferência, sem trazer bytes do jogo); outro agente, ou você,
+  escreve o conversor seguindo a especificação seção a seção, com critério de aceite fechado (`conv_tool
+  --disco` sem erro, `--mapa` sem divergência nos arquivos da luta, os já aprovados continuando aprovados).
+  Quando a validação do disco inteiro acusa um caso que a demo não exercita, um agente amplia a
+  especificação com o caso exato (a mensagem do conversor diz qual arquivo e qual entrada). Revise o
+  código do agente e rode os testes você mesmo antes do commit.
 - **O relatório do agente não é verdade:** confira cada achado antes de corrigir (a maioria
   procede, mas não todos).
 - **Fazer o programa dizer onde morreu antes de adivinhar** (vale para o console e para a F1).
@@ -242,6 +249,11 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
   depois do fluxo BPE. Só se libera um trecho depois de confirmar que o jogo não o lê, e com comentário.
 - Dado comprimido não se converte no arquivo: converta o resultado da descompressão, no caminho de quem usa
   aquele formato (não no descompressor, que serve a vários formatos).
+- Valide no disco inteiro, não só nos arquivos da luta de teste: no BT3 a especificação de personagem feita
+  pela demo convertia 860 de 1.976 arquivos; os erros (costura, tipos de efeito, variantes de pacote,
+  trajes vazios, a faixa do registro maior que o elenco) só apareceram assim.
+- Reconheça o formato pelo jeito que o jogo escolhe o arquivo (o id: `chara*10 + 0x590...`), não por uma
+  lista; e confira a estrutura (contagem da tabela) dentro do conversor.
 - A validação contra o rastreio tem três números: posições iguais, com outra largura, não trocadas. Todos os
   três importam; a cobertura de bytes diz o que o rastreio não viu.
 
