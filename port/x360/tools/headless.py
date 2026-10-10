@@ -50,8 +50,9 @@ class Alvo:
             # as pontes entre os dois lados (plat_libm.c, plat_fastvec.c) só passam inteiros. Ressalva: printf
             # de float a partir de código em software sai errado.
             # PORT_BIG_ENDIAN: os #ifdef do código do jogo para host big-endian (o mesmo símbolo no 360)
-            self.soft = ["-msoft-float", "-mno-gnu-attribute", "-DPORT_BIG_ENDIAN"]
-            self.hard = ["-DPORT_BIG_ENDIAN"]
+            # -fsigned-char: no PS2, na x86 e no MSVC o char tem sinal; no GCC de PowerPC, não
+            self.soft = ["-msoft-float", "-mno-gnu-attribute", "-fsigned-char", "-DPORT_BIG_ENDIAN"]
+            self.hard = ["-fsigned-char", "-DPORT_BIG_ENDIAN"]
         else:
             self.cc, self.ld = ["clang", "-m32"], ["clang", "-m32", "-static"]
             self.asm = ["as", "--32"]
@@ -188,6 +189,23 @@ def ligar(alvo, objs):
         print("  " + l[-200:])
     if r.returncode:
         sys.exit(1)
+    # as variáveis globais do jogo no programa, para o checksum e o dump de estado (state.c)
+    r = run([sys.executable, ROOT / "port/x360/tools/mem.py", alvo.exe])
+    if r.returncode:
+        print((r.stdout + r.stderr).strip()[-300:])
+        sys.exit(1)
+    # carimbo: de que commit (e diferença) este programa saiu, para não comparar builds de origens diferentes
+    (alvo.b / "CARIMBO").write_text(carimbo())
+
+
+def carimbo():
+    try:
+        return pathlib.Path(ROOT / "port/build/ENVIADO").read_text()
+    except OSError:
+        h = run(["git", "rev-parse", "--short", "HEAD"]).stdout.strip()
+        d = run(["git", "diff", "HEAD"]).stdout
+        import hashlib
+        return f"{h} diff:{hashlib.sha1(d.encode()).hexdigest()[:10]}\n"
 
 
 def main():
