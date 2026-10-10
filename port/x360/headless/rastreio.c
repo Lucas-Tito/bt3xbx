@@ -8,13 +8,15 @@
  * Como: a build x86 de 32 bits sem janela é compilada com -fsanitize=kernel-address em modo de chamada, e o
  * compilador põe uma chamada __asan_loadN/__asan_storeN antes de cada leitura e escrita de memória. Aqui:
  *   - cada byte lido do disco (Port_FileReadAt) ganha uma origem: (arquivo, deslocamento no arquivo);
- *   - memcpy/memmove levam a origem junto; memset e escrita de outro dado a apagam;
+ *   - memcpy/memmove levam a origem junto; memset e escrita de outro dado a apagam (o heap é reaproveitado
+ *     depois que o arquivo sai, e o dado novo não é do disco); reescrever o próprio campo (deslocamento do
+ *     arquivo virando ponteiro) a mantém;
  *   - cópia feita em laço pelo próprio jogo (lê N bytes, grava N bytes) também leva a origem: a leitura
  *     conta como cópia, não como uso;
  *   - a saída do Bpe_Decode (descompressão) vira um arquivo virtual "<origem>#bpe";
  *   - cada leitura de um byte com origem é anotada: (arquivo, deslocamento) -> tamanhos usados.
  * No fim (atexit), BT3_RASTREIO=<arquivo> recebe uma linha por (arquivo, deslocamento):
- *     arquivo  deslocamento  tamanhos  usos  escritas  pc
+ *     arquivo  deslocamento  tamanhos  usos  escritas  pc  cópias
  * tamanhos é uma máscara: 1, 2, 4, 8, 16 bytes. port/x360/tools/rastreio.py resume e gera o mapa.
  *
  * Não é usado em nenhuma build que vá para o console.
@@ -86,6 +88,7 @@ typedef struct Uso {
     uint64_t chave; /* origem do primeiro byte lido */
     uint32_t usos, escritas, pc;
     uint8_t tamanhos;
+    uint8_t copias; /* larguras com que a posição foi copiada (evidência fraca: vale se não houver uso) */
 } Uso;
 
 #define TAB (1u << 23)
@@ -157,12 +160,18 @@ NAO_RASTREAR static void resolver(void) {
     }
     sPend.vivo = 0;
     if (memcmp((const void *)(uintptr_t)sPend.dst, (const void *)(uintptr_t)sPend.src, sPend.size) == 0) {
+        Uso *u = origem(sPend.src) != 0 ? uso(origem(sPend.src)) : NULL;
+        if (u != NULL) {
+            u->copias |= (uint8_t)sPend.size;
+        }
         for (b = 0; b < sPend.size; b++) {
             marcar(sPend.dst + b, origem(sPend.src + b));
         }
     } else {
         anotar_uso(sPend.src, sPend.size, sPend.pc);
-        anotar_escrita(sPend.dst, sPend.size, sPend.pc);
+        for (b = 0; b < sPend.size; b++) {
+            marcar(sPend.dst + b, 0); /* gravou uma conta, não o dado do disco */
+        }
     }
 }
 
@@ -212,8 +221,10 @@ NAO_RASTREAR static void gravar(uint32_t addr, uint32_t size, uint32_t pc) {
             return;
         }
     }
-    /* escrita de outro dado sobre dado do disco: anota (a origem fica para as leituras seguintes) */
-    anotar_escrita(addr, size, pc);
+    /* escrita de outro dado: a memória deixa de ser do disco (o heap é reaproveitado depois que o arquivo sai) */
+    for (k = 0; k < (int)size; k++) {
+        marcar(addr + (uint32_t)k, 0);
+    }
 }
 
 #define PC ((uint32_t)(uintptr_t)__builtin_return_address(0))
@@ -340,8 +351,8 @@ NAO_RASTREAR static void despejar(void) {
     for (i = 0; i < TAB; i++) {
         Uso *u = &sTab[i];
         if (u->chave != 0) {
-            fprintf(fp, "%s\t%llu\t%u\t%u\t%u\t%08x\n", sNome[u->chave >> 40], (unsigned long long)(u->chave & 0xFFFFFFFFFFull),
-                    u->tamanhos, u->usos, u->escritas, u->pc);
+            fprintf(fp, "%s\t%llu\t%u\t%u\t%u\t%08x\t%u\n", sNome[u->chave >> 40], (unsigned long long)(u->chave & 0xFFFFFFFFFFull),
+                    u->tamanhos, u->usos, u->escritas, u->pc, u->copias);
         }
     }
     fclose(fp);

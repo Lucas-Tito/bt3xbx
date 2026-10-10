@@ -59,8 +59,11 @@ class Alvo:
             self.soft = ["-msoft-float", "-mno-sse", "-mno-mmx", "-mno-x87", "-malign-double", "-Wno-error=return-mismatch"]
             self.hard = ["-msse2", "-mfpmath=sse"]
         # Rastreio: uma chamada antes de cada leitura/escrita (rastreio.c), cópias de estrutura via memcpy.
+        # As leituras de variáveis locais também: o jogo copia um vetor do arquivo para a pilha e lê um
+        # componente dali (o ASan pularia por "provar" o acesso seguro).
         self.instr = ["-fsanitize=kernel-address", "-mllvm", "-asan-instrumentation-with-call-threshold=0",
-                      "-mllvm", "-asan-stack=0", "-mllvm", "-asan-globals=0"] if rastreio else []
+                      "-mllvm", "-asan-stack=0", "-mllvm", "-asan-globals=0",
+                      "-mllvm", "-asan-skip-promotable-allocas=0", "-mllvm", "-asan-use-stack-safety=0"] if rastreio else []
 
 
 def run(cmd, **kw):
@@ -138,7 +141,7 @@ def construir(alvo):
             alvo.soft + ["-DSF_FAST_CALLS", "-include", "math.h", "-include", "stdlib.h", "-include", "port_libm.h"]
         cmd = alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-fno-strict-aliasing", "-ffp-contract=off",
                          "-fno-builtin", "-w", "-Iinclude", "-Iport/include", "-Iport/src", "-Iport/x360/headless"] + \
-            soft + nomes + (alvo.instr if not ponte else [])
+            soft + nomes + alvo.instr  # as pontes também: plat_fastvec.c lê vetores e matrizes da memória do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
     extras = ["sem_janela"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \

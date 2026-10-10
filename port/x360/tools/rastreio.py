@@ -16,10 +16,16 @@ import bisect, collections, subprocess, sys
 LARG = (8, 4, 2)
 
 
-def ler(caminho):
+def ler(caminho, com_copias=False):
+    """(arquivo, deslocamento, larguras, usos, escritas, pc). com_copias: as larguras de cópia valem quando a
+    posição não foi lida como número por ninguém (o jogo leu e guardou o mesmo valor noutro lugar)."""
     for l in open(caminho, encoding="utf-8", errors="replace"):
-        arq, ofs, tam, usos, esc, pc = l.rstrip("\n").split("\t")
-        yield arq, int(ofs), int(tam), int(usos), int(esc), int(pc, 16)
+        c = l.rstrip("\n").split("\t")
+        arq, ofs, tam, usos, esc, pc = c[:6]
+        tam = int(tam)
+        if com_copias and len(c) > 6 and not larguras(tam):
+            tam |= int(c[6])
+        yield arq, int(ofs), tam, int(usos), int(esc), int(pc, 16)
 
 
 def larguras(tam):
@@ -63,17 +69,65 @@ def resumo(caminho, programa=None):
     print(f"total: 8:{tot[8]} 4:{tot[4]} 2:{tot[2]} 1:{tot[1]} em {len(por)} arquivos")
 
 
+def expandir(pos):
+    """Uma leitura larga (8 ou 16 bytes) cobre várias posições, mas o rastreio só anota a primeira. Ex.: dois
+    floats copiados numa leitura de 8 bytes, um vetor em 16. As posições cobertas recebem a menor largura
+    conhecida da primeira (4 se ela só foi lida larga e de 16; uma de 8 sozinha fica u64/double)."""
+    novos = {}
+    for (arq, ofs), tam in pos.items():
+        larga = 16 if tam & 16 else 8 if tam & 8 else 0
+        if not larga:
+            continue
+        menores = [w for w in (2, 4) if tam & w]
+        if menores:
+            unidade = menores[0]
+        elif larga == 16:
+            unidade = 8 if tam & 8 else 4
+        else:
+            continue  # só 8: u64 ou double
+        for o in range(ofs + unidade, ofs + larga, unidade):
+            if (arq, o) not in pos:
+                novos[(arq, o)] = novos.get((arq, o), 0) | unidade
+        if tam & 16 and not menores and not tam & 8:
+            pos[(arq, ofs)] = tam | 4
+    pos.update(novos)
+    return len(novos)
+
+
 def mapa(caminhos, saida):
     pos = {}
     for c in caminhos:
-        for arq, ofs, tam, usos, esc, pc in ler(c):
+        for arq, ofs, tam, usos, esc, pc in ler(c, com_copias=True):
             pos[(arq, ofs)] = pos.get((arq, ofs), 0) | tam
-    linhas, ant = [], None
-    for (arq, ofs) in sorted(pos):
-        ls = larguras(pos[(arq, ofs)])
-        if not ls:
+    print(f"{expandir(pos)} posições cobertas por leituras largas acrescentadas")
+    # largura de cada posição (em conflito, a menor) e divisão das que contêm outra menor: uma palavra lida
+    # inteira por um copiador e campo a campo pelo jogo vale campo a campo (ex.: s32 + u16 + u16)
+    larg = {}
+    desalinhadas = 0
+    for k, tam in pos.items():
+        # o MIPS do PS2 não lê número desalinhado: uma posição fora do alinhamento da própria largura é erro de
+        # atribuição da origem (cópia deslocada), não campo do arquivo
+        ls = [w for w in larguras(tam) if k[1] % w == 0]
+        if len(ls) < len(larguras(tam)):
+            desalinhadas += 1
+        if ls:
+            larg[k] = ls[-1]
+    print(f"{desalinhadas} posições com leitura desalinhada descartadas")
+    divididas = 0
+    for (arq, ofs), w in sorted(larg.items()):
+        if larg.get((arq, ofs)) != w:
             continue
-        w = ls[-1]  # em conflito, a menor
+        dentro = [larg[(arq, o)] for o in range(ofs + 1, ofs + w) if (arq, o) in larg]
+        if dentro:
+            u = min(dentro + [w])
+            larg[(arq, ofs)] = u
+            for o in range(ofs + u, ofs + w, u):
+                larg[(arq, o)] = min(larg.get((arq, o), u), u)
+            divididas += 1
+    print(f"{divididas} posições divididas pela largura menor de dentro")
+    linhas, ant = [], None
+    for (arq, ofs) in sorted(larg):
+        w = larg[(arq, ofs)]
         if ant and ant[0] == arq and ant[2] == w and ant[1] + ant[2] * ant[3] == ofs:
             ant[3] += 1
             continue

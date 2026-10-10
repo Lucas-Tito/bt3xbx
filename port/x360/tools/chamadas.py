@@ -34,6 +34,7 @@ def main():
     a, b = seq(x, px, "<I"), seq(p, pp, ">I")
     i = j = 0
     pulos = Counter()
+    onde = {}
     while i < len(a) and j < len(b):
         if a[i] == b[j]:
             i += 1
@@ -41,11 +42,15 @@ def main():
             continue
         for k in range(1, 4):  # chamada(s) a mais de um lado só
             if a[i + k:i + k + 3] == b[j:j + 3]:
-                pulos["x86: " + " ".join(a[i:i + k])] += 1
+                chave = "x86: " + " ".join(a[i:i + k])
+                pulos[chave] += 1
+                onde.setdefault(chave, (i, a[max(0, i - 12):i]))
                 i += k
                 break
             if b[j + k:j + k + 3] == a[i:i + 3]:
-                pulos["ppc: " + " ".join(b[j:j + k])] += 1
+                chave = "ppc: " + " ".join(b[j:j + k])
+                pulos[chave] += 1
+                onde.setdefault(chave, (i, a[max(0, i - 12):i]))
                 j += k
                 break
         else:
@@ -58,7 +63,8 @@ def main():
     else:
         print(f"iguais até o fim de uma delas: x86 {i}/{len(a)}, ppc {j}/{len(b)} chamadas")
     for k, n in pulos.most_common(10):
-        print(f"  tolerado {n}x: {k}")
+        i, antes = onde[k]
+        print(f"  tolerado {n}x: {k}   (primeira na chamada {i}, depois de: {' '.join(antes)})")
 
 
 main()
