@@ -28,7 +28,7 @@ fi
 [ -n "${F1_SEM_BUILD:-}" ] || python3 port/x360/tools/headless.py --alvo ppc
 # conversores por formato (port/x360/conv): os arquivos do registro, convertidos e conferidos contra o mapa, numa
 # raiz de dados só da PPC (links para gamedata + mods/ com os convertidos; a x86 segue lendo o original)
-gcc -std=c89 -O2 -Wall -o $B/conv_tool port/x360/conv/*.c
+gcc -std=c89 -O2 -Wall -o $B/conv_tool port/x360/conv/*.c  # conv_jogo.c entra junto; não atrapalha
 rm -rf $B/dados_ppc && mkdir -p $B/dados_ppc/mods
 for d in gamedata/*; do ln -s "$(realpath "$d")" $B/dados_ppc/; done
 $B/conv_tool --mapa $B/mapa.tsv --saida $B/dados_ppc/mods --todos gamedata || echo "CONVERSORES: falha ou discordância"

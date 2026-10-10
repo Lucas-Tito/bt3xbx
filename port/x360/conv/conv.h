@@ -52,6 +52,13 @@ conv_u16 Conv_U16(ConvCtx *c, conv_ofs ofs);
 conv_u32 Conv_U32(ConvCtx *c, conv_ofs ofs);
 void Conv_U64(ConvCtx *c, conv_ofs ofs);
 
+/* marca atual de um byte (CONV_LIVRE, CONV_BYTE, CONV_CONT ou a largura) */
+conv_u8 Conv_Marca(ConvCtx *c, conv_ofs ofs);
+
+/* o que sobrou sem marca em [ini, fim) tem de ser zero (enchimento): marca como bytes; senão é erro (dado que
+   nenhum conversor reconhece) */
+void Conv_Zeros(ConvCtx *c, conv_ofs ini, conv_ofs fim, const char *oque);
+
 /* trechos */
 void Conv_U16s(ConvCtx *c, conv_ofs ofs, conv_ofs n);
 void Conv_U32s(ConvCtx *c, conv_ofs ofs, conv_ofs n);
@@ -64,6 +71,10 @@ int Conv_Arquivo(const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, c
 /* Converte com um formato pedido pelo nome do formato ("personagem"...); mesmos retornos. */
 int Conv_Formato(const char *formato, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg,
                  int nmsg);
+
+/* Uma animação de personagem descomprimida (BobjAnim), em tempo de jogo: chamada por BtlObjAnim_Load logo depois
+   de Bpe_Decode, só em host big-endian. Aloca a marcação. 1: convertida; -1: erro (msg). */
+int Conv_Animacao(conv_u8 *buf, conv_ofs tam, char *msg, int nmsg);
 
 /* i-ésimo arquivo do registro (NULL depois do último) */
 const char *Conv_Registrado(int i);

@@ -366,6 +366,12 @@ BobjAnim *BtlObjAnim_Load(BobjObj *obj, void *buf, s32 anim, s32 *size) {
         *size = 1;
     } else if (obj->mdl.anims[anim] != NULL) {
         Bpe_Decode(obj->mdl.anims[anim], buf, size);
+#ifdef PORT_BIG_ENDIAN /* the motion's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertAnim(void *buf, s32 size);
+            Port_ConvertAnim(buf, *size);
+        }
+#endif
         ret = buf;
     } else {
         ret = NULL;

@@ -1,6 +1,7 @@
 /* Base da conversão por formato: acesso com limite, troca com marcação e o registro dos formatos (conv.h). */
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "conv.h"
@@ -131,14 +132,38 @@ void Conv_Bytes(ConvCtx *c, conv_ofs ofs, conv_ofs n) {
     }
 }
 
+conv_u8 Conv_Marca(ConvCtx *c, conv_ofs ofs) {
+    return ofs < c->tam ? c->feito[ofs] : CONV_LIVRE;
+}
+
+void Conv_Zeros(ConvCtx *c, conv_ofs ini, conv_ofs fim, const char *oque) {
+    conv_ofs i;
+    if (!Conv_Cabe(c, ini, fim - ini, oque)) {
+        return;
+    }
+    for (i = ini; i < fim; i++) {
+        if (c->feito[i] == CONV_LIVRE) {
+            if (c->buf[i] != 0) {
+                Conv_Erro(c, "%s: byte 0x%lX não reconhecido (não é enchimento)", oque, (unsigned long)i);
+                return;
+            }
+            c->feito[i] = CONV_BYTE;
+        }
+    }
+}
+
 /* ------------------------------------------------------------------ registro */
 
 /* os formatos (um arquivo .c cada) */
 void Conv_Personagem(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_PersonagemAnim(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_BobjAnim(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
-    {"personagem", Conv_Personagem},
+    {"personagem", Conv_Personagem},           /* file[0] do slot: modelo, texturas, parâmetros, lábio */
+    {"personagem_anim", Conv_PersonagemAnim},  /* file[1]: animações em BPE (só a tabela e os cabeçalhos) */
+    {"animacao", Conv_BobjAnim},               /* uma animação descomprimida (Conv_Animacao, em tempo de jogo) */
 };
 
 /* Que formato tem cada arquivo do disco. Os arquivos não dizem o próprio formato: a lista vem das tabelas do
@@ -146,7 +171,9 @@ static const Formato sFormatos[] = {
 typedef struct Arquivo { const char *nome; const char *formato; } Arquivo;
 static const Arquivo sArquivos[] = {
     {"pzs3us1/01473.bin", "personagem"},
+    {"pzs3us1/01481.bin", "personagem_anim"},
     {"pzs3us1/01793.bin", "personagem"},
+    {"pzs3us1/01801.bin", "personagem_anim"},
 };
 
 static int converter(ConvFn fn, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg, int nmsg) {
@@ -186,4 +213,19 @@ int Conv_Arquivo(const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, c
 
 const char *Conv_Registrado(int i) {
     return i >= 0 && (unsigned)i < sizeof(sArquivos) / sizeof(sArquivos[0]) ? sArquivos[i].nome : NULL;
+}
+
+int Conv_Animacao(conv_u8 *buf, conv_ofs tam, char *msg, int nmsg) {
+    conv_u8 *feito = (conv_u8 *)calloc(tam ? tam : 1, 1);
+    int r;
+    if (feito == NULL) {
+        if (msg != NULL && nmsg > 0) {
+            strncpy(msg, "sem memória para a marcação", (size_t)nmsg - 1);
+            msg[nmsg - 1] = '\0';
+        }
+        return -1;
+    }
+    r = Conv_Formato("animacao", "animação", buf, tam, feito, msg, nmsg);
+    free(feito);
+    return r;
 }

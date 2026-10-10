@@ -168,7 +168,10 @@ void *__wrap_Bpe_Decode(void *src, void *dst, int32_t *rawSize) {
         if (sLeit[i].buf != NULL && s >= sLeit[i].buf && s < sLeit[i].buf + sLeit[i].size) {
             char nome[256];
             snprintf(nome, sizeof(nome), "%s@0x%X#bpe", sLeit[i].nome, (unsigned)(sLeit[i].ofs + (uint32_t)(s - sLeit[i].buf)));
-            aplicar(nome, 0, out, (uint32_t)*rawSize);
+            /* de um arquivo convertido por formato, quem converte o descomprimido é o jogo (Port_ConvertAnim) */
+            if (!convertido(sLeit[i].nome)) {
+                aplicar(nome, 0, out, (uint32_t)*rawSize);
+            }
             if (getenv("BT3_INVERTER_LOG") != NULL) {
                 fprintf(stderr, "inverter: bpe %s -> %p (%d bytes)\n", nome, out, (int)*rawSize);
             }

@@ -184,6 +184,13 @@ def construir(alvo):
         o = alvo.obj / f"x360_{nome}.o"
         junta(nome, o, run(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-w"] + alvo.hard +
                            [f"port/x360/headless/{nome}.c", "-o", o]))
+    # big-endian: a conversão por formato (port/x360/conv), que o jogo chama em tempo de jogo (Port_ConvertAnim)
+    if alvo.be:
+        for f in sorted((ROOT / "port/x360/conv").glob("*.c")):
+            if f.stem == "conv_tool":
+                continue
+            o = alvo.obj / f"conv_{f.stem}.o"
+            junta(f, o, run(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-Wall"] + alvo.hard + [f, "-o", o]))
 
     for f, r in falhas:
         erro = next((l for l in r.stderr.splitlines() if "rror" in l), r.stderr.strip()[:200])
