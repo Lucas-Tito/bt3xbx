@@ -42,6 +42,8 @@ void Conv_Iniciar(ConvCtx *c, const char *nome, conv_u8 *buf, conv_ofs tam, conv
 /* 1 se [ofs, ofs+n) cabe no buffer; senão anota o erro (com o contexto) e devolve 0 */
 int Conv_Cabe(ConvCtx *c, conv_ofs ofs, conv_ofs n, const char *oque);
 void Conv_Erro(ConvCtx *c, const char *fmt, ...);
+/* acrescenta onde o erro (se houve) aconteceu: "... [entrada 3]" */
+void Conv_Onde(ConvCtx *c, const char *fmt, unsigned long n);
 
 /* lê sem trocar (little-endian, como está no disco) */
 conv_u32 Conv_Ler32(ConvCtx *c, conv_ofs ofs);
@@ -76,8 +78,8 @@ int Conv_Formato(const char *formato, const char *nome, conv_u8 *buf, conv_ofs t
    de Bpe_Decode, só em host big-endian. Aloca a marcação. 1: convertida; -1: erro (msg). */
 int Conv_Animacao(conv_u8 *buf, conv_ofs tam, char *msg, int nmsg);
 
-/* i-ésimo arquivo do registro (NULL depois do último) */
-const char *Conv_Registrado(int i);
+/* o formato de um arquivo do disco pelo nome, ou NULL se nenhum conversor o conhece */
+const char *Conv_FormatoDe(const char *nome);
 
 /* um conversor de formato: converte [base, base+tam) de c */
 typedef void (*ConvFn)(ConvCtx *c, conv_ofs base, conv_ofs tam);

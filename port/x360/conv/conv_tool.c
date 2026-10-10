@@ -2,7 +2,8 @@
  * Ferramenta de PC da conversão (e o teste dos conversores na F1).
  *
  *   conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--detalhe N] DADOS ARQUIVO...
- *   conv_tool [--mapa ...] [--saida ...] --todos DADOS       todos os arquivos do registro (conv.c)
+ *   conv_tool --disco DADOS        todos os arquivos que algum conversor conhece (pzs3us0..2), sem gravar: a
+ *                                  validação estrutural (contagens, deslocamentos, enchimento) no disco inteiro
  *
  * Para cada ARQUIVO (relativo a DADOS, como o jogo o pede: pzs3us1/01473.bin): converte com o formato do
  * registro (ou F), diz a cobertura (quanto do arquivo algum conversor reconheceu) e, com --mapa, confere
@@ -170,7 +171,7 @@ static int um(const char *dados, const char *rel) {
 
 int main(int argc, char **argv) {
     const char *dados = NULL;
-    int i, falhas = 0, todos = 0;
+    int i, falhas = 0, disco = 0;
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--formato") == 0 && i + 1 < argc) {
             formato = argv[++i];
@@ -180,8 +181,8 @@ int main(int argc, char **argv) {
             saida = argv[++i];
         } else if (strcmp(argv[i], "--detalhe") == 0 && i + 1 < argc) {
             detalhe = atoi(argv[++i]);
-        } else if (strcmp(argv[i], "--todos") == 0) {
-            todos = 1;
+        } else if (strcmp(argv[i], "--disco") == 0) {
+            disco = 1;
         } else if (dados == NULL) {
             dados = argv[i];
         } else {
@@ -189,11 +190,33 @@ int main(int argc, char **argv) {
         }
     }
     if (dados == NULL) {
-        fprintf(stderr, "uso: conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--detalhe N] [--todos] DADOS ARQUIVO...\n");
+        fprintf(stderr, "uso: conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--detalhe N] [--disco] DADOS ARQUIVO...\n");
         return 2;
     }
-    for (i = 0; todos && Conv_Registrado(i) != NULL; i++) {
-        falhas += um(dados, Conv_Registrado(i));
+    if (disco) {
+        int p, n, ok = 0, erros = 0;
+        for (p = 0; p < 3; p++) {
+            for (n = 0; n < 100000; n++) {
+                char rel[64], caminho[1024];
+                FILE *fp;
+                sprintf(rel, "pzs3us%d/%05d.bin", p, n);
+                if (Conv_FormatoDe(rel) == NULL) {
+                    continue;
+                }
+                sprintf(caminho, "%s/%s", dados, rel);
+                if ((fp = fopen(caminho, "rb")) == NULL) {
+                    continue;
+                }
+                fclose(fp);
+                if (um(dados, rel)) {
+                    erros++;
+                } else {
+                    ok++;
+                }
+            }
+        }
+        printf("disco: %d arquivos convertidos sem erro, %d com erro\n", ok, erros);
+        falhas += erros;
     }
     return falhas ? 1 : 0;
 }

@@ -26,6 +26,18 @@ void Conv_Erro(ConvCtx *c, const char *fmt, ...) {
     va_end(ap);
 }
 
+void Conv_Onde(ConvCtx *c, const char *fmt, unsigned long n) {
+    char aqui[64];
+    size_t t = strlen(c->msg);
+    if (!c->erro) {
+        return;
+    }
+    sprintf(aqui, fmt, n);
+    if (t + strlen(aqui) + 4 < sizeof(c->msg)) {
+        sprintf(c->msg + t, " [%s]", aqui);
+    }
+}
+
 int Conv_Cabe(ConvCtx *c, conv_ofs ofs, conv_ofs n, const char *oque) {
     if (c->erro) {
         return 0;
@@ -157,24 +169,39 @@ void Conv_Zeros(ConvCtx *c, conv_ofs ini, conv_ofs fim, const char *oque) {
 /* os formatos (um arquivo .c cada) */
 void Conv_Personagem(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_PersonagemAnim(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_PersonagemEfeitos(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_BobjAnim(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
     {"personagem", Conv_Personagem},           /* file[0] do slot: modelo, texturas, parâmetros, lábio */
     {"personagem_anim", Conv_PersonagemAnim},  /* file[1]: animações em BPE (só a tabela e os cabeçalhos) */
+    {"personagem_efeitos", Conv_PersonagemEfeitos}, /* file[2]: pacote de efeitos */
     {"animacao", Conv_BobjAnim},               /* uma animação descomprimida (Conv_Animacao, em tempo de jogo) */
 };
 
-/* Que formato tem cada arquivo do disco. Os arquivos não dizem o próprio formato: a lista vem das tabelas do
-   jogo que escolhem o arquivo de cada coisa (ver docs/x360/formatos/). */
-typedef struct Arquivo { const char *nome; const char *formato; } Arquivo;
-static const Arquivo sArquivos[] = {
-    {"pzs3us1/01473.bin", "personagem"},
-    {"pzs3us1/01481.bin", "personagem_anim"},
-    {"pzs3us1/01793.bin", "personagem"},
-    {"pzs3us1/01801.bin", "personagem_anim"},
-};
+/* Que formato tem cada arquivo do disco. Os arquivos não dizem o próprio formato: vem de como o jogo escolhe o
+   arquivo de cada coisa. Os ids de arquivo do jogo 1..0xD47 são a partição 1 (pzs3us1/NNNNN.bin, índice id - 1;
+   include/sys/file.h). */
+static const char *formato_de(const char *nome) {
+    int i, k;
+    char resto[8];
+    if (sscanf(nome, "pzs3us1/%5d.%3s", &i, resto) != 2 || strcmp(resto, "bin") != 0 || i < 0 || i >= 0xD47) {
+        return NULL;
+    }
+    /* slot do lutador (BtlObj_RequestCharaModel, src/battle/btl_obj.c; CHRVIEW_FILE_FIRST em battle/view_a.h):
+       file[0] = chara*10 + traje + 0x590 (+4 na variante danificada), file[1] = chara*10 + 0x598,
+       file[2] = chara*10 + 0x599 */
+    k = i + 1 - 0x590;
+    if (k >= 0 && k < 161 * 10) { /* 161 personagens (SAVE_CHARA_COUNT); depois disso a faixa é de outros formatos */
+        switch (k % 10) {
+        case 8: return "personagem_anim";
+        case 9: return "personagem_efeitos";
+        default: return "personagem";
+        }
+    }
+    return NULL;
+}
 
 static int converter(ConvFn fn, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg, int nmsg) {
     ConvCtx c;
@@ -202,18 +229,14 @@ int Conv_Formato(const char *formato, const char *nome, conv_u8 *buf, conv_ofs t
 }
 
 int Conv_Arquivo(const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg, int nmsg) {
-    unsigned i;
-    for (i = 0; i < sizeof(sArquivos) / sizeof(sArquivos[0]); i++) {
-        if (strcmp(sArquivos[i].nome, nome) == 0) {
-            return Conv_Formato(sArquivos[i].formato, nome, buf, tam, feito, msg, nmsg);
-        }
-    }
-    return 0;
+    const char *f = formato_de(nome);
+    return f != NULL ? Conv_Formato(f, nome, buf, tam, feito, msg, nmsg) : 0;
 }
 
-const char *Conv_Registrado(int i) {
-    return i >= 0 && (unsigned)i < sizeof(sArquivos) / sizeof(sArquivos[0]) ? sArquivos[i].nome : NULL;
+const char *Conv_FormatoDe(const char *nome) {
+    return formato_de(nome);
 }
+
 
 int Conv_Animacao(conv_u8 *buf, conv_ofs tam, char *msg, int nmsg) {
     conv_u8 *feito = (conv_u8 *)calloc(tam ? tam : 1, 1);

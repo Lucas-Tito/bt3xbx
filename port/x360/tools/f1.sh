@@ -31,7 +31,10 @@ fi
 gcc -std=c89 -O2 -Wall -o $B/conv_tool port/x360/conv/*.c  # conv_jogo.c entra junto; não atrapalha
 rm -rf $B/dados_ppc && mkdir -p $B/dados_ppc/mods
 for d in gamedata/*; do ln -s "$(realpath "$d")" $B/dados_ppc/; done
-$B/conv_tool --mapa $B/mapa.tsv --saida $B/dados_ppc/mods --todos gamedata || echo "CONVERSORES: falha ou discordância"
+# os arquivos que a luta lê (do rastreio) e que algum conversor conhece (conv_tool diz "sem conversor" aos outros)
+$B/conv_tool --mapa $B/mapa.tsv --saida $B/dados_ppc/mods gamedata \
+    $(cut -f1 $B/x86r/rastreio.tsv | grep -v -e '#bpe' -e '^ELF:' | sort -u) | grep -v "sem conversor$" ||
+    echo "CONVERSORES: falha ou discordância"
 touch $B/dados_ppc/mods/convertidos.txt
 export BT3_CONVERTIDOS=$B/dados_ppc/mods/convertidos.txt
 echo "carimbos: x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO) | ppc $(cat $B/ppc/CARIMBO) | $(cat $B/ppc/ENTRADAS)"
