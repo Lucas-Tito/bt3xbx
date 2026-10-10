@@ -1,0 +1,70 @@
+bt3xbx sonda F0 (Oct  9 2026 22:44:23)
+pilha da main perto de 7004FC90
+memória no início: livre 478672 KB de 524288 KB
+== memória em endereço fixo
+ ok    00100000 +01F00000 dados do jogo + heap (0x100000..0x2000000)
+ ok    02000000 +01000000 pilha do jogo
+ ok    10000000 +00010000 registradores de hardware
+ ok    12000000 +00010000 registradores do GS
+ ok    13000000 +0C000000 arena baixa do port (só reserva)
+ info  70000000 +00010000 scratchpad (páginas de 64 KB): devolveu 00000000, erro 87, estava ocupada
+   VirtualQuery(70000000) falhou, erro 87
+memória depois de reservar: livre 430364 KB de 524288 KB
+D3D pronto em 1280x720
+memória com o D3D: livre 424420 KB de 524288 KB
+pilha da thread de medição perto de 700DFEE0
+== leitura de memória
+ lwz           0.63 ns por palavra (bloco de 16 KB na cache)
+ lwbrx         1.38 ns por palavra
+ int->float   12.15 ns por palavra (cada uma num float independente)
+ leitura aleatória, páginas de 4 KB em 03000000: 345.30 ns
+ leitura aleatória, páginas de 64 KB em 40100000: 120.26 ns
+== aritmética (controlfp inicial=0008001F)
+ 1/3 perto=3EAAAAAB (esperado 3EAAAAAB)
+ 1/3 truncado=3EAAAAAA (esperado 3EAAAAAA se o modo pegou)
+  denormal mantém       controlfp=00000000  1e-45+0=00000001  min*0.5=00400000
+  denormal zera tudo     controlfp=01000000  1e-45+0=00000001  min*0.5=00400000
+  denormal zera entrada  controlfp=02000000  1e-45+0=00000001  min*0.5=00400000
+  denormal zera saída   controlfp=03000000  1e-45+0=00000001  min*0.5=00400000
+ -- números comuns (expoente 100..154)
+  soma                     trunc: difere em  303467 de 1000000 (303467 por 1 ulp, 0 dão inf/nan/denormal)
+    ex.: 49DB24A3 op B933AC98 -> hw 49DB24A2, ps2 49DB24A3
+  soma com máscara        trunc: difere em       0 de 1000000 (0 por 1 ulp, 0 dão inf/nan/denormal)
+  multiplicação          trunc: difere em       0 de 1000000 (0 por 1 ulp, 0 dão inf/nan/denormal)
+  divisão                 perto: difere em       0 de 1000000 (0 por 1 ulp, 0 dão inf/nan/denormal)
+ -- para comparar: tudo ao mais próximo
+  soma                     perto: difere em  178887 de 1000000 (178887 por 1 ulp, 0 dão inf/nan/denormal)
+    ex.: 37B14B11 op 438F25F8 -> hw 438F25F9, ps2 438F25F8
+  multiplicação          perto: difere em  500707 de 1000000 (500707 por 1 ulp, 0 dão inf/nan/denormal)
+    ex.: 49DB24A3 op B933AC98 -> hw C399CE5D, ps2 C399CE5C
+  divisão truncada        trunc: difere em  499606 de 1000000 (499606 por 1 ulp, 0 dão inf/nan/denormal)
+    ex.: 37B14B11 op 438F25F8 -> hw 339E8817, ps2 339E8818
+-- resultado perto do denormal, denormais zerados
+  soma com cancelamento    trunc: difere em  730680 de 1000000 (324 por 1 ulp, 730680 dão inf/nan/denormal)
+    ex.: 01E1A48B op 81E1A458 -> hw 000000CC, ps2 00000000
+  multiplicação          trunc: difere em  238136 de 1000000 (0 por 1 ulp, 238136 dão inf/nan/denormal)
+    ex.: BBF4F789 op 03EF0CB1 -> hw 80725F9E, ps2 80000000
+  divisão                 perto: difere em  325829 de 1000000 (0 por 1 ulp, 325829 dão inf/nan/denormal)
+    ex.: 3A2E54A6 op F99C0DAD -> hw 80477EEC, ps2 80000000
+-- resultado perto do estouro
+  multiplicação          trunc: difere em       0 de 1000000 (0 por 1 ulp, 0 dão inf/nan/denormal)
+  divisão                 perto: difere em  242202 de 1000000 (242202 por 1 ulp, 242202 dão inf/nan/denormal)
+    ex.: DC2CB47F op 9B0C57B7 -> hw 7F800000, ps2 7F7FFFFF
+-- o mesmo, denormais mantidos
+  soma com cancelamento    trunc: difere em  731543 de 1000000 (304 por 1 ulp, 731543 dão inf/nan/denormal)
+    ex.: 07F2DFD1 op 87F2DFA4 -> hw 000B4000, ps2 00000000
+  multiplicação          trunc: difere em  238106 de 1000000 (0 por 1 ulp, 238106 dão inf/nan/denormal)
+    ex.: 26C3B648 op 1895AE54 -> hw 0039372F, ps2 00000000
+-- custo por operação (bloco de 16 KB na cache)
+  hw soma (vazão)               2.40 ns
+  hw multiplicação (vazão)      2.25 ns
+  hw divisão (vazão)           26.56 ns
+  hw mul+soma em cadeia         6.60 ns (latência)
+  hw divisão trocando o modo  2425.95 ns
+  hw soma com máscara          44.05 ns
+  ps2 soma (software)         143.36 ns
+  ps2 multiplicação (software) 77.85 ns
+  ps2 divisão (software)       76.57 ns
+memória no fim: livre 427840 KB de 524288 KB
+== fim: tudo certo
+aperte qualquer botão para voltar ao dashboard
