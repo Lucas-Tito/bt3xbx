@@ -234,7 +234,12 @@ typedef struct EftAuraPool {
 } EftAuraPool;
 
 typedef struct EftAuraCfgFlame {
+#ifdef PORT_BIG_ENDIAN /* unk0 is the low byte of an s32 in the file (part[k].node of the aura data): last on a big-endian host */
+    /* 0x0 */ u8 pad0[3];
+    /* 0x3 */ u8 unk0;
+#else
     /* 0x0 */ u8 unk0;
+#endif
     /* 0x4 */ s32 node;  /* second model node of the part, or negative */
     /* 0x8 */ s32 unk8;
 } EftAuraCfgFlame;

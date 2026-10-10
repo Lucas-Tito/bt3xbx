@@ -22,6 +22,7 @@ PERMUTADAS = {
     "EftPart9Arg": "include/battle/eft_x.h: objId gravado como s32 pelo criador, lido como u8",
     "BtlCapiBPose": "include/battle/btl_capi_b.h: groundFlags gravado como s32, lido como campo de bits de u8",
     "BObjModelBytes": "include/battle/bobj_b.h: flags do cabeçalho do modelo (u32 no arquivo), byte alto lido como char",
+    "EftAuraCfgFlame": "include/battle/eft_m.h: s32 dos dados da aura (00002) com o byte baixo lido como u8",
 }
 DIE = re.compile(r"^(0x[0-9a-f]+):(\s+)(DW_TAG_\w+|NULL)")
 ATTR = re.compile(r"^\s+(DW_AT_\w+)\s+\((.*)\)\s*$")
