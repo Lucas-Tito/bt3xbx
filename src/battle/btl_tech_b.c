@@ -569,7 +569,13 @@ s32 BtlKiBlast_GetGuardDamageOf(BtlTechBChr *chr, u32 kind) {
 s32 BtlKiBlast_GetKiCost(BtlTechBChr *chr) {
     s32 kind;
 
+#ifdef PORT /* the call fills chr / kind: first, as on the PS2 (see BtlKiBlast_GetSpeed) */
+    s32 v = BtlKiBlast_GetCurrent(chr, &kind)->ki;
+
+    return BtlKiBlast_ScaleKiByAbility(chr, v, kind);
+#else
     return BtlKiBlast_ScaleKiByAbility(chr, BtlKiBlast_GetCurrent(chr, &kind)->ki, kind);
+#endif
 }
 
 /* The same for a hit record (an absorber gains three times this). */
@@ -577,7 +583,13 @@ s32 BtlKiBlast_GetKiCostOfHit(BtlTechBHit *hit) {
     BtlTechBChr *chr;
     s32 kind;
 
+#ifdef PORT /* the call fills chr / kind: first, as on the PS2 (see BtlKiBlast_GetSpeed) */
+    s32 v = BtlKiBlast_GetOfHit(hit, &chr, &kind)->ki;
+
+    return BtlKiBlast_ScaleKiByAbility(chr, v, kind);
+#else
     return BtlKiBlast_ScaleKiByAbility(chr, BtlKiBlast_GetOfHit(hit, &chr, &kind)->ki, kind);
+#endif
 }
 
 /* The same for a kind. */
@@ -588,16 +600,28 @@ s32 BtlKiBlast_GetKiCostOf(BtlTechBChr *chr, u32 kind) {
 /* Flight speed per frame (record +0x10 in 10 km/h, abilities). */
 f32 BtlKiBlast_GetSpeed(BtlTechBChr *chr) {
     s32 kind;
+#ifdef PORT
+    /* The original call reads `kind` in the same argument list that fills it in: the PS2 compiler evaluates the
+       last argument first, a host compiler may not (clang passed an uninitialised kind). Same order, explicit. */
+    f32 speed = BtlKiBlast_GetCurrent(chr, &kind)->speed * 10.0f * BTL_KMH_PER_FRAME;
 
+    return BtlKiBlast_ScaleSpeedByAbility(chr, kind, speed);
+#else
     return BtlKiBlast_ScaleSpeedByAbility(chr, kind, BtlKiBlast_GetCurrent(chr, &kind)->speed * 10.0f * BTL_KMH_PER_FRAME);
+#endif
 }
 
 /* The same for a hit record. */
 f32 BtlKiBlast_GetSpeedOfHit(BtlTechBHit *hit) {
     BtlTechBChr *chr;
     s32 kind;
+#ifdef PORT
+    f32 speed = BtlKiBlast_GetOfHit(hit, &chr, &kind)->speed * 10.0f * BTL_KMH_PER_FRAME; /* as above: chr and kind first */
 
+    return BtlKiBlast_ScaleSpeedByAbility(chr, kind, speed);
+#else
     return BtlKiBlast_ScaleSpeedByAbility(chr, kind, BtlKiBlast_GetOfHit(hit, &chr, &kind)->speed * 10.0f * BTL_KMH_PER_FRAME);
+#endif
 }
 
 /* The same for a kind. */
@@ -654,7 +678,13 @@ s32 BtlKiBlast_GetUnk31Of(BtlTechBChr *chr, u32 kind) {
 s32 BtlKiBlast_GetReact(BtlTechBChr *chr) {
     s32 kind;
 
+#ifdef PORT /* the call fills chr / kind: first, as on the PS2 (see BtlKiBlast_GetSpeed) */
+    s32 v = BtlKiBlast_GetCurrent(chr, &kind)->react;
+
+    return BtlKiBlast_MapReact(chr, v, kind);
+#else
     return BtlKiBlast_MapReact(chr, BtlKiBlast_GetCurrent(chr, &kind)->react, kind);
+#endif
 }
 
 /* The same for a hit record. */
@@ -662,7 +692,13 @@ s32 BtlKiBlast_GetReactOfHit(BtlTechBHit *hit) {
     BtlTechBChr *chr;
     s32 kind;
 
+#ifdef PORT /* the call fills chr / kind: first, as on the PS2 (see BtlKiBlast_GetSpeed) */
+    s32 v = BtlKiBlast_GetOfHit(hit, &chr, &kind)->react;
+
+    return BtlKiBlast_MapReact(chr, v, kind);
+#else
     return BtlKiBlast_MapReact(chr, BtlKiBlast_GetOfHit(hit, &chr, &kind)->react, kind);
+#endif
 }
 
 /* The same for a kind. */
