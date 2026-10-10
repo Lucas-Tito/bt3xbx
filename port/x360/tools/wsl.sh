@@ -2,7 +2,7 @@
 # Atalhos para o WSL do Windows (decisão 6). O código se edita aqui; lá só se compila e roda.
 #   wsl.sh enviar        põe o clone de lá no commit daqui (já no GitHub) + as alterações sem commit
 #   wsl.sh rodar 'cmd'   roda um comando na raiz do repositório de lá
-#   wsl.sh puxar         git pull lá (depois de um push daqui)
+#   wsl.sh puxar         põe o clone de lá no origin/main (sem as alterações locais)
 #   wsl.sh script < x.sh roda um script bash (da entrada) na raiz do repositório de lá, sem as aspas
 #                        passarem pelo cmd do Windows
 set -euo pipefail
@@ -20,7 +20,8 @@ case "${1:-}" in
         git branch -r --contains "$sha" | grep -q . || { echo "o commit $sha não está no GitHub: faça push antes"; exit 1; }
         mapfile -t arquivos < <(git ls-files -m -o --exclude-standard)
         mapfile -t apagados < <(git ls-files -d)
-        dif=$(git diff HEAD | sha1sum | cut -c1-10)
+        # a diferença inclui o conteúdo dos arquivos novos (git diff não mostra os não rastreados)
+        dif=$({ git diff HEAD; git ls-files -o --exclude-standard -z | xargs -0 -r sha1sum; } | sha1sum | cut -c1-10)
         carimbo="$(git rev-parse --short HEAD) diff:$dif (${#arquivos[@]} alterados, ${#apagados[@]} apagados)"
         { echo "cd ~/bt3xbx || exit 1"
           # o clone de lá não guarda nada próprio fora de port/build e gamedata (ignorados): descarta e alinha
@@ -44,7 +45,8 @@ case "${1:-}" in
         { echo 'cd ~/bt3xbx || exit 1'; cat; } | ssh -o LogLevel=ERROR -o ServerAliveInterval=30 "$HOST" "$WSL bash -s" | tr -d '\0'
         ;;
     puxar)
-        ssh -o LogLevel=ERROR "$HOST" "$WSL bash -lc \"cd ~/bt3xbx && git checkout -- . && git clean -fdq port/x360 && git pull -q && git log --oneline -1\"" | tr -d '\0'
+        # depois de um `enviar` o HEAD de lá fica destacado: volta para a main antes de atualizar
+        ssh -o LogLevel=ERROR "$HOST" "$WSL bash -lc \"cd ~/bt3xbx && git checkout -- . && git clean -fdq port/x360 && git checkout -q main && git pull -q && rm -f port/build/ENVIADO && git log --oneline -1\"" | tr -d '\0'
         ;;
     *)
         sed -n 2,6p "$0"; exit 1 ;;
