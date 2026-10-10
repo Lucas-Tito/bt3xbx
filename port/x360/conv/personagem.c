@@ -1,33 +1,34 @@
 /*
- * Arquivos do slot de um lutador: file[0] (modelo, texturas, parâmetros, câmeras, texto, lábio) e file[1]
+ * Arquivos do slot de um lutador: file[0] (modelo, texturas, parâmetros, câmeras, Conv_Texto, lábio) e file[1]
  * (animações em BPE). Especificação: docs/x360/formatos/personagem.md (as seções citadas abaixo).
  */
 #include "conv.h"
+#include "conv_pecas.h"
 
 /* ------------------------------------------------------------------ peças comuns */
 
 /* §2: tabela de deslocamentos. Devolve N; ent[n] = início da entrada n (n = 1..N+1, o último é o fim). */
-static conv_u32 tabela(ConvCtx *c, conv_ofs base, conv_ofs tam, conv_u32 *ent, conv_u32 max) {
+conv_u32 Conv_Tabela(ConvCtx *c, conv_ofs base, conv_ofs tam, conv_u32 *ent, conv_u32 max) {
     conv_u32 n = Conv_Ler32(c, base), i, ini;
     if (c->erro) {
         return 0;
     }
     if (n == 0 || n > max) {
-        Conv_Erro(c, "tabela: %lu entradas (máximo %lu)", (unsigned long)n, (unsigned long)max);
+        Conv_Erro(c, "Conv_Tabela: %lu entradas (máximo %lu)", (unsigned long)n, (unsigned long)max);
         return 0;
     }
     for (i = 1; i <= n + 1; i++) {
         ent[i] = Conv_Ler32(c, base + i * 4);
         if (!c->erro && (ent[i] > tam || (i > 1 && ent[i] < ent[i - 1]))) {
-            Conv_Erro(c, "tabela: entrada %lu em 0x%lX fora de ordem ou do arquivo", (unsigned long)i, (unsigned long)ent[i]);
+            Conv_Erro(c, "Conv_Tabela: entrada %lu em 0x%lX fora de ordem ou do arquivo", (unsigned long)i, (unsigned long)ent[i]);
         }
     }
     if (!c->erro && ent[n + 1] != tam) {
-        Conv_Erro(c, "tabela: fim 0x%lX, arquivo 0x%lX", (unsigned long)ent[n + 1], (unsigned long)tam);
+        Conv_Erro(c, "Conv_Tabela: fim 0x%lX, arquivo 0x%lX", (unsigned long)ent[n + 1], (unsigned long)tam);
     }
     ini = ent[1];
     if (!c->erro && ini < (n + 2) * 4) {
-        Conv_Erro(c, "tabela: entrada 1 em 0x%lX, dentro da tabela", (unsigned long)ini);
+        Conv_Erro(c, "Conv_Tabela: entrada 1 em 0x%lX, dentro da tabela", (unsigned long)ini);
     }
     if (!c->erro) {
         Conv_U32s(c, base, ini / 4); /* a contagem, os deslocamentos, o fim e o enchimento: tudo u32 */
@@ -35,8 +36,8 @@ static conv_u32 tabela(ConvCtx *c, conv_ofs base, conv_ofs tam, conv_u32 *ent, c
     return c->erro ? 0 : n;
 }
 
-/* §4.2.1: pacote DMA/VIF (etiqueta ret, fluxo, etiqueta end de 16 bytes): toda palavra u32. Devolve o fim. */
-static conv_ofs pacote_vif(ConvCtx *c, conv_ofs ofs, conv_ofs fim) {
+/* §4.2.1: pacote DMA/VIF (etiqueta ret, fluxo, etiqueta end de 16 Conv_BytesEntrada): toda palavra u32. Devolve o fim. */
+conv_ofs Conv_PacoteVif(ConvCtx *c, conv_ofs ofs, conv_ofs fim) {
     conv_u32 tag = Conv_Ler32(c, ofs), qwc;
     conv_ofs fimpac;
     if (c->erro) {
@@ -58,7 +59,7 @@ static conv_ofs pacote_vif(ConvCtx *c, conv_ofs ofs, conv_ofs fim) {
 
 /* §4.4: pacote de pixels ou de paleta: cabeçalho de 0x60 e fim de 0x20 em palavras u32 (os valores de 64 bits
    ficam como duas palavras, a baixa primeiro, como no fluxo VIF: decisão 12), a imagem em bytes. */
-static void pacote_imagem(ConvCtx *c, conv_ofs ofs, conv_ofs tam) {
+void Conv_PacoteImagem(ConvCtx *c, conv_ofs ofs, conv_ofs tam) {
     if (Conv_Marca(c, ofs) != CONV_LIVRE) {
         return; /* outro registro aponta para o mesmo pacote */
     }
@@ -76,7 +77,7 @@ static void pacote_imagem(ConvCtx *c, conv_ofs ofs, conv_ofs tam) {
 }
 
 /* §4.4: arquivo de textura (TexFile + TexEntry[count] + pacotes) */
-static void texfile(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_TexFile(ConvCtx *c, conv_ofs a, conv_ofs b, int hud) {
     conv_u32 n = Conv_U32(c, a), ent = Conv_U32(c, a + 4) * 4, i;
     Conv_U32s(c, a + 8, 3); /* 0x08 não determinado (2 x u32 provável), 0x10 ponteiro gravado na carga */
     if (c->erro || ent < 0x14 || n > 256 || a + ent + n * 0x40 > b) {
@@ -88,21 +89,25 @@ static void texfile(ConvCtx *c, conv_ofs a, conv_ofs b) {
         conv_u32 pix = Conv_U32(c, e), clut = Conv_U32(c, e + 4);
         conv_u32 ptam = Conv_U32(c, e + 8), ctam = Conv_U32(c, e + 12);
         Conv_U32s(c, e + 0x10, 6);
-        Conv_Bytes(c, e + 0x28, 8);
+        if (hud) {
+            Conv_U32s(c, e + 0x28, 2); /* folhas do HUD (comuns.md 6.3): s32 mark e s32 */
+        } else {
+            Conv_Bytes(c, e + 0x28, 8);
+        }
         Conv_U64(c, e + 0x30); /* tex0: campo u64 de struct */
         Conv_U32s(c, e + 0x38, 2);
         if (pix != 0) {
-            pacote_imagem(c, a + pix * 4, ptam);
+            Conv_PacoteImagem(c, a + pix * 4, ptam);
         }
         if (clut != 0) {
-            pacote_imagem(c, a + clut * 4, ctam);
+            Conv_PacoteImagem(c, a + clut * 4, ctam);
         }
     }
     Conv_Zeros(c, a, b, "texturas");
 }
 
-/* o que sobrou sem marca em [a, b) fica como está (bytes), sem exigir zero: só para trechos que o código nunca lê */
-static void resto_bytes(ConvCtx *c, conv_ofs a, conv_ofs b) {
+/* o que sobrou sem marca em [a, b) fica como está (Conv_BytesEntrada), sem exigir zero: só para trechos que o código nunca lê */
+void Conv_RestoBytes(ConvCtx *c, conv_ofs a, conv_ofs b) {
     conv_ofs p;
     for (p = a; p < b && !c->erro; p++) {
         if (Conv_Marca(c, p) == CONV_LIVRE) {
@@ -138,7 +143,7 @@ static void modelo(ConvCtx *c, conv_ofs a, conv_ofs b) {
         Conv_U32s(c, r + 0x10, 12);
         if (ligado) {
             Conv_U32s(c, r + 0x40, 8);
-            if (pacote_vif(c, r + 0x60, b) != r + prox) {
+            if (Conv_PacoteVif(c, r + 0x60, b) != r + prox) {
                 Conv_Erro(c, "malha em 0x%lX: next 0x%lX não fecha com o pacote", (unsigned long)r, (unsigned long)prox);
             }
         } else if (prox != 0x40 && !ultimo) {
@@ -176,7 +181,7 @@ static void modelo(ConvCtx *c, conv_ofs a, conv_ofs b) {
         }
     } else {
         /* sem costura: os 0x40 bytes depois do último registro têm palavras não nulas que ninguém lê */
-        resto_bytes(c, fimregs, b);
+        Conv_RestoBytes(c, fimregs, b);
     }
     Conv_Zeros(c, a, b, "modelo");
 }
@@ -296,7 +301,7 @@ static void habilidades(ConvCtx *c, conv_ofs a, conv_ofs b) {
 }
 
 /* §5.11: tamanho / 0x24 registros */
-static void cortes(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_Cortes(ConvCtx *c, conv_ofs a, conv_ofs b) {
     conv_ofs r;
     for (r = a; r + 0x24 <= b && !c->erro; r += 0x24) {
         Conv_Bytes(c, r, 4);
@@ -307,7 +312,7 @@ static void cortes(ConvCtx *c, conv_ofs a, conv_ofs b) {
 }
 
 /* §5.12, §6.5: animação de câmera (deslocamentos a partir de a) */
-static void camera(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_Camera(ConvCtx *c, conv_ofs a, conv_ofs b) {
     conv_u32 canais, n, pose, i;
     Conv_Bytes(c, a, 4); /* assinatura */
     Conv_U32(c, a + 4);
@@ -336,11 +341,11 @@ static void camera(ConvCtx *c, conv_ofs a, conv_ofs b) {
             Conv_U32s(c, a + chaves, k * 8); /* flags, tempo, valor e 0x14 bytes de palavras não lidas */
         }
     }
-    resto_bytes(c, a, b); /* o bloco unk1C (nunca lido; version 0) e o alinhamento ficam como estão */
+    Conv_RestoBytes(c, a, b); /* o bloco unk1C (nunca lido; version 0) e o alinhamento ficam como estão */
 }
 
 /* §5.13: texto u16 */
-static void texto(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_Texto(ConvCtx *c, conv_ofs a, conv_ofs b) {
     if ((b - a) % 2 != 0) {
         Conv_Erro(c, "texto em 0x%lX: tamanho ímpar", (unsigned long)a);
         return;
@@ -349,7 +354,7 @@ static void texto(ConvCtx *c, conv_ofs a, conv_ofs b) {
 }
 
 /* §6.6: faixa de lábio */
-static void labio(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_Labio(ConvCtx *c, conv_ofs a, conv_ofs b) {
     conv_u32 n;
     Conv_Bytes(c, a, 8);
     n = Conv_U16(c, a + 8);
@@ -424,15 +429,15 @@ static void animacao(ConvCtx *c, conv_ofs a, conv_ofs b) {
 }
 
 static void malha_boca(ConvCtx *c, conv_ofs a, conv_ofs b) {
-    pacote_vif(c, a, b);
+    Conv_PacoteVif(c, a, b);
     Conv_Zeros(c, a, b, "boca");
 }
 
-static void bytes(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_BytesEntrada(ConvCtx *c, conv_ofs a, conv_ofs b) {
     Conv_Bytes(c, a, b - a);
 }
 
-static void u32s(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_U32Entrada(ConvCtx *c, conv_ofs a, conv_ofs b) {
     if ((b - a) % 4 != 0) {
         Conv_Erro(c, "entrada em 0x%lX: tamanho não múltiplo de 4", (unsigned long)a);
         return;
@@ -440,10 +445,14 @@ static void u32s(ConvCtx *c, conv_ofs a, conv_ofs b) {
     Conv_U32s(c, a, (b - a) / 4);
 }
 
+static void texturas(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    Conv_TexFile(c, a, b, 0);
+}
+
 /* §3.1: o formato de cada entrada do file[0] */
 static ConvFn formato_f0(conv_u32 n) {
     if (n == 1 || n == 12 || n == 13 || (n >= 14 && n <= 17)) {
-        return texfile;
+        return texturas;
     }
     if (n == 2) {
         return corpo;
@@ -458,33 +467,33 @@ static ConvFn formato_f0(conv_u32 n) {
     case 0x12: return param;
     case 0x13: return golpes;
     case 0x14: return rajadas;
-    case 0x15: return u32s;     /* §5.5: só números de 4 bytes */
-    case 0x16: return bytes;    /* §5.6 */
+    case 0x15: return Conv_U32Entrada;     /* §5.5: só números de 4 bytes */
+    case 0x16: return Conv_BytesEntrada;    /* §5.6 */
     case 0x17: return cadeias;
     case 0x18: return tecnicas;
     case 0x19: return habilidades;
-    case 0x1B: return bytes;    /* §5.10 */
-    case 0x1C: return cortes;
+    case 0x1B: return Conv_BytesEntrada;    /* §5.10 */
+    case 0x1C: return Conv_Cortes;
     default: break;
     }
     if (n >= 0x1D && n <= 0x24) {
         return animacao;
     }
     if (n >= 0x25 && n <= 0x2B) {
-        return camera;
+        return Conv_Camera;
     }
     if (n >= 0x2C && n <= 0x34) {
-        return texto;
+        return Conv_Texto;
     }
     if (n >= 0x35 && n <= 0xFC) {
-        return labio;
+        return Conv_Labio;
     }
     return 0; /* 0x1A: sem leitor (vazia nos arquivos conhecidos) */
 }
 
 void Conv_Personagem(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     conv_u32 ent[0x100 + 2], n, i;
-    n = tabela(c, base, tam, ent, 0xFC);
+    n = Conv_Tabela(c, base, tam, ent, 0xFC);
     if (!c->erro && n == 1 && tam <= 0x40) {
         return; /* traje que não existe: o disco tem uma tabela de uma entrada vazia no lugar */
     }
@@ -509,9 +518,9 @@ void Conv_Personagem(ConvCtx *c, conv_ofs base, conv_ofs tam) {
 
 /* ------------------------------------------------------------------ file[2]: pacote de efeitos (§7) */
 
-/* um pacote F2.1 em [a, b): a tabela; ent[i] relativos a a */
+/* um pacote F2.1 em [a, b): a Conv_Tabela; ent[i] relativos a a */
 static conv_u32 pacote(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 *ent, conv_u32 max) {
-    return tabela(c, a, b - a, ent, max);
+    return Conv_Tabela(c, a, b - a, ent, max);
 }
 
 /* §7.9: pacote de sprites "V000" */
@@ -551,8 +560,8 @@ static void sprites(ConvCtx *c, conv_ofs a, conv_ofs b) {
     Conv_Zeros(c, a, b, "sprites");
 }
 
-/* §7.8: dados de uma parte, entrada a (b = 0) ou b (b = 1), pelo tipo do grupo */
-static void parte(ConvCtx *c, conv_u32 tipo, int qual, conv_ofs a, conv_ofs b) {
+/* §7.8: dados de uma Conv_ParteEfeito, entrada a (b = 0) ou b (b = 1), pelo tipo do grupo */
+void Conv_ParteEfeito(ConvCtx *c, conv_u32 tipo, int qual, conv_ofs a, conv_ofs b) {
     conv_ofs i;
     if (a == b) {
         return;
@@ -582,7 +591,7 @@ static void parte(ConvCtx *c, conv_u32 tipo, int qual, conv_ofs a, conv_ofs b) {
         case 9: /* EftQuadDef / EftPart9Def */
             Conv_U32s(c, a, 0x234 / 4 + 1);
             Conv_Bytes(c, a + 0x238, 0x0B);
-            resto_bytes(c, a + 0x243, b); /* no disco a entrada passa da struct (até 0x25B); ninguém lê */
+            Conv_RestoBytes(c, a + 0x243, b); /* no disco a entrada passa da struct (até 0x25B); ninguém lê */
             break;
         case 10: /* EftPart10Def, 0x20E */
             Conv_U32s(c, a, 0x1F8 / 4);
@@ -636,7 +645,7 @@ static void parte(ConvCtx *c, conv_u32 tipo, int qual, conv_ofs a, conv_ofs b) {
 
 /* §7.6: conjunto de emissores: cabeçalho na entrada idx do pacote, recursos nas seguintes, em ordem. Devolve a
    primeira entrada não consumida. */
-static conv_u32 conjunto(ConvCtx *c, conv_ofs base, const conv_u32 *ent, conv_u32 n, conv_u32 idx) {
+conv_u32 Conv_Conjunto(ConvCtx *c, conv_ofs base, const conv_u32 *ent, conv_u32 n, conv_u32 idx) {
     conv_ofs h = base + ent[idx], fim = base + ent[idx + 1];
     conv_u32 grupos, partes, g, k = idx + 1, p = 0;
     if (h == fim) {
@@ -677,20 +686,20 @@ static conv_u32 conjunto(ConvCtx *c, conv_ofs base, const conv_u32 *ent, conv_u3
                 break;
             }
             if (ent[k] != ent[k + 1]) {
-                texfile(c, base + ent[k], base + ent[k + 1]);
+                Conv_TexFile(c, base + ent[k], base + ent[k + 1], 0);
             }
         }
         for (i = 0; i < np && !c->erro; i++) {
             if (k > n) {
                 break;
             }
-            parte(c, tipo, 0, base + ent[k], base + ent[k + 1]);
+            Conv_ParteEfeito(c, tipo, 0, base + ent[k], base + ent[k + 1]);
             k++;
             if (tipo != 2 && tipo != 14) {
                 if (k > n) {
                     break;
                 }
-                parte(c, tipo, 1, base + ent[k], base + ent[k + 1]);
+                Conv_ParteEfeito(c, tipo, 1, base + ent[k], base + ent[k + 1]);
                 k++;
             }
         }
@@ -716,7 +725,7 @@ static void pacote_conjunto(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 idx) {
             Conv_Erro(c, "pacote em 0x%lX: entrada %lu antes do cabeçalho não determinada", (unsigned long)a, (unsigned long)k);
         }
     }
-    k = conjunto(c, a, ent, n, idx);
+    k = Conv_Conjunto(c, a, ent, n, idx);
     if (!c->erro && k != n + 1) {
         Conv_Erro(c, "pacote em 0x%lX: o conjunto consumiu %lu de %lu entradas", (unsigned long)a, (unsigned long)(k - 1),
                   (unsigned long)n);
@@ -724,7 +733,7 @@ static void pacote_conjunto(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 idx) {
 }
 
 /* §7.14: malha de efeito (EftMeshData): grupos, triângulos e vértices, tudo palavra de 4 bytes */
-static void malha_efeito(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_MalhaEfeito(ConvCtx *c, conv_ofs a, conv_ofs b) {
     conv_u32 ng, tris, vtx, g, nt = 0, nv = 0, i;
     Conv_Bytes(c, a, 4); /* assinatura */
     ng = Conv_U32(c, a + 4);
@@ -782,7 +791,7 @@ static void sub1_tecnica(ConvCtx *c, conv_ofs x, conv_ofs y) {
         return;
     }
     if (Conv_Ler32(c, x + 4) == 8) {
-        texfile(c, x, y);
+        Conv_TexFile(c, x, y, 0);
         return;
     }
     m = pacote(c, x, y, sub, 6);
@@ -801,8 +810,8 @@ static void sub1_tecnica(ConvCtx *c, conv_ofs x, conv_ofs y) {
         Conv_Erro(c, "subentrada 1 em 0x%lX: pacote de %lu entradas não reconhecido", (unsigned long)x, (unsigned long)m);
         return;
     }
-    malha_efeito(c, x + sub[1], x + sub[2]);
-    texfile(c, x + sub[2], x + sub[3]);
+    Conv_MalhaEfeito(c, x + sub[1], x + sub[2]);
+    Conv_TexFile(c, x + sub[2], x + sub[3], 0);
 }
 
 /* §7.4: pacote de técnica (entradas 1..5 do topo) */
@@ -824,12 +833,12 @@ static void pacote_tecnica(ConvCtx *c, conv_ofs a, conv_ofs b) {
         return;
     }
     if (n >= 3 && ent[3] != ent[4]) {
-        u32s(c, a + ent[3], a + ent[4]); /* §7.10: posicionamento, f32 */
+        Conv_U32Entrada(c, a + ent[3], a + ent[4]); /* §7.10: posicionamento, f32 */
     }
     if (n < 4) {
         return;
     }
-    k = conjunto(c, a, ent, n, 4);
+    k = Conv_Conjunto(c, a, ent, n, 4);
     if (!c->erro && k != n + 1) {
         Conv_Erro(c, "técnica em 0x%lX: o conjunto consumiu %lu de %lu entradas", (unsigned long)a, (unsigned long)(k - 1),
                   (unsigned long)n);
@@ -848,7 +857,7 @@ static void pacote_personagem(ConvCtx *c, conv_ofs a, conv_ofs b) {
         switch (i) {
         case 1: /* §7.11: bits, deslocamento, resto nunca lido */
             Conv_U32s(c, x, 2);
-            resto_bytes(c, x, y);
+            Conv_RestoBytes(c, x, y);
             break;
         case 3: case 4:
             /* §7.5.1: um modelo (e texturas) quando alguma rajada do file[0] tem tipo 2 ou 3; senão emissores.
@@ -859,7 +868,7 @@ static void pacote_personagem(ConvCtx *c, conv_ofs a, conv_ofs b) {
                     Conv_Personagem(c, x + sub[1], sub[2] - sub[1]);
                 }
                 if (!c->erro && m >= 2 && sub[2] != sub[3]) {
-                    texfile(c, x + sub[2], x + sub[3]);
+                    Conv_TexFile(c, x + sub[2], x + sub[3], 0);
                 }
                 break;
             }
@@ -872,7 +881,11 @@ static void pacote_personagem(ConvCtx *c, conv_ofs a, conv_ofs b) {
             m = pacote(c, x, y, sub, 2);
             for (j = 1; j <= m && !c->erro; j++) {
                 if (sub[j] != sub[j + 1]) {
-                    (j == 1 ? sprites : texfile)(c, x + sub[j], x + sub[j + 1]);
+                    if (j == 1) {
+                        sprites(c, x + sub[j], x + sub[j + 1]);
+                    } else {
+                        Conv_TexFile(c, x + sub[j], x + sub[j + 1], 0);
+                    }
                 }
             }
             break;
@@ -880,7 +893,7 @@ static void pacote_personagem(ConvCtx *c, conv_ofs a, conv_ofs b) {
             m = pacote(c, x, y, sub, 8);
             for (j = 1; j <= m && !c->erro; j++) {
                 if (sub[j] != sub[j + 1]) {
-                    camera(c, x + sub[j], x + sub[j + 1]);
+                    Conv_Camera(c, x + sub[j], x + sub[j + 1]);
                 }
             }
             break;
@@ -894,7 +907,7 @@ static void pacote_personagem(ConvCtx *c, conv_ofs a, conv_ofs b) {
 
 void Conv_PersonagemEfeitos(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     conv_u32 ent[8], n, i;
-    n = tabela(c, base, tam, ent, 6);
+    n = Conv_Tabela(c, base, tam, ent, 6);
     if (!c->erro && n != 6) {
         Conv_Erro(c, "file[2] com %lu entradas (esperado 6)", (unsigned long)n);
     }
@@ -913,7 +926,7 @@ void Conv_PersonagemEfeitos(ConvCtx *c, conv_ofs base, conv_ofs tam) {
 void Conv_PersonagemAnim(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     static conv_u32 ent[0x200 + 2];
     conv_u32 n, i;
-    n = tabela(c, base, tam, ent, 0x200);
+    n = Conv_Tabela(c, base, tam, ent, 0x200);
     for (i = 1; i <= n && !c->erro; i++) {
         conv_ofs a = base + ent[i], b = base + ent[i + 1];
         conv_u32 pack;
@@ -926,7 +939,7 @@ void Conv_PersonagemAnim(ConvCtx *c, conv_ofs base, conv_ofs tam) {
             Conv_Erro(c, "BPE da entrada %lu: fluxo de 0x%lX passa do fim", (unsigned long)i, (unsigned long)pack);
             break;
         }
-        /* o fluxo e o resto da entrada: bytes (há bytes não nulos depois do fluxo, que o decodificador não lê) */
+        /* o fluxo e o resto da entrada: Conv_BytesEntrada (há bytes não nulos depois do fluxo, que o decodificador não lê) */
         Conv_Bytes(c, a + 8, b - a - 8);
     }
 }

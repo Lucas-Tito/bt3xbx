@@ -171,6 +171,11 @@ void Conv_Personagem(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_PersonagemAnim(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_PersonagemEfeitos(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_BobjAnim(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_Comum1(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_Comum2(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_Comum3(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_Comum4(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_Hud(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
@@ -178,6 +183,11 @@ static const Formato sFormatos[] = {
     {"personagem_anim", Conv_PersonagemAnim},  /* file[1]: animações em BPE (só a tabela e os cabeçalhos) */
     {"personagem_efeitos", Conv_PersonagemEfeitos}, /* file[2]: pacote de efeitos */
     {"animacao", Conv_BobjAnim},               /* uma animação descomprimida (Conv_Animacao, em tempo de jogo) */
+    {"comum1", Conv_Comum1},                   /* comuns.md: 00001, tabelas da luta e IA */
+    {"comum2", Conv_Comum2},                   /* 00002, efeitos comuns */
+    {"comum3", Conv_Comum3},                   /* 00003, personagens e itens */
+    {"comum4", Conv_Comum4},                   /* 00004, fontes, ícones, avisos do controle */
+    {"hud", Conv_Hud},                         /* 00005 e 00006, HUD e menu de pausa por idioma */
 };
 
 /* Que formato tem cada arquivo do disco. Os arquivos não dizem o próprio formato: vem de como o jogo escolhe o
@@ -192,6 +202,15 @@ static const char *formato_de(const char *nome) {
     /* slot do lutador (BtlObj_RequestCharaModel, src/battle/btl_obj.c; CHRVIEW_FILE_FIRST em battle/view_a.h):
        file[0] = chara*10 + traje + 0x590 (+4 na variante danificada), file[1] = chara*10 + 0x598,
        file[2] = chara*10 + 0x599 */
+    /* arquivos comuns (comuns.md): ids 2..5 lidos na partida, 6 e 7 o HUD de cada idioma */
+    switch (i) {
+    case 1: return "comum1";
+    case 2: return "comum2";
+    case 3: return "comum3";
+    case 4: return "comum4";
+    case 5: case 6: return "hud";
+    default: break;
+    }
     k = i + 1 - 0x590;
     if (k >= 0 && k < 161 * 10) { /* 161 personagens (SAVE_CHARA_COUNT); depois disso a faixa é de outros formatos */
         switch (k % 10) {
