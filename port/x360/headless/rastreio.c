@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define NAO_RASTREAR __attribute__((no_sanitize("kernel-address"), noinline))
 
@@ -389,9 +390,41 @@ NAO_RASTREAR static void despejar(void) {
             sPerdidos || sArqs == MAX_ARQ ? " (TABELA CHEIA: usos ou arquivos perdidos)" : "");
 }
 
+/* As tabelas de dados do executável (vindas do disco do usuário): origem "ELF:<objeto>.<seção>", com as faixas
+   que headless.py tirou do mapa do linker para <programa>.elfdata. */
+NAO_RASTREAR static void marcar_elf(void) {
+    char exe[512], linha[300], nome[256];
+    unsigned long a, n, i;
+    ssize_t k = readlink("/proc/self/exe", exe, sizeof(exe) - 16);
+    FILE *fp;
+    if (k <= 0) {
+        return;
+    }
+    exe[k] = '\0';
+    strcat(exe, ".elfdata");
+    fp = fopen(exe, "r");
+    if (fp == NULL) {
+        fprintf(stderr, "rastreio: sem %s (tabelas do executável sem origem)\n", exe);
+        return;
+    }
+    while (fgets(linha, sizeof(linha), fp) != NULL) {
+        if (sscanf(linha, "%250s %lx %lx", nome, &a, &n) == 3) {
+            char rotulo[300];
+            uint64_t f;
+            snprintf(rotulo, sizeof(rotulo), "ELF:%s", nome);
+            f = (uint64_t)arquivo(rotulo) << 40;
+            for (i = 0; i < n; i++) {
+                marcar((uint32_t)(a + i), f | i);
+            }
+        }
+    }
+    fclose(fp);
+}
+
 __attribute__((constructor)) NAO_RASTREAR static void iniciar(void) {
     sAtivo = getenv("BT3_RASTREIO") != NULL;
     if (sAtivo) {
+        marcar_elf();
         atexit(despejar);
     }
 }

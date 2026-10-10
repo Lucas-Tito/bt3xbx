@@ -18,13 +18,13 @@ Uso (no WSL, na raiz do repositório, depois do install.py):
     port/x360/tools/headless.py --alvo ppc
     BT3_DEMO=1 BT3_GS=none BT3_SOUND_TICKS=1 BT3_SETTINGS= qemu-ppc port/build/ppc/bt3_ppc
 """
-import argparse, concurrent.futures, os, pathlib, re, subprocess, sys
+import argparse, collections, concurrent.futures, os, pathlib, re, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "port/tools"))
 import eeconst, portsrc  # noqa: E402
 sys.path.insert(0, str(ROOT / "port/x360/tools"))
-import bitfields  # noqa: E402
+import bitfields, elfdados  # noqa: E402
 
 # Sem janela: desenho na GPU, controle, rede e a janela de opções ficam de fora, trocados por
 # port/x360/headless/sem_janela.c (o que eles devolvem rodando sem janela). O som e o checksum de estado
@@ -120,9 +120,27 @@ def construir(alvo):
     # tabelas de dados do jogo (do disco do usuário, gen_data.py); na PowerPC o assembler grava big-endian
     dados = alvo.b / "obj_data"
     dados.mkdir(exist_ok=True)
+    # No big-endian, cada diretiva com a largura que o jogo lê (elfdados.py, a partir do rastreio da x86).
+    larg_elf = {}
+    if alvo.be:
+        rastreio = pathlib.Path(os.environ.get("BT3_RASTREIO_ELF", ROOT / "port/build/x86r/rastreio.tsv"))
+        if rastreio.exists():
+            larg_elf = elfdados.larguras_elf(rastreio)
+        else:
+            print(f"AVISO: sem {rastreio}: tabelas de dados do executável com os tipos do splat (erradas no big-endian)")
+    trocas = collections.Counter()
     for s in sorted((ROOT / "port/build/gen/data").glob("*.s")):
         o = dados / (s.name[:-2] + ".o")
-        junta(s, o, run(alvo.asm + [s, "-o", o]))
+        fonte = s
+        if alvo.be:
+            texto, t = elfdados.retipar(s.read_text(), larg_elf.get(s.name[:-2], {}))
+            trocas.update(t)
+            fonte = alvo.b / "gen_data" / s.name
+            fonte.parent.mkdir(exist_ok=True)
+            fonte.write_text(texto)
+        junta(s, o, run(alvo.asm + [fonte, "-o", o]))
+    if trocas:
+        print("tabelas do executável retipadas: " + ", ".join(f"{k} {v}" for k, v in trocas.most_common()))
 
     # biblioteca matemática do PS2 (software)
     for f in sorted((ROOT / "port/third_party/newlib_libm").glob("*.c")):
@@ -195,6 +213,13 @@ def ligar(alvo, objs):
         print("  " + l[-200:])
     if r.returncode:
         sys.exit(1)
+    # onde cada objeto de dados do executável ficou (rastreio.c marca esses bytes com a origem "ELF:...")
+    faixas = []
+    for m in re.finditer(r"^ (\.data|\.bss|\.rodata)\s+0x([0-9a-f]+)\s+0x([0-9a-f]+)\s+\S*/obj_data/(\S+)\.o$",
+                         pathlib.Path(str(alvo.exe) + ".map").read_text(errors="replace"), re.M):
+        if int(m.group(3), 16):
+            faixas.append(f"{m.group(4)}{m.group(1)} {m.group(2)} {m.group(3)}")
+    pathlib.Path(str(alvo.exe) + ".elfdata").write_text("\n".join(faixas) + "\n")
     # as variáveis globais do jogo no programa, para o checksum e o dump de estado (state.c)
     r = run([sys.executable, ROOT / "port/x360/tools/mem.py", alvo.exe])
     if r.returncode:
