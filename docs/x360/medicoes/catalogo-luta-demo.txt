@@ -1,0 +1,52 @@
+# Catálogo da luta de demonstração: por arquivo do disco, quantas leituras (posição, leitor) e de que tipo
+# do código (tipos.py sobre o rastreio). '?' = sem expressão na coluna do DWARF; ok = largura lida igual ao tipo.
+# Gerado no WSL; só nomes de structs e contagens, nenhum dado do jogo.
+
+01473.bin (246108 leituras, ok 99%): *(u32 *) 237206, u32 *[] 5204, ? 762, *(const RefVec4f *) 753, ObjMdlMesh 591, Vec4 450, BObjBound 404, TexEntry 106, CpSphere 88, BobjBodyPart 66, BtlObjBound 66, ObjDrawPart 66, BobjBone 66, BtlKiBlastData 37
+01481.bin (213075 leituras, ok 1%): ? 209301, u8 *[] 1829, *(u8 *) 1049, u32 *[] 828, *(s32 *) 68
+01793.bin (204161 leituras, ok 99%): *(u32 *) 196976, u32 *[] 3674, *(const RefVec4f *) 733, ? 649, ObjMdlMesh 537, Vec4 444, BObjBound 363, CpSphere 88, BObjLipKey 87, TexEntry 76, BobjBodyPart 66, BobjBone 60, BtlObjBound 60, ObjDrawPart 60
+01801.bin (187048 leituras, ok 2%): ? 181859, u8 *[] 2771, *(u8 *) 1503, u32 *[] 828, *(s32 *) 83, *(const RefVec4f *) 3, EftYVec 1
+01481.bin#bpe (131100 leituras, ok 94%): BobjPackedQuat 66310, u16 *[] 39512, BobjTrack 11057, BobjKey 5974, BobjAnimLayer **[] 3685, ? 3580, BobjAnimEvent 420, *(const RefVec4f *) 286, BobjAnim 167, Quat 64, BtlStatChr 14, BtlMovePose 9, BtlSuperAnimData 8, BtlCapiPose 8
+01801.bin#bpe (118132 leituras, ok 93%): BobjPackedQuat 58558, u16 *[] 32980, BobjTrack 13370, BobjKey 5434, BobjAnimLayer **[] 4565, ? 2021, *(const RefVec4f *) 794, BobjAnim 160, BobjAnimEvent 158, *(u16 *) 26, BtlStatChr 21, Quat 15, BtlMovePose 8, BtlCapiPose 8
+00369.bin (114461 leituras, ok 40%): ? 52741, *(const RefVec4f *) 9822, ColNode 9333, StgRelocB1 6010, Vec4 4910, EftDetVec 4052, StgRelocA2 3936, StgMMesh 3465, StgMPart 3252, StgColPoly 3033, StgColNode 2348, StgColVec 2245, StgPart 1484, CpVec 1144
+01802.bin (16750 leituras, ok 37%): ? 6233, *(const RefVec4f *) 3038, EftSetDef 854, EftEmitDef 748, EftUVec 611, EftSprLayerDef 438, EftPtclDef 366, EftSprKey 359, EftSprKey *[] 344, EftUPtclCur 338, EftUPtcl 320, EftSetGroupDef 309, s32 *[] 280, Vec4 253
+00961.bin (11222 leituras, ok 3%): ? 10823, u8 *[] 328, *(u8 *) 70, *(s32 *) 1
+00002.bin (10607 leituras, ok 51%): ? 3055, *(const RefVec4f *) 1500, s32 *[] 634, EftSetGroupDef 535, EftSetDef 468, EftEmitDef 440, TexEntry 406, TexFile 345, EftUVec 340, EftPtclDef 311, EftSprLayerDef 175, EftSprKey 170, EftSprKey *[] 168, EftUPtclCur 163
+01482.bin (8178 leituras, ok 57%): ? 2258, DemoCamKey 1936, *(const RefVec4f *) 894, EftEmitDef 274, s32 *[] 248, EftSetDef 247, EftSetGroupDef 233, *(f32 *) 215, EftUVec 157, TexEntry 148, TexFile 117, EftUPtclCur 105, EftPtclDef 96, EftUPtcl 94
+00001.bin (4125 leituras, ok 48%): ? 2122, AiThRule 1092, u32 *[] 396, BtlAiSeqStep 239, s8 *[] 69, AiRateRow 62, BtlVoiceEntry 37, ChrCamCutDef 25, u8 *[] 19, BtlAiSeqEntry 16, AiThRuleList 16, TexEntry 7, BtlMemberGauge 6, TexFile 3
+ELF:cod_1C3400.data.data (1397 leituras, ok 52%): BtlTaskCls 473, ? 254, BtlActHandler *[] 145, BtlTask 126, AiThCondFunc *[] 94, *(const RefClipVtx *) 42, const RefClipVtx 37, EftLayer3Entry 30, *(const RefVec4f *) 25, BobjTalkStep 20, EftStageKind 19, AdxPlayer 18, BtlSeqState 15, s32 *[] 15
+00003.bin (358 leituras, ok 97%): ItemInfo 346, ? 9, ChrTblFile 2, ItemFile 1
+00005.bin (281 leituras, ok 99%): TexEntry 200, HudCTex 50, TexFile 18, u32 *[] 6, HudRes 5, ? 2
+ELF:inc_D_002EDA70.rodata.data (187 leituras, ok 99%): s32 *[] 173, AiThPlan 9, BtlAiSeqEntry 2, BtlAiPlan 1, ? 1, AiActEntry 1
+ELF:inc_gEftShotFxSegs.rodata.data (174 leituras, ok 79%): EftShotFxSeg 138, *(const RefVec4f *) 18, ? 18
+ELF:inc_D_002EDD50.rodata.data (127 leituras, ok 88%): u8 *[] 112, ? 15
+ELF:inc_D_002EDCE0.rodata.data (124 leituras, ok 90%): u8 *[] 112, ? 12
+00329.bin (103 leituras, ok 89%): u8 *[] 81, SndBankFile 11, ? 4, SifDmaData 3, u32 *[] 2, SndVagInfoChunk 2
+ELF:inc_D_002EDC70.rodata.data (95 leituras, ok 100%): *(u8 *) 95
+ELF:inc_D_002EDDD8.rodata.data (72 leituras, ok 80%): u8 *[] 56, ? 14, BtlAiSeqEntry 2
+00004.bin (72 leituras, ok 97%): TexEntry 56, FontData 4, FontTex 4, u32 *[] 3, TexFile 3, ? 2
+03199.bin (71 leituras, ok 100%): u8 *[] 56, SndBankFile 11, u32 *[] 2, SndVagInfoChunk 2
+03231.bin (71 leituras, ok 100%): u8 *[] 56, SndBankFile 11, u32 *[] 2, SndVagInfoChunk 2
+ELF:inc_gEftShotFxRows.rodata.data (51 leituras, ok 86%): EftShotFxRow 44, *(const RefVec4f *) 4, ? 3
+ELF:inc_D_002EDEE8.rodata.data (48 leituras, ok 66%): *(u8 *) 32, ? 16
+ELF:cod_1EC248.rodata.data (35 leituras, ok 0%): ? 19, *(const RefVec4f *) 16
+ELF:cod_1F3488.rodata.data (26 leituras, ok 92%): *(const char *) 24, char (*)[64][] 2
+00961.bin#bpe (25 leituras, ok 100%): TexEntry 15, SpriteTex 6, TexFile 3, LoadSprite 1
+ELF:inc_D_002EDDC0.rodata.data (24 leituras, ok 100%): u8 *[] 24
+00330.bin (23 leituras, ok 100%): SndBankFile 11, u8 *[] 8, u32 *[] 2, SndVagInfoChunk 2
+00334.bin (22 leituras, ok 100%): u8 *[] 10, SndBankFile 8, SndVagInfoChunk 2, u32 *[] 2
+ELF:cod_1EE7BC.rodata.data (18 leituras, ok 0%): f32 (*)[3][] 18
+ELF:inc_D_002EDE10.rodata.data (14 leituras, ok 0%): ? 14
+ELF:cod_1FF05C.sdata.data (11 leituras, ok 90%): HeapBlock **[] 4, u32 *[] 3, BattleSide 2, ? 1, List 1
+ELF:cod_002FF180.sbss.bss (9 leituras, ok 0%): ? 9
+ELF:cod_1FEAE0.sdata.data (8 leituras, ok 50%): ? 4, BtlCollVec 2, StgColCtx 1, StgGroundOut 1
+ELF:inc_D_002F2420.rodata.data (6 leituras, ok 100%): f32 *[] 6
+ELF:cod_1FEBB0.sdata.data (6 leituras, ok 16%): ? 3, *(const RefVec4f *) 2, Vec4 1
+00082.bin (5 leituras, ok 100%): TexFile 3, TexEntry 2
+00017.bin (5 leituras, ok 100%): TexFile 3, TexEntry 2
+ELF:cod_1FEB28.sdata.data (4 leituras, ok 0%): ? 4
+ELF:cod_1FF11C.sdata.data (4 leituras, ok 0%): ? 4
+ELF:cod_1FEC44.sdata.data (4 leituras, ok 50%): BtlObjView 2, ? 2
+ELF:cod_1FE880.sdata.data (1 leituras, ok 0%): ? 1
+ELF:cod_1FE958.sdata.data (1 leituras, ok 100%): *(EftTransWork **) 1
+ELF:cod_1FEB78.sdata.data (1 leituras, ok 0%): ? 1
