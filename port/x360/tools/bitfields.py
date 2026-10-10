@@ -7,6 +7,9 @@ do XDK; o GCC da F1 não tem pragma igual, então lsb() reescreve o C já pré-p
 armazenamento, os campos vão em ordem inversa, com um campo sem nome no topo ocupando os bits que sobram.
 O resultado no GCC big-endian é o mesmo layout que o lsb_to_msb dá no 360.
 
+As linhas do arquivo se mantêm (as quebras dentro dos campos reescritos vão para o fim deles), para o DWARF e
+o rastreio apontarem a linha certa. tools/layout.py confere o resultado contra a build little-endian.
+
 Simplificações (avisadas em `avisos`): uma sequência de campos que muda de tamanho de tipo no meio começa
 unidade nova; campos de largura 0 fecham a unidade.
 """
@@ -59,7 +62,7 @@ def _unidades(run):
 
 def _reescrever_corpo(corpo):
     segs = corpo.split(";")
-    out, run = [], []
+    out, run, linhas = [], [], [0]
 
     def fecha():
         for bits, campos, usados in _unidades(run):
@@ -68,7 +71,10 @@ def _reescrever_corpo(corpo):
                 out.append(f" {tipo} : {bits - usados}")
             for t, n, w in reversed(campos):
                 out.append(f" {t} {n} : {w}")
+        if run:  # as quebras de linha dos campos reescritos voltam no fim: o resto do arquivo mantém as linhas
+            out[-1] += "\n" * linhas[0]
         run.clear()
+        linhas[0] = 0
 
     for i, seg in enumerate(segs):
         if i == len(segs) - 1:  # depois do último ;
@@ -78,6 +84,7 @@ def _reescrever_corpo(corpo):
         c = _campos(seg)
         if c is not None:
             run.extend(c)
+            linhas[0] += seg.count("\n")
             continue
         fecha()
         out.append(seg)
@@ -85,14 +92,26 @@ def _reescrever_corpo(corpo):
 
 
 def lsb(texto):
-    """Reescreve os corpos de struct/union que têm campos de bits (de dentro para fora)."""
+    """Reescreve os corpos de struct/union que têm campos de bits, cada corpo uma vez só (de dentro para fora:
+    um corpo já reescrito vira um marcador opaco para o corpo de fora)."""
     if ":" not in texto:
         return texto
-    abre, fecha = "\x01", "\x02"
+    corpos = []
     padrao = re.compile(r"\{([^{}]*)\}")
+
+    def guarda(m):
+        corpo = m.group(1)
+        if re.search(r":\s*\d+\s*[;,]", corpo):
+            corpo = _reescrever_corpo(corpo)
+        corpos.append(corpo)
+        return f"\x01{len(corpos) - 1}\x02"
+
     while True:
-        novo = padrao.sub(lambda m: abre + (_reescrever_corpo(m.group(1)) if re.search(r":\s*\d+\s*[;,]", m.group(1)) else m.group(1)) + fecha, texto)
+        novo = padrao.sub(guarda, texto)
         if novo == texto:
             break
         texto = novo
-    return texto.replace(abre, "{").replace(fecha, "}")
+    marcador = re.compile(r"\x01(\d+)\x02")
+    while marcador.search(texto):
+        texto = marcador.sub(lambda m: "{" + corpos[int(m.group(1))] + "}", texto)
+    return texto
