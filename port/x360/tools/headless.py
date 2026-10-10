@@ -141,7 +141,8 @@ def construir(alvo):
             alvo.soft + ["-DSF_FAST_CALLS", "-include", "math.h", "-include", "stdlib.h", "-include", "port_libm.h"]
         cmd = alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-fno-strict-aliasing", "-ffp-contract=off",
                          "-fno-builtin", "-w", "-Iinclude", "-Iport/include", "-Iport/src", "-Iport/x360/headless"] + \
-            soft + nomes + alvo.instr  # as pontes também: plat_fastvec.c lê vetores e matrizes da memória do jogo
+            soft + nomes + alvo.instr + \
+            (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
     extras = ["sem_janela"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \

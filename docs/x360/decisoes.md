@@ -146,3 +146,40 @@ voltam texto e logs.
   clang 18 do Ubuntu, 3 arquivos falham no `ptr32.py`.
 - Resultado em 10/10/2026: o ISO confere com os hashes do lançamento americano, 68.611 arquivos
   extraídos, `port/build/bt3_64` compilado e a luta de demonstração rodou até o fim.
+
+## 7. F1: build PowerPC sem janela + rastreio, e as três classes de problema de ordem de bytes (10/10/2026)
+
+Ferramentas (todas em `port/x360/`, rodando no WSL, decisão 6):
+- `tools/headless.py --alvo x86|ppc [--rastreio] [--chamadas]`: o jogo sem janela em x86 32 bits
+  (referência) e em PowerPC 32 bits big-endian no qemu (o 360 em ordem de bytes). As duas com a
+  aritmética do PS2 em software: diferença entre elas só pode vir da ordem dos bytes.
+- `headless/rastreio.c` + `tools/rastreio.py`: na x86 instrumentada (ASan em modo chamada), cada byte
+  vindo do disco carrega a origem (arquivo, deslocamento); o mapa diz, por arquivo, que posições o jogo
+  lê como número de 2, 4 ou 8 bytes. `headless/inverter.c` aplica o mapa na PowerPC.
+- `headless/chamadas.c` + `tools/chamadas.py`: sequência de funções do jogo (e do `rand`) nas duas
+  builds; a primeira diferença é onde se separam. `BT3_VIGIAR=<endereço>` acha quem escreve num lugar.
+- `tools/memdiff.py`: memória do jogo das duas builds num quadro, ignorando a ordem dos bytes.
+
+Resultado: a PowerPC carrega tudo, entra na luta de demonstração e roda 2.940 quadros; vida, posições,
+relógio e gerador batem com a x86 por ~350 quadros de luta.
+
+As três classes de problema:
+1. **Dados do disco lidos como estrutura.** Resolvido por inversão na carga. Mas o mapa por posição só
+   cobre o que a luta rastreada usou (ex.: só as faixas de lábio das falas ditas; das outras, nada).
+   Não generaliza: o produto precisa de conversão por FORMATO (decisão 8).
+2. **Campos de bits.** O código conta com o primeiro campo no bit 0 (`task->bits = ~3`). No 360:
+   `#pragma bitfield_order(lsb_to_msb)` do compilador do XDK (conferido na documentação). Na F1:
+   `tools/bitfields.py` reescreve o C pré-processado para o GCC dar o mesmo layout.
+3. **Union e pacotes montados como imagem de memória do PS2.** O jogo grava a etiqueta DMA como
+   palavra e relê a metade `qwc` como u16 (`GfxPostSpritePkt`, `OtPrim`): corrigidos com
+   `#ifdef PORT_BIG_ENDIAN` trocando a ordem das metades. Os pacotes da GPU têm mais disso (u64 gravado
+   como dois u32, campos de 8/16 bits dentro de registradores de 64): é assunto do renderizador (F3).
+
+## 8. A conversão dos dados do jogo será por formato, não por posição (10/10/2026)
+
+O rastreio provou o método e achou os formatos que a luta usa (com as funções que os leem), mas a
+cobertura por posição é parcial por natureza. O produto precisa de conversores por formato (modelo,
+textura, animação comprimida, colisão do cenário, banco de som, fonte, faixa de lábio...), escritos a
+partir das structs da decomp, aplicados na carga do arquivo (ou no instalador). O rastreio continua
+servindo de catálogo (que arquivo é lido por que função, com que largura) e de teste: mapa e conversor
+têm de concordar em cada posição que o rastreio viu.
