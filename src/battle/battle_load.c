@@ -1576,7 +1576,7 @@ void BattleSetup_SetMemberByItemIds(s32 sideNo, s32 idx, s32 chara, s32 costume,
 
     memset(&items, 0, sizeof(items));
     for (i = 0; i < 8; i++) {
-        items.id[i] = *(u16 *)&itemIds[i] + 1;
+        items.id[i] = PS2_LOW(u16, itemIds[i]) + 1;
     }
     BtlMember_Init(m, chara, costume, variant, cpuLevel, health, &items);
 }

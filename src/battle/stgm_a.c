@@ -429,7 +429,7 @@ void StgModel_Draw(void *view) {
                                 }
                             }
                         }
-                        StgModel_SetTexture(*(u8 *)&mats[i].cur);
+                        StgModel_SetTexture(PS2_LOW(u8, mats[i].cur));
                     } else {
                         StgModel_SetTexture(mats[i].tex);
                     }

@@ -27,7 +27,7 @@
  * Cross or triangle pressed on pad 0. The original tests the two bits of gamePressed through the 64-bit word
  * that starts at gameHeld (one `ld`, mask 0x600 << 32); a 32-bit test of gamePressed does not match.
  */
-#define SHEN_PRESSED_CROSS_OR_TRIANGLE() (*(u64 *)&gPad[0].gameHeld & ((u64)(PADG_CROSS | PADG_TRIANGLE) << 32))
+#define SHEN_PRESSED_CROSS_OR_TRIANGLE() (PS2_LD64(gPad[0].gameHeld) & ((u64)(PADG_CROSS | PADG_TRIANGLE) << 32))
 
 /* Movies per window: the code loops over them. */
 #define SHEN_FLASH_COUNT 1

@@ -874,11 +874,11 @@ void BtlPartner_SetFlag80(FxChr *chr, s32 on) {
             }
         }
         if (set) {
-            if ((*(u64 *)&obj->flags & 0x82) != 0x82) {
+            if ((PS2_LD64(obj->flags) & 0x82) != 0x82) {
                 obj->flags |= 0x80;
             }
         } else {
-            if ((*(u64 *)&obj->flags & 0x82) == 0x82) {
+            if ((PS2_LD64(obj->flags) & 0x82) == 0x82) {
                 obj->flags &= ~0x80;
             }
         }

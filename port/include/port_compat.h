@@ -20,6 +20,16 @@ typedef long long s64;
 typedef unsigned long long u64;
 typedef float f32;
 
+/* include/types.h: a variable read through a pointer of another width, as the PS2 (little-endian) reads it. On a
+   big-endian host the low part of x is at its end, and the two words of a 64-bit load come swapped. */
+#ifdef PORT_BIG_ENDIAN
+#define PS2_LOW(T, x) (*(T *)((u8 *)&(x) + sizeof(x) - sizeof(T)))
+#define PS2_LD64(x) ((u64)((u32 *)&(x))[1] << 32 | ((u32 *)&(x))[0])
+#else
+#define PS2_LOW(T, x) (*(T *)&(x))
+#define PS2_LD64(x) (*(u64 *)&(x))
+#endif
+
 /* Functions the matching build takes from assembly: the port supplies them elsewhere (see docs/port/). */
 #define INCLUDE_ASM_H
 #define INCLUDE_ASM(FOLDER, NAME)

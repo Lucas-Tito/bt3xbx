@@ -885,7 +885,7 @@ void DcPass_DrawNames(DcPass *pass) {
 
 /* Whether L1 or L2 asks to move the text cursor left. */
 s32 DcPass_IsPrevPressed(void) {
-    if (gPad[0].status == 0 && (*(u64 *)&gPad[0].gameRepeat & (PADG_L1 | PADG_L2))) {
+    if (gPad[0].status == 0 && (PS2_LD64(gPad[0].gameRepeat) & (PADG_L1 | PADG_L2))) {
         return 1;
     }
     return 0;
@@ -893,7 +893,7 @@ s32 DcPass_IsPrevPressed(void) {
 
 /* Whether R1 or R2 asks to move the text cursor right. */
 s32 DcPass_IsNextPressed(void) {
-    if (gPad[0].status == 0 && (*(u64 *)&gPad[0].gameRepeat & (PADG_R1 | PADG_R2))) {
+    if (gPad[0].status == 0 && (PS2_LD64(gPad[0].gameRepeat) & (PADG_R1 | PADG_R2))) {
         return 1;
     }
     return 0;

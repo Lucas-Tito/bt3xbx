@@ -51,7 +51,7 @@ Consolidação dos três estudos em `docs/x360/pesquisa/`:
 O `bt3xbx` é um **fork** do Tenkaichi3Decomp (remote `upstream`), não um submódulo. O código do jogo vai precisar de `#ifdef` para o 360 (endianness), e com fork isso é só mais um commit; trazer novidades do upstream é um `git merge upstream/main` feito de propósito (decisão 1 em `decisoes.md`).
 
 ```
-src/, include/       código do jogo (upstream); mudanças do 360 dentro de #ifdef PORT_X360
+src/, include/       código do jogo (upstream); mudanças para host big-endian em #ifdef PORT_BIG_ENDIAN ou nas macros PS2_LOW/PS2_LD64 (include/types.h)
 port/                camada de plataforma de PC (upstream)
 port/x360/           nosso backend: main, gfx, áudio, input, fs, save, instalador
 port/x360/tools/     build.sh, subir.py (FTP), gerador de swappers

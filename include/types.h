@@ -11,4 +11,9 @@ typedef long s64;
 typedef unsigned long u64;
 typedef float f32;
 
+/* A variable read through a pointer of another width, as the PS2 (little-endian) reads it: the low T of x, and
+   the 64-bit word that starts at x. The port bridges these for big-endian hosts (port/include/port_compat.h). */
+#define PS2_LOW(T, x) (*(T *)&(x))
+#define PS2_LD64(x) (*(u64 *)&(x))
+
 #endif
