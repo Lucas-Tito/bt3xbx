@@ -115,7 +115,7 @@ static void resto_bytes(ConvCtx *c, conv_ofs a, conv_ofs b) {
 
 /* §4.1, §4.2: o modelo (cabeçalho, malhas com pacotes VIF, costura) */
 static void modelo(ConvCtx *c, conv_ofs a, conv_ofs b) {
-    conv_ofs r;
+    conv_ofs r, fimregs = b;
     conv_u32 malhas, costura;
     Conv_Bytes(c, a, 0xC);
     Conv_U32s(c, a + 0x0C, 7);  /* flags, fadeNear, fadeFar, size[4] */
@@ -145,9 +145,7 @@ static void modelo(ConvCtx *c, conv_ofs a, conv_ofs b) {
             Conv_Erro(c, "malha sem desenho em 0x%lX com next 0x%lX", (unsigned long)r, (unsigned long)prox);
         }
         if (ultimo) {
-            /* depois do último registro, até o fim da entrada: alinhamento que o jogo não lê, com alguns bytes
-               não nulos nos arquivos do disco */
-            resto_bytes(c, r + 0x40, b);
+            fimregs = r + 0x40;
             break;
         }
         r += prox;
@@ -171,6 +169,14 @@ static void modelo(ConvCtx *c, conv_ofs a, conv_ofs b) {
             Conv_U64(c, t + 0x10); /* TEX0 lido como u64 inteiro aqui (gfxm_d_c.c) */
             Conv_U64(c, t + 0x18);
         }
+        /* §4.2.2: a costura começa onde o último registro de malha termina (conferido nos 73 modelos do disco) */
+        if (!c->erro && a + costura != fimregs) {
+            Conv_Erro(c, "costura em +0x%lX, mas os registros terminam em +0x%lX", (unsigned long)costura,
+                      (unsigned long)(fimregs - a));
+        }
+    } else {
+        /* sem costura: os 0x40 bytes depois do último registro têm palavras não nulas que ninguém lê */
+        resto_bytes(c, fimregs, b);
     }
     Conv_Zeros(c, a, b, "modelo");
 }
@@ -576,6 +582,23 @@ static void parte(ConvCtx *c, conv_u32 tipo, int qual, conv_ofs a, conv_ofs b) {
         case 9: /* EftQuadDef / EftPart9Def */
             Conv_U32s(c, a, 0x234 / 4 + 1);
             Conv_Bytes(c, a + 0x238, 0x0B);
+            resto_bytes(c, a + 0x243, b); /* no disco a entrada passa da struct (até 0x25B); ninguém lê */
+            break;
+        case 10: /* EftPart10Def, 0x20E */
+            Conv_U32s(c, a, 0x1F8 / 4);
+            Conv_Bytes(c, a + 0x1F8, 4);
+            Conv_U32s(c, a + 0x1FC, 4);
+            Conv_Bytes(c, a + 0x20C, 2);
+            break;
+        case 12: /* EftZapDef, 0xB8 (ausente do disco: layout só pelo código) */
+            Conv_U32s(c, a, 0xA8 / 4);
+            Conv_Bytes(c, a + 0xA8, 0x0C);
+            Conv_U32(c, a + 0xB4);
+            break;
+        case 15: /* EftLinkDef / EftWLinkDef, 0x1A4 */
+            Conv_U32s(c, a, 0x19C / 4);
+            Conv_Bytes(c, a + 0x19C, 4);
+            Conv_U32(c, a + 0x1A0);
             break;
         case 14:
             sprites(c, a, b);
@@ -600,7 +623,8 @@ static void parte(ConvCtx *c, conv_u32 tipo, int qual, conv_ofs a, conv_ofs b) {
             return;
         }
     } else {
-        conv_u32 n = tipo == 5 ? 0x114 : tipo == 9 ? 0x12C : tipo == 16 ? 0x84 : tipo == 17 ? 0xB4 : tipo == 18 ? 0x114 : 0;
+        conv_u32 n = tipo == 5 ? 0x114 : tipo == 9 || tipo == 10 || tipo == 12 || tipo == 15 ? 0x12C : tipo == 16 ? 0x84 :
+                     tipo == 17 ? 0xB4 : tipo == 18 ? 0x114 : 0;
         if (n == 0) {
             Conv_Erro(c, "parte b em 0x%lX: tipo de grupo %lu não especificado", (unsigned long)a, (unsigned long)tipo);
             return;
@@ -699,6 +723,88 @@ static void pacote_conjunto(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 idx) {
     }
 }
 
+/* §7.14: malha de efeito (EftMeshData): grupos, triângulos e vértices, tudo palavra de 4 bytes */
+static void malha_efeito(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    conv_u32 ng, tris, vtx, g, nt = 0, nv = 0, i;
+    Conv_Bytes(c, a, 4); /* assinatura */
+    ng = Conv_U32(c, a + 4);
+    tris = Conv_U32(c, a + 8);
+    vtx = Conv_U32(c, a + 12);
+    if (c->erro || ng > 64 || tris != 0x10 + ng * 0x10 || vtx < tris || a + vtx > b) {
+        Conv_Erro(c, "malha de efeito em 0x%lX: %lu grupos, triângulos em +0x%lX, vértices em +0x%lX", (unsigned long)a,
+                  (unsigned long)ng, (unsigned long)tris, (unsigned long)vtx);
+        return;
+    }
+    for (g = 0; g < ng; g++) {
+        conv_u32 k = Conv_U32(c, a + 0x10 + g * 16), primeiro;
+        Conv_U32(c, a + 0x14 + g * 16);
+        primeiro = Conv_U32(c, a + 0x18 + g * 16);
+        Conv_U32(c, a + 0x1C + g * 16);
+        if (primeiro + k > nt) {
+            nt = primeiro + k; /* o arquivo não diz quantos: o maior firstTri + numTris */
+        }
+    }
+    if (tris + nt * 16 > vtx) {
+        Conv_Erro(c, "malha de efeito em 0x%lX: %lu triângulos não cabem", (unsigned long)a, (unsigned long)nt);
+        return;
+    }
+    for (i = 0; i < nt && !c->erro; i++) {
+        conv_u32 k;
+        for (k = 0; k < 3; k++) {
+            conv_u32 v = Conv_U32(c, a + tris + i * 16 + k * 4);
+            if (v + 1 > nv) {
+                nv = v + 1; /* nem quantos vértices: o maior índice + 1 */
+            }
+        }
+        Conv_U32(c, a + tris + i * 16 + 12);
+    }
+    if (!c->erro && a + vtx + nv * 0x30 > b) {
+        Conv_Erro(c, "malha de efeito em 0x%lX: %lu vértices não cabem", (unsigned long)a, (unsigned long)nv);
+        return;
+    }
+    Conv_U32s(c, a + vtx, nv * 12);
+    Conv_Zeros(c, a, b, "malha de efeito");
+}
+
+/* 1 se [x, y) começa como um arquivo no formato do file[0] (contagem 0xFC, entrada 1 em 0x400) */
+static int parece_modelo(ConvCtx *c, conv_ofs x, conv_ofs y) {
+    return y - x >= 8 && Conv_Ler32(c, x) == 0xFC && Conv_Ler32(c, x + 4) == 0x400;
+}
+
+/* §7.4.1: subentrada 1 do pacote de técnica. O formato depende do tipo de efeito da técnica, que está no
+   file[0]; o arquivo sozinho também o diz pela forma, e esse critério bate com o do código nos 805 pacotes de
+   técnica do disco: modelo (file[0]), conjunto de texturas (entOfs 8), pacote de modelos por traje, ou anel
+   (malha + texturas). */
+static void sub1_tecnica(ConvCtx *c, conv_ofs x, conv_ofs y) {
+    conv_u32 sub[8], m, j;
+    if (parece_modelo(c, x, y)) {
+        Conv_Personagem(c, x, y - x);
+        return;
+    }
+    if (Conv_Ler32(c, x + 4) == 8) {
+        texfile(c, x, y);
+        return;
+    }
+    m = pacote(c, x, y, sub, 6);
+    if (c->erro) {
+        return;
+    }
+    if (parece_modelo(c, x + sub[1], x + sub[2])) {
+        for (j = 1; j <= m && !c->erro; j++) {
+            if (sub[j] != sub[j + 1]) {
+                Conv_Personagem(c, x + sub[j], sub[j + 1] - sub[j]);
+            }
+        }
+        return;
+    }
+    if (m != 2) {
+        Conv_Erro(c, "subentrada 1 em 0x%lX: pacote de %lu entradas não reconhecido", (unsigned long)x, (unsigned long)m);
+        return;
+    }
+    malha_efeito(c, x + sub[1], x + sub[2]);
+    texfile(c, x + sub[2], x + sub[3]);
+}
+
 /* §7.4: pacote de técnica (entradas 1..5 do topo) */
 static void pacote_tecnica(ConvCtx *c, conv_ofs a, conv_ofs b) {
     conv_u32 ent[0x100 + 2], n, k;
@@ -707,8 +813,11 @@ static void pacote_tecnica(ConvCtx *c, conv_ofs a, conv_ofs b) {
         return;
     }
     if (n >= 1 && ent[1] != ent[2]) {
-        Conv_Erro(c, "técnica em 0x%lX: subentrada 1 (formato depende do tipo de efeito) não suportada", (unsigned long)a);
-        return;
+        sub1_tecnica(c, a + ent[1], a + ent[2]);
+        Conv_Onde(c, "sub %lu", 1);
+        if (c->erro) {
+            return;
+        }
     }
     if (n >= 2 && ent[2] != ent[3]) {
         Conv_Erro(c, "técnica em 0x%lX: subentrada 2 não determinada", (unsigned long)a);
@@ -741,7 +850,22 @@ static void pacote_personagem(ConvCtx *c, conv_ofs a, conv_ofs b) {
             Conv_U32s(c, x, 2);
             resto_bytes(c, x, y);
             break;
-        case 2: case 3: case 4: case 7: case 9: case 11:
+        case 3: case 4:
+            /* §7.5.1: um modelo (e texturas) quando alguma rajada do file[0] tem tipo 2 ou 3; senão emissores.
+               No arquivo: a entrada 1 começa como um file[0] (nenhuma máscara de emissores do disco é 0xFC) */
+            if (Conv_Ler32(c, x) >= 1 && y - x >= 12 && parece_modelo(c, x + Conv_Ler32(c, x + 4), y)) {
+                m = pacote(c, x, y, sub, 2);
+                if (!c->erro) {
+                    Conv_Personagem(c, x + sub[1], sub[2] - sub[1]);
+                }
+                if (!c->erro && m >= 2 && sub[2] != sub[3]) {
+                    texfile(c, x + sub[2], x + sub[3]);
+                }
+                break;
+            }
+            pacote_conjunto(c, x, y, 1);
+            break;
+        case 2: case 7: case 9: case 11:
             pacote_conjunto(c, x, y, 1);
             break;
         case 6: /* onda de choque: sprites e texturas */
