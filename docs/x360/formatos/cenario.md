@@ -57,7 +57,7 @@ Para o conversor reconhecer todos os arquivos de cenário: **índices 368..445 d
 | 442..445 | 0x1BB..0x1BE | vagas de tela dividida de 0x23..0x26: arquivos de 2.496 bytes só com a entrada 24 |
 
 O índice 367 (id 0x170) e o 446 (id 0x1BF, `BTL_FILE_TRANSITION_3`) são de outros formatos (tabelas de 3
-entradas). Reconhecer pelo índice e conferir a tabela (N = 25, seção 2) antes de converter.
+entradas; o 367 é o banco de som do cenário 0x22, `som-e-sprites.md` 1.2). Reconhecer pelo índice e conferir a tabela (N = 25, seção 2) antes de converter.
 
 Depois da leitura, `StgModel_InitStage` (`src/battle/stg_d_b.c:82`) é quem liga o arquivo. Ela é chamada por
 `Battle_Init` (`src/battle/battle.c:153`), por `BtlLoad_EndStageSwap` (`battle_load.c:183`, depois de cada
