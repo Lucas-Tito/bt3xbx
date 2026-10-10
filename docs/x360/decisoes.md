@@ -210,3 +210,19 @@ Achados novos:
 Estado: a PowerPC roda a luta de demonstração inteira; vida, posições e relógio iguais nos 4.242 quadros;
 o gerador aleatório diverge a partir do quadro 2.751 (efeitos visuais) e há um crash no quadro ~3.979
 depois das últimas correções. A lista do detector é o que falta resolver da classe 3.
+
+## 10. F1 concluída na luta de demonstração (10/10/2026)
+
+A build PowerPC big-endian (o 360 em ordem de bytes) reproduz a luta de demonstração **idêntica à x86 em
+todos os 4.242 quadros**: vida, posições, relógio e gerador aleatório. O que foi preciso, além das
+ferramentas das decisões 7 e 9:
+- mapa de inversão dos dados do disco (rastreio) e tabelas do executável retipadas (`elfdados.py`);
+- campos de bits na ordem do PS2 (`bitfields.py`; no 360, `#pragma bitfield_order`);
+- sete correções no código do jogo com `#ifdef PORT_BIG_ENDIAN` (etiquetas DMA lidas por metades, `objId`
+  do emissor de quads, bit do chão, `u64` sobre flags de 32 bits, cores do desfoque) e uma com `#ifdef PORT`
+  (ordem de avaliação de argumentos no golpe de ki, que vale para qualquer host).
+
+O que a F1 NÃO prova: outras lutas, personagens, cenários e os menus (o mapa por posição só cobre o que
+esta luta usou: decisão 8); o caminho do som e o da GPU (a build roda sem janela e sem áudio); e a FPU do
+360 (as duas builds usam a aritmética do PS2 em software). Ainda falta: o detector de visões tem resíduos
+na pilha a entender, e os pacotes da GPU ficam para a F3.
