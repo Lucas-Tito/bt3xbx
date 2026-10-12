@@ -7,6 +7,8 @@
  *     do par e o outro fica quase vazio, então o que vale contra o orçamento de 33,3 ms é a soma de cada par.
  *     Resumo no log a cada 600 vblanks e no fim (Estado_Resumo), com a razão contra o tempo real (16,683 ms por
  *     vblank: abaixo de 1 o jogo cabe no tempo).
+ *   - BT3_ATE=<vblank>: encerra o jogo nesse vblank (os menus rodam em ciclo, título e demo, sem fim próprio);
+ *   - cada troca de tela (gProgress->mode, include/menu/menu_a.h) e cada começo e fim de luta vão para o log.
  */
 #include <xtl.h>
 #include <stdio.h>
@@ -50,9 +52,15 @@ void Estado_Resumo(void) {
     }
 }
 
+void Port_Sair(int codigo);
+void Port_X360FecharSaida(void); /* posix360.c */
+extern int *gProgress; /* include/menu/menu_a.h, MenuProgress: o modo da tela está em +0x18 */
+
 void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
     LARGE_INTEGER agora;
     long pos;
+    static unsigned ate = 0xFFFFFFFFu;
+    static int modo = -1, luta = 0;
     (void)fightSize;
     QueryPerformanceCounter(&agora);
     if (sModo < 0) {
@@ -63,6 +71,10 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
             sModo = 1;
         }
         Diario_Escrever("hash por quadro: %s", sModo ? caminho : "desligado");
+        if (getenv("BT3_ATE") != NULL) {
+            ate = (unsigned)atoi(getenv("BT3_ATE"));
+            Diario_Escrever("encerra no vblank %u", ate);
+        }
     } else {
         double ms = (double)(agora.QuadPart - sAntes.QuadPart) * 1000.0 / (double)sFreq.QuadPart;
         sTotal += ms;
@@ -109,5 +121,18 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
         }
         fputc('\n', sArq);
     }
+    if (gProgress != NULL && gProgress[0x18 / 4] != modo) {
+        modo = gProgress[0x18 / 4];
+        Diario_Escrever("vblank %u: tela %d", vblank, modo);
+    }
+    if ((fight != NULL) != luta) {
+        luta = fight != NULL;
+        Diario_Escrever("vblank %u: %s", vblank, luta ? "luta começou" : "luta terminou");
+    }
+    Port_X360FecharSaida(); /* o fprintf(stderr) do jogo chega ao disco mesmo num travamento sem exceção */
     QueryPerformanceCounter(&sAntes); /* sem o tempo da própria gravação */
+    if (vblank >= ate) {
+        Diario_Escrever("BT3_ATE: vblank %u", vblank);
+        Port_Sair(0);
+    }
 }
