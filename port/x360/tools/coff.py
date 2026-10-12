@@ -7,6 +7,8 @@ Microsoft, e o esqueleto só precisa de seções, rótulos, zeros, números e en
     coff.py --saida DIR A.s B.s ...       vários, cada um em DIR/<nome>.obj
     coff.py --rotulos A.s                 lista "seção rótulo deslocamento" (para conferir com o dumpbin)
     coff.py --externos A.s B.s ...        símbolos que os .long pedem e nenhum dos arquivos define
+    --absoluto NOME=VALOR                 (repetível) símbolo de endereço fixo, como o --defsym do ld: o valor
+                                          vai gravado no lugar e a relocação some (D_3BE71C, port/tools/link.py)
 
 Formato, conferido com objetos do próprio cl.exe do XDK (dumpbin /headers /symbols /relocations):
 - máquina 0x1F2 (PPCBE), características 0x180 como o cl; cabeçalho, seções, relocações e tabela de
@@ -287,9 +289,18 @@ def local(nome):
     return nome.startswith(".L")
 
 
-def objeto(m):
+def objeto(m, absolutos={}):
     """Bytes do objeto COFF de uma Montagem."""
     secoes = list(m.secoes.values())
+    for s in secoes:
+        fica = []
+        for off, nome in s.relocs:
+            if nome in absolutos and nome not in m.rotulos:
+                v = struct.unpack_from(">I", s.dados, off)[0]
+                struct.pack_into(">I", s.dados, off, (v + absolutos[nome]) & 0xFFFFFFFF)
+            else:
+                fica.append((off, nome))
+        s.relocs = fica
     indice_secao = {id(s): i + 1 for i, s in enumerate(secoes)}
 
     # tabela de textos: tamanho (4 bytes, conta ele mesmo) e nomes longos terminados em zero
@@ -376,8 +387,14 @@ def main():
     ap.add_argument("--saida", help="pasta dos .obj (um por .s, mesmo nome)")
     ap.add_argument("--rotulos", action="store_true", help="lista seção, rótulo e deslocamento")
     ap.add_argument("--externos", action="store_true", help="símbolos pedidos e não definidos nos arquivos")
+    ap.add_argument("--absoluto", action="append", default=[], metavar="NOME=VALOR",
+                    help="símbolo de endereço fixo, gravado no lugar sem relocação")
     a = ap.parse_args()
     try:
+        absolutos = {}
+        for par in a.absoluto:
+            nome, _, valor = par.partition("=")
+            absolutos[nome] = numero(valor, "--absoluto")
         montagens = [Montagem(p) for p in a.entradas]
         if a.rotulos:
             for m in montagens:
@@ -388,7 +405,7 @@ def main():
         if a.externos:
             definidos = {n for m in montagens for n in m.rotulos if n in m.globais}
             pedidos = {n for m in montagens for s in m.secoes.values() for _, n in s.relocs if n not in m.rotulos}
-            for n in sorted(pedidos - definidos):
+            for n in sorted(pedidos - definidos - set(absolutos)):
                 print(n)
             return
         if a.saida_arq and len(montagens) != 1:
@@ -401,7 +418,7 @@ def main():
             destino = a.saida_arq or os.path.join(
                 a.saida, os.path.splitext(os.path.basename(m.caminho))[0] + ".obj")
             with open(destino, "wb") as f:
-                f.write(objeto(m))
+                f.write(objeto(m, absolutos))
     except Erro as e:
         sys.exit(f"coff.py: {e}")
 
