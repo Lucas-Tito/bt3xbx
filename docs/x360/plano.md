@@ -69,13 +69,34 @@ Mudanças que servem ao upstream (correções de endianness, ganchos de platafor
 | F0 | Spike do compilador com arquivos reais da decomp + hello `.xex` com Title ID e ícone aparecendo no Aurora + medição de memória e reserva de endereços fixos do PS2 num título XDK. |
 | F1 | Build headless big-endian no qemu-ppc reproduzindo o replay igual à build x86. |
 | F2 | O mesmo replay headless rodando no 360, com tempo de frame medido. |
-| F3 | Instalador + boot até a tela de título. |
+| F3 | Dados direto da ISO (decisão 18) + boot até a tela de título, com imagem. |
 | F4 | Menus e save do console. |
 | F5 | Uma luta a 30 fps. |
 | F6 | Áudio (ADX e efeitos) e filmes. |
 | F7 | Conteúdo completo e split-screen. |
 | F8 | Acabamento (opções, 16:9, remapeamento) e release. |
 | F9 | Depois do jogo base rodando bem: tela dividida para 4 jogadores, a partir do mod Tag Team (decisão 16; sem o online). |
+
+### F3 em etapas (12/10/2026)
+
+Do estudo do caminho do boot: `main`, logos (arquivo de menu 0, `pzs3us1/00473`), checagem do cartão (`00477`),
+filme de abertura (pulável com `BT3_NOMOVIE`), arquivo de menu 1 (`00449`) e `Title_Run`, que vai sozinho para a
+demo depois de 1.800 quadros parado. Os três arquivos de menu não têm conversor: pacote de seções em BPE, e depois
+da descompressão texturas (`TexFile`, já especificado), Flash ("FOD\x11LIT") e diálogo com textos.
+
+| # | Onde | O que | Critério |
+|---|---|---|---|
+| 1 | console | Dados direto da ISO (`iso360.c`) | a luta da F2 roda sem `gamedata` |
+| 2 | WSL | Menus sem janela em x86 e PPC, sem `BT3_DEMO`, mais o rastreio desse caminho | execução igual até a demo começar pelo título; catálogo dos arquivos e larguras lidos |
+| 3 | WSL | `formatos/menus.md` e os conversores dos menus, com o gancho depois do `Sprite_Unpack` | `conv_tool --disco` sem erro, `--mapa` sem divergência, PPC sem mapa igual à x86 |
+| 4 | WSL | Frontend do GS em big-endian: a convenção de 64 bits nos pacotes da GPU (decisão a registrar), a memória do GS, o rasterizador de software de referência | imagens (PPM) idênticas entre x86 e PPC nos logos, no cartão e no título |
+| 5 | console | A build sem janela pelos menus até a demo | log com a sequência de telas e o tempo por quadro nos menus (alvo 16,7 ms) |
+| 6 | console | Esqueleto D3D9: device 720p, um shader do `fxc` sob wine, padrão de teste | cores, geometria e meio pixel certos; a Guide abre e fecha sem congelar |
+| 7 | console | `GsBackend` D3D9 mínimo (desenho 2D, texturas, um alvo, present) | logos e título na tela, batendo com o PPM da etapa 4 |
+| 8 | console | Entrada por XInput | START abre o menu do título; desconectar mostra o aviso |
+
+Filme e som ficam para a F6; VU1, outline e o resto da luta para a F5. Risco anotado para a F5: a gravação e a
+decodificação de texturas do `gs_draw.c` custam 2 a 3 ms no PC e podem passar do que sobra do quadro no Xenon.
 
 Fora do escopo: netplay, versão PAL/japonesa, 60 fps (interpolação ou lógica a 60; decisão 15: 720p a 30).
 
