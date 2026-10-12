@@ -347,3 +347,18 @@ conversor) e de catálogo para os formatos que faltam.
 
 Falta para o produto: os formatos que a demo não usa (menus, cenas, modos de jogo), os pacotes da GPU (F3), o
 áudio (F6), e levar tudo isso ao 360 (F2: o mesmo jogo sem janela no console, com o float do 360).
+
+## 15. Alvo de vídeo: 720p a 30 fps (12/10/2026)
+
+O alvo é **1280x720 a 30 quadros por segundo** nas lutas, o ritmo do jogo original (a lógica anda em passo fixo de
+30 por segundo; os menus seguem a 60, como no PS2). 60 fps fica fora por enquanto, nos dois caminhos possíveis:
+
+- **Interpolação** (o renderizador desenha um quadro intermediário, como o protótipo `BT3_INTERP` do port de PC):
+  não muda a luta, mas custa um quadro de atraso e o dobro de desenho, e o protótipo só suaviza o que passa pelos
+  programas de vértice.
+- **Lógica a 60 de verdade:** exigiria reescalar tudo o que o jogo conta em passos (velocidades, timers, animação,
+  janelas de golpe, IA); mexe no jogo inteiro e muda a sensação da luta.
+
+Consequência para a F3: o renderizador desenha só a área visível do GS na resolução de saída (cabe na EDRAM de
+10 MB), não a memória inteira do GS como o port de PC. Reabrir esta decisão só depois de medir a folga de CPU (F2)
+e de GPU (F3).

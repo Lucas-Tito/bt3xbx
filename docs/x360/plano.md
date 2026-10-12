@@ -76,7 +76,7 @@ Mudanças que servem ao upstream (correções de endianness, ganchos de platafor
 | F7 | Conteúdo completo e split-screen. |
 | F8 | Acabamento (opções, 16:9, remapeamento) e release. |
 
-Fora do escopo: netplay, versão PAL/japonesa, interpolação a 60 fps.
+Fora do escopo: netplay, versão PAL/japonesa, 60 fps (interpolação ou lógica a 60; decisão 15: 720p a 30).
 
 ## 6. Riscos principais
 
