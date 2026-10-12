@@ -54,3 +54,7 @@ EftSprAnim_DrawTriClip	EftShotFx_DrawQuad	ADIADO (F3): pacote da GPU montado byt
 EftSprAnim_DrawTriClip	EftSprAnim_DrawLayerAt	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
 EftSprAnim_DrawTriClip	EftSprAnim_DrawTriClip	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
 EftSprAnim_DrawTriClip	EftSpr_DrawRot	ADIADO (F3): pacote da GPU montado byte a byte e em u64, relido em u32 pelo desenho de triângulos
+EftPrim_DrawTriangle	EftAura_UpdateTextures	ADIADO (F3, etapa 4, decisão 19): tex0 u64 da aura copiado em metades de 32 bits pelo código x86 e gravado no pacote da GPU
+EftAuraTask_Init	BattleSide_SetObjId	cópia de struct (aura->arg = *arg) em pedaços de 8 bytes sobre campos s32: cópia mais larga, não lê número
+McCard_Checksum	McCard_Checksum	soma de verificação do cartão sobre bytes de números nativos: outro valor em big-endian, confere em cada máquina (esperado)
+McCard_Checksum	McFlow_Init	soma de verificação do cartão sobre bytes de números nativos: outro valor em big-endian, confere em cada máquina (esperado)

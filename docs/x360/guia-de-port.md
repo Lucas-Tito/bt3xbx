@@ -89,8 +89,11 @@ própria só para isso). Para cá só volta texto.
 | --- | --- |
 | `headless.py --alvo x86\|ppc [--rastreio\|--chamadas]` | builds sem janela do port de PC: x86 de 32 bits (clang `-m32`, a referência little-endian com ponteiros de 32 bits como o 360) e PowerPC 32 bits big-endian (GCC cross, roda no `qemu-ppc`). As duas usam float por software (o do PS2), então uma diferença entre elas só pode vir da ordem dos bytes |
 | `f1.sh` | o ciclo inteiro: builds, rastreio, mapa, luta na PPC, comparações. `F1_SEM_RASTREIO=1` reaproveita o rastreio (que leva cerca de 1 h) |
+| `menus.sh` | o ciclo dos menus (F3, etapa 3): boot até as demos sem `BT3_DEMO`, PPC sem mapa com os arquivos que a x86 lê, lutas das demos e memória num quadro comparadas |
 | `compara.py` | compara a luta quadro a quadro (vida, posição, relógio, gerador aleatório) pelo `hash.txt` do `state.c` |
 | `memdiff.py` | compara a memória do jogo das duas builds num quadro: heap pareado pelos blocos do alocador do jogo, globais pelo nome, cada palavra numa classe (igual, igual sem inverter, 2xu16, u64...) |
+| `memdiff.py --marcas` | o mesmo, campo a campo num bloco que guarda um arquivo, pela largura que o conversor deu a cada byte (`conv_tool --marcas`) |
+| `campos.py` | compara um bloco campo a campo pelo tipo do DWARF (via gdb); `--donos` diz quem alocou cada bloco do heap num vblank |
 | `layout.py` | compara pelo DWARF o layout de toda struct do jogo entre x86 e PPC; a build PPC falha se algo divergir |
 | `mem.py` | lista as variáveis globais do jogo para o dump de memória |
 
@@ -247,6 +250,24 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
   como nome do comando. Use `env` com um vetor.
 - Carimbe cada build com a origem (commit, hash da diferença incluindo arquivos novos, hash do
   rastreio usado), e só compare builds do mesmo carimbo.
+- **O par de um u64 se acha pelo endereço, não pelo deslocamento na região.** Os blocos do heap do jogo começam em
+  qualquer múltiplo de 4; o `memdiff` juntava a palavra `o` com a `o ^ 4` da região e, num bloco que começa em 4 mod 8,
+  juntava metades de dois u64. Os dois buffers de pacotes da GPU, com o mesmo conteúdo, saíam um com 13.799 palavras
+  "diferentes" e o outro com 8.682 "u64"; o `SaveData.charaBits` (u64 nativo, valores iguais) saía "diferente".
+- **A classe por palavra não serve para palavra com larguras misturadas.** Dois bytes e um u16 na mesma palavra
+  (`FontIconDef`, `FlashTl.state/depths`, o registro de golpe do 00001) e os u16 desalinhados do Flash dos menus saem
+  "diferente" ou "2xu16" mesmo convertidos certo: 19.632 "diferentes" no quadro 3000 dos menus, todos assim ou do erro
+  acima. Compare pela largura de cada campo:
+  - buffer que guarda um arquivo (ou o conteúdo descomprimido): `conv_tool --marcas DIR` grava a largura que o
+    conversor deu a cada byte (só larguras) e `memdiff.py --marcas heap#N=DIR/arquivo.marcas` confere número a número
+    ("conforme" / "fora-do-formato");
+  - struct do código: `campos.py` compara folha a folha pelo tipo do DWARF (via gdb), e `campos.py --donos` diz quem
+    alocou cada bloco do heap vivo num vblank.
+- **Quem gravou uma palavra:** watchpoint de hardware do gdb na x86, com o vblank do `Port_StateLog` numa variável de
+  conveniência. A palavra "diferente" do buffer de pacotes não era gravada desde o vblank 197 (resto de um quadro do
+  cartão de memória, além do fim do pacote atual): sem isso, a procura seria no desenho do título.
+- **Soma de verificação sobre bytes de números nativos** (`McCard_Checksum` do cartão de memória) dá outro valor em
+  big-endian, e confere em cada build: é esperado enquanto o save não sai de uma máquina para outra.
 
 ### 5.5 Conversores por formato
 
@@ -342,6 +363,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   - descubra o IP pelo MAC (timeout curto demais em varredura perde o console);
   - nome e ícone vêm do SPA embutido no `.xex`.
 - **Python no build:** a imagem do XDK não tem Python, então o SPA é gerado no host.
+- **Lista de convertidos tirada do rastreio:** a PPC sem mapa só converte os arquivos da lista, e a lista vinha dos
+  arquivos que a rodada rastreada leu. A rodada sem rastreio vai mais longe: depois da primeira demo o título volta, a
+  segunda demo sorteia outra tela de carregamento (`Load_InitScreen`, 00960 em vez de 00961), o arquivo chega cru e o
+  `Bpe_Decode` derruba o qemu uns 7.000 vblanks depois do quadro comparado. Agora:
+  - o `inverter.c` para na leitura, com o nome, quando um arquivo que tem conversor não está na lista nem no mapa;
+  - a lista sai dos arquivos que a x86 lê na rodada inteira (`dprintf` do gdb em `Port_FileReadAt`; o WSL não tem
+    `strace`).
+
+  No 360 isso não existe (`iso360.c` converte todo arquivo que tem conversor ao abrir).
+- **Queda no qemu:** `qemu-ppc -g PORTA` e `gdb-multiarch` com `target remote` dão a pilha e os registradores na hora
+  da queda (o WSL tem os dois); é mais rápido que bissectar com `BT3_HASH_AT`.
 - **Build com falha intermitente:** uma vez 8 objetos falharam e passaram na repetição sem
   mudança. O ciclo agora mostra as linhas `FALHOU` em vez de cortá-las com `tail`.
 

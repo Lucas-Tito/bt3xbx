@@ -438,6 +438,34 @@ de cobertura.
 - A seção 1 do 00473 e a 2 do 00449 (menu principal) não foram descomprimidas por ninguém no caminho; o rastreio
   não as tem (seção 11).
 
+### 10.4 A PPC sem mapa contra a x86 (critério da etapa 3)
+
+Rodada sem `BT3_DEMO` (boot, logos, cartão, título, demos sozinhas), `BT3_GS=none`, sem filme. A PPC lê só os
+arquivos convertidos pela `conv_tool` (61: os que a x86 lê até o vblank 30.000, tirados do `Port_FileReadAt` pelo
+gdb), sem mapa do rastreio.
+
+- **Execução:** a PPC passa por seis demos (vblanks 4.433 a 41.484) com vida, posições, relógio e gerador iguais aos da
+  x86 em todos os 18.654 quadros de luta comparados (`compara.py`).
+- **Memória no vblank 3.000** (título; `memdiff.py` com `--marcas` nos blocos que guardam arquivo): os 72 blocos do
+  heap no lugar; os oito blocos com arquivo ou conteúdo descomprimido (00001 a 00004, 00449 cru e a seção 1
+  descomprimida, 00477 cru e descomprimido) conformes número a número, nenhum byte fora do formato. Sobram 46 palavras
+  "diferentes", todas explicadas:
+
+| Onde | Palavras | O que é | Por quê |
+|---|---|---|---|
+| heap#0 (`SndMgr.iopBuf`, `Snd_Init`) | 1 | ponteiro do port (`sceSifAllocIopHeap`, `calloc` em 32 bits) | endereço do host, outro em cada build |
+| heap#24 e #25 (`Dma_InitBuffers`, pacotes da GPU) | 1 + 1 | etiqueta GIF de `Font_OpenSpriteTag` com o NLOOP gravado por `Font_CloseSpriteTag` como u16 sobre o u64 | resto do vblank 197 (cartão de memória), além do fim do pacote atual; visão u16 sobre u64, etapa 4 (decisão 19) |
+| heap#37 (`FlashClipList_Init`) | 4 | `FlashTl` +0x14: u8, u8 e u16 na mesma palavra | larguras misturadas; `campos.py`: 1.210 folhas iguais |
+| heap#52 (`Flash_Create`, raiz do filme do diálogo) | 1 | idem | idem |
+| heap#68 (`McFlow_Init`) | 3 | `repSave.hdr.sum` e `hdrSum` | soma de bytes de números nativos (`McCard_Checksum`); confere em cada build |
+| `D_002C6970`, `D_002C697C` (`FontIconDef`) | 2 | u16 e dois s8 na mesma palavra | larguras misturadas; `campos.py`: as 30 entradas iguais |
+| `gPortMoviePath`, `gPortAdxView` | 32 | caminhos do host | `BT3_DATA` diferente nas duas rodadas |
+| `gPortDataStripped` | 1 | estado das tabelas do executável | a PPC liga o esqueleto e copia do SLUS (decisão 13) |
+
+As classes `u64` e `u64-com-zero` ficam nos pacotes da GPU (heap#24 e #25, 8.682 e 5.584 cada; `gGfx`;
+`gTexBltPacket`): etapa 4, decisão 19. Fora deles: `SaveData.charaBits`/`stageBits` e `gPortRandNext` (u64 nativos,
+certos) e uma das quatro somas do `McFlow` (coincidência).
+
 ## 11. O que fica pendente
 
 **Outros chamadores de `Sprite_Unpack`/`Bpe_Decode`.** Cada um descomprime um formato próprio e precisa do seu
@@ -492,8 +520,7 @@ leitor achado; o pacote externo cobre o cabeçalho BPE dela.
 **Na F1:** a build PPC aplica o mapa ao conteúdo `#bpe` só de arquivos que não estão na lista dos convertidos
 (port/x360/headless/inverter.c). Com 00449 na lista, o menu principal (seção 2) fica sem conversão nenhuma na PPC
 até ganhar o seu gancho; o caminho do título até a demo não passa por ele. A comparação da PPC sem mapa com a x86
-nos menus (critério da etapa 3 no plano) depende da build sem janela dos menus da etapa 2, que ainda não está no
-repositório.
+está em 10.4.
 
 ## 12. Não determinado
 
