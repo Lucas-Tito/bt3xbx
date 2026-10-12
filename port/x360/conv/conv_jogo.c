@@ -56,3 +56,28 @@ void Port_ConvertLoadSheet(void *buf, int size) {
         falha("conv: folha da tela de carregamento de 0x%X bytes: %s", (unsigned)size, msg);
     }
 }
+
+/* Um pacote de tela de menu logo depois de Sprite_Unpack, com o formato que o chamador sabe que é (docs/x360/formatos/
+   menus.md 4): BootCard_Init ("menu_cartao"), FirstRun_Main ("menu_logos"), McFlow_Init ("menu_mcflow") e
+   Title_Init ("menu_titulo"). Cada Sprite_Unpack desses aloca um buffer novo: não há conversão dupla. */
+void Port_ConvertMenuPack(void *buf, int size, const char *formato) {
+    char msg[240];
+    conv_u8 *feito;
+    int r;
+    if (size <= 0) {
+        falha("conv: %s com 0x%X bytes descomprimidos", formato, (unsigned)size);
+    }
+    feito = (conv_u8 *)calloc((size_t)size, 1);
+    if (feito == NULL) {
+        falha("conv: %s: sem memória", formato);
+    }
+    msg[0] = '\0';
+    r = Conv_Formato(formato, formato, (conv_u8 *)buf, (conv_ofs)size, feito, msg, sizeof(msg));
+    free(feito);
+    if (r == 0) {
+        falha("conv: formato %s desconhecido", formato);
+    }
+    if (r < 0) {
+        falha("conv: %s de 0x%X bytes: %s", formato, (unsigned)size, msg);
+    }
+}

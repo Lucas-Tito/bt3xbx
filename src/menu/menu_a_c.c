@@ -54,6 +54,12 @@ void Title_Init(s32 section) {
     memset(gTitle, 0, 0xD0);
     gTitle->pack = (u32 *)MPACK_AT(gMenuArc1, section);
     gTitle->res = Sprite_Unpack(gTitle->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gTitle->res, ((s32 *)gTitle->pack)[0], "menu_titulo");
+    }
+#endif
     TT_RES(1);
     gTitle->bg = res;
     TT_RES(2);

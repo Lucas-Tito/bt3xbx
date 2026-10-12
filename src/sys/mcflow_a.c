@@ -2634,6 +2634,12 @@ void McFlow_Init(void) {
     memset(gMcFlow, 0, 0x39F90);
     gMcFlow->pack = File_LoadSync(gProgress->fileBase + 0x1D, NULL, 0);
     gMcFlow->res = Sprite_Unpack(gMcFlow->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gMcFlow->res, ((s32 *)gMcFlow->pack)[0], "menu_mcflow");
+    }
+#endif
     work = gMcFlow;
     rep = BattleReplay_GetBuffer(NULL);
     hdr = &work->repSave.hdr;

@@ -171,6 +171,12 @@ s32 FirstRun_Main(void) {
     }
     BootCard_Run(2);
     res = Sprite_Unpack(MPACK_AT(gMenuArc0, 3), NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(res, ((s32 *)MPACK_AT(gMenuArc0, 3))[0], "menu_logos");
+    }
+#endif
     Logo_ShowAll(res);
     if (res != NULL) {
         Heap_Free(res);

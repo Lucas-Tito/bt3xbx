@@ -22,6 +22,12 @@ void BootCard_Init(s32 section) {
     memset(gBootCard, 0, 0x14);
     gBootCard->pack = (u32 *)MPACK_AT(gMenuArc0, section);
     gBootCard->res = Sprite_Unpack(gBootCard->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gBootCard->res, ((s32 *)gBootCard->pack)[0], "menu_cartao");
+    }
+#endif
     Dialog_Init(MPACK_AT(gBootCard->res, 1), NULL, 0);
     McFlow_Init(1);
     McFlow_SetDoneCb(0, BootCard_OnFlowDone, NULL);
