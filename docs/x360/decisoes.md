@@ -419,3 +419,8 @@ convertida na hora em que o jogo a abre; as outras (fluxos de som e filmes) pass
 - **Versão:** o hash das tabelas copiadas do SLUS e do DBZP.BIN (`Port_LoadGameData`) já recusa outra versão.
 - **Substitui** o instalador do plano (seção 3, passo 2) e a conversão "no instalador" da decisão 12. A
   `conv_tool` de PC fica como teste dos conversores.
+
+Medido no console (12/10/2026): a luta lida da ISO sai idêntica à da F2 quadro a quadro. A carga dos 20 arquivos
+gasta cerca de 210 ms lendo da ISO e 500 ms convertendo; só o cenário (`pzs3us1/00369`, 6,7 MB) leva 70 ms de
+leitura e 264 ms de conversão. Se a pausa da carga incomodar com imagem, o primeiro passo é um caminho rápido do
+conversor na carga (a conferência byte a byte fica na `conv_tool`), antes de pensar num cache em disco.
