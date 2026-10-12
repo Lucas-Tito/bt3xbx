@@ -9,9 +9,13 @@
  *   - disc/...    o arquivo da ISO (ISO 9660, sem extensões: nomes em maiúsculas com ";1");
  *   - pzsN/...    a entrada do AFS dentro da ISO.
  * Entrada com conversor (Conv_Arquivo, port/x360/conv) é lida inteira e convertida na abertura; o resto (fluxos
- * de som, filmes) é lido da ISO a cada fread. O arquivo aberto é um IsoArq do vetor sAbertos, e as funções de
- * stdio do shim (Port_X360Fread...) reconhecem um IsoArq pelo endereço e mandam o resto para a CRT.
- * Só leitura. Mais de uma thread lê (a do jogo e a do som): a ISO tem um handle só, com trava.
+ * de som, filmes) é lido da ISO a cada fread. Os dados sob a raiz estão sempre no formato do PS2: um arquivo de
+ * mods/ ou de uma pasta solta (sem ISO) com conversor também se converte ao abrir (Iso_DeArquivo). O arquivo
+ * aberto é um IsoArq do vetor sAbertos, e as funções de stdio do shim (Port_X360Fread...) reconhecem um IsoArq
+ * pelo endereço e mandam o resto para a CRT. Caminho sob a raiz que não é do disco (fases e músicas de fora,
+ * port/src/plat_stages.c, plat_songs.c) vai para o arquivo de verdade.
+ * Só leitura. Mais de uma thread lê (a do jogo e a do som): Iso_Iniciar roda na main antes das threads, e a ISO
+ * tem um handle só, com trava, que também cobre a carga das tabelas dos AFS.
  */
 #include <xtl.h>
 #include <stdio.h>
@@ -64,16 +68,20 @@ static unsigned le32(const unsigned char *p) {
     return (unsigned)p[0] | (unsigned)p[1] << 8 | (unsigned)p[2] << 16 | (unsigned)p[3] << 24;
 }
 
-/* A primeira .iso da pasta do .xex (ou BT3_ISO). Nome no FATX: até 42 caracteres. */
-static void iniciar(void) {
+/* A primeira .iso da pasta do .xex (ou BT3_ISO). Nome no FATX: até 42 caracteres. Chamada pela main antes de criar
+   threads (main360.cpp), depois do ambiente. */
+void Iso_Iniciar(void) {
     WIN32_FIND_DATA d;
     HANDLE h;
     unsigned char pvd[SETOR];
     char caminho[512];
     const char *escolhido = getenv("BT3_ISO");
 
-    sIniciado = 1;
+    if (sIniciado) {
+        return;
+    }
     InitializeCriticalSection(&sTrava);
+    sIniciado = 1;
     if (escolhido != NULL && escolhido[0] != '\0') {
         strncpy(caminho, escolhido, sizeof(caminho) - 1);
     } else {
@@ -171,6 +179,9 @@ static int achar(const char *caminho, __int64 *ini, long *tam) {
             return 0;
         }
         if (ultimo) {
+            if (dirTam > 0x7FFFFFFFu) {
+                return 0; /* tamanho em long de 32 bits: nenhum arquivo do disco passa disso (os AFS se leem por entrada) */
+            }
             *ini = (__int64)lba * SETOR;
             *tam = (long)dirTam;
             return 1;
@@ -179,37 +190,63 @@ static int achar(const char *caminho, __int64 *ini, long *tam) {
     }
 }
 
-/* A tabela do AFS DATA/PZS3USn.AFS ("AFS\0", n, depois deslocamento e tamanho de cada entrada). */
+/* A tabela do AFS DATA/PZS3USn.AFS ("AFS\0", n, depois deslocamento e tamanho de cada entrada). Sob a trava (duas
+   threads podem pedir a primeira entrada ao mesmo tempo), e a tabela só aparece já na ordem do host. A trava
+   é recursiva (seção crítica): ler() a toma de novo. */
 static Afs *afs(int n) {
     static const char *nomes[3] = {"DATA/PZS3US0.AFS", "DATA/PZS3US1.AFS", "DATA/PZS3US2.AFS"};
     Afs *a = &sAfs[n];
     unsigned char cab[8];
+    unsigned *tab = NULL;
+    unsigned i, cont = 0;
+    __int64 ini = 0;
     long tam;
+    EnterCriticalSection(&sTrava);
     if (a->lido) {
+        LeaveCriticalSection(&sTrava);
         return a->tab != NULL ? a : NULL;
     }
-    a->lido = 1;
-    if (!achar(nomes[n], &a->ini, &tam) || !ler(a->ini, cab, 8) || memcmp(cab, "AFS", 4) != 0) {
+    if (!achar(nomes[n], &ini, &tam) || !ler(ini, cab, 8) || memcmp(cab, "AFS", 4) != 0) {
         Diario_Escrever("iso: %s não está na ISO ou não é AFS", nomes[n]);
-        return NULL;
-    }
-    a->n = le32(cab + 4);
-    a->tab = (unsigned *)malloc((size_t)a->n * 8);
-    if (a->tab == NULL || !ler(a->ini + 8, a->tab, (unsigned long)a->n * 8)) {
-        Diario_Escrever("iso: tabela de %s ilegível", nomes[n]);
-        free(a->tab);
-        a->tab = NULL;
-        return NULL;
-    }
-    {
-        unsigned i;
-        unsigned char *b = (unsigned char *)a->tab;
-        for (i = 0; i < a->n * 2; i++) {
-            a->tab[i] = le32(b + i * 4);
+    } else {
+        cont = le32(cab + 4);
+        tab = (unsigned *)malloc((size_t)cont * 8);
+        if (tab == NULL || !ler(ini + 8, tab, (unsigned long)cont * 8)) {
+            Diario_Escrever("iso: tabela de %s ilegível", nomes[n]);
+            free(tab);
+            tab = NULL;
+        } else {
+            for (i = 0; i < cont * 2; i++) {
+                tab[i] = le32((unsigned char *)tab + i * 4);
+            }
+            Diario_Escrever("iso: %s com %u entradas", nomes[n], cont);
         }
     }
-    Diario_Escrever("iso: %s com %u entradas", nomes[n], a->n);
-    return a;
+    a->ini = ini;
+    a->n = cont;
+    a->tab = tab;
+    a->lido = 1;
+    LeaveCriticalSection(&sTrava);
+    return tab != NULL ? a : NULL;
+}
+
+/* Conv_Arquivo sobre o arquivo inteiro; falha é fatal (decisão 12: formato que não bate não segue). */
+static void converter(const char *rel, unsigned char *dados, long tam, double msLer) {
+    char msg[240];
+    LARGE_INTEGER t0;
+    unsigned char *feito = (unsigned char *)calloc((size_t)tam + 1, 1);
+    QueryPerformanceCounter(&t0);
+    if (feito == NULL) {
+        Diario_Escrever("iso: %s (%ld bytes): sem memória para a marcação", rel, tam);
+        Port_Abortar();
+    }
+    if (Conv_Arquivo(rel, (conv_u8 *)dados, (conv_ofs)tam, feito, msg, sizeof(msg)) < 0) {
+        Diario_Escrever("iso: conversão de %s: %s", rel, msg);
+        Port_Abortar();
+    }
+    free(feito);
+    /* de onde vem a pausa da carga (decisão 18): leitura ou conversão */
+    Diario_Escrever("iso: %s, %ld bytes: leitura %.1f ms, conversão %.1f ms", rel, tam, msLer, ms_desde(t0));
 }
 
 static IsoArq *novo(__int64 ini, long tam) {
@@ -245,7 +282,7 @@ void *Iso_Abrir(const char *rel) {
     IsoArq *r;
 
     if (!sIniciado) {
-        iniciar();
+        Iso_Iniciar();
     }
     if (sIso == INVALID_HANDLE_VALUE || strncmp(rel, "mods/", 5) == 0) {
         return (void *)-1;
@@ -263,33 +300,48 @@ void *Iso_Abrir(const char *rel) {
         ini = a->ini + a->tab[ent * 2];
         tam = (long)a->tab[ent * 2 + 1];
     } else {
-        return NULL;
+        return (void *)-1; /* sob a raiz mas não do disco (fases, músicas de fora): o arquivo de verdade */
     }
     r = novo(ini, tam);
     if (r == NULL) {
         return NULL;
     }
     if (Conv_FormatoDe(rel) != NULL) {
-        char msg[240];
-        unsigned char *feito = (unsigned char *)calloc((size_t)tam + 1, 1);
         LARGE_INTEGER t0;
-        double msLer;
         QueryPerformanceCounter(&t0);
         r->dados = (unsigned char *)malloc((size_t)tam + 1);
-        if (r->dados == NULL || feito == NULL || !ler(ini, r->dados, (unsigned long)tam)) {
+        if (r->dados == NULL || !ler(ini, r->dados, (unsigned long)tam)) {
             Diario_Escrever("iso: %s (%ld bytes): sem memória ou leitura falhou", rel, tam);
             Port_Abortar();
         }
-        msLer = ms_desde(t0);
-        QueryPerformanceCounter(&t0);
-        if (Conv_Arquivo(rel, (conv_u8 *)r->dados, (conv_ofs)tam, feito, msg, sizeof(msg)) < 0) {
-            Diario_Escrever("iso: conversão de %s: %s", rel, msg);
-            Port_Abortar();
-        }
-        free(feito);
-        /* de onde vem a pausa da carga (decisão 18): leitura da ISO ou conversão */
-        Diario_Escrever("iso: %s, %ld bytes: leitura %.1f ms, conversão %.1f ms", rel, tam, msLer, ms_desde(t0));
+        converter(rel, r->dados, tam, ms_desde(t0));
     }
+    return r;
+}
+
+/* Um arquivo de verdade sob a raiz (mods/, ou dados soltos sem ISO) que tem conversor: lido inteiro e convertido,
+   como a entrada da ISO. NULL se não deu para ler; o chamador fecha f. */
+void *Iso_DeArquivo(FILE *f, const char *rel) {
+    LARGE_INTEGER t0;
+    IsoArq *r;
+    long tam;
+    if (!sIniciado) {
+        Iso_Iniciar();
+    }
+    QueryPerformanceCounter(&t0);
+    if (fseek(f, 0, SEEK_END) != 0 || (tam = ftell(f)) < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        return NULL;
+    }
+    r = novo(0, tam);
+    if (r == NULL) {
+        return NULL;
+    }
+    r->dados = (unsigned char *)malloc((size_t)tam + 1);
+    if (r->dados == NULL || fread(r->dados, 1, (size_t)tam, f) != (size_t)tam) {
+        Diario_Escrever("iso: %s (%ld bytes, arquivo solto): sem memória ou leitura falhou", rel, tam);
+        Port_Abortar();
+    }
+    converter(rel, r->dados, tam, ms_desde(t0));
     return r;
 }
 

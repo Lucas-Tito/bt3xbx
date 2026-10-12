@@ -289,8 +289,13 @@ static uint8_t *read_file(const char *path, size_t *size) {
 }
 
 static void data_fail(const char *what, const char *path) {
+#ifdef PORT_X360 /* no installer on the 360: the game reads the disc image itself (port/x360/src/iso360.c) */
+    fprintf(stderr, "bt3: %s%s%s\n     The game's data comes from your own disc image (USA, SLUS-21678): copy the .iso into the game's folder, next to default.xex.\n", what,
+            path != NULL ? ": " : "", path != NULL ? path : "");
+#else
     fprintf(stderr, "bt3: %s%s%s\n     The game's data comes from your own disc image; run the setup (Tenkaichi3Decomp-setup) to unpack it.\n", what,
             path != NULL ? ": " : "", path != NULL ? path : "");
+#endif
     exit(2);
 }
 

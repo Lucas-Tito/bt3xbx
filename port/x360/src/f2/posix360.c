@@ -1,7 +1,8 @@
 /*
  * F2: o pedaço de POSIX e de biblioteca C que o port usa e a CRT do Xbox 360 não tem, sobre a API do console. As
  * declarações que o código do jogo e do port vê estão em port/x360/shim (o c89.py pré-processa com elas).
- *   - ambiente: getenv lê uma tabela (padrões da build sem janela + game:\ambiente.txt, linhas NOME=VALOR);
+ *   - ambiente: getenv lê uma tabela (padrões da build sem janela + game:\ambiente.txt, linhas NOME=VALOR, e
+ *     -NOME para tirar uma variável, como BT3_DEMO para rodar os menus);
  *   - arquivos: caminhos com '/' viram '\' e caminho relativo vai para game:\ (a pasta do .xex);
  *   - saída de texto (stdout, stderr, printf): game:\saida.txt, com buffer e fflush por printf;
  *   - tempo, pastas, threads (pthread sobre threads e seções críticas) e os atômicos do GCC.
@@ -25,6 +26,14 @@ static void definir(const char *nome, const char *valor) {
         if (strcmp(sNome[i], nome) == 0) {
             break;
         }
+    }
+    if (valor == NULL) { /* tirar: a última entra no lugar */
+        if (i < sVars) {
+            sVars--;
+            strcpy(sNome[i], sNome[sVars]);
+            strcpy(sValor[i], sValor[sVars]);
+        }
+        return;
     }
     if (i == MAX_VARS) {
         return;
@@ -58,7 +67,10 @@ void Ambiente_Carregar(const char *caminho) {
         while (n > 0 && (linha[n - 1] == '\n' || linha[n - 1] == '\r')) {
             linha[--n] = '\0';
         }
-        if (igual != NULL && linha[0] != '#') {
+        if (linha[0] == '-' && linha[1] != '\0') {
+            definir(linha + 1, NULL);
+            Diario_Escrever("ambiente: sem %s", linha + 1);
+        } else if (igual != NULL && linha[0] != '#') {
             *igual = '\0';
             definir(linha, igual + 1);
             Diario_Escrever("ambiente: %s=%s", linha, igual + 1);
@@ -93,6 +105,8 @@ static void caminho360(const char *de, char *para, size_t n) {
 
 /* iso360.c: os dados do jogo de dentro da ISO (decisão 18) */
 void *Iso_Abrir(const char *rel);
+void *Iso_DeArquivo(FILE *f, const char *rel);
+const char *Conv_FormatoDe(const char *nome);
 int Iso_Eh(const void *f);
 size_t Iso_Ler(void *buf, size_t tam, size_t n, void *f);
 int Iso_Posicionar(void *f, long desl, int origem);
@@ -100,14 +114,16 @@ long Iso_Posicao(void *f);
 int Iso_Fechar(void *f);
 int Iso_Caractere(void *f);
 
-/* Leitura sob a raiz de dados (BT3_DATA): da ISO, se houver uma; o resto (e tudo sem ISO) é arquivo de verdade. */
+/* Leitura sob a raiz de dados (BT3_DATA): da ISO, se houver uma. O resto é arquivo de verdade; sob a raiz, os dados
+   estão no formato do PS2 (mods/, ou soltos sem ISO), e o que tem conversor se converte ao abrir, como a ISO. */
 FILE *Port_X360Fopen(const char *caminho, const char *modo) {
-    char c[512];
+    char c[512], rel[256];
     const char *raiz = getenv("BT3_DATA");
     size_t n = raiz != NULL ? strlen(raiz) : 0;
+    int dados = 0;
+    FILE *f;
     if (n > 0 && strchr(modo, 'w') == NULL && strchr(modo, 'a') == NULL && strchr(modo, '+') == NULL &&
         strncmp(caminho, raiz, n) == 0 && (caminho[n] == '/' || caminho[n] == '\\')) {
-        char rel[256];
         size_t i;
         void *v;
         for (i = 0; caminho[n + 1 + i] != '\0' && i + 1 < sizeof(rel); i++) {
@@ -118,9 +134,19 @@ FILE *Port_X360Fopen(const char *caminho, const char *modo) {
         if (v != (void *)-1) {
             return (FILE *)v;
         }
+        dados = 1;
     }
     caminho360(caminho, c, sizeof(c));
-    return fopen(c, modo);
+    f = fopen(c, modo);
+    if (f != NULL && dados) {
+        const char *nome = strncmp(rel, "mods/", 5) == 0 ? rel + 5 : rel;
+        if (Conv_FormatoDe(nome) != NULL) {
+            void *v = Iso_DeArquivo(f, nome);
+            fclose(f);
+            return (FILE *)v;
+        }
+    }
+    return f;
 }
 
 /* as leituras do shim: arquivo da ISO ou da CRT */
@@ -171,11 +197,13 @@ FILE *Port_X360Saida(void) {
     return sSaida;
 }
 
-/* Na saída do jogo (Port_Sair): o que estiver no buffer vai para o arquivo. */
+/* Na saída do jogo (Port_Sair) e a cada vblank (estado360.c): o buffer vai até o disco ("c"). Sem fclose, de
+   propósito: uma escrita tardia de outra thread reabriria com "w" e apagaria o arquivo. */
 void Port_X360FecharSaida(void) {
-    if (sSaida != NULL) {
-        fclose(sSaida);
-        sSaida = NULL;
+    /* só com algo no buffer: com "c" o fflush chama FlushFileBuffers mesmo vazio (Source/crt/fflush.c:114), e
+       isto roda a cada vblank */
+    if (sSaida != NULL && sSaida->_ptr != sSaida->_base) {
+        fflush(sSaida);
     }
 }
 

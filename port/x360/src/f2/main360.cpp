@@ -26,6 +26,7 @@ void Port_Abortar(void);
 void Ambiente_Carregar(const char *caminho); /* posix360.c */
 void Estado_Resumo(void);                  /* estado360.c */
 void Port_X360FecharSaida(void);           /* posix360.c */
+void Iso_Iniciar(void);                    /* iso360.c */
 extern const char *volatile gPortStage;    /* plat_mem.c: até onde o arranque chegou */
 }
 
@@ -120,6 +121,7 @@ void __cdecl main() {
     Diario_Escrever("bt3xbx F2, jogo sem janela (" __DATE__ " " __TIME__ "), pilha da main perto de %08X",
                     (unsigned)(DWORD)&local);
     Ambiente_Carregar("game:\\ambiente.txt");
+    Iso_Iniciar(); /* antes de qualquer thread: a ISO e a trava dela */
 
     t = CreateThread(NULL, 256 * 1024, Preparar, NULL, CREATE_SUSPENDED, &gThreadJogo);
     ResumeThread(t);

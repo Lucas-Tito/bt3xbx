@@ -415,7 +415,8 @@ convertida na hora em que o jogo a abre; as outras (fluxos de som e filmes) pass
   passada sobre os bytes de cada arquivo aberto. Sem instalador não há etapa de minutos no primeiro uso, nem 3 GB a
   mais no HD, nem as pastas de milhares de entradas que o FATX não aguenta. Decisão do Lucas, entre as duas opções.
 - **Onde:** `port/x360/src/iso360.c` (ISO 9660 e AFS) atrás do `fopen` do shim: o código do jogo e do port não
-  muda. Arquivo em `mods/` continua valendo, como no PC.
+  muda. Arquivo em `mods/` continua valendo, como no PC, no formato do PS2: o que tem conversor se converte ao
+  abrir, como a entrada da ISO (e também os dados soltos, sem ISO).
 - **Versão:** o hash das tabelas copiadas do SLUS e do DBZP.BIN (`Port_LoadGameData`) já recusa outra versão.
 - **Substitui** o instalador do plano (seção 3, passo 2) e a conversão "no instalador" da decisão 12. A
   `conv_tool` de PC fica como teste dos conversores.
