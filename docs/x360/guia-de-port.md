@@ -301,10 +301,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `ppcintrinsics.h` (o `cl` o aceitou como função implícita e virou stub no link).
 - **Link do XDK:** `-DEBUG` liga o ICF junto com `-OPT:REF`, e funções iguais (umas 170 vazias)
   passam a ter o mesmo endereço; o jogo compara ponteiros de função. Use `-OPT:REF,NOICF`.
-- **Arquivo sem buffer na CRT do 360:** o `saida.txt` aberto com `setvbuf(_IONBF)` voltou duas vezes
-  com o tamanho certo e só zeros, mesmo fechado no fim; o `hash.txt`, com buffer, chegou certo. Use
-  buffer e `fflush` (hipótese da F3, a confirmar na próxima rodada); o log usa `WriteFile` e
-  `FlushFileBuffers`.
+- **Nunca `_IONBF` na CRT do 360:** sem buffer, o `_flsbuf` faz `_write(fh, &ch, 1)` com `ch` int
+  (`XDK/Source/crt/_flsbuf.c:189`), e no PowerPC sai o byte alto, 0. Cada caractere de `printf`,
+  `fprintf` e `fputc` vira um zero; o `saida.txt` voltou duas vezes com o tamanho certo (46 bytes: o
+  modo texto não viu os `\n`, que com os bytes certos dariam 48) e só zeros. Não era o FATX nem a falta
+  de `fclose`, como a F2 chegou a anotar. Use buffer; `fopen(..., "wc")` faz o `fflush` ir até o disco
+  (`_commit`). O fonte da CRT está em `XDK/Source/crt`: leia antes de adivinhar.
 - **`wsl.sh enviar` recusado** (commit ainda não enviado ao GitHub) não para um `enviar | tail && ...`:
   o status do pipe é o do `tail`, e o resto roda com a árvore velha do WSL. Faça push antes e confira a
   linha "WSL em <commit>".

@@ -44,7 +44,7 @@ void Estado_Resumo(void) {
                     "tempo real, %u pares acima de 33,3 ms", sParesAcima, sPares, sLuta,
                     sLuta ? sLutaTotal / (sLuta * VBLANK_MS) : 0.0, sLutaParesAcima);
     if (sArq != NULL) {
-        fclose(sArq); /* fechado: só o fflush não garante os bytes no FATX (port/x360/src/f2/posix360.c) */
+        fclose(sArq);
         sArq = NULL;
         sModo = 0;
     }

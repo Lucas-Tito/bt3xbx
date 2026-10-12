@@ -3,7 +3,7 @@
  * declarações que o código do jogo e do port vê estão em port/x360/shim (o c89.py pré-processa com elas).
  *   - ambiente: getenv lê uma tabela (padrões da build sem janela + game:\ambiente.txt, linhas NOME=VALOR);
  *   - arquivos: caminhos com '/' viram '\' e caminho relativo vai para game:\ (a pasta do .xex);
- *   - saída de texto (stdout, stderr, printf): game:\saida.txt, sem buffer;
+ *   - saída de texto (stdout, stderr, printf): game:\saida.txt, com buffer e fflush por printf;
  *   - tempo, pastas, threads (pthread sobre threads e seções críticas) e os atômicos do GCC.
  */
 #include <xtl.h>
@@ -163,15 +163,15 @@ static FILE *sSaida;
 
 FILE *Port_X360Saida(void) {
     if (sSaida == NULL) {
-        sSaida = fopen("game:\\saida.txt", "w");
-        if (sSaida != NULL) {
-            setvbuf(sSaida, NULL, _IONBF, 0);
-        }
+        /* nunca _IONBF: sem buffer, o _flsbuf da CRT do XDK faz _write(fh, &ch, 1) com ch int
+           (Source/crt/_flsbuf.c:189), e no PowerPC sai o byte alto, 0, de cada caractere. "c": fflush e
+           _flushall chamam FlushFileBuffers (_commit), como o diario.c */
+        sSaida = fopen("game:\\saida.txt", "wc");
     }
     return sSaida;
 }
 
-/* Na saída do jogo (Port_Sair): sem fechar, o FATX guardou o tamanho e não os bytes (46 zeros na 1ª rodada). */
+/* Na saída do jogo (Port_Sair): o que estiver no buffer vai para o arquivo. */
 void Port_X360FecharSaida(void) {
     if (sSaida != NULL) {
         fclose(sSaida);
@@ -189,6 +189,7 @@ int Port_Printf(const char *formato, ...) {
     va_start(ap, formato);
     r = vfprintf(f, formato, ap);
     va_end(ap);
+    fflush(f);
     return r;
 }
 
