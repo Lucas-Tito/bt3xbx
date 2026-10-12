@@ -376,3 +376,30 @@ parte da tela dividida para 4 jogadores locais. O online fica de fora.
 Para quando chegar a hora: usar o mod como referência de comportamento e escrever a partir da decomp (traduzir o
 código dele faria do port obra derivada sob GPL-3.0); medir o custo de desenhar a cena até 4 vezes contra a meta de
 720p a 30 (decisão 15). Até lá, não fechar portas: a camada de entrada do 360 aceita 4 controles.
+
+## 17. F2: a luta de demonstração roda no 360 em 45% do tempo real (12/10/2026)
+
+O jogo sem janela (`port/x360/tools/build_f2.sh`: o código do jogo rebaixado para C89 pelo `c89.py`, compilado pelo
+`cl` do XDK, tabelas do executável pelo `coff.py` e pelo `dat360.py`) roda a luta de demonstração inteira no console
+e termina bem. Os dados vão do WSL direto ao console: SLUS, DBZP.BIN e os 20 arquivos da luta já convertidos.
+
+Medido no console, sem desenho nem som, com o jogo sozinho numa thread de hardware:
+
+- a luta inteira gasta **0,45 do tempo real**: cerca de 15 ms dos 33,3 ms de um quadro a 30 fps (decisão 15);
+- **nenhum quadro da luta** passa de 33,3 ms (pior par de vblanks: cerca de 20 ms). Os 3 que passam são da
+  carga, antes da luta (238 ms);
+- 103 funções ainda em assembly viraram stubs, e nenhuma foi chamada.
+
+Comparada com a x86, a luta se separa no primeiro quadro de luta, por 1 bit numa posição. É a diferença de float
+que a decisão 5 já previa: soma e multiplicação em truncamento na FPU contra o float por software do PS2, e a
+divisão. Daí em diante a luta segue outro caminho e termina em 3.182 quadros de luta, contra 4.242, sem valor
+absurdo.
+
+Consequências:
+
+- **Desempenho:** o risco 1 do plano (CPU do Xenon) cai muito. Sobra mais da metade do quadro para o desenho e o
+  áudio, antes de qualquer otimização (o código ainda é `-Ox` genérico, sem VMX).
+- **Comparação exata:** o `hash.txt` do console não serve para pegar erro de ordem de bytes, que já está coberto
+  pela F1. Para conferir o 360 quadro a quadro seria preciso um gêmeo no qemu com o mesmo float. Fica para quando
+  houver suspeita.
+- **Próximo passo:** F3 (instalador e boot até a tela de título).
