@@ -301,8 +301,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `ppcintrinsics.h` (o `cl` o aceitou como função implícita e virou stub no link).
 - **Link do XDK:** `-DEBUG` liga o ICF junto com `-OPT:REF`, e funções iguais (umas 170 vazias)
   passam a ter o mesmo endereço; o jogo compara ponteiros de função. Use `-OPT:REF,NOICF`.
-- **FATX:** arquivo não fechado guarda o tamanho e não os bytes (o `saida.txt` da 1ª rodada da F2
-  voltou com 46 zeros, mesmo sem buffer). Feche os arquivos na saída; o log usa `FlushFileBuffers`.
+- **Arquivo sem buffer na CRT do 360:** o `saida.txt` aberto com `setvbuf(_IONBF)` voltou duas vezes
+  com o tamanho certo e só zeros, mesmo fechado no fim; o `hash.txt`, com buffer, chegou certo. Use
+  buffer e `fflush` (hipótese da F3, a confirmar na próxima rodada); o log usa `WriteFile` e
+  `FlushFileBuffers`.
+- **`wsl.sh enviar` recusado** (commit ainda não enviado ao GitHub) não para um `enviar | tail && ...`:
+  o status do pipe é o do `tail`, e o resto roda com a árvore velha do WSL. Faça push antes e confira a
+  linha "WSL em <commit>".
+- **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
+- **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
+  trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
 - **Relógio:** `QueryPerformanceCounter * 1e9` passa de 64 bits uns 6 minutos depois do boot
   (50 MHz). Divida antes: segundos e resto.
 - **Console:**

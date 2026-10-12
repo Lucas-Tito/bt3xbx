@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -701,9 +702,19 @@ NAO_RASTREAR static void despejar_visoes(void) {
     fprintf(stderr, "visões: %u pares (função que gravou, função que leu) em %s\n", n, caminho);
 }
 
+/* `timeout` encerra com SIGTERM, que não passa pelo atexit: sem isto um rastreio limitado por tempo (os menus
+   rodam em ciclo, sem fim próprio) perderia tudo. exit() chama os despejos. */
+NAO_RASTREAR static void ao_terminar(int sinal) {
+    (void)sinal;
+    exit(0);
+}
+
 __attribute__((constructor)) NAO_RASTREAR static void iniciar(void) {
     sAtivo = getenv("BT3_RASTREIO") != NULL;
     sVisoes = getenv("BT3_VISOES") != NULL;
+    if (sAtivo || sVisoes) {
+        signal(SIGTERM, ao_terminar);
+    }
     if (sAtivo) {
         marcar_elf();
         atexit(despejar);
