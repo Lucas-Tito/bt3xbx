@@ -260,7 +260,11 @@ int __wrap_main(int argc, char **argv) {
 
 /* Set to 1 in the file by strip_data.py: this program does not work without its list. (2, not 0: it has to be in
    the file, not in the zero-filled part of memory.) */
+#if defined(PORT_X360)
+volatile uint32_t gPortDataStripped = 1; /* the .xex is signed and packed: it is marked here, not in the file */
+#else
 volatile uint32_t gPortDataStripped = 2;
+#endif
 
 static uint8_t *read_file(const char *path, size_t *size) {
     FILE *fp = fopen(path, "rb");
@@ -626,6 +630,14 @@ __attribute__((constructor)) static void Port_MapMemory(void) {
         ExitProcess(4);
     }
 #endif
+#ifdef PORT_X360
+    /* On the 360 the low addresses are handed out from the bottom up: reserve the game's regions before the load
+       below allocates megabytes, or the CRT's heap may take them. */
+    gPortStage = "reserving the game's memory";
+    map_heap();
+    map(0x10000000u, 0x10000, "the hardware registers");
+    map(0x12000000u, 0x2000, "the GS registers");
+#endif
     gPortStage = "reading the game's programs from gamedata";
     Port_LoadGameData();
     gPortStage = "reserving the game's memory";
@@ -638,10 +650,10 @@ __attribute__((constructor)) static void Port_MapMemory(void) {
 #if defined(__x86_64__) && defined(_WIN32)
     low_region_take();
 #endif
+#ifndef PORT_X360
     map_heap();
     map(0x10000000u, 0x10000, "the hardware registers");
     map(0x12000000u, 0x2000, "the GS registers");
-#ifndef PORT_X360
     map(0x70000000u, 0x4000, "the scratchpad");
 #endif
     gPortStage = "memory ready, before the program's main";
