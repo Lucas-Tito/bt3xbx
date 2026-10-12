@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Envia arquivos ao console pelo FTP da FreeStyle e confere o md5 de volta.
 
-Uso: subir.py [--ip IP] [--destino /Hdd1/HOMEBREW/bt3xbx] ARQUIVO...
+Uso: subir.py [--ip IP] [--destino /Hdd1/HOMEBREW/bt3xbx] [--nome NOME] ARQUIVO...
      subir.py [--ip IP] --baixar NOME [--destino ...]       (ex.: o log bt3xbx.log)
      subir.py --achar                                       (só procura o console)
 
@@ -103,24 +103,39 @@ def garantir_pasta(f, destino):
             f.cwd(parte)
 
 
-def subir(f, caminho):
-    nome = os.path.basename(caminho)
-    dados = open(caminho, "rb").read()
-    md5 = hashlib.md5(dados).hexdigest()
+class ComMd5:
+    """Lê o arquivo em fluxo (a ISO tem 3 GB) e calcula o md5 do que passou."""
+    def __init__(self, arq):
+        self.arq, self.md5, self.n = arq, hashlib.md5(), 0
+
+    def read(self, n=-1):
+        b = self.arq.read(n)
+        self.md5.update(b)
+        self.n += len(b)
+        return b
+
+
+def subir(f, caminho, nome=None):
+    nome = nome or os.path.basename(caminho)
+    if len(nome) > 42:
+        sys.exit(f"{nome}: o FATX aceita nome de até 42 caracteres (use --nome)")
     # nome único: um envio abortado tranca o temporário até a sessão cair
-    temporario = f"{nome}.{os.getpid()}.{int(time.time())}.tmp"
-    f.storbinary(f"STOR {temporario}", io.BytesIO(dados))
+    temporario = f"{nome[:20]}.{os.getpid()}.{int(time.time())}.tmp"
+    with open(caminho, "rb") as arq:
+        fonte = ComMd5(arq)
+        f.storbinary(f"STOR {temporario}", fonte, blocksize=1 << 20)
+    md5, tamanho = fonte.md5.hexdigest(), fonte.n
     try:
         f.sendcmd(f"DELE {nome}")
     except ftplib.error_perm:
         pass  # não existia
     f.sendcmd(f"RNFR {temporario}")
     f.sendcmd(f"RNTO {nome}")
-    volta = io.BytesIO()
-    f.retrbinary(f"RETR {nome}", volta.write)
-    if hashlib.md5(volta.getvalue()).hexdigest() != md5:
+    volta = hashlib.md5()
+    f.retrbinary(f"RETR {nome}", volta.update, blocksize=1 << 20)
+    if volta.hexdigest() != md5:
         sys.exit(f"ERRO: {nome} chegou diferente no console")
-    avisar(f"ok  {nome}  {len(dados)} bytes  md5 {md5}")
+    avisar(f"ok  {nome}  {tamanho} bytes  md5 {md5}")
 
 
 def existentes(f):
@@ -156,6 +171,7 @@ def main():
     ap.add_argument("--achar", action="store_true")
     ap.add_argument("--baixar")
     ap.add_argument("--listar", action="store_true")
+    ap.add_argument("--nome", help="nome no console (um arquivo só; o FATX aceita até 42 caracteres)")
     ap.add_argument("arquivos", nargs="*")
     a = ap.parse_args()
 
@@ -172,8 +188,10 @@ def main():
             f.retrlines("LIST")
         if a.baixar:
             sys.stdout.buffer.write(baixar(f, a.baixar))
+        if a.nome and len(a.arquivos) != 1:
+            sys.exit("--nome vale para um arquivo só")
         for caminho in a.arquivos:
-            subir(f, caminho)
+            subir(f, caminho, a.nome)
     finally:
         f.close()  # nunca quit(): o servidor não responde ao QUIT
 
