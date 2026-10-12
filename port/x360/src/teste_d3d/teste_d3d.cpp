@@ -10,7 +10,8 @@
  *     desligado. O que estiver nítido diz a convenção certa; o outro sai cinza;
  *   - shaders do fxc do XDK (compilados no build, port/x360/tools/build_teste_d3d.sh), nunca no boot;
  *   - a thread de desenho nunca para (a Guide congela o console se parar).
- * No quadro 120 a tela vai para game:\tela.bmp (resolve para textura linear), e o log diz o que foi feito.
+ * No quadro 120 a tela vai para game:\tela.bmp, e o log diz o que foi feito. A referência que não depende de textura
+ * nem de shader: um retângulo vermelho puro feito só com Clear, embaixo à esquerda.
  * Qualquer botão volta ao dashboard.
  */
 #include <xtl.h>
@@ -76,16 +77,16 @@ static unsigned Quadrantes(int x, int y) {
 static unsigned Xadrez(int x, int y) { return ((x ^ y) & 1) ? Rgba(255, 255, 255, 255) : Rgba(0, 0, 0, 255); }
 static unsigned Branco(int x, int y) { (void)x; (void)y; return Rgba(255, 255, 255, 255); }
 
-/* A tela resolvida para uma textura e gravada em BMP (little-endian, 24 bits, de baixo para cima). O resolve entrega
-   a memória em blocos (tiled) mesmo numa textura LIN_ (medido no console): cada pixel se lê pelo
-   XGAddress2DTiledOffset. */
+/* A tela resolvida para uma textura e gravada em BMP (little-endian, 24 bits, de baixo para cima). O destino do
+   Resolve tem de ser textura tiled (documentação do XDK, IDirect3DDevice9::Resolve: "4 KB-aligned and tiled"); cada
+   pixel se lê pelo XGAddress2DTiledOffset, com a largura já múltipla de 32. */
 static void Print(const char *caminho) {
     D3DTexture *t = NULL;
     D3DLOCKED_RECT r;
     HANDLE h;
     DWORD n;
     const int W = 1280, H = 720;
-    if (FAILED(gDev->CreateTexture(W, H, 1, 0, D3DFMT_LIN_A8R8G8B8, D3DPOOL_DEFAULT, &t, NULL))) {
+    if (FAILED(gDev->CreateTexture(W, H, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &t, NULL))) {
         Diario_Escrever("ERRO: textura do print");
         return;
     }
@@ -179,6 +180,10 @@ void __cdecl main() {
         /* pixels do GS -> clip: x / 640 - 1, 1 - y / 360 */
         const float escala[4] = {2.0f / 1280.0f, -2.0f / 720.0f, -1.0f, 1.0f};
         gDev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(40, 40, 48), 1.0f, 0);
+        {
+            D3DRECT ref = {80, 480, 400, 640};
+            gDev->Clear(1, &ref, D3DCLEAR_TARGET, D3DCOLOR_XRGB(255, 0, 0), 1.0f, 0);
+        }
         gDev->SetVertexDeclaration(decl);
         gDev->SetVertexShader(vs);
         gDev->SetPixelShader(ps);

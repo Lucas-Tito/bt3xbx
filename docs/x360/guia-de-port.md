@@ -80,6 +80,7 @@ própria só para isso). Para cá só volta texto.
 | `c89.py` | rebaixa o C do jogo e do port para o C89 do `cl` pelo AST do clang (literal composto, declaração no meio do bloco, `typeof`, expressão-comando, case com intervalo), com os headers mínimos de `port/x360/shim` |
 | `coff.py` | as tabelas do executável (esqueleto `port/data/*.s`) como objetos COFF do 360; `--absoluto NOME=VALOR` faz o papel do `--defsym` |
 | `dat360.py` | `default.dat` e `default.swap` ao lado do `.xex`, pelo `.map` da Microsoft (o `esqueleto()` do `headless.py` para o 360) |
+| `subir_f2.sh` | envia o `.xex` sempre junto com o `.dat` e o `.swap` da mesma build: os dois dependem dos endereços do `.map`, e um par de outra build copia as tabelas para o lugar errado sem erro nenhum |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
 ### Builds de teste da ordem de bytes (F1, rodam no WSL)
@@ -317,12 +318,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **D3D9 do Xenos, medido no console (F3, `port/x360/src/teste_d3d`):**
   - `D3DFMT_LIN_A8B8G8R8` recebe o u32 nativo `R | G<<8 | B<<16 | A<<24` do `gs_draw.c` sem troca;
   - cor de vértice `UBYTE4N` com os bytes r, g, b, a na memória chega ao shader como (a, b, g, r):
-    inverta com `.wzyx` no shader;
+    o tipo é `x | y<<8 | z<<16 | w<<24` sobre o u32 (`MakeUBYTE4` na documentação). Inverta com `.wzyx`
+    no shader; a alternativa na declaração (`MAKED3DDECLTYPE` com outro swizzle, `d3d9types.h`) não foi
+    medida;
   - `D3DRS_HALFPIXELOFFSET` ligado dá centros de pixel em .5, como GL e Vulkan (xadrez de 1 pixel nítido;
     desligado sai cinza);
-  - `Resolve` para textura `LIN_` entrega a memória em blocos (tiled): leia com `XGAddress2DTiledOffset`;
+  - o destino do `Resolve` tem de ser textura tiled (documentação: "4 KB-aligned and tiled"); a primeira
+    versão usou `LIN_`, e o resultado veio em blocos e fora do contrato. Leia com `XGAddress2DTiledOffset`
+    ou `XGUntileTextureLevel`;
   - o `fxc` do XDK roda no wine e gera o microcódigo (`xvs_3_0`) em header: shaders só no build.
-  - Um print da tela gravado pelo próprio programa (`tela.bmp`) dispensa descrição do usuário.
+  - Um print da tela gravado pelo próprio programa (`tela.bmp`) dispensa descrição do usuário, desde que
+    tenha uma referência que não dependa do que se testa (um retângulo de `Clear` com cor pura).
 - **`wsl.sh enviar` recusado** (commit ainda não enviado ao GitHub) não para um `enviar | tail && ...`:
   o status do pipe é o do `tail`, e o resto roda com a árvore velha do WSL. Faça push antes e confira a
   linha "WSL em <commit>".
