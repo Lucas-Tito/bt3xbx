@@ -84,8 +84,11 @@ def achar():
 def conectar(ip):
     for tentativa in range(4):
         try:
-            f = ftplib.FTP(ip, timeout=180)  # o servidor da FreeStyle para por dezenas de segundos em arquivo grande
+            f = ftplib.FTP(ip, timeout=20)
             f.login(USUARIO, SENHA)
+            # depois de conectar: o servidor da FreeStyle para por dezenas de segundos no meio de arquivo grande
+            f.timeout = 180
+            f.sock.settimeout(180)
             return f
         except Exception as e:
             avisar(f"conexão falhou ({e}); tentando de novo em 10 s")
@@ -120,7 +123,7 @@ def subir(f, caminho, nome=None):
     if len(nome) > 42:
         sys.exit(f"{nome}: o FATX aceita nome de até 42 caracteres (use --nome)")
     # nome único: um envio abortado tranca o temporário até a sessão cair
-    temporario = f"{nome[:20]}.{os.getpid()}.{int(time.time())}.tmp"
+    temporario = f"{nome[:15]}.{os.getpid() % 100000}.{int(time.time())}.tmp"  # até 42 caracteres (FATX)
     with open(caminho, "rb") as arq:
         fonte = ComMd5(arq)
         f.storbinary(f"STOR {temporario}", fonte, blocksize=1 << 20)
