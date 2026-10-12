@@ -452,9 +452,12 @@ NAO_RASTREAR static void resolver(void) {
     }
 }
 
+NAO_RASTREAR static void talvez_parar(void);
+
 NAO_RASTREAR static void ler(uint32_t addr, uint32_t size, uint32_t pc) {
     int i, sus;
     Visao v;
+    talvez_parar();
     resolver();
     sus = forma_lida(addr, size, pc, &v);
     /* com o detector ligado, toda leitura entra no anel: é assim que uma cópia (struct inteira copiada palavra
@@ -481,6 +484,7 @@ NAO_RASTREAR static void ler(uint32_t addr, uint32_t size, uint32_t pc) {
 
 NAO_RASTREAR static void gravar(uint32_t addr, uint32_t size, uint32_t pc) {
     int k;
+    talvez_parar();
     resolver();
     forma_gravada(addr, size, pc);
     if (!sAtivo && !sVisoes) {
@@ -703,17 +707,34 @@ NAO_RASTREAR static void despejar_visoes(void) {
 }
 
 /* `timeout` encerra com SIGTERM, que não passa pelo atexit: sem isto um rastreio limitado por tempo (os menus
-   rodam em ciclo, sem fim próprio) perderia tudo. exit() chama os despejos. */
+   rodam em ciclo, sem fim próprio) perderia tudo. O tratador só marca: exit() dentro do sinal podia travar (o sinal
+   cai no meio de um malloc, e o despejo faz fopen) ou reentrar. Quem sai é ler()/gravar(), que só rodam a partir do
+   código instrumentado do jogo, nunca de dentro da libc. O alarme é a rede: se o jogo não ler nem gravar em 10 s
+   (parado numa chamada de sistema), o SIGALRM encerra sem despejo em vez de deixar o timeout esperando. */
+static volatile sig_atomic_t sParar;
+
 NAO_RASTREAR static void ao_terminar(int sinal) {
     (void)sinal;
-    exit(0);
+    sParar = 1;
+    alarm(10);
+}
+
+NAO_RASTREAR static void talvez_parar(void) {
+    if (sParar == 1) {
+        sParar = 2; /* uma vez só: o exit não volta aqui */
+        exit(0);
+    }
 }
 
 __attribute__((constructor)) NAO_RASTREAR static void iniciar(void) {
     sAtivo = getenv("BT3_RASTREIO") != NULL;
     sVisoes = getenv("BT3_VISOES") != NULL;
     if (sAtivo || sVisoes) {
-        signal(SIGTERM, ao_terminar);
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = ao_terminar;
+        sa.sa_flags = SA_RESETHAND; /* um segundo SIGTERM encerra na hora */
+        sigaction(SIGTERM, &sa, NULL);
     }
     if (sAtivo) {
         marcar_elf();
