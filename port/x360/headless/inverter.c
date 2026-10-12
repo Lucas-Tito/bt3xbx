@@ -10,11 +10,18 @@
  *
  * BT3_CONVERTIDOS=<lista>: arquivos que já vêm convertidos por formato (port/x360/conv, conv_tool --saida);
  * neles o mapa não se aplica. Assim os conversores entram um formato por vez, e o mapa cobre o resto.
+ *
+ * Com a lista, um arquivo que tem conversor (Conv_FormatoDe) mas não está nela nem no mapa chegaria cru, little-endian,
+ * e o jogo cairia mais adiante num lugar sem relação (a tela de carregamento 00960, fora da lista tirada do rastreio,
+ * derrubou o Bpe_Decode milhares de quadros depois do ponto comparado). No 360 isso não acontece (iso360.c converte
+ * todo arquivo que tem conversor ao abrir); aqui a leitura para na hora, com o nome do arquivo.
  */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+const char *Conv_FormatoDe(const char *nome); /* port/x360/conv/conv.c */
 
 typedef struct Trecho { uint32_t ofs, n; uint8_t w; } Trecho;
 typedef struct Mapa { char *nome; Trecho *t; uint32_t n, cap; } Mapa;
@@ -135,6 +142,11 @@ size_t __wrap_Port_FileReadAt(const char *rel, long offset, void *buf, size_t by
     if (getenv("BT3_INVERTER_LOG") != NULL) {
         fprintf(stderr, "inverter: leu %s +0x%lX -> %p (%u bytes)%s\n", rel, offset, buf, (unsigned)got,
                 achar(rel, 0) == NULL ? " SEM MAPA" : "");
+    }
+    if (got > 0 && sConvN > 0 && !convertido(rel) && achar(rel, 0) == NULL && Conv_FormatoDe(rel) != NULL) {
+        fprintf(stderr, "inverter: %s tem conversor (%s) e não está em BT3_CONVERTIDOS nem no mapa: chegaria cru\n", rel,
+                Conv_FormatoDe(rel));
+        abort();
     }
     if (got > 0) {
         aplicar(rel, (uint32_t)offset, buf, (uint32_t)got);
