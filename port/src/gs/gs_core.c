@@ -1204,7 +1204,12 @@ const char *Port_GetEnv(const char *name) {
 }
 /* Each place a variable is asked for remembers its answer (the names are literals; the environment does not
    change while the game runs). Asked in the middle of drawing, the search in Port_GetEnv was 3% of a frame. */
+#ifdef PORT_X360 /* the Xbox 360's compiler is C89 (no statement expressions); see gs_internal.h */
+#undef getenv
+#define getenv(name) Port_GetEnv(name)
+#else
 #define getenv(name) (__extension__({ static const char *v_; static int k_; if (!k_) { v_ = Port_GetEnv(name); k_ = 1; } v_; }))
+#endif
 
 /* Which renderer: BT3_GS = "gpu" (the window), "1" (the software reference), "none" (nothing is drawn: tests).
    Without the variable a release program opens its window, so that it can be started by a double click; a

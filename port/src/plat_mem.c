@@ -32,7 +32,28 @@ const char *volatile gPortStage = "starting";
    restore must leave alone. */
 static uint8_t *sGameStackTop;
 
-#ifdef _WIN32
+#if defined(PORT_X360)
+/* ------------------------------------------------------------------------------------------------------ Xbox 360
+   (port/x360) Pointers are 4 bytes and the address space below 0x40000000 is free, so the regions go at their PS2
+   addresses as on 32-bit Linux. Not the scratchpad: 0x70000000 is where the console puts the threads' stacks, and
+   in the port the game does not use it (only gs/state.c, which the 360 replaces). There are no constructors and no
+   --wrap: port/x360/src/main360.c calls Port_MapMemory and then the game's main on a thread of its own. */
+void *Port_X360Reserve(uint32_t addr, uint32_t size); /* port/x360/src/main360.c: VirtualAlloc at that address */
+
+static void map(uint32_t addr, uint32_t size, const char *what) {
+    uint32_t base = addr & ~0xFFFFu; /* reservations start on 64 KB boundaries */
+
+    if (Port_X360Reserve(base, size + (addr - base)) != (void *)(uintptr_t)base) {
+        fprintf(stderr, "bt3: cannot reserve %s at 0x%08X\n", what, addr);
+        exit(2);
+    }
+}
+
+static void map_heap(void) {
+    map(HEAP_BASE, HEAP_END - HEAP_BASE, "the game heap");
+}
+
+#elif defined(_WIN32)
 #include <direct.h> /* chdir */
 /* ------------------------------------------------------------------------------------------------------ Windows
    The same needs, with Windows' means (the 64-bit build only; its pointers are 4 bytes wide, see ptr32.py):
@@ -362,7 +383,9 @@ static void Port_LoadGameData(void) {
     size_t listSize = 0, elfSize = 0, srcSize[2] = {0, 0};
     uint64_t hash = 0xCBF29CE484222325ull, want;
     uint32_t count, i, k;
-#ifdef _WIN32
+#if defined(PORT_X360)
+    long n = (long)strlen(strcpy(exe, "game:\\default")); /* the .xex's folder; its list and map are next to it */
+#elif defined(_WIN32)
     long n = (long)GetModuleFileNameA(NULL, exe, sizeof(exe) - 1);
 #else
     long n = (long)readlink("/proc/self/exe", exe, sizeof(exe) - 1);
@@ -579,8 +602,12 @@ void Port_HeapRegion(uint8_t **base, uint32_t *size) {
 #if defined(__x86_64__)
 static void low_region_take(void);
 #endif
+#ifdef PORT_X360
+void Port_MapMemory(void) { /* called by port/x360/src/main360.c before the game's main */
+#else
 __attribute__((constructor)) static void Port_MapMemory(void) {
-#ifdef _WIN32
+#endif
+#if defined(_WIN32) && !defined(PORT_X360)
     /* The program only works at the address it was linked for (the game's pointers are 4 bytes and absolute). It
        carries no relocation table, so Windows has to load it there; should it be somewhere else all the same (a
        system set to move every program, "Mandatory ASLR", moved builds that still had the table: a crash at the
@@ -614,7 +641,9 @@ __attribute__((constructor)) static void Port_MapMemory(void) {
     map_heap();
     map(0x10000000u, 0x10000, "the hardware registers");
     map(0x12000000u, 0x2000, "the GS registers");
+#ifndef PORT_X360
     map(0x70000000u, 0x4000, "the scratchpad");
+#endif
     gPortStage = "memory ready, before the program's main";
 }
 

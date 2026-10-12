@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-"""F2: prepara cada fonte do jogo para o cl.exe do XDK, que em modo C (-TC) é C89 e não conhece as extensões do GCC.
+"""F2: prepara cada fonte do jogo e do port para o cl.exe do XDK, que em modo C (-TC) é C89 e não conhece as extensões
+do GCC.
 
-    c89.py SAIDA [FONTE...]       (roda na imagem bt3xbx-ferramentas, na raiz do repositório; sem FONTE, todos)
+    c89.py SAIDA [--grupo G] [FONTE...]   (na imagem bt3xbx-ferramentas, na raiz do repositório)
+
+Sem FONTE, todos os fontes da build sem janela do 360 (F2), por grupo, como a build PowerPC da F1
+(port/x360/tools/headless.py): o jogo, a biblioteca matemática do PS2 (newlib), o GS sem janela, a camada do port e
+os stubs sem janela. O que o 360 substitui por versão própria (port/x360/src) fica de fora.
 
 Para cada fonte do jogo (a lista e a preparação do port de PC: port/tools/portsrc.py), escreve SAIDA/<nome>.c, um
 C autocontido que o cl compila sem headers:
@@ -20,13 +25,53 @@ import eeconst, portsrc  # noqa: E402
 
 CLANG = os.environ.get("CLANG", "clang")
 DEFS = ["-DPORT_BIG_ENDIAN", "-DPORT_X360", "-D_XBOX"]
+I = lambda p: "-I" + str(ROOT / p)  # noqa: E731
+
+# O que o 360 troca por versão própria em port/x360/src (o resto de port/src e de port/src/gs entra como está).
+SUBSTITUIDOS = {"plat_crash", "plat_libm", "softfloat_ps2", "plat_fastvec", "state"}
+GS_SEM_JANELA = {"gs_core", "gs_sony", "gs_vu1", "namefont", "snd_adx", "snd_se"}  # e state.c (substituído)
 
 
-def preprocessar(src, f):
-    cmd = [CLANG, "-E", "--target=powerpc-unknown-unknown", "-m32", "-std=gnu89", "-fsigned-char", "-nostdinc",
-           "-isystem", str(ROOT / "port/x360/shim"), "-fno-builtin"] + DEFS + \
-          ["-include", "port_libm.h", "-I" + str(ROOT / "include"), "-I" + str(ROOT / "port/include"),
-           "-include", "port_compat.h", "-I" + str(f.parent), str(src)]
+def renomes(f):
+    """O linker da Microsoft não tem --wrap: o embrulho de main e de Progress_Main (port/src/plat_mem.c e
+    port/src/headless.c no PC) vira renomeação na preparação."""
+    rel = str(f.relative_to(ROOT))
+    if rel == "src/main.c":
+        return ["-Dmain=__real_main", "-DProgress_Main=__wrap_Progress_Main"]
+    if rel == "src/menu/menu_a_b.c":
+        return ["-DProgress_Main=__real_Progress_Main"]
+    return []
+
+
+def grupos():
+    """[(nome do grupo, fonte, flags do clang, aplica eeconst)] da build sem janela do 360."""
+    out = []
+    for f in portsrc.sources():
+        out.append(("", f, ["-std=gnu89", "-include", "port_libm.h", I("include"), I("port/include"),
+                            "-include", "port_compat.h", "-I" + str(f.parent)] + renomes(f), True))
+    for f in sorted((ROOT / "port/third_party/newlib_libm").glob("*.c")):
+        out.append(("nl_", f, ["-std=gnu89", I("port/include"), "-I" + str(f.parent), "-include", "newlib_shim.h"], True))
+    for f in sorted((ROOT / "port/src/gs").glob("*.c")):
+        if f.stem in GS_SEM_JANELA:
+            out.append(("gs_", f, ["-std=gnu99", I("port/x360/headless"), I("port/src/gs")], False))
+    vu0 = ["-include", "vu0_names.h", "-DREF_VU0_EXTERN_ARITH"]
+    for f in [ROOT / "src/port/vu0_a.c", ROOT / "src/port/vu0_b.c"] + sorted((ROOT / "port/src").glob("*.c")):
+        if f.stem in SUBSTITUIDOS:
+            continue
+        nomes = f.parent.name == "port" and f.parent.parent.name == "src"
+        # port/x360/src/hw antes de port/src: o softfloat_ps2_inl.h do 360 faz a aritmética pela FPU
+        base = ["-std=gnu99", I("include"), I("port/include"), I("port/x360/src/hw"), I("port/src"),
+                I("port/x360/headless")]
+        extra = vu0 if nomes else ["-DSF_FAST_CALLS", "-include", "math.h", "-include", "stdlib.h",
+                                   "-include", "port_libm.h"]
+        out.append(("pc_", f, base + extra, not nomes))
+    out.append(("hl_", ROOT / "port/x360/headless/sem_janela.c", ["-std=gnu99", I("port/x360/headless")], False))
+    return out
+
+
+def preprocessar(src, f, flags):
+    cmd = [CLANG, "-E", "--target=powerpc-unknown-unknown", "-m32", "-fsigned-char", "-nostdinc",
+           "-isystem", str(ROOT / "port/x360/shim"), "-fno-builtin"] + DEFS + flags + [str(src)]
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
     if r.returncode:
         raise RuntimeError(r.stderr.strip()[-600:])
@@ -382,7 +427,11 @@ def rebaixar(texto):
                 andar(c, caminho + [n])
 
     andar(raiz, [])
-    # todo __attribute__((...)) e __asm__("nome") de declaração sai do texto
+    # todo __attribute__((...)) e __asm__("nome") de declaração sai do texto; construtor não pode sumir calado
+    # (o C da Microsoft não roda função antes do main: quem precisa é chamado pelo main do 360)
+    m = re.search(r"__attribute__\s*\(\(\s*(constructor|destructor)", texto)
+    if m:
+        raise ValueError("%s: o 360 não roda isso sozinho; chame do main (port/x360/src)" % m.group(1))
     for m in re.finditer(r"\b__attribute__\b", texto):
         r.apaga(m.start(), fim_atributo(texto, m.start()))
     for m in re.finditer(r'\b__asm__\s*\(\s*"[A-Za-z_]\w*"\s*\)', texto):
@@ -390,34 +439,55 @@ def rebaixar(texto):
     return PRELUDIO + "\n".join(sorted(set(pragmas))) + "\n" + r.aplica()
 
 
-def preparar(f, saida):
-    src, _, _ = portsrc.prepare(f)
-    texto = preprocessar(src, f)
-    texto = eeconst.transform(texto)
+FMAX_LIT = re.compile(r'"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|(?<![\w.])(\d+\.\d*|\.\d+)[eE]\+?38[fF]\b')
+
+
+def float_max(texto):
+    """Literal float acima do maior float que arredonda para ele (3.4028235e38f): o cl 2010 recusa o decimal acima de
+    FLT_MAX; vira o valor exato do float. Strings ficam como estão."""
+    def troca(m):
+        if m.group(1) is None:
+            return m.group(0)
+        v = struct.unpack(">f", struct.pack(">f", float(m.group(0)[:-1])))[0]
+        if abs(v) == 3.4028234663852886e38:  # o FLT_MAX do float.h da Microsoft: abaixo do exato, mesmo float
+            return "3.402823466e+38f"
+        return "%.9gf" % v
+    return FMAX_LIT.sub(troca, texto)
+
+
+def preparar(grupo, f, flags, ee, saida):
+    src = portsrc.prepare(f)[0] if f.is_relative_to(ROOT / "src") and f.parent.name != "port" else f
+    texto = preprocessar(src, f, flags)
+    if ee:
+        texto = eeconst.transform(texto)
     texto = rebaixar(texto)
     texto = HEXF.sub(decimal, texto)
+    texto = float_max(texto)
     texto = linhas(texto)
-    nome = str(f.relative_to(ROOT / "src")).replace("/", "_")
+    nome = grupo + (str(f.relative_to(ROOT / "src")).replace("/", "_") if not grupo else f.name)
     (saida / nome).write_text(texto)
     return nome
 
 
 def um(args):
-    f, saida = args
+    grupo, f, flags, ee, saida = args
     try:
-        return f, preparar(f, saida), None
+        return f, preparar(grupo, f, flags, ee, saida), None
     except Exception as e:  # noqa: BLE001 (o relatório diz qual fonte e por quê)
         return f, None, str(e)
 
 
 def main():
-    if len(sys.argv) < 2:
+    a = sys.argv[1:]
+    if not a:
         sys.exit(__doc__)
-    saida = ROOT / sys.argv[1]
+    saida = ROOT / a[0]
     saida.mkdir(parents=True, exist_ok=True)
-    fontes = [ROOT / a for a in sys.argv[2:]] or portsrc.sources()
+    so = a[a.index("--grupo") + 1] if "--grupo" in a else None
+    nomes = [x for x in a[1:] if not x.startswith("--") and x != so]
+    todos = [g for g in grupos() if (so is None or g[0] == so) and (not nomes or str(g[1].relative_to(ROOT)) in nomes)]
     with concurrent.futures.ProcessPoolExecutor(os.cpu_count()) as ex:
-        res = list(ex.map(um, [(f, saida) for f in fontes]))
+        res = list(ex.map(um, [g + (saida,) for g in todos]))
     falhas = [(f, e) for f, n, e in res if e]
     for f, e in falhas:
         print(f"FALHOU {f.relative_to(ROOT)}: {e[:300]}")

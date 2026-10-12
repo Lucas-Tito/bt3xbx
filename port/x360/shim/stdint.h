@@ -12,4 +12,8 @@ typedef int intptr_t;
 typedef unsigned int uintptr_t;
 #define INT32_MAX 0x7FFFFFFF
 #define UINT32_MAX 0xFFFFFFFFu
+#define INT32_MIN (-INT32_MAX - 1)
+#define INT16_MAX 0x7FFF
+#define INT16_MIN (-INT16_MAX - 1)
+#define UINT16_MAX 0xFFFF
 #endif
