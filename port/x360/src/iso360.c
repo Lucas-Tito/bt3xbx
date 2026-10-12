@@ -42,6 +42,13 @@ static Afs sAfs[3];
 static IsoArq sAbertos[MAX_ABERTOS];
 static char sNomeIso[512];
 
+static double ms_desde(LARGE_INTEGER antes) {
+    LARGE_INTEGER agora, f;
+    QueryPerformanceCounter(&agora);
+    QueryPerformanceFrequency(&f);
+    return (double)(agora.QuadPart - antes.QuadPart) * 1000.0 / (double)f.QuadPart;
+}
+
 static int ler(__int64 pos, void *buf, unsigned long n) {
     LARGE_INTEGER p;
     DWORD lidos = 0;
@@ -265,16 +272,23 @@ void *Iso_Abrir(const char *rel) {
     if (Conv_FormatoDe(rel) != NULL) {
         char msg[240];
         unsigned char *feito = (unsigned char *)calloc((size_t)tam + 1, 1);
+        LARGE_INTEGER t0;
+        double msLer;
+        QueryPerformanceCounter(&t0);
         r->dados = (unsigned char *)malloc((size_t)tam + 1);
         if (r->dados == NULL || feito == NULL || !ler(ini, r->dados, (unsigned long)tam)) {
             Diario_Escrever("iso: %s (%ld bytes): sem memória ou leitura falhou", rel, tam);
             Port_Abortar();
         }
+        msLer = ms_desde(t0);
+        QueryPerformanceCounter(&t0);
         if (Conv_Arquivo(rel, (conv_u8 *)r->dados, (conv_ofs)tam, feito, msg, sizeof(msg)) < 0) {
             Diario_Escrever("iso: conversão de %s: %s", rel, msg);
             Port_Abortar();
         }
         free(feito);
+        /* de onde vem a pausa da carga (decisão 18): leitura da ISO ou conversão */
+        Diario_Escrever("iso: %s, %ld bytes: leitura %.1f ms, conversão %.1f ms", rel, tam, msLer, ms_desde(t0));
     }
     return r;
 }

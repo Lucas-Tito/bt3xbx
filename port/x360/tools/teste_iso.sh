@@ -34,6 +34,8 @@ typedef struct { char cFileName[260]; } WIN32_FIND_DATA;
 #define FILE_ATTRIBUTE_NORMAL 0
 #define FILE_BEGIN 0
 #define InitializeCriticalSection(c) ((void)(c))
+static void QueryPerformanceCounter(LARGE_INTEGER *x) { x->QuadPart = 0; }
+static void QueryPerformanceFrequency(LARGE_INTEGER *x) { x->QuadPart = 1; }
 #define EnterCriticalSection(c) ((void)(c))
 #define LeaveCriticalSection(c) ((void)(c))
 #define GetLastError() 0u
