@@ -181,6 +181,12 @@ void Conv_BancoSom(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_FolhaBpe(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Folha(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Rosto(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuPacote(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuBpe(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuCartao(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuLogos(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuMcFlow(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuTitulo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
@@ -198,6 +204,13 @@ static const Formato sFormatos[] = {
     {"folha", Conv_Folha},                     /* 2.3: a folha descomprimida (em tempo de jogo) */
     {"rosto", Conv_Rosto},                     /* 3: rosto de membro */
     {"cenario", Conv_Cenario},                 /* cenario.md: pacote de 25 entradas do cenário da luta */
+    {"menu_pacote", Conv_MenuPacote},          /* menus.md 2: arquivo de menu (tabela de seções em BPE) */
+    {"menu_bpe", Conv_MenuBpe},                /* 3: recursos do cartão, um contêiner BPE inteiro */
+    /* menus.md 5: pacotes de tela descomprimidos, em tempo de jogo (Port_ConvertMenuPack, um por chamador) */
+    {"menu_cartao", Conv_MenuCartao},          /* 5.1: tela do cartão (BootCard_Init) */
+    {"menu_logos", Conv_MenuLogos},            /* 5.2: logos do boot (FirstRun_Main) */
+    {"menu_mcflow", Conv_MenuMcFlow},          /* 5.3: recursos do cartão (McFlow_Init) */
+    {"menu_titulo", Conv_MenuTitulo},          /* 5.4: tela de título (Title_Init) */
 };
 
 /* Que formato tem cada arquivo do disco. Os arquivos não dizem o próprio formato: vem de como o jogo escolhe o
@@ -231,6 +244,15 @@ static const char *formato_de(const char *nome) {
     }
     if (i >= 960 && i <= 962) {
         return "folha_bpe";
+    }
+    /* menus.md 1: arquivos de menu do caminho do boot ao título, ids a partir de MenuProgress.baseFile = 0x1C1:
+       + 1 (0x1C2, título e menu principal, Title_Init e MainMenu_Init) e + 0x19 (0x1DA, cartão e logos,
+       FirstRun_Main); 0x1DE é o de McFlow_Init (fileBase + 0x1D). Os outros arquivos de menu ainda não têm
+       especificação (menus.md 11). */
+    switch (i) {
+    case 0x1C2 - 1: case 0x1DA - 1: return "menu_pacote";
+    case 0x1DE - 1: return "menu_bpe";
+    default: break;
     }
     /* cenários (cenario.md, seção 1): BtlLoad_* pedem 0x171 + cenário (BTL_FILE_STAGE) ou 0x198 + cenário em tela
        dividida (BTL_FILE_STAGE_SPLIT), ShenScene 0x194 + dragão e ChrView 0x197; ids 0x171..0x1BE, índices

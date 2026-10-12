@@ -264,6 +264,13 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
   lista; e confira a estrutura (contagem da tabela) dentro do conversor.
 - A validação contra o rastreio tem três números: posições iguais, com outra largura, não trocadas. Todos os
   três importam; a cobertura de bytes diz o que o rastreio não viu.
+- Descompressor comum a dezenas de formatos (no BT3, o `Sprite_Unpack` dos menus, com mais de 80 chamadas): o gancho
+  fica em cada chamador, com o nome do formato, porque só quem chama sabe o que descomprimiu. A ferramenta de teste
+  repete essa escolha numa tabela (arquivo e seção para formato) e converte o conteúdo pelo nome que o rastreio dá
+  (`arquivo@0xDESL#bpe`), no `--mapa` e no `--disco`.
+- Fluxo de tags sem alinhamento (o Flash dos menus): percorra pelo mesmo caminho do leitor do jogo e exija que cada
+  bloco feche exatamente no tamanho declarado. É essa conferência que pega um passo de leitura errado, porque um
+  campo medido errado desalinha tudo o que vem depois.
 
 ### 5.6 Ligar leitura a tipo (`tipos.py`)
 

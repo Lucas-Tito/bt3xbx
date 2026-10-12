@@ -1,0 +1,473 @@
+/*
+ * Arquivos de menu do caminho do boot até a tela de título: o pacote externo de 00449 e 00473 (tabela de contêineres
+ * BPE), 00477 (um contêiner BPE inteiro) e, em tempo de jogo, os pacotes de tela que o jogo descomprime deles (cartão,
+ * logos, recursos do cartão, título), com as peças de dentro: arquivo de diálogo, filme Flash ("FOD") e tabela de
+ * textos. Especificação: docs/x360/formatos/menus.md (as seções citadas abaixo).
+ */
+#include "conv.h"
+#include "conv_pecas.h"
+
+/* entrada n de uma tabela já lida; b == a quando vazia */
+#define ENT(n) (base + ent[n]), (base + ent[(n) + 1])
+
+static void vazia(ConvCtx *c, const conv_u32 *ent, conv_u32 n) {
+    if (!c->erro && ent[n] != ent[n + 1]) {
+        Conv_Erro(c, "seção %lu: esperada vazia (sem leitor)", (unsigned long)n);
+    }
+}
+
+/* tabela de seções com exatamente `n` entradas (§2.1, a de personagem.md 2) */
+static int secoes(ConvCtx *c, conv_ofs base, conv_ofs tam, conv_u32 *ent, conv_u32 n, const char *oque) {
+    conv_u32 lidas = Conv_Tabela(c, base, tam, ent, n);
+    if (!c->erro && lidas != n) {
+        Conv_Erro(c, "%s com %lu seções (esperado %lu)", oque, (unsigned long)lidas, (unsigned long)n);
+    }
+    Conv_Onde(c, oque, 0); /* o nome do pacote vai junto com o erro (oque não tem formato) */
+    return !c->erro;
+}
+
+/* ------------------------------------------------------------------ no arquivo (§2, §3) */
+
+/* §2.2: um contêiner BPE em [a, b): rawSize e packSize (s32), o fluxo e a cauda em bytes (a cauda tem bytes não nulos
+   que o decodificador não lê, como em som-e-sprites.md 2.2) */
+static void contem_bpe(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    conv_u32 bruto, pack;
+    bruto = Conv_U32(c, a);
+    pack = Conv_U32(c, a + 4);
+    if (!c->erro && (bruto == 0 || 8 + (conv_ofs)pack > b - a)) {
+        Conv_Erro(c, "BPE em 0x%lX: 0x%lX bytes em 0x%lX de fluxo, contêiner de 0x%lX", (unsigned long)a,
+                  (unsigned long)bruto, (unsigned long)pack, (unsigned long)(b - a));
+        return;
+    }
+    Conv_Bytes(c, a + 8, b - a - 8);
+}
+
+/* §2: arquivo de menu (00449, 00473): tabela de seções, cada uma um contêiner BPE (MPACK_AT) */
+void Conv_MenuPacote(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    conv_u32 ent[0x40 + 2], n, i;
+    n = Conv_Tabela(c, base, tam, ent, 0x40);
+    for (i = 1; i <= n && !c->erro; i++) {
+        if (ent[i] != ent[i + 1]) {
+            contem_bpe(c, ENT(i));
+            Conv_Onde(c, "seção %lu", (unsigned long)i);
+        }
+    }
+}
+
+/* §3: 00477, o arquivo inteiro num contêiner BPE */
+void Conv_MenuBpe(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    if (tam < 8) {
+        Conv_Erro(c, "BPE de 0x%lX bytes", (unsigned long)tam);
+        return;
+    }
+    contem_bpe(c, base, base + tam);
+}
+
+/* ------------------------------------------------------------------ filme Flash (§7) */
+
+/* um byte em o, dentro de [.., fim); -1 (com erro) se passa */
+static int byte(ConvCtx *c, conv_ofs o, conv_ofs fim) {
+    if (c->erro) {
+        return -1;
+    }
+    if (o >= fim) {
+        Conv_Erro(c, "Flash: leitura em 0x%lX passa do bloco (0x%lX)", (unsigned long)o, (unsigned long)fim);
+        return -1;
+    }
+    Conv_Bytes(c, o, 1);
+    return c->erro ? -1 : c->buf[o];
+}
+
+/* u16 sem alinhamento em o, dentro de [.., fim) (o jogo lê por memcpy) */
+static conv_u32 u16(ConvCtx *c, conv_ofs o, conv_ofs fim) {
+    if (!c->erro && o + 2 > fim) {
+        Conv_Erro(c, "Flash: u16 em 0x%lX passa do bloco (0x%lX)", (unsigned long)o, (unsigned long)fim);
+    }
+    return c->erro ? 0 : Conv_U16(c, o);
+}
+
+/* §7.8: `n` bits a partir do bit `pos` de o, o mais alto primeiro (Flash_ReadBits); só para medir o campo */
+static conv_u32 bits(ConvCtx *c, conv_ofs o, conv_u32 pos, conv_u32 n, conv_ofs fim) {
+    conv_u32 v = 0, i;
+    if (c->erro || o + ((pos + n + 7) >> 3) > fim) {
+        Conv_Erro(c, "Flash: campo de bits em 0x%lX passa do bloco", (unsigned long)o);
+        return 0;
+    }
+    for (i = 0; i < n; i++) {
+        conv_u32 p = pos + i;
+        v = v << 1 | ((c->buf[o + (p >> 3)] >> (7 - (p & 7))) & 1);
+    }
+    return v;
+}
+
+/* §7.8: matriz (Flash_ReadMtx): byte de flags e campos de bits, tudo byte; devolve o fim */
+static conv_ofs matriz(ConvCtx *c, conv_ofs o, conv_ofs fim) {
+    static const conv_u8 par[3][3] = {{0x11, 1, 0x10}, {0x0A, 2, 8}, {0x24, 4, 0x20}};
+    int flags = byte(c, o, fim), k;
+    conv_u32 pos = 0, n;
+    for (k = 0; k < 3 && flags >= 0 && !c->erro; k++) {
+        if (flags & par[k][0]) {
+            n = bits(c, o + 1, pos, 5, fim);
+            pos += 5;
+            pos += (flags & par[k][1]) ? n : 0;
+            pos += (flags & par[k][2]) ? n : 0;
+        }
+    }
+    if (c->erro || o + 1 + ((pos + 7) >> 3) > fim) {
+        Conv_Erro(c, "Flash: matriz em 0x%lX passa do bloco", (unsigned long)o);
+        return o;
+    }
+    Conv_Bytes(c, o + 1, (pos + 7) >> 3);
+    return o + 1 + ((pos + 7) >> 3);
+}
+
+/* §7.8: transformação de cor (Flash_ReadCxform): byte de flags, largura em 4 bits e os campos, tudo byte */
+static conv_ofs cor(ConvCtx *c, conv_ofs o, conv_ofs fim) {
+    int flags = byte(c, o, fim), i;
+    conv_u32 pos = 0, n;
+    if (flags > 0) {
+        n = bits(c, o + 1, 0, 4, fim);
+        pos = 4;
+        for (i = 0; i < 8; i++) {
+            pos += ((flags >> i) & 1) ? n : 0;
+        }
+    }
+    if (c->erro || o + 1 + ((pos + 7) >> 3) > fim) {
+        Conv_Erro(c, "Flash: cor em 0x%lX passa do bloco", (unsigned long)o);
+        return o;
+    }
+    Conv_Bytes(c, o + 1, (pos + 7) >> 3);
+    return o + 1 + ((pos + 7) >> 3);
+}
+
+/* cadeia terminada em zero (Flash_ReadString), bytes; devolve o fim */
+static conv_ofs cadeia(ConvCtx *c, conv_ofs o, conv_ofs fim) {
+    conv_ofs z;
+    for (z = o; z < fim && !c->erro; z++) {
+        if (c->buf[z] == 0) {
+            Conv_Bytes(c, o, z + 1 - o);
+            return z + 1;
+        }
+    }
+    Conv_Erro(c, "Flash: cadeia em 0x%lX sem fim no bloco", (unsigned long)o);
+    return o;
+}
+
+/* §7.7: lista de ações (FlashTl_TagActions / FlashTl_SkipActions), até a ação 0 */
+static conv_ofs acoes(ConvCtx *c, conv_ofs o, conv_ofs fim) {
+    int a;
+    do {
+        a = byte(c, o, fim);
+        o++;
+        switch (a) {
+        case 0x81: /* GotoFrame: u16 quadro */
+            u16(c, o, fim);
+            o += 2;
+            break;
+        case 0x83: /* GetURL: duas cadeias */
+            o = cadeia(c, o, fim);
+            o = cadeia(c, o, fim);
+            break;
+        case 0x8A: /* WaitForFrame: 3 bytes que o jogo pula sem ler */
+            if (!c->erro && o + 3 > fim) {
+                Conv_Erro(c, "Flash: WaitForFrame em 0x%lX passa do bloco", (unsigned long)o);
+            } else {
+                Conv_Bytes(c, o, 3);
+            }
+            o += 3;
+            break;
+        case 0x8B: /* SetTarget */
+        case 0x8C: /* GotoLabel */
+            o = cadeia(c, o, fim);
+            break;
+        case 0: case 4: case 5: case 6: case 7: case -1:
+            break;
+        default:
+            Conv_Erro(c, "Flash: ação 0x%X em 0x%lX sem leitor", (unsigned)a, (unsigned long)(o - 1));
+            break;
+        }
+    } while (a > 0 && !c->erro);
+    return o;
+}
+
+/* §7.6: as tags de um quadro (FlashTl_RunFrame), de o até a ShowFrame (1), que tem de fechar o bloco em fim */
+static void tags_quadro(ConvCtx *c, conv_ofs o, conv_ofs fim) {
+    conv_u32 cod;
+    int flags, tipo;
+    do {
+        cod = u16(c, o, fim);
+        o += 2;
+        switch (cod) {
+        case 4: /* PlaceObject: u16 profundidade, u8 tipo, u16 id, matriz e (sprite) cor */
+            u16(c, o, fim);
+            tipo = byte(c, o + 2, fim);
+            u16(c, o + 3, fim);
+            o += 5;
+            if (tipo == 4) {
+                o = matriz(c, o, fim);
+            } else if (tipo == 6) {
+                o = matriz(c, o, fim);
+                o = cor(c, o, fim);
+            }
+            break;
+        case 26: /* PlaceObject2 */
+            flags = byte(c, o, fim);
+            u16(c, o + 1, fim);
+            o += 3;
+            if (flags < 0) {
+                break;
+            }
+            if (flags & 2) {
+                byte(c, o, fim);
+                u16(c, o + 1, fim);
+                o += 3;
+            }
+            if (flags & 4) {
+                o = matriz(c, o, fim);
+            }
+            if (flags & 8) {
+                o = cor(c, o, fim);
+            }
+            if ((flags & 2) && (flags & 0x20)) { /* o nome só se lê num objeto novo */
+                o = cadeia(c, o, fim);
+            }
+            break;
+        case 5: /* RemoveObject: u16 profundidade, u8 tipo, u16 id */
+            u16(c, o, fim);
+            byte(c, o + 2, fim);
+            u16(c, o + 3, fim);
+            o += 5;
+            break;
+        case 28: /* RemoveObject2: u16 profundidade */
+            u16(c, o, fim);
+            o += 2;
+            break;
+        case 12: /* DoAction */
+            o = acoes(c, o, fim);
+            break;
+        case 1: /* ShowFrame */
+            break;
+        default:
+            if (!c->erro) {
+                Conv_Erro(c, "Flash: tag de quadro %lu em 0x%lX sem leitor", (unsigned long)cod, (unsigned long)(o - 2));
+            }
+            break;
+        }
+    } while (cod != 1 && !c->erro);
+    if (!c->erro && o != fim) {
+        Conv_Erro(c, "Flash: quadro termina em 0x%lX, bloco em 0x%lX", (unsigned long)o, (unsigned long)fim);
+    }
+}
+
+/* §7.5: blocos nomeados de quadros (nome, u16 tamanho, tags) em [a, b), até o bloco de tamanho 0; o resto é zero */
+static void quadros(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    conv_ofs o = a, fim;
+    conv_u32 tam;
+    for (;;) {
+        o = cadeia(c, o, b);
+        tam = u16(c, o, b);
+        o += 2;
+        if (c->erro || tam == 0) {
+            break;
+        }
+        fim = o + tam;
+        if (fim > b) {
+            Conv_Erro(c, "Flash: quadro em 0x%lX de 0x%lX bytes passa do registro", (unsigned long)o, (unsigned long)tam);
+            break;
+        }
+        tags_quadro(c, o, fim);
+        o = fim;
+    }
+    Conv_Zeros(c, a, b, "fim da linha do tempo");
+}
+
+/* §7.3: cabeçalho de 8 bytes de uma tag ou de um registro (FlashTag): u8 código, u8, u16 contagem, u32 tamanho */
+static conv_u32 cabecalho(ConvCtx *c, conv_ofs o, conv_ofs fim, conv_u32 *cont) {
+    if (!c->erro && o + 8 > fim) {
+        Conv_Erro(c, "Flash: cabeçalho em 0x%lX passa do fim", (unsigned long)o);
+        return 0;
+    }
+    Conv_Bytes(c, o, 2);
+    *cont = Conv_U16(c, o + 2);
+    return Conv_U32(c, o + 4);
+}
+
+/* §7: filme Flash ("FOD" 0x11 "LIT") em [a, b) */
+static void flash(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    static const conv_u8 magia[8] = {'F', 'O', 'D', 0x11, 'L', 'I', 'T', 0};
+    conv_ofs o, r, fimtag;
+    conv_u32 cod, cont, tam, i, rcont, rtam;
+    if (!Conv_Cabe(c, a, 8, "Flash") || b - a < 16) {
+        Conv_Erro(c, "Flash em 0x%lX: seção curta", (unsigned long)a);
+        return;
+    }
+    for (i = 0; i < 8; i++) {
+        if (c->buf[a + i] != magia[i]) {
+            Conv_Erro(c, "Flash em 0x%lX: sem o cabeçalho FOD", (unsigned long)a);
+            return;
+        }
+    }
+    Conv_Bytes(c, a, 8);
+    for (o = a + 8; !c->erro; o = fimtag) {
+        if (o + 8 > b) {
+            Conv_Erro(c, "Flash em 0x%lX: sem a tag de fim", (unsigned long)a);
+            break;
+        }
+        cod = c->buf[o];
+        tam = cabecalho(c, o, b, &cont);
+        if (c->erro) {
+            break;
+        }
+        if (cod == 0) { /* fim da lista (Flash_FindTag) */
+            if (cont != 0 || tam != 0) {
+                Conv_Erro(c, "Flash em 0x%lX: tag de fim com dados", (unsigned long)a);
+            }
+            Conv_Zeros(c, o + 8, b, "Flash depois da tag de fim");
+            break;
+        }
+        fimtag = o + 8 + tam;
+        if (fimtag > b || fimtag < o) {
+            Conv_Erro(c, "Flash em 0x%lX: tag %lu de 0x%lX bytes passa do fim", (unsigned long)a, (unsigned long)cod,
+                      (unsigned long)tam);
+            break;
+        }
+        for (r = o + 8, i = 0; i < cont && !c->erro; i++) {
+            conv_ofs d, z;
+            rtam = cabecalho(c, r, fimtag, &rcont);
+            d = r + 8;
+            z = d + rtam;
+            if (c->erro || z > fimtag || z < d) {
+                Conv_Erro(c, "Flash em 0x%lX: registro %lu da tag %lu passa do fim", (unsigned long)a, (unsigned long)i,
+                          (unsigned long)cod);
+                break;
+            }
+            switch (cod) {
+            case 2: /* §7.4: lista de sprites: u16 id do registro da tag 6 */
+            case 3: /* imagem: u16 largura, u16 altura */
+                if (rtam != (cod == 2 ? 2u : 4u)) {
+                    Conv_Erro(c, "Flash em 0x%lX: registro da tag %lu com 0x%lX bytes", (unsigned long)a,
+                              (unsigned long)cod, (unsigned long)rtam);
+                    break;
+                }
+                Conv_U16s(c, d, rtam / 2);
+                break;
+            case 4: { /* forma: u16 n e n FlashShapeQuad (s16, u16, u32, 4 x s32), sem alinhamento */
+                conv_u32 n = u16(c, d, z), k;
+                if (!c->erro && rtam != 2 + n * 0x18) {
+                    Conv_Erro(c, "Flash em 0x%lX: forma %lu com %lu quadriláteros em 0x%lX bytes", (unsigned long)a,
+                              (unsigned long)i, (unsigned long)n, (unsigned long)rtam);
+                    break;
+                }
+                for (k = 0; k < n && !c->erro; k++) {
+                    conv_ofs q = d + 2 + k * 0x18;
+                    Conv_U16s(c, q, 2);     /* image, unk02 (sem leitor; u16 pela struct) */
+                    Conv_U32s(c, q + 4, 5); /* rgba, x0, x1, y0, y1 */
+                }
+                break;
+            }
+            case 6: /* §7.5: quadros de um sprite */
+            case 7: /* quadros da raiz */
+                quadros(c, d, z);
+                break;
+            default:
+                Conv_Erro(c, "Flash em 0x%lX: tag %lu sem leitor", (unsigned long)a, (unsigned long)cod);
+                break;
+            }
+            r = z;
+        }
+        if (!c->erro && r != fimtag) {
+            Conv_Erro(c, "Flash em 0x%lX: registros da tag %lu terminam em 0x%lX, a tag em 0x%lX", (unsigned long)a,
+                      (unsigned long)cod, (unsigned long)r, (unsigned long)fimtag);
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ diálogo (§6) */
+
+/* §6.4: tabela de textos (Dialog_GetTitleTable, DIALOG_TEXT): a tabela de §2.1 e um texto u16 por entrada */
+static void textos(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    static conv_u32 ent[0x100 + 2];
+    conv_u32 n, i;
+    n = Conv_Tabela(c, a, b - a, ent, 0x100);
+    for (i = 1; i <= n && !c->erro; i++) {
+        Conv_Texto(c, a + ent[i], a + ent[i + 1]);
+        Conv_Onde(c, "texto %lu", (unsigned long)i);
+    }
+}
+
+/* §6: arquivo do diálogo (Dialog_Init): seis partes */
+static void dialogo(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    conv_u32 ent[8], i;
+    conv_ofs base = a;
+    if (!secoes(c, a, b - a, ent, 6, "diálogo")) {
+        return;
+    }
+    for (i = 1; i <= 4 && !c->erro; i++) {
+        Conv_TexFile(c, ENT(i), 0);
+        Conv_Onde(c, "parte %lu do diálogo", (unsigned long)i);
+    }
+    flash(c, ENT(5));
+    textos(c, ENT(6));
+}
+
+/* ------------------------------------------------------------------ pacotes de tela, em tempo de jogo (§5) */
+
+/* §5.1: tela do cartão (BootCard_Init, seção 2 de 00473): só o diálogo */
+void Conv_MenuCartao(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    conv_u32 ent[4];
+    if (secoes(c, base, tam, ent, 1, "tela do cartão")) {
+        dialogo(c, ENT(1));
+    }
+}
+
+/* §5.2: logos (FirstRun_Main, seção 3 de 00473): 3..8 lidas por Logo_Show, 2 sem leitor (TexFile pela forma) */
+void Conv_MenuLogos(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    conv_u32 ent[12], i;
+    if (!secoes(c, base, tam, ent, 9, "logos")) {
+        return;
+    }
+    vazia(c, ent, 1);
+    vazia(c, ent, 9);
+    for (i = 2; i <= 8 && !c->erro; i++) {
+        Conv_TexFile(c, ENT(i), 0);
+        Conv_Onde(c, "logo %lu", (unsigned long)i);
+    }
+}
+
+/* §5.3: recursos do cartão (McFlow_Init, 00477): os dois ícones do cartão de memória, que vão ao cartão como bytes
+   (sceMcWrite) com os tamanhos fixos do código; depois deles, zeros */
+void Conv_MenuMcFlow(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_ofs icone[2] = {0x9C9A, 0xBE8A}; /* McFlow_SetupRequest */
+    conv_u32 ent[6], i;
+    if (!secoes(c, base, tam, ent, 3, "recursos do cartão")) {
+        return;
+    }
+    for (i = 1; i <= 2 && !c->erro; i++) {
+        if (ent[i + 1] - ent[i] < icone[i - 1]) {
+            Conv_Erro(c, "ícone %lu de 0x%lX bytes (o cartão grava 0x%lX)", (unsigned long)i,
+                      (unsigned long)(ent[i + 1] - ent[i]), (unsigned long)icone[i - 1]);
+            break;
+        }
+        Conv_Bytes(c, base + ent[i], icone[i - 1]);
+        Conv_Zeros(c, ENT(i), "ícone do cartão");
+    }
+    vazia(c, ent, 3);
+}
+
+/* §5.4: título (Title_Init, seção 1 de 00449): 1..3, 5..10 e 14 relocadas por Title_Init, 4 sem leitor (TexFile pela
+   forma), 11 o filme, 12 o diálogo */
+void Conv_MenuTitulo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    conv_u32 ent[16], i;
+    if (!secoes(c, base, tam, ent, 14, "título")) {
+        return;
+    }
+    for (i = 1; i <= 14 && !c->erro; i++) {
+        switch (i) {
+        case 11: flash(c, ENT(11)); break;
+        case 12: dialogo(c, ENT(12)); break;
+        case 13: vazia(c, ent, 13); break;
+        default: Conv_TexFile(c, ENT(i), 0); break;
+        }
+        Conv_Onde(c, "seção %lu do título", (unsigned long)i);
+    }
+}

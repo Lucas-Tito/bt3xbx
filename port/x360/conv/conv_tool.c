@@ -3,13 +3,17 @@
  *
  *   conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--detalhe N] DADOS ARQUIVO...
  *   conv_tool --disco DADOS        todos os arquivos que algum conversor conhece (pzs3us0..2), sem gravar: a
- *                                  validação estrutural (contagens, deslocamentos, enchimento) no disco inteiro
+ *                                  validação estrutural (contagens, deslocamentos, enchimento) no disco inteiro;
+ *                                  depois, o conteúdo descomprimido que o jogo converte em tempo de jogo (folhas da
+ *                                  tela de carregamento e pacotes de tela dos menus)
  *
  * Para cada ARQUIVO (relativo a DADOS, como o jogo o pede: pzs3us1/01473.bin): converte com o formato do
  * registro (ou F), diz a cobertura (quanto do arquivo algum conversor reconheceu) e, com --mapa, confere
  * contra o rastreio (port/x360/tools/rastreio.py): cada posição que o jogo leu como número de largura w tem de
  * ter sido trocada com largura w. Com --saida grava o arquivo convertido em DIR/ARQUIVO e acrescenta o nome a
  * DIR/convertidos.txt (a build PPC da F1 lê esses arquivos e não aplica o mapa neles).
+ * Um ARQUIVO "pzs3us1/00449.bin@0x40#bpe" (o nome que o rastreio dá) é o contêiner BPE nesse deslocamento do arquivo,
+ * descomprimido aqui e convertido com o formato que o chamador do jogo aplica (formato_bpe), sem --saida.
  * Sai com 1 se algum arquivo deu erro ou discordou do mapa.
  */
 #include <stdio.h>
@@ -63,34 +67,205 @@ static void criar_pastas(char *caminho) {
 static const char *formato, *mapa, *saida;
 static int detalhe = 10;
 
+/* lê o arquivo inteiro (tam + 1 bytes alocados); NULL se não abre */
+static conv_u8 *ler_arquivo(const char *dados, const char *rel, long *tam) {
+    char caminho[1024];
+    FILE *fp;
+    conv_u8 *buf;
+    sprintf(caminho, "%s/%s", dados, rel);
+    fp = fopen(caminho, "rb");
+    if (fp == NULL) {
+        return NULL;
+    }
+    fseek(fp, 0, SEEK_END);
+    *tam = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    buf = malloc((size_t)*tam + 1);
+    if (fread(buf, 1, (size_t)*tam, fp) != (size_t)*tam) {
+        printf("%s: leitura curta\n", rel);
+    }
+    fclose(fp);
+    return buf;
+}
+
+static conv_u32 le32(const conv_u8 *p) {
+    return (conv_u32)p[0] | (conv_u32)p[1] << 8 | (conv_u32)p[2] << 16 | (conv_u32)p[3] << 24;
+}
+
+/* src/sys/bpe.c (Bpe_Decode) com os limites conferidos: o contêiner em [ofs, tam) do arquivo ainda little-endian.
+   Devolve o buffer de rawSize bytes (+ 1) ou NULL. */
+static conv_u8 *descomprimir(const conv_u8 *arq, long tam, unsigned long ofs, long *bruto) {
+    conv_u8 esq[256], dir[256], pilha[256], *res;
+    unsigned long in, fimin, out = 0;
+    long n;
+    if (ofs + 8 > (unsigned long)tam) {
+        return NULL;
+    }
+    n = (long)le32(arq + ofs);
+    fimin = ofs + 8 + le32(arq + ofs + 4);
+    if (n <= 0 || fimin > (unsigned long)tam) {
+        return NULL;
+    }
+    res = calloc((size_t)n + 1, 1);
+    in = ofs + 8;
+    while (in < fimin) {
+        int cont = arq[in++], c = 0, i, sp = 0;
+        unsigned bloco;
+        for (i = 0; i < 256; i++) {
+            esq[i] = (conv_u8)i;
+        }
+        for (;;) {
+            if (cont > 127) {
+                c += cont - 127;
+                cont = 0;
+            }
+            if (c == 256) {
+                break;
+            }
+            for (i = 0; i <= cont && c < 256; i++, c++) {
+                if (in + 2 > fimin) {
+                    free(res);
+                    return NULL;
+                }
+                esq[c] = arq[in++];
+                if (c != esq[c]) {
+                    dir[c] = arq[in++];
+                }
+            }
+            if (c >= 256 || in >= fimin) {
+                break;
+            }
+            cont = arq[in++];
+        }
+        if (in + 2 > fimin) {
+            free(res);
+            return NULL;
+        }
+        bloco = (unsigned)arq[in] << 8 | arq[in + 1];
+        in += 2;
+        for (;;) {
+            int ch;
+            if (sp != 0) {
+                ch = pilha[--sp];
+            } else {
+                if (bloco-- == 0) {
+                    break;
+                }
+                if (in >= fimin) {
+                    free(res);
+                    return NULL;
+                }
+                ch = arq[in++];
+            }
+            if (ch == esq[ch]) {
+                if (out >= (unsigned long)n) {
+                    free(res);
+                    return NULL;
+                }
+                res[out++] = (conv_u8)ch;
+            } else {
+                if (sp > 254) {
+                    free(res);
+                    return NULL;
+                }
+                pilha[sp++] = dir[ch];
+                pilha[sp++] = esq[ch];
+            }
+        }
+    }
+    if (in != fimin || out != (unsigned long)n) {
+        free(res);
+        return NULL;
+    }
+    *bruto = n;
+    return res;
+}
+
+/* O formato do conteúdo descomprimido do contêiner em `ofs` do arquivo `rel` (ainda little-endian): o que o chamador
+   do jogo aplica depois de descomprimir (docs/x360/formatos/menus.md 4; som-e-sprites.md 2.4; personagem.md 6.2).
+   NULL: o jogo não converte esse conteúdo (ainda). */
+static const char *formato_bpe(const char *rel, const conv_u8 *arq, long tam, unsigned long ofs) {
+    const char *f = Conv_FormatoDe(rel);
+    unsigned long n, s;
+    if (f == NULL) {
+        return NULL;
+    }
+    if (strcmp(f, "personagem_anim") == 0) {
+        return "animacao"; /* BtlObjAnim_Load */
+    }
+    if (ofs == 0 && strcmp(f, "folha_bpe") == 0) {
+        return "folha"; /* Load_InitScreen */
+    }
+    if (ofs == 0 && strcmp(f, "menu_bpe") == 0) {
+        return "menu_mcflow"; /* McFlow_Init */
+    }
+    if (strcmp(f, "menu_pacote") != 0 || tam < 8) {
+        return NULL;
+    }
+    n = le32(arq);
+    for (s = 1; s <= n && (s + 1) * 4 <= (unsigned long)tam; s++) {
+        if (le32(arq + s * 4) == ofs) {
+            break;
+        }
+    }
+    if (strcmp(rel, "pzs3us1/00473.bin") == 0 && s == 2) {
+        return "menu_cartao"; /* BootCard_Run(2) */
+    }
+    if (strcmp(rel, "pzs3us1/00473.bin") == 0 && s == 3) {
+        return "menu_logos"; /* FirstRun_Main */
+    }
+    if (strcmp(rel, "pzs3us1/00449.bin") == 0 && s == 1) {
+        return "menu_titulo"; /* Title_Run(1) */
+    }
+    return NULL;
+}
+
 /* converte e confere um arquivo; devolve 1 se falhou */
 static int um(const char *dados, const char *rel) {
     int falhas = 0;
-    char caminho[1024], msg[256];
+    char caminho[1024], msg[256], base[512];
     FILE *fp;
     long tam;
     conv_u8 *buf, *feito;
     int r;
     unsigned long k, cobertos = 0, trocados = 0;
+    const char *arroba = strstr(rel, "@0x"), *f = formato;
+    int bpe = arroba != NULL && strlen(arroba) > 4 && strcmp(rel + strlen(rel) - 4, "#bpe") == 0;
 
-    sprintf(caminho, "%s/%s", dados, rel);
-    fp = fopen(caminho, "rb");
-    if (fp == NULL) {
-        printf("%s: não abre\n", rel);
-        return 1;
+    if (bpe) {
+        long tarq;
+        unsigned long ofs = strtoul(arroba + 3, NULL, 16);
+        conv_u8 *arq;
+        sprintf(base, "%.*s", (int)(arroba - rel), rel);
+        arq = ler_arquivo(dados, base, &tarq);
+        if (arq == NULL) {
+            printf("%s: não abre\n", rel);
+            return 1;
+        }
+        if (f == NULL) {
+            f = formato_bpe(base, arq, tarq, ofs);
+        }
+        buf = f != NULL ? descomprimir(arq, tarq, ofs, &tam) : NULL;
+        free(arq);
+        if (f == NULL) {
+            printf("%s: sem conversor\n", rel);
+            return 0;
+        }
+        if (buf == NULL) {
+            printf("%s: BPE inválido em 0x%lX\n", rel, ofs);
+            return 1;
+        }
+    } else {
+        buf = ler_arquivo(dados, rel, &tam);
+        if (buf == NULL) {
+            printf("%s: não abre\n", rel);
+            return 1;
+        }
     }
-    fseek(fp, 0, SEEK_END);
-    tam = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    buf = malloc((size_t)tam + 1);
     feito = calloc((size_t)tam + 1, 1);
-    if (fread(buf, 1, (size_t)tam, fp) != (size_t)tam) {
-        printf("%s: leitura curta\n", rel);
-    }
-    fclose(fp);
     msg[0] = '\0';
-    r = formato ? Conv_Formato(formato, rel, buf, (conv_ofs)tam, feito, msg, sizeof(msg))
-                : Conv_Arquivo(rel, buf, (conv_ofs)tam, feito, msg, sizeof(msg));
+    r = f ? Conv_Formato(f, rel, buf, (conv_ofs)tam, feito, msg, sizeof(msg))
+          : Conv_Arquivo(rel, buf, (conv_ofs)tam, feito, msg, sizeof(msg));
     if (r == 0) {
         printf("%s: sem conversor\n", rel);
         free(buf);
@@ -145,7 +320,7 @@ static int um(const char *dados, const char *rel) {
         }
         free(tr);
     }
-    if (saida != NULL && r > 0) {
+    if (saida != NULL && r > 0 && !bpe) {
         FILE *lista;
         sprintf(caminho, "%s/%s", saida, rel);
         criar_pastas(caminho);
@@ -217,6 +392,39 @@ int main(int argc, char **argv) {
         }
         printf("disco: %d arquivos convertidos sem erro, %d com erro\n", ok, erros);
         falhas += erros;
+        /* o conteúdo descomprimido que o jogo converte: as folhas (contêiner no começo) e as seções dos menus */
+        {
+            static const struct { const char *rel; int secao; } desc[] = {
+                {"pzs3us1/00960.bin", 0}, {"pzs3us1/00961.bin", 0}, {"pzs3us1/00962.bin", 0},
+                {"pzs3us1/00477.bin", 0}, {"pzs3us1/00473.bin", 2}, {"pzs3us1/00473.bin", 3},
+                {"pzs3us1/00449.bin", 1},
+            };
+            unsigned d;
+            ok = erros = 0;
+            for (d = 0; d < sizeof(desc) / sizeof(desc[0]); d++) {
+                long t;
+                conv_u8 *arq = ler_arquivo(dados, desc[d].rel, &t);
+                char rel[64];
+                unsigned long ofs = 0;
+                if (arq == NULL) {
+                    printf("%s: não abre\n", desc[d].rel);
+                    erros++;
+                    continue;
+                }
+                if (desc[d].secao > 0 && (desc[d].secao + 1) * 4 <= t) {
+                    ofs = le32(arq + desc[d].secao * 4);
+                }
+                free(arq);
+                sprintf(rel, "%s@0x%lX#bpe", desc[d].rel, ofs);
+                if (um(dados, rel)) {
+                    erros++;
+                } else {
+                    ok++;
+                }
+            }
+            printf("disco (descomprimidos): %d convertidos sem erro, %d com erro\n", ok, erros);
+            falhas += erros;
+        }
     }
     return falhas ? 1 : 0;
 }
