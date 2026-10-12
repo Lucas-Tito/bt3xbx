@@ -76,6 +76,10 @@ própria só para isso). Para cá só volta texto.
 | `make_spa.py` | gera o SPA (XDBF: XTHD, XSTC, nome, ícone 64x64), porque o `spac.exe` é .NET e não roda no wine |
 | `make_icon.py` | ícone próprio, sem arte do jogo |
 | `subir.py` | FTP para o console com conferência de md5; `--baixar` traz o log |
+| `build_f2.sh` | o jogo sem janela inteiro até o `default.xex` (F2): `c89.py`, `cl.exe`, `coff.py`, link com stubs automáticos para o que falta, `dat360.py`, `imagexex` |
+| `c89.py` | rebaixa o C do jogo e do port para o C89 do `cl` pelo AST do clang (literal composto, declaração no meio do bloco, `typeof`, expressão-comando, case com intervalo), com os headers mínimos de `port/x360/shim` |
+| `coff.py` | as tabelas do executável (esqueleto `port/data/*.s`) como objetos COFF do 360; `--absoluto NOME=VALOR` faz o papel do `--defsym` |
+| `dat360.py` | `default.dat` e `default.swap` ao lado do `.xex`, pelo `.map` da Microsoft (o `esqueleto()` do `headless.py` para o 360) |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
 ### Builds de teste da ordem de bytes (F1, rodam no WSL)
@@ -290,7 +294,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   - `#pragma fenv_access(on)` só depois dos includes (antes dá C2099 no xnamath);
   - não use `-fp:fast`, porque ele dobra contas que o jogo espera ver arredondadas.
 - **Memória do 360:** abaixo de 0x40000000 só há páginas de 4 KB; acima, de 64 KB. 0x70000000 é
-  das pilhas.
+  das pilhas. Os endereços baixos saem de baixo para cima: reserve as faixas fixas do jogo antes de
+  qualquer alocação grande (D3D, pilha grande, leitura de arquivos).
+- **Atômicos no 360:** as `Interlocked*` sem `Acquire`/`Release` não têm barreira (`winbase.h` do
+  XDK), e `MemoryBarrier` é só `lwsync`. Barreira completa é `__sync()`; não há `__isync` no
+  `ppcintrinsics.h` (o `cl` o aceitou como função implícita e virou stub no link).
+- **Link do XDK:** `-DEBUG` liga o ICF junto com `-OPT:REF`, e funções iguais (umas 170 vazias)
+  passam a ter o mesmo endereço; o jogo compara ponteiros de função. Use `-OPT:REF,NOICF`.
+- **FATX:** arquivo não fechado guarda o tamanho e não os bytes (o `saida.txt` da 1ª rodada da F2
+  voltou com 46 zeros, mesmo sem buffer). Feche os arquivos na saída; o log usa `FlushFileBuffers`.
+- **Relógio:** `QueryPerformanceCounter * 1e9` passa de 64 bits uns 6 minutos depois do boot
+  (50 MHz). Divida antes: segundos e resto.
 - **Console:**
   - o FTP só responde na FreeStyle;
   - descubra o IP pelo MAC (timeout curto demais em varredura perde o console);
