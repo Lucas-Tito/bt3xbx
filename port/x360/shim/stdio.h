@@ -3,10 +3,15 @@
 #include <stddef.h>
 struct _iobuf { char *_ptr; int _cnt; char *_base; int _flag; int _file; int _charbuf; int _bufsiz; char *_tmpfname; };
 typedef struct _iobuf FILE;
-FILE *__iob_func(void); /* a CRT do Xbox (crt/stdio.h): stdin, stdout e stderr são as três primeiras */
-#define stdin (&__iob_func()[0])
-#define stdout (&__iob_func()[1])
-#define stderr (&__iob_func()[2])
+/* no 360 a saída de texto do port vai para game:\saida.txt, e os caminhos passam pela tradução de
+   port/x360/src/f2/posix360.c ('/' para '\', relativo à pasta do .xex) */
+FILE *Port_X360Saida(void);
+FILE *Port_X360Fopen(const char *, const char *);
+int Port_Printf(const char *, ...);
+#define stdout (Port_X360Saida())
+#define stderr (Port_X360Saida())
+#define fopen Port_X360Fopen
+#define printf Port_Printf
 FILE *fopen(const char *, const char *);
 int fclose(FILE *);
 size_t fread(void *, size_t, size_t, FILE *);
@@ -14,6 +19,10 @@ size_t fwrite(const void *, size_t, size_t, FILE *);
 int fseek(FILE *, long, int);
 long ftell(FILE *);
 int fflush(FILE *);
+int fgetc(FILE *);
+char *fgets(char *, int, FILE *);
+int fputc(int, FILE *);
+int fputs(const char *, FILE *);
 int printf(const char *, ...);
 int fprintf(FILE *, const char *, ...);
 int sprintf(char *, const char *, ...);

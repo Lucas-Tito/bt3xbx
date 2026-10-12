@@ -113,6 +113,11 @@ double fabs(double);
 #define __builtin_memcpy memcpy
 #define __builtin_abs abs
 void *memset(void *, int, unsigned int);
+/* os atômicos do GCC que o port usa (port/x360/src/posix360.c) */
+int __sync_lock_test_and_set(volatile int *, int);
+void __sync_lock_release(volatile int *);
+int __sync_bool_compare_and_swap(volatile int *, int, int);
+void __sync_synchronize(void);
 """
 
 
@@ -182,6 +187,9 @@ class Reescrita:
         return t
 
 
+# Símbolos de endereço fixo que o linker do PC define (headless.py: --defsym): no 360 viram constante.
+ABSOLUTOS = {"D_3BE71C": 0x3BE71C}  # fim do overlay do menu no PS2: o tamanho do heap do jogo sai dele (heap.c)
+
 EXPRS_TOPO = {"BinaryOperator", "CompoundAssignOperator", "CallExpr", "UnaryOperator"}
 
 
@@ -193,6 +201,7 @@ def rebaixar(texto):
     vistos = {}
     conta = [0]
     por_id, structs, variaveis, anonima = {}, {}, {}, {}
+    absolutos = set()
 
     def indexar(n):
         if n.get("id"):
@@ -354,6 +363,11 @@ def rebaixar(texto):
                 j = texto.index(";", fim_de(n))
                 r.apaga(ini_de(n), j + 1)
             vistos.setdefault(nome, tipo)
+        if k == "VarDecl" and n.get("name") in ABSOLUTOS and n.get("storageClass") == "extern":
+            # símbolo de endereço fixo (o --defsym da build de PC): a declaração sai e o nome vira a constante
+            j = texto.index(";", fim_de(n))
+            r.apaga(ini_de(n), j + 1)
+            absolutos.add(n["name"])
         if k == "VarDecl" and n.get("name"):
             variaveis[n["name"]] = (n, caminho[-1] if caminho else None)
         if k == "VarDecl" and "typeof" in n.get("type", {}).get("qualType", ""):
@@ -436,7 +450,8 @@ def rebaixar(texto):
         r.apaga(m.start(), fim_atributo(texto, m.start()))
     for m in re.finditer(r'\b__asm__\s*\(\s*"[A-Za-z_]\w*"\s*\)', texto):
         r.apaga(m.start(), m.end())
-    return PRELUDIO + "\n".join(sorted(set(pragmas))) + "\n" + r.aplica()
+    defs = "".join("#define %s ((unsigned char *)0x%X)\n" % (n, ABSOLUTOS[n]) for n in sorted(absolutos))
+    return PRELUDIO + defs + "\n".join(sorted(set(pragmas))) + "\n" + r.aplica()
 
 
 FMAX_LIT = re.compile(r'"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|(?<![\w.])(\d+\.\d*|\.\d+)[eE]\+?38[fF]\b')

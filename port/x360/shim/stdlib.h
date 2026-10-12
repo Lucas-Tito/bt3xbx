@@ -5,8 +5,11 @@ void *malloc(size_t);
 void *calloc(size_t, size_t);
 void *realloc(void *, size_t);
 void free(void *);
-void exit(int);
-void abort(void);
+/* no 360 o fim do jogo encerra só a thread dele (port/x360/src/f2/main360.cpp) */
+void Port_Sair(int);
+void Port_Abortar(void);
+#define exit Port_Sair
+#define abort Port_Abortar
 int abs(int);
 int atoi(const char *);
 long strtol(const char *, char **, int);

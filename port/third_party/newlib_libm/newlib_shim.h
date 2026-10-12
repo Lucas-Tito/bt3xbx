@@ -23,4 +23,7 @@
 #define fabsf Port_fabsf
 #define scalbnf Port_scalbnf
 #define copysignf Port_copysignf
+/* their prototypes (the host's math.h declared them under the newlib names, before the renames above) */
+float Port_scalbnf(float, int);
+float Port_copysignf(float, float);
 #endif
