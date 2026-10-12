@@ -307,6 +307,15 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   modo texto não viu os `\n`, que com os bytes certos dariam 48) e só zeros. Não era o FATX nem a falta
   de `fclose`, como a F2 chegou a anotar. Use buffer; `fopen(..., "wc")` faz o `fflush` ir até o disco
   (`_commit`). O fonte da CRT está em `XDK/Source/crt`: leia antes de adivinhar.
+- **D3D9 do Xenos, medido no console (F3, `port/x360/src/teste_d3d`):**
+  - `D3DFMT_LIN_A8B8G8R8` recebe o u32 nativo `R | G<<8 | B<<16 | A<<24` do `gs_draw.c` sem troca;
+  - cor de vértice `UBYTE4N` com os bytes r, g, b, a na memória chega ao shader como (a, b, g, r):
+    inverta com `.wzyx` no shader;
+  - `D3DRS_HALFPIXELOFFSET` ligado dá centros de pixel em .5, como GL e Vulkan (xadrez de 1 pixel nítido;
+    desligado sai cinza);
+  - `Resolve` para textura `LIN_` entrega a memória em blocos (tiled): leia com `XGAddress2DTiledOffset`;
+  - o `fxc` do XDK roda no wine e gera o microcódigo (`xvs_3_0`) em header: shaders só no build.
+  - Um print da tela gravado pelo próprio programa (`tela.bmp`) dispensa descrição do usuário.
 - **`wsl.sh enviar` recusado** (commit ainda não enviado ao GitHub) não para um `enviar | tail && ...`:
   o status do pipe é o do `tail`, e o resto roda com a árvore velha do WSL. Faça push antes e confira a
   linha "WSL em <commit>".
