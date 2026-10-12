@@ -425,3 +425,24 @@ Medido no console (12/10/2026): a luta lida da ISO sai idêntica à da F2 quadro
 gasta cerca de 210 ms lendo da ISO e 500 ms convertendo; só o cenário (`pzs3us1/00369`, 6,7 MB) leva 70 ms de
 leitura e 264 ms de conversão. Se a pausa da carga incomodar com imagem, o primeiro passo é um caminho rápido do
 conversor na carga (a conferência byte a byte fica na `conv_tool`), antes de pensar num cache em disco.
+
+## 19. Valores de 64 bits para a GPU: a imagem do PS2 em palavras de 32 bits (12/10/2026)
+
+Os pacotes da GPU (etiquetas GIF, registradores do GS em A+D) têm campos de 64 bits e vêm de dois lugares: montados
+pelo código do jogo, que grava `u64` nativo (no 360 a metade alta fica primeiro), e prontos nos arquivos do disco,
+convertidos palavra a palavra pela decisão 12 (a metade baixa primeiro, como no PS2). O leitor de pacotes
+(`port/src/gs/gs_core.c`, `gs_vu1.c`) não sabe de onde cada um veio.
+
+Decisão do Lucas, entre as duas saídas: **tudo o que vai para a GPU fica como a imagem do PS2 em palavras de 32 bits
+nativas, a metade baixa primeiro**, na memória principal e na da VU.
+
+- **No código do jogo:** toda gravação de 64 bits num pacote passa por uma macro que, em `PORT_BIG_ENDIAN`, troca as
+  metades (a maior parte vem de `GIF_TAG_EX` e das macros de registrador; o resto, por auditoria).
+- **No leitor:** um valor de 64 bits se lê como duas palavras, a baixa primeiro (uma regra só, igual para a memória
+  principal e a da VU).
+- **No disco:** nada muda; a decisão 12 fica como está.
+- **Conferência:** na comparação de memória x86 contra PPC (`memdiff.py`), os buffers de pacotes têm de ficar sem
+  nenhuma palavra da classe `u64`; cada uma que sobrar é uma gravação esquecida. Depois, as imagens do rasterizador de
+  software das duas builds têm de sair idênticas (etapa 4 da F3).
+- **Recusado:** trocar os campos da GPU como `u64` nos conversores do disco. Reabriria conversores já validados,
+  exigiria que cada um separasse campo de 64 bits de pixel de textura, e deixaria o leitor com duas regras.
