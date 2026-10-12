@@ -362,3 +362,17 @@ O alvo é **1280x720 a 30 quadros por segundo** nas lutas, o ritmo do jogo origi
 Consequência para a F3: o renderizador desenha só a área visível do GS na resolução de saída (cabe na EDRAM de
 10 MB), não a memória inteira do GS como o port de PC. Reabrir esta decisão só depois de medir a folga de CPU (F2)
 e de GPU (F3).
+
+## 16. Mod Tag Team: depois do jogo base, só a tela dividida de 4 (12/10/2026)
+
+O [Tag Team Mod](https://github.com/tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PCSX2-) (GPL-3.0) põe vários
+lutadores por lado ao mesmo tempo, com tela dividida para até 4 jogadores e um online experimental. Ele não roda no
+port como está: é um programa em Python ao lado do PCSX2 que lê e escreve a RAM do PS2 pela PINE e engancha o código
+MIPS original, que o port não tem.
+
+Decisão do Lucas: portar depois que o BT3 estiver rodando bem no Xbox, reimplementando em C dentro do port, e só a
+parte da tela dividida para 4 jogadores locais. O online fica de fora.
+
+Para quando chegar a hora: usar o mod como referência de comportamento e escrever a partir da decomp (traduzir o
+código dele faria do port obra derivada sob GPL-3.0); medir o custo de desenhar a cena até 4 vezes contra a meta de
+720p a 30 (decisão 15). Até lá, não fechar portas: a camada de entrada do 360 aceita 4 controles.
