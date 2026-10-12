@@ -1,0 +1,4 @@
+Headers mínimos da biblioteca C para pré-processar o código do jogo com o clang (port/x360/tools/c89.py).
+O .c gerado é autocontido: o cl.exe do XDK não vê estes headers nem os dele; só as declarações daqui, com os
+mesmos nomes e tipos da CRT do Xbox, que o linker resolve. Tipos para um alvo de 32 bits (int 32, long 32,
+ponteiro 32, long long 64), como o 360.

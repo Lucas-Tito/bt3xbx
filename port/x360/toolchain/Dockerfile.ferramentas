@@ -1,0 +1,11 @@
+# Ferramentas de preparação dos fontes do jogo para o cl.exe do XDK (port/x360/tools/c89.py): clang 22 para
+# pré-processar e ler o AST, Python para reescrever. Sem nada do jogo nem do XDK.
+#   docker build -t bt3xbx-ferramentas -f port/x360/toolchain/Dockerfile.ferramentas port/x360/toolchain
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates curl gnupg python3 \
+    && curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main" \
+       > /etc/apt/sources.list.d/llvm.list \
+    && apt-get update -qq && apt-get install -y -qq --no-install-recommends clang-22 \
+    && ln -s /usr/bin/clang-22 /usr/local/bin/clang && rm -rf /var/lib/apt/lists/*
