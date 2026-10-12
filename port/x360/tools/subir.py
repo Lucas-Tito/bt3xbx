@@ -84,7 +84,7 @@ def achar():
 def conectar(ip):
     for tentativa in range(4):
         try:
-            f = ftplib.FTP(ip, timeout=20)
+            f = ftplib.FTP(ip, timeout=180)  # o servidor da FreeStyle para por dezenas de segundos em arquivo grande
             f.login(USUARIO, SENHA)
             return f
         except Exception as e:
