@@ -91,10 +91,72 @@ static void caminho360(const char *de, char *para, size_t n) {
     para[k] = '\0';
 }
 
+/* iso360.c: os dados do jogo de dentro da ISO (decisão 18) */
+void *Iso_Abrir(const char *rel);
+int Iso_Eh(const void *f);
+size_t Iso_Ler(void *buf, size_t tam, size_t n, void *f);
+int Iso_Posicionar(void *f, long desl, int origem);
+long Iso_Posicao(void *f);
+int Iso_Fechar(void *f);
+int Iso_Caractere(void *f);
+
+/* Leitura sob a raiz de dados (BT3_DATA): da ISO, se houver uma; o resto (e tudo sem ISO) é arquivo de verdade. */
 FILE *Port_X360Fopen(const char *caminho, const char *modo) {
     char c[512];
+    const char *raiz = getenv("BT3_DATA");
+    size_t n = raiz != NULL ? strlen(raiz) : 0;
+    if (n > 0 && strchr(modo, 'w') == NULL && strchr(modo, 'a') == NULL && strchr(modo, '+') == NULL &&
+        strncmp(caminho, raiz, n) == 0 && (caminho[n] == '/' || caminho[n] == '\\')) {
+        char rel[256];
+        size_t i;
+        void *v;
+        for (i = 0; caminho[n + 1 + i] != '\0' && i + 1 < sizeof(rel); i++) {
+            rel[i] = caminho[n + 1 + i] == '\\' ? '/' : caminho[n + 1 + i];
+        }
+        rel[i] = '\0';
+        v = Iso_Abrir(rel);
+        if (v != (void *)-1) {
+            return (FILE *)v;
+        }
+    }
     caminho360(caminho, c, sizeof(c));
     return fopen(c, modo);
+}
+
+/* as leituras do shim: arquivo da ISO ou da CRT */
+size_t Port_X360Fread(void *buf, size_t tam, size_t n, FILE *f) {
+    return Iso_Eh(f) ? Iso_Ler(buf, tam, n, f) : fread(buf, tam, n, f);
+}
+
+int Port_X360Fseek(FILE *f, long desl, int origem) {
+    return Iso_Eh(f) ? Iso_Posicionar(f, desl, origem) : fseek(f, desl, origem);
+}
+
+long Port_X360Ftell(FILE *f) {
+    return Iso_Eh(f) ? Iso_Posicao(f) : ftell(f);
+}
+
+int Port_X360Fclose(FILE *f) {
+    return Iso_Eh(f) ? Iso_Fechar(f) : fclose(f);
+}
+
+int Port_X360Fgetc(FILE *f) {
+    return Iso_Eh(f) ? Iso_Caractere(f) : fgetc(f);
+}
+
+char *Port_X360Fgets(char *s, int n, FILE *f) {
+    int i = 0, c = 0;
+    if (!Iso_Eh(f)) {
+        return fgets(s, n, f);
+    }
+    while (i + 1 < n && (c = Iso_Caractere(f)) != EOF) {
+        s[i++] = (char)c;
+        if (c == '\n') {
+            break;
+        }
+    }
+    s[i] = '\0';
+    return i > 0 ? s : NULL;
 }
 
 static FILE *sSaida;

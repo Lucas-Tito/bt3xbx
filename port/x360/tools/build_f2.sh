@@ -34,7 +34,7 @@ python3 port/x360/tools/cl_resumo.py $OUT/obj | grep -q "^$(ls $OUT/c89/*.c | wc
 docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app -e WINEDEBUG=-all "$IMAGEM" bash -c '
   wineboot -i >/dev/null 2>&1 || true
   ok=0
-  for f in port/x360/src/diario.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do
+  for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do
     n=$(basename ${f%.*}); t=-TC; case $f in *.cpp) t="-TP -EHsc -GR-";; esac
     INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX '"$CLFLAGS"' $t \
       -Iport/x360/src -Iport/x360/conv -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }

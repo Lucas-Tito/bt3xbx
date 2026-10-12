@@ -403,3 +403,19 @@ Consequências:
   pela F1. Para conferir o 360 quadro a quadro seria preciso um gêmeo no qemu com o mesmo float. Fica para quando
   houver suspeita.
 - **Próximo passo:** F3 (instalador e boot até a tela de título).
+
+## 18. Os dados vêm direto da ISO, convertidos na carga, sem instalador (12/10/2026)
+
+O usuário copia a própria ISO (SLUS-21678, 3,02 GB, abaixo do limite de 4 GB do FATX) para a pasta do jogo, e o
+jogo lê tudo de dentro dela: o SLUS e o DBZP.BIN para as tabelas do executável (decisão 13), os arquivos soltos de
+`DATA/` e as entradas dos três AFS. Cada entrada que tem conversor (`Conv_Arquivo`, decisão 12) é lida inteira e
+convertida na hora em que o jogo a abre; as outras (fluxos de som e filmes) passam direto da ISO.
+
+- **Por quê:** os conversores trocam no lugar, sem mudar tamanho nem posição, então converter na carga custa uma
+  passada sobre os bytes de cada arquivo aberto. Sem instalador não há etapa de minutos no primeiro uso, nem 3 GB a
+  mais no HD, nem as pastas de milhares de entradas que o FATX não aguenta. Decisão do Lucas, entre as duas opções.
+- **Onde:** `port/x360/src/iso360.c` (ISO 9660 e AFS) atrás do `fopen` do shim: o código do jogo e do port não
+  muda. Arquivo em `mods/` continua valendo, como no PC.
+- **Versão:** o hash das tabelas copiadas do SLUS e do DBZP.BIN (`Port_LoadGameData`) já recusa outra versão.
+- **Substitui** o instalador do plano (seção 3, passo 2) e a conversão "no instalador" da decisão 12. A
+  `conv_tool` de PC fica como teste dos conversores.
