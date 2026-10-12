@@ -109,6 +109,6 @@ gcc -std=gnu99 -O2 -w -I"$T/inc" -Iport/x360/conv -o "$T/teste" "$T/teste.c" por
 echo "conferindo $(wc -l < "$T/pares.txt") arquivos; com conversor: $(ls port/build/iso_ref/pzs3us1 | wc -l)"
 status=0
 BT3_ISO="$ISO" "$T/teste" < "$T/pares.txt" > "$T/saida.txt" || status=$?
-grep -v "^FALTA\|^DIFERENTE" "$T/saida.txt" | head -20 || true
+grep -v "^FALTA\|^DIFERENTE\|^iso: pzs" "$T/saida.txt" | head -20 || true
 grep "^FALTA\|^DIFERENTE" "$T/saida.txt" | head -10 || true
 exit $status
