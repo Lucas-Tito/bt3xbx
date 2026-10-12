@@ -1,7 +1,7 @@
 /*
  * Ferramenta de PC da conversão (e o teste dos conversores na F1).
  *
- *   conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--detalhe N] DADOS ARQUIVO...
+ *   conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--marcas DIR] [--detalhe N] DADOS ARQUIVO...
  *   conv_tool --disco DADOS        todos os arquivos que algum conversor conhece (pzs3us0..2), sem gravar: a
  *                                  validação estrutural (contagens, deslocamentos, enchimento) no disco inteiro;
  *                                  depois, o conteúdo descomprimido que o jogo converte em tempo de jogo (folhas da
@@ -12,6 +12,10 @@
  * contra o rastreio (port/x360/tools/rastreio.py): cada posição que o jogo leu como número de largura w tem de
  * ter sido trocada com largura w. Com --saida grava o arquivo convertido em DIR/ARQUIVO e acrescenta o nome a
  * DIR/convertidos.txt (a build PPC da F1 lê esses arquivos e não aplica o mapa neles).
+ * Com --marcas grava em DIR a marcação de cada byte (a largura com que o conversor o trocou, 1 para byte, 0 se nenhum
+ * conversor o reconheceu, 0x80 na continuação de um número), um arquivo por ARQUIVO com '/' trocado por '_' e
+ * ".marcas" no fim: só larguras, nenhum byte do jogo. É o que memdiff.py --marcas usa para comparar um buffer do jogo
+ * campo a campo, pela largura de cada número, em vez de palavra a palavra.
  * Um ARQUIVO "pzs3us1/00449.bin@0x40#bpe" (o nome que o rastreio dá) é o contêiner BPE nesse deslocamento do arquivo,
  * descomprimido aqui e convertido com o formato que o chamador do jogo aplica (formato_bpe), sem --saida.
  * Sai com 1 se algum arquivo deu erro ou discordou do mapa.
@@ -64,7 +68,7 @@ static void criar_pastas(char *caminho) {
     }
 }
 
-static const char *formato, *mapa, *saida;
+static const char *formato, *mapa, *saida, *marcas;
 static int detalhe = 10;
 
 /* lê o arquivo inteiro (tam + 1 bytes alocados); NULL se não abre */
@@ -320,6 +324,23 @@ static int um(const char *dados, const char *rel) {
         }
         free(tr);
     }
+    if (marcas != NULL && r > 0) {
+        char *q;
+        sprintf(caminho, "%s/%s.marcas", marcas, rel);
+        for (q = caminho + strlen(marcas) + 1; *q; q++) {
+            if (*q == '/') {
+                *q = '_';
+            }
+        }
+        fp = fopen(caminho, "wb");
+        if (fp == NULL || fwrite(feito, 1, (size_t)tam, fp) != (size_t)tam) {
+            printf("%s: não gravou\n", caminho);
+            falhas++;
+        }
+        if (fp != NULL) {
+            fclose(fp);
+        }
+    }
     if (saida != NULL && r > 0 && !bpe) {
         FILE *lista;
         sprintf(caminho, "%s/%s", saida, rel);
@@ -354,6 +375,8 @@ int main(int argc, char **argv) {
             mapa = argv[++i];
         } else if (strcmp(argv[i], "--saida") == 0 && i + 1 < argc) {
             saida = argv[++i];
+        } else if (strcmp(argv[i], "--marcas") == 0 && i + 1 < argc) {
+            marcas = argv[++i];
         } else if (strcmp(argv[i], "--detalhe") == 0 && i + 1 < argc) {
             detalhe = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--disco") == 0) {
@@ -365,7 +388,8 @@ int main(int argc, char **argv) {
         }
     }
     if (dados == NULL) {
-        fprintf(stderr, "uso: conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--detalhe N] [--disco] DADOS ARQUIVO...\n");
+        fprintf(stderr, "uso: conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--marcas DIR] [--detalhe N] [--disco] DADOS "
+                        "ARQUIVO...\n");
         return 2;
     }
     if (disco) {

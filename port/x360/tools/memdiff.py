@@ -2,6 +2,7 @@
 """F1: compara a memória do jogo de duas builds de ordem de bytes diferente num mesmo quadro.
 
     memdiff.py X86.dump PPC.dump PROG_X86 PROG_PPC [--max N] [--faixa INI-FIM] [--estrito] [--resumo]
+               [--marcas REGIAO=ARQ.marcas]...
 
 Os .dump são os de port/src/gs/state.c (BT3_HASH=<arq> BT3_HASH_AT=<quadro> -> <arq>.dump): heap,
 scratchpad e as variáveis globais do jogo (<programa>.mem, escrito por tools/mem.py).
@@ -17,10 +18,18 @@ Cada palavra de 4 bytes alinhada cai numa classe:
   igual-sem-inverter  iguais byte a byte sem ser palíndromo: certo para bytes/strings, ERRADO para u32
   ponteiro-port    endereço da imagem (a partir da base de ligação, 0x20000000) ou do heap do C, nos dois lados
   2xu16            cada metade invertida: certo se forem dois u16, ERRADO se for um u32
-  u64              o par de palavras trocado (sem zero): certo se for u64/double, ERRADO se forem dois u32
+  u64              o par de palavras trocado (sem zero; o par pelo endereço alinhado a 8): certo se for
+                   u64/double, ERRADO se forem dois u32
   u64-com-zero     idem, mas uma das palavras é 0: também pode ser coincidência
   diferente        o resto
 Sem largura gravada não dá para separar as classes ambíguas de erro; com --estrito elas são listadas.
+
+--marcas heap#33=DIR/pzs3us1_00449.bin@0x40#bpe.marcas (repetível): o bloco guarda esse arquivo (ou conteúdo
+descomprimido) a partir do endereço de dados do bloco (HeapBlock.data); a marcação vem de conv_tool --marcas (a
+largura de cada número do formato). Nesse trecho a comparação é campo a campo: número de largura w com os w bytes
+invertidos e byte igual contam como "conforme"; o resto é "fora-do-formato" (listado), e isso separa o que a
+classificação por palavra não separa (bytes e u16 na mesma palavra, u16 desalinhado do Flash). Um campo que o jogo
+grava depois da carga (relocação) continua conforme se gravou um número nativo da mesma largura.
 """
 import bisect, struct, subprocess, sys
 from collections import Counter
@@ -129,10 +138,42 @@ def pares_heap(nome, ax, dx, ap, dp):
     return out
 
 
+def pelo_formato(ax, dx, dp, marcas):
+    """Compara [data, data + len(marcas)) do bloco pela marcação do conversor. Devolve (início, fim, classes,
+    trechos fora do formato) com início e fim relativos ao bloco."""
+    ini = struct.unpack_from("<I", dx, 0x14)[0] - ax  # HeapBlock.data
+    fim = min(ini + len(marcas), len(dx), len(dp))
+    classes, trechos, k = Counter(), [], ini
+    while k < fim:
+        m = marcas[k - ini]
+        w = m if m in (2, 4, 8) else 1
+        if k + w > fim:
+            w = fim - k
+        a, b = dx[k:k + w], dp[k:k + w]
+        if m in (2, 4, 8):
+            ok = a == b[::-1]
+        elif m == 1:
+            ok = a == b
+        else:  # livre ou continuação solta: nenhum conversor disse o que é
+            ok = a == b and a == bytes(w)
+        classes["conforme" if ok else "fora-do-formato"] += 1
+        if not ok:
+            if trechos and k - trechos[-1][1] <= 16:
+                trechos[-1][1] = k + w
+            else:
+                trechos.append([k, k + w])
+        k += w
+    return ini, fim, classes, trechos
+
+
 def main():
     args, opc, it = [], {}, iter(sys.argv[1:])
+    marcas = {}
     for a in it:
-        if a in ("--max", "--faixa"):
+        if a == "--marcas":
+            r, arq = next(it).split("=", 1)
+            marcas[r] = open(arq, "rb").read()
+        elif a in ("--max", "--faixa"):
             opc[a] = next(it)
         elif a.startswith("--"):
             opc[a] = True
@@ -162,9 +203,19 @@ def main():
         n = min(len(dx), len(dp)) // 4 * 4
         classes = Counter()
         trechos, ini, fim = [], None, None
+        fmt_ini = fmt_fim = 0
+        if nx in marcas:
+            fmt_ini, fmt_fim, cf, tf = pelo_formato(ax, dx, dp, marcas[nx])
+            classes.update(cf)
+            trechos += [tuple(t) for t in tf]
         for o in range(0, n, 4):
+            if fmt_ini <= o < fmt_fim or fmt_ini < o + 4 <= fmt_fim:
+                continue
             a, b = dx[o:o + 4], dp[o:o + 4]
             va, vb = struct.unpack("<I", a)[0], struct.unpack(">I", b)[0]
+            # a outra metade de um u64 pelo endereço (alinhado a 8), não pelo deslocamento na região: um bloco do
+            # heap começa em qualquer múltiplo de 4, e o par pelo deslocamento juntava metades de dois u64
+            par = ((ax + o) ^ 4) - ax
             if a == b[::-1]:
                 c = "igual"
             elif a == b:
@@ -173,8 +224,8 @@ def main():
                 c = "ponteiro-port"
             elif a[:2] == b[1::-1] and a[2:] == b[:1:-1]:
                 c = "2xu16"
-            elif o ^ 4 < n and dx[o:o + 4] == dp[(o ^ 4):(o ^ 4) + 4][::-1]:
-                c = "u64-com-zero" if va == 0 or dx[o ^ 4:(o ^ 4) + 4] == bytes(4) else "u64"
+            elif 0 <= par < n and dx[o:o + 4] == dp[par:par + 4][::-1]:
+                c = "u64-com-zero" if va == 0 or dx[par:par + 4] == bytes(4) else "u64"
             else:
                 c = "diferente"
             classes[c] += 1
@@ -187,6 +238,7 @@ def main():
                     ini, fim = o, o + 4
         if ini is not None:
             trechos.append((ini, fim))
+        trechos.sort()
         tot.update(classes)
         if not trechos or "--resumo" in opc:
             continue
