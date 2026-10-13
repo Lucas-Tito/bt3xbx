@@ -270,6 +270,8 @@ static D3DTexture *sCurDate;
 static float sCurC[16];
 static int sTemC, sTemScissor, sScissor[4];
 static float sCurBlendc = -1.0f;
+static float sCurTexW = 1.0f, sCurTexH = 1.0f;
+static unsigned sLutaVista, sPassoAPasso;
 
 static void esquece_estado(void) {
     sCurPipe = -1;
@@ -576,8 +578,15 @@ static void desenha(const GsDraw *d) {
     }
     aplica_pipe(d->pipeline);
     if (d->tex != sCurTex) {
-        sDev->SetTexture(0, (D3DBaseTexture *)(d->tex != 0 ? d->tex : (GsTex)sBranco));
+        D3DTexture *t = (D3DTexture *)(d->tex != 0 ? d->tex : (GsTex)sBranco);
+        D3DSURFACE_DESC desc;
+        sDev->SetTexture(0, t);
         sCurTex = d->tex;
+        /* o tamanho, para a arte 2D lida no ponto (gs_d3d.hlsl) */
+        if (SUCCEEDED(t->GetLevelDesc(0, &desc))) {
+            sCurTexW = (float)desc.Width;
+            sCurTexH = (float)desc.Height;
+        }
     }
     if (d->sampler != sCurSamp) {
         aplica_sampler(0, d->sampler);
@@ -594,7 +603,7 @@ static void desenha(const GsDraw *d) {
     c[0] = (float)d->mode[0]; c[1] = (float)d->mode[1]; c[2] = (float)d->mode[2]; c[3] = (float)d->mode[3];
     memcpy(c + 4, d->misc, sizeof(d->misc));
     memcpy(c + 8, d->rect, sizeof(d->rect));
-    c[12] = 1.0f / TAM; c[13] = 1.0f / TAM; c[14] = 0.0f; c[15] = 0.0f;
+    c[12] = 1.0f / TAM; c[13] = 1.0f / TAM; c[14] = sCurTexW; c[15] = sCurTexH;
     if (!sTemC || memcmp(c, sCurC, sizeof(c)) != 0) {
         sDev->SetPixelShaderConstantF(0, c, 4);
         memcpy(sCurC, c, sizeof(c));

@@ -383,6 +383,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     `XGSurfaceSize`) serve a todos os alvos; cada um tem uma textura tiled com o conteúdo. Trocar de alvo é `Resolve`
     do anterior (retângulo em múltiplos de 8, `GPU_RESOLVE_ALIGNMENT`) e um retângulo desenhado com a textura do novo
     sobre a EDRAM limpa. O back buffer também mora na EDRAM (base 0): depois do present, nada do alvo sobrou lá.
+  - **Profundidade fora de 0..1 corta a primitiva inteira no D3D9 do 360.** O GS aceita z além do formato do buffer
+    (os glifos do texto do cartão do BT3 vêm com `0x0FFFFFF0` num Z24: z / zmax perto de 16). O PC não via: o GL liga
+    `GL_DEPTH_CLAMP` e a SDL GPU desliga o corte. No console a caixa aparecia e o texto não. Prenda o z no shader
+    (`saturate`).
+  - **Arte 2D com filtro linear no canto do pixel do GS sai macia:** o `gs.frag` toma a coordenada onde o GS a toma
+    (o canto do pixel), que cai na borda do texel; com o filtro bilinear que o jogo pede, cada pixel vira a média de
+    quatro texels. O rasterizador de referência lê o texel do pixel inteiro (`u >> 4`). Desenhada texel por pixel, a
+    arte 2D é lida no ponto (`gs_d3d.hlsl`).
   - Da documentação, ainda não medido no console: recurso preso no dispositivo (`SetTexture`) fica `IsBusy` até ser
     solto, e `LockRect` ou o último `Release` esperam por ele, então solte as texturas antes de ler uma de volta e só
     libere as soltas depois de `InsertFence` e `IsBusy() == FALSE`; o destino do `Resolve` não deve estar preso como

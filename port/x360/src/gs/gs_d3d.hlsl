@@ -10,7 +10,10 @@ struct GsSaida { float4 pos : POSITION; float4 cor : COLOR0; float3 stq : TEXCOO
 GsSaida vs_gs(GsEntrada e) {
     GsSaida s;
     // 0..1024 pixels do GS cobrem o alvo inteiro; +Y do recorte é o alto da imagem, como na SDL GPU
-    s.pos = float4(e.pos.x / 512.0f - 1.0f, 1.0f - e.pos.y / 512.0f, e.pos.z, 1.0f);
+    // A profundidade presa em 0..1: o GS aceita z além do formato do buffer (os glifos do texto do cartão vêm com
+    // 0x0FFFFFF0 num Z24, z / zmax perto de 16), o PC liga GL_DEPTH_CLAMP (e a SDL GPU desliga o corte), e o D3D9 do
+    // 360 cortaria a primitiva inteira.
+    s.pos = float4(e.pos.x / 512.0f - 1.0f, 1.0f - e.pos.y / 512.0f, saturate(e.pos.z), 1.0f);
     // UBYTE4N no Xenos: os bytes r, g, b, a da memória chegam como (a, b, g, r) (medido na etapa 6)
     s.cor = e.cor.wzyx;
     s.stq = e.stq;
@@ -20,7 +23,7 @@ GsSaida vs_gs(GsEntrada e) {
 float4 modo : register(c0); // x: textura (0 nenhuma, 1 da memória do GS, 2 um alvo, 3 pacote), y: TFX, z: TCC, w: teste de alfa (0 desligado, senão ATST + 1)
 float4 misc : register(c1); // x: AREF (0..255); y: DATE (0, 1 passa com o bit 7 zerado, 2 com ele ligado); z: FBA; w: pixels de saída por pixel do GS na arte 2D (0: não)
 float4 rect : register(c2); // modo.x == 2: a faixa de uv que pode ser lida
-float4 alvo : register(c3); // xy: 1 / tamanho do alvo em pixels (a cópia para o DATE)
+float4 alvo : register(c3); // xy: 1 / tamanho do alvo em pixels (a cópia para o DATE); zw: tamanho da textura em texels
 
 sampler2D tex : register(s0);
 sampler2D dateTex : register(s1); // cópia da cor do alvo, para o teste de alfa do destino
@@ -50,6 +53,13 @@ float4 ps_gs(GsPixel e) : COLOR0 {
         float s = abs(misc.w);
         float2 g = floor(f / s) * s;
         uv = uv0 - (dx * (f.x - g.x) + dy * (f.y - g.y));
+        // Desenhada texel por pixel do GS, a arte 2D é lida no ponto, como o rasterizador de referência faz (o texel
+        // u >> 4 do pixel inteiro): a coordenada do GS cai na borda do texel, e o filtro linear ali faz a média de
+        // quatro (o título saía macio). Ampliada ou reduzida, segue com o filtro que o jogo pediu.
+        float2 passo = float2(abs(dx.x) + abs(dy.x), abs(dx.y) + abs(dy.y)) * s * alvo.zw; // texels por pixel do GS
+        if (abs(passo.x - 1.0f) < 0.02f && abs(passo.y - 1.0f) < 0.02f) {
+            uv = (floor(uv * alvo.zw + 1.0f / 64.0f) + 0.5f) / alvo.zw;
+        }
     }
     if (modo.x == 2.0f) {
         uv = clamp(uv, rect.xy, rect.zw);
