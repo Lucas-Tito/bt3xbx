@@ -142,8 +142,9 @@ controle do jogador 1 (não um vblank: o Shenlong, a 30 quadros por segundo, lê
 | `segura B N` | apertado N quadros, sem soltar no fim |
 | `quadros N` | controle parado N quadros |
 | `ritmo SEGURA SOLTA` | o ritmo dos `aperta` seguintes |
-| `repete ate COND` [`max Q`] ... `volta` | repete o bloco até a condição, que se confere a cada quadro, em qualquer ponto do bloco |
-| `desbloqueia` | `Save_UnlockAll` do próprio jogo (o da aba de truques da janela do PC): todo personagem, estágio, música, item e as sete esferas. Só com `BT3_DESBLOQUEIO=1`; sem ela o roteiro para com erro |
+| `repete ate COND` [`max Q`] ... `volta` | repete o bloco até a condição, que se confere a cada quadro, em qualquer ponto do bloco; aninhados, a de cada um (a de fora encerra também os de dentro) |
+| `desbloqueia` | `Save_UnlockAll` do próprio jogo (o da aba de truques da janela do PC): todo personagem, estágio, música, item e as sete esferas. Só com `BT3_DESBLOQUEIO=1` e com o cartão vazio no começo da rodada (sem o arquivo de dados do save em `BT3_SAVES`, que no 360 é `game:\saves`): fora disso o roteiro para com erro, para o desbloqueio nunca ir para um save de verdade |
+| `confere som N` | o som do save em memória (`gSaveData->soundMode`: 0 estéreo, 1 mono) igual a N, ou falha com arquivo e linha |
 | `marca TEXTO` | uma linha no rastro |
 | `inclui ARQUIVO` | outro roteiro, relativo à pasta deste |
 | `fim` | sem janela, encerra o programa (saída 0); no 360, solta o controle |
@@ -559,6 +560,13 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     as do mesmo arquivo: `roteiros.py partes` corta o rastreio em partes de até 4 milhões de posições, cada arquivo
     inteiro numa só, e os mapas das partes, juntos e ordenados, são o mapa inteiro (conferido no Duelo, cortado em
     partes de 1 milhão: `mapa.tsv` e conflitos idênticos).
+  - **Ler a estrutura do jogo fora do jogo pede os tipos do jogo.** O `confere som` lê `gSaveData->soundMode` pelo
+    `include/sys/save.h`, e o `roteiro.c` compilado só com `-Iinclude` pegou o `s64` do `types.h` (um `long`, 4 bytes
+    na x86 de 32 bits): o `SaveData` saiu com 16.368 bytes e o campo em 0x1694, lendo outra opção (o roteiro acusou
+    "som 0, esperado 1" logo no primeiro passo). Os fontes do jogo compilam com `-include port_compat.h` (`s64` de 64
+    bits); o `roteiro.c` agora também, nas três builds, e um `typedef` com tamanho negativo para a build se o campo
+    sair de 0x16A4. O gdb também não ajuda aqui: `gSaveData` sai "unknown type" (leia por `*(int*)(*(char**)&gSaveData
+    + 0x16A4)`).
   - **gdb: dois `break` no mesmo endereço, cada um com `commands ... continue`,** só rodam os comandos do primeiro (o
     `continue` dele retoma antes do segundo). Junte num só, com `if` dentro.
   - **A PPC com o mapa passa adiante nos menus sem conversor** (para conferir o "sem conversor" pela guarda, que só

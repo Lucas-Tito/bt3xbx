@@ -175,7 +175,9 @@ def construir(alvo):
         (["chamadas"] if alvo.chamadas else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
-        junta(nome, o, run(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-w"] + alvo.hard +
+        # (o roteiro lê o save do jogo pela estrutura dele, include/sys/save.h, com os tipos do jogo: port_compat.h)
+        tipos_jogo = ["-Iinclude", "-Iport/include", "-include", "port_compat.h"] if nome == "roteiro" else []
+        junta(nome, o, run(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-w"] + alvo.hard + tipos_jogo +
                            [f"port/x360/headless/{nome}.c", "-o", o]))
     # big-endian: a conversão por formato (port/x360/conv), que o jogo chama em tempo de jogo (Port_ConvertAnim)
     if alvo.be:

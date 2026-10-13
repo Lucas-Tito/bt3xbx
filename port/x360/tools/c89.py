@@ -74,7 +74,10 @@ def grupos():
     out.append(("hl_", ROOT / "port/x360/headless/sem_janela.c", ["-std=gnu99", "-DX360_GS_D3D", I("port/x360/headless")],
                 False))
     # o roteiro de controle (F4, etapa 4): o mesmo leitor das builds sem janela
-    out.append(("hl_", ROOT / "port/x360/headless/roteiro.c", ["-std=gnu99", I("port/x360/headless")], False))
+    # (com os tipos do jogo, port_compat.h, como os fontes dele: o roteiro lê o save pela estrutura, sys/save.h)
+    out.append(("hl_", ROOT / "port/x360/headless/roteiro.c",
+                ["-std=gnu99", I("include"), I("port/include"), "-include", "port_compat.h", I("port/x360/headless")],
+                False))
     return out
 
 

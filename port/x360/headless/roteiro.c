@@ -7,7 +7,9 @@
  *
  *   BT3_ROTEIRO=<arquivo>   liga o roteiro (sem ela, nada muda: Roteiro_Pad devolve 0 e o controle fica parado)
  *   BT3_DESBLOQUEIO=1       permite o passo "desbloqueia" (Save_UnlockAll do próprio jogo, o mesmo da aba de truques
- *                           da janela do PC); sem ela o passo para o roteiro com erro. Nunca no jogo normal
+ *                           da janela do PC); sem ela o passo para o roteiro com erro. Nunca no jogo normal. E só com
+ *                           o cartão vazio no começo da rodada (sem o arquivo de dados do save na pasta de saves,
+ *                           BT3_SAVES): o desbloqueio iria para o save de verdade na próxima gravação
  *
  * Com o roteiro ligado, cada troca de tela vai ao log ("tela N vblank V quadro Q"), e cada espera cumprida também
  * ("roteiro: arquivo:linha ok ..."): é o rastro que os roteiros e as comparações usam. Na build sem janela (x86 e
@@ -21,6 +23,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <stddef.h>
+
+#include "sys/save.h" /* gSaveData (SaveData), Save_UnlockAll */
+
+/* O campo do "confere som" onde o jogo o tem (save.h: 0x16A4). Este arquivo compila com os tipos do jogo
+   (port_compat.h, forçado como nos fontes do jogo: s64 de 64 bits); sem eles o SaveData sai menor e o campo cai em
+   0x1694, lendo outra opção. A build para aqui se isso voltar a acontecer. */
+typedef char RoteiroSaveConfere[offsetof(SaveData, soundMode) == 0x16A4 ? 1 : -1];
+
 /* O estado do jogo que identifica a tela. Os tipos completos são do jogo; aqui só os campos lidos, nos mesmos
    deslocamentos (as três builds têm ponteiros de 32 bits). */
 extern struct { int unk0[5]; int flags; int mode; } *gProgress; /* include/menu/menu_a.h: flags 0x14, mode 0x18 */
@@ -28,8 +39,6 @@ extern struct { int unk0[9]; int state; } *gMcFlow;             /* include/sys/m
 extern struct { int state; } *gBtlSeq;                         /* include/battle/btl_seq.h: >= 2 com a luta andando */
 extern int gPortMenuMode;                                      /* port/src/headless.c: 1 enquanto os menus rodam */
 extern unsigned gPortVBlanks;                                  /* port/src/plat_stub.c */
-extern void *gSaveData;
-extern void Save_UnlockAll(void *opt);                         /* src/sys/save.c */
 
 #ifdef PORT_X360
 void Diario_Escrever(const char *formato, ...);
@@ -93,7 +102,7 @@ static void nome_tela(int t, char *s) {
 
 /* ------------------------------------------------------------------ o roteiro */
 
-enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA };
+enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE };
 enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA };
 
 typedef struct Passo {
@@ -101,7 +110,7 @@ typedef struct Passo {
     unsigned botoes;    /* P_APERTA, P_SEGURA: os bits de pad360.c (1 = apertado) */
     int n;              /* P_QUADROS, P_SEGURA: quadros; P_APERTA: vezes (sem "ate") */
     int segura, solta;  /* P_APERTA: o ritmo de cada vez */
-    int cond, valor;    /* P_ESPERA e P_APERTA com "ate": a condição */
+    int cond, valor;    /* P_ESPERA e P_APERTA com "ate": a condição; P_CONFERE: o valor esperado */
     int max;            /* quadros até a falha */
     int par;            /* P_REPETE: o índice do P_VOLTA; P_VOLTA: o do P_REPETE */
     char onde[80];      /* arquivo:linha, para o log */
@@ -119,6 +128,7 @@ static int sProf;               /* profundidade dos "inclui" */
 static int sAbertos[8], sNAbertos; /* os "repete" ainda sem "volta", na leitura */
 static struct { int passo, t, inicio; } sLaco[8]; /* os "repete" em andamento: o passo, quadros nele, quadro da volta */
 static int sNLaco;
+static int sCartaoVazio = 1;    /* sem o arquivo de dados do save no começo da rodada (P_DESBLOQUEIA) */
 
 static const struct { const char *nome; unsigned bit; } kBotoes[] = {
     {"SELECT", 0x0001}, {"L3", 0x0002}, {"R3", 0x0004}, {"START", 0x0008}, {"CIMA", 0x0010}, {"DIREITA", 0x0020},
@@ -223,6 +233,15 @@ static Passo *novo(const char *onde, int tipo) {
 
 static void ler(const char *caminho);
 
+/* o nome do arquivo sem a pasta: depois da última "/" ou "\" (o 360 usa as duas) */
+static const char *sem_pasta(const char *caminho) {
+    const char *a = strrchr(caminho, '/'), *b = strrchr(caminho, '\\');
+    if (b != NULL && (a == NULL || b > a)) {
+        a = b;
+    }
+    return a != NULL ? a + 1 : caminho;
+}
+
 /* uma linha já sem o comentário, em palavras */
 static void linha(const char *caminho, const char *onde, char **pal, int n) {
     Passo *p;
@@ -233,12 +252,7 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
     if (igual(pal[0], "inclui")) {
         /* relativo à pasta do arquivo que inclui */
         char outro[300];
-        const char *barra = strrchr(caminho, '/'), *barra2 = strrchr(caminho, '\\');
-        size_t k;
-        if (barra2 != NULL && (barra == NULL || barra2 > barra)) {
-            barra = barra2;
-        }
-        k = barra != NULL ? (size_t)(barra - caminho + 1) : 0;
+        size_t k = (size_t)(sem_pasta(caminho) - caminho);
         if (n != 2 || k + strlen(pal[1]) >= sizeof(outro)) {
             erro_linha(onde, "inclui ARQUIVO", NULL);
         }
@@ -285,6 +299,13 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
     } else if (igual(pal[0], "desbloqueia")) {
         p = novo(onde, P_DESBLOQUEIA);
         i = 1;
+    } else if (igual(pal[0], "confere")) { /* confere som N: o campo do save em memória (gSaveData) igual a N */
+        if (n < 2 || !igual(pal[1], "som")) {
+            erro_linha(onde, "confere som N", n > 1 ? pal[1] : NULL);
+        }
+        p = novo(onde, P_CONFERE);
+        p->valor = numero(onde, n > 2 ? pal[2] : NULL);
+        i = 3;
     } else if (igual(pal[0], "marca")) { /* marca TEXTO: uma linha no rastro */
         p = novo(onde, P_MARCA);
         for (i = 1; i < n; i++) {
@@ -335,8 +356,7 @@ static void ler(const char *caminho) {
         sprintf(buf, "não abre %.200s", caminho);
         falha(buf);
     }
-    base = strrchr(caminho, '/');
-    base = base != NULL ? base + 1 : caminho;
+    base = sem_pasta(caminho);
     while (fgets(buf, sizeof(buf), fp) != NULL) {
         char *c = strchr(buf, '#'), *s = buf;
         int n = 0;
@@ -369,6 +389,23 @@ static void iniciar(void) {
     sAtivo = caminho != NULL && caminho[0] != '\0';
     if (!sAtivo) {
         return;
+    }
+    {
+        /* o cartão no começo da rodada: o arquivo de dados do save (ou o .new de uma gravação interrompida) na pasta
+           de saves, onde port/src/plat_mc.c o põe (host_path: BT3_SAVES, ou "saves", + "/card1/" + o caminho do
+           jogo); no 360 o BT3_SAVES é game:\saves (posix360.c) */
+        const char *raiz = getenv("BT3_SAVES") != NULL ? getenv("BT3_SAVES") : "saves";
+        char dados[400];
+        FILE *fp;
+        int k;
+        for (k = 0; k < 2 && sCartaoVazio; k++) {
+            sprintf(dados, "%.300s/card1/BASLUS-21678DBZT3/BASLUS-21678DBZT3%s", raiz, k ? ".new" : "");
+            fp = fopen(dados, "rb");
+            if (fp != NULL) {
+                fclose(fp);
+                sCartaoVazio = 0;
+            }
+        }
     }
     ler(caminho);
     if (sNAbertos != 0) {
@@ -443,19 +480,23 @@ static unsigned quadro(void) {
     char s[300];
     for (;;) {
         Passo *p;
-        /* o "repete" mais interno termina assim que a condição dele se cumpre, em qualquer ponto do bloco */
-        if (sNLaco > 0) {
-            Passo *r = &sPassos[sLaco[sNLaco - 1].passo];
+        int k, saiu = 0;
+        /* cada "repete" em andamento termina assim que a condição dele se cumpre, em qualquer ponto do bloco; o de
+           fora primeiro, e ele encerra também os de dentro */
+        for (k = 0; k < sNLaco && !saiu; k++) {
+            Passo *r = &sPassos[sLaco[k].passo];
             if (cumprida(r)) {
                 ok(r);
                 sPasso = r->par + 1;
                 sT = 0;
-                sNLaco--;
-                continue;
-            }
-            if (sLaco[sNLaco - 1].t >= r->max) {
+                sNLaco = k;
+                saiu = 1;
+            } else if (sLaco[k].t >= r->max) {
                 esgotou(r);
             }
+        }
+        if (saiu) {
+            continue;
         }
         if (sPasso >= sN) {
             return 0;
@@ -525,8 +566,27 @@ static unsigned quadro(void) {
                 sprintf(s, "%s: desbloqueia sem save na memória", p->onde);
                 falha(s);
             }
+            if (!sCartaoVazio) {
+                sprintf(s, "%s: desbloqueia recusado: o cartão já tinha um save no começo da rodada, e o desbloqueio "
+                        "iria para ele (use uma pasta de saves vazia em BT3_SAVES)", p->onde);
+                falha(s);
+            }
             Save_UnlockAll(gSaveData);
             sprintf(s, "roteiro: %s desbloqueado (Save_UnlockAll) vblank %u quadro %u", p->onde, gPortVBlanks, sQuadro);
+            diz(s);
+            proximo();
+            continue;
+        case P_CONFERE:
+            if (gSaveData == NULL) {
+                sprintf(s, "%s: confere sem save na memória", p->onde);
+                falha(s);
+            }
+            if (gSaveData->soundMode != p->valor) {
+                sprintf(s, "%s: som %d (gSaveData->soundMode), esperado %d", p->onde, (int)gSaveData->soundMode,
+                        p->valor);
+                falha(s);
+            }
+            sprintf(s, "roteiro: %s ok som %d vblank %u quadro %u", p->onde, p->valor, gPortVBlanks, sQuadro);
             diz(s);
             proximo();
             continue;
