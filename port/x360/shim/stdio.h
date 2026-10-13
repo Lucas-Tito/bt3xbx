@@ -25,6 +25,11 @@ char *Port_X360Fgets(char *, int, FILE *);
 #define fclose Port_X360Fclose
 #define fgetc Port_X360Fgetc
 #define fgets Port_X360Fgets
+/* apagar e trocar o nome com a tradução de caminho (a gravação atômica do cartão, port/src/plat_mc.c) */
+int Port_X360Remove(const char *);
+int Port_X360Rename(const char *, const char *);
+#define remove Port_X360Remove
+#define rename Port_X360Rename
 FILE *fopen(const char *, const char *);
 int fclose(FILE *);
 size_t fread(void *, size_t, size_t, FILE *);

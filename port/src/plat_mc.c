@@ -17,6 +17,13 @@
  *     sceMcGetDir    the number of entries that match (the game only asks "is this directory there": 1 or 0)
  *     sceMcRead / sceMcWrite   bytes transferred;   sceMcSeek   the new position;   sceMcClose / sceMcFormat   0
  * The names are the library's addresses in the PS2 executable; the game sources #define the sce names onto them.
+ *
+ * Big-endian builds (Xbox 360 and the PowerPC test build, PORT_MC_ATOMIC): a power cut never leaves a half-written
+ * save (bt3xbx, docs/x360/decisoes.md 22). A file opened for writing is held in memory; on sceMcClose the whole file
+ * goes to NAME.tmp (every write, the flush to the disk and the close checked), NAME.tmp is renamed NAME.new (the
+ * commit point: a .new is always complete), NAME is deleted and NAME.new renamed NAME (FATX cannot rename over an
+ * existing file). Any card path that is used first finishes or undoes an interrupted save: a .new replaces NAME,
+ * a .tmp is deleted. A failure is the card's own error (-5), which the game shows as "could not save".
  */
 #include <dirent.h>
 #include <stddef.h>
@@ -27,6 +34,13 @@
 #ifdef _WIN32
 #include <direct.h>
 #define mkdir(path, mode) _mkdir(path) /* Windows: no permission bits */
+#endif
+
+#if defined(PORT_BIG_ENDIAN) && !defined(PORT_MC_ATOMIC)
+#define PORT_MC_ATOMIC
+#endif
+#if defined(PORT_MC_ATOMIC) && !defined(PORT_X360) && !defined(_WIN32)
+#include <unistd.h> /* fsync, _exit */
 #endif
 
 #define MC_FILES 8
@@ -61,6 +75,239 @@ static int request(int cmd, int result) {
     return 0;
 }
 
+#ifdef PORT_MC_ATOMIC
+/* The contents of a file open for writing (host memory, like sHost; a state restored while a save is open is not
+   supported, and the big-endian builds never restore one). */
+PORT_HOST static struct { unsigned char *data; long size, cap; int dirty; } sBuf[MC_FILES];
+
+#ifdef PORT_X360
+void Diario_Escrever(const char *formato, ...);
+#define MC_LOG(line) Diario_Escrever("%s", line)  /* the console's log, game:\bt3xbx.log */
+#define MC_COMMIT_MODE "wbc"                      /* "c": fflush goes on to the disk (FlushFileBuffers) */
+#elif defined(_WIN32)
+#define MC_LOG(line) fprintf(stderr, "%s\n", line)
+#define MC_COMMIT_MODE "wbc"
+#else
+#define MC_LOG(line) fprintf(stderr, "%s\n", line)
+#define MC_COMMIT_MODE "wb"                       /* fsync after the fflush */
+#endif
+
+/* The card path of a host path, for the log. */
+static const char *mc_name(const char *path) {
+    const char *c = strstr(path, "card1");
+    return c != NULL ? c + 6 : path;
+}
+
+static int mc_exists(const char *path) {
+    struct stat st;
+    return stat(path, &st) == 0;
+}
+
+/* Test only (never set by default): BT3_MC_FALHA=escrita makes the write of the temporary file short, so the save
+   fails as a full card would; BT3_MC_FALHA=queda1|queda2|queda3 ends the program (as a power cut) half-way through
+   the temporary file, after NAME.new exists, after NAME was deleted. ":SUFFIX" limits it to the paths that end with
+   SUFFIX. The log lines are in Portuguese, like the rest of the console log (bt3xbx). */
+static int mc_fail(const char *what, const char *path) {
+    const char *v = getenv("BT3_MC_FALHA");
+    size_t n = strlen(what), lp = strlen(path), ls;
+    if (v == NULL || strncmp(v, what, n) != 0 || (v[n] != '\0' && v[n] != ':')) {
+        return 0;
+    }
+    if (v[n] == '\0') {
+        return 1;
+    }
+    ls = strlen(v + n + 1);
+    return lp >= ls && strcmp(path + lp - ls, v + n + 1) == 0;
+}
+
+static void mc_cut(const char *what, const char *path) {
+#if !defined(PORT_X360) && !defined(_WIN32)
+    if (mc_fail(what, path)) {
+        char line[700];
+        snprintf(line, sizeof(line), "mc: queda simulada (%s) gravando %s", what, mc_name(path));
+        MC_LOG(line);
+        _exit(86);
+    }
+#else
+    (void)what; (void)path;
+#endif
+}
+
+/* Finishes or undoes a save that a power cut interrupted: NAME.new is complete (it is only named so after the
+   commit), NAME.tmp may be anything. */
+static void mc_recover(const char *path) {
+    char tmp[620], fresh[620], line[700];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    snprintf(fresh, sizeof(fresh), "%s.new", path);
+    if (mc_exists(tmp)) {
+        remove(tmp);
+        snprintf(line, sizeof(line), "mc: %s.tmp de uma gravação interrompida apagado (vale o anterior, se houver)",
+                 mc_name(path));
+        MC_LOG(line);
+    }
+    if (mc_exists(fresh)) {
+        remove(path);
+        snprintf(line, sizeof(line), "mc: %s.new de uma gravação interrompida %s", mc_name(path),
+                 rename(fresh, path) == 0 ? "toma o lugar do arquivo" : "não pôde ser renomeado");
+        MC_LOG(line);
+    }
+}
+
+/* The whole file to the disk under its name, or nothing changed: 0, or -5 (libmc: the card refused the write). */
+static int mc_commit(const char *path, const unsigned char *data, long size) {
+    char tmp[620], fresh[620], line[700];
+    const char *step = NULL;
+    long n = mc_fail("escrita", path) ? size / 2 : size;
+    FILE *f;
+
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+    snprintf(fresh, sizeof(fresh), "%s.new", path);
+    remove(tmp);
+    f = fopen(tmp, MC_COMMIT_MODE);
+    if (f == NULL) {
+        step = "abertura do temporário";
+    } else {
+        if (n > 0 && fwrite(data, 1, (size_t)n, f) != (size_t)n) {
+            step = "escrita";
+        } else if (n != size) {
+            step = "escrita (teste: BT3_MC_FALHA)";
+        }
+        if (fflush(f) != 0 && step == NULL) {
+            step = "descarga (fflush)";
+        }
+        mc_cut("queda1", path);
+#if !defined(PORT_X360) && !defined(_WIN32)
+        if (step == NULL && fsync(fileno(f)) != 0) {
+            step = "fsync";
+        }
+#endif
+        if (fclose(f) != 0 && step == NULL) {
+            step = "fechamento (fclose)";
+        }
+    }
+    if (step == NULL) {
+        remove(fresh);
+        if (rename(tmp, fresh) != 0) {
+            step = "troca de nome para .new";
+        }
+    }
+    if (step != NULL) {
+        remove(tmp);
+        snprintf(line, sizeof(line), "mc: gravação de %s (%ld bytes) FALHOU (%s); o arquivo anterior fica",
+                 mc_name(path), size, step);
+        MC_LOG(line);
+        return -5;
+    }
+    mc_cut("queda2", path);
+    remove(path);
+    mc_cut("queda3", path);
+    if (rename(fresh, path) != 0) {
+        mc_recover(path); /* once more; when that fails too, the next use of the path tries again */
+        if (!mc_exists(path)) {
+            snprintf(line, sizeof(line), "mc: gravação de %s (%ld bytes) FALHOU na troca de nome; fica como .new",
+                     mc_name(path), size);
+            MC_LOG(line);
+            return -5;
+        }
+    }
+    snprintf(line, sizeof(line), "mc: gravou %s (%ld bytes): ok", mc_name(path), size);
+    MC_LOG(line);
+    return 0;
+}
+
+static void mc_drop(int fd) {
+    free(sBuf[fd].data);
+    sBuf[fd].data = NULL;
+    sBuf[fd].size = sBuf[fd].cap = 0;
+    sBuf[fd].dirty = 0;
+}
+
+/* sceMcOpen for writing: the file's present contents into memory. A file that the open creates is written at the
+   close even when nothing is written into it. Returns the libmc result. */
+static int mc_open_write(int fd, const char *path, int mode) {
+    FILE *f = fopen(path, "rb");
+    long n = 0;
+
+    mc_drop(fd);
+    if (f == NULL) {
+        if (!(mode & 0x200)) {
+            return -4;
+        }
+        sBuf[fd].dirty = 1;
+        return fd;
+    }
+    if (fseek(f, 0, SEEK_END) == 0) {
+        n = ftell(f);
+    }
+    fseek(f, 0, SEEK_SET);
+    if (n > 0) {
+        sBuf[fd].data = (unsigned char *)malloc((size_t)n);
+        if (sBuf[fd].data == NULL || fread(sBuf[fd].data, 1, (size_t)n, f) != (size_t)n) {
+            fclose(f);
+            mc_drop(fd);
+            return -5;
+        }
+        sBuf[fd].size = sBuf[fd].cap = n;
+    }
+    fclose(f);
+    return fd;
+}
+
+static int mc_write(int fd, const void *buf, int size) {
+    long end = sMc[fd].pos + size;
+    if (size < 0) {
+        return -5;
+    }
+    if (end > sBuf[fd].cap) {
+        long cap = sBuf[fd].cap * 2 > end ? sBuf[fd].cap * 2 : end;
+        unsigned char *p = (unsigned char *)realloc(sBuf[fd].data, (size_t)cap);
+        if (p == NULL) {
+            return -5;
+        }
+        sBuf[fd].data = p;
+        sBuf[fd].cap = cap;
+    }
+    if (sMc[fd].pos > sBuf[fd].size) {
+        memset(sBuf[fd].data + sBuf[fd].size, 0, (size_t)(sMc[fd].pos - sBuf[fd].size));
+    }
+    memcpy(sBuf[fd].data + sMc[fd].pos, buf, (size_t)size);
+    sMc[fd].pos = end;
+    if (end > sBuf[fd].size) {
+        sBuf[fd].size = end;
+    }
+    sBuf[fd].dirty = 1;
+    return size;
+}
+
+static int mc_read(int fd, void *buf, int size) {
+    long n = sBuf[fd].size - sMc[fd].pos;
+    if (n > size) {
+        n = size;
+    }
+    if (n <= 0) {
+        return 0;
+    }
+    Port_StateTouch(buf, (size_t)n);
+    memcpy(buf, sBuf[fd].data + sMc[fd].pos, (size_t)n);
+    sMc[fd].pos += n;
+    return (int)n;
+}
+
+static int mc_seek(int fd, int offset, int origin) {
+    long pos = (origin == 0 ? 0 : origin == 1 ? sMc[fd].pos : sBuf[fd].size) + offset;
+    sMc[fd].pos = pos < 0 ? 0 : pos;
+    return (int)sMc[fd].pos;
+}
+
+static int mc_close(int fd) {
+    int r = sBuf[fd].dirty ? mc_commit(sMc[fd].path, sBuf[fd].data, sBuf[fd].size) : 0;
+    mc_drop(fd);
+    return r;
+}
+
+#define MC_BUFFERED(fd) ((sMc[fd].mode & 2) != 0)
+#endif
+
 /* The host path of a card path; creates the card's folder on first use. Returns 0 for slot 2 (no card). */
 static int host_path(int port, const char *name, char *out, size_t size) {
     const char *root = getenv("BT3_SAVES") != NULL ? getenv("BT3_SAVES") : "saves";
@@ -79,6 +326,11 @@ static int host_path(int port, const char *name, char *out, size_t size) {
         return 0;
     }
     snprintf(out, size, "%s/%s", dir, name);
+#ifdef PORT_MC_ATOMIC
+    if (*name != '\0') {
+        mc_recover(out);
+    }
+#endif
     return 1;
 }
 
@@ -116,6 +368,24 @@ int func_002A1E58(int port, int slot, char *name, int mode) {
     if (fd == MC_FILES) {
         return request(2, -7); /* too many open files */
     }
+#ifdef PORT_MC_ATOMIC
+    if (mode & 2) {
+        int r = mc_open_write(fd, path, mode);
+        if (r < 0) {
+            return request(2, r);
+        }
+        if (sHost[fd] != NULL) {
+            fclose(sHost[fd]);
+            sHost[fd] = NULL;
+        }
+        sHostPath[fd][0] = '\0';
+        sMc[fd].open = 1;
+        sMc[fd].mode = mode;
+        sMc[fd].pos = 0;
+        snprintf(sMc[fd].path, sizeof(sMc[fd].path), "%s", path);
+        return request(2, fd);
+    }
+#endif
     f = fopen(path, (mode & 2) ? "r+b" : "rb");
     if (f == NULL && (mode & 0x200)) {
         f = fopen(path, "w+b");
@@ -150,6 +420,12 @@ int func_002A1FB8(int fd) {
     if (fd < 0 || fd >= MC_FILES || !sMc[fd].open) {
         return request(3, -4);
     }
+#ifdef PORT_MC_ATOMIC
+    if (MC_BUFFERED(fd)) {
+        sMc[fd].open = 0;
+        return request(3, mc_close(fd));
+    }
+#endif
     if (sHost[fd] != NULL) {
         fclose(sHost[fd]);
         sHost[fd] = NULL;
@@ -161,6 +437,11 @@ int func_002A1FB8(int fd) {
 /* sceMcSeek: origin 0 = start, 1 = current, 2 = end */
 int func_002A2078(int fd, int offset, int origin) {
     FILE *f;
+#ifdef PORT_MC_ATOMIC
+    if (fd >= 0 && fd < MC_FILES && sMc[fd].open && MC_BUFFERED(fd)) {
+        return request(4, mc_seek(fd, offset, origin));
+    }
+#endif
     if (fd < 0 || fd >= MC_FILES || !sMc[fd].open || (f = host_file(fd)) == NULL) {
         return request(4, -4);
     }
@@ -174,12 +455,24 @@ int func_002A2078(int fd, int offset, int origin) {
 int func_002A2208(int fd, void *buf, int size) {
     FILE *f;
     int n;
+#ifdef PORT_MC_ATOMIC
+    if (fd >= 0 && fd < MC_FILES && sMc[fd].open && MC_BUFFERED(fd)) {
+        return request(5, mc_read(fd, buf, size));
+    }
+#endif
     if (fd < 0 || fd >= MC_FILES || !sMc[fd].open || (f = host_file(fd)) == NULL) {
         return request(5, -4);
     }
     fseek(f, sMc[fd].pos, SEEK_SET);
     Port_StateTouch(buf, (size_t)size); /* (gs/state.c: file data straight into watched memory) */
     n = (int)fread(buf, 1, (size_t)size, f);
+#ifdef PORT_MC_ATOMIC
+    {
+        char line[700];
+        snprintf(line, sizeof(line), "mc: leu %s em %ld: %d de %d bytes", mc_name(sMc[fd].path), sMc[fd].pos, n, size);
+        MC_LOG(line);
+    }
+#endif
     sMc[fd].pos += n;
     return request(5, n);
 }
@@ -189,6 +482,11 @@ int func_002A2320(int fd, void *buf, int size) {
     int n;
 
     FILE *f;
+#ifdef PORT_MC_ATOMIC
+    if (fd >= 0 && fd < MC_FILES && sMc[fd].open && MC_BUFFERED(fd)) {
+        return request(6, mc_write(fd, buf, size));
+    }
+#endif
     if (fd < 0 || fd >= MC_FILES || !sMc[fd].open || (f = host_file(fd)) == NULL) {
         return request(6, -4);
     }

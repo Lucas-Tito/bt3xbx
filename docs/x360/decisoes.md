@@ -598,6 +598,15 @@ Escolhas do Lucas para a F4 (plano, "F4 em etapas"):
   só o torna robusto a queda de energia: gravar em temporário e trocar o nome, conferir o `fclose`.
   - **Recusado:** XContent (pacote no Armazenamento do console, seletor de dispositivo). Seria mais trabalho e
     teria comportamento sem perfil a medir.
+  - **Como ficou (etapa 3, 13/10/2026):** a camada do cartão (`port/src/plat_mc.c`, só nas builds big-endian:
+    `PORT_MC_ATOMIC`) guarda em memória o arquivo aberto para gravação e, no `sceMcClose`, grava o arquivo inteiro em
+    `NOME.tmp` (cada `fwrite`, o `fflush` até o disco e o `fclose` conferidos), troca o nome para `NOME.new`, apaga
+    `NOME` e troca `NOME.new` para `NOME`. O `.new` é o ponto de compromisso: só existe completo. Ao usar um caminho
+    do cartão, um `.new` que sobrou toma o lugar do arquivo e um `.tmp` é apagado. Falha vira o erro -5 da libmc, que
+    o jogo mostra no fluxo do cartão ("não foi possível salvar"). Apagar antes de trocar o nome porque o `rename` da
+    CRT do XDK é o `MoveFile`, que não substitui arquivo existente.
+    - **Recusado:** gravar direto no arquivo (como o PC) ou só no `.tmp` com troca de nome sem o `.new`: sem um nome
+      que só exista completo, a leitura não sabe se um `.tmp` órfão de uma primeira gravação está inteiro.
 - **Ajuste depois do inventário (etapa 1, 13/10/2026):** o "submenu dos modos" do essencial é o `DuelMenu` (modo 38),
   e o save essencial é o das Opções, pelo `McFlow`. O `ModeMenu` (lista de episódios da História) e o DcSave (Data
   Center e Evolution Z) vão para a etapa 9 (`formatos/menus-modos.md` 5).

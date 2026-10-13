@@ -188,6 +188,21 @@ char *Port_X360Fgets(char *s, int n, FILE *f) {
     return i > 0 ? s : NULL;
 }
 
+/* Para a gravação atômica do cartão (port/src/plat_mc.c, decisão 22): MoveFile não troca o nome por cima de um arquivo
+   que existe (o FATX recusa), então quem chama apaga o destino antes. */
+int Port_X360Remove(const char *caminho) {
+    char c[512];
+    caminho360(caminho, c, sizeof(c));
+    return DeleteFile(c) ? 0 : -1;
+}
+
+int Port_X360Rename(const char *de, const char *para) {
+    char a[512], b[512];
+    caminho360(de, a, sizeof(a));
+    caminho360(para, b, sizeof(b));
+    return MoveFile(a, b) ? 0 : -1;
+}
+
 static FILE *sSaida;
 
 FILE *Port_X360Saida(void) {
