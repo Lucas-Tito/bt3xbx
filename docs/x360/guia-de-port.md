@@ -76,7 +76,7 @@ própria só para isso). Para cá só volta texto.
 | `make_spa.py` | gera o SPA (XDBF: XTHD, XSTC, nome, ícone 64x64), porque o `spac.exe` é .NET e não roda no wine |
 | `make_icon.py` | ícone próprio, sem arte do jogo |
 | `subir.py` | FTP para o console com conferência de md5; `--baixar` traz o log |
-| `build_f2.sh` | o jogo sem janela inteiro até o `default.xex` (F2): `c89.py`, `cl.exe`, `coff.py`, link com stubs automáticos para o que falta, `dat360.py`, `imagexex` |
+| `build_f2.sh` | o jogo inteiro até o `default.xex` (F2): `c89.py`, `cl.exe`, `coff.py`, link com stubs automáticos para o que falta, `dat360.py`, `imagexex`. Desde a F3 leva o backend D3D9 (`port/x360/src/gs`, shaders pelo `fxc`): sem janela por padrão, desenhando com `BT3_GS=gpu` no `ambiente.txt` |
 | `c89.py` | rebaixa o C do jogo e do port para o C89 do `cl` pelo AST do clang (literal composto, declaração no meio do bloco, `typeof`, expressão-comando, case com intervalo), com os headers mínimos de `port/x360/shim` |
 | `coff.py` | as tabelas do executável (esqueleto `port/data/*.s`) como objetos COFF do 360; `--absoluto NOME=VALOR` faz o papel do `--defsym` |
 | `dat360.py` | `default.dat` e `default.swap` ao lado do `.xex`, pelo `.map` da Microsoft (o `esqueleto()` do `headless.py` para o 360) |
@@ -376,8 +376,22 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     versão usou `LIN_`, e o resultado veio em blocos e fora do contrato. Leia com `XGAddress2DTiledOffset`
     ou `XGUntileTextureLevel`;
   - o `fxc` do XDK roda no wine e gera o microcódigo (`xvs_3_0`) em header: shaders só no build.
+  - **O microcódigo do Xenos não tem `discard`:** o `fxc` do XDK recusa com "X3500: Microcode Compiler not yet
+    implemented: 'discard' statement". Use `clip(x)` (descarta com x < 0). Gradiente (`tex2D`, `ddx`) fora de desvio
+    dinâmico: calcule `ddx`/`ddy` antes e amostre com `tex2Dgrad`.
+  - **Vários alvos com uma EDRAM só** (F3, etapa 7, decisão 20; o desenho, ainda não medido no console): um par de superfícies na EDRAM (`Base` em tiles,
+    `XGSurfaceSize`) serve a todos os alvos; cada um tem uma textura tiled com o conteúdo. Trocar de alvo é `Resolve`
+    do anterior (retângulo em múltiplos de 8, `GPU_RESOLVE_ALIGNMENT`) e um retângulo desenhado com a textura do novo
+    sobre a EDRAM limpa. O back buffer também mora na EDRAM (base 0): depois do present, nada do alvo sobrou lá.
+  - Da documentação, ainda não medido no console: recurso preso no dispositivo (`SetTexture`) fica `IsBusy` até ser
+    solto, e `LockRect` ou o último `Release` esperam por ele, então solte as texturas antes de ler uma de volta e só
+    libere as soltas depois de `InsertFence` e `IsBusy() == FALSE`; o destino do `Resolve` não deve estar preso como
+    textura; `DrawPrimitiveUP` aceita menos de 65.535 vértices por chamada; só a thread dona usa o dispositivo
+    (`ReleaseThreadOwnership` numa, `AcquireThreadOwnership` na outra).
   - Um print da tela gravado pelo próprio programa (`tela.bmp`) dispensa descrição do usuário, desde que
     tenha uma referência que não dependa do que se testa (um retângulo de `Clear` com cor pura).
+- **`docker run ... | tr` com o `cl -Zi` dentro não termina:** o `cl` sobe o `mspdbsrv.exe`, que herda a saída e fica
+  vivo depois do `cl`; o pipe nunca fecha. Redirecione a saída do `cl` para arquivo (como o `build_f2.sh`) e leia depois.
 - **`atof` sem declaração no C89 do `cl`:** "C4013: assuming extern returning int", e no PowerPC o valor viria do
   registrador de inteiro, não do de float. O shim (`port/x360/shim/stdlib.h`) declara o que a CRT tem; procure `C4013`
   nos `.txt` da build depois de cada fonte novo.

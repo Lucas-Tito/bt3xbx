@@ -9,12 +9,17 @@
  *   verde    terminou bem; qualquer botão volta para o dashboard
  *   vermelho falhou (o log diz onde: game:\bt3xbx.log, game:\saida.txt)
  * O jogo roda noutra thread, com pilha grande e a FPU em truncamento (o modelo do PS2 para soma e multiplicação).
+ * Com BT3_GS=gpu (F3, etapa 7) o jogo desenha: o dispositivo passa para a thread do jogo, que apresenta um quadro por
+ * quadro do GS (port/x360/src/gs/gs_d3d.cpp), e a main só espera; quando o jogo termina, ela pega o dispositivo de
+ * volta para a cor do fim.
  * Por quadro: game:\hash.txt (o mesmo formato da build de PC, para port/x360/tools/compara.py) e o tempo de cada
  * quadro no log (port/x360/src/f2/estado360.c).
  */
 #include <xtl.h>
 #include <float.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "diario.h"
 
 extern "C" {
@@ -28,6 +33,8 @@ void Estado_Resumo(void);                  /* estado360.c */
 void Port_X360FecharSaida(void);           /* posix360.c */
 void Iso_Iniciar(void);                    /* iso360.c */
 extern const char *volatile gPortStage;    /* plat_mem.c: até onde o arranque chegou */
+void GsD3d_Soltar(void);                   /* port/x360/src/gs/gs_d3d.cpp */
+D3DDevice *gX360Dev;                       /* o dispositivo, para o backend do GS */
 }
 
 static volatile DWORD gCor = 0xFFE0C000;     /* amarelo */
@@ -45,6 +52,7 @@ extern "C" void Port_Sair(int codigo) {
     Estado_Resumo();
     Port_X360FecharSaida();
     _flushall();
+    GsD3d_Soltar(); /* o dispositivo volta para a main mostrar a cor do fim */
     InterlockedExchange(&gCodigo, codigo);
     InterlockedExchange((volatile LONG *)&gCor, codigo == 0 ? 0xFF20A040 : 0xFFC02020);
     InterlockedExchange(&gTerminou, 1);
@@ -73,6 +81,7 @@ static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
     gCor = 0xFFC02020;
     InterlockedExchange(&gTerminou, 1);
     if (GetCurrentThreadId() == gThreadJogo) {
+        GsD3d_Soltar();
         ExitThread(5); /* só o jogo morre: a main segue com a tela vermelha e volta ao dashboard no botão */
     }
     Diario_Fechar();
@@ -115,6 +124,7 @@ void __cdecl main() {
     D3DDevice *dev = NULL;
     HANDLE t;
     int local;
+    bool gpu;
 
     Diario_Abrir("game:\\bt3xbx.log");
     SetUnhandledExceptionFilter(AoMorrer);
@@ -143,6 +153,17 @@ void __cdecl main() {
         }
     }
 
+    /* BT3_GS=gpu: quem desenha é o jogo (gs_d3d.cpp pega o dispositivo no começo do desenho) */
+#pragma warning(suppress : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt, não o da CRT) */
+    gpu = getenv("BT3_GS") != NULL && strcmp(getenv("BT3_GS"), "gpu") == 0;
+    gX360Dev = dev;
+    if (gpu) {
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF000000, 1.0f, 0);
+        dev->Present(NULL, NULL, NULL, NULL);
+        dev->ReleaseThreadOwnership();
+        Diario_Escrever("BT3_GS=gpu: o jogo desenha");
+    }
+
     /* o jogo no núcleo 1 (thread de hardware 2), sozinho; pilha de 16 MB como a build de PC de 64 bits */
     if (!gTerminou) {
         t = CreateThread(NULL, 16 * 1024 * 1024, Jogo, NULL, CREATE_SUSPENDED, &gThreadJogo);
@@ -151,6 +172,24 @@ void __cdecl main() {
     }
 
     for (;;) {
+        if (gpu) {
+            if (!gTerminou) {
+                Sleep(50);
+                continue;
+            }
+            /* o jogo terminou: o dispositivo volta (GsD3d_Soltar); se ele morreu sem soltar, toma-se à força */
+            for (int espera = 0; espera < 40 && dev->QueryThreadOwnership() != 0 &&
+                                 dev->QueryThreadOwnership() != GetCurrentThreadId(); espera++) {
+                Sleep(50);
+            }
+            if (dev->QueryThreadOwnership() == 0) {
+                dev->AcquireThreadOwnership();
+            } else if (dev->QueryThreadOwnership() != GetCurrentThreadId()) {
+                Diario_Escrever("o dispositivo ainda era da thread %u: tomado", (unsigned)dev->QueryThreadOwnership());
+                dev->SetThreadOwnership(GetCurrentThreadId());
+            }
+            gpu = false;
+        }
         dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
         if (gTerminou) {

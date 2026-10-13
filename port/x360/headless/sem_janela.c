@@ -7,7 +7,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-/* gs_gpu.c: só é chamado com o GS em modo gpu */
+/* gs_gpu.c: só é chamado com o GS em modo gpu. Na build do 360 com o backend D3D9 (F3, etapa 7: c89.py define
+   X360_GS_D3D), estas entradas e o letreiro vêm do gs_draw.c de verdade. */
+#ifndef X360_GS_D3D
 int GsGpu_Init(void) { return 0; }
 void GsGpu_Draw(int type, int ctx, const void *v) { (void)type; (void)ctx; (void)v; }
 void GsGpu_DrawVu0(int layer, int ctx, const float *v, uint32_t n, const float *c) { (void)layer; (void)ctx; (void)v; (void)n; (void)c; }
@@ -24,6 +26,7 @@ int gGpuNewPipes, gGpuNewTex, gGpuNewTexPixels;
 /* gs_draw.c: o letreiro de fases e músicas de fora do disco, desenhado pela janela */
 volatile int gUiNameX, gUiNameY, gUiNameW, gUiNameH, gUiNameIdx, gUiNameReady;
 volatile int gUiSongX, gUiSongY, gUiSongW, gUiSongH, gUiSongIdx, gUiSongLit, gUiSongReady;
+#endif
 
 /* gs_input.c: sem janela, Port_PadRead devolve 0 (nenhum controle) */
 extern int Port_Setting(const char *name, int def);

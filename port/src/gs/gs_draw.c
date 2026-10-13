@@ -1228,6 +1228,19 @@ int GsGpu_Init(void) {
     gsVuIdx = malloc(MAX_VU_IDX * sizeof(uint32_t));
     gsVuUni = malloc(MAX_VU_UNIFORMS * sizeof(Vu0Uniform));
     gsDraws = malloc(MAX_DRAWS * sizeof(GsDraw));
+#ifdef PORT_X360
+    /* The Xbox 360 has one back end, Direct3D 9 on its own device (port/x360/src/gs/gs_d3d.cpp). */
+    (void)api;
+    {
+        extern GsBackend sD3dBackend;
+        sb = &sD3dBackend;
+        sBackend = sb;
+        if (!sb->init()) {
+            sBackend = NULL;
+            return 0;
+        }
+    }
+#else
     /* BT3_GPU_API=vulkan|gl|auto picks the back end. Both are complete renderers of the same list, so a
        picture from either should be the same (see the frame-by-frame compare in the port's docs). */
     if (api == NULL || strcmp(api, "auto") == 0) {
@@ -1260,6 +1273,7 @@ int GsGpu_Init(void) {
             return 0;
         }
     }
+#endif
     gsWhite = sb->whiteTex();
     gsFxOff = (unsigned)(getenv("BT3_FX_OFF") != NULL ? atoi(getenv("BT3_FX_OFF")) : Port_Setting("fx_off", 0)) & 31;
     gsGlowPercent = getenv("BT3_GLOW") != NULL ? atoi(getenv("BT3_GLOW")) : Port_Setting("glow", GLOW_DEFAULT);

@@ -4,9 +4,9 @@ do GCC.
 
     c89.py SAIDA [--grupo G] [FONTE...]   (na imagem bt3xbx-ferramentas, na raiz do repositório)
 
-Sem FONTE, todos os fontes da build sem janela do 360 (F2), por grupo, como a build PowerPC da F1
-(port/x360/tools/headless.py): o jogo, a biblioteca matemática do PS2 (newlib), o GS sem janela, a camada do port e
-os stubs sem janela. O que o 360 substitui por versão própria (port/x360/src) fica de fora.
+Sem FONTE, todos os fontes da build do 360 (F2), por grupo, como a build PowerPC da F1
+(port/x360/tools/headless.py): o jogo, a biblioteca matemática do PS2 (newlib), o GS (com a gravação do quadro para o
+backend D3D9 desde a F3), a camada do port e os stubs sem janela. O que o 360 substitui por versão própria (port/x360/src) fica de fora.
 
 Para cada fonte do jogo (a lista e a preparação do port de PC: port/tools/portsrc.py), escreve SAIDA/<nome>.c, um
 C autocontido que o cl compila sem headers:
@@ -30,6 +30,9 @@ I = lambda p: "-I" + str(ROOT / p)  # noqa: E731
 # O que o 360 troca por versão própria em port/x360/src (o resto de port/src e de port/src/gs entra como está).
 SUBSTITUIDOS = {"plat_crash", "plat_libm", "softfloat_ps2", "plat_fastvec", "state"}
 GS_SEM_JANELA = {"gs_core", "gs_sony", "gs_vu1", "namefont", "snd_adx", "snd_se"}  # e state.c (substituído)
+# F3, etapa 7: a gravação do quadro para o backend D3D9 do 360 (port/x360/src/gs/gs_d3d.cpp). Compila com o pedaço
+# de SDL que ela cita (port/x360/src/gs/sdl) e tira as entradas GsGpu_* vazias do sem_janela.c (X360_GS_D3D).
+GS_D3D = {"gs_draw"}
 
 
 def renomes(f):
@@ -54,6 +57,9 @@ def grupos():
     for f in sorted((ROOT / "port/src/gs").glob("*.c")):
         if f.stem in GS_SEM_JANELA:
             out.append(("gs_", f, ["-std=gnu99", I("port/x360/headless"), I("port/src/gs")], False))
+        elif f.stem in GS_D3D:
+            out.append(("gs_", f, ["-std=gnu99", I("port/x360/src/gs/sdl"), I("port/x360/headless"), I("port/src/gs")],
+                        False))
     vu0 = ["-include", "vu0_names.h", "-DREF_VU0_EXTERN_ARITH"]
     for f in [ROOT / "src/port/vu0_a.c", ROOT / "src/port/vu0_b.c"] + sorted((ROOT / "port/src").glob("*.c")):
         if f.stem in SUBSTITUIDOS:
@@ -65,7 +71,8 @@ def grupos():
         extra = vu0 if nomes else ["-DSF_FAST_CALLS", "-include", "math.h", "-include", "stdlib.h",
                                    "-include", "port_libm.h"]
         out.append(("pc_", f, base + extra, not nomes))
-    out.append(("hl_", ROOT / "port/x360/headless/sem_janela.c", ["-std=gnu99", I("port/x360/headless")], False))
+    out.append(("hl_", ROOT / "port/x360/headless/sem_janela.c", ["-std=gnu99", "-DX360_GS_D3D", I("port/x360/headless")],
+                False))
     return out
 
 

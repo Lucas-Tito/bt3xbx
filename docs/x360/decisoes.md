@@ -472,3 +472,42 @@ nativas, a metade baixa primeiro**, na memória principal e na da VU.
   compilar com `-ffp-contract=off`, como o resto do port.
 - **Fica para a F5:** os vetores `u8 rgba[4]` dos vértices dos efeitos da luta e os pacotes da VU1 das tabelas do
   executável (`vu1_micro.data`), tipados como `u8[]` (`gpu.md` seção 6).
+
+## 20. O GsBackend D3D9 do 360: um alvo na EDRAM, os outros em texturas (13/10/2026)
+
+Etapa 7 da F3. A gravação do quadro é a do port de PC (`port/src/gs/gs_draw.c`, compilada no 360 sem mudança além da
+escolha do backend em `#ifdef PORT_X360`); o backend novo é `port/x360/src/gs/gs_d3d.cpp`, com os shaders em
+`gs_d3d.hlsl` (tradução de `gs.vert` e `gs.frag`) compilados pelo `fxc` do XDK no `build_f2.sh`. A mesma build roda
+sem janela (padrão) ou desenhando (`BT3_GS=gpu` no `ambiente.txt`).
+
+Padrões que o Lucas deixou e que podem ser revertidos:
+
+- **SCALE = 1.** Um alvo do GS de 1024 x 1024 com profundidade ocupa 832 + 832 dos 2.048 tiles da EDRAM. Escala maior
+  exige tiling predicado.
+- **Saída 1280 x 720**, a imagem 4:3 (512 x 448 do GS) em 960 x 720 no meio da tela, filtro linear.
+- **O desenho na thread do jogo,** com present a cada quadro do GS. A main cria o dispositivo e o solta
+  (`ReleaseThreadOwnership`); o backend o pega no init; `GsD3d_Soltar` o devolve no fim do jogo ou numa queda, e a main
+  volta a mostrar a cor do fim. Numa carga longa ninguém apresenta (a Guide demora a abrir nesse intervalo).
+
+Escolhas de implementação, dentro desses padrões:
+
+- **Um par de superfícies na EDRAM para todos os alvos.** Cor A8R8G8B8 na base 0, profundidade D24S8 logo depois;
+  cada alvo do GS tem uma textura tiled com o conteúdo dele. Trocar de alvo resolve o anterior (só o retângulo sujo,
+  múltiplo de 8) e põe o novo de volta com um retângulo desenhado sobre a EDRAM limpa. A profundidade de um alvo que
+  sai da EDRAM se perde: basta para o 2D; a luta (F5) vai precisar resolvê-la também, ou medir se as trocas de alvo
+  acontecem com profundidade viva.
+- **Sem o segundo alvo com o byte de alfa** (`outAux` do `gs.frag`): não cabe junto na EDRAM a 1024 x 1024. O teste
+  de alfa do destino (DATE) lê o alfa da própria cor, que guarda `min(A / 0x80, 1)` e chega a 1 exatamente com o bit 7
+  ligado; o FBA grava alfa 1 (o GS liga o bit 7). Os efeitos nativos que precisam do byte (contorno, tabela de
+  profundidade, cópia dos ids) ficam para a F5, os programas de vértice (VU1) também, e as imagens copiadas direto para
+  o quadro (filmes) para a F6: são contados no log e não desenhados.
+- **Vértices por `DrawPrimitiveUP`** (até 65.532 por chamada), sem buffer próprio: o 2D dos menus tem poucos.
+- **Texturas decodificadas** em `D3DFMT_LIN_A8B8G8R8` (o u32 do `gs_draw.c` sem troca, etapa 6), soltas só quando a
+  GPU terminou com elas (`IsBusy` depois do `InsertFence`). Sem pacote de texturas no 360.
+- **Ordem de bytes das texturas:** o `gs_draw.c` decodifica pela `Gs_VramRead`, que já lê a `sVram` (os bytes do PS2)
+  como little-endian em qualquer host (`GS_LE32`, decisão 19). O backend de GPU do PC não lê a `sVram` direto; só o
+  leitor de pacote de texturas usa `Gs_BlockPtr`, e para um hash de bytes.
+
+Conferência: o backend grava as imagens mostradas (`BT3_SHOT`, `game:\shots\gpu_NNNNN.ppm`, no formato e na numeração
+do rasterizador de software) e `port/x360/tools/compara_quadros.py` as mede contra as da etapa 4 no WSL. O teste no
+console está pendente (o console estava desligado quando o código ficou pronto).

@@ -64,8 +64,11 @@ de 16 bits a metade little-endian, os índices de 8 e 4 bits o byte e o nibble q
   rápidos de 32, 16, 8 e 4 bits e o geral).
 - `vram_rw`, que lê e grava um pixel como número, passa a palavra por `GS_LE32` (troca de bytes no big-endian, nada
   no PC). É o único lugar que lê a `sVram` como palavra.
-- `Gs_BlockPtr` devolve os bytes do PS2: quem decodifica textura a partir dele (o backend de GPU do PC, e o do 360
-  quando vier) lê little-endian.
+- `Gs_BlockPtr` devolve os bytes do PS2: quem lê textura a partir dele lê little-endian. Hoje só o leitor de pacote de
+  texturas do PC (`gs_texpack.c`), para um hash de bytes, igual em qualquer host.
+- A decodificação de textura dos backends de GPU (`gs_draw.c`, `texture_get` e `clut_texture`) e a cópia de um quadro
+  da memória (`gs_gl.c`, `gs_gpu.c`) passam pela `Gs_VramRead`: já saem certas num host big-endian. O backend do 360
+  (decisão 20) recebe delas o u32 `R | G<<8 | B<<16 | A<<24` e o põe numa textura `D3DFMT_LIN_A8B8G8R8` sem troca.
 - `Gs_PageHash` é chave de cache e só se compara no mesmo host: o valor muda entre x86 e PowerPC, sem efeito.
 - A captura (`BT3_SHOT`) grava R, G, B em bytes.
 

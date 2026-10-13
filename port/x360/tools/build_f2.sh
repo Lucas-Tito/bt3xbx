@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# F2: o jogo sem janela para o Xbox 360 (port/x360/src/f2/main360.cpp), da preparação ao .xex.
+# F2: o jogo para o Xbox 360 (port/x360/src/f2/main360.cpp), da preparação ao .xex. Sem janela por padrão; com
+# BT3_GS=gpu no ambiente.txt, desenhando pelo backend D3D9 (port/x360/src/gs/gs_d3d.cpp, F3, etapa 7).
 #   port/x360/tools/build_f2.sh          ->  build/x360/f2/default.xex (+ .map, .pdb)
 # Passos:
 #   1. c89.py (imagem bt3xbx-ferramentas): cada fonte do jogo e do port vira C89 para o cl;
-#   2. cl.exe (imagem do XDK): esses fontes e os do 360 (port/x360/src/f2, port/x360/src/diario.c);
+#   2. fxc.exe e cl.exe (imagem do XDK): os shaders do backend (gs_d3d.hlsl, em headers com o microcódigo do Xenos),
+#      esses fontes e os do 360 (port/x360/src/f2, port/x360/src/gs, port/x360/src/diario.c);
 #   3. coff.py: as tabelas do executável (esqueleto port/data, sem bytes do jogo) como objetos COFF;
 #   4. link.exe: o que ainda faltar vira stub que diz o nome no log e encerra (build/x360/f2/stubs.txt), como a
 #      build PowerPC da F1; depois imagexex com o Title ID e o SPA;
@@ -17,7 +19,7 @@ cd "$RAIZ"
 IMAGEM=${IMAGEM:-collectionui-xdk:light}
 XDK_DIR=${XDK_DIR:-$HOME/Documentos/CollectionUI/sdk/XDK}
 OUT=build/x360/f2
-mkdir -p $OUT/c89 $OUT/obj $OUT/dados $OUT/x360
+mkdir -p $OUT/c89 $OUT/obj $OUT/dados $OUT/x360 $OUT/shaders
 TITLE_ID=$(grep '^TITLE_ID=' port/x360/package/titulo.env | cut -d= -f2-)
 TITLE_NAME=$(grep '^TITLE_NAME=' port/x360/package/titulo.env | cut -d= -f2-)
 
@@ -34,6 +36,19 @@ python3 port/x360/tools/cl_resumo.py $OUT/obj | grep -q "^$(ls $OUT/c89/*.c | wc
 docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app -e WINEDEBUG=-all "$IMAGEM" bash -c '
   wineboot -i >/dev/null 2>&1 || true
   ok=0
+  # os shaders: compilados aqui, nunca no boot
+  H=port/x360/src/gs/gs_d3d.hlsl
+  for e in vs_gs:vs_3_0:kGsVs:gs_vs ps_gs:ps_3_0:kGsPs:gs_ps vs_copia:vs_3_0:kCopiaVs:copia_vs ps_copia:ps_3_0:kCopiaPs:copia_ps; do
+    IFS=: read n t v a <<< "$e"
+    wine /xdk/bin/win32/fxc.exe /nologo /T $t /E $n /Fh '"$OUT"'/shaders/$a.h /Vn $v $H > '"$OUT"'/shaders/$a.txt 2>&1 || { cat '"$OUT"'/shaders/$a.txt; ok=1; }
+  done
+  # o backend do GS: com os headers do GS do port (C) e o stdint.h que o cl não tem
+  for f in port/x360/src/gs/*.cpp; do
+    n=$(basename ${f%.*})
+    INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX -D PORT_X360 -D PORT_BIG_ENDIAN \
+      '"$CLFLAGS"' -TP -EHsc -GR- -Iport/x360/src -Iport/src/gs -Iport/x360/src/gs/cl -I'"$OUT"'/shaders \
+      -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
+  done
   for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do
     n=$(basename ${f%.*}); t=-TC; case $f in *.cpp) t="-TP -EHsc -GR-";; esac
     INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX '"$CLFLAGS"' $t \

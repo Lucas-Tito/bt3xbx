@@ -95,6 +95,9 @@ da descompressão texturas (`TexFile`, já especificado), Flash ("FOD\x11LIT") e
 | 7 | console | `GsBackend` D3D9 mínimo (desenho 2D, texturas, um alvo, present) | logos e título na tela, batendo com o PPM da etapa 4 |
 | 8 | console | Entrada por XInput | START abre o menu do título; desconectar mostra o aviso |
 
+Etapa 7 (13/10/2026): o backend está em `port/x360/src/gs/` (decisão 20) e a build liga sem stub novo; falta o teste
+no console (`BT3_GS=gpu`, capturas `BT3_SHOT` comparadas no WSL por `compara_quadros.py`).
+
 Filme e som ficam para a F6; VU1, outline e o resto da luta para a F5. Risco anotado para a F5: a gravação e a
 decodificação de texturas do `gs_draw.c` custam 2 a 3 ms no PC e podem passar do que sobra do quadro no Xenon.
 
