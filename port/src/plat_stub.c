@@ -228,7 +228,12 @@ int sceDbcInit() { return 1; }
 int scePad2Init() { return 1; }
 static int sPadSockets;
 int scePad2CreateSocket() { return sPadSockets++; }
+#ifdef PORT_X360 /* the 360's controllers come and go (port/x360/src/f2/pad360.c): a missing one is not ready */
+extern int Port_PadConnected(int socket);
+int scePad2GetState(int socket) { return Port_PadConnected(socket) ? 1 : 0; }
+#else
 int scePad2GetState() { return 1; }            /* connected and ready */
+#endif
 /* A DualShock 2's button profile: every digital button, both sticks, every pressure-sensitive button. */
 int scePad2GetButtonProfile(int socket, unsigned char *profile) {
     (void)socket;

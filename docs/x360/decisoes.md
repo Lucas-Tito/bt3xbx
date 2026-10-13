@@ -545,3 +545,38 @@ jogo parada de 8 a 80 s e, sem memória livre, a Guide sem abrir até o console 
 etapa aqui, parar os testes antes da luta (`BT3_ATE=4400`) e começar a F5 por um teto de memória no backend
 (plano, seção 5).
 
+
+## 21. Controles do 360: o jogador 1 é o primeiro controle ligado (13/10/2026)
+
+Etapa 8 da F3. O XInput (`port/x360/src/f2/pad360.c`) responde aos dois controles do PS2 que o jogo lê
+(`scePad2GetState` e `scePad2Read`, `port/src/plat_stub.c`; `scePad2GetState` só consulta o controle em
+`PORT_X360`). Escolha do Lucas:
+
+- **O jogador 1 é o primeiro controle ligado, em qualquer quadrante do anel; o jogador 2 é o seguinte.** O índice do
+  XInput é o quadrante, que o título não escolhe, e o jogo espera o controle 1 no boot (`FirstRun_WaitPad`, laço
+  enquanto `gPad[0]` não existe): preso ao quadrante 1, um controle único que ligou no 2 travaria o boot. Um jogador
+  só troca de controle quando o dele some e há outro livre; o do outro jogador fica reservado mesmo desligado. Sem
+  controle, o jogo mostra o próprio aviso de desconexão. É o princípio da build de PC ("o n-ésimo controle
+  conectado") e não fecha a porta aos quatro controles (decisão 16).
+- **Recusado:** quadrante fixo (quadrante 1 = jogador 1). Mais simples, mas trava o boot no caso acima.
+
+Detalhes que a revisão crítica trouxe:
+
+- **O estado é zerado antes de cada `XInputGetState`.** Com a Guide aberta, o hiddriver devolve sucesso sem preencher
+  o estado dos controles que ele emula; zerado, o controle fica parado (os eixos 0 viram 0x80). A CollectionUI faz o
+  mesmo.
+- **Uma leitura por controle por quadro:** `scePad2GetState` lê e guarda; `scePad2Read`, chamado logo depois pelo
+  `Pad_Update`, converte o que foi guardado.
+- **Gatilhos:** L2/R2 a partir de 93 de 255, uns 37% do curso, como o PC (12000 de 32767). O limiar do XInput (30)
+  transformaria um dedo apoiado em aperto.
+- **Sem zona morta própria:** a do jogo (`PAD_STICK_DEADZONE`, 50 de 127) já cobre o ruído do analógico do 360. Os
+  bytes de pressão vão zerados, como no PC; nenhum código do jogo os lê.
+
+**Para depois:**
+
+- **Vibração:** o `vibData` do `Pad_SendActuator` para o `XInputSetState`, parando os motores na Guide, na pausa e na
+  queda.
+- **Guide pausando a luta:** `XNotifyCreateListener` com `XN_SYS_UI`, controle parado com a Guide aberta, e os botões
+  segurados mascarados até soltar.
+- **Teste sem ninguém no console:** o boot pelos menus agora exige um controle ligado, e o `BT3_PAD_PLAY` não toca sem
+  controle. Uma chave do `ambiente.txt` pode dar o controle como sempre ligado.

@@ -340,6 +340,13 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **WSL por SSH:**
   - aspas passam pelo `cmd` do Windows, então use `wsl.sh script` com o script na entrada;
   - processo em segundo plano morre com a sessão.
+- **IP por DHCP:** o Windows e o console mudam de IP entre um dia e outro. Ache o Windows pela porta 22 e o console
+  pela porta 21 (`subir.py --achar`). No `~/.ssh/config`, o `HostKeyAlias bt3win` deixa a chave do host presa ao
+  nome, e uma troca de IP só muda o `HostName`.
+- **XInput com o hiddriver:** zere o `XINPUT_STATE` antes de cada `XInputGetState`. Com a Guide aberta, o hiddriver
+  devolve sucesso sem preencher o estado dos controles que ele emula (decisão 21).
+- **O quadrante do anel é o índice do XInput, e o título não o escolhe:** um controle único pode estar no 2. Mapeie o
+  jogador ao primeiro controle ligado (decisão 21), ou um jogo que espera o controle 1 trava no boot.
 - **Ubuntu 24.04:** o `gcc-multilib` remove o cross `gcc-powerpc-linux-gnu`. A x86 de 32 bits sai
   com `clang -m32` e `libc6-dev-i386 lib32gcc-13-dev --no-install-recommends`.
 - **Link na PowerPC:** o linker recusa misturar objetos com float por software e por hardware. Use

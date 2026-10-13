@@ -95,6 +95,11 @@ da descompressão texturas (`TexFile`, já especificado), Flash ("FOD\x11LIT") e
 | 7 | console | `GsBackend` D3D9 mínimo (desenho 2D, texturas, um alvo, present) | logos e título na tela, batendo com o PPM da etapa 4 |
 | 8 | console | Entrada por XInput | START abre o menu do título; desconectar mostra o aviso |
 
+Etapa 8 concluída em 13/10/2026 (decisão 21): o controle pelo XInput levou o jogo do título até o New Game e a
+criação do save. O menu principal cai em seguida (`Res_RelocateOffsets` de `MainMenu_Init`): é um pacote de recursos
+sem o conversor, uma das chamadas de `Sprite_Unpack` fora do caminho do título, que ficaram para a F4. **A F3 está
+concluída.**
+
 Etapa 7 concluída em 13/10/2026 (decisão 20): cartão, logos e título no console batendo com o rasterizador, e os
 menus em 16,2 ms por quadro. Os testes no console param antes da luta (`BT3_ATE=4400`): ela esgota a memória
 (primeiro item da F5, abaixo).

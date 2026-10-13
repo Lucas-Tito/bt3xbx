@@ -28,9 +28,12 @@ volatile int gUiNameX, gUiNameY, gUiNameW, gUiNameH, gUiNameIdx, gUiNameReady;
 volatile int gUiSongX, gUiSongY, gUiSongW, gUiSongH, gUiSongIdx, gUiSongLit, gUiSongReady;
 #endif
 
-/* gs_input.c: sem janela, Port_PadRead devolve 0 (nenhum controle) */
+/* gs_input.c: sem janela, Port_PadRead devolve 0 (nenhum controle). No 360 os controles vêm do XInput
+   (port/x360/src/f2/pad360.c, F3 etapa 8). */
 extern int Port_Setting(const char *name, int def);
+#ifndef PORT_X360
 int Port_PadRead(int socket, unsigned char *data) { (void)socket; (void)data; return 0; }
+#endif
 void Port_ClashLog(int player, const char *what, int fromInput, int total, int frame) {
     (void)player; (void)what; (void)fromInput; (void)total; (void)frame;
 }
