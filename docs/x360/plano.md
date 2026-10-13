@@ -95,11 +95,18 @@ da descompressão texturas (`TexFile`, já especificado), Flash ("FOD\x11LIT") e
 | 7 | console | `GsBackend` D3D9 mínimo (desenho 2D, texturas, um alvo, present) | logos e título na tela, batendo com o PPM da etapa 4 |
 | 8 | console | Entrada por XInput | START abre o menu do título; desconectar mostra o aviso |
 
-Etapa 7 (13/10/2026): o backend está em `port/x360/src/gs/` (decisão 20) e a build liga sem stub novo; falta o teste
-no console (`BT3_GS=gpu`, capturas `BT3_SHOT` comparadas no WSL por `compara_quadros.py`).
+Etapa 7 concluída em 13/10/2026 (decisão 20): cartão, logos e título no console batendo com o rasterizador, e os
+menus em 16,2 ms por quadro. Os testes no console param antes da luta (`BT3_ATE=4400`): ela esgota a memória
+(primeiro item da F5, abaixo).
 
-Filme e som ficam para a F6; VU1, outline e o resto da luta para a F5. Risco anotado para a F5: a gravação e a
-decodificação de texturas do `gs_draw.c` custam 2 a 3 ms no PC e podem passar do que sobra do quadro no Xenon.
+Filme e som ficam para a F6; VU1, outline e o resto da luta para a F5. Riscos anotados para a F5:
+
+- **A luta esgota a memória com o D3D9** (13/10/2026): as texturas chegam ao teto de 128 MB e os alvos a 24 (cerca de
+  96 MB); sobram 3 MB, a criação de alvos falha, a thread do jogo para de 8 a 80 s seguidos, e a Guide não abre (o
+  console trava). É o primeiro item da F5: um teto de memória no backend, com descarte do que está há mais tempo sem
+  uso, e só depois a causa das paradas longas.
+- A gravação e a decodificação de texturas do `gs_draw.c` custam 2 a 3 ms no PC e podem passar do que sobra do quadro
+  no Xenon.
 
 Fora do escopo: netplay, versão PAL/japonesa, 60 fps (interpolação ou lógica a 60; decisão 15: 720p a 30).
 

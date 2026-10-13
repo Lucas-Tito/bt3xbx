@@ -535,3 +535,13 @@ carga da demo 98,9%. Três problemas, corrigidos na segunda versão:
 - **1,8 vez o tempo real nos menus:** as capturas (`BT3_SHOT=20`) custavam cerca de 260 ms cada, três a cada 60
   quadros; descontadas pela conta, o quadro inteiro fica perto dos 16,7 ms (a confirmar na segunda rodada). A captura passou a sair do tiling de uma vez e a ser
   gravada num `WriteFile` só, e o log mede os quadros com captura à parte.
+
+**Segunda rodada no console (13/10/2026): a etapa 7 fecha.** Comparação com o rasterizador (até 8): cartão 99,0%
+(PSNR 34,6), logos 97,5%, título 95,9% (PSNR 28,1), carga 99,9% (PSNR 46,2). O texto do cartão aparece. O pior quadro
+do título (2200, arte ampliada) é filtrado no console e pixelado na referência: a diferença é da referência, que nunca
+filtra. Os menus ficaram em 16,2 ms por quadro sem as capturas (a lentidão era delas). A luta não trava mais logo no
+começo, mas esgota a memória: 128 MB de texturas, 24 alvos e 3 MB livres; alvos e texturas recusados, a thread do
+jogo parada de 8 a 80 s e, sem memória livre, a Guide sem abrir até o console travar. Escolha do Lucas: fechar a
+etapa aqui, parar os testes antes da luta (`BT3_ATE=4400`) e começar a F5 por um teto de memória no backend
+(plano, seção 5).
+
