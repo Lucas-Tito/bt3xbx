@@ -6,7 +6,9 @@
 #   TP=1800    segundos da PPC no qemu (uns 20 vblanks por segundo)
 set -uo pipefail
 B=port/build; Q=${Q:-3000}; ATE=${ATE:-30000}
-export BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1
+# BT3_MENU_ITEM4=0: o Dragon Net Battle fora do menu principal, como no 360 (posix360.c), para os roteiros de
+# controle andarem igual nas três builds (decisão 22)
+export BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 mkdir -p $B/menus
