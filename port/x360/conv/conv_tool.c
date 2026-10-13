@@ -5,7 +5,8 @@
  *   conv_tool --disco DADOS        todos os arquivos que algum conversor conhece (pzs3us0..2), sem gravar: a
  *                                  validação estrutural (contagens, deslocamentos, enchimento) no disco inteiro;
  *                                  depois, o conteúdo descomprimido que o jogo converte em tempo de jogo (folhas da
- *                                  tela de carregamento e pacotes de tela dos menus)
+ *                                  tela de carregamento e pacotes de tela dos menus); no fim, o censo dos arquivos
+ *                                  de menu por faixa de id (o que ainda está sem conversor)
  *
  * Para cada ARQUIVO (relativo a DADOS, como o jogo o pede: pzs3us1/01473.bin): converte com o formato do
  * registro (ou F), diz a cobertura (quanto do arquivo algum conversor reconheceu) e, com --mapa, confere
@@ -357,6 +358,113 @@ static int um(const char *dados, const char *rel) {
     return falhas;
 }
 
+/* O censo dos arquivos de menu (F4, docs/x360/formatos/menus-modos.md): por faixa de id, quantos arquivos há, quantos
+   o disco converte (o arquivo e o conteúdo de cada contêiner BPE dele, pela tabela única de conv.c) e quantos ficam
+   "sem conversor". A forma de cada arquivo sem formato se reconhece pela estrutura (menus.md 2.1 e 3): tabela de
+   seções que fecha no tamanho do arquivo (pacote), ou um contêiner BPE inteiro. Só contagens: nenhum byte sai. */
+typedef struct Censo { int arqs, arq_conv, pacote, bpe, outra, cont, cont_conv; } Censo;
+
+static int bpe_plausivel(const conv_u8 *p, unsigned long n) {
+    unsigned long bruto, comp;
+    if (n < 8) {
+        return 0;
+    }
+    bruto = le32(p);
+    comp = le32(p + 4);
+    return bruto > 0 && bruto < 0x4000000UL && comp > 0 && comp <= n - 8;
+}
+
+/* n de seções se arq é uma tabela de seções que fecha no tamanho (menus.md 2.1); 0 se não */
+static unsigned long pacote_n(const conv_u8 *arq, long tam) {
+    unsigned long n, s, ant;
+    if (tam < 16) {
+        return 0;
+    }
+    n = le32(arq);
+    if (n < 1 || n > 255 || (n + 2) * 4 > (unsigned long)tam || le32(arq + (n + 1) * 4) != (unsigned long)tam) {
+        return 0;
+    }
+    ant = (n + 2) * 4;
+    for (s = 1; s <= n + 1; s++) {
+        unsigned long o = le32(arq + s * 4);
+        if (o < ant || o > (unsigned long)tam) {
+            return 0;
+        }
+        ant = o;
+    }
+    return n;
+}
+
+static void censo_arquivo(const char *dados, const char *rel, Censo *c, int detalhe_arq) {
+    long tam;
+    conv_u8 *arq = ler_arquivo(dados, rel, &tam);
+    unsigned long n, s;
+    int conv, sem = 0, cont = 0;
+    if (arq == NULL) {
+        return;
+    }
+    c->arqs++;
+    conv = Conv_FormatoDe(rel) != NULL;
+    c->arq_conv += conv;
+    if ((n = pacote_n(arq, tam)) > 0) {
+        c->pacote++;
+        for (s = 1; s <= n; s++) {
+            unsigned long o = le32(arq + s * 4), fim = le32(arq + (s + 1) * 4);
+            if (fim > o && bpe_plausivel(arq + o, fim - o)) {
+                int f = conv && Conv_FormatoSecao(rel, (int)s) != NULL;
+                cont++;
+                c->cont++;
+                c->cont_conv += f;
+                sem += !f;
+            }
+        }
+    } else if (bpe_plausivel(arq, (unsigned long)tam)) {
+        int f = conv && Conv_FormatoSecao(rel, 0) != NULL;
+        c->bpe++;
+        cont = 1;
+        c->cont++;
+        c->cont_conv += f;
+        sem += !f;
+    } else {
+        c->outra++;
+    }
+    if (detalhe_arq) {
+        printf("  %s: %s, arquivo %s, %d contêineres BPE, %d sem conversor\n", rel,
+               n > 0 ? "pacote" : cont ? "BPE inteiro" : "outra forma", conv ? "convertido" : "sem conversor", cont, sem);
+    }
+    free(arq);
+}
+
+static void censo(const char *dados) {
+    /* as faixas dos arquivos que os menus pedem (menus-modos.md 1): baseFile 0x1C1 + 0..0x1D, retratos 0x2F9 +
+       personagem, imagens de estágio 0x39D + estágio (até 0x3C0, que o EvoZ usa de fundo), convites e fundos do
+       torneio, páginas do Treino; índice = id - 1 */
+    static const struct { int ini, fim; const char *nome; int detalhe; } faixas[] = {
+        {0x1C1 - 1, 0x1DE - 1, "arquivos de menu (baseFile 0x1C1 + 0..0x1D)", 1},
+        {0x2F9 - 1, 0x39C - 1, "retratos (0x2F9 + personagem)", 0},
+        {0x39D - 1, 0x3C0 - 1, "imagens de estágio (0x39D + estágio)", 0},
+        {0x3C4 - 1, 0x3CD - 1, "convites (0x3C4 + torneio) e fundos (0x3C9 + torneio) do torneio", 0},
+        {0x3CE - 1, 0x401 - 1, "imagens da História (0x3CE.. episódios, 0x3FE.. fundos do resultado)", 0},
+        /* as páginas do Treino (0x402 + página, Train_UpdateImage): o teto é hipótese, até os slots de lutador */
+        {0x402 - 1, 0x590 - 2, "páginas do Treino (0x402 + página; o fim da faixa é hipótese)", 0},
+    };
+    unsigned f;
+    for (f = 0; f < sizeof(faixas) / sizeof(faixas[0]); f++) {
+        Censo c;
+        int i;
+        memset(&c, 0, sizeof(c));
+        printf("censo: %s, índices %d..%d\n", faixas[f].nome, faixas[f].ini, faixas[f].fim);
+        for (i = faixas[f].ini; i <= faixas[f].fim; i++) {
+            char rel[64];
+            sprintf(rel, "pzs3us1/%05d.bin", i);
+            censo_arquivo(dados, rel, &c, faixas[f].detalhe);
+        }
+        printf("censo: %d arquivos (%d pacotes, %d BPE inteiros, %d de outra forma); arquivo: %d convertidos, %d sem "
+               "conversor; conteúdo BPE: %d contêineres, %d com conversor, %d sem conversor\n", c.arqs, c.pacote,
+               c.bpe, c.outra, c.arq_conv, c.arqs - c.arq_conv, c.cont, c.cont_conv, c.cont - c.cont_conv);
+    }
+}
+
 int main(int argc, char **argv) {
     const char *dados = NULL;
     int i, falhas = 0, disco = 0;
@@ -442,6 +550,7 @@ int main(int argc, char **argv) {
             printf("disco (descomprimidos): %d convertidos sem erro, %d com erro\n", ok, erros);
             falhas += erros;
         }
+        censo(dados);
     }
     return falhas ? 1 : 0;
 }
