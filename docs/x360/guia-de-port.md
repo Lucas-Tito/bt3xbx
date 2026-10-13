@@ -93,9 +93,9 @@ própria só para isso). Para cá só volta texto.
 | `f1.sh` | o ciclo inteiro: builds, rastreio, mapa, luta na PPC, comparações. `F1_SEM_RASTREIO=1` reaproveita o rastreio (que leva cerca de 1 h) |
 | `menus.sh` | o ciclo dos menus (F3, etapa 3): boot até as demos sem `BT3_DEMO`, PPC sem mapa com os arquivos que a x86 lê, lutas das demos e memória num quadro comparadas |
 | `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X num ciclo de 90 leituras) entra no menu principal pelo New Game, sem criar o save (responde "não" ao "criar o save?"); a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Os testes novos usam os roteiros de controle (abaixo) |
-| `roteiros.sh [NOME...\|todos]` | os roteiros de controle (F4, etapa 4; formato abaixo) contra as referências e o inventário: cada roteiro duas vezes na x86 (o rastro de telas igual nas duas e igual à referência em `~/referencias` do WSL), sob o gdb (cada `Sprite_Unpack` alcançado, casado com o `unpacks.py`), na x86r com o rastreio e o `conv_tool --mapa` (o "sem conversor" por conteúdo tem de ser o das chamadas pendentes alcançadas); com `PPC=1`, também a PPC com o mapa e a guarda só anotando, cujo rastro tem de ser o começo do da x86 (hoje ela para no Flash do menu principal, seção 6). Um por vez no WSL (memória). No fim, as chamadas de todos juntos contra o inventário |
-| `roteiros.py` | as peças do `roteiros.sh`: `telas` (o rastro de uma rodada), `compara`, `chamadas` (do log do gdb), `confere` (chamadas contra o `--mapa`), `soma` (contra o inventário). A tabela `CONTEUDO` diz o que cada uma das 82 chamadas descomprime (`menus-modos.md`) |
-| `save_mc.sh` | a gravação atômica do cartão (F4, etapa 3, `port/src/plat_mc.c` com `PORT_MC_ATOMIC`): o `teste_mc` (`port/x360/headless/teste_mc.c`, a camada sem o jogo, com quedas de energia simuladas por `BT3_MC_FALHA`) na x86 e na PPC; o jogo na x86 e na PPC sem mapa até o `MainMenu_Init` com um controle que cria o save (ciclo de 120 leituras), a sequência de estados do McFlow comparada entre as duas; na PPC, criação, falha de escrita, `.tmp` truncado e `.new` deixado por uma queda |
+| `roteiros.sh [NOME...\|todos]` | os roteiros de controle (F4, etapa 4; formato abaixo) contra as referências e o inventário: cada roteiro duas vezes na x86 (o rastro de telas igual nas duas e igual à referência em `~/referencias` do WSL), sob o gdb (cada `Sprite_Unpack` alcançado, casado com o `unpacks.py`), na x86r com o rastreio e o `conv_tool --mapa` (o "sem conversor" por conteúdo tem de ser o das chamadas pendentes alcançadas); com `PPC=1`, também a PPC com o mapa e a guarda só anotando, cujo rastro tem de ser o começo do da x86 (hoje ela para no Flash do menu principal, seção 6). Um por vez no WSL (memória). No fim, as chamadas de todos juntos contra o inventário. Sai com 1 se qualquer conferência falhar (a lista no fim); `REUSA=1` refaz só as conferências sobre as saídas guardadas (para ver os verificadores falharem numa cópia estragada, com `O=` e `REFS=` apontando para ela) |
+| `roteiros.py` | as peças do `roteiros.sh`: `telas` (o rastro de uma rodada), `compara`, `chamadas` (do log do gdb), `confere` (chamadas contra o `--mapa`; toda linha do `conv_tool` que não é "convertido" nem "sem conversor" é erro, assim como "contra o mapa" com outra largura ou não trocadas, e todo "sem conversor" fora de `disc/` e das faixas de menu, menos as exceções conhecidas da tabela `CONHECIDOS`), `soma` (contra o inventário). A tabela `CONTEUDO` diz o que cada uma das 82 chamadas descomprime (`menus-modos.md`) |
+| `save_mc.sh` | a gravação atômica do cartão (F4, etapa 3, `port/src/plat_mc.c` com `PORT_MC_ATOMIC`): o `teste_mc` (`port/x360/headless/teste_mc.c`, a camada sem o jogo, com quedas de energia simuladas por `BT3_MC_FALHA`) na x86 e na PPC; o jogo na x86 e na PPC sem mapa até o `MainMenu_Init` com um controle que cria o save (ciclo de 120 leituras), a sequência de estados do McFlow comparada entre as duas; na PPC, criação, falha de escrita, `.tmp` truncado e `.new` deixado por uma queda. |
 | `compara.py` | compara a luta quadro a quadro (vida, posição, relógio, gerador aleatório) pelo `hash.txt` do `state.c` |
 | `memdiff.py` | compara a memória do jogo das duas builds num quadro: heap pareado pelos blocos do alocador do jogo, globais pelo nome, cada palavra numa classe (igual, igual sem inverter, 2xu16, u64...) |
 | `memdiff.py --marcas` | o mesmo, campo a campo num bloco que guarda um arquivo, pela largura que o conversor deu a cada byte (`conv_tool --marcas`) |
@@ -238,6 +238,12 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 
   As três revisões da F1 acharam problemas reais. O padrão que mais se repetiu: **ferramenta de
   comparação que aceita como igual justamente o erro que ela devia achar.**
+- **Todo verificador precisa ser visto falhando.** Antes de confiar num verificador (script de conferência, caso de
+  teste, checagem no build), rode-o com uma entrada estragada de propósito (uma cópia num diretório temporário, nunca
+  a referência real) e veja-o acusar e sair com código diferente de 0. Um teste que nunca falhou não prova nada: a
+  revisão da etapa 4 da F4 achou um `roteiros.sh` que só devolvia a saída da soma (referência diferente passava), um
+  `roteiros.py` que contava erro do `conv_tool` como "convertido" e pulava o "sem conversor" do que não é de menu, e
+  um save que dizia "gravou ok" com o arquivo antigo no lugar. Nenhum deles tinha sido visto falhando.
 - **Formatos em linha de produção:** um agente escreve a especificação de um formato a partir do código
   (com o rastreio e o disco inteiro como conferência, sem trazer bytes do jogo); outro agente, ou você,
   escreve o conversor seguindo a especificação seção a seção, com critério de aceite fechado (`conv_tool
@@ -565,6 +571,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     `memcpy`) sobre campos de 4, e o mapa não inverte posição lida com duas larguras (três conflitos "[4, 8]" só nesse
     conteúdo). O mapa por posição não passa pelos menus; quem passa é o conversor do Flash (`menus.md` 7). A PPC com o
     mapa confere o rastro e a guarda só até o primeiro menu sem conversor.
+  - **Os verificadores do ciclo só falavam, não decidiam** (revisão da etapa 4). O `roteiros.sh` imprimia
+    "DIFERENTES" e seguia, e a saída dele era a da soma; o `roteiros.py confere` contava a linha de erro do
+    `conv_tool` ("NOME: mensagem; cobertura ...") como convertido, não lia o "contra o mapa" e pulava o "sem
+    conversor" de arquivo fora das faixas de menu (assim passaram despercebidos três da História, 00510, 00560 e
+    00710, hoje na tabela `CONHECIDOS` com os dois do Shenlong). Agora cada conferência que falha entra numa lista e
+    o script sai com 1. Cuidado com o `set -o pipefail` ao filtrar a saída de um comparador: `compara | grep -q`
+    falha quando o compara sai com 1 mesmo que o grep ache o que procura (o "DIFERENTES" de um começo de rastro, o
+    caso certo da PPC); guarde a saída numa variável e procure nela.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).

@@ -16,9 +16,16 @@
 #      registros do Flash, lidos com duas larguras: guia, seção 6): até o conversor dele (etapa 5), o passo 4 confere
 #      do boot ao MainMenu_Init.
 # No fim, as chamadas de todos os roteiros juntos contra o inventário (roteiros.py soma).
-#   TP=3600  segundos da PPC no qemu
+# Sai com 1 se qualquer conferência falhar em qualquer roteiro (a x86 sem "fim" ou com FALHA, a repetição, a
+# referência, a x86r, o rastreio.py, o conv_tool, o confere, a PPC, a soma), com a lista no fim; 0 só com tudo certo.
+#   TP=3600     segundos da PPC no qemu
+#   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
+#               verificadores; a x86 tem de ser a mesma build que gravou o gdb.txt, pelo addr2line)
+#   O=pasta     onde ficam as saídas (port/build/roteiros); REFS=pasta, as referências (~/referencias)
 set -uo pipefail
-B=port/build; O=$B/roteiros; REFS=~/referencias
+B=port/build; O=${O:-$B/roteiros}; REFS=${REFS:-~/referencias}
+FALHAS=()
+falhou() { FALHAS+=("$n: $*"); echo "   >> FALHA: $*"; }
 export BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1
 NOMES=("$@"); [ ${#NOMES[@]} -gt 0 ] || NOMES=(duelo duelo_time treino opcoes)
 [ "${NOMES[0]}" != todos ] || NOMES=(duelo duelo_time treino opcoes historia ultimate torneio evolution datacenter \
@@ -40,61 +47,98 @@ G
 echo "x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO)"
 LOGS=()
 for n in "${NOMES[@]}"; do
-    D=$O/$n; rm -rf $D; mkdir -p $D
+    D=$O/$n; [ -n "${REUSA:-}" ] || { rm -rf $D; mkdir -p $D; }
     R=port/x360/roteiros/$n.txt
     echo "== $n"
     for v in a b; do
-        BT3_ROTEIRO=$R BT3_SAVES=$D/s$v BT3_HASH=$D/h$v.txt timeout 900 $B/x86/bt3_x86 > $D/x86_$v.txt 2>&1
-        echo "   x86 ($v) saiu com $?: $(grep -a '^roteiro: .* fim \|FALHA' $D/x86_$v.txt | head -1)"
+        if [ -z "${REUSA:-}" ]; then
+            BT3_ROTEIRO=$R BT3_SAVES=$D/s$v BT3_HASH=$D/h$v.txt timeout 900 $B/x86/bt3_x86 > $D/x86_$v.txt 2>&1
+            r=$?
+        else
+            r=$(grep -aq '^roteiro: .* fim ' $D/x86_$v.txt && echo 0 || echo "?")
+        fi
+        echo "   x86 ($v) saiu com $r: $(grep -a '^roteiro: .* fim \|FALHA' $D/x86_$v.txt | head -1)"
+        { [ "$r" = 0 ] && grep -aq '^roteiro: .* fim ' $D/x86_$v.txt && ! grep -aq 'FALHA' $D/x86_$v.txt; } ||
+            falhou "x86 ($v) sem chegar ao fim do roteiro"
         python3 port/x360/tools/roteiros.py telas $D/x86_$v.txt > $D/telas_$v.txt
     done
     echo "   repetição: $(python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_b.txt | tr '\n' ' ')"
+    python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_b.txt > /dev/null || falhou "repetição diferente"
     if [ ! -s $REFS/$n.telas ] || [ -n "${REF:-}" ]; then
         cp $D/telas_a.txt $REFS/$n.telas
         echo "   referência gravada: $REFS/$n.telas ($(grep -c '^tela ' $REFS/$n.telas) trocas de tela)"
     else
         echo "   referência: $(python3 port/x360/tools/roteiros.py compara $REFS/$n.telas $D/telas_a.txt | tr '\n' ' ')"
+        python3 port/x360/tools/roteiros.py compara $REFS/$n.telas $D/telas_a.txt > /dev/null ||
+            falhou "rastro diferente da referência $REFS/$n.telas"
     fi
     grep '^tela ' $D/telas_a.txt | cut -d' ' -f2,4 | tr '\n' ' ' | sed 's/^/   telas (vblank): /'; echo
-    BT3_ROTEIRO=$R BT3_SAVES=$D/sg BT3_HASH=$D/hg.txt timeout 900 gdb -batch -nx -x $O/unpack.gdb --args $B/x86/bt3_x86 \
-        > $D/gdb.txt 2>&1
+    [ -n "${REUSA:-}" ] || BT3_ROTEIRO=$R BT3_SAVES=$D/sg BT3_HASH=$D/hg.txt timeout 900 gdb -batch -nx -x $O/unpack.gdb \
+        --args $B/x86/bt3_x86 > $D/gdb.txt 2>&1
+    grep -aq '^roteiro: .* fim ' $D/gdb.txt || falhou "x86 sob o gdb sem chegar ao fim do roteiro"
     LOGS+=($D/gdb.txt)
     echo "   Sprite_Unpack alcançados:"; python3 port/x360/tools/roteiros.py chamadas $D/gdb.txt --prog $B/x86/bt3_x86
-    BT3_RASTREIO_BITS=24 BT3_ROTEIRO=$R BT3_SAVES=$D/sr BT3_HASH=$D/hr.txt BT3_RASTREIO=$D/rastreio.tsv \
-        timeout 3600 setarch -R $B/x86r/bt3_x86r > $D/x86r.txt 2>&1
-    echo "   x86r saiu com $?: $(grep -a '^rastreio:' $D/x86r.txt)"
+    [ -n "${REUSA:-}" ] || BT3_RASTREIO_BITS=24 BT3_ROTEIRO=$R BT3_SAVES=$D/sr BT3_HASH=$D/hr.txt \
+        BT3_RASTREIO=$D/rastreio.tsv timeout 3600 setarch -R $B/x86r/bt3_x86r > $D/x86r.txt 2>&1
+    echo "   x86r: $(grep -a '^rastreio:' $D/x86r.txt)"
     python3 port/x360/tools/roteiros.py telas $D/x86r.txt > $D/telas_r.txt
     echo "   x86r contra x86: $(python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_r.txt | tr '\n' ' ')"
+    python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_r.txt > /dev/null || falhou "x86r com outro rastro"
     # (o rastreio.py guarda tudo na memória, e os 13 milhões de posições da Ultimate Battle não cabem nos 8 GB do WSL:
     # o rastreio vai em partes, cada arquivo inteiro numa só, e os mapas das partes se juntam; e um roteiros.sh por vez)
-    rm -rf $D/partes; python3 port/x360/tools/roteiros.py partes $D/rastreio.tsv $D/partes | sed 's/^/   /'
-    ok=1; : > $D/mapa.txt
-    for p in $D/partes/parte_*.tsv; do
-        python3 port/x360/tools/rastreio.py mapa $p -o ${p%.tsv}.mapa --prog $B/x86r/bt3_x86r >> $D/mapa.txt 2>&1 || ok=
-    done
-    if [ -z "$ok" ]; then echo "   FALHA: rastreio.py mapa saiu com erro (memória?): $(tail -1 $D/mapa.txt)"; continue; fi
-    cat $D/partes/*.mapa | LC_ALL=C sort -t$'\t' -k1,1 -k2,2n > $D/mapa.tsv
-    cat $D/partes/*.mapa.conflitos | LC_ALL=C sort -t$'\t' -k1,1 -k2,2n > $D/mapa.tsv.conflitos
+    if [ -z "${REUSA:-}" ]; then
+        rm -rf $D/partes; python3 port/x360/tools/roteiros.py partes $D/rastreio.tsv $D/partes | sed 's/^/   /'
+        ok=1; : > $D/mapa.txt
+        for p in $D/partes/parte_*.tsv; do
+            python3 port/x360/tools/rastreio.py mapa $p -o ${p%.tsv}.mapa --prog $B/x86r/bt3_x86r >> $D/mapa.txt 2>&1 || ok=
+        done
+        if [ -z "$ok" ]; then falhou "rastreio.py mapa saiu com erro (memória?): $(tail -1 $D/mapa.txt)"; continue; fi
+        cat $D/partes/*.mapa | LC_ALL=C sort -t$'\t' -k1,1 -k2,2n > $D/mapa.tsv
+        cat $D/partes/*.mapa.conflitos | LC_ALL=C sort -t$'\t' -k1,1 -k2,2n > $D/mapa.tsv.conflitos
+    fi
     # o que o rastreio viu ler como número e todo arquivo aberto (gdb): a PPC do passo 4 lê todos, e um que tem
     # conversor e chegasse sem conversão pararia o inverter.c (00001 a 00005 só se leem como número na luta)
-    { cut -f1 $D/rastreio.tsv; grep -a '^LEU ' $D/gdb.txt | cut -d' ' -f2; } | grep -v -e '^ELF:' -e '^disc/' | sort -u > $D/lidos.txt
+    [ -n "${REUSA:-}" ] || { cut -f1 $D/rastreio.tsv; grep -a '^LEU ' $D/gdb.txt | cut -d' ' -f2; } |
+        grep -v -e '^ELF:' -e '^disc/' | sort -u > $D/lidos.txt
     # (com --saida: os arquivos que têm conversor, convertidos para a PPC do passo 4, como no f1.sh)
-    mkdir -p $D/dados/mods; for d in gamedata/*; do ln -s "$(realpath "$d")" $D/dados/; done
+    mkdir -p $D/dados/mods; for d in gamedata/*; do [ -e $D/dados/$(basename $d) ] || ln -s "$(realpath "$d")" $D/dados/; done
     $O/conv_tool --mapa $D/mapa.tsv --saida $D/dados/mods gamedata $(cat $D/lidos.txt) > $D/conv.txt
+    r=$?
     touch $D/dados/mods/convertidos.txt
-    echo "   conv_tool --mapa saiu com $? ($(wc -l < $D/lidos.txt) arquivos e conteúdos lidos)"
+    echo "   conv_tool --mapa saiu com $r ($(wc -l < $D/lidos.txt) arquivos e conteúdos lidos)"
+    [ $r = 0 ] || falhou "conv_tool --mapa saiu com $r"
+    # (o "sem conversor" de cada arquivo e conteúdo, o do que não é de menu inclusive, o confere julga logo abaixo)
     grep -v -e "sem conversor$" -e ': convertido; cobertura [0-9]* de [0-9]* bytes (100.0%)' \
         -e ' iguais, 0 com outra largura, 0 não trocadas$' $D/conv.txt | sed 's/^/   /' | head -10
-    python3 port/x360/tools/roteiros.py confere $D/gdb.txt --prog $B/x86/bt3_x86 --conv $D/conv.txt | sed 's/^/   /'
+    python3 port/x360/tools/roteiros.py confere $D/gdb.txt --prog $B/x86/bt3_x86 --conv $D/conv.txt > $D/confere.txt
+    r=$?
+    sed 's/^/   /' $D/confere.txt
+    [ $r = 0 ] || falhou "confere: o sem conversor do --mapa diferente do inventário"
     if [ -n "${PPC:-}" ]; then
-        BT3_MAPA=$D/mapa.tsv BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_GUARDA=anota \
-            BT3_ROTEIRO=$R BT3_SAVES=$D/sp BT3_HASH=$D/hp.txt timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $D/ppc.txt 2>&1
-        echo "   ppc com mapa saiu com $?: $(grep -a '^roteiro: .* fim \|FALHA\|abort' $D/ppc.txt | head -1)"
+        [ -n "${REUSA:-}" ] || BT3_MAPA=$D/mapa.tsv BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt \
+            BT3_GUARDA=anota BT3_ROTEIRO=$R BT3_SAVES=$D/sp BT3_HASH=$D/hp.txt timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc \
+            > $D/ppc.txt 2>&1
+        echo "   ppc com mapa: $(grep -a '^roteiro: .* fim \|FALHA\|abort' $D/ppc.txt | head -1)"
         python3 port/x360/tools/roteiros.py telas $D/ppc.txt > $D/telas_p.txt
         echo "   ppc contra x86: $(python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_p.txt | tr '\n' ' ')"
+        # hoje a PPC para no Flash do menu principal (acima): o rastro dela tem de ser o começo do da x86, ou ele inteiro
+        # (sem pipe: com o pipefail, a saída 1 do compara, "DIFERENTES" num começo, contaria como falha)
+        cmp_p=$(python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_p.txt)
+        grep -q -e '^iguais' -e 'do mais curto são o começo do outro' <<< "$cmp_p" || falhou "PPC com outro rastro que a x86"
+        [ "$(wc -l < $D/telas_p.txt)" -le "$(wc -l < $D/telas_a.txt)" ] || falhou "PPC com rastro mais longo que a x86"
         grep -a '^guarda: ' $D/ppc.txt | sed 's/ (retorno.*//' | sort | uniq -c | sed 's/^/   /'
     fi
     rm -f bt3_crash.txt
 done
 echo "== todos juntos"
+n=soma
 python3 port/x360/tools/roteiros.py soma "${LOGS[@]}" --prog $B/x86/bt3_x86
+r=$?
+# (as 16 pendentes do essencial só se alcançam com os 4 roteiros dele juntos: com menos, a soma só informa)
+essencial=0; for e in duelo duelo_time treino opcoes; do [[ " ${NOMES[*]} " == *" $e "* ]] && essencial=$((essencial + 1)); done
+[ $r = 0 ] || [ $essencial -lt 4 ] || falhou "pendente do essencial não alcançada"
+if [ ${#FALHAS[@]} -gt 0 ]; then
+    echo "== ${#FALHAS[@]} falha(s):"; printf '   %s\n' "${FALHAS[@]}"
+    exit 1
+fi
+echo "== tudo certo"

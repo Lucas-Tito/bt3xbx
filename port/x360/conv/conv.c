@@ -219,7 +219,8 @@ static const Formato sFormatos[] = {
    Seção (ConvFaixa.secao): CONV_ARQ é o arquivo como está no disco (Conv_Arquivo, iso360.c); 0 é o conteúdo do
    contêiner BPE que começa no deslocamento 0 do arquivo; n >= 1 é o conteúdo da seção n da tabela do arquivo
    (menu_pacote, menus.md 2.1). O conteúdo descomprimido se converte em tempo de jogo, pelo gancho de quem chama o
-   Sprite_Unpack (menus.md 4); a conv_tool usa estas linhas no --mapa e no --disco. As faixas não se sobrepõem. */
+   Sprite_Unpack (menus.md 4); a conv_tool usa estas linhas no --mapa e no --disco. As faixas da mesma seção não se
+   sobrepõem (a conv_tool confere a cada execução: faixas_conferidas). */
 static const ConvFaixa sFaixas[] = {
     /* arquivos comuns (comuns.md): ids 2..5 lidos na partida, 6 e 7 o HUD de cada idioma */
     {1, 1, CONV_ARQ, "comum1"},

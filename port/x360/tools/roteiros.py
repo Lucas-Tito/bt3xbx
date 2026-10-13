@@ -70,6 +70,20 @@ FAIXAS = [("chave", 454, 458), ("saga", 464, 471), ("sim_dia", 474, 474), ("ub_r
           ("fundo_resultado", 1021, 1024), ("pagina_treino", 1025, 1422)]
 PACOTES = {448, 449, 450, 451, 452, 453, 459, 460, 461, 462, 463, 472, 473}
 
+# Arquivos fora das faixas de menu que o rastreio vê ler como número e que ainda não têm conversor, já conhecidos: o
+# "confere" acusa todo outro "sem conversor" fora de disc/ (um caso novo não pode sumir por não ser de menu). Cada um
+# é pendência da etapa 9 (plano.md, F4).
+CONHECIDOS = {
+    # atores da cena do Shenlong (ShenScene_*, src/battle/view_b_d.c:366, ids 0xD3D e 0xD46): roteiro shenlong
+    "pzs3us1/03388.bin": "Shenlong, ator da cena (id 0xD3D)",
+    "pzs3us1/03397.bin": "Shenlong, ator da cena (id 0xD46)",
+    # achados na correção da revisão da etapa 4 (o "confere" antigo pulava o que não é de menu): ids 0x1FF, 0x231 e
+    # 0x2C7, entre os de cenário e os de menu, lidos na luta do primeiro episódio; quem os lê e o formato, a levantar
+    "pzs3us1/00510.bin": "História, luta do primeiro episódio (id 0x1FF)",
+    "pzs3us1/00560.bin": "História, luta do primeiro episódio (id 0x231)",
+    "pzs3us1/00710.bin": "História, luta do primeiro episódio (id 0x2C7)",
+}
+
 # O caminho essencial da decisão 22 (menus-modos.md 4: 16 pendentes, 5 com gancho)
 ESSENCIAL = {"menu_a.c:55", "menu_c_e.c:226", "menu_c_e.c:294", "menu_c_e.c:388", "menu_c_e.c:391", "menu_c_e.c:722",
              "menu_c_e.c:729", "menu_e_b.c:290", "menu_e_b.c:361", "menu_e_b.c:457", "menu_e_b.c:753",
@@ -163,13 +177,34 @@ def classe(nome, dados):
     return None
 
 
-def conv(caminho, dados):
-    """{nome: "sem conversor" | "convertido" | outra mensagem} das linhas do conv_tool"""
+def conv(caminho):
+    """{nome: "sem conversor" | "convertido" | "ERRO: mensagem"} das linhas do conv_tool. Tudo que não é "convertido"
+    nem "sem conversor" é erro (conv_tool.c, um(): "NOME: mensagem; cobertura ...", "não abre", "BPE inválido"), e a
+    linha "  contra o mapa: ..." que segue a de um arquivo o torna erro com posições de outra largura ou não trocadas."""
     out = {}
+    ultimo = None
     for l in pathlib.Path(caminho).read_text(errors="replace").splitlines():
-        m = re.match(r"(\S+): (sem conversor|convertido|.*)", l)
+        m = re.match(r"  contra o mapa: (\d+) posições; (\d+) iguais, (\d+) com outra largura, (\d+) não trocadas", l)
         if m:
-            out[m.group(1)] = "convertido" if m.group(2).startswith("convertido") else m.group(2)
+            if ultimo is None:
+                out["?"] = f"ERRO: linha \"contra o mapa\" sem arquivo antes: {l.strip()}"
+            elif (int(m.group(3)) or int(m.group(4))) and not out[ultimo].startswith("ERRO"):
+                out[ultimo] = f"ERRO: {l.strip()}"
+            continue
+        if l.startswith(" ") or not l.strip():
+            continue  # (o detalhe das posições divergentes, "    0x...: rastreio leu ...", já contado na de cima)
+        m = re.match(r"(\S+): (.*)$", l)
+        if not m:
+            out[l] = f"ERRO: linha que o roteiros.py não entende: {l}"
+            ultimo = None
+            continue
+        ultimo, r = m.group(1), m.group(2)
+        if r == "sem conversor":
+            out[ultimo] = r
+        elif r.startswith("convertido; cobertura "):
+            out[ultimo] = "convertido"
+        else:
+            out[ultimo] = f"ERRO: {r}"
     return out
 
 
@@ -252,21 +287,35 @@ def main():
     # confere: as chamadas da rodada contra o "sem conversor" do --mapa da mesma rodada
     ev = chamadas(a.arqs[0], a.prog)
     vistas = {k for _, _, k in ev}
-    resultado = conv(a.conv, a.dados)
+    resultado = conv(a.conv)
+    erros = 0
+    for nome, r in sorted(resultado.items()):
+        if r.startswith("ERRO"):
+            print(f"  DIFERENÇA: conv_tool em {nome}: {r[6:]}")
+            erros += 1
+    # o que não é de menu e saiu sem conversor (fora do disc/, que o jogo lê por outro caminho): só as exceções
+    # conhecidas, uma a uma
+    for nome, r in sorted(resultado.items()):
+        if r == "sem conversor" and not nome.startswith("disc/") and classe(nome, a.dados) is None:
+            base = nome.split("@")[0]
+            if base in CONHECIDOS:
+                print(f"  NOTA: {nome} sem conversor, exceção conhecida (etapa 9): {CONHECIDOS[base]}")
+            else:
+                print(f"  DIFERENÇA: {nome} lido como número, fora das faixas de menu e sem conversor")
+                erros += 1
     sem = collections.Counter()
     com = collections.Counter()
     for nome, r in resultado.items():
-        if not nome.endswith("#bpe"):
+        if not nome.endswith("#bpe") or r.startswith("ERRO"):
             continue
         c = classe(nome, a.dados)
         if c is None:
-            continue  # (as animações do lutador, Bpe_Decode direto, e o que não é de menu)
+            continue  # (as animações do lutador, Bpe_Decode direto, convertidas; o sem conversor já foi acima)
         (sem if r == "sem conversor" else com)[c] += 1
     esperado_sem = {CONTEUDO[k] for k in vistas if todas.get(k, ("",))[0] == "pendente"}
     esperado_com = {CONTEUDO[k] for k in vistas if todas.get(k, ("",))[0] != "pendente"}
     print("conteúdo sem conversor no --mapa: " + ", ".join(f"{c} ({n})" for c, n in sorted(sem.items())))
     print("conteúdo convertido no --mapa:    " + ", ".join(f"{c} ({n})" for c, n in sorted(com.items())))
-    erros = 0
     for c in sorted(esperado_sem - set(sem)):
         if c not in com:
             # o rastreio só vê o conteúdo lido como número: um descomprimido que ninguém lê não aparece (o DcList_Init

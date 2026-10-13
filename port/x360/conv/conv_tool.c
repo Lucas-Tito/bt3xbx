@@ -465,9 +465,43 @@ static void censo(const char *dados) {
     }
 }
 
+/* A tabela única de conv.c (sFaixas) promete que as faixas não se sobrepõem: duas linhas da mesma seção com ids em
+   comum dariam a um arquivo dois formatos, e a primeira ganharia em silêncio. Confere a cada execução, e também que
+   cada linha decide o formato de todos os ids dela (a regra do lutador, fora da tabela, não pode tomar uns). */
+static int faixas_conferidas(void) {
+    int n, a, b, erros = 0;
+    const ConvFaixa *f = Conv_Faixas(&n);
+    for (a = 0; a < n; a++) {
+        int i;
+        for (b = a + 1; b < n; b++) {
+            if (f[a].secao == f[b].secao && f[a].ini <= f[b].fim && f[b].ini <= f[a].fim) {
+                fprintf(stderr, "conv_tool: faixas sobrepostas em sFaixas (conv.c): %d..%d \"%s\" e %d..%d \"%s\", "
+                        "seção %d\n", f[a].ini, f[a].fim, f[a].formato, f[b].ini, f[b].fim, f[b].formato, f[a].secao);
+                erros++;
+            }
+        }
+        for (i = f[a].ini; i <= f[a].fim; i++) {
+            char rel[32];
+            const char *g;
+            sprintf(rel, "pzs3us1/%05d.bin", i);
+            g = f[a].secao == CONV_ARQ ? Conv_FormatoDe(rel) : Conv_FormatoSecao(rel, f[a].secao);
+            if (g == NULL || strcmp(g, f[a].formato) != 0) {
+                fprintf(stderr, "conv_tool: o id %d da faixa %d..%d \"%s\" (seção %d) sai com o formato %s\n", i,
+                        f[a].ini, f[a].fim, f[a].formato, f[a].secao, g != NULL ? g : "nenhum");
+                erros++;
+                break;
+            }
+        }
+    }
+    return erros == 0;
+}
+
 int main(int argc, char **argv) {
     const char *dados = NULL;
     int i, falhas = 0, disco = 0;
+    if (!faixas_conferidas()) {
+        return 1;
+    }
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--formato") == 0 && i + 1 < argc) {
             formato = argv[++i];
