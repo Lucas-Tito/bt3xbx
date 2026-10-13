@@ -213,54 +213,78 @@ static const Formato sFormatos[] = {
     {"menu_titulo", Conv_MenuTitulo},          /* 5.4: tela de título (Title_Init) */
 };
 
-/* Que formato tem cada arquivo do disco. Os arquivos não dizem o próprio formato: vem de como o jogo escolhe o
-   arquivo de cada coisa. Os ids de arquivo do jogo 1..0xD47 são a partição 1 (pzs3us1/NNNNN.bin, índice id - 1;
-   include/sys/file.h). */
-static const char *formato_de(const char *nome) {
-    int i, k;
-    char resto[8];
-    if (sscanf(nome, "pzs3us1/%5d.%3s", &i, resto) != 2 || strcmp(resto, "bin") != 0 || i < 0 || i >= 0xD47) {
-        return NULL;
-    }
-    /* slot do lutador (BtlObj_RequestCharaModel, src/battle/btl_obj.c; CHRVIEW_FILE_FIRST em battle/view_a.h):
-       file[0] = chara*10 + traje + 0x590 (+4 na variante danificada), file[1] = chara*10 + 0x598,
-       file[2] = chara*10 + 0x599 */
+/* Que formato tem cada arquivo do disco e cada conteúdo descomprimido dele: a tabela única (arquivo e seção para
+   formato). Os arquivos não dizem o próprio formato: vem de como o jogo escolhe o arquivo de cada coisa, pelo id. Os
+   ids de arquivo do jogo 1..0xD47 são a partição 1 (pzs3us1/NNNNN.bin, índice id - 1; include/sys/file.h).
+   Seção (ConvFaixa.secao): CONV_ARQ é o arquivo como está no disco (Conv_Arquivo, iso360.c); 0 é o conteúdo do
+   contêiner BPE que começa no deslocamento 0 do arquivo; n >= 1 é o conteúdo da seção n da tabela do arquivo
+   (menu_pacote, menus.md 2.1). O conteúdo descomprimido se converte em tempo de jogo, pelo gancho de quem chama o
+   Sprite_Unpack (menus.md 4); a conv_tool usa estas linhas no --mapa e no --disco. As faixas não se sobrepõem. */
+static const ConvFaixa sFaixas[] = {
     /* arquivos comuns (comuns.md): ids 2..5 lidos na partida, 6 e 7 o HUD de cada idioma */
-    switch (i) {
-    case 1: return "comum1";
-    case 2: return "comum2";
-    case 3: return "comum3";
-    case 4: return "comum4";
-    case 5: case 6: return "hud";
-    default: break;
-    }
+    {1, 1, CONV_ARQ, "comum1"},
+    {2, 2, CONV_ARQ, "comum2"},
+    {3, 3, CONV_ARQ, "comum3"},
+    {4, 4, CONV_ARQ, "comum4"},
+    {5, 6, CONV_ARQ, "hud"},
     /* som-e-sprites.md 4: rostos dos membros (id 8 + chara*2 + lado), bancos de som (comuns, menu, cenários,
-       vozes), folhas da tela de carregamento (id 0x3C1 + tipo) */
-    if (i >= 7 && i <= 328) {
-        return "rosto";
-    }
-    if ((i >= 329 && i <= 367) || (i >= 3033 && i <= 3354)) {
-        return "som";
-    }
-    if (i >= 960 && i <= 962) {
-        return "folha_bpe";
-    }
-    /* menus.md 1: arquivos de menu do caminho do boot ao título, ids a partir de MenuProgress.baseFile = 0x1C1:
-       + 1 (0x1C2, título e menu principal, Title_Init e MainMenu_Init) e + 0x19 (0x1DA, cartão e logos,
-       FirstRun_Main); 0x1DE é o de McFlow_Init (fileBase + 0x1D). Os outros arquivos de menu ainda não têm
-       especificação (menus.md 11). */
-    switch (i) {
-    case 0x1C2 - 1: case 0x1DA - 1: return "menu_pacote";
-    case 0x1DE - 1: return "menu_bpe";
-    default: break;
-    }
+       vozes) */
+    {7, 328, CONV_ARQ, "rosto"},
+    {329, 367, CONV_ARQ, "som"},
+    {3033, 3354, CONV_ARQ, "som"},
     /* cenários (cenario.md, seção 1): BtlLoad_* pedem 0x171 + cenário (BTL_FILE_STAGE) ou 0x198 + cenário em tela
        dividida (BTL_FILE_STAGE_SPLIT), ShenScene 0x194 + dragão e ChrView 0x197; ids 0x171..0x1BE, índices
        368..445, todos com a tabela de 25 entradas (conferida no conversor) */
-    if (i >= 0x171 - 1 && i <= 0x1BE - 1) {
-        return "cenario";
+    {0x171 - 1, 0x1BE - 1, CONV_ARQ, "cenario"},
+    /* folhas da tela de carregamento (som-e-sprites.md 2, id 0x3C1 + tipo): o arquivo é um contêiner BPE, e a folha
+       descomprimida se converte em Load_InitScreen (Port_ConvertLoadSheet) */
+    {960, 962, CONV_ARQ, "folha_bpe"},
+    {960, 962, 0, "folha"},
+    /* menus.md 1: arquivos de menu do caminho do boot ao título, ids a partir de MenuProgress.baseFile = 0x1C1.
+       0x1DE (fileBase + 0x1D) é o de McFlow_Init; o conteúdo, os recursos do cartão */
+    {0x1DE - 1, 0x1DE - 1, CONV_ARQ, "menu_bpe"},
+    {0x1DE - 1, 0x1DE - 1, 0, "menu_mcflow"},
+    /* baseFile + 0x19 (0x1DA, cartão e logos, FirstRun_Main): seção 2 a tela do cartão (BootCard_Run(2)), seção 3
+       os logos */
+    {0x1DA - 1, 0x1DA - 1, CONV_ARQ, "menu_pacote"},
+    {0x1DA - 1, 0x1DA - 1, 2, "menu_cartao"},
+    {0x1DA - 1, 0x1DA - 1, 3, "menu_logos"},
+    /* baseFile + 1 (0x1C2, título e menu principal): seção 1 o título (Title_Run(1)); a 2, o menu principal, ainda
+       sem conversor (menus-modos.md). Os outros arquivos de menu ainda não têm especificação. */
+    {0x1C2 - 1, 0x1C2 - 1, CONV_ARQ, "menu_pacote"},
+    {0x1C2 - 1, 0x1C2 - 1, 1, "menu_titulo"},
+};
+
+const ConvFaixa *Conv_Faixas(int *n) {
+    *n = (int)(sizeof(sFaixas) / sizeof(sFaixas[0]));
+    return sFaixas;
+}
+
+/* o índice do arquivo na partição 1 (id - 1), ou -1 se o nome não é de lá */
+static int indice_de(const char *nome) {
+    int i;
+    char resto[8];
+    if (sscanf(nome, "pzs3us1/%5d.%3s", &i, resto) != 2 || strcmp(resto, "bin") != 0 || i < 0 || i >= 0xD47) {
+        return -1;
     }
-    k = i + 1 - 0x590;
+    return i;
+}
+
+static const char *da_tabela(int i, int secao) {
+    unsigned k;
+    for (k = 0; k < sizeof(sFaixas) / sizeof(sFaixas[0]); k++) {
+        if (i >= sFaixas[k].ini && i <= sFaixas[k].fim && sFaixas[k].secao == secao) {
+            return sFaixas[k].formato;
+        }
+    }
+    return NULL;
+}
+
+/* slot do lutador (BtlObj_RequestCharaModel, src/battle/btl_obj.c; CHRVIEW_FILE_FIRST em battle/view_a.h):
+   file[0] = chara*10 + traje + 0x590 (+4 na variante danificada), file[1] = chara*10 + 0x598,
+   file[2] = chara*10 + 0x599. Uma regra, não uma faixa: fica fora da tabela. */
+static const char *do_lutador(int i) {
+    int k = i + 1 - 0x590;
     if (k >= 0 && k < 161 * 10) { /* 161 personagens (SAVE_CHARA_COUNT); depois disso a faixa é de outros formatos */
         switch (k % 10) {
         case 8: return "personagem_anim";
@@ -269,6 +293,30 @@ static const char *formato_de(const char *nome) {
         }
     }
     return NULL;
+}
+
+static const char *formato_de(const char *nome) {
+    int i = indice_de(nome);
+    const char *f;
+    if (i < 0) {
+        return NULL;
+    }
+    f = da_tabela(i, CONV_ARQ);
+    return f != NULL ? f : do_lutador(i);
+}
+
+const char *Conv_FormatoSecao(const char *nome, int secao) {
+    int i = indice_de(nome);
+    const char *f;
+    if (i < 0) {
+        return NULL;
+    }
+    f = do_lutador(i);
+    if (f != NULL) {
+        /* as animações em BPE do file[1], em qualquer deslocamento (BtlObjAnim_Load, Port_ConvertAnim) */
+        return strcmp(f, "personagem_anim") == 0 ? "animacao" : NULL;
+    }
+    return da_tabela(i, secao);
 }
 
 static int converter(ConvFn fn, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg, int nmsg) {

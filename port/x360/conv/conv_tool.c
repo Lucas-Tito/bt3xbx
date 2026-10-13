@@ -185,43 +185,35 @@ static conv_u8 *descomprimir(const conv_u8 *arq, long tam, unsigned long ofs, lo
     return res;
 }
 
-/* O formato do conteúdo descomprimido do contêiner em `ofs` do arquivo `rel` (ainda little-endian): o que o chamador
-   do jogo aplica depois de descomprimir (docs/x360/formatos/menus.md 4; som-e-sprites.md 2.4; personagem.md 6.2).
-   NULL: o jogo não converte esse conteúdo (ainda). */
-static const char *formato_bpe(const char *rel, const conv_u8 *arq, long tam, unsigned long ofs) {
+/* A seção do arquivo `rel` (ainda little-endian) onde começa o contêiner em `ofs`: 0 no começo do arquivo, n se é a
+   seção n da tabela de um menu_pacote (menus.md 2.1), -2 se não é nenhuma das duas. */
+static int secao_de(const char *rel, const conv_u8 *arq, long tam, unsigned long ofs) {
     const char *f = Conv_FormatoDe(rel);
     unsigned long n, s;
-    if (f == NULL) {
-        return NULL;
+    if (ofs == 0) {
+        return 0;
     }
-    if (strcmp(f, "personagem_anim") == 0) {
-        return "animacao"; /* BtlObjAnim_Load */
-    }
-    if (ofs == 0 && strcmp(f, "folha_bpe") == 0) {
-        return "folha"; /* Load_InitScreen */
-    }
-    if (ofs == 0 && strcmp(f, "menu_bpe") == 0) {
-        return "menu_mcflow"; /* McFlow_Init */
-    }
-    if (strcmp(f, "menu_pacote") != 0 || tam < 8) {
-        return NULL;
+    if (f == NULL || strcmp(f, "menu_pacote") != 0 || tam < 8) {
+        return -2;
     }
     n = le32(arq);
     for (s = 1; s <= n && (s + 1) * 4 <= (unsigned long)tam; s++) {
         if (le32(arq + s * 4) == ofs) {
-            break;
+            return (int)s;
         }
     }
-    if (strcmp(rel, "pzs3us1/00473.bin") == 0 && s == 2) {
-        return "menu_cartao"; /* BootCard_Run(2) */
+    return -2;
+}
+
+/* O formato do conteúdo descomprimido do contêiner em `ofs` do arquivo `rel`: o que o chamador do jogo aplica depois
+   de descomprimir, pela tabela única de conv.c (Conv_FormatoSecao; docs/x360/formatos/menus.md 4; som-e-sprites.md
+   2.4; personagem.md 6.2). NULL: o jogo não converte esse conteúdo (ainda). */
+static const char *formato_bpe(const char *rel, const conv_u8 *arq, long tam, unsigned long ofs) {
+    if (Conv_FormatoDe(rel) == NULL) {
+        return NULL; /* o arquivo chegaria cru: nem o contêiner se leria */
     }
-    if (strcmp(rel, "pzs3us1/00473.bin") == 0 && s == 3) {
-        return "menu_logos"; /* FirstRun_Main */
-    }
-    if (strcmp(rel, "pzs3us1/00449.bin") == 0 && s == 1) {
-        return "menu_titulo"; /* Title_Run(1) */
-    }
-    return NULL;
+    /* (as animações do lutador estão em qualquer deslocamento: Conv_FormatoSecao não olha a seção delas) */
+    return Conv_FormatoSecao(rel, secao_de(rel, arq, tam, ofs));
 }
 
 /* converte e confere um arquivo; devolve 1 se falhou */
@@ -416,34 +408,35 @@ int main(int argc, char **argv) {
         }
         printf("disco: %d arquivos convertidos sem erro, %d com erro\n", ok, erros);
         falhas += erros;
-        /* o conteúdo descomprimido que o jogo converte: as folhas (contêiner no começo) e as seções dos menus */
+        /* o conteúdo descomprimido que o jogo converte: as linhas da tabela única com seção (as folhas, com o
+           contêiner no começo, e as seções dos menus) */
         {
-            static const struct { const char *rel; int secao; } desc[] = {
-                {"pzs3us1/00960.bin", 0}, {"pzs3us1/00961.bin", 0}, {"pzs3us1/00962.bin", 0},
-                {"pzs3us1/00477.bin", 0}, {"pzs3us1/00473.bin", 2}, {"pzs3us1/00473.bin", 3},
-                {"pzs3us1/00449.bin", 1},
-            };
-            unsigned d;
+            int nf, d, a;
+            const ConvFaixa *fx = Conv_Faixas(&nf);
             ok = erros = 0;
-            for (d = 0; d < sizeof(desc) / sizeof(desc[0]); d++) {
-                long t;
-                conv_u8 *arq = ler_arquivo(dados, desc[d].rel, &t);
-                char rel[64];
-                unsigned long ofs = 0;
-                if (arq == NULL) {
-                    printf("%s: não abre\n", desc[d].rel);
-                    erros++;
-                    continue;
-                }
-                if (desc[d].secao > 0 && (desc[d].secao + 1) * 4 <= t) {
-                    ofs = le32(arq + desc[d].secao * 4);
-                }
-                free(arq);
-                sprintf(rel, "%s@0x%lX#bpe", desc[d].rel, ofs);
-                if (um(dados, rel)) {
-                    erros++;
-                } else {
-                    ok++;
+            for (d = 0; d < nf; d++) {
+                for (a = fx[d].ini; fx[d].secao >= 0 && a <= fx[d].fim; a++) {
+                    long t;
+                    char arqrel[64], rel[96];
+                    conv_u8 *arq;
+                    unsigned long ofs = 0;
+                    sprintf(arqrel, "pzs3us1/%05d.bin", a);
+                    arq = ler_arquivo(dados, arqrel, &t);
+                    if (arq == NULL) {
+                        printf("%s: não abre\n", arqrel);
+                        erros++;
+                        continue;
+                    }
+                    if (fx[d].secao > 0 && (fx[d].secao + 1) * 4 <= t) {
+                        ofs = le32(arq + fx[d].secao * 4);
+                    }
+                    free(arq);
+                    sprintf(rel, "%s@0x%lX#bpe", arqrel, ofs);
+                    if (um(dados, rel)) {
+                        erros++;
+                    } else {
+                        ok++;
+                    }
                 }
             }
             printf("disco (descomprimidos): %d convertidos sem erro, %d com erro\n", ok, erros);

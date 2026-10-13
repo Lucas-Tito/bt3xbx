@@ -81,6 +81,17 @@ int Conv_Animacao(conv_u8 *buf, conv_ofs tam, char *msg, int nmsg);
 /* o formato de um arquivo do disco pelo nome, ou NULL se nenhum conversor o conhece */
 const char *Conv_FormatoDe(const char *nome);
 
+/* A tabela única de formatos (conv.c): faixa de arquivos da partição 1 (índice = id - 1) e seção para formato.
+   secao: CONV_ARQ = o arquivo como está no disco; 0 = o conteúdo do contêiner BPE no começo do arquivo; n >= 1 = o
+   conteúdo da seção n da tabela do arquivo (menus.md 2.1). */
+#define CONV_ARQ (-1)
+typedef struct ConvFaixa { int ini, fim, secao; const char *formato; } ConvFaixa;
+const ConvFaixa *Conv_Faixas(int *n);
+
+/* o formato do conteúdo descomprimido da seção `secao` (0: o contêiner no começo) do arquivo `nome`, como o
+   chamador do jogo o converte depois do Sprite_Unpack; NULL se o jogo ainda não o converte */
+const char *Conv_FormatoSecao(const char *nome, int secao);
+
 /* um conversor de formato: converte [base, base+tam) de c */
 typedef void (*ConvFn)(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
