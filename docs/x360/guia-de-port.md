@@ -534,6 +534,13 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   - **O desbloqueio tem de vir antes do `MainMenu_Init`:** a lista de itens do menu principal se monta no Init (o
     Shenlong só entra com as sete esferas), então desbloquear já no menu muda o anel só na visita seguinte. O
     `boot.txt` desbloqueia quando o fluxo do cartão do New Game volta a 0, enquanto o título sai.
+  - **Com tudo desbloqueado, o `Save_UnlockAll` esvazia a lista de registros**, e telas que dependem dela (o retrato
+    da lista do Data Center) recusam o X: nem todo `Sprite_Unpack` se alcança só com o desbloqueio.
+  - **A tela de replay cai nas builds sem janela** (SIGFPE no `ReplayMenu_Draw`, `menu_za_d.c:409`,
+    `num / (s32)pow(10.0, i)`, divisão por zero): o `pow` de double não passa pelo `port_libm.h` (só o `powf` passa),
+    e o código do jogo, em float por software, chama o da libm, de float em hardware (a causa provável do 0; não
+    conferida no depurador). É do teste sem janela (o 360 compila tudo com float em hardware); o roteiro do Data
+    Center não entra no replay até isso se resolver na etapa 9.
   - **Duas chamadas iguais do fonte viram uma no binário.** O clang juntou os dois `Sprite_Unpack` do pacote do
     `CharSel_Init` (o do treino e o do duelo, menu_c_e.c:388 e :391) num só endereço: o endereço de retorno não diz
     qual foi, e o `roteiros.py` decide pelo modo (45 é o treino). Na PPC cada uma tem o seu gancho e não se juntam.

@@ -1,0 +1,58 @@
+# Ultimate Battle (etapa 9): UbMenu (modo 13); Missão 100 (MisSel, 14) até a seleção do time (UbTeamSel, 15) com o
+# cursor andando; Sobrevivência (SurvSel, 17); Disc Fusion (24); e por último o Sim Dragon (SimTop, 20), a seleção do
+# personagem (SoloSel, 21) com o cursor andando, até o tabuleiro (SimDay, 22), onde o roteiro termina (sair do
+# tabuleiro é uma escolha do menu dele). Os resultados (16, 19, 23, 27, 30) pedem lutas terminadas.
+inclui boot.txt
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+# Missão 100: X na primeira missão leva à seleção do time
+aperta BAIXO
+quadros 30
+aperta X ate tela 14 max 600
+quadros 200
+aperta X ate tela 15 max 1200
+quadros 300
+aperta DIREITA 2                  # UbTeamSel_UpdateFaceLoad
+quadros 100
+repete ate tela 13 max 3000
+    aperta TRIANGULO
+    quadros 80
+volta
+quadros 200
+# Sobrevivência
+aperta BAIXO
+quadros 30
+aperta X ate tela 17 max 600
+quadros 300
+repete ate tela 13 max 3000
+    aperta TRIANGULO
+    quadros 80
+volta
+quadros 200
+# Disc Fusion (o X lá dentro abre um diálogo do cartão: só a tela)
+aperta BAIXO
+quadros 30
+aperta X ate tela 24 max 600
+quadros 300
+repete ate tela 13 max 3000
+    aperta TRIANGULO
+    quadros 80
+volta
+quadros 200
+# Sim Dragon
+aperta CIMA 3
+quadros 30
+aperta X ate tela 20 max 600
+quadros 300
+aperta X ate tela 21 max 600
+quadros 300
+aperta DIREITA 2                  # SoloSel_UpdateImage
+quadros 60
+repete ate tela 22 max 3000       # X no personagem, nos itens e na cor
+    aperta X
+    quadros 100
+volta
+quadros 300
+fim

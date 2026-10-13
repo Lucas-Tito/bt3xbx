@@ -1,0 +1,19 @@
+# Referência de personagens (etapa 9): CharRef (modo 60), a lista, os detalhes de um personagem (o retrato:
+# CharRef_UpdateImage), e de volta ao menu principal. O modelo 3D (ChrView) só aparece por inteiro depois da F5.
+inclui boot.txt
+quadros 90
+aperta CIMA 3                     # Referência
+aperta X ate tela 60
+quadros 200
+aperta BAIXO 3
+quadros 60
+aperta X                          # detalhes
+quadros 120
+aperta TRIANGULO
+quadros 60
+repete ate tela 4 max 2000
+    aperta TRIANGULO
+    quadros 40
+volta
+quadros 60
+fim

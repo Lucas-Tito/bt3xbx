@@ -1,0 +1,18 @@
+# Dragon History (etapa 9): HistSel (modo 6; na primeira visita o Goku explica o modo, e cada X passa uma fala), a
+# primeira saga, ModeMenu (modo 7) com a imagem do episódio, até a luta do primeiro episódio começar. O fim da
+# História (HistOutro, 9), o resultado (HistResult, 8) e o save dela (HistSave, 10) pedem lutas ganhas.
+inclui boot.txt
+quadros 90
+aperta X ate tela 6               # História (o primeiro item)
+quadros 300
+repete ate tela 7 max 3000        # as falas do Goku e a primeira saga
+    aperta X
+    quadros 120
+volta
+quadros 300
+repete ate luta max 6000          # o primeiro episódio e a apresentação dele
+    aperta X
+    quadros 150
+volta
+quadros 60
+fim

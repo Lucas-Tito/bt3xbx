@@ -1,0 +1,35 @@
+# Evolution Z (etapa 9): EvoTop (modo 48), EvoZ (49) com o cursor andando no retrato, a loja (Shop, 50), e de volta
+# ao menu principal.
+inclui boot.txt
+quadros 90
+aperta BAIXO 4                    # Evolution Z
+aperta X ate tela 48
+quadros 200
+aperta X ate tela 49              # EvoZ
+quadros 200
+aperta BAIXO                      # EvoZ_UpdateFace
+quadros 60
+aperta X
+quadros 120
+repete ate tela 48 max 2000
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 200
+aperta BAIXO
+quadros 30
+aperta X ate tela 50 max 600      # loja
+quadros 200
+aperta BAIXO
+quadros 60
+repete ate tela 48 max 2000
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 200
+repete ate tela 4 max 3000
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 60
+fim

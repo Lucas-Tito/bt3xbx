@@ -1,0 +1,41 @@
+# Data Center (etapa 9): DcMenu (modo 53); a senha (DcPass, 54) com o cursor andando; a lista de personagens
+# (DcList, 55; o X num registro, que com o desbloqueio está vazio, é recusado); e de volta ao menu principal. Os
+# retratos da lista e da senha (DcList_UpdateFace, DcPass_UpdateFace) pedem um registro ou uma senha válida. O replay
+# (56, ReplayMenu_Init) fica de fora: nas builds sem janela o ReplayMenu_Draw cai (SIGFPE) no num / (s32)pow(10.0, i)
+# (menu_za_d.c:409, divisão por zero): o pow de double vem da libm, de float em hardware, num código compilado com
+# float em software (a causa provável; guia, seção 6). É do teste sem janela; o 360 compila tudo com float em hardware.
+inclui boot.txt
+quadros 90
+aperta BAIXO 6                    # Data Center
+aperta X ate tela 53
+quadros 200
+aperta X ate tela 54 max 600      # senha
+quadros 200
+aperta DIREITA 2
+quadros 30
+aperta BAIXO 2
+quadros 60
+repete ate tela 53 max 1500
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 200
+aperta BAIXO
+quadros 30
+aperta X ate tela 55 max 600      # lista
+quadros 200
+aperta BAIXO 2
+quadros 30
+aperta X
+quadros 200
+repete ate tela 53 max 1500
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 200
+repete ate tela 4 max 3000
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 60
+fim
