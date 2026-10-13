@@ -598,6 +598,9 @@ Escolhas do Lucas para a F4 (plano, "F4 em etapas"):
   só o torna robusto a queda de energia: gravar em temporário e trocar o nome, conferir o `fclose`.
   - **Recusado:** XContent (pacote no Armazenamento do console, seletor de dispositivo). Seria mais trabalho e
     teria comportamento sem perfil a medir.
+- **Ajuste depois do inventário (etapa 1, 13/10/2026):** o "submenu dos modos" do essencial é o `DuelMenu` (modo 38),
+  e o save essencial é o das Opções, pelo `McFlow`. O `ModeMenu` (lista de episódios da História) e o DcSave (Data
+  Center e Evolution Z) vão para a etapa 9 (`formatos/menus-modos.md` 5).
 - **A F4 inteira antes do teto de memória** (o primeiro item da F5). Se um passeio pelos menus esgotar a memória no
   console, o teto entra quando acontecer.
 - **Decisões menores, como a proposta recomendou:**

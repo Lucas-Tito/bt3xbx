@@ -132,7 +132,7 @@ quatro redes de cobertura:
 | 2 | WSL | Guarda em `sprite.c` (`PORT_BIG_ENDIAN`); Dragon Net Battle escondido no 360 e nos roteiros | a PPC sem mapa para com "sem conversor em MainMenu_Init"; a `.text` da x86 inalterada |
 | 3 | console | Save em `game:\saves` robusto: gravação em temporário e troca de nome, `fclose` conferido | salvar, sair e abrir de novo: o título tem Continue e a opção volta como estava |
 | 4 | WSL | Roteiros de controle em texto, ancorados na troca de tela; desbloqueio de tudo no headless; um roteiro por modo | cada roteiro repete na x86 as telas de referência; o "sem conversor" do `--mapa` é igual ao inventário |
-| 5 | WSL | Especificações e conversores do caminho essencial: menu principal, submenu dos modos, Duelo (personagem, time, estágio), Treino, Opções, DcSave | `--disco` 100% nessas faixas; `--mapa` sem divergência; PPC sem mapa igual à x86 em cada roteiro |
+| 5 | WSL | Especificações e conversores do caminho essencial: menu principal, submenu do Duelo (`DuelMenu`), Duelo (personagem, time, estágio), Treino, Opções com o save delas | `--disco` 100% nessas faixas; `--mapa` sem divergência; PPC sem mapa igual à x86 em cada roteiro |
 | 6 | WSL | Rasterizador x86 e PPC nas telas essenciais | PPM idênticos |
 | 7 | console | Caminho essencial no console, pelos roteiros (`BT3_PAD_PLAY`) | mesmas telas da x86; capturas no patamar da F3; nenhuma queda |
 | 8 | WSL e console | Save entre builds (PPC e 360) | os dois sentidos carregam; save de PC cai no fluxo de "dados danificados" do jogo, sem queda |
@@ -145,9 +145,10 @@ pendentes (16 no caminho essencial), 33 formatos novos (6 no essencial: `menu_te
 (`sFaixas`, `port/x360/conv/conv.c`), e o `--disco` termina com o censo dos menus por faixa (seção 6 de lá). O
 `unpacks.py` lista as pendentes; a guarda faz a PPC sem mapa parar com "Sprite_Unpack sem conversor em
 MainMenu_Init" (`port/x360/tools/guarda_menu.sh`), com a `.text` da x86 inalterada. O Dragon Net Battle sai do menu
-no 360 (padrão do `ambiente.txt`) e nos roteiros (`BT3_MENU_ITEM4=0`). Duas perguntas para o Lucas antes da etapa 5
-(`menus-modos.md` 5): o "submenu dos modos" é o `DuelMenu` (o `ModeMenu` só serve à História), e o DcSave só existe
-no Data Center e no Evolution Z (as Opções salvam pelo `McFlow`, que já tem gancho).
+no 360 (padrão do `ambiente.txt`) e nos roteiros (`BT3_MENU_ITEM4=0`). O Lucas respondeu às duas perguntas do
+inventário (`menus-modos.md` 5, decisão 22): o "submenu dos modos" do essencial é o `DuelMenu` (o `ModeMenu` só serve
+à História e vai para a etapa 9), e o save essencial é o das Opções, pelo `McFlow` (o DcSave, do Data Center e do
+Evolution Z, vai para a etapa 9).
 
 Critério da F4: no console, com o controle, do boot ao começo da luta pelo Duelo e pelo Treino, Opções com salvar e
 carregar, e os outros modos navegáveis; a sequência de telas igual à x86. Antes da etapa 5, um revisor independente
