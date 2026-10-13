@@ -150,7 +150,7 @@ inventário (`menus-modos.md` 5, decisão 22): o "submenu dos modos" do essencia
 à História e vai para a etapa 9), e o save essencial é o das Opções, pelo `McFlow` (o DcSave, do Data Center e do
 Evolution Z, vai para a etapa 9).
 
-Etapa 3 feita no WSL em 13/10/2026; falta a rodada no console. A camada do cartão (`port/src/plat_mc.c`) gravava
+Etapa 3 concluída em 13/10/2026 (a metade do critério que o console alcança; a outra metade depois da etapa 7). A camada do cartão (`port/src/plat_mc.c`) gravava
 direto no arquivo do save, a cada `sceMcWrite`, sem conferir o `fclose`. Nas builds big-endian (`PORT_MC_ATOMIC`)
 o arquivo aberto para gravação agora fica em memória e, no fechamento, vai inteiro para `NOME.tmp`, que vira
 `NOME.new` (o ponto de compromisso: só existe completo); então `NOME` é apagado e `NOME.new` toma o lugar dele
@@ -164,8 +164,13 @@ Falha de gravação vira o erro do cartão que o jogo já mostra, e cada gravaç
 `bt3xbx.log`. No WSL (`port/x360/tools/save_mc.sh`): os 24 casos do `teste_mc` na x86 e na PPC; o jogo na PPC sem mapa
 cria o save pelo New Game e o carrega no boot seguinte com a mesma sequência de estados do McFlow da x86, também com
 um `.tmp` truncado ao lado ou só com o `.new` de uma queda; com a escrita falhando, mostra o erro e segue sem queda.
-A `.text` da x86 não mudou; o 360 compila com os mesmos 103 stubs. O console não respondeu na porta 21, e a build não
-subiu.
+A `.text` da x86 não mudou; o 360 compila com os mesmos 103 stubs.
+
+No console (build `668b2e18`), com o Lucas: o save da F3, em `saves`, carregou no boot (linha "mc: leu ... 16384 de
+16384 bytes") e o título ofereceu Continue. Com `BT3_SAVES=game:\saves2` (cartão vazio), o New Game criou o save
+(as três linhas "mc: gravou ... ok"), o menu principal parou na guarda ("sem conversor em MainMenu_Init", tela
+vermelha), e no boot seguinte o save carregou e o título ofereceu Continue. Na pasta ficaram só os três arquivos,
+sem `.tmp` nem `.new`: o `DeleteFile` e o `MoveFile` da CRT funcionam no FATX.
 
 No console, enquanto o menu principal cair (etapa 5), o critério possível é a metade dele: o New Game cria o save
 (três linhas "mc: gravou ... ok": `icon.sys` 964 bytes, `dbzsm.ico` 40.090, o arquivo de dados 16.384), e depois de
