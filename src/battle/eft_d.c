@@ -48,18 +48,22 @@ extern void Vec4_ToInt(s32 *dst, Vec4 *src); /* float vector to integer vector *
 
 /* GS XYZF2 register. */
 typedef struct EftXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftXyzf;
 
 /* One vertex of a REGLIST triangle: RGBAQ, ST, XYZF2. */
 typedef struct EftTriVtx {
+#ifdef PORT_BIG_ENDIAN /* a GS packet is 32-bit words of the host (decision 19): R is the low byte of the word */
+    u8 a, b, g, r;
+#else
     /* 0x00 */ u8 r;
     /* 0x01 */ u8 g;
     /* 0x02 */ u8 b;
     /* 0x03 */ u8 a;
+#endif
     /* 0x04 */ f32 q;
     /* 0x08 */ f32 s;
     /* 0x0C */ f32 t;
@@ -106,14 +110,14 @@ typedef struct EftTriGs {
 #define EFT_SURF_FILL_PKT(pkt, c, abe, t0, t1)                                                                  \
     prim = 0x1B; /* triangle, gouraud, textured */                                                              \
     ((EftPrim *)&prim)->abe = (abe);                                                                            \
-    (pkt)->prim = prim;                                                                                         \
+    (pkt)->prim = PS2_PKT64(prim);                                                                              \
     (pkt)->tag = 0x20000007;                                                                                    \
     (pkt)->vif0 = 0x10000000;                                                                                   \
     (pkt)->vif1 = 0x50000007;                                                                                   \
-    (pkt)->giftag[0] = 0xC400000000008001;                                                                      \
-    (pkt)->giftag[1] = 0xF42142142160;                                                                          \
+    (pkt)->giftag[0] = PS2_PKT64(0xC400000000008001);                                                           \
+    (pkt)->giftag[1] = PS2_PKT64(0xF42142142160);                                                               \
     (pkt)->next = 0;                                                                                            \
-    (pkt)->nop = 0;                                                                                             \
+    (pkt)->nop = PS2_PKT64(0);                                                                                  \
     (pkt)->v[0].r = (c)[0].x;                                                                                   \
     (pkt)->v[0].g = (c)[0].y;                                                                                   \
     (pkt)->v[0].b = (c)[0].z;                                                                                   \
@@ -208,7 +212,7 @@ static inline void EftSurf_QueueTri(EftScrPos *scr0, EftScrPos *scr1, EftScrPos 
         if (!(layer < 2)) {
             l = layer - 2;
         }
-        pkt->tex0 = tex[i];
+        pkt->tex0 = PS2_PKT64(tex[i]);
         EFT_SURF_FILL_PKT2(pkt, (s32 *)scr0, (s32 *)scr1, (s32 *)scr2, (f32 *)st0, (f32 *)st1, (f32 *)st2);
         EFT_SURF_QUEUE(pkt, z, l, entry);
         layer++;
@@ -367,10 +371,10 @@ void EftSurf_DrawTriDirect(EftScrPos *scr0, EftScrPos *scr1, EftScrPos *scr2, Ve
 
         p = (EftTriGs *)Dma_BeginDirect();
         ctxt = i;
-        p->prim = 0x1B | ((u64)abe << 6) | ((u64)ctxt << 9);
-        p->giftag[0] = 0xC400000000008001;
-        p->giftag[1] = 0xF42142142160 + (ctxt << 4); /* TEX0_1 or TEX0_2 */
-        p->nop = 0;
+        p->prim = PS2_PKT64(0x1B | ((u64)abe << 6) | ((u64)ctxt << 9));
+        p->giftag[0] = PS2_PKT64(0xC400000000008001);
+        p->giftag[1] = PS2_PKT64(0xF42142142160 + (ctxt << 4)); /* TEX0_1 or TEX0_2 */
+        p->nop = PS2_PKT64(0);
         p->v[0].r = c[0];
         p->v[0].g = c[1];
         p->v[0].b = c[2];
@@ -386,7 +390,7 @@ void EftSurf_DrawTriDirect(EftScrPos *scr0, EftScrPos *scr1, EftScrPos *scr2, Ve
         p->v[2].b = c[10];
         p->v[2].a = c[11];
         p->v[2].q = st2->z;
-        p->tex0 = tex0[i];
+        p->tex0 = PS2_PKT64(tex0[i]);
         p->v[0].s = st0->x;
         p->v[0].t = st0->y;
         p->v[1].s = st1->x;

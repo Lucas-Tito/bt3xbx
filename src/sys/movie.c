@@ -124,8 +124,8 @@ void MovieTag_BuildBlocks(u32 *tags, u8 *image, s32 step, s32 x, s32 y, s32 w, s
 
 /* Writes one DMA source-chain tag. */
 void MovieTag_SetDmaTag(u64 *p, s32 spr, s32 addr, s32 irq, s32 id, s32 pce, s32 qwc) {
-    *p = ((u64)spr << 63) | ((u64)(addr & ~0xF) << 32) | ((u64)(u32)irq << 31) | ((u64)(u32)id << 28) |
-         ((u64)(u32)pce << 26) | (u64)(u32)qwc;
+    *p = PS2_PKT64(((u64)spr << 63) | ((u64)(addr & ~0xF) << 32) | ((u64)(u32)irq << 31) | ((u64)(u32)id << 28) |
+         ((u64)(u32)pce << 26) | (u64)(u32)qwc);
 }
 
 /* Writes one GIF tag. */

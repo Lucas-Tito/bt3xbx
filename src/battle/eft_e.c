@@ -187,10 +187,10 @@ extern void Vu0Cur_ProjectPoints(EftSteamScr *out, Vec4 *in, s32 count);
 
 /* GS XYZF2 register value. */
 typedef struct EftSteamXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftSteamXyzf;
 
 /* The packet of one particle quad: REGLIST of PRIM, TEX0_1, RGBAQ and four (ST, XYZF2). */
@@ -538,11 +538,11 @@ void EftSteam_DrawQuad(EftEVec *color, EftEVec *pos, f32 w, f32 h, f32 u0, f32 v
     gOtCur = (u32 *)(p + 1);
     p->tag = 0x20000007;
     p->vif1 = 0x50000007;
-    p->tex0 = tex0;
-    p->prim = prim;
+    p->tex0 = PS2_PKT64(tex0);
+    p->prim = PS2_PKT64(prim);
     p->vif0 = 0x10000000;
-    p->gif0 = 0xC400000000008001;
-    p->gif1 = 0xF42424242160;
+    p->gif0 = PS2_PKT64(0xC400000000008001);
+    p->gif1 = PS2_PKT64(0xF42424242160);
     p->next = 0;
     p->rgba[0] = (u32)(color->x * tint);
     p->rgba[1] = (u32)(color->y * tint);
@@ -1366,10 +1366,10 @@ extern s32 EftUtil_IsCamUnderWater(void); /* eft_g.c: camera height against the 
 
 /* GS XYZF2 register value. */
 typedef struct EftWaterXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftWaterXyzf;
 
 typedef struct EftWaterGsVtx {
@@ -1461,10 +1461,10 @@ static inline void EftWaterOt_Add(OtPrim *p, s32 z, s32 layer) {
         q->h.vif0 = 0x10000000;                                                                                     \
         q->h.vif1 = 0x50000002;                                                                                     \
         q->h.next = 0;                                                                                              \
-        *d = 0x1000000000008001;                                                                                    \
-        q->h.gif1 = 0xE;                                                                                            \
-        q->data = (test);                                                                                           \
-        q->reg = 0x47;                                                                                              \
+        *d = PS2_PKT64(0x1000000000008001);                                                                         \
+        q->h.gif1 = PS2_PKT64(0xE);                                                                                 \
+        q->data = PS2_PKT64((test));                                                                                \
+        q->reg = PS2_PKT64(0x47);                                                                                   \
         EftWaterOt_Add((OtPrim *)q, z, layer);                                                                       \
     }
 
@@ -2636,10 +2636,10 @@ void EftWater_DrawBillboard(EftWaterVec *pos, EftWaterMtx *world2screen, f32 siz
         return;
     }
     p->h.tag = 0x20000007;
-    p->prim = 0x54;
+    p->prim = PS2_PKT64(0x54);
     p->h.vif1 = 0x50000007;
-    p->h.gif0 = 0xC400000000008001;
-    p->h.gif1 = 0xF42424242160;
+    p->h.gif0 = PS2_PKT64(0xC400000000008001);
+    p->h.gif1 = PS2_PKT64(0xF42424242160);
     p->h.next = 0;
     p->h.vif0 = 0x10000000;
     p->rgba[0] = r;
@@ -2677,7 +2677,7 @@ void EftWater_DrawBillboard(EftWaterVec *pos, EftWaterMtx *world2screen, f32 siz
     } else {
         z += 500;
     }
-    p->tex0 = *tex;
+    p->tex0 = PS2_PKT64(*tex);
     if (alphaRef != 0) {
         EFT_WATER_QUEUE_TEST(((u64)alphaRef << 4) | 0x5000D, z, layer);
     }
@@ -2801,11 +2801,11 @@ void EftWater_DrawSprayQuad(EftWaterVec *pos, EftWaterMtx *orient, EftWaterMtx *
     if (p == NULL) {
         return;
     }
-    p->prim = 0x5C;
+    p->prim = PS2_PKT64(0x5C);
     p->h.tag = 0x20000008;
     p->h.vif0 = 0x10000000;
-    p->h.gif0 = 0xE400000000008001;
-    p->h.gif1 = 0x42142142142160;
+    p->h.gif0 = PS2_PKT64(0xE400000000008001);
+    p->h.gif1 = PS2_PKT64(0x42142142142160);
     p->h.next = 0;
     p->h.vif1 = 0x50000008;
     p->v[0].rgba[0] = r;
@@ -2852,7 +2852,7 @@ void EftWater_DrawSprayQuad(EftWaterVec *pos, EftWaterMtx *orient, EftWaterMtx *
     p->v[3].xyz.y = scr[3].y;
     p->v[3].xyz.z = scr[3].z;
     p->v[3].xyz.f = 0xFF;
-    p->tex0 = *tex;
+    p->tex0 = PS2_PKT64(*tex);
     EftWaterOt_Add((OtPrim *)p, z, layer);
     EFT_WATER_QUEUE_TEST(0x50000, z, layer);
 }
@@ -2917,14 +2917,14 @@ static inline void EftWater_QueueTri(EftWaterScr4 *p0, EftWaterScr4 *p1, EftWate
     EftWaterTriPkt *p = (EftWaterTriPkt *)gOtCur;
 
     gOtCur = (u32 *)(p + 1);
-    p->prim = 0x5B;
+    p->prim = PS2_PKT64(0x5B);
     p->h.tag = 0x20000007;
     p->h.vif0 = 0x10000000;
     p->h.vif1 = 0x50000007;
-    p->h.gif0 = 0xC400000000008001;
-    p->h.gif1 = 0xF42142142160;
+    p->h.gif0 = PS2_PKT64(0xC400000000008001);
+    p->h.gif1 = PS2_PKT64(0xF42142142160);
     p->h.next = 0;
-    p->pad = 0;
+    p->pad = PS2_PKT64(0);
     p->v[0].rgba[0] = (u32)c0->x;
     p->v[0].rgba[1] = (u32)c0->y;
     p->v[0].rgba[2] = (u32)c0->z;
@@ -2940,7 +2940,7 @@ static inline void EftWater_QueueTri(EftWaterScr4 *p0, EftWaterScr4 *p1, EftWate
     p->v[2].rgba[2] = (u32)c2->z;
     p->v[2].rgba[3] = (u32)c2->w;
     p->v[2].q = t2->z;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     p->v[0].s = t0->x;
     p->v[0].t = t0->y;
     p->v[1].s = t1->x;

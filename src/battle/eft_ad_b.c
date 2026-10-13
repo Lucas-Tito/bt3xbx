@@ -41,10 +41,10 @@ typedef struct EftAdOtSlot {
 } EftAdOtSlot;
 
 typedef struct EftAdXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftAdXyzf;
 
 typedef struct EftAdRgbaq {
@@ -852,13 +852,13 @@ void EftMesh_QueueTri(EftAdScr *p0, EftAdScr *p1, EftAdScr *p2, EftAdVec *c0, Ef
         p->dmaTag = 0x20000003;
         p->vif0 = 0x10000000;
         p->vif1 = 0x50000003;
-        p->gifTag = 0x1000000000008002;
-        p->regs = 0xE;
-        p->addr0 = 8;
-        p->addr1 = 9;
+        p->gifTag = PS2_PKT64(0x1000000000008002);
+        p->regs = PS2_PKT64(0xE);
+        p->addr0 = PS2_PKT64(8);
+        p->addr1 = PS2_PKT64(9);
         p->next = NULL;
-        p->data0 = 0;
-        p->data1 = 0;
+        p->data0 = PS2_PKT64(0);
+        p->data1 = PS2_PKT64(0);
         e->tail->next = p;
         e->tail = (EftAdOtPrim *)p;
     }
@@ -870,14 +870,14 @@ void EftMesh_QueueTri(EftAdScr *p0, EftAdScr *p1, EftAdScr *p2, EftAdVec *c0, Ef
 
         gOtCur = (u8 *)(p + 1);
         ctx = layer >= 2;
-        p->prim = ((s64)abe << 6) | ((s64)ctx << 9) | 0x1B;
+        p->prim = PS2_PKT64(((s64)abe << 6) | ((s64)ctx << 9) | 0x1B);
         p->dmaTag = 0x20000007;
         p->vif0 = 0x10000000;
         p->vif1 = 0x50000007;
-        p->gifTag = 0xC400000000008001;
-        p->regs = (s64)(ctx << 4) + 0xF42142142160;
+        p->gifTag = PS2_PKT64(0xC400000000008001);
+        p->regs = PS2_PKT64((s64)(ctx << 4) + 0xF42142142160);
         p->next = NULL;
-        p->nop = 0;
+        p->nop = PS2_PKT64(0);
         p->v[0].rgbaq.r = c0->x;
         p->v[0].rgbaq.g = c0->y;
         p->v[0].rgbaq.b = c0->z;
@@ -893,7 +893,7 @@ void EftMesh_QueueTri(EftAdScr *p0, EftAdScr *p1, EftAdScr *p2, EftAdVec *c0, Ef
         p->v[2].rgbaq.b = c2->z;
         p->v[2].rgbaq.a = c2->w;
         p->v[2].rgbaq.q = t2->z;
-        p->tex0 = tex0;
+        p->tex0 = PS2_PKT64(tex0);
         p->v[0].st.s = t0->x;
         p->v[0].st.t = t0->y;
         p->v[1].st.s = t1->x;
@@ -931,12 +931,12 @@ void EftMesh_QueueTri(EftAdScr *p0, EftAdScr *p1, EftAdScr *p2, EftAdVec *c0, Ef
         EftAdOtEntry *e;
 
         gOtCur = (u8 *)(p + 1);
-        p->prim = ((s64)abe << 6) | 0xB;
+        p->prim = PS2_PKT64(((s64)abe << 6) | 0xB);
         p->dmaTag = 0x20000005;
         p->vif0 = 0x10000000;
         p->vif1 = 0x50000005;
-        p->gifTag = 0x8400000000008001;
-        p->regs = 0xF4141410;
+        p->gifTag = PS2_PKT64(0x8400000000008001);
+        p->regs = PS2_PKT64(0xF4141410);
         p->next = NULL;
         p->v[0].rgbaq.r = c0->x;
         p->v[0].rgbaq.g = c0->y;
@@ -996,14 +996,14 @@ void EftMesh_SendTri(EftAdScr *p0, EftAdScr *p1, EftAdScr *p2, EftAdVec *c0, Eft
     }
     dst = Dma_BeginDirect();
     a = abe;
-    pkt.prim = ((s64)(s8)a << 6) | 0x1B;
+    pkt.prim = PS2_PKT64(((s64)(s8)a << 6) | 0x1B);
     pkt.dmaTag = 0x20000007;
     pkt.vif0 = 0x10000000;
     pkt.vif1 = 0x50000007;
-    pkt.gifTag = 0xC400000000008001;
-    pkt.regs = 0xF42142142160;
+    pkt.gifTag = PS2_PKT64(0xC400000000008001);
+    pkt.regs = PS2_PKT64(0xF42142142160);
     pkt.next = NULL;
-    pkt.nop = 0;
+    pkt.nop = PS2_PKT64(0);
     pkt.v[0].rgbaq.r = c0->x;
     pkt.v[0].rgbaq.g = c0->y;
     pkt.v[0].rgbaq.b = c0->z;
@@ -1019,7 +1019,7 @@ void EftMesh_SendTri(EftAdScr *p0, EftAdScr *p1, EftAdScr *p2, EftAdVec *c0, Eft
     pkt.v[2].rgbaq.b = c2->z;
     pkt.v[2].rgbaq.a = c2->w;
     pkt.v[2].rgbaq.q = t2->z;
-    pkt.tex0 = tex0;
+    pkt.tex0 = PS2_PKT64(tex0);
     pkt.v[0].st.s = t0->x;
     pkt.v[0].st.t = t0->y;
     pkt.v[1].st.s = t1->x;

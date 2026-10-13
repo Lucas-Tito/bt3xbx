@@ -670,7 +670,8 @@ f32 FlashDraw_AdjustY(f32 y) {
    it (+0x40), and returns the TEX0 value. Entry `index` holds the CLUT; when it has no pixels of its own the
    pixels are entry 0's (several palettes for one picture). */
 u64 FlashDraw_UploadTex(FlashTex *tex, s32 index, s32 tbp) {
-    TexBltPacket pkt = { { 0x10000002, 0, 0, 0x50000002 }, { 0x1000000000008001, 0xE }, 0, 0x50 };
+    TexBltPacket pkt = { { 0x10000002, 0, 0, 0x50000002 }, { PS2_PKT64(0x1000000000008001), PS2_PKT64(0xE) }, 0,
+                         PS2_PKT64(0x50) };
     TexEntry *clut = (TexEntry *)((index << 6) + (u32)tex);
     TexEntry *pix;
     s64 base = tbp;
@@ -680,12 +681,12 @@ u64 FlashDraw_UploadTex(FlashTex *tex, s32 index, s32 tbp) {
         index = 0;
     }
     pix = (TexEntry *)((index << 6) + (u32)tex);
-    pkt.bitbltbuf = (base << 32) | ((u64)pix->pixBlt << 48);
+    pkt.bitbltbuf = PS2_PKT64((base << 32) | ((u64)pix->pixBlt << 48));
     Dma_AddData(&pkt, sizeof(pkt));
     Dma_AddRef(pix->pix, pix->pixSize);
     tbp += pix->tbpStep;
     tbp += 0x40;
-    pkt.bitbltbuf = ((s64)tbp << 32) | ((u64)clut->clutBlt << 48);
+    pkt.bitbltbuf = PS2_PKT64(((s64)tbp << 32) | ((u64)clut->clutBlt << 48));
     Dma_AddData(&pkt, sizeof(pkt));
     Dma_AddRef(clut->clut, clut->clutSize);
     tex0 = pix->tex0;
@@ -707,14 +708,14 @@ u64 *FlashDraw_PutSprite(u64 *p, FlashQuad *q, u64 tex0) {
     s32 oy;
     s32 ox;
 
-    p[0] = 0xC400000000008001;
-    p[1] = 0x5353535306E1;
+    p[0] = PS2_PKT64(0xC400000000008001);
+    p[1] = PS2_PKT64(0x5353535306E1);
     p += 2;
-    p[0] = FLASH_RGBA(q);
-    p[1] = 0;
+    p[0] = PS2_PKT64(FLASH_RGBA(q));
+    p[1] = PS2_PKT64(0);
     p += 2;
-    p[0] = tex0;
-    p[1] = 0x154;
+    p[0] = PS2_PKT64(tex0);
+    p[1] = PS2_PKT64(0x154);
     p += 2;
     uv[0] = q->uv.u0 + 1;
     uv[2] = q->uv.u1 - 1;
@@ -730,17 +731,17 @@ u64 *FlashDraw_PutSprite(u64 *p, FlashQuad *q, u64 tex0) {
     }
     oy = 0x7200;
     ox = 0x7000;
-    p[0] = (uv[0] << 4) | ((s64)(uv[1] << 4) << 16);
-    p[1] = FLASH_XY(q->pt[0][0], q->pt[0][1]);
+    p[0] = PS2_PKT64((uv[0] << 4) | ((s64)(uv[1] << 4) << 16));
+    p[1] = PS2_PKT64(FLASH_XY(q->pt[0][0], q->pt[0][1]));
     p += 2;
-    p[0] = (uv[2] << 4) | ((s64)(uv[1] << 4) << 16);
-    p[1] = FLASH_XY(q->pt[1][0], q->pt[1][1]);
+    p[0] = PS2_PKT64((uv[2] << 4) | ((s64)(uv[1] << 4) << 16));
+    p[1] = PS2_PKT64(FLASH_XY(q->pt[1][0], q->pt[1][1]));
     p += 2;
-    p[0] = (uv[0] << 4) | ((s64)(uv[3] << 4) << 16);
-    p[1] = FLASH_XY(q->pt[2][0], q->pt[2][1]);
+    p[0] = PS2_PKT64((uv[0] << 4) | ((s64)(uv[3] << 4) << 16));
+    p[1] = PS2_PKT64(FLASH_XY(q->pt[2][0], q->pt[2][1]));
     p += 2;
-    p[0] = (uv[2] << 4) | ((s64)(uv[3] << 4) << 16);
-    p[1] = FLASH_XY(q->pt[3][0], q->pt[3][1]);
+    p[0] = PS2_PKT64((uv[2] << 4) | ((s64)(uv[3] << 4) << 16));
+    p[1] = PS2_PKT64(FLASH_XY(q->pt[3][0], q->pt[3][1]));
     p += 2;
     return p;
 }
@@ -751,40 +752,40 @@ void FlashDraw_FlatQuad(FlashQuad *q) {
     s32 oy;
     s32 ox;
 
-    p[0] = 0x1000000000008004;
-    p[1] = 0xE;
+    p[0] = PS2_PKT64(0x1000000000008004);
+    p[1] = PS2_PKT64(0xE);
     p += 2;
-    p[0] = GFX_FRAME_REG();
-    p[1] = 0x4C;
+    p[0] = PS2_PKT64(GFX_FRAME_REG());
+    p[1] = PS2_PKT64(0x4C);
     p += 2;
-    p[0] = 1;
-    p[1] = 0x46;
+    p[0] = PS2_PKT64(1);
+    p[1] = PS2_PKT64(0x46);
     p += 2;
     if (q->flags & FLASH_QUAD_ADD) {
-        p[0] = 0x48;
+        p[0] = PS2_PKT64(0x48);
     } else if (q->flags & FLASH_QUAD_SUB) {
-        p[0] = 0x42;
+        p[0] = PS2_PKT64(0x42);
     } else {
-        p[0] = 0x44;
+        p[0] = PS2_PKT64(0x44);
     }
-    p[1] = 0x42;
+    p[1] = PS2_PKT64(0x42);
     p += 2;
-    p[0] = 0x30000;
-    p[1] = 0x47;
+    p[0] = PS2_PKT64(0x30000);
+    p[1] = PS2_PKT64(0x47);
     p += 2;
-    p[0] = 0x6400000000008001;
-    p[1] = 0x555510;
+    p[0] = PS2_PKT64(0x6400000000008001);
+    p[1] = PS2_PKT64(0x555510);
     p += 2;
-    p[0] = 0x44;
+    p[0] = PS2_PKT64(0x44);
     oy = 0x7200;
     ox = 0x7000;
-    p[1] = FLASH_RGBA(q);
+    p[1] = PS2_PKT64(FLASH_RGBA(q));
     p += 2;
-    p[0] = FLASH_XY(q->pt[0][0], q->pt[0][1]);
-    p[1] = FLASH_XY(q->pt[1][0], q->pt[1][1]);
+    p[0] = PS2_PKT64(FLASH_XY(q->pt[0][0], q->pt[0][1]));
+    p[1] = PS2_PKT64(FLASH_XY(q->pt[1][0], q->pt[1][1]));
     p += 2;
-    p[0] = FLASH_XY(q->pt[2][0], q->pt[2][1]);
-    p[1] = FLASH_XY(q->pt[3][0], q->pt[3][1]);
+    p[0] = PS2_PKT64(FLASH_XY(q->pt[2][0], q->pt[2][1]));
+    p[1] = PS2_PKT64(FLASH_XY(q->pt[3][0], q->pt[3][1]));
     p += 2;
     Dma_EndDirect(p);
 }
@@ -796,8 +797,8 @@ void FlashDraw_MaskQuad(FlashQuad *q, u64 tex0, s32 set) {
     u64 frame;
     u64 reg;
 
-    p[0] = 0x1000000000008007;
-    p[1] = 0xE;
+    p[0] = PS2_PKT64(0x1000000000008007);
+    p[1] = PS2_PKT64(0xE);
     p += 2;
     frame = GFX_FRAME_REG();
     if (set) {
@@ -805,40 +806,40 @@ void FlashDraw_MaskQuad(FlashQuad *q, u64 tex0, s32 set) {
     } else {
         reg = frame | 0xFF00000000000000;
     }
-    p[0] = reg;
-    p[1] = 0x4C;
+    p[0] = PS2_PKT64(reg);
+    p[1] = PS2_PKT64(0x4C);
     p += 2;
-    p[0] = 1;
-    p[1] = 0x46;
+    p[0] = PS2_PKT64(1);
+    p[1] = PS2_PKT64(0x46);
     p += 2;
     if (set) {
-        p[0] = 0x50000;
+        p[0] = PS2_PKT64(0x50000);
     } else {
-        p[0] = 0x503CD;
+        p[0] = PS2_PKT64(0x503CD);
     }
-    p[1] = 0x47;
+    p[1] = PS2_PKT64(0x47);
     p += 2;
     if (q->flags & FLASH_QUAD_ADD) {
-        p[0] = !set ? 0x58 : 0x48;
+        p[0] = PS2_PKT64(!set ? 0x58 : 0x48);
     } else if (q->flags & FLASH_QUAD_SUB) {
-        p[0] = !set ? 0x52 : 0x42;
+        p[0] = PS2_PKT64(!set ? 0x52 : 0x42);
     } else {
-        p[0] = !set ? 0x54 : 0x44;
+        p[0] = PS2_PKT64(!set ? 0x54 : 0x44);
     }
-    p[1] = 0x42;
+    p[1] = PS2_PKT64(0x42);
     p += 2;
-    p[0] = 0;
-    p[1] = 0x3F;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(0x3F);
     p += 2;
-    p[0] = 0x60;
-    p[1] = 0x14;
+    p[0] = PS2_PKT64(0x60);
+    p[1] = PS2_PKT64(0x14);
     p += 2;
     if (q->flags & FLASH_QUAD_REPEAT) {
-        p[0] = 0;
+        p[0] = PS2_PKT64(0);
     } else {
-        p[0] = 5;
+        p[0] = PS2_PKT64(5);
     }
-    p[1] = 8;
+    p[1] = PS2_PKT64(8);
     p += 2;
     Dma_EndDirect(FlashDraw_PutSprite(p, q, tex0));
 }
@@ -869,36 +870,36 @@ void FlashDraw_Quad(FlashTex *tex, FlashQuad *q) {
         return;
     }
     p = Dma_BeginDirect();
-    p[0] = 0x1000000000008006;
-    p[1] = 0xE;
+    p[0] = PS2_PKT64(0x1000000000008006);
+    p[1] = PS2_PKT64(0xE);
     p += 2;
-    p[0] = GFX_FRAME_REG();
-    p[1] = 0x4C;
+    p[0] = PS2_PKT64(GFX_FRAME_REG());
+    p[1] = PS2_PKT64(0x4C);
     p += 2;
-    p[0] = 1;
-    p[1] = 0x46;
+    p[0] = PS2_PKT64(1);
+    p[1] = PS2_PKT64(0x46);
     p += 2;
     if (q->flags & FLASH_QUAD_ADD) {
-        p[0] = 0x48;
+        p[0] = PS2_PKT64(0x48);
     } else if (q->flags & FLASH_QUAD_SUB) {
-        p[0] = 0x42;
+        p[0] = PS2_PKT64(0x42);
     } else {
-        p[0] = 0x44;
+        p[0] = PS2_PKT64(0x44);
     }
-    p[1] = 0x42;
+    p[1] = PS2_PKT64(0x42);
     p += 2;
-    p[0] = 0x60;
-    p[1] = 0x14;
+    p[0] = PS2_PKT64(0x60);
+    p[1] = PS2_PKT64(0x14);
     p += 2;
-    p[0] = 0x30000;
-    p[1] = 0x47;
+    p[0] = PS2_PKT64(0x30000);
+    p[1] = PS2_PKT64(0x47);
     p += 2;
     if (q->flags & FLASH_QUAD_REPEAT) {
-        p[0] = 0;
+        p[0] = PS2_PKT64(0);
     } else {
-        p[0] = 5;
+        p[0] = PS2_PKT64(5);
     }
-    p[1] = 8;
+    p[1] = PS2_PKT64(8);
     p += 2;
     Dma_EndDirect(FlashDraw_PutSprite(p, q, tex0));
 }

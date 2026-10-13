@@ -761,10 +761,10 @@ typedef struct EftSScr {
 
 /* GS XYZF2 register value. */
 typedef struct EftSXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftSXyzf;
 
 typedef struct EftSGsVtx {
@@ -871,20 +871,20 @@ void EftChain_DrawStrand(EftArc *w, EftArc *w2, EftArcChain *ch) {
                     return;
                 }
                 if (p->layer < 2) {
-                    pkt->prim = 0x5C;
+                    pkt->prim = PS2_PKT64(0x5C);
                     pkt->tag = 0x20000008;
                     pkt->vif0 = 0x10000000;
                     pkt->vif1 = 0x50000008;
-                    pkt->gif0 = 0xE400000000008001;
-                    pkt->gif1 = 0x42142142142160;
+                    pkt->gif0 = PS2_PKT64(0xE400000000008001);
+                    pkt->gif1 = PS2_PKT64(0x42142142142160);
                     pkt->next = 0;
                 } else {
-                    pkt->prim = 0x25C;
+                    pkt->prim = PS2_PKT64(0x25C);
                     pkt->tag = 0x20000008;
                     pkt->vif0 = 0x10000000;
                     pkt->vif1 = 0x50000008;
-                    pkt->gif0 = 0xE400000000008001;
-                    pkt->gif1 = 0x42142142142170;
+                    pkt->gif0 = PS2_PKT64(0xE400000000008001);
+                    pkt->gif1 = PS2_PKT64(0x42142142142170);
                     pkt->next = 0;
                 }
                 for (j = 0; j < 4; j++) {
@@ -944,7 +944,7 @@ void EftChain_DrawStrand(EftArc *w, EftArc *w2, EftArcChain *ch) {
                 pkt->v[3].xyz.y = scr[3].y;
                 pkt->v[3].xyz.z = scr[3].z;
                 pkt->v[3].xyz.f = 0xFF;
-                pkt->tex0 = w2->tex0;
+                pkt->tex0 = PS2_PKT64(w2->tex0);
                 EftChain_OtAdd((OtPrim *)pkt, z, p->layer);
             }
         }
@@ -2441,12 +2441,12 @@ void EftRay_DrawQuad2D(Vec4 *corner, s32 z, u8 r0, u8 g0, u8 b0, u8 a0, u8 r1, u
         Vec4_ToInt(&scr[3], &p[3]);
         q = (EftTQuadPkt *)gOtCurRead;
         gOtCur = (u32 *)(q + 1);
-        q->prim = 0x5C;
+        q->prim = PS2_PKT64(0x5C);
         q->tag = 0x20000008;
         q->vif0 = 0x10000000;
         q->vif1 = 0x50000008;
-        q->gif0 = 0xE400000000008001;
-        q->gif1 = 0x42142142142160;
+        q->gif0 = PS2_PKT64(0xE400000000008001);
+        q->gif1 = PS2_PKT64(0x42142142142160);
         q->next = 0;
         q->v[0].rgba[0] = r0;
         q->v[0].rgba[1] = g0;
@@ -2492,7 +2492,7 @@ void EftRay_DrawQuad2D(Vec4 *corner, s32 z, u8 r0, u8 g0, u8 b0, u8 a0, u8 r1, u
         q->v[3].xyz.y = (u16)scr[3].y * 16 + 0x7200;
         q->v[3].xyz.z = 0xFFFFFF;
         q->v[3].xyz.f = 0xFF;
-        q->tex0 = tex->tex0;
+        q->tex0 = PS2_PKT64(tex->tex0);
         EftTOt_Add((OtPrim *)q, z, blend);
         Vec4_Copy(&p[0], &p[2]);
         aCur = aNext;

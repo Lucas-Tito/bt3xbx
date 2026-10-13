@@ -15,23 +15,23 @@ void ColorFade_Draw(void) {
     if (gColorFade.a != 0) {
         Gfx_AddDefaultEnv();
         p = Dma_BeginDirect();
-        p[0] = GIF_TAG(2, 1, 1);
-        p[1] = GIF_REG_AD;
+        p[0] = PS2_PKT64(GIF_TAG(2, 1, 1));
+        p[1] = PS2_PKT64(GIF_REG_AD);
         p += 2;
-        p[0] = 0x44;
-        p[1] = GS_ALPHA_1;
+        p[0] = PS2_PKT64(0x44);
+        p[1] = PS2_PKT64(GS_ALPHA_1);
         p += 2;
-        p[0] = 0x30000;
-        p[1] = GS_TEST_1;
+        p[0] = PS2_PKT64(0x30000);
+        p[1] = PS2_PKT64(GS_TEST_1);
         p += 2;
-        p[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 4);
-        p[1] = 0x5510;
+        p[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 4));
+        p[1] = PS2_PKT64(0x5510);
         p += 2;
-        p[0] = 0x46;
-        p[1] = (u64)gColorFade.r | ((u64)gColorFade.g << 8) | ((u64)gColorFade.b << 16) | ((u64)gColorFade.a << 24);
+        p[0] = PS2_PKT64(0x46);
+        p[1] = PS2_PKT64((u64)gColorFade.r | ((u64)gColorFade.g << 8) | ((u64)gColorFade.b << 16) | ((u64)gColorFade.a << 24));
         p += 2;
-        p[0] = 0x72007000;
-        p[1] = 0x8E009000;
+        p[0] = PS2_PKT64(0x72007000);
+        p[1] = PS2_PKT64(0x8E009000);
         p += 2;
         Dma_EndDirect(p);
     }

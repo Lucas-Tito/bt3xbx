@@ -110,14 +110,14 @@ void FontIcon_PutSprite(u64 **pkt, FontCmd *cmd, FontIconDef *icon, s32 frame, s
         tv0 = size * (frame / perRow);
         tu1 = (frame % perRow + 1) * size;
         tv1 = (frame / perRow + 1) * size;
-        (*pkt)[0] = reg;
-        (*pkt)[1] = (u64)color | ((u64)0x3F800000 << 32);
+        (*pkt)[0] = PS2_PKT64(reg);
+        (*pkt)[1] = PS2_PKT64((u64)color | ((u64)0x3F800000 << 32));
         *pkt += 2;
-        (*pkt)[0] = ((u64)tu0 << 4) | ((u64)tv0 << 20);
-        (*pkt)[1] = ((u64)x0 << 4) | ((u64)y0 << 20) | ((u64)0xFFFFFFF0 << 32);
+        (*pkt)[0] = PS2_PKT64(((u64)tu0 << 4) | ((u64)tv0 << 20));
+        (*pkt)[1] = PS2_PKT64(((u64)x0 << 4) | ((u64)y0 << 20) | ((u64)0xFFFFFFF0 << 32));
         *pkt += 2;
-        (*pkt)[0] = ((u64)tu1 << 4) | ((u64)tv1 << 20);
-        (*pkt)[1] = ((u64)x1 << 4) | ((u64)y1 << 20) | ((u64)0xFFFFFFF0 << 32);
+        (*pkt)[0] = PS2_PKT64(((u64)tu1 << 4) | ((u64)tv1 << 20));
+        (*pkt)[1] = PS2_PKT64(((u64)x1 << 4) | ((u64)y1 << 20) | ((u64)0xFFFFFFF0 << 32));
         *pkt += 2;
     }
 }

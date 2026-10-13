@@ -1712,10 +1712,10 @@ void EftGfx_DrawPolyScaledZ(EftGfxVert *verts, s32 arg1, s32 arg2, s32 arg3, s32
 
 /* GS XYZF2 register. */
 typedef struct EftGfxXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftGfxXyzf;
 
 typedef struct EftGfxRgbaq {
@@ -1855,12 +1855,12 @@ void EftGfx_DrawSprite(EftVec *pos, EftVec *color, f32 w, f32 h, f32 u0, f32 v0,
         return;
     }
     ctx = layer >= 2;
-    p->prim = ((u64)abe << 6) | ((u64)ctx << 9) | 0x1C;
+    p->prim = PS2_PKT64(((u64)abe << 6) | ((u64)ctx << 9) | 0x1C);
     p->dmaTag = 0x20000008;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000008;
-    p->gifTag = 0xE400000000008001;
-    p->regs = 0x42142142142160 + (ctx << 4);
+    p->gifTag = PS2_PKT64(0xE400000000008001);
+    p->regs = PS2_PKT64(0x42142142142160 + (ctx << 4));
     p->next = NULL;
     p->rgbaq0.r = color->x;
     p->rgbaq0.g = color->y;
@@ -1906,7 +1906,7 @@ void EftGfx_DrawSprite(EftVec *pos, EftVec *color, f32 w, f32 h, f32 u0, f32 v0,
     p->xyz3.y = y3;
     p->xyz3.z = zz;
     p->xyz3.f = 0xFF;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     l = layer;
     if (l >= 2) {
         l -= 2;

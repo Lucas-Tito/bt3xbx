@@ -448,13 +448,13 @@ gdb), sem mapa do rastreio.
   x86 em todos os 18.654 quadros de luta comparados (`compara.py`).
 - **Memória no vblank 3.000** (título; `memdiff.py` com `--marcas` nos blocos que guardam arquivo): os 72 blocos do
   heap no lugar; os oito blocos com arquivo ou conteúdo descomprimido (00001 a 00004, 00449 cru e a seção 1
-  descomprimida, 00477 cru e descomprimido) conformes número a número, nenhum byte fora do formato. Sobram 46 palavras
-  "diferentes", todas explicadas:
+  descomprimida, 00477 cru e descomprimido) conformes número a número, nenhum byte fora do formato. Sobravam 46 palavras
+  "diferentes", todas explicadas (44 depois da etapa 4, que acertou a etiqueta do `Font_CloseSpriteTag`):
 
 | Onde | Palavras | O que é | Por quê |
 |---|---|---|---|
 | heap#0 (`SndMgr.iopBuf`, `Snd_Init`) | 1 | ponteiro do port (`sceSifAllocIopHeap`, `calloc` em 32 bits) | endereço do host, outro em cada build |
-| heap#24 e #25 (`Dma_InitBuffers`, pacotes da GPU) | 1 + 1 | etiqueta GIF de `Font_OpenSpriteTag` com o NLOOP gravado por `Font_CloseSpriteTag` como u16 sobre o u64 | resto do vblank 197 (cartão de memória), além do fim do pacote atual; visão u16 sobre u64, etapa 4 (decisão 19) |
+| heap#24 e #25 (`Dma_InitBuffers`, pacotes da GPU) | 1 + 1 | etiqueta GIF de `Font_OpenSpriteTag` com o NLOOP gravado por `Font_CloseSpriteTag` como u16 sobre o u64 | resto do vblank 197 (cartão de memória); resolvido na etapa 4: `PS2_LOW(u16, *(u32 *)tag)` (`gpu.md`) |
 | heap#37 (`FlashClipList_Init`) | 4 | `FlashTl` +0x14: u8, u8 e u16 na mesma palavra | larguras misturadas; `campos.py`: 1.210 folhas iguais |
 | heap#52 (`Flash_Create`, raiz do filme do diálogo) | 1 | idem | idem |
 | heap#68 (`McFlow_Init`) | 3 | `repSave.hdr.sum` e `hdrSum` | soma de bytes de números nativos (`McCard_Checksum`); confere em cada build |
@@ -462,9 +462,12 @@ gdb), sem mapa do rastreio.
 | `gPortMoviePath`, `gPortAdxView` | 32 | caminhos do host | `BT3_DATA` diferente nas duas rodadas |
 | `gPortDataStripped` | 1 | estado das tabelas do executável | a PPC liga o esqueleto e copia do SLUS (decisão 13) |
 
-As classes `u64` e `u64-com-zero` ficam nos pacotes da GPU (heap#24 e #25, 8.682 e 5.584 cada; `gGfx`;
-`gTexBltPacket`): etapa 4, decisão 19. Fora deles: `SaveData.charaBits`/`stageBits` e `gPortRandNext` (u64 nativos,
-certos) e uma das quatro somas do `McFlow` (coincidência).
+As classes `u64` e `u64-com-zero` ficavam nos pacotes da GPU (heap#24 e #25, 8.682 e 5.584 cada; `gGfx`;
+`gTexBltPacket`). Depois da etapa 4 (decisão 19, `gpu.md`) os dois buffers de pacotes e o `gTexBltPacket` não têm
+nenhuma palavra dessas classes (nem `2xu16`, `igual-sem-inverter` ou `diferente`), e no `gGfx` sobram só as quatro de
+`disp[0..1].dispfb` (o DISPFB que a biblioteca da Sony grava no registrador privilegiado do GS, um número, não um
+pacote). Fora deles: `SaveData.charaBits`/`stageBits` (heap#21) e `gPortRandNext` (u64 nativos, certos) e uma das
+quatro somas do `McFlow` (coincidência).
 
 ## 11. O que fica pendente
 

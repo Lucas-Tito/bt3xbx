@@ -41,10 +41,10 @@ typedef struct EftXVert {
 
 /* GS registers of the packets queued here. */
 typedef struct EftXXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftXXyzf;
 
 typedef struct EftXRgbaq {
@@ -448,12 +448,12 @@ void EftPart10_DrawQuad(Vec4 *corner, EftXVec uv0, EftXVec uv1, EftXVec color, s
         return;
     }
     ctx = layer >= 2;
-    p->prim = ((u64)abe << 6) | ((u64)ctx << 9) | 0x1C;
+    p->prim = PS2_PKT64(((u64)abe << 6) | ((u64)ctx << 9) | 0x1C);
     p->dmaTag = 0x20000008;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000008;
-    p->gifTag = 0xE400000000008001;
-    p->regs = 0x42142142142160 + (ctx << 4);
+    p->gifTag = PS2_PKT64(0xE400000000008001);
+    p->regs = PS2_PKT64(0x42142142142160 + (ctx << 4));
     p->next = NULL;
     z = (scr[0].z + scr[1].z + scr[2].z + scr[3].z) >> 10;
     if (noDepth) {
@@ -507,7 +507,7 @@ void EftPart10_DrawQuad(Vec4 *corner, EftXVec uv0, EftXVec uv1, EftXVec color, s
     p->v[3].xyz.y = scr[3].y;
     p->v[3].xyz.z = scr[3].z;
     p->v[3].xyz.f = 0xFF;
-    p->tex0 = EFT_X_TEX0(tex, texIdx);
+    p->tex0 = PS2_PKT64(EFT_X_TEX0(tex, texIdx));
     l = layer;
     if (l >= 2) {
         l -= 2;
@@ -705,12 +705,12 @@ void EftPart10_DrawBillboard(Vec4 *pos, Vec4 *color, f32 w, s32 offX, s32 offY, 
         return;
     }
     ctx = layer >= 2;
-    p->prim = ((u64)abe << 6) | ((u64)ctx << 9) | 0x14;
+    p->prim = PS2_PKT64(((u64)abe << 6) | ((u64)ctx << 9) | 0x14);
     p->dmaTag = 0x20000007;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000007;
-    p->gifTag = 0xC400000000008001;
-    p->regs = 0xF42424242160 + (ctx << 4);
+    p->gifTag = PS2_PKT64(0xC400000000008001);
+    p->regs = PS2_PKT64(0xF42424242160 + (ctx << 4));
     p->next = NULL;
     p->rgbaq.r = color->x;
     p->rgbaq.g = color->y;
@@ -746,7 +746,7 @@ void EftPart10_DrawBillboard(Vec4 *pos, Vec4 *color, f32 w, s32 offX, s32 offY, 
     p->xyz1.f = 0xFF;
     p->xyz2.f = 0xFF;
     p->xyz3.f = 0xFF;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     if (z < 0) {
         e = &gOtZ[0].layer[l];
     } else if (z >= 0x1000) {

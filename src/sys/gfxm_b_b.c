@@ -261,7 +261,7 @@ void Res_RelocateOffsets(TexFile **out, u8 *base, TexFile *hdr) {
 /* Queues the upload of a texture's pixels to GS block `tbp`. */
 void Tex_UploadPixels(TexEntry *e, s32 tbp) {
     if (e->pixOfs != 0) {
-        gTexBltPacket.bitbltbuf = ((s64)tbp << 32) | ((u64)e->pixBlt << 48);
+        gTexBltPacket.bitbltbuf = PS2_PKT64(((s64)tbp << 32) | ((u64)e->pixBlt << 48));
         Dma_AddData(&gTexBltPacket, sizeof(TexBltPacket));
         Dma_AddRef(e->pix, e->pixSize);
     }
@@ -270,7 +270,7 @@ void Tex_UploadPixels(TexEntry *e, s32 tbp) {
 /* Queues the upload of a texture's CLUT to GS block `cbp`. */
 void Tex_UploadClut(TexEntry *e, s32 cbp) {
     if (e->clutOfs != 0) {
-        gTexBltPacket.bitbltbuf = ((s64)cbp << 32) | ((u64)e->clutBlt << 48);
+        gTexBltPacket.bitbltbuf = PS2_PKT64(((s64)cbp << 32) | ((u64)e->clutBlt << 48));
         Dma_AddData(&gTexBltPacket, sizeof(TexBltPacket));
         Dma_AddRef(e->clut, e->clutSize);
     }

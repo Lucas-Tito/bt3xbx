@@ -77,10 +77,10 @@ extern EftPView *gBtlCamView;
 
 /* GS XYZF2 register value. */
 typedef struct EftPXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftPXyzf;
 
 typedef struct EftPGsVtx {
@@ -1061,12 +1061,12 @@ void EftGlow_DrawParts(EftPGlow *e, s32 objId, f32 alpha) {
         if (pkt == NULL) {
             return;
         }
-        pkt->prim = 0x5C;
+        pkt->prim = PS2_PKT64(0x5C);
         pkt->tag = 0x20000008;
         pkt->vif0 = 0x10000000;
         pkt->vif1 = 0x50000008;
-        pkt->gif0 = 0xE400000000008001;
-        pkt->gif1 = 0x42142142142160;
+        pkt->gif0 = PS2_PKT64(0xE400000000008001);
+        pkt->gif1 = PS2_PKT64(0x42142142142160);
         pkt->next = 0;
         pkt->v[0].rgba[0] = col[0];
         pkt->v[0].rgba[1] = col[1];
@@ -1113,11 +1113,11 @@ void EftGlow_DrawParts(EftPGlow *e, s32 objId, f32 alpha) {
         pkt->v[3].xyz.z = scr[3].z;
         pkt->v[3].xyz.f = 0xFF;
         if (p->flags & 0x20) {
-            pkt->tex0 = *pairTex;
+            pkt->tex0 = PS2_PKT64(*pairTex);
         } else if (e->flags & 0x20) {
-            pkt->tex0 = e->tex[1 + p->tex];
+            pkt->tex0 = PS2_PKT64(e->tex[1 + p->tex]);
         } else {
-            pkt->tex0 = e->tex[0];
+            pkt->tex0 = PS2_PKT64(e->tex[0]);
         }
         z = (scr[0].z + scr[1].z + scr[2].z + scr[3].z) >> 10;
         if (BtlCharApi_IsCircleDash(p->objId)) {

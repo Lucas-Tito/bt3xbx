@@ -30,10 +30,10 @@ typedef struct EftAdCOtSlot {
 } EftAdCOtSlot;
 
 typedef struct EftAdCXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftAdCXyzf;
 
 /* Textured quad as a triangle strip with one colour. */
@@ -46,7 +46,11 @@ typedef struct EftSprPkt {
     /* 0x18 */ u64 regs;       /* PRIM, TEX0_1 (TEX0_2 with ctx), RGBAQ, 4 x (ST, XYZF2), NOP */
     /* 0x20 */ u64 prim;       /* 0x54 (textured blended triangle strip) | ctx << 9 */
     /* 0x28 */ u64 tex0;
+#ifdef PORT_BIG_ENDIAN /* a GS packet is 32-bit words of the host (decision 19): R is the low byte of the word */
+    /* 0x30 */ u8 a, b, g, r;
+#else
     /* 0x30 */ u8 r, g, b, a;
+#endif
     /* 0x34 */ f32 q;          /* 1.0 */
     /* 0x38 */ struct {
         f32 s, t;
@@ -111,18 +115,18 @@ void EftSpr_DrawFlat(s32 r, s32 g, s32 b, s32 a, f32 u0, f32 v0, f32 u1, f32 v1,
     p = (EftSprPkt *)gOtCur;
     gOtCur = (u8 *)(p + 1);
     c = ctx;
-    p->prim = ((s64)(s8)c << 9) | (abe << 6) | 0x14;
+    p->prim = PS2_PKT64(((s64)(s8)c << 9) | (abe << 6) | 0x14);
     p->dmaTag = 0x20000007;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000007;
-    p->gifTag = 0xC400000000008001;
-    p->regs = (s64)(c << 4) + 0xF42424242160;
+    p->gifTag = PS2_PKT64(0xC400000000008001);
+    p->regs = PS2_PKT64((s64)(c << 4) + 0xF42424242160);
     p->next = NULL;
     l = layer;
     if (l >= 2) {
         l -= 2;
     }
-    p->tex0 = *tex0;
+    p->tex0 = PS2_PKT64(*tex0);
     p->r = r;
     p->g = g;
     p->b = b;
@@ -256,18 +260,18 @@ void EftSpr_DrawRot(u8 r, u8 g, u8 b, u8 a, f32 x, f32 y, f32 z, f32 u0, f32 v0,
     p = (EftSprPkt *)gOtCur;
     gOtCur = (u8 *)(p + 1);
     cc = ctx;
-    p->prim = ((s64)(s8)cc << 9) | (abe << 6) | 0x14;
+    p->prim = PS2_PKT64(((s64)(s8)cc << 9) | (abe << 6) | 0x14);
     p->dmaTag = 0x20000007;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000007;
-    p->gifTag = 0xC400000000008001;
-    p->regs = (s64)(cc << 4) + 0xF42424242160;
+    p->gifTag = PS2_PKT64(0xC400000000008001);
+    p->regs = PS2_PKT64((s64)(cc << 4) + 0xF42424242160);
     p->next = NULL;
     l = layer;
     if (l >= 2) {
         l -= 2;
     }
-    p->tex0 = *tex0;
+    p->tex0 = PS2_PKT64(*tex0);
     p->r = r;
     p->g = g;
     p->b = b;

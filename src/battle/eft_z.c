@@ -231,20 +231,20 @@ void EftLine_DrawSprite(EftYTask *task) {
         gOtCur = (u32 *)(pk + 1);
         if (pk != NULL) {
             if (def->layer < 2) {
-                pk->prim = 0x5C;
+                pk->prim = PS2_PKT64(0x5C);
                 pk->dmaTag = 0x20000008;
                 pk->vif0 = 0x10000000;
                 pk->vif1 = 0x50000008;
-                pk->gifTag = 0xE400000000008001;
-                pk->regs = 0x42142142142160;
+                pk->gifTag = PS2_PKT64(0xE400000000008001);
+                pk->regs = PS2_PKT64(0x42142142142160);
                 pk->next = NULL;
             } else {
-                pk->prim = 0x25C;
+                pk->prim = PS2_PKT64(0x25C);
                 pk->dmaTag = 0x20000008;
                 pk->vif0 = 0x10000000;
                 pk->vif1 = 0x50000008;
-                pk->gifTag = 0xE400000000008001;
-                pk->regs = 0x42142142142170;
+                pk->gifTag = PS2_PKT64(0xE400000000008001);
+                pk->regs = PS2_PKT64(0x42142142142170);
                 pk->next = NULL;
             }
             for (i = 0; i < 4; i++) {
@@ -307,7 +307,7 @@ void EftLine_DrawSprite(EftYTask *task) {
             pk->v[3].xyz.y = scr[3].y;
             pk->v[3].xyz.z = scr[3].z;
             pk->v[3].xyz.f = 0xFF;
-            pk->tex0 = w->gsTex0;
+            pk->tex0 = PS2_PKT64(w->gsTex0);
             layer = def->layer;
             if (layer >= 2) {
                 layer -= 2;

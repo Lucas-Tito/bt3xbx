@@ -631,12 +631,12 @@ void EftStreak_DrawScreen(Vec4 *corner, EftTVec color, s32 blend, s32 segs, s32 
         Vec4_ToInt(&scr[3], &p[3]);
         q = (EftTQuadPkt *)gOtCur;
         gOtCur = (u32 *)(q + 1);
-        q->prim = 0x5C;
+        q->prim = PS2_PKT64(0x5C);
         q->tag = 0x20000008;
         q->vif0 = 0x10000000;
         q->vif1 = 0x50000008;
-        q->gif0 = 0xE400000000008001;
-        q->gif1 = 0x42142142142160;
+        q->gif0 = PS2_PKT64(0xE400000000008001);
+        q->gif1 = PS2_PKT64(0x42142142142160);
         q->next = 0;
         q->v[0].rgba[0] = col.x;
         q->v[0].rgba[1] = col.y;
@@ -680,7 +680,7 @@ void EftStreak_DrawScreen(Vec4 *corner, EftTVec color, s32 blend, s32 segs, s32 
         q->v[2].xyz.f = 0xFF;
         q->v[3].xyz.x = (u16)scr[3].x * 16 + 0x7000;
         q->v[3].xyz.y = (u16)scr[3].y * 16 + 0x7200;
-        q->tex0 = tex0;
+        q->tex0 = PS2_PKT64(tex0);
         q->v[3].xyz.z = zz;
         q->v[3].xyz.f = 0xFF;
         EftTOt_Add((OtPrim *)q, slot, blend);

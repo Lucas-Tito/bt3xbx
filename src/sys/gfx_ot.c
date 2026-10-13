@@ -310,13 +310,13 @@ OtPrim *Ot_NewHead(s32 layer) {
     p[0] = DMA_TAG_NEXT | 3;
     p[2] = VIF_FLUSHE;
     p[3] = VIF_DIRECT | 3;
-    ((u64 *)p)[2] = GIF_TAG(2, 1, 1);
-    ((u64 *)p)[3] = GIF_REG_AD;
-    ((u64 *)p)[5] = GS_ALPHA_1;
-    ((u64 *)p)[7] = GS_ALPHA_2;
+    ((u64 *)p)[2] = PS2_PKT64(GIF_TAG(2, 1, 1));
+    ((u64 *)p)[3] = PS2_PKT64(GIF_REG_AD);
+    ((u64 *)p)[5] = PS2_PKT64(GS_ALPHA_1);
+    ((u64 *)p)[7] = PS2_PKT64(GS_ALPHA_2);
     p[1] = 0;
-    ((u64 *)p)[4] = gOt->alpha1[layer];
-    ((u64 *)p)[6] = gOt->alpha2[layer];
+    ((u64 *)p)[4] = PS2_PKT64(gOt->alpha1[layer]);
+    ((u64 *)p)[6] = PS2_PKT64(gOt->alpha2[layer]);
     return (OtPrim *)p;
 }
 

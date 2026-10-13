@@ -160,10 +160,10 @@ extern void EftSpr_DrawFlat(s32 r, s32 g, s32 b, s32 a, Vec4 *pos, f32 u0, f32 v
 
 /* GS XYZF2 register value. */
 typedef struct EftGsXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftGsXyzf;
 
 typedef struct EftGsVtx {
@@ -406,12 +406,12 @@ void EftUtil_DrawTri(EftScrXyz *xyz0, EftScrXyz *xyz1, EftScrXyz *xyz2, f32 *col
     gOtCur = (u32 *)(p + 1);
     p->tag = 0x20000007;
     p->vif1 = 0x50000007;
-    p->prim = 0x5B;
+    p->prim = PS2_PKT64(0x5B);
     p->vif0 = 0x10000000;
-    p->gif0 = 0xC400000000008001;
-    p->gif1 = gif1;
+    p->gif0 = PS2_PKT64(0xC400000000008001);
+    p->gif1 = PS2_PKT64(gif1);
     p->next = 0;
-    p->pad = 0;
+    p->pad = PS2_PKT64(0);
     p->v[0].rgba[0] = (u32)col0[0];
     p->v[0].rgba[1] = (u32)col0[1];
     p->v[0].rgba[2] = (u32)col0[2];
@@ -427,7 +427,7 @@ void EftUtil_DrawTri(EftScrXyz *xyz0, EftScrXyz *xyz1, EftScrXyz *xyz2, f32 *col
     p->v[2].rgba[2] = (u32)col2[2];
     p->v[2].rgba[3] = (u32)col2[3];
     p->v[2].q = st2[2];
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     p->v[0].s = st0[0];
     p->v[0].t = st0[1];
     p->v[1].s = st1[0];
@@ -516,13 +516,13 @@ converted to float through a spilled variable, and pointer variables assigned tw
 #define EFT_STORM_SPRITE(bolt, a, b, texv, col, tagv, vifv) \
     do { \
         p = EftOt_Alloc(sizeof(EftStripPkt)); \
-        p->gif1 = 0xF42424242160; \
+        p->gif1 = PS2_PKT64(0xF42424242160); \
         p->vif0 = 0x10000000; \
         p->tag = (tagv); \
         p->next = 0; \
-        p->gif0 = 0xC400000000008001; \
+        p->gif0 = PS2_PKT64(0xC400000000008001); \
         p->vif1 = (vifv); \
-        p->prim = 0x54; \
+        p->prim = PS2_PKT64(0x54); \
         p->rgba[0] = (u32)(col); \
         p->rgba[1] = (u32)(col); \
         p->rgba[2] = (u32)(col); \
@@ -552,7 +552,7 @@ converted to float through a spilled variable, and pointer variables assigned tw
         p->v[2].t = 1.0f; \
         p->v[3].s = 1.0f; \
         p->v[3].t = 1.0f; \
-        p->tex0 = (texv); \
+        p->tex0 = PS2_PKT64((texv)); \
         EftOt_Add((OtPrim *)p,  (a)->z >> 8, 1); \
     } while (0)
 
@@ -730,12 +730,12 @@ void EftStorm_DrawRainLines(EftStormDrop *drop, s32 count, Vec4 *streak) {
         Vec4_Add(&pos[1], &drop->pos, streak);
         if (Vu0Cur_ProjectPoints(xyz, pos, 2) != 0 && EftScr_IsValid(&xyz[0]) && EftScr_IsValid(&xyz[1])) {
         { u32 *cur = gOtCur; p = (EftLinePkt *)cur; cur += 16; gOtCur = cur; }
-        p->prim = 0x41;
+        p->prim = PS2_PKT64(0x41);
         p->tag = 0x20000003;
         p->vif0 = 0x10000000;
         p->vif1 = 0x50000003;
-        p->gif0 = 0x4400000000008001;
-        p->gif1 = 0x4410;
+        p->gif0 = PS2_PKT64(0x4400000000008001);
+        p->gif1 = PS2_PKT64(0x4410);
         p->rgba[3] = 0x20;
         p->q = 1.0f;
         p->next = 0;

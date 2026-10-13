@@ -1415,11 +1415,11 @@ void EftSurf_PutTri(s32 *xyz0, s32 *xyz1, s32 *xyz2, Vec4 *st0, Vec4 *st1, Vec4 
     u64 *p;
 
     p = Dma_BeginDirect();
-    p[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 12);
-    p[1] = 0xF52152152160;
+    p[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 12));
+    p[1] = PS2_PKT64(0xF52152152160);
     p += 2;
-    p[0] = 0x5B;
-    p[1] = tex0;
+    p[0] = PS2_PKT64(0x5B);
+    p[1] = PS2_PKT64(tex0);
     p += 2;
     ((u32 *)p)[0] = EFT_F2RGBA(rgba0);
     ((u32 *)p)[1] = *(u32 *)&st0->z;
@@ -1443,7 +1443,7 @@ void EftSurf_PutTri(s32 *xyz0, s32 *xyz1, s32 *xyz2, Vec4 *st0, Vec4 *st1, Vec4 
     p += 2;
     ((u32 *)p)[0] = xyz2[0] | (xyz2[1] << 16);
     ((u32 *)p)[1] = xyz2[2];
-    p[1] = 0;
+    p[1] = PS2_PKT64(0);
     p += 2;
     Dma_EndDirect(p);
 }
@@ -1458,60 +1458,60 @@ void EftSurf_BeginDraw(s32 blend, s32 noDepthTest) {
         ztst = 1;
     }
     p = Dma_BeginDirect();
-    p[0] = GIF_TAG(14, 1, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(14, 1, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
     if (blend == 0) {
-        p[0] = 0x44;
-        p[1] = GS_ALPHA_1;
+        p[0] = PS2_PKT64(0x44);
+        p[1] = PS2_PKT64(GS_ALPHA_1);
         p += 2;
     } else if (blend == 1) {
-        p[0] = 0x48;
-        p[1] = GS_ALPHA_1;
+        p[0] = PS2_PKT64(0x48);
+        p[1] = PS2_PKT64(GS_ALPHA_1);
         p += 2;
     } else if (blend == 2) {
-        p[0] = 0x42;
-        p[1] = GS_ALPHA_1;
+        p[0] = PS2_PKT64(0x42);
+        p[1] = PS2_PKT64(GS_ALPHA_1);
         p += 2;
     }
-    p[0] = 0x60;
-    p[1] = GS_TEX1_1;
+    p[0] = PS2_PKT64(0x60);
+    p[1] = PS2_PKT64(GS_TEX1_1);
     p += 2;
-    p[0] = ((u64)ztst << 17) | 0x10000;
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(((u64)ztst << 17) | 0x10000);
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
-    p[0] = 0;
-    p[1] = GS_CLAMP_1;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(GS_CLAMP_1);
     p += 2;
-    p[0] = GS_SET_ZBUF(0xE0, GS_PSMZ24, 1);
-    p[1] = GS_ZBUF_1;
+    p[0] = PS2_PKT64(GS_SET_ZBUF(0xE0, GS_PSMZ24, 1));
+    p[1] = PS2_PKT64(GS_ZBUF_1);
     p += 2;
-    p[0] = 1;
-    p[1] = GS_COLCLAMP;
+    p[0] = PS2_PKT64(1);
+    p[1] = PS2_PKT64(GS_COLCLAMP);
     p += 2;
-    p[0] = 0x48;
-    p[1] = GS_ALPHA_2;
+    p[0] = PS2_PKT64(0x48);
+    p[1] = PS2_PKT64(GS_ALPHA_2);
     p += 2;
-    p[0] = 0x60;
-    p[1] = 0x15;
+    p[0] = PS2_PKT64(0x60);
+    p[1] = PS2_PKT64(0x15);
     p += 2;
-    p[0] = ((u64)ztst << 17) | 0x10000;
-    p[1] = GS_TEST_2;
+    p[0] = PS2_PKT64(((u64)ztst << 17) | 0x10000);
+    p[1] = PS2_PKT64(GS_TEST_2);
     p += 2;
-    p[0] = 0;
-    p[1] = GS_CLAMP_2;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(GS_CLAMP_2);
     p += 2;
-    p[0] = GS_SET_ZBUF(0xE0, GS_PSMZ24, 1);
-    p[1] = GS_ZBUF_2;
+    p[0] = PS2_PKT64(GS_SET_ZBUF(0xE0, GS_PSMZ24, 1));
+    p[1] = PS2_PKT64(GS_ZBUF_2);
     p += 2;
-    p[0] = !(gGfx.frame & 1) ? 0x80070 : 0x80000;
-    p[1] = GS_FRAME_2;
+    p[0] = PS2_PKT64(!(gGfx.frame & 1) ? 0x80070 : 0x80000);
+    p[1] = PS2_PKT64(GS_FRAME_2);
     p += 2;
-    p[0] = GS_SET_XYOFFSET(0x7000, 0x7200);
-    p[1] = GS_XYOFFSET_2;
+    p[0] = PS2_PKT64(GS_SET_XYOFFSET(0x7000, 0x7200));
+    p[1] = PS2_PKT64(GS_XYOFFSET_2);
     p += 2;
-    p[0] = GS_SET_SCISSOR(0, 0x1FF, 0, 0x1BF);
-    p[1] = GS_SCISSOR_2;
+    p[0] = PS2_PKT64(GS_SET_SCISSOR(0, 0x1FF, 0, 0x1BF));
+    p[1] = PS2_PKT64(GS_SCISSOR_2);
     p += 2;
     Dma_EndDirect(p);
 }
@@ -1523,41 +1523,41 @@ void EftSurf_EndDraw(s32 arg) {
     s32 clamp = arg == 0;
 
     p = Dma_BeginDirect();
-    p[0] = GIF_TAG(11, 1, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(11, 1, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x44;
-    p[1] = GS_ALPHA_1;
+    p[0] = PS2_PKT64(0x44);
+    p[1] = PS2_PKT64(GS_ALPHA_1);
     p += 2;
-    p[0] = 0x60;
-    p[1] = GS_TEX1_1;
+    p[0] = PS2_PKT64(0x60);
+    p[1] = PS2_PKT64(GS_TEX1_1);
     p += 2;
-    p[0] = 0x50000;
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(0x50000);
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
-    p[0] = GS_SET_CLAMP(clamp, clamp, 0, 0, 0, 0);
-    p[1] = GS_CLAMP_1;
+    p[0] = PS2_PKT64(GS_SET_CLAMP(clamp, clamp, 0, 0, 0, 0));
+    p[1] = PS2_PKT64(GS_CLAMP_1);
     p += 2;
-    p[0] = GS_SET_ZBUF(0xE0, GS_PSMZ24, 0);
-    p[1] = GS_ZBUF_1;
+    p[0] = PS2_PKT64(GS_SET_ZBUF(0xE0, GS_PSMZ24, 0));
+    p[1] = PS2_PKT64(GS_ZBUF_1);
     p += 2;
-    p[0] = 1;
-    p[1] = GS_COLCLAMP;
+    p[0] = PS2_PKT64(1);
+    p[1] = PS2_PKT64(GS_COLCLAMP);
     p += 2;
-    p[0] = 0x44;
-    p[1] = GS_ALPHA_2;
+    p[0] = PS2_PKT64(0x44);
+    p[1] = PS2_PKT64(GS_ALPHA_2);
     p += 2;
-    p[0] = 0x60;
-    p[1] = 0x15;
+    p[0] = PS2_PKT64(0x60);
+    p[1] = PS2_PKT64(0x15);
     p += 2;
-    p[0] = 0x50000;
-    p[1] = GS_TEST_2;
+    p[0] = PS2_PKT64(0x50000);
+    p[1] = PS2_PKT64(GS_TEST_2);
     p += 2;
-    p[0] = GS_SET_CLAMP(clamp, clamp, 0, 0, 0, 0);
-    p[1] = GS_CLAMP_2;
+    p[0] = PS2_PKT64(GS_SET_CLAMP(clamp, clamp, 0, 0, 0, 0));
+    p[1] = PS2_PKT64(GS_CLAMP_2);
     p += 2;
-    p[0] = GS_SET_ZBUF(0xE0, GS_PSMZ24, 0);
-    p[1] = GS_ZBUF_2;
+    p[0] = PS2_PKT64(GS_SET_ZBUF(0xE0, GS_PSMZ24, 0));
+    p[1] = PS2_PKT64(GS_ZBUF_2);
     p += 2;
     Dma_EndDirect(p);
 }
@@ -1690,10 +1690,10 @@ void EftSurf_DrawReflectTriClipped(EftSurfVtx *tri, u64 *tex, Vec4 *fog) {
 
 /* GS vertex register with fog (XYZF2), and the triangle packet this file queues in the ordering table. */
 typedef struct EftSurfXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftSurfXyzf;
 
 typedef struct EftSurfRgbaq {
@@ -1745,14 +1745,14 @@ static inline void EftSurf_QueueTri(EftScreenPos *v0, EftScreenPos *v1, EftScree
     }
     p = (EftSurfTriPkt *)gOtCur;
     gOtCur = (u32 *)(p + 1);
-    p->prim = ((u64)abe << 6) | 0x1B;
+    p->prim = PS2_PKT64(((u64)abe << 6) | 0x1B);
     p->dmaTag = 0x20000007;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000007;
-    p->gifTag = 0xC400000000008001;
-    p->regs = 0xF42142142160;
+    p->gifTag = PS2_PKT64(0xC400000000008001);
+    p->regs = PS2_PKT64(0xF42142142160);
     p->next = NULL;
-    p->nop = 0;
+    p->nop = PS2_PKT64(0);
     p->rgbaq0.r = c0[0];
     p->rgbaq0.g = c0[1];
     p->rgbaq0.b = c0[2];
@@ -1772,7 +1772,7 @@ static inline void EftSurf_QueueTri(EftScreenPos *v0, EftScreenPos *v1, EftScree
         l -= 2;
     }
     p->rgbaq2.q = uv2->z;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     p->st0.s = uv0->x;
     p->st0.t = uv0->y;
     p->st1.s = uv1->x;

@@ -232,32 +232,32 @@ void HudSprite_DrawAlphaClear(HudCSprite *spr) {
     v[2][1] = Sprite_ConvY(v[2][1]);
     v[3][1] = Sprite_ConvY(v[3][1]);
     p = Dma_BeginDirect();
-    p[0] = GIF_TAG(5, 0, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(5, 0, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x44;
-    p[1] = GS_ALPHA_1;
+    p[0] = PS2_PKT64(0x44);
+    p[1] = PS2_PKT64(GS_ALPHA_1);
     p += 2;
-    p[0] = 0x30000; /* alpha and depth tests always pass */
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(0x30000); /* alpha and depth tests always pass */
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
-    p[0] = 0;
-    p[1] = GS_FBA_1;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(GS_FBA_1);
     p += 2;
-    p[0] = GFX_CLEAR_RGBAQ;
-    p[1] = GS_RGBAQ;
+    p[0] = PS2_PKT64(GFX_CLEAR_RGBAQ);
+    p[1] = PS2_PKT64(GS_RGBAQ);
     p += 2;
-    p[0] = 0x44; /* triangle strip, alpha blended */
-    p[1] = GS_PRIM;
+    p[0] = PS2_PKT64(0x44); /* triangle strip, alpha blended */
+    p[1] = PS2_PKT64(GS_PRIM);
     p += 2;
-    p[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 4);
-    p[1] = 0x5555;
+    p[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 4));
+    p[1] = PS2_PKT64(0x5555);
     p += 2;
-    p[0] = HUDC_XYZ_CONV(v[0]);
-    p[1] = HUDC_XYZ_CONV(v[1]);
+    p[0] = PS2_PKT64(HUDC_XYZ_CONV(v[0]));
+    p[1] = PS2_PKT64(HUDC_XYZ_CONV(v[1]));
     p += 2;
-    p[0] = HUDC_XYZ_CONV(v[2]);
-    p[1] = HUDC_XYZ_CONV(v[3]);
+    p[0] = PS2_PKT64(HUDC_XYZ_CONV(v[2]));
+    p[1] = PS2_PKT64(HUDC_XYZ_CONV(v[3]));
     p += 2;
     Dma_EndDirect(p);
 }
@@ -288,32 +288,32 @@ void HudSprite_DrawAlphaSet(HudCSprite *spr) {
     v[2][1] = Sprite_ConvY(v[2][1]);
     v[3][1] = Sprite_ConvY(v[3][1]);
     p = Dma_BeginDirect();
-    p[0] = GIF_TAG(5, 0, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(5, 0, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x44;
-    p[1] = GS_ALPHA_1;
+    p[0] = PS2_PKT64(0x44);
+    p[1] = PS2_PKT64(GS_ALPHA_1);
     p += 2;
-    p[0] = 0x30000;
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(0x30000);
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
-    p[0] = 0;
-    p[1] = GS_FBA_1;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(GS_FBA_1);
     p += 2;
-    p[0] = 0x3F800000FF000000;
-    p[1] = GS_RGBAQ;
+    p[0] = PS2_PKT64(0x3F800000FF000000);
+    p[1] = PS2_PKT64(GS_RGBAQ);
     p += 2;
-    p[0] = 0x44;
-    p[1] = GS_PRIM;
+    p[0] = PS2_PKT64(0x44);
+    p[1] = PS2_PKT64(GS_PRIM);
     p += 2;
-    p[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 4);
-    p[1] = 0x5555;
+    p[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 4));
+    p[1] = PS2_PKT64(0x5555);
     p += 2;
-    p[0] = HUDC_XYZ_CONV(v[0]);
-    p[1] = HUDC_XYZ_CONV(v[1]);
+    p[0] = PS2_PKT64(HUDC_XYZ_CONV(v[0]));
+    p[1] = PS2_PKT64(HUDC_XYZ_CONV(v[1]));
     p += 2;
-    p[0] = HUDC_XYZ_CONV(v[2]);
-    p[1] = HUDC_XYZ_CONV(v[3]);
+    p[0] = PS2_PKT64(HUDC_XYZ_CONV(v[2]));
+    p[1] = PS2_PKT64(HUDC_XYZ_CONV(v[3]));
     p += 2;
     Dma_EndDirect(p);
 }
@@ -326,37 +326,37 @@ void HudGfx_ClearAlpha(void) {
     s32 n;
     u64 *tag;
 
-    p[0] = GIF_TAG(3, 0, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(3, 0, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = GFX_CLEAR_RGBAQ;
-    p[1] = GS_RGBAQ;
+    p[0] = PS2_PKT64(GFX_CLEAR_RGBAQ);
+    p[1] = PS2_PKT64(GS_RGBAQ);
     p += 2;
-    p[0] = GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 0);
-    p[1] = GS_ZBUF_1;
+    p[0] = PS2_PKT64(GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 0));
+    p[1] = PS2_PKT64(GS_ZBUF_1);
     p += 2;
-    p[0] = 0x46; /* sprite, alpha blended */
-    p[1] = GS_PRIM;
+    p[0] = PS2_PKT64(0x46); /* sprite, alpha blended */
+    p[1] = PS2_PKT64(GS_PRIM);
     p += 2;
     tag = p;
     p += 2;
     i = 0;
     for (n = 0; n < 16; n++) {
-        p[0] = ((i * 32 + 1792) << 4) | ((1824 << 4) << 16);
-        p[1] = GS_SET_XYZ((i * 32 + 1792 + 32) << 4, (1824 + 448) << 4, 0);
+        p[0] = PS2_PKT64(((i * 32 + 1792) << 4) | ((1824 << 4) << 16));
+        p[1] = PS2_PKT64(GS_SET_XYZ((i * 32 + 1792 + 32) << 4, (1824 + 448) << 4, 0));
         p += 2;
         i++;
     }
-    tag[0] = GIF_TAG_EX(16, 1, GIF_FLG_REGLIST, 2);
-    tag[1] = GS_REG_XYZ2 | (GS_REG_XYZ2 << 4);
-    p[0] = GIF_TAG(2, 0, 1);
-    p[1] = GIF_REG_AD;
+    tag[0] = PS2_PKT64(GIF_TAG_EX(16, 1, GIF_FLG_REGLIST, 2));
+    tag[1] = PS2_PKT64(GS_REG_XYZ2 | (GS_REG_XYZ2 << 4));
+    p[0] = PS2_PKT64(GIF_TAG(2, 0, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x3F80000080808080;
-    p[1] = GS_RGBAQ;
+    p[0] = PS2_PKT64(0x3F80000080808080);
+    p[1] = PS2_PKT64(GS_RGBAQ);
     p += 2;
-    p[0] = GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 1);
-    p[1] = GS_ZBUF_1;
+    p[0] = PS2_PKT64(GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 1));
+    p[1] = PS2_PKT64(GS_ZBUF_1);
     p += 2;
     Dma_EndDirect(p);
 }
@@ -461,35 +461,35 @@ void HudSprite_DrawAt(HudCSprite *spr, HudCRes *res, u8 ctx2, s32 tbp, s32 cbp) 
         s32 block = t->imageBlock + tbp;
         u64 clut = (u64)(pal->clutBlock + cbp) << 37;
 
-        p[0] = (u64)spr->r | ((u64)spr->g << 8) | ((u64)spr->b << 16) | ((u64)spr->a << 24);
-        p[1] = t->tex0 | clut | block | ((u64)0x8000 << 19);
+        p[0] = PS2_PKT64((u64)spr->r | ((u64)spr->g << 8) | ((u64)spr->b << 16) | ((u64)spr->a << 24));
+        p[1] = PS2_PKT64(t->tex0 | clut | block | ((u64)0x8000 << 19));
         p += 2;
-        p[0] = t->tex0 | clut | block | ((u64)0x8000 << 19);
-        p[1] = ((u64)ctx << 9) | 0x154; /* triangle strip, textured, alpha blended, UV coordinates */
+        p[0] = PS2_PKT64(t->tex0 | clut | block | ((u64)0x8000 << 19));
+        p[1] = PS2_PKT64(((u64)ctx << 9) | 0x154); /* triangle strip, textured, alpha blended, UV coordinates */
         p += 2;
     } else {
-        p[0] = (u64)spr->r | ((u64)spr->g << 8) | ((u64)spr->b << 16) | ((u64)spr->a << 24);
-        p[1] = ((u64)ctx << 9) | 0x44;
+        p[0] = PS2_PKT64((u64)spr->r | ((u64)spr->g << 8) | ((u64)spr->b << 16) | ((u64)spr->a << 24));
+        p[1] = PS2_PKT64(((u64)ctx << 9) | 0x44);
         p += 2;
     }
-    p[0] = ((uv[0][0] << 4) + 8) | ((u64)((uv[0][1] << 4) + 8) << 16);
-    p[1] = HUDC_XYZ(v[0]);
+    p[0] = PS2_PKT64(((uv[0][0] << 4) + 8) | ((u64)((uv[0][1] << 4) + 8) << 16));
+    p[1] = PS2_PKT64(HUDC_XYZ(v[0]));
     p += 2;
-    p[0] = ((uv[1][0] << 4) + 8) | ((u64)((uv[1][1] << 4) + 8) << 16);
-    p[1] = HUDC_XYZ(v[1]);
+    p[0] = PS2_PKT64(((uv[1][0] << 4) + 8) | ((u64)((uv[1][1] << 4) + 8) << 16));
+    p[1] = PS2_PKT64(HUDC_XYZ(v[1]));
     p += 2;
-    p[0] = ((uv[2][0] << 4) + 8) | ((u64)((uv[2][1] << 4) + 8) << 16);
-    p[1] = HUDC_XYZ(v[2]);
+    p[0] = PS2_PKT64(((uv[2][0] << 4) + 8) | ((u64)((uv[2][1] << 4) + 8) << 16));
+    p[1] = PS2_PKT64(HUDC_XYZ(v[2]));
     p += 2;
-    p[0] = ((uv[3][0] << 4) + 8) | ((u64)((uv[3][1] << 4) + 8) << 16);
-    p[1] = HUDC_XYZ(v[3]);
+    p[0] = PS2_PKT64(((uv[3][0] << 4) + 8) | ((u64)((uv[3][1] << 4) + 8) << 16));
+    p[1] = PS2_PKT64(HUDC_XYZ(v[3]));
     p += 2;
     if (spr->tex >= 0) {
-        tag[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 12);
-        tag[1] = 0x535353530671; /* RGBAQ, TEX0_2, TEX0_1, PRIM, 4 x (UV, XYZ2) */
+        tag[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 12));
+        tag[1] = PS2_PKT64(0x535353530671); /* RGBAQ, TEX0_2, TEX0_1, PRIM, 4 x (UV, XYZ2) */
     } else {
-        tag[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 10);
-        tag[1] = 0x5353535301; /* RGBAQ, PRIM, 4 x (UV, XYZ2) */
+        tag[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 10));
+        tag[1] = PS2_PKT64(0x5353535301); /* RGBAQ, PRIM, 4 x (UV, XYZ2) */
     }
     Dma_EndDirect(p);
 }
@@ -564,41 +564,41 @@ void HudSprite_DrawGradient(HudCSprite *spr, HudCRes *res, u8 ctx2, s32 colorL, 
         s32 block = t->imageBlock + HUDC_GRADIENT_TBP;
         u64 clut = (u64)(pal->clutBlock + HUDC_GRADIENT_CBP) << 37;
 
-        p[0] = t->tex0 | clut | block | ((u64)0x8000 << 19);
-        p[1] = t->tex0 | clut | block | ((u64)0x8000 << 19);
+        p[0] = PS2_PKT64(t->tex0 | clut | block | ((u64)0x8000 << 19));
+        p[1] = PS2_PKT64(t->tex0 | clut | block | ((u64)0x8000 << 19));
         p += 2;
-        p[0] = ((u64)ctx << 9) | 0x154;
-        p[1] = HUDC_RGBA(colorL);
+        p[0] = PS2_PKT64(((u64)ctx << 9) | 0x154);
+        p[1] = PS2_PKT64(HUDC_RGBA(colorL));
         p += 2;
     } else {
-        p[0] = ((u64)ctx << 9) | 0x44;
-        p[1] = HUDC_RGBA(colorL);
+        p[0] = PS2_PKT64(((u64)ctx << 9) | 0x44);
+        p[1] = PS2_PKT64(HUDC_RGBA(colorL));
         p += 2;
     }
-    p[0] = ((uv[0][0] << 4) + 8) | ((u64)((uv[0][1] << 4) + 8) << 16);
-    p[1] = HUDC_XYZ(v[0]);
+    p[0] = PS2_PKT64(((uv[0][0] << 4) + 8) | ((u64)((uv[0][1] << 4) + 8) << 16));
+    p[1] = PS2_PKT64(HUDC_XYZ(v[0]));
     p += 2;
-    p[0] = HUDC_RGBA(colorR);
-    p[1] = ((uv[1][0] << 4) + 8) | ((u64)((uv[1][1] << 4) + 8) << 16);
+    p[0] = PS2_PKT64(HUDC_RGBA(colorR));
+    p[1] = PS2_PKT64(((uv[1][0] << 4) + 8) | ((u64)((uv[1][1] << 4) + 8) << 16));
     p += 2;
-    p[0] = HUDC_XYZ(v[1]);
-    p[1] = HUDC_RGBA(colorL);
+    p[0] = PS2_PKT64(HUDC_XYZ(v[1]));
+    p[1] = PS2_PKT64(HUDC_RGBA(colorL));
     p += 2;
-    p[0] = ((uv[2][0] << 4) + 8) | ((u64)((uv[2][1] << 4) + 8) << 16);
-    p[1] = HUDC_XYZ(v[2]);
+    p[0] = PS2_PKT64(((uv[2][0] << 4) + 8) | ((u64)((uv[2][1] << 4) + 8) << 16));
+    p[1] = PS2_PKT64(HUDC_XYZ(v[2]));
     p += 2;
-    p[0] = HUDC_RGBA(colorR);
-    p[1] = ((uv[3][0] << 4) + 8) | ((u64)((uv[3][1] << 4) + 8) << 16);
+    p[0] = PS2_PKT64(HUDC_RGBA(colorR));
+    p[1] = PS2_PKT64(((uv[3][0] << 4) + 8) | ((u64)((uv[3][1] << 4) + 8) << 16));
     p += 2;
-    p[0] = HUDC_XYZ(v[3]);
-    p[1] = 0;
+    p[0] = PS2_PKT64(HUDC_XYZ(v[3]));
+    p[1] = PS2_PKT64(0);
     p += 2;
     if (spr->tex >= 0) {
-        tag[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 15);
-        tag[1] = 0x0531531531531067; /* TEX0_2, TEX0_1, PRIM, 4 x (RGBAQ, UV, XYZ2) */
+        tag[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 15));
+        tag[1] = PS2_PKT64(0x0531531531531067); /* TEX0_2, TEX0_1, PRIM, 4 x (RGBAQ, UV, XYZ2) */
     } else {
-        tag[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 13);
-        tag[1] = 0x5315315315310; /* PRIM, 4 x (RGBAQ, UV, XYZ2) */
+        tag[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 13));
+        tag[1] = PS2_PKT64(0x5315315315310); /* PRIM, 4 x (RGBAQ, UV, XYZ2) */
     }
     Dma_EndDirect(p);
 }

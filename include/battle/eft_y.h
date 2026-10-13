@@ -401,10 +401,10 @@ typedef struct EftYSt {
 } EftYSt;
 
 typedef struct EftYXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftYXyzf;
 
 /* DMA tag + REGLIST GIF tag: PRIM, TEX0, four (RGBAQ, ST, XYZF2). */

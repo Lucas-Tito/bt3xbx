@@ -1168,10 +1168,10 @@ void EftFlash_Draw(EftQTask *task) {
     gOtCur = (u32 *)(p + 1);
     p->dmaTag = 0x20000003;
     p->vif1 = 0x50000003;
-    p->prim = 0x46;
+    p->prim = PS2_PKT64(0x46);
     p->vif0 = 0x10000000;
-    p->gifTag = 0x4400000000008001;
-    p->regs = 0x4410;
+    p->gifTag = PS2_PKT64(0x4400000000008001);
+    p->regs = PS2_PKT64(0x4410);
     p->next = NULL;
     p->rgbaq.r = col.x;
     p->rgbaq.g = col.y;
@@ -1669,12 +1669,12 @@ void EftTrail_DrawSprite(u8 r, u8 g, u8 b, u8 a, f32 x, f32 y, f32 z, f32 w, f32
     }
     p = (EftQQuadPkt *)gOtCur;
     gOtCur = (u32 *)(p + 1);
-    p->prim = 0x54;
+    p->prim = PS2_PKT64(0x54);
     p->dmaTag = 0x20000007;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000007;
-    p->gifTag = 0xC400000000008001;
-    p->regs = 0xF42424242160;
+    p->gifTag = PS2_PKT64(0xC400000000008001);
+    p->regs = PS2_PKT64(0xF42424242160);
     l = layer;
     if (l >= 2) {
         l -= 2;
@@ -1684,7 +1684,7 @@ void EftTrail_DrawSprite(u8 r, u8 g, u8 b, u8 a, f32 x, f32 y, f32 z, f32 w, f32
     p->rgbaq.b = b;
     p->rgbaq.a = a;
     p->rgbaq.q = 1.0f;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     p->next = NULL;
     p->st0.s = u0;
     p->st0.t = v0;

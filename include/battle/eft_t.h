@@ -226,10 +226,10 @@ typedef struct EftTClipVtx {
 
 /* GS XYZF2 register value. */
 typedef struct EftTXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftTXyzf;
 
 typedef struct EftTGsVtx {

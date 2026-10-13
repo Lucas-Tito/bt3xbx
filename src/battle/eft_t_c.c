@@ -142,10 +142,10 @@ typedef struct EftUView {
 
 /* GS XYZF2 register value. */
 typedef struct EftUXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftUXyzf;
 
 typedef struct EftUGsVtx {
@@ -561,12 +561,12 @@ void EftShotFx_DrawQuad(Vec4 *quad, EftUMtx mtx, u8 r, u8 g, u8 b, u8 a, u64 *te
     if (p == NULL) {
         return;
     }
-    p->prim = 0x5C;
+    p->prim = PS2_PKT64(0x5C);
     p->tag = 0x20000008;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000008;
-    p->gif0 = 0xE400000000008001;
-    p->gif1 = 0x42142142142160;
+    p->gif0 = PS2_PKT64(0xE400000000008001);
+    p->gif1 = PS2_PKT64(0x42142142142160);
     p->next = 0;
     p->v[0].rgba[0] = r;
     p->v[0].rgba[1] = g;
@@ -613,7 +613,7 @@ void EftShotFx_DrawQuad(Vec4 *quad, EftUMtx mtx, u8 r, u8 g, u8 b, u8 a, u64 *te
     p->v[3].xyz.z = scr[3].z;
     p->v[3].xyz.f = 0xFF;
     z = (scr[0].z + scr[1].z + scr[2].z + scr[3].z) >> 10;
-    p->tex0 = *tex;
+    p->tex0 = PS2_PKT64(*tex);
     layer = blend;
     if (layer >= 2) {
         layer -= 2;

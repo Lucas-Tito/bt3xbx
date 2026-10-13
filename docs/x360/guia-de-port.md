@@ -95,6 +95,7 @@ própria só para isso). Para cá só volta texto.
 | `memdiff.py --marcas` | o mesmo, campo a campo num bloco que guarda um arquivo, pela largura que o conversor deu a cada byte (`conv_tool --marcas`) |
 | `campos.py` | compara um bloco campo a campo pelo tipo do DWARF (via gdb); `--donos` diz quem alocou cada bloco do heap num vblank |
 | `layout.py` | compara pelo DWARF o layout de toda struct do jogo entre x86 e PPC; a build PPC falha se algo divergir |
+| `pacotes64.py` | todo acesso de 64 bits à memória no código do jogo (AST dos `.i`), classificado em pacote da GPU ou número; falha se uma gravação em pacote estiver sem `PS2_PKT64` (decisão 19, `formatos/gpu.md`) |
 | `mem.py` | lista as variáveis globais do jogo para o dump de memória |
 
 ### Achar o que depende da ordem dos bytes
@@ -192,7 +193,9 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
      (na build de matching expandem para a expressão original; o port as redefine em
      `port/include/port_compat.h`);
    - quando é o layout que muda: `#ifdef PORT_BIG_ENDIAN` trocando a ordem dos campos dentro da
-     mesma palavra. Toda struct assim tem de constar em `layout.PERMUTADAS`, com o motivo.
+     mesma palavra. Toda struct assim tem de constar em `layout.PERMUTADAS`, com o motivo;
+   - pacotes da GPU (decisão 19): o valor de 64 bits fica como duas palavras, a baixa primeiro, com `PS2_PKT64` em
+     cada gravação e `PS2_PKT64_FIELDS` nos campos de bits (`formatos/gpu.md`).
 5. **Ordem de avaliação de argumentos.** Uma função que lê e preenche a mesma variável na mesma
    chamada dá resultados diferentes entre clang e GCC (e o MSVC é um terceiro). Corrige com
    `#ifdef PORT`, que vale para qualquer host.
@@ -266,6 +269,22 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 - **Quem gravou uma palavra:** watchpoint de hardware do gdb na x86, com o vblank do `Port_StateLog` numa variável de
   conveniência. A palavra "diferente" do buffer de pacotes não era gravada desde o vblank 197 (resto de um quadro do
   cartão de memória, além do fim do pacote atual): sem isso, a procura seria no desenho do título.
+- **A macro de troca fica na gravação, não nas macros de valor.** A decisão 19 esperava que a maior parte viesse de
+  `GIF_TAG_EX` e das `GS_SET_*`; a auditoria pelo AST mostrou cerca de 2.000 gravações de 64 bits em pacotes, a maioria com literal ou
+  número de registrador gravado direto (`p[0] = 0x44; p[1] = GS_ALPHA_1;`). A troca dentro da macro de valor deixaria
+  essas de fora e trocaria duas vezes onde o valor também passa pela gravação. O `.i` já não tem macro: a reescrita
+  foi pelo texto do fonte, na linha que o AST aponta, e o que vem de macro de função (três nos efeitos) ficou à mão.
+- **Campo de bits sobre um número não se permuta junto com o pacote.** `EftPrim` é uma visão de bits sobre um `u64`
+  local (número) que depois se copia para o pacote; as 26 structs XYZF2, ao contrário, são o próprio pacote. Olhe
+  cada uso da struct antes de inverter a ordem dos campos.
+- **Revisando campo de bits em big-endian, lembre que o port já os põe do bit 0 para cima** (pragma no 360,
+  `bitfields.py` no GCC). Pelo padrão da PPC (do bit mais alto para baixo), a `PS2_PKT64_FIELDS`, que só troca as
+  metades, pareceu errada na revisão da etapa 4 e quase foi "corrigida" para a ordem que gravaria as palavras
+  trocadas. Leia a ordem pela regra do port, não pela ABI.
+- **"A x86 continua igual" não se prova pelo hash de memória inteira.** A coluna 2 do `hash.txt` muda entre duas
+  rodadas da mesma x86 (13 palavras: endereços da pilha e afins). Prove pela seção `.text` (`objcopy -O binary
+  --only-section=.text` e `sha1sum`: a mesma antes e depois), pelos valores da luta (`compara.py`) e pela memória
+  comparada com uma segunda rodada da base.
 - **Soma de verificação sobre bytes de números nativos** (`McCard_Checksum` do cartão de memória) dá outro valor em
   big-endian, e confere em cada build: é esperado enquanto o save não sai de uma máquina para outra.
 
@@ -371,9 +390,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   - a lista sai dos arquivos que a x86 lê na rodada inteira (`dprintf` do gdb em `Port_FileReadAt`; o WSL não tem
     `strace`).
 
-  No 360 isso não existe (`iso360.c` converte todo arquivo que tem conversor ao abrir).
+  No 360 isso não existe (`iso360.c` converte todo arquivo que tem conversor ao abrir). Com `TP` maior que o padrão
+  a PPC do `menus.sh` passa do vblank 47.000 e para nessa guarda (o 00349, som, lido depois do vblank 30.000 da
+  lista): para ir mais longe, aumente `ATE` junto.
 - **Queda no qemu:** `qemu-ppc -g PORTA` e `gdb-multiarch` com `target remote` dão a pilha e os registradores na hora
   da queda (o WSL tem os dois); é mais rápido que bissectar com `BT3_HASH_AT`.
+- **`/tmp` do WSL some entre sessões do `wsl.sh`** (a distribuição pode parar entre uma sessão e outra): o que tem de
+  passar de um comando para outro fica em `~/`.
+- **Rasterizador de software no qemu** (`BT3_GS=1`): uns 100 quadros por minuto nos logos e 30 no título; a x86 faz
+  15 a 27 por segundo. Do boot ao fim do título (4.244 quadros) a PPC leva perto de 1 h 30. `BT3_SHOT=N` grava
+  `port/build/shots/frame_NNNNN.ppm` relativo à pasta de trabalho: rodadas ao mesmo tempo, cada uma na sua pasta, com
+  `BT3_DATA` absoluto. O número é o quadro do GS, não o vblank: as telas se acham pelo gdb (`dprintf` em
+  `BootCard_Init`, `Logo_Init`, `Title_Init` com `gGsFrame`). Compare as imagens lá e traga só contagens.
 - **Build com falha intermitente:** uma vez 8 objetos falharam e passaram na repetição sem
   mudança. O ciclo agora mostra as linhas `FALHOU` em vez de cortá-las com `tail`.
 

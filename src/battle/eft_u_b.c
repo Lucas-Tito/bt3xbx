@@ -982,20 +982,20 @@ void EftPtcl_DrawAxisQuads(EftPtclWork *w, EftPtclWork *w2) {
                     return;
                 }
                 if (def->layer < 2) {
-                    pkt->prim = 0x5C;
+                    pkt->prim = PS2_PKT64(0x5C);
                     pkt->dmaTag = 0x20000008;
                     pkt->vif0 = 0x10000000;
                     pkt->vif1 = 0x50000008;
-                    pkt->gifTag = 0xE400000000008001;
-                    pkt->regs = 0x42142142142160;
+                    pkt->gifTag = PS2_PKT64(0xE400000000008001);
+                    pkt->regs = PS2_PKT64(0x42142142142160);
                     pkt->next = NULL;
                 } else {
-                    pkt->prim = 0x25C;
+                    pkt->prim = PS2_PKT64(0x25C);
                     pkt->dmaTag = 0x20000008;
                     pkt->vif0 = 0x10000000;
                     pkt->vif1 = 0x50000008;
-                    pkt->gifTag = 0xE400000000008001;
-                    pkt->regs = 0x42142142142170;
+                    pkt->gifTag = PS2_PKT64(0xE400000000008001);
+                    pkt->regs = PS2_PKT64(0x42142142142170);
                     pkt->next = NULL;
                 }
                 for (i = 0; i < 4; i++) {
@@ -1059,7 +1059,7 @@ void EftPtcl_DrawAxisQuads(EftPtclWork *w, EftPtclWork *w2) {
                 pkt->xyz3.y = scr[3].y;
                 pkt->xyz3.z = scr[3].z;
                 pkt->xyz3.f = 0xFF;
-                pkt->tex0 = w->tex0;
+                pkt->tex0 = PS2_PKT64(w->tex0);
                 layer = def->layer;
                 if (layer >= 2) {
                     layer -= 2;

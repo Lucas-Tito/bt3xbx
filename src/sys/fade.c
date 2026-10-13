@@ -25,27 +25,27 @@ void Fade_DrawRect(Fade *fade) {
     Gfx_PutDefaultEnv(&p);
     rgba = ((u32)fade->color[0] & 0xFF) | (((u32)fade->color[1] & 0xFF) << 8) | (((u32)fade->color[2] & 0xFF) << 16) |
            ((u32)fade->color[3] << 24);
-    p[0] = GIF_TAG(4, 0, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(4, 0, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x30000; /* alpha and depth tests always pass */
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(0x30000); /* alpha and depth tests always pass */
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
-    p[0] = GS_SET_ZBUF(0xE0, GS_PSMZ24, 1); /* no depth writes */
-    p[1] = GS_ZBUF_1;
+    p[0] = PS2_PKT64(GS_SET_ZBUF(0xE0, GS_PSMZ24, 1)); /* no depth writes */
+    p[1] = PS2_PKT64(GS_ZBUF_1);
     p += 2;
-    p[0] = 0x46; /* sprite, alpha blended */
-    p[1] = GS_PRIM;
+    p[0] = PS2_PKT64(0x46); /* sprite, alpha blended */
+    p[1] = PS2_PKT64(GS_PRIM);
     p += 2;
-    p[0] = (u64)rgba | (0x3F800000ULL << 32);
-    p[1] = GS_RGBAQ;
+    p[0] = PS2_PKT64((u64)rgba | (0x3F800000ULL << 32));
+    p[1] = PS2_PKT64(GS_RGBAQ);
     p += 2;
-    p[0] = GIF_TAG_EX(FADE_STRIPS, 1, GIF_FLG_REGLIST, 2);
-    p[1] = GS_REG_XYZ2 | (GS_REG_XYZ2 << 4);
+    p[0] = PS2_PKT64(GIF_TAG_EX(FADE_STRIPS, 1, GIF_FLG_REGLIST, 2));
+    p[1] = PS2_PKT64(GS_REG_XYZ2 | (GS_REG_XYZ2 << 4));
     p += 2;
     for (i = 0; i < FADE_STRIPS; i++) {
-        p[0] = ((i * 32 + FADE_X) << 4) | ((FADE_Y << 4) << 16);
-        p[1] = GS_SET_XYZ((i * 32 + FADE_X + 32) << 4, (FADE_Y + FADE_H) << 4, 0);
+        p[0] = PS2_PKT64(((i * 32 + FADE_X) << 4) | ((FADE_Y << 4) << 16));
+        p[1] = PS2_PKT64(GS_SET_XYZ((i * 32 + FADE_X + 32) << 4, (FADE_Y + FADE_H) << 4, 0));
         p += 2;
     }
     Dma_EndDirect(p);

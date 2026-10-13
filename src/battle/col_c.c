@@ -29,23 +29,23 @@ s32 Font_IsInClip(CbFontClip *clip, s32 x0, s32 y0, s32 x1, s32 y1) {
 void Font_BeginPacket(CbFontOut *out) {
     out->p = Dma_BeginDirect();
     Gfx_PutDefaultEnv(out);
-    out->p[0] = 0x1000000000008005;
-    out->p[1] = 0xE;
+    out->p[0] = PS2_PKT64(0x1000000000008005);
+    out->p[1] = PS2_PKT64(0xE);
     out->p += 2;
-    out->p[0] = 0;
-    out->p[1] = 8;
+    out->p[0] = PS2_PKT64(0);
+    out->p[1] = PS2_PKT64(8);
     out->p += 2;
-    out->p[0] = 0;
-    out->p[1] = 0x47;
+    out->p[0] = PS2_PKT64(0);
+    out->p[1] = PS2_PKT64(0x47);
     out->p += 2;
-    out->p[0] = 0x0000008000008080;
-    out->p[1] = 0x3B;
+    out->p[0] = PS2_PKT64(0x0000008000008080);
+    out->p[1] = PS2_PKT64(0x3B);
     out->p += 2;
-    out->p[0] = 0x00000001310000E0;
-    out->p[1] = 0x4E;
+    out->p[0] = PS2_PKT64(0x00000001310000E0);
+    out->p[1] = PS2_PKT64(0x4E);
     out->p += 2;
-    out->p[0] = 0x156;
-    out->p[1] = 0;
+    out->p[0] = PS2_PKT64(0x156);
+    out->p[1] = PS2_PKT64(0);
     out->p += 2;
 }
 
@@ -63,14 +63,14 @@ void Font_PutSprite(CbFontOut *out, s32 x0, s32 y0, s32 x1, s32 y1, s32 u0, s32 
     y0 += 0x720;
     y1 += 0x720;
     if (Font_IsInGsRange(x0, y0, x1, y1)) {
-        out->p[0] = tex0;
-        out->p[1] = (u64)rgba | ((u64)0x3F800000 << 32);
+        out->p[0] = PS2_PKT64(tex0);
+        out->p[1] = PS2_PKT64((u64)rgba | ((u64)0x3F800000 << 32));
         out->p += 2;
-        out->p[0] = (u64)(u0 * 16 + 8) | ((u64)(v0 * 16 + 8) << 16);
-        out->p[1] = ((u64)x0 << 4) | ((u64)y0 << 20) | ((u64)0xFFFFFF0 << 32);
+        out->p[0] = PS2_PKT64((u64)(u0 * 16 + 8) | ((u64)(v0 * 16 + 8) << 16));
+        out->p[1] = PS2_PKT64(((u64)x0 << 4) | ((u64)y0 << 20) | ((u64)0xFFFFFF0 << 32));
         out->p += 2;
-        out->p[0] = (u64)(u1 * 16 + 8) | ((u64)(v1 * 16 + 8) << 16);
-        out->p[1] = ((u64)x1 << 4) | ((u64)y1 << 20) | ((u64)0xFFFFFF0 << 32);
+        out->p[0] = PS2_PKT64((u64)(u1 * 16 + 8) | ((u64)(v1 * 16 + 8) << 16));
+        out->p[1] = PS2_PKT64(((u64)x1 << 4) | ((u64)y1 << 20) | ((u64)0xFFFFFF0 << 32));
         out->p += 2;
     }
 }
@@ -159,25 +159,25 @@ void Font_PutScissor(u64 **pkt, FontCmd *cmd) {
     s32 x1 = cmd->clipX1 - 1;
     s32 y1 = cmd->clipY1 - 1;
 
-    (*pkt)[0] = 0x1000000000008001;
-    (*pkt)[1] = 0xE;
+    (*pkt)[0] = PS2_PKT64(0x1000000000008001);
+    (*pkt)[1] = PS2_PKT64(0xE);
     *pkt += 2;
-    (*pkt)[0] = (u64)x0 | ((u64)x1 << 16) | ((u64)y0 << 32) | ((u64)y1 << 48);
-    (*pkt)[1] = 0x40;
+    (*pkt)[0] = PS2_PKT64((u64)x0 | ((u64)x1 << 16) | ((u64)y0 << 32) | ((u64)y1 << 48));
+    (*pkt)[1] = PS2_PKT64(0x40);
     *pkt += 2;
 }
 
 /* Opens a REGLIST tag of sprites (TEX0_1, RGBAQ, UV, XYZ2, UV, XYZ2 per sprite) and remembers where it is. */
 void Font_OpenSpriteTag(u64 **pkt, u64 **tag) {
     *tag = *pkt;
-    (*pkt)[0] = 0x6400000000008000;
-    (*pkt)[1] = 0x535316;
+    (*pkt)[0] = PS2_PKT64(0x6400000000008000);
+    (*pkt)[1] = PS2_PKT64(0x535316);
     *pkt += 2;
 }
 
 /* Patches the tag opened by Font_OpenSpriteTag with the number of sprites written since. */
 void Font_CloseSpriteTag(u64 **pkt, u64 **tag) {
-    *(u16 *)*tag = ((*pkt - *tag) - 2) / 6;
+    PS2_LOW(u16, *(u32 *)*tag) = ((*pkt - *tag) - 2) / 6; /* NLOOP: the low half of the tag's first word */
 }
 
 /* GS TEX0 value of a font's texture with CLUT number clut (0..3). */

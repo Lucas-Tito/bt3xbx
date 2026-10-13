@@ -92,22 +92,22 @@ extern void Vu0_CheckState(void);
 void Gfx_InitDrawEnv(void) {
     sceGsResetGraph(0, 1, 2, 0);
     sceGsSetDefDBuff(&gGfx.db, 0, GFX_WIDTH, GFX_HEIGHT, 3, GS_PSMZ24, 1);
-    gGfx.db.clear0.xyz2a = GS_SET_XYZ(GFX_OFX, GFX_OFY, 0);
-    gGfx.db.clear0.xyz2b = GS_SET_XYZ(GFX_OFX + (GFX_WIDTH << 4), GFX_OFY + (GFX_HEIGHT << 4), 0);
-    gGfx.db.clear0.rgbaq = GFX_CLEAR_RGBAQ;
-    gGfx.db.draw0.xyoffset1 = GS_SET_XYOFFSET(GFX_OFX, GFX_OFY);
-    gGfx.db.draw0.scissor1 = GS_SET_SCISSOR(0, GFX_WIDTH - 1, 0, GFX_HEIGHT - 1);
-    gGfx.db.draw0.zbuf1 = GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 0);
-    gGfx.db.clear1.xyz2a = GS_SET_XYZ(GFX_OFX, GFX_OFY, 0);
-    gGfx.db.clear1.xyz2b = GS_SET_XYZ(GFX_OFX + (GFX_WIDTH << 4), GFX_OFY + (GFX_HEIGHT << 4), 0);
-    gGfx.db.clear1.rgbaq = GFX_CLEAR_RGBAQ;
+    gGfx.db.clear0.xyz2a = PS2_PKT64(GS_SET_XYZ(GFX_OFX, GFX_OFY, 0));
+    gGfx.db.clear0.xyz2b = PS2_PKT64(GS_SET_XYZ(GFX_OFX + (GFX_WIDTH << 4), GFX_OFY + (GFX_HEIGHT << 4), 0));
+    gGfx.db.clear0.rgbaq = PS2_PKT64(GFX_CLEAR_RGBAQ);
+    gGfx.db.draw0.xyoffset1 = PS2_PKT64(GS_SET_XYOFFSET(GFX_OFX, GFX_OFY));
+    gGfx.db.draw0.scissor1 = PS2_PKT64(GS_SET_SCISSOR(0, GFX_WIDTH - 1, 0, GFX_HEIGHT - 1));
+    gGfx.db.draw0.zbuf1 = PS2_PKT64(GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 0));
+    gGfx.db.clear1.xyz2a = PS2_PKT64(GS_SET_XYZ(GFX_OFX, GFX_OFY, 0));
+    gGfx.db.clear1.xyz2b = PS2_PKT64(GS_SET_XYZ(GFX_OFX + (GFX_WIDTH << 4), GFX_OFY + (GFX_HEIGHT << 4), 0));
+    gGfx.db.clear1.rgbaq = PS2_PKT64(GFX_CLEAR_RGBAQ);
     gGfx.db.disp[0].dispfb = GFX_DISPFB_A;
-    gGfx.db.draw0.frame1 = GS_SET_FRAME(GFX_FBP_A, GFX_FBW, 0, 0);
+    gGfx.db.draw0.frame1 = PS2_PKT64(GS_SET_FRAME(GFX_FBP_A, GFX_FBW, 0, 0));
     gGfx.db.disp[1].dispfb = GFX_DISPFB_B;
-    gGfx.db.draw1.frame1 = GS_SET_FRAME(GFX_FBP_B, GFX_FBW, 0, 0);
-    gGfx.db.draw1.xyoffset1 = GS_SET_XYOFFSET(GFX_OFX, GFX_OFY);
-    gGfx.db.draw1.scissor1 = GS_SET_SCISSOR(0, GFX_WIDTH - 1, 0, GFX_HEIGHT - 1);
-    gGfx.db.draw1.zbuf1 = GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 0);
+    gGfx.db.draw1.frame1 = PS2_PKT64(GS_SET_FRAME(GFX_FBP_B, GFX_FBW, 0, 0));
+    gGfx.db.draw1.xyoffset1 = PS2_PKT64(GS_SET_XYOFFSET(GFX_OFX, GFX_OFY));
+    gGfx.db.draw1.scissor1 = PS2_PKT64(GS_SET_SCISSOR(0, GFX_WIDTH - 1, 0, GFX_HEIGHT - 1));
+    gGfx.db.draw1.zbuf1 = PS2_PKT64(GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 0));
     FlushCache(0);
 }
 
@@ -142,12 +142,12 @@ void Gfx_SetDisplayRegs(s32 field, s32 blend) {
 void Gfx_Init(void) {
     sceGsDBuff db;
     u64 pkt[12] = {
-        GIF_TAG(5, 1, 1), GIF_REG_AD,
-        0, GS_PABE,    /* no per-pixel alpha blending switch */
-        0, GS_SCANMSK, /* draw every line */
-        0, GS_DTHE,    /* no dithering */
-        0, GS_CLAMP_1,
-        0, GS_CLAMP_2,
+        PS2_PKT64(GIF_TAG(5, 1, 1)), PS2_PKT64(GIF_REG_AD),
+        0, PS2_PKT64(GS_PABE),    /* no per-pixel alpha blending switch */
+        0, PS2_PKT64(GS_SCANMSK), /* draw every line */
+        0, PS2_PKT64(GS_DTHE),    /* no dithering */
+        0, PS2_PKT64(GS_CLAMP_1),
+        0, PS2_PKT64(GS_CLAMP_2),
     };
 
     memset(&gGfx, 0, sizeof(gGfx));
@@ -219,44 +219,44 @@ void Gfx_AddDefaultEnv(void) {
 
 /* Writes the 13 quadwords that put GS context 1 back to the default full-screen drawing state. */
 void Gfx_PutDefaultEnv(GsQword **pp) {
-    (*pp)->d[0] = GIF_TAG(12, 1, 1);
-    (*pp)->d[1] = GIF_REG_AD;
+    (*pp)->d[0] = PS2_PKT64(GIF_TAG(12, 1, 1));
+    (*pp)->d[1] = PS2_PKT64(GIF_REG_AD);
     (*pp)++;
-    (*pp)->d[0] = 0x8000000000; /* TA1 = 0x80 */
-    (*pp)->d[1] = GS_TEXA;
+    (*pp)->d[0] = PS2_PKT64(0x8000000000); /* TA1 = 0x80 */
+    (*pp)->d[1] = PS2_PKT64(GS_TEXA);
     (*pp)++;
-    (*pp)->d[0] = GS_SET_XYOFFSET(GFX_OFX, GFX_OFY);
-    (*pp)->d[1] = GS_XYOFFSET_1;
+    (*pp)->d[0] = PS2_PKT64(GS_SET_XYOFFSET(GFX_OFX, GFX_OFY));
+    (*pp)->d[1] = PS2_PKT64(GS_XYOFFSET_1);
     (*pp)++;
-    (*pp)->d[0] = GS_SET_SCISSOR(0, GFX_WIDTH - 1, 0, GFX_HEIGHT - 1);
-    (*pp)->d[1] = GS_SCISSOR_1;
+    (*pp)->d[0] = PS2_PKT64(GS_SET_SCISSOR(0, GFX_WIDTH - 1, 0, GFX_HEIGHT - 1));
+    (*pp)->d[1] = PS2_PKT64(GS_SCISSOR_1);
     (*pp)++;
-    (*pp)->d[0] = GFX_FRAME_REG();
-    (*pp)->d[1] = GS_FRAME_1;
+    (*pp)->d[0] = PS2_PKT64(GFX_FRAME_REG());
+    (*pp)->d[1] = PS2_PKT64(GS_FRAME_1);
     (*pp)++;
-    (*pp)->d[0] = 0x50000; /* depth test on, pass when Z >= buffer; no alpha test */
-    (*pp)->d[1] = GS_TEST_1;
+    (*pp)->d[0] = PS2_PKT64(0x50000); /* depth test on, pass when Z >= buffer; no alpha test */
+    (*pp)->d[1] = PS2_PKT64(GS_TEST_1);
     (*pp)++;
-    (*pp)->d[0] = 0;
-    (*pp)->d[1] = GS_FBA_1;
+    (*pp)->d[0] = PS2_PKT64(0);
+    (*pp)->d[1] = PS2_PKT64(GS_FBA_1);
     (*pp)++;
-    (*pp)->d[0] = GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 0);
-    (*pp)->d[1] = GS_ZBUF_1;
+    (*pp)->d[0] = PS2_PKT64(GS_SET_ZBUF(GFX_ZBP, GS_PSMZ24, 0));
+    (*pp)->d[1] = PS2_PKT64(GS_ZBUF_1);
     (*pp)++;
-    (*pp)->d[0] = 0x44; /* (Cs - Cd) * As + Cd */
-    (*pp)->d[1] = GS_ALPHA_1;
+    (*pp)->d[0] = PS2_PKT64(0x44); /* (Cs - Cd) * As + Cd */
+    (*pp)->d[1] = PS2_PKT64(GS_ALPHA_1);
     (*pp)++;
-    (*pp)->d[0] = GS_SET_CLAMP(1, 1, 0, 0, 0, 0);
-    (*pp)->d[1] = GS_CLAMP_1;
+    (*pp)->d[0] = PS2_PKT64(GS_SET_CLAMP(1, 1, 0, 0, 0, 0));
+    (*pp)->d[1] = PS2_PKT64(GS_CLAMP_1);
     (*pp)++;
-    (*pp)->d[0] = 1;
-    (*pp)->d[1] = GS_PRMODECONT;
+    (*pp)->d[0] = PS2_PKT64(1);
+    (*pp)->d[1] = PS2_PKT64(GS_PRMODECONT);
     (*pp)++;
-    (*pp)->d[0] = 1;
-    (*pp)->d[1] = GS_COLCLAMP;
+    (*pp)->d[0] = PS2_PKT64(1);
+    (*pp)->d[1] = PS2_PKT64(GS_COLCLAMP);
     (*pp)++;
-    (*pp)->d[0] = 0x60; /* bilinear magnify and minify, no mipmaps */
-    (*pp)->d[1] = GS_TEX1_1;
+    (*pp)->d[0] = PS2_PKT64(0x60); /* bilinear magnify and minify, no mipmaps */
+    (*pp)->d[1] = PS2_PKT64(GS_TEX1_1);
     (*pp)++;
 }
 

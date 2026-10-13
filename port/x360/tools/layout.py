@@ -14,15 +14,24 @@ import collections, os, re, subprocess, sys
 
 DWARFDUMP = os.environ.get("LLVM_DWARFDUMP", "llvm-dwarfdump")
 # Structs que o código do jogo arruma de propósito para host big-endian (#ifdef PORT_BIG_ENDIAN): os campos mudam
-# de lugar dentro da mesma palavra para o VALOR que o resto do código grava continuar certo. Delas se exige uma
-# permutação: mesmo tamanho total, cada campo com o mesmo tamanho (ou a mesma largura de bits), e só campos de
-# preenchimento (com "pad" no nome) a mais.
+# de lugar dentro da mesma palavra (ou de metade num valor de 64 bits) para o VALOR que o resto do código grava
+# continuar certo. Delas se exige uma permutação: mesmo tamanho total, cada campo com o mesmo tamanho (ou a mesma
+# largura de bits, em qualquer posição da unidade), e só campos de preenchimento (com "pad" no nome) a mais.
 PERMUTADAS = {
     "OtPrim": "include/sys/gfx_ot.h: etiqueta DMA gravada como u32, qwc lido como u16",
     "EftPart9Arg": "include/battle/eft_x.h: objId gravado como s32 pelo criador, lido como u8",
     "BtlCapiBPose": "include/battle/btl_capi_b.h: groundFlags gravado como s32, lido como campo de bits de u8",
     "BObjModelBytes": "include/battle/bobj_b.h: flags do cabeçalho do modelo (u32 no arquivo), byte alto lido como char",
     "EftAuraCfgFlame": "include/battle/eft_m.h: s32 dos dados da aura (00002) com o byte baixo lido como u8",
+    # pacotes da GPU (decisão 19): o registro de 64 bits é duas palavras de 32, a baixa primeiro; os campos de bits do
+    # XYZF2 (PS2_PKT64_FIELDS) vêm com a metade alta declarada primeiro, e os bytes e metades de uma palavra invertidos
+    "EftSprPkt": "src/battle/eft_ad_c.c: R, G, B, A do RGBAQ na palavra do pacote da GPU",
+    "EftTriVtx": "src/battle/eft_d.c: R, G, B, A do RGBAQ na palavra do pacote da GPU; XYZF2",
+    "EftNVtx": "src/battle/eft_n.c: R, G, B, A do RGBAQ na palavra do pacote da GPU; XYZF2",
+    **{n: "XYZF2 num pacote da GPU (PS2_PKT64_FIELDS)" for n in (
+        "EftSteamXyzf", "EftWaterXyzf", "EftUXyzf", "EftAdCXyzf", "EftXyzf", "EftWXyzf", "EftGfxXyzf", "EftGsXyzf",
+        "EftXXyzf", "EftAdXyzf", "EftAeXyzf", "EftBXyzf", "EftSXyzf", "EftPXyzf", "EftSurfXyzf", "EftYXyzf",
+        "EftTXyzf", "EftAaXyzf", "EftAcXyzf", "EftVXyzf", "EftQXyzf")},
 }
 DIE = re.compile(r"^(0x[0-9a-f]+):(\s+)(DW_TAG_\w+|NULL)")
 ATTR = re.compile(r"^\s+(DW_AT_\w+)\s+\((.*)\)\s*$")
@@ -168,7 +177,8 @@ def permutacao(da, db):
         for campo, v in d.items():
             if "pad" in campo:
                 continue
-            out[campo] = re.sub(r"@0x[0-9a-f]+ ?", "", v)  # tira o deslocamento, fica tamanho/largura/bit
+            # tira o deslocamento e, no campo de bits, a posição na unidade: fica tamanho/largura
+            out[campo] = re.sub(r"bit \d+ ", "", re.sub(r"@0x[0-9a-f]+ ?", "", v))
         return out
     return da[""] == db[""] and forma(da) == forma(db)
 

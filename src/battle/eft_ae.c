@@ -62,10 +62,10 @@ typedef struct EftAeRegPkt {
 
 /* GS XYZF2 register value. */
 typedef struct EftAeXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftAeXyzf;
 
 typedef struct EftAeGsVtx {
@@ -715,13 +715,13 @@ void EftSprAnim_DrawLayerAt(EftAeMtx *m, EftAeMtx *oriented, Vec4 *objPos, EftSp
     p->h.tag = 0x20000003;
     p->h.vif0 = 0x10000000;
     p->h.vif1 = 0x50000003;
-    p->h.gif0 = 0x1000000000008002;
-    p->h.gif1 = 0xE;
-    p->reg0 = 8;
-    p->reg1 = 9;
+    p->h.gif0 = PS2_PKT64(0x1000000000008002);
+    p->h.gif1 = PS2_PKT64(0xE);
+    p->reg0 = PS2_PKT64(8);
+    p->reg1 = PS2_PKT64(9);
     p->h.next = 0;
-    p->data0 = 0;
-    p->data1 = 0;
+    p->data0 = PS2_PKT64(0);
+    p->data1 = PS2_PKT64(0);
     e->tail->next = (OtPrim *)p;
     e->tail = (OtPrim *)p;
     if (def->flags & EFT_SPR_LAYER_SUBDIV) {
@@ -891,16 +891,16 @@ static inline void EftSprAnim_QueueTri(EftAeScr *v0, EftAeScr *v1, EftAeScr *v2,
     }
     p = (EftAeTriPkt *)gOtCur;
     gOtCur = (u32 *)(p + 1);
-    p->prim = ((u64)abe << 6) | ((u64)ctx << 9) | 0x1B;
-    p->h.gif1 = ((u64)ctx << 4) + ((u64)ctx << 48) + ((u64)ctx << 8) + 0xF8421421421860;
+    p->prim = PS2_PKT64(((u64)abe << 6) | ((u64)ctx << 9) | 0x1B);
+    p->h.gif1 = PS2_PKT64(((u64)ctx << 4) + ((u64)ctx << 48) + ((u64)ctx << 8) + 0xF8421421421860);
     p->h.vif1 = 0x50000008;
     p->h.tag = 0x20000008;
     p->h.vif0 = 0x10000000;
-    p->h.gif0 = 0xE400000000008001;
-    p->clamp = 5;
+    p->h.gif0 = PS2_PKT64(0xE400000000008001);
+    p->clamp = PS2_PKT64(5);
     p->h.next = 0;
-    p->pad = 0;
-    p->clampEnd = 0;
+    p->pad = PS2_PKT64(0);
+    p->clampEnd = PS2_PKT64(0);
     p->v[0].rgba[0] = c0->x;
     p->v[0].rgba[1] = c0->y;
     p->v[0].rgba[2] = c0->z;
@@ -916,7 +916,7 @@ static inline void EftSprAnim_QueueTri(EftAeScr *v0, EftAeScr *v1, EftAeScr *v2,
     p->v[2].rgba[2] = c2->z;
     p->v[2].rgba[3] = c2->w;
     p->v[2].q = uv2->z;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     p->v[0].s = uv0->x;
     p->v[0].t = uv0->y;
     p->v[1].s = uv1->x;

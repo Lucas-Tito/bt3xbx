@@ -56,10 +56,10 @@ typedef struct EftAcScr {
 
 /* GS registers as packed into the packet EftZap_DrawQuad queues (same views as include/battle/eft_aa.h). */
 typedef struct EftAcXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftAcXyzf;
 
 typedef struct EftAcRgbaq {

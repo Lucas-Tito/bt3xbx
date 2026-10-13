@@ -56,6 +56,9 @@ SIMBOLO = re.compile(r"^([A-Za-z_.$][\w.$]*)\s*(?:([+-])\s*(0x[0-9A-Fa-f]+|\d+))
 TOLERA = ["-Wno-error=return-mismatch", "-Wno-error=int-conversion", "-Wno-error=incompatible-pointer-types",
           "-Wno-error=implicit-function-declaration", "-Wno-error=implicit-int"]
 GENERICOS = {"void", "char", "signed char", "unsigned char", "u8", "s8", "u_char", "uchar"}
+# Pacotes da GPU nas tabelas (decisão 19): um campo de 64 bits fica como duas palavras de 32, a baixa primeiro, e se
+# troca como dois u32. Só o TexBltPacket tem u64 vivo nas tabelas (gTexBltPacket, include/sys/gfxm_b_b.h).
+PACOTES_GPU = re.compile(r"^(typedef |struct )?TexBltPacket\b")
 
 
 # ------------------------------------------------------------------------------------------------ 1. os objetos
@@ -857,6 +860,9 @@ def exportar_trocas(objetos, mapas, vivo_byte, caminho):
                     erros.append(f"{o.nome}+{a:#x} [{w}] {desc}: parte vem do disco, parte não ({sorted(m)})")
                 elif kk not in ("int", "float", "bits", "ptr") or w not in (2, 4, 8):
                     erros.append(f"{o.nome}+{a:#x} [{w}] {desc}: tipo {kk}")
+                elif w == 8 and PACOTES_GPU.match(desc):
+                    f.write(f"{o.nome}\t{a}\t4\n{o.nome}\t{a + 4}\t4\n")
+                    cont["trocar: 8 bytes de pacote da GPU, como dois u32 (decisão 19)"] += 1
                 else:
                     f.write(f"{o.nome}\t{a}\t{w}\n")
                     cont[f"trocar: {w} bytes ({'ponteiro numérico' if kk == 'ptr' else kk})"] += 1

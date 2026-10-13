@@ -50,17 +50,21 @@ typedef struct EftNScr {
 
 /* One vertex of the quad packets built here: colour, texture coordinates, position. */
 typedef struct EftNVtx {
+#ifdef PORT_BIG_ENDIAN /* a GS packet is 32-bit words of the host (decision 19): R is the low byte of the word */
+    u8 a, b, g, r;
+#else
     /* 0x00 */ u8 r;
     /* 0x01 */ u8 g;
     /* 0x02 */ u8 b;
     /* 0x03 */ u8 a;
+#endif
     /* 0x04 */ f32 q;
     /* 0x08 */ f32 s;
     /* 0x0C */ f32 t;
-    /* 0x10 */ u64 x : 16;
-    /* 0x12 */ u64 y : 16;
-    /* 0x14 */ u64 z : 24;
-    /* 0x17 */ u64 f : 8;
+    /* 0x10 */ PS2_PKT64_FIELDS(u64 x : 16;
+    /* 0x12 */                  u64 y : 16;,
+    /* 0x14 */                  u64 z : 24;
+    /* 0x17 */                  u64 f : 8;)
 } EftNVtx; /* 0x18 */
 
 /* A 4-vertex textured, gouraud-shaded triangle strip (0x90 bytes at gOtCur). */
@@ -357,12 +361,12 @@ void EftAura_DrawFlames(EftAuraWork *aura, s32 objId, f32 alpha) {
         if (pkt == NULL) {
             return;
         }
-        pkt->prim = 0x5C;
+        pkt->prim = PS2_PKT64(0x5C);
         pkt->tag = 0x20000008;
         pkt->vif0 = 0x10000000;
         pkt->vif1 = 0x50000008;
-        pkt->gif0 = 0xE400000000008001;
-        pkt->gif1 = 0x42142142142160;
+        pkt->gif0 = PS2_PKT64(0xE400000000008001);
+        pkt->gif1 = PS2_PKT64(0x42142142142160);
         pkt->next = NULL;
         pkt->v[0].r = rgb[0];
         pkt->v[0].g = rgb[1];
@@ -409,11 +413,11 @@ void EftAura_DrawFlames(EftAuraWork *aura, s32 objId, f32 alpha) {
         pkt->v[3].z = scr[3].z;
         pkt->v[3].f = 0xFF;
         if (EftAura_FlameFlagInl(f, 0x800)) {
-            pkt->tex0 = sparkTex->entry[0].tex0;
+            pkt->tex0 = PS2_PKT64(sparkTex->entry[0].tex0);
         } else if (EftAura_WorkFlagInl(aura, 0x80)) {
-            pkt->tex0 = aura->tex[f->tex + 1];
+            pkt->tex0 = PS2_PKT64(aura->tex[f->tex + 1]);
         } else {
-            pkt->tex0 = aura->tex[0];
+            pkt->tex0 = PS2_PKT64(aura->tex[0]);
         }
         if (BtlScene_IsStageFlagOn()) {
             EftAura_OtAdd((OtPrim *)pkt, z, 1);
@@ -1527,10 +1531,10 @@ void EftBolt_Draw(EftBoltWork *work, EftBolt *bolt, f32 alpha) {
             }
             pkt->tag = 0x20000008;
             pkt->vif1 = 0x50000008;
-            pkt->prim = 0x5C;
+            pkt->prim = PS2_PKT64(0x5C);
             pkt->vif0 = 0x10000000;
-            pkt->gif0 = 0xE400000000008001;
-            pkt->gif1 = 0x42142142142160;
+            pkt->gif0 = PS2_PKT64(0xE400000000008001);
+            pkt->gif1 = PS2_PKT64(0x42142142142160);
             pkt->next = NULL;
             IVec4_Set(col0, seg->r * 255.0f, seg->g * 255.0f, seg->b * 255.0f, seg->alpha * 255.0f * alpha);
             IVec4_Set(col1, next->r * 255.0f, next->g * 255.0f, next->b * 255.0f,
@@ -1579,7 +1583,7 @@ void EftBolt_Draw(EftBoltWork *work, EftBolt *bolt, f32 alpha) {
             pkt->v[3].y = scr[3].y;
             pkt->v[3].z = scr[3].z;
             pkt->v[3].f = 0xFF;
-            pkt->tex0 = work->tex0;
+            pkt->tex0 = PS2_PKT64(work->tex0);
             /* the fourth term is scr[2].w, not scr[3].z: a typo in the original */
             z = (scr[0].z + scr[1].z + scr[2].z + scr[2].w) >> 10;
             EftAura_OtAdd((OtPrim *)pkt, z, 1);

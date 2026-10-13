@@ -185,20 +185,20 @@ void PadWatch_DrawMessage(void) {
 
         Gfx_AddDefaultEnv();
         p = Dma_BeginDirect();
-        p[0] = GIF_TAG(1, 1, 1);
-        p[1] = GIF_REG_AD;
+        p[0] = PS2_PKT64(GIF_TAG(1, 1, 1));
+        p[1] = PS2_PKT64(GIF_REG_AD);
         p += 2;
-        p[0] = 0x44; /* (Cs - Cd) * As + Cd */
-        p[1] = GS_ALPHA_1;
+        p[0] = PS2_PKT64(0x44); /* (Cs - Cd) * As + Cd */
+        p[1] = PS2_PKT64(GS_ALPHA_1);
         p += 2;
-        p[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 4);
-        p[1] = 0x5510; /* PRIM, RGBAQ, XYZ2, XYZ2 */
+        p[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 4));
+        p[1] = PS2_PKT64(0x5510); /* PRIM, RGBAQ, XYZ2, XYZ2 */
         p += 2;
-        p[0] = 0x46; /* sprite, alpha blended */
-        p[1] = 0x3F80000060000000ULL; /* black, alpha 0x60 */
+        p[0] = PS2_PKT64(0x46); /* sprite, alpha blended */
+        p[1] = PS2_PKT64(0x3F80000060000000ULL); /* black, alpha 0x60 */
         p += 2;
-        p[0] = GS_SET_XYZ(0x6F00, 0x7100, 0xFFFFFF);
-        p[1] = GS_SET_XYZ(0x9100, 0x8F00, 0xFFFFFF);
+        p[0] = PS2_PKT64(GS_SET_XYZ(0x6F00, 0x7100, 0xFFFFFF));
+        p[1] = PS2_PKT64(GS_SET_XYZ(0x9100, 0x8F00, 0xFFFFFF));
         Dma_EndDirect(p + 2);
         Font_PushStyle();
         Font_SetAlign(1);

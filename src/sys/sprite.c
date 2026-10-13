@@ -39,23 +39,23 @@ void Sprite_DrawPicture(SpriteRes *res, s32 x, s32 y, s32 alpha) {
     Gfx_AddDefaultEnv();
     yy = y;
     p = Dma_BeginDirect();
-    p[0] = GIF_TAG(5, 1, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(5, 1, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x44; /* Cs * As + Cd * (1 - As) */
-    p[1] = GS_ALPHA_1;
+    p[0] = PS2_PKT64(0x44); /* Cs * As + Cd * (1 - As) */
+    p[1] = PS2_PKT64(GS_ALPHA_1);
     p += 2;
-    p[0] = 0;
-    p[1] = GS_FBA_1;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(GS_FBA_1);
     p += 2;
-    p[0] = 0x30000; /* alpha and depth tests always pass */
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(0x30000); /* alpha and depth tests always pass */
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
-    p[0] = ((u64)alpha << 24) | 0x808080;
-    p[1] = GS_RGBAQ;
+    p[0] = PS2_PKT64(((u64)alpha << 24) | 0x808080);
+    p[1] = PS2_PKT64(GS_RGBAQ);
     p += 2;
-    p[0] = 5; /* clamp S and T */
-    p[1] = GS_CLAMP_1;
+    p[0] = PS2_PKT64(5); /* clamp S and T */
+    p[1] = PS2_PKT64(GS_CLAMP_1);
     p += 2;
     Dma_EndDirect(p);
     for (row = 0; row < 2; row++) {
@@ -67,19 +67,19 @@ void Sprite_DrawPicture(SpriteRes *res, s32 x, s32 y, s32 alpha) {
             y1 = row ? yy + 0xC0 : yy + 0xE0;
             y0 = row ? yy - 0x20 : yy;
             y0 = (y0 << 4) + SPRITE_OFS_Y;
-            p[0] = GIF_TAG(1, 1, 6);
-            p[0] |= (u64)GIF_FLG_REGLIST << 58;
-            p[1] = 0x535306; /* TEX0_1, PRIM, UV, XYZ2, UV, XYZ2 */
+            p[0] = PS2_PKT64(GIF_TAG(1, 1, 6));
+            p[0] |= PS2_PKT64((u64)GIF_FLG_REGLIST << 58);
+            p[1] = PS2_PKT64(0x535306); /* TEX0_1, PRIM, UV, XYZ2, UV, XYZ2 */
             p += 2;
-            p[0] = res->tex[idx].tex0 | ((u64)(res->tex[idx].cbpOfs + SPRITE_CBP_PICTURE) << 37) |
-                   (((u64)4 << 32) | SPRITE_TBP);
-            p[1] = 0x156; /* sprite, textured, alpha blended, UV coordinates */
+            p[0] = PS2_PKT64(res->tex[idx].tex0 | ((u64)(res->tex[idx].cbpOfs + SPRITE_CBP_PICTURE) << 37) |
+                   (((u64)4 << 32) | SPRITE_TBP));
+            p[1] = PS2_PKT64(0x156); /* sprite, textured, alpha blended, UV coordinates */
             p += 2;
-            p[0] = 0;
-            p[1] = ((x + col * 0x80 + 0x700) << 4) | ((u64)y0 << 16);
+            p[0] = PS2_PKT64(0);
+            p[1] = PS2_PKT64(((x + col * 0x80 + 0x700) << 4) | ((u64)y0 << 16));
             p += 2;
-            p[0] = GS_SET_UV(0x80 << 4, 0x100 << 4);
-            p[1] = ((x + col * 0x80 + 0x780) << 4) | ((u64)((y1 + 0x720) << 4) << 16);
+            p[0] = PS2_PKT64(GS_SET_UV(0x80 << 4, 0x100 << 4));
+            p[1] = PS2_PKT64(((x + col * 0x80 + 0x780) << 4) | ((u64)((y1 + 0x720) << 4) << 16));
             p += 2;
             Dma_EndDirect(p);
         }
@@ -97,17 +97,17 @@ void Sprite_DrawList(SpriteRes *res, s32 x, s32 y, LoadSprite *list) {
     }
     Gfx_AddDefaultEnv();
     p = Dma_BeginDirect();
-    p[0] = GIF_TAG(3, 1, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(3, 1, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x44; /* Cs * As + Cd * (1 - As) */
-    p[1] = GS_ALPHA_1;
+    p[0] = PS2_PKT64(0x44); /* Cs * As + Cd * (1 - As) */
+    p[1] = PS2_PKT64(GS_ALPHA_1);
     p += 2;
-    p[0] = 0x60; /* bilinear */
-    p[1] = GS_TEX1_1;
+    p[0] = PS2_PKT64(0x60); /* bilinear */
+    p[1] = PS2_PKT64(GS_TEX1_1);
     p += 2;
-    p[0] = 0x30000;
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(0x30000);
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
     Dma_EndDirect(p);
     for (i = 0; !(list[i].flags & LOAD_SPR_END); i++) {
@@ -119,26 +119,26 @@ void Sprite_DrawList(SpriteRes *res, s32 x, s32 y, LoadSprite *list) {
                 Dma_AddTexFlush();
             }
             p = Dma_BeginDirect();
-            p[0] = GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 8);
-            p[1] = 0x535306E1; /* RGBAQ, A+D (ignored), TEX0_1, PRIM, UV, XYZ2, UV, XYZ2 */
+            p[0] = PS2_PKT64(GIF_TAG_EX(1, 1, GIF_FLG_REGLIST, 8));
+            p[1] = PS2_PKT64(0x535306E1); /* RGBAQ, A+D (ignored), TEX0_1, PRIM, UV, XYZ2, UV, XYZ2 */
             p += 2;
-            p[0] = (u64)spr->r | ((u64)spr->g << 8) | ((u64)spr->b << 16) | ((u64)spr->a << 24);
-            p[1] = 0;
+            p[0] = PS2_PKT64((u64)spr->r | ((u64)spr->g << 8) | ((u64)spr->b << 16) | ((u64)spr->a << 24));
+            p[1] = PS2_PKT64(0);
             p += 2;
             if ((spr->flags & 4) || res == NULL) {
-                p[0] = 0;
-                p[1] = 0x46;
+                p[0] = PS2_PKT64(0);
+                p[1] = PS2_PKT64(0x46);
             } else {
-                p[0] = res->tex[spr->tex].tex0 | ((u64)(res->tex[spr->tex].cbpOfs + SPRITE_CBP_LIST) << 37) |
-                       (((u64)4 << 32) | SPRITE_TBP);
-                p[1] = 0x156;
+                p[0] = PS2_PKT64(res->tex[spr->tex].tex0 | ((u64)(res->tex[spr->tex].cbpOfs + SPRITE_CBP_LIST) << 37) |
+                       (((u64)4 << 32) | SPRITE_TBP));
+                p[1] = PS2_PKT64(0x156);
             }
             p += 2;
-            p[0] = (spr->u0 << 4) | ((u64)(spr->v0 << 4) << 16);
-            p[1] = (((spr->x0 + x) << 4) + SPRITE_OFS_X) | ((u64)((Sprite_ConvY(spr->y0 + y) << 4) + SPRITE_OFS_Y) << 16);
+            p[0] = PS2_PKT64((spr->u0 << 4) | ((u64)(spr->v0 << 4) << 16));
+            p[1] = PS2_PKT64((((spr->x0 + x) << 4) + SPRITE_OFS_X) | ((u64)((Sprite_ConvY(spr->y0 + y) << 4) + SPRITE_OFS_Y) << 16));
             p += 2;
-            p[0] = (spr->u1 << 4) | ((u64)(spr->v1 << 4) << 16);
-            p[1] = (((spr->x1 + x) << 4) + SPRITE_OFS_X) | ((u64)((Sprite_ConvY(spr->y1 + y) << 4) + SPRITE_OFS_Y) << 16);
+            p[0] = PS2_PKT64((spr->u1 << 4) | ((u64)(spr->v1 << 4) << 16));
+            p[1] = PS2_PKT64((((spr->x1 + x) << 4) + SPRITE_OFS_X) | ((u64)((Sprite_ConvY(spr->y1 + y) << 4) + SPRITE_OFS_Y) << 16));
             p += 2;
             Dma_EndDirect(p);
         }

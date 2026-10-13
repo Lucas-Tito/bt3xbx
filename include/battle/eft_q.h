@@ -278,10 +278,10 @@ typedef struct EftQVert {
 
 /* GS registers and the ordering-table packets this file queues. */
 typedef struct EftQXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftQXyzf;
 
 typedef struct EftQRgbaq {

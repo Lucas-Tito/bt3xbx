@@ -51,10 +51,10 @@ typedef struct EftAaTask {
 
 /* GS registers as packed into the packets queued here. */
 typedef struct EftAaXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftAaXyzf;
 
 typedef struct EftAaRgbaq {

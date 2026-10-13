@@ -68,11 +68,11 @@ void Dma_Flush(void) {
     p[2] = VIF_FLUSHE;
     p[3] = VIF_DIRECT | 2;
     p += 4;
-    ((u64 *)p)[0] = GIF_TAG(1, 1, 1);
-    ((u64 *)p)[1] = GIF_REG_AD;
+    ((u64 *)p)[0] = PS2_PKT64(GIF_TAG(1, 1, 1));
+    ((u64 *)p)[1] = PS2_PKT64(GIF_REG_AD);
     p += 4;
-    ((u64 *)p)[0] = 0;
-    ((u64 *)p)[1] = GS_FINISH;
+    ((u64 *)p)[0] = PS2_PKT64(0);
+    ((u64 *)p)[1] = PS2_PKT64(GS_FINISH);
     p += 4;
     p[0] = DMA_TAG_END;
     p[1] = 0;
@@ -96,8 +96,8 @@ u64 *Dma_BeginDirect(void) {
     u128 *tag = (u128 *)gDmaCur;
 
 #ifdef PORT
-    tag->lo = 0;
-    tag->hi = 0;
+    tag->lo = PS2_PKT64(0);
+    tag->hi = PS2_PKT64(0);
 #else
     *tag = 0;
 #endif
@@ -496,33 +496,33 @@ void Dma_AddFillRect(s32 x, s32 y, s32 w, s32 h, u32 rgba) {
     u64 *tag;
     s32 i;
 
-    p[0] = GIF_TAG(5, 0, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(5, 0, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x44;
-    p[1] = GS_ALPHA_1;
+    p[0] = PS2_PKT64(0x44);
+    p[1] = PS2_PKT64(GS_ALPHA_1);
     p += 2;
-    p[0] = 0x30000;
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(0x30000);
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
-    p[0] = 0;
-    p[1] = GS_FBA_1;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(GS_FBA_1);
     p += 2;
-    p[0] = 0x46;
-    p[1] = GS_PRIM;
+    p[0] = PS2_PKT64(0x46);
+    p[1] = PS2_PKT64(GS_PRIM);
     p += 2;
-    p[0] = (u64)rgba | (0x3F800000ULL << 32);
-    p[1] = GS_RGBAQ;
+    p[0] = PS2_PKT64((u64)rgba | (0x3F800000ULL << 32));
+    p[1] = PS2_PKT64(GS_RGBAQ);
     p += 2;
     tag = p;
     p += 2;
     for (i = 0; i < n; i++) {
-        p[0] = GS_SET_XYZ((x << 4) + (i * 32 << 4), y << 4, 0);
-        p[1] = GS_SET_XYZ((x << 4) + ((i * 32 + 32) << 4), (y + h) << 4, 0);
+        p[0] = PS2_PKT64(GS_SET_XYZ((x << 4) + (i * 32 << 4), y << 4, 0));
+        p[1] = PS2_PKT64(GS_SET_XYZ((x << 4) + ((i * 32 + 32) << 4), (y + h) << 4, 0));
         p += 2;
     }
-    tag[0] = GIF_TAG_EX(n, 1, GIF_FLG_REGLIST, 2);
-    tag[1] = GS_REG_XYZ2 | (GS_REG_XYZ2 << 4);
+    tag[0] = PS2_PKT64(GIF_TAG_EX(n, 1, GIF_FLG_REGLIST, 2));
+    tag[1] = PS2_PKT64(GS_REG_XYZ2 | (GS_REG_XYZ2 << 4));
     Dma_EndDirect(p);
 }
 
@@ -535,38 +535,38 @@ void Dma_PutTexStrips(GsQword **pp, s32 x0, s32 y0, s32 x1, s32 y1, s32 xFrac, s
     s32 w = x1 - x0;
     s32 i;
 
-    (*pp)->d[0] = GIF_TAG(2, 0, 1);
-    (*pp)->d[1] = GIF_REG_AD;
+    (*pp)->d[0] = PS2_PKT64(GIF_TAG(2, 0, 1));
+    (*pp)->d[1] = PS2_PKT64(GIF_REG_AD);
     (*pp)++;
-    (*pp)->d[0] = blend ? 0x156 : 0x116;
-    (*pp)->d[1] = GS_PRIM;
+    (*pp)->d[0] = PS2_PKT64(blend ? 0x156 : 0x116);
+    (*pp)->d[1] = PS2_PKT64(GS_PRIM);
     (*pp)++;
-    (*pp)->d[0] = (u64)rgba | (0x3F800000ULL << 32);
-    (*pp)->d[1] = GS_RGBAQ;
+    (*pp)->d[0] = PS2_PKT64((u64)rgba | (0x3F800000ULL << 32));
+    (*pp)->d[1] = PS2_PKT64(GS_RGBAQ);
     (*pp)++;
-    (*pp)->d[0] = GIF_TAG_EX(n, 1, GIF_FLG_REGLIST, 4);
-    (*pp)->d[1] = 0x5353;
+    (*pp)->d[0] = PS2_PKT64(GIF_TAG_EX(n, 1, GIF_FLG_REGLIST, 4));
+    (*pp)->d[1] = PS2_PKT64(0x5353);
     (*pp)++;
     if (w % n == 0) {
         s32 dx = w / n;
 
         for (i = 0; i < n; i++) {
-            (*pp)->d[0] = GS_SET_UV(((u0 + i * step) << 4) + uFrac, (v0 << 4) + vFrac);
-            (*pp)->d[1] = GS_SET_XYZ(((x0 + i * dx) << 4) + xFrac + 0x7000, ((y0 + 0x720) << 4) + yFrac, 0);
+            (*pp)->d[0] = PS2_PKT64(GS_SET_UV(((u0 + i * step) << 4) + uFrac, (v0 << 4) + vFrac));
+            (*pp)->d[1] = PS2_PKT64(GS_SET_XYZ(((x0 + i * dx) << 4) + xFrac + 0x7000, ((y0 + 0x720) << 4) + yFrac, 0));
             (*pp)++;
-            (*pp)->d[0] = GS_SET_UV(((u0 + (i + 1) * step) << 4) + uFrac, (v1 << 4) + vFrac);
-            (*pp)->d[1] = GS_SET_XYZ(((x0 + (i + 1) * dx) << 4) + xFrac + 0x7000, ((y1 + 0x720) << 4) + yFrac, 0);
+            (*pp)->d[0] = PS2_PKT64(GS_SET_UV(((u0 + (i + 1) * step) << 4) + uFrac, (v1 << 4) + vFrac));
+            (*pp)->d[1] = PS2_PKT64(GS_SET_XYZ(((x0 + (i + 1) * dx) << 4) + xFrac + 0x7000, ((y1 + 0x720) << 4) + yFrac, 0));
             (*pp)++;
         }
     } else {
         f32 dx = (f32)(w << 4) / (f32)n;
 
         for (i = 0; i < n; i++) {
-            (*pp)->d[0] = GS_SET_UV(((u0 + i * step) << 4) + uFrac, (v0 << 4) + vFrac);
-            (*pp)->d[1] = GS_SET_XYZ(x0 + (xFrac + (s32)(dx * (f32)i)) + 0x7000, ((y0 + 0x720) << 4) + yFrac, 0);
+            (*pp)->d[0] = PS2_PKT64(GS_SET_UV(((u0 + i * step) << 4) + uFrac, (v0 << 4) + vFrac));
+            (*pp)->d[1] = PS2_PKT64(GS_SET_XYZ(x0 + (xFrac + (s32)(dx * (f32)i)) + 0x7000, ((y0 + 0x720) << 4) + yFrac, 0));
             (*pp)++;
-            (*pp)->d[0] = GS_SET_UV(((u0 + (i + 1) * step) << 4) + uFrac, (v1 << 4) + vFrac);
-            (*pp)->d[1] = GS_SET_XYZ(x0 + (xFrac + (s32)(dx * (f32)(i + 1))) + 0x7000, ((y1 + 0x720) << 4) + yFrac, 0);
+            (*pp)->d[0] = PS2_PKT64(GS_SET_UV(((u0 + (i + 1) * step) << 4) + uFrac, (v1 << 4) + vFrac));
+            (*pp)->d[1] = PS2_PKT64(GS_SET_XYZ(x0 + (xFrac + (s32)(dx * (f32)(i + 1))) + 0x7000, ((y1 + 0x720) << 4) + yFrac, 0));
             (*pp)++;
         }
     }

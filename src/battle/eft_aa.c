@@ -497,10 +497,10 @@ void EftGndDust_DrawQuad(Vec4 *pos, Vec4 *color, Mtx44 *mtx, u64 tex0, f32 scale
     }
     p->dmaTag = 0x20000008;
     p->vif1 = 0x50000008;
-    p->prim = 0x5C;
+    p->prim = PS2_PKT64(0x5C);
     p->vif0 = 0x10000000;
-    p->gifTag = 0xE400000000008001;
-    p->regs = 0x42142142142160;
+    p->gifTag = PS2_PKT64(0xE400000000008001);
+    p->regs = PS2_PKT64(0x42142142142160);
     p->next = NULL;
     p->v[0].rgbaq.r = color->x;
     p->v[0].rgbaq.g = color->y;
@@ -551,7 +551,7 @@ void EftGndDust_DrawQuad(Vec4 *pos, Vec4 *color, Mtx44 *mtx, u64 tex0, f32 scale
     p->v[3].xyz.z = scr[3].z;
     p->v[3].xyz.f = 0xFF;
     z = (scr[0].z + scr[1].z + scr[2].z + scr[3].z) >> 10;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     if (z < 0) {
         e = &gOtZ[0].layer[l];
     } else if (z >= 0x1000) {
@@ -1130,12 +1130,12 @@ void EftBlade_Draw(EftAaTask *task) {
             p = (EftBladeTriPkt *)gOtCur;
             gOtCur = (u8 *)(p + 1);
             layer = def->layer;
-            p->prim = EftBlade_MakePrim(0xB, abe, layer >= 2);
+            p->prim = PS2_PKT64(EftBlade_MakePrim(0xB, abe, layer >= 2));
             p->dmaTag = 0x20000005;
             p->vif1 = 0x50000005;
             p->vif0 = 0x10000000;
-            p->gifTag = 0x8400000000008001;
-            p->regs = 0xF4141410;
+            p->gifTag = PS2_PKT64(0x8400000000008001);
+            p->regs = PS2_PKT64(0xF4141410);
             p->next = NULL;
             p->v[0].rgbaq.r = col.x;
             p->v[0].rgbaq.g = col.y;
@@ -1357,12 +1357,12 @@ void EftBlind_DrawOverlay(s32 view, s32 full, f32 alpha) {
     Vec4_Set((Vec4 *)&c, 128.0f, 128.0f, 128.0f, alpha);
     p = (EftBlindPkt *)gOtCur;
     gOtCur = (u8 *)(p + 1);
-    p->prim = 0x46;
+    p->prim = PS2_PKT64(0x46);
     p->dmaTag = 0x20000003;
     p->vif1 = 0x50000003;
     p->vif0 = 0x10000000;
-    p->gifTag = 0x4400000000008001;
-    p->regs = 0x4410;
+    p->gifTag = PS2_PKT64(0x4400000000008001);
+    p->regs = PS2_PKT64(0x4410);
     p->next = NULL;
     p->rgbaq.r = c.x;
     p->rgbaq.g = c.y;

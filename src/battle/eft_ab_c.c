@@ -2235,12 +2235,12 @@ void EftZap_DrawQuad(EftAcVec *pos, EftAcVec color, f32 u0, f32 v0, f32 u1, f32 
         return;
     }
     ctx = layer >= 2;
-    p->prim = ((u64)abe << 6) | ((u64)ctx << 9) | 0x1C;
+    p->prim = PS2_PKT64(((u64)abe << 6) | ((u64)ctx << 9) | 0x1C);
     p->dmaTag = 0x20000008;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000008;
-    p->gifTag = 0xE400000000008001;
-    p->regs = 0x42142142142160 + (ctx << 4);
+    p->gifTag = PS2_PKT64(0xE400000000008001);
+    p->regs = PS2_PKT64(0x42142142142160 + (ctx << 4));
     p->next = NULL;
     z = (scr[0].z + scr[1].z + scr[2].z + scr[3].z) >> 10;
     if (front) {
@@ -2299,7 +2299,7 @@ void EftZap_DrawQuad(EftAcVec *pos, EftAcVec color, f32 u0, f32 v0, f32 u1, f32 
     p->v[3].xyz.y = scr[3].y;
     p->v[3].xyz.z = scr[3].z;
     p->v[3].xyz.f = 0xFF;
-    p->tex0 = *t;
+    p->tex0 = PS2_PKT64(*t);
     if (z < 0) {
         e = &gOtZ[0].layer[l];
     } else if (z >= 0x1000) {

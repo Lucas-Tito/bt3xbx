@@ -1025,30 +1025,30 @@ void ScrXfade_StoreHalf(s16 sbp, u16 w, u16 h, s32 index) {
     ((u32 *)p)[1] = 0;
     ((u32 *)p)[2] = 0;
     p += 2;
-    p[0] = GIF_TAG(4, 1, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(4, 1, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[1] = 0x50; /* BITBLTBUF: filled in by ScrXfade_Draw */
-    p[0] = 0;
+    p[1] = PS2_PKT64(0x50); /* BITBLTBUF: filled in by ScrXfade_Draw */
+    p[0] = PS2_PKT64(0);
     p += 2;
-    p[1] = 0x51; /* TRXPOS */
-    p[0] = 0;
+    p[1] = PS2_PKT64(0x51); /* TRXPOS */
+    p[0] = PS2_PKT64(0);
     p += 2;
-    p[0] = (u64)w | ((u64)h << 32);
-    p[1] = 0x52; /* TRXREG */
+    p[0] = PS2_PKT64((u64)w | ((u64)h << 32));
+    p[1] = PS2_PKT64(0x52); /* TRXREG */
     p += 2;
-    p[1] = 0x53; /* TRXDIR: host to local */
-    p[0] = 0;
+    p[1] = PS2_PKT64(0x53); /* TRXDIR: host to local */
+    p[0] = PS2_PKT64(0);
     p += 2;
-    p[0] = (u64)(u32)(qwc | GIF_EOP) | (2ULL << 58); /* image data */
-    p[1] = 0;
+    p[0] = PS2_PKT64((u64)(u32)(qwc | GIF_EOP) | (2ULL << 58)); /* image data */
+    p[1] = PS2_PKT64(0);
     p += 2;
     p += qwc * 2;
-    p[0] = GIF_TAG(1, 1, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(1, 1, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[1] = GS_TEXFLUSH;
-    p[0] = 0;
+    p[1] = PS2_PKT64(GS_TEXFLUSH);
+    p[0] = PS2_PKT64(0);
 }
 #else
 INCLUDE_ASM("asm/nonmatchings/battle/stg_b", ScrXfade_StoreHalf);
@@ -1076,28 +1076,28 @@ void ScrXfade_Draw(s32 unused, s32 tbp, u8 alpha) {
             dbp = tbp + w * h / 64;
             break;
         }
-        gScrXfade->buf[i][4] = ((u64)dbp << 32) | ((u64)bw << 48) | 0x0100000001000000ULL;
+        gScrXfade->buf[i][4] = PS2_PKT64(((u64)dbp << 32) | ((u64)bw << 48) | 0x0100000001000000ULL);
         Dma_AddData(&gScrXfade->chain[i], 0x10);
     }
     p = Dma_BeginDirect();
     Gfx_PutDefaultEnv((GsQword **)&p);
-    p[0] = GIF_TAG(5, 1, 1);
-    p[1] = GIF_REG_AD;
+    p[0] = PS2_PKT64(GIF_TAG(5, 1, 1));
+    p[1] = PS2_PKT64(GIF_REG_AD);
     p += 2;
-    p[0] = 0x30000;
-    p[1] = GS_TEST_1;
+    p[0] = PS2_PKT64(0x30000);
+    p[1] = PS2_PKT64(GS_TEST_1);
     p += 2;
-    p[0] = GS_SET_ZBUF(0xE0, GS_PSMZ24, 1);
-    p[1] = GS_ZBUF_1;
+    p[0] = PS2_PKT64(GS_SET_ZBUF(0xE0, GS_PSMZ24, 1));
+    p[1] = PS2_PKT64(GS_ZBUF_1);
     p += 2;
-    p[0] = 0;
-    p[1] = GS_TEX1_1;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(GS_TEX1_1);
     p += 2;
-    p[0] = 0;
-    p[1] = GS_TEXFLUSH;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(GS_TEXFLUSH);
     p += 2;
-    p[0] = (u64)(u32)tbp | ((u64)bw << 14) | (0xA641ULL << 20);
-    p[1] = GS_TEX0_1;
+    p[0] = PS2_PKT64((u64)(u32)tbp | ((u64)bw << 14) | (0xA641ULL << 20));
+    p[1] = PS2_PKT64(GS_TEX0_1);
     p += 2;
     Dma_PutTexStrips((GsQword **)&p, 0, 0, 0x200, 0x1C0, 0, 0, 0, 0, 0x200, 0x1C0, 8, 8, (alpha << 24) | 0x808080, 1);
     Dma_EndDirect(p);
@@ -1173,45 +1173,45 @@ s32 ScrXfade_IsActive(void) {
 void ScrWarp_BeginPacket(u64 **pp, s32 x0, s32 x1, s32 w, s32 h, s32 tw, s32 th) {
     *pp = Dma_BeginDirect();
     Gfx_PutDefaultEnv((GsQword **)pp);
-    (*pp)[0] = GIF_TAG(7, 0, 1);
-    (*pp)[1] = GIF_REG_AD;
+    (*pp)[0] = PS2_PKT64(GIF_TAG(7, 0, 1));
+    (*pp)[1] = PS2_PKT64(GIF_REG_AD);
     *pp += 2;
-    (*pp)[0] = 0x30000;
-    (*pp)[1] = GS_TEST_1;
+    (*pp)[0] = PS2_PKT64(0x30000);
+    (*pp)[1] = PS2_PKT64(GS_TEST_1);
     *pp += 2;
-    (*pp)[0] = GS_SET_SCISSOR(0, tw - 1, 0, th - 1);
-    (*pp)[1] = GS_SCISSOR_1;
+    (*pp)[0] = PS2_PKT64(GS_SET_SCISSOR(0, tw - 1, 0, th - 1));
+    (*pp)[1] = PS2_PKT64(GS_SCISSOR_1);
     *pp += 2;
-    (*pp)[0] = GS_SET_ZBUF(0xE0, GS_PSMZ24, 1);
-    (*pp)[1] = GS_ZBUF_1;
+    (*pp)[0] = PS2_PKT64(GS_SET_ZBUF(0xE0, GS_PSMZ24, 1));
+    (*pp)[1] = PS2_PKT64(GS_ZBUF_1);
     *pp += 2;
-    (*pp)[0] = GS_SET_FRAME(0x150, 4, 0, 0);
-    (*pp)[1] = GS_FRAME_1;
+    (*pp)[0] = PS2_PKT64(GS_SET_FRAME(0x150, 4, 0, 0));
+    (*pp)[1] = PS2_PKT64(GS_FRAME_1);
     *pp += 2;
-    (*pp)[0] = GS_SET_CLAMP(2, 2, x0, x1 - 1, 0, h - 1);
-    (*pp)[1] = GS_CLAMP_1;
+    (*pp)[0] = PS2_PKT64(GS_SET_CLAMP(2, 2, x0, x1 - 1, 0, h - 1));
+    (*pp)[1] = PS2_PKT64(GS_CLAMP_1);
     *pp += 2;
-    (*pp)[0] = 0x60;
-    (*pp)[1] = GS_TEX1_1;
+    (*pp)[0] = PS2_PKT64(0x60);
+    (*pp)[1] = PS2_PKT64(GS_TEX1_1);
     *pp += 2;
-    (*pp)[0] = !(gGfx.frame & 1) ? 0x264020E00ULL : 0x264020000ULL;
-    (*pp)[1] = GS_TEX0_1;
+    (*pp)[0] = PS2_PKT64(!(gGfx.frame & 1) ? 0x264020E00ULL : 0x264020000ULL);
+    (*pp)[1] = PS2_PKT64(GS_TEX0_1);
     *pp += 2;
     Dma_PutTexStrips((GsQword **)pp, 0, 0, tw, th, 0, 0, x0, 0, w + x0, h, 8, 8, 0x80808080, 0);
-    (*pp)[0] = GIF_TAG(4, 0, 1);
-    (*pp)[1] = GIF_REG_AD;
+    (*pp)[0] = PS2_PKT64(GIF_TAG(4, 0, 1));
+    (*pp)[1] = PS2_PKT64(GIF_REG_AD);
     *pp += 2;
-    (*pp)[0] = !(gGfx.frame & 1) ? 0x80070 : 0x80000;
-    (*pp)[1] = GS_FRAME_1;
+    (*pp)[0] = PS2_PKT64(!(gGfx.frame & 1) ? 0x80070 : 0x80000);
+    (*pp)[1] = PS2_PKT64(GS_FRAME_1);
     *pp += 2;
-    (*pp)[0] = GS_SET_SCISSOR(x0, x1 - 1, 0, h - 1);
-    (*pp)[1] = GS_SCISSOR_1;
+    (*pp)[0] = PS2_PKT64(GS_SET_SCISSOR(x0, x1 - 1, 0, h - 1));
+    (*pp)[1] = PS2_PKT64(GS_SCISSOR_1);
     *pp += 2;
-    (*pp)[0] = GS_SET_CLAMP(2, 2, 0, tw - 1, 0, th - 1);
-    (*pp)[1] = GS_CLAMP_1;
+    (*pp)[0] = PS2_PKT64(GS_SET_CLAMP(2, 2, 0, tw - 1, 0, th - 1));
+    (*pp)[1] = PS2_PKT64(GS_CLAMP_1);
     *pp += 2;
-    (*pp)[0] = 0x220012A00ULL;
-    (*pp)[1] = GS_TEX0_1;
+    (*pp)[0] = PS2_PKT64(0x220012A00ULL);
+    (*pp)[1] = PS2_PKT64(GS_TEX0_1);
     *pp += 2;
 }
 
@@ -1222,14 +1222,14 @@ void ScrWarp_EndPacket(u64 **pp) {
 
 /* Starts a textured, blended triangle strip of `count` vertices. */
 void ScrWarp_BeginStrip(u64 **pp, s32 count) {
-    (*pp)[0] = GIF_TAG(1, 0, 1);
-    (*pp)[1] = GIF_REG_AD;
+    (*pp)[0] = PS2_PKT64(GIF_TAG(1, 0, 1));
+    (*pp)[1] = PS2_PKT64(GIF_REG_AD);
     (*pp) += 2;
-    (*pp)[0] = 0x15C; /* triangle strip, gouraud, textured, blended, UV coordinates */
-    (*pp)[1] = GS_PRIM;
+    (*pp)[0] = PS2_PKT64(0x15C); /* triangle strip, gouraud, textured, blended, UV coordinates */
+    (*pp)[1] = PS2_PKT64(GS_PRIM);
     (*pp) += 2;
-    (*pp)[0] = GIF_TAG_EX(count, 1, GIF_FLG_REGLIST, 4);
-    (*pp)[1] = 0x531F; /* NOP, RGBAQ, UV, XYZ2 */
+    (*pp)[0] = PS2_PKT64(GIF_TAG_EX(count, 1, GIF_FLG_REGLIST, 4));
+    (*pp)[1] = PS2_PKT64(0x531F); /* NOP, RGBAQ, UV, XYZ2 */
     (*pp) += 2;
 }
 
@@ -1239,11 +1239,11 @@ void ScrWarp_EndStrip(u64 **pp) {
 
 /* Adds one strip vertex: frame pixel, texel and colour. */
 void ScrWarp_PutVertex(u64 **pp, s32 x, s32 y, s32 u, s32 v, s32 rgba) {
-    (*pp)[0] = 0;
-    (*pp)[1] = (u64)rgba | (0x3F800000ULL << 32);
+    (*pp)[0] = PS2_PKT64(0);
+    (*pp)[1] = PS2_PKT64((u64)rgba | (0x3F800000ULL << 32));
     (*pp) += 2;
-    (*pp)[0] = GS_SET_UV(u << 4, v << 4);
-    (*pp)[1] = GS_SET_UV((x << 4) + 0x7000, (y << 4) + 0x7200);
+    (*pp)[0] = PS2_PKT64(GS_SET_UV(u << 4, v << 4));
+    (*pp)[1] = PS2_PKT64(GS_SET_UV((x << 4) + 0x7000, (y << 4) + 0x7200));
     (*pp) += 2;
 }
 
@@ -1654,33 +1654,33 @@ void StgFog_Draw(void) {
 
         p = Dma_BeginDirect();
         Gfx_PutDefaultEnv((GsQword **)&p);
-        p[0] = GIF_TAG(4, 0, 1);
-        p[1] = GIF_REG_AD;
+        p[0] = PS2_PKT64(GIF_TAG(4, 0, 1));
+        p[1] = PS2_PKT64(GIF_REG_AD);
         p += 2;
-        p[0] = (u64)fbp[0] | (fbw << 16);
-        p[1] = GS_FRAME_1;
+        p[0] = PS2_PKT64((u64)fbp[0] | (fbw << 16));
+        p[1] = PS2_PKT64(GS_FRAME_1);
         p += 2;
-        p[0] = GS_SET_ZBUF(0xE0, GS_PSMZ24, 1);
-        p[1] = GS_ZBUF_1;
+        p[0] = PS2_PKT64(GS_SET_ZBUF(0xE0, GS_PSMZ24, 1));
+        p[1] = PS2_PKT64(GS_ZBUF_1);
         p += 2;
-        p[0] = 0x30000;
-        p[1] = GS_TEST_1;
+        p[0] = PS2_PKT64(0x30000);
+        p[1] = PS2_PKT64(GS_TEST_1);
         p += 2;
-        p[0] = !(gGfx.frame & 1) ? 0xA64020E00ULL : 0xA64020000ULL;
-        p[1] = GS_TEX0_1;
+        p[0] = PS2_PKT64(!(gGfx.frame & 1) ? 0xA64020E00ULL : 0xA64020000ULL);
+        p[1] = PS2_PKT64(GS_TEX0_1);
         p += 2;
         Dma_PutTexStrips((GsQword **)&p, 0, 0, half, h, 0, 0, 0, 0, width, srcH, 0, 0, 0x80808080, 1);
-        p[0] = GIF_TAG(3, 0, 1);
-        p[1] = GIF_REG_AD;
+        p[0] = PS2_PKT64(GIF_TAG(3, 0, 1));
+        p[1] = PS2_PKT64(GIF_REG_AD);
         p += 2;
-        p[0] = !(gGfx.frame & 1) ? 0xFF00000000080070ULL : 0xFF00000000080000ULL;
-        p[1] = GS_FRAME_1;
+        p[0] = PS2_PKT64(!(gGfx.frame & 1) ? 0xFF00000000080070ULL : 0xFF00000000080000ULL);
+        p[1] = PS2_PKT64(GS_FRAME_1);
         p += 2;
-        p[0] = (0x80ULL << 32) | 0x54;
-        p[1] = GS_ALPHA_1;
+        p[0] = PS2_PKT64((0x80ULL << 32) | 0x54);
+        p[1] = PS2_PKT64(GS_ALPHA_1);
         p += 2;
-        p[0] = (u64)tbp[0] | (fbw << 14) | ((u64)tw << 26) | ((u64)th << 30);
-        p[1] = GS_TEX0_1;
+        p[0] = PS2_PKT64((u64)tbp[0] | (fbw << 14) | ((u64)tw << 26) | ((u64)th << 30));
+        p[1] = PS2_PKT64(GS_TEX0_1);
         p += 2;
         Dma_PutTexStrips((GsQword **)&p, 0, 0, width, srcH, 0, 0, 0, 0, half, h, 8, 8, 0x80808080, 1);
         Dma_EndDirect(p);

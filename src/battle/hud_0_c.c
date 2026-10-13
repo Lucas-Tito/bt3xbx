@@ -84,22 +84,22 @@ void BtlText_PutSprite(u64 **pkt, s32 x0, s32 y0, s32 x1, s32 y1, s32 u0, s32 v0
     y0 += 0x720;
     y1 += 0x720;
     if (BtlText_IsOnScreen(x0, y0, x1, y1)) {
-        (*pkt)[0] = 0x8400000000008001;
-        (*pkt)[1] = 0x535316F0;
+        (*pkt)[0] = PS2_PKT64(0x8400000000008001);
+        (*pkt)[1] = PS2_PKT64(0x535316F0);
         y0++;
         y0--;
         *pkt += 2;
-        (*pkt)[0] = 0x156;
-        (*pkt)[1] = 0;
+        (*pkt)[0] = PS2_PKT64(0x156);
+        (*pkt)[1] = PS2_PKT64(0);
         *pkt += 2;
-        (*pkt)[0] = BtlText_GetTex0(part);
-        (*pkt)[1] = (u64)color | 0x3F80000000000000;
+        (*pkt)[0] = PS2_PKT64(BtlText_GetTex0(part));
+        (*pkt)[1] = PS2_PKT64((u64)color | 0x3F80000000000000);
         *pkt += 2;
-        (*pkt)[0] = ((s64)u0 << 4) | ((s64)v0 << 20);
-        (*pkt)[1] = ((s64)x0 << 4) | ((s64)y0 << 20) | 0xFFFFFFF000000000;
+        (*pkt)[0] = PS2_PKT64(((s64)u0 << 4) | ((s64)v0 << 20));
+        (*pkt)[1] = PS2_PKT64(((s64)x0 << 4) | ((s64)y0 << 20) | 0xFFFFFFF000000000);
         *pkt += 2;
-        (*pkt)[0] = ((s64)u1 << 4) | ((s64)v1 << 20);
-        (*pkt)[1] = ((s64)x1 << 4) | ((s64)y1 << 20) | 0xFFFFFFF000000000;
+        (*pkt)[0] = PS2_PKT64(((s64)u1 << 4) | ((s64)v1 << 20));
+        (*pkt)[1] = PS2_PKT64(((s64)x1 << 4) | ((s64)y1 << 20) | 0xFFFFFFF000000000);
         *pkt += 2;
     }
 }
@@ -119,11 +119,11 @@ u64 BtlText_GetTex0(s32 part) {
 
 /* Writes SCISSOR_1 for a clip rectangle (inclusive pixel bounds). */
 void BtlText_PutScissor(u64 **pkt, s32 x0, s32 y0, s32 x1, s32 y1) {
-    (*pkt)[0] = 0x1000000000008001;
-    (*pkt)[1] = 0xE;
+    (*pkt)[0] = PS2_PKT64(0x1000000000008001);
+    (*pkt)[1] = PS2_PKT64(0xE);
     *pkt += 2;
-    (*pkt)[0] = (((s64)x0 | ((s64)x1 << 16)) | ((s64)y0 << 32)) | ((s64)y1 << 48);
-    (*pkt)[1] = 0x40;
+    (*pkt)[0] = PS2_PKT64((((s64)x0 | ((s64)x1 << 16)) | ((s64)y0 << 32)) | ((s64)y1 << 48));
+    (*pkt)[1] = PS2_PKT64(0x40);
     *pkt += 2;
 }
 

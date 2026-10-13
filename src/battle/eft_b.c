@@ -193,10 +193,10 @@ void EftGeyser_DrawColumn(EftBTask *task);
 
 /* GS vertex register with fog (XYZF2), and the packets this file queues in the ordering table. */
 typedef struct EftBXyzf {
-    u64 x : 16;
-    u64 y : 16;
-    u64 z : 24;
-    u64 f : 8;
+    PS2_PKT64_FIELDS(u64 x : 16;
+                     u64 y : 16;,
+                     u64 z : 24;
+                     u64 f : 8;)
 } EftBXyzf;
 
 typedef struct EftBRgbaq {
@@ -374,12 +374,12 @@ void EftPrim_DrawBillboard(Vec4 *pos, Vec4 *color, s32 layer, s32 noDepth, u64 t
         return;
     }
     ctx = layer >= 2;
-    p->prim = ((u64)abe << 6) | ((u64)ctx << 9) | 0x14;
+    p->prim = PS2_PKT64(((u64)abe << 6) | ((u64)ctx << 9) | 0x14);
     p->dmaTag = 0x20000007;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000007;
-    p->gifTag = 0xC400000000008001;
-    p->regs = 0xF42424242160 + (ctx << 4);
+    p->gifTag = PS2_PKT64(0xC400000000008001);
+    p->regs = PS2_PKT64(0xF42424242160 + (ctx << 4));
     p->next = NULL;
     p->rgbaq.r = color->x;
     p->rgbaq.g = color->y;
@@ -416,7 +416,7 @@ void EftPrim_DrawBillboard(Vec4 *pos, Vec4 *color, s32 layer, s32 noDepth, u64 t
     p->xyz1.f = 0xFF;
     p->xyz2.f = 0xFF;
     p->xyz3.f = 0xFF;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     if (oz < 0) {
         e = &gOtZ[0].layer[l];
     } else if (oz >= 0x1000) {
@@ -545,14 +545,14 @@ void EftPrim_DrawTriangle(EftBIVec *v0, EftBIVec *v1, EftBIVec *v2, Vec4 *c0, Ve
     ctx = layer >= 2;
     p = (EftBTriPkt *)gOtCur;
     gOtCur = (u32 *)(p + 1);
-    p->prim = ((u64)abe << 6) | ((u64)ctx << 9) | 0x1B;
+    p->prim = PS2_PKT64(((u64)abe << 6) | ((u64)ctx << 9) | 0x1B);
     p->dmaTag = 0x20000007;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000007;
-    p->gifTag = 0xC400000000008001;
-    p->regs = 0xF42142142160 + (ctx << 4);
+    p->gifTag = PS2_PKT64(0xC400000000008001);
+    p->regs = PS2_PKT64(0xF42142142160 + (ctx << 4));
     p->next = NULL;
-    p->nop = 0;
+    p->nop = PS2_PKT64(0);
     p->rgbaq0.r = c0->x;
     p->rgbaq0.g = c0->y;
     p->rgbaq0.b = c0->z;
@@ -572,7 +572,7 @@ void EftPrim_DrawTriangle(EftBIVec *v0, EftBIVec *v1, EftBIVec *v2, Vec4 *c0, Ve
         l -= 2;
     }
     p->rgbaq2.q = uv2->z;
-    p->tex0 = tex0;
+    p->tex0 = PS2_PKT64(tex0);
     p->st0.s = uv0->x;
     p->st0.t = uv0->y;
     p->st1.s = uv1->x;
@@ -1174,12 +1174,12 @@ void EftBubble_DrawOne(EftBVec pos, EftBMtx m, f32 size, f32 rot, u8 r, u8 g, u8
     if (l >= 2) {
         l -= 2;
     }
-    p->prim = 0x54;
+    p->prim = PS2_PKT64(0x54);
     p->dmaTag = 0x20000007;
     p->vif0 = 0x10000000;
     p->vif1 = 0x50000007;
-    p->gifTag = 0xC400000000008001;
-    p->regs = 0xF42424242160;
+    p->gifTag = PS2_PKT64(0xC400000000008001);
+    p->regs = PS2_PKT64(0xF42424242160);
     p->rgbaq.r = r;
     p->rgbaq.g = g;
     p->rgbaq.b = b;
@@ -1211,7 +1211,7 @@ void EftBubble_DrawOne(EftBVec pos, EftBMtx m, f32 size, f32 rot, u8 r, u8 g, u8
     p->xyz3.z = scr[3].z;
     p->xyz3.f = 0xFF;
     z = (scr[0].z + scr[2].z + (scr[3].z + scr[1].z)) >> 10;
-    p->tex0 = tex->tex0;
+    p->tex0 = PS2_PKT64(tex->tex0);
     if (z < 0) {
         e = &gOtZ[0].layer[l];
     } else if (z >= 0x1000) {
@@ -1304,17 +1304,17 @@ void EftStageScroll_Draw(void) {
     }
     EftStageScroll_PlaceTextures(1, 0);
     p = Dma_BeginDirect();
-    p[0] = 0x1000000000008003;
-    p[1] = 0xE;
+    p[0] = PS2_PKT64(0x1000000000008003);
+    p[1] = PS2_PKT64(0xE);
     p += 2;
-    p[0] = 0x44;
-    p[1] = 0x42;
+    p[0] = PS2_PKT64(0x44);
+    p[1] = PS2_PKT64(0x42);
     p += 2;
-    p[0] = 0x50000;
-    p[1] = 0x47;
+    p[0] = PS2_PKT64(0x50000);
+    p[1] = PS2_PKT64(0x47);
     p += 2;
-    p[0] = 0;
-    p[1] = 8;
+    p[0] = PS2_PKT64(0);
+    p[1] = PS2_PKT64(8);
     p += 2;
     Dma_EndDirect(p);
     Mtx_StoreIdentity(&m);
@@ -1681,24 +1681,24 @@ void EftGeyser_DrawColumn(EftBTask *task) {
                 gOtCur = (u32 *)(q + 1);
                 q->dmaTag = 0x20000003;
                 q->vif1 = 0x50000003;
-                q->gifTag = 0x1000000000008002;
-                q->regs = 0xE;
-                q->clamp1Reg = 8;
-                q->clamp2Reg = 9;
+                q->gifTag = PS2_PKT64(0x1000000000008002);
+                q->regs = PS2_PKT64(0xE);
+                q->clamp1Reg = PS2_PKT64(8);
+                q->clamp2Reg = PS2_PKT64(9);
                 q->next = NULL;
                 q->vif0 = 0x10000000;
-                q->clamp1 = 0;
-                q->clamp2 = 0;
+                q->clamp1 = PS2_PKT64(0);
+                q->clamp2 = PS2_PKT64(0);
                 e->tail->next = (OtPrim *)q;
                 e->tail = (OtPrim *)q;
                 p = (EftBStripPkt *)gOtCur;
                 gOtCur = (u32 *)(p + 1);
                 p->vif0 = 0x10000000;
-                p->prim = ((u64)abe << 6) | 0x1C;
+                p->prim = PS2_PKT64(((u64)abe << 6) | 0x1C);
                 p->dmaTag = 0x20000008;
                 p->vif1 = 0x50000008;
-                p->gifTag = 0xE400000000008001;
-                p->regs = 0x42142142142160;
+                p->gifTag = PS2_PKT64(0xE400000000008001);
+                p->regs = PS2_PKT64(0x42142142142160);
                 p->next = NULL;
                 p->rgbaq0.r = col[0].x;
                 p->rgbaq0.g = col[0].y;
@@ -1719,7 +1719,7 @@ void EftGeyser_DrawColumn(EftBTask *task) {
                 p->rgbaq3.g = col[3].y;
                 p->rgbaq3.b = col[3].z;
                 p->rgbaq3.a = col[3].w;
-                p->tex0 = tex0;
+                p->tex0 = PS2_PKT64(tex0);
                 p->rgbaq3.q = uv[3].z;
                 p->st0.s = uv[0].x;
                 p->st0.t = uv[0].y;

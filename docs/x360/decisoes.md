@@ -446,3 +446,29 @@ nativas, a metade baixa primeiro**, na memória principal e na da VU.
   software das duas builds têm de sair idênticas (etapa 4 da F3).
 - **Recusado:** trocar os campos da GPU como `u64` nos conversores do disco. Reabriria conversores já validados,
   exigiria que cada um separasse campo de 64 bits de pixel de textura, e deixaria o leitor com duas regras.
+
+**Implementação e conferência (12/10/2026, etapa 4 da F3).** A convenção está em `formatos/gpu.md`.
+
+- **A troca fica na gravação.** A auditoria pelo AST (`port/x360/tools/pacotes64.py`) achou cerca de 2.000 gravações
+  de 64 bits em pacotes, a maioria com literal ou número de registrador gravado direto, sem passar por `GIF_TAG_EX`
+  nem pelas `GS_SET_*`. Por isso uma macro só, `PS2_PKT64(x)` (`include/types.h`, a do port em
+  `port/include/port_compat.h`), no lado direito de cada gravação (1.998 sítios em 50 arquivos, quase todos por
+  reescrita automática conferida linha a linha) e das cópias de número para pacote; as macros de valor seguem dando o
+  número. `PS2_PKT64_FIELDS` declara os campos de bits das 26 structs XYZF2 com a metade alta primeiro no host
+  big-endian. `GfxPostSpritePkt`, `EftSprPkt`, `EftTriVtx` e `EftNVtx` tiveram os bytes e metades de cor e UV
+  permutados; o NLOOP do `Font_CloseSpriteTag` virou `PS2_LOW(u16, *(u32 *)tag)`; o `gTexBltPacket` das tabelas do
+  executável se troca como dois `u32` (`elftipos.PACOTES_GPU`).
+- **No leitor:** `PS2_PKT64` também em `port/src/gs/gs_internal.h` (`Gs_Gif`, `kick` e as versões em shader da VU1,
+  `gs_sony.c`), o UNPACK de 8 e 16 bits por palavra, e a memória do GS como os bytes do PS2 (`GS_LE32` em `vram_rw`;
+  os uploads já copiavam bytes).
+- **Conferência no WSL:** no quadro 3000 dos menus, os buffers de pacotes (heap#24 e #25) e o `gTexBltPacket` sem
+  nenhuma palavra `u64`, `u64-com-zero`, `2xu16`, `igual-sem-inverter` ou `diferente` (antes: 8.682 `u64` e 5.584
+  `u64-com-zero` em cada buffer); no `gGfx` sobram as quatro palavras de `disp[0..1].dispfb`, número que a biblioteca
+  da Sony grava no registrador privilegiado do GS, não pacote. As lutas das demos seguem iguais (19.802 quadros, até
+  o vblank 47.604) e a x86 não mudou (mesma seção `.text`, luta da demo igual nos 4.242 quadros).
+- **Imagens do rasterizador de software,** do boot até a demo, um quadro a cada 20 (217): cartão, logos, título e
+  tela de carregamento da demo idênticos byte a byte entre x86 e PPC. A primeira rodada teve 1 a 9 pixels diferentes
+  em 4 quadros do título: era o `fmadd` do GCC na PPC (a x86 não tem FMA), não ordem de bytes; o GS da PPC passou a
+  compilar com `-ffp-contract=off`, como o resto do port.
+- **Fica para a F5:** os vetores `u8 rgba[4]` dos vértices dos efeitos da luta e os pacotes da VU1 das tabelas do
+  executável (`vu1_micro.data`), tipados como `u8[]` (`gpu.md` seção 6).
