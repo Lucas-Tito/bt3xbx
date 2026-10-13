@@ -4,7 +4,8 @@
  *     teste_mc PASTA        (port/x360/tools/save_mc.sh compila e roda)
  * Casos: criar, regravar um trecho (o arquivo inteiro vai de novo), abrir sem criar, abrir para gravar e fechar sem
  * gravar (o arquivo não é trocado), falha de escrita (o jogo recebe -5 e o anterior fica), quedas de energia em três
- * pontos (processo filho que termina no meio; a leitura seguinte termina ou desfaz a gravação), temporário truncado
+ * pontos (processo filho que termina no meio; a leitura seguinte termina ou desfaz a gravação), apagar do anterior
+ * falhando (-5, e o próximo uso põe o .new no lugar), temporário truncado
  * deixado à mão, criação interrompida e arquivo maior que o primeiro. Sai com 1 se algum caso falhar.
  */
 #include <stdio.h>
@@ -157,6 +158,17 @@ int main(int argc, char **argv) {
     caso("queda3: só o .new", existe("D/F.new") && !existe("D/F"));
     memset(esperado, 'G', 100);
     caso("queda3: a leitura seguinte dá o novo, sem .new", conteudo("/D/F", esperado, 100) && !existe("D/F.new"));
+
+    /* 8b. o apagar do arquivo antigo falha (e a troca de nome não o substitui, como o MoveFile do 360): o jogo recebe
+       -5 em vez de um "gravou ok" com o conteúdo antigo, e o próximo uso põe o .new no lugar */
+    caso("apaga: o fechamento devolve -5", gravar_com_falha("/D/F", 2, 'I', 100, "apaga") == 1);
+    caso("apaga: o antigo e o .new ficam", existe("D/F") && existe("D/F.new") && !existe("D/F.tmp"));
+    memset(esperado, 'I', 100);
+    caso("apaga: a leitura seguinte dá o novo, sem .new", conteudo("/D/F", esperado, 100) && !existe("D/F.new"));
+    memset(esperado, 'G', 100);
+    fd = abrir("/D/F", 2);
+    r = gravar(fd, esperado, 100);
+    caso("apaga: regravado o conteúdo do caso 8", r == 100 && fechar(fd) == 0 && conteudo("/D/F", esperado, 100));
 
     /* 9. um temporário truncado deixado à mão */
     {

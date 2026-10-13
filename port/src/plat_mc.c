@@ -105,8 +105,9 @@ static int mc_exists(const char *path) {
 
 /* Test only (never set by default): BT3_MC_FALHA=escrita makes the write of the temporary file short, so the save
    fails as a full card would; BT3_MC_FALHA=queda1|queda2|queda3 ends the program (as a power cut) half-way through
-   the temporary file, after NAME.new exists, after NAME was deleted. ":SUFFIX" limits it to the paths that end with
-   SUFFIX. The log lines are in Portuguese, like the rest of the console log (bt3xbx). */
+   the temporary file, after NAME.new exists, after NAME was deleted; BT3_MC_FALHA=apaga makes the delete of NAME
+   fail (and the rename onto it, as the MoveFile of the 360 CRT, which does not replace an existing file). ":SUFFIX"
+   limits it to the paths that end with SUFFIX. The log lines are in Portuguese, like the rest of the console log (bt3xbx). */
 static int mc_fail(const char *what, const char *path) {
     const char *v = getenv("BT3_MC_FALHA");
     size_t n = strlen(what), lp = strlen(path), ls;
@@ -133,6 +134,15 @@ static void mc_cut(const char *what, const char *path) {
 #endif
 }
 
+/* remove(NAME) and rename(NAME.new, NAME), with the delete failure of the test (BT3_MC_FALHA=apaga) */
+static int mc_remove(const char *path) {
+    return mc_fail("apaga", path) ? -1 : remove(path);
+}
+
+static int mc_rename(const char *from, const char *to) {
+    return mc_fail("apaga", to) && mc_exists(to) ? -1 : rename(from, to);
+}
+
 /* Finishes or undoes a save that a power cut interrupted: NAME.new is complete (it is only named so after the
    commit), NAME.tmp may be anything. */
 static void mc_recover(const char *path) {
@@ -146,9 +156,9 @@ static void mc_recover(const char *path) {
         MC_LOG(line);
     }
     if (mc_exists(fresh)) {
-        remove(path);
+        mc_remove(path);
         snprintf(line, sizeof(line), "mc: %s.new de uma gravação interrompida %s", mc_name(path),
-                 rename(fresh, path) == 0 ? "toma o lugar do arquivo" : "não pôde ser renomeado");
+                 mc_rename(fresh, path) == 0 ? "toma o lugar do arquivo" : "não pôde ser renomeado");
         MC_LOG(line);
     }
 }
@@ -199,11 +209,13 @@ static int mc_commit(const char *path, const unsigned char *data, long size) {
         return -5;
     }
     mc_cut("queda2", path);
-    remove(path);
+    mc_remove(path); /* (not checked here: the rename below is, and it fails while the old file is there) */
     mc_cut("queda3", path);
-    if (rename(fresh, path) != 0) {
-        mc_recover(path); /* once more; when that fails too, the next use of the path tries again */
-        if (!mc_exists(path)) {
+    if (mc_rename(fresh, path) != 0) {
+        /* once more; when that fails too, the next use of the path tries again. Success only when the .new took the
+           place of the file: an old file that could not be deleted is still there, and it is not the save */
+        mc_recover(path);
+        if (mc_exists(fresh) || !mc_exists(path)) {
             snprintf(line, sizeof(line), "mc: gravação de %s (%ld bytes) FALHOU na troca de nome; fica como .new",
                      mc_name(path), size);
             MC_LOG(line);
