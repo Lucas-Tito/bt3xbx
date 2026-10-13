@@ -3,6 +3,8 @@
 
 Uso: subir.py [--ip IP] [--destino /Hdd1/HOMEBREW/bt3xbx] [--nome NOME] ARQUIVO...
      subir.py [--ip IP] --baixar NOME [--destino ...]       (ex.: o log bt3xbx.log)
+     subir.py [--ip IP] --baixar-pasta shots --para DIR     (todos os arquivos de uma pasta: as capturas do
+                                                            BT3_SHOT; só no WSL, são imagens do jogo)
      subir.py --achar                                       (só procura o console)
 
 Regras do servidor da FreeStyle (hiddriver/docs/ftp-no-xbox.md): só responde com o console parado
@@ -167,6 +169,22 @@ def baixar(f, nome):
     return buf.getvalue()
 
 
+def baixar_pasta(f, pasta, para):
+    """Todos os arquivos de `pasta` (dentro do destino) para o diretório `para`. O jogo já terminou de gravá-los: o
+    console está parado na FreeStyle."""
+    f.cwd(pasta)
+    linhas = []
+    f.retrlines("LIST", linhas.append)
+    nomes = sorted(l.split(None, 8)[-1] for l in linhas if l.strip() and not l.startswith("d"))
+    os.makedirs(para, exist_ok=True)
+    total = 0
+    for nome in nomes:
+        with open(os.path.join(para, nome), "wb") as arq:
+            f.retrbinary(f"RETR {nome}", arq.write, blocksize=1 << 20)
+            total += arq.tell()
+    avisar(f"{len(nomes)} arquivos de {pasta}, {total} bytes, em {para}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ip")
@@ -174,6 +192,8 @@ def main():
     ap.add_argument("--achar", action="store_true")
     ap.add_argument("--baixar")
     ap.add_argument("--listar", action="store_true")
+    ap.add_argument("--baixar-pasta", metavar="PASTA")
+    ap.add_argument("--para", default=".")
     ap.add_argument("--nome", help="nome no console (um arquivo só; o FATX aceita até 42 caracteres)")
     ap.add_argument("arquivos", nargs="*")
     a = ap.parse_args()
@@ -191,6 +211,8 @@ def main():
             f.retrlines("LIST")
         if a.baixar:
             sys.stdout.buffer.write(baixar(f, a.baixar))
+        if a.baixar_pasta:
+            baixar_pasta(f, a.baixar_pasta, a.para)
         if a.nome and len(a.arquivos) != 1:
             sys.exit("--nome vale para um arquivo só")
         for caminho in a.arquivos:

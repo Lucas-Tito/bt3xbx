@@ -80,6 +80,8 @@ própria só para isso). Para cá só volta texto.
 | `c89.py` | rebaixa o C do jogo e do port para o C89 do `cl` pelo AST do clang (literal composto, declaração no meio do bloco, `typeof`, expressão-comando, case com intervalo), com os headers mínimos de `port/x360/shim` |
 | `coff.py` | as tabelas do executável (esqueleto `port/data/*.s`) como objetos COFF do 360; `--absoluto NOME=VALOR` faz o papel do `--defsym` |
 | `dat360.py` | `default.dat` e `default.swap` ao lado do `.xex`, pelo `.map` da Microsoft (o `esqueleto()` do `headless.py` para o 360) |
+| `subir.py --baixar-pasta shots --para DIR` | baixa uma pasta inteira do console (as capturas do `BT3_SHOT`); só no WSL, porque são imagens do jogo |
+| `compara_quadros.py` | capturas do console (`gpu_NNNNN.ppm`) contra as do rasterizador de software (`frame_NNNNN.ppm`), por fase e pelos piores quadros: pixels iguais, até 2 e até 8 de diferença, erro médio, PSNR, imagens pretas. Roda no WSL; só números voltam |
 | `subir_f2.sh` | envia o `.xex` sempre junto com o `.dat` e o `.swap` da mesma build: os dois dependem dos endereços do `.map`, e um par de outra build copia as tabelas para o lugar errado sem erro nenhum |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
