@@ -104,6 +104,7 @@ própria só para isso). Para cá só volta texto.
 | `pacotes64.py` | todo acesso de 64 bits à memória no código do jogo (AST dos `.i`), classificado em pacote da GPU ou número; falha se uma gravação em pacote estiver sem `PS2_PKT64` (decisão 19, `formatos/gpu.md`) |
 | `mem.py` | lista as variáveis globais do jogo para o dump de memória |
 | `unpacks.py` | toda chamada de `Sprite_Unpack` em `src/` com o gancho de conversão logo depois (`#ifdef PORT_BIG_ENDIAN`, `Port_ConvertMenuPack(buffer, rawSize, "formato")` ou a marca `Port_UnpackSemNumeros`), com buffer, tamanho e formato conferidos contra a tabela do conversor; a tabela de chamadores da guarda igual ao código; lista as pendentes e sai com 1 enquanto houver (F4, `formatos/menus-modos.md` 7). Roda em qualquer máquina, sem build |
+| `chamadores_bl.py` | (no `build_f2.sh`) cada `bl Sprite_Unpack` do `default.exe` do 360, pela função que o `.map` dá, contra a tabela `CHAMADORES` da guarda: a guarda nomeia quem chamou pela função da tabela de maior endereço antes do retorno, e um inlining do `cl` trocaria o nome sem aviso. Sai com 1 se uma chamada cai fora da tabela ou se uma função da tabela não tem chamada |
 
 ### Roteiros de controle (F4, etapa 4)
 

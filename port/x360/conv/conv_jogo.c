@@ -39,8 +39,13 @@ static void falha(const char *formato, ...) {
      - o que vier depois com a anotação ainda lá é falha fatal com o nome de quem chamou: o Sprite_Unpack seguinte,
        o Res_RelocateOffsets (src/sys/gfxm_b_b.c, o primeiro leitor de quase toda tela, antes de usar os
        deslocamentos crus) e o vblank (port/src/plat_stub.c: no máximo um quadro depois);
-     - antes de descomprimir, um cabeçalho BPE impossível (tamanho negativo ou acima de 16 MB) é contêiner cru: o
-       arquivo chegou sem conversor (formato_de, conv.c), e Bpe_Decode cairia.
+     - antes de descomprimir, um cabeçalho BPE impossível é contêiner cru: o arquivo chegou sem conversor
+       (formato_de, conv.c), e Bpe_Decode cairia. Impossível: tamanho negativo ou acima de 16 MB, ou blocos que não
+       terminam exatamente no packSize (Conv_BpeFecha). Só a faixa deixava passar um cabeçalho little-endian com os dois
+       tamanhos múltiplos de 256 (lido ao contrário, outro múltiplo de 256 abaixo de 16 MB); o percurso dos blocos usa
+       só os bytes deles, então um packSize lido ao contrário não fecha (nos 712 contêineres de menu do disco, nenhum
+       packSize 256 a mais ou a menos fecha). Não prova que o conteúdo foi convertido: a rede de segurança é o
+       conv_tool --disco (todo arquivo de menu com o formato certo).
    O nome sai da tabela de quem chama Sprite_Unpack (abaixo, conferida por port/x360/tools/unpacks.py): a função de
    maior endereço que não passa do retorno. O endereço vai junto para conferir pelo addr2line (qemu) ou pelo .map
    (360). Só em host big-endian: a build x86 não compila este arquivo, e o jogo chama a guarda em #ifdef
@@ -124,7 +129,8 @@ void Port_UnpackBefore(void *src, void *chamador) {
     Port_UnpackCheck("Sprite_Unpack seguinte");
     bruto = (long)((int *)src)[0];
     comp = (long)((int *)src)[1];
-    if (bruto < 0 || bruto > 0x1000000L || comp < 0 || comp > 0x1000000L) {
+    if (bruto < 0 || bruto > 0x1000000L || comp < 0 || comp > 0x1000000L ||
+        !Conv_BpeFecha((const conv_u8 *)src + 8, (conv_ofs)comp)) {
         falha("Sprite_Unpack em %s sobre um contêiner BPE cru (rawSize 0x%lX, packSize 0x%lX): o arquivo não passou "
               "por conversor (formato_de, port/x360/conv/conv.c)", quem(chamador, s), (unsigned long)bruto,
               (unsigned long)comp);

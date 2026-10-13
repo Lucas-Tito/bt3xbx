@@ -354,6 +354,39 @@ const char *Conv_FormatoDe(const char *nome) {
     return formato_de(nome);
 }
 
+int Conv_BpeFecha(const conv_u8 *p, conv_ofs comp) {
+    conv_ofs in = 0;
+    while (in < comp) {
+        int cont = p[in++], c = 0, i;
+        for (;;) { /* a tabela de pares: um byte por par igual ao índice, dois nos outros */
+            if (cont > 127) {
+                c += cont - 127;
+                cont = 0;
+            }
+            if (c == 256) {
+                break;
+            }
+            for (i = 0; i <= cont && c < 256; i++, c++) {
+                if (in + 2 > comp) {
+                    return 0;
+                }
+                if (p[in++] != c) {
+                    in++;
+                }
+            }
+            if (c >= 256 || in >= comp) {
+                break;
+            }
+            cont = p[in++];
+        }
+        if (in + 2 > comp) {
+            return 0;
+        }
+        in += 2 + ((conv_ofs)p[in] << 8 | p[in + 1]); /* o tamanho do bloco (big-endian no próprio formato) */
+    }
+    return in == comp;
+}
+
 
 int Conv_Animacao(conv_u8 *buf, conv_ofs tam, char *msg, int nmsg) {
     conv_u8 *feito = (conv_u8 *)calloc(tam ? tam : 1, 1);

@@ -9,6 +9,7 @@
 #   3. coff.py: as tabelas do executável (esqueleto port/data, sem bytes do jogo) como objetos COFF;
 #   4. link.exe: o que ainda faltar vira stub que diz o nome no log e encerra (build/x360/f2/stubs.txt), como a
 #      build PowerPC da F1; depois imagexex com o Title ID e o SPA;
+#      chamadores_bl.py: cada `bl Sprite_Unpack` do .exe cai numa função da tabela CHAMADORES da guarda;
 #   5. dat360.py: default.dat (de onde vem cada valor das tabelas no disco) e default.swap (o que trocar de ordem),
 #      pelo .map. As trocas (elftipos.py --trocas) saem da build x86, que só existe no WSL:
 #      wsl.sh rodar 'cat port/build/ppc/elftipos/trocas.tsv' > build/x360/f2/elftipos/trocas.tsv
@@ -90,6 +91,10 @@ if [ ! -s $OUT/default.exe ] || grep -q "error LNK" $OUT/link.txt; then
   grep -E "error|warning LNK4" $OUT/link.txt | head -20
   exit 1
 fi
+
+# a guarda do Sprite_Unpack nomeia quem chamou pela tabela CHAMADORES (conv_jogo.c): toda chamada no binário tem de
+# cair numa função da tabela (o inlining do cl podia mudar o nome sem aviso)
+python3 port/x360/tools/chamadores_bl.py $OUT/default.exe $OUT/default.map || exit 1
 
 echo "== 5. lista e trocas das tabelas (dat360.py)"
 [ -s $OUT/elftipos/trocas.tsv ] || { echo "falta $OUT/elftipos/trocas.tsv (ver o cabeçalho)"; exit 1; }

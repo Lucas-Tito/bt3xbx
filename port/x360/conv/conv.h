@@ -78,6 +78,11 @@ int Conv_Formato(const char *formato, const char *nome, conv_u8 *buf, conv_ofs t
    de Bpe_Decode, só em host big-endian. Aloca a marcação. 1: convertida; -1: erro (msg). */
 int Conv_Animacao(conv_u8 *buf, conv_ofs tam, char *msg, int nmsg);
 
+/* Os blocos de um contêiner BPE (src/sys/bpe.c, Bpe_Decode; o mesmo percurso da descompressão da conv_tool), sem
+   descomprimir: dados = o que vem depois do cabeçalho de 8 bytes, comp = o packSize dele. 1 se o último bloco termina
+   exatamente em comp. Só os bytes dos blocos, que não têm ordem: vale nos dois hosts. */
+int Conv_BpeFecha(const conv_u8 *dados, conv_ofs comp);
+
 /* o formato de um arquivo do disco pelo nome, ou NULL se nenhum conversor o conhece */
 const char *Conv_FormatoDe(const char *nome);
 
