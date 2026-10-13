@@ -150,6 +150,29 @@ inventário (`menus-modos.md` 5, decisão 22): o "submenu dos modos" do essencia
 à História e vai para a etapa 9), e o save essencial é o das Opções, pelo `McFlow` (o DcSave, do Data Center e do
 Evolution Z, vai para a etapa 9).
 
+Etapa 3 feita no WSL em 13/10/2026; falta a rodada no console. A camada do cartão (`port/src/plat_mc.c`) gravava
+direto no arquivo do save, a cada `sceMcWrite`, sem conferir o `fclose`. Nas builds big-endian (`PORT_MC_ATOMIC`)
+o arquivo aberto para gravação agora fica em memória e, no fechamento, vai inteiro para `NOME.tmp`, que vira
+`NOME.new` (o ponto de compromisso: só existe completo); então `NOME` é apagado e `NOME.new` toma o lugar dele
+(decisão 22). Numa queda de energia:
+
+- durante o `.tmp`, ou antes de ele virar `.new`: o próximo uso apaga o `.tmp` e vale o save anterior (numa primeira
+  gravação, nenhum, como no PS2);
+- com o `.new` pronto, antes ou depois de apagar o anterior: o próximo uso põe o `.new` no lugar, e vale o save novo.
+
+Falha de gravação vira o erro do cartão que o jogo já mostra, e cada gravação e leitura deixa uma linha `mc:` no
+`bt3xbx.log`. No WSL (`port/x360/tools/save_mc.sh`): os 24 casos do `teste_mc` na x86 e na PPC; o jogo na PPC sem mapa
+cria o save pelo New Game e o carrega no boot seguinte com a mesma sequência de estados do McFlow da x86, também com
+um `.tmp` truncado ao lado ou só com o `.new` de uma queda; com a escrita falhando, mostra o erro e segue sem queda.
+A `.text` da x86 não mudou; o 360 compila com os mesmos 103 stubs. O console não respondeu na porta 21, e a build não
+subiu.
+
+No console, enquanto o menu principal cair (etapa 5), o critério possível é a metade dele: o New Game cria o save
+(três linhas "mc: gravou ... ok": `icon.sys` 964 bytes, `dbzsm.ico` 40.090, o arquivo de dados 16.384), e depois de
+sair e abrir de novo o boot o carrega (linha "mc: leu ... 16384 de 16384 bytes", sem o aviso de dados danificados) e
+o título oferece Continue. "A opção volta como estava" fica para depois da etapa 7, quando as Opções forem alcançáveis
+no console.
+
 Critério da F4: no console, com o controle, do boot ao começo da luta pelo Duelo e pelo Treino, Opções com salvar e
 carregar, e os outros modos navegáveis; a sequência de telas igual à x86. Antes da etapa 5, um revisor independente
 (guia, seção 4).
