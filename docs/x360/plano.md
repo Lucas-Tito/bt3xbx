@@ -134,7 +134,7 @@ quatro redes de cobertura:
 | 4 | WSL | Roteiros de controle em texto, ancorados na troca de tela; desbloqueio de tudo no headless; um roteiro por modo | cada roteiro repete na x86 as telas de referência; o "sem conversor" do `--mapa` é igual ao inventário |
 | 5 | WSL | Especificações e conversores do caminho essencial: menu principal, submenu do Duelo (`DuelMenu`), Duelo (personagem, time, estágio), Treino, Opções com o save delas | `--disco` 100% nessas faixas; `--mapa` sem divergência; PPC sem mapa igual à x86 em cada roteiro |
 | 6 | WSL | Rasterizador x86 e PPC nas telas essenciais | PPM idênticos |
-| 7 | console | Caminho essencial no console, pelos roteiros (`BT3_PAD_PLAY`) | mesmas telas da x86; capturas no patamar da F3; nenhuma queda |
+| 7 | console | Caminho essencial no console, pelos roteiros (`BT3_ROTEIRO`) | mesmas telas da x86; capturas no patamar da F3; nenhuma queda |
 | 8 | WSL e console | Save entre builds (PPC e 360) | os dois sentidos carregam; save de PC cai no fluxo de "dados danificados" do jogo, sem queda |
 | 9 | WSL | Os outros modos pela mesma linha de produção | `unpacks.py` sem pendência; `--disco` 100% em todas as faixas de menu |
 | 10 | console | Sessão de 30 min com o Lucas pelos modos | o critério da F4 sem queda |
@@ -239,6 +239,47 @@ usar o `ReplayMenu`.
 Critério da F4: no console, com o controle, do boot ao começo da luta pelo Duelo e pelo Treino, Opções com salvar e
 carregar, e os outros modos navegáveis; a sequência de telas igual à x86. Antes da etapa 5, um revisor independente
 (guia, seção 4).
+
+Revisão da etapa 4 (13/10/2026), corrigida antes da etapa 5. Os verificadores agora decidem e cada um foi visto
+falhando com uma entrada estragada de propósito (guia, seção 4): o `roteiros.sh` sai com 1 em qualquer conferência que
+falhe (antes saía com o código da soma); o `roteiros.py confere` trata como erro a linha de erro do `conv_tool` e o
+"contra o mapa" com outra largura ou não trocadas, e acusa todo "sem conversor" fora de `disc/` e das faixas de menu,
+menos a lista explícita `CONHECIDOS`; o `conv_tool` confere que as faixas da tabela única não se sobrepõem; o
+`build_f2.sh` confere que toda chamada de `Sprite_Unpack` no `.exe` cai numa função da tabela da guarda
+(`chamadores_bl.py`); a guarda também percorre os blocos do contêiner antes de descomprimir. O roteiro das Opções
+confere o som do save (`confere som N`: mono escolhido, estéreo de volta, mono depois do carregar); o `desbloqueia`
+recusa um cartão que já tinha save no começo da rodada (proteção do save real para a etapa 7); o `repete` aninhado
+confere a condição de cada nível. O save atômico devolve erro quando o arquivo antigo não pôde ser apagado e o `.new`
+não tomou o lugar dele (`BT3_MC_FALHA=apaga` no `teste_mc`).
+
+Pendências da etapa 9 que o `confere` corrigido revelou (tabela `CONHECIDOS` do `roteiros.py`): arquivos fora das
+faixas de menu lidos como número sem conversor, os dois atores da cena do Shenlong (03388 e 03397, ids 0xD3D e
+0xD46, `ShenScene`) e três da luta do primeiro episódio da História (00510, 00560 e 00710, ids 0x1FF, 0x231 e 0x2C7;
+quem os lê e o formato, a levantar).
+
+**Etapa 5: o critério "PPC sem mapa igual à x86 em cada roteiro"**, mais forte do que telas e tempo. Em cada roteiro do
+essencial, a PPC sem mapa (só os conversores) e a x86 têm de dar:
+
+- o mesmo rastro (telas, estados do McFlow, esperas cumpridas e conferências, com o vblank);
+- a mesma sequência de arquivos lidos (as linhas `LEU` do `dprintf` em `Port_FileReadAt`, na ordem);
+- o mesmo `BT3_HASH` da luta (o roteiro que chega à luta);
+- o `memdiff --marcas` no passo `fim` de cada roteiro sem diferença fora do que as marcas explicam.
+
+Antes do critério, o `roteiros.sh` precisa de um modo "PPC sem mapa" (os arquivos convertidos pelo `conv_tool --saida`,
+sem `BT3_MAPA`, com a guarda fatal) que faça essas quatro comparações e entre na lista de falhas; ele ainda não existe
+(hoje só há a PPC com o mapa e a guarda anotando, que para no Flash).
+
+Ordem de trabalho da etapa 5:
+
+1. as peças comuns, especificadas primeiro (são usadas por quase todas as telas): `JanelaMsg`, `JanelaIcone`,
+   `LipPack`, `ListaIds`, `Células`, `SubpacoteTex`, `ItemPanel`, `ItemHelp`;
+2. o `menu_principal` com o Flash (o primeiro bloqueio da PPC: os registros de 8 bytes lidos sobre campos de 4);
+3. as entradas do `formato_de` que o essencial pede: 448, 453 e 461 como `menu_pacote`; retratos, estágios e as
+   páginas do Treino como `menu_bpe`; com o `menu_texfile`;
+4. duelo, seleção, treino e opções, um por vez, cada um com o critério acima antes do seguinte.
+
+As faixas por hipótese (retratos 921..923, estágios 0x24 e 0x25, o fim das páginas do Treino) só entram no
+`formato_de` depois de conferir pelos `lidos.txt` de todos os roteiros que nenhum outro código lê esses arquivos.
 
 ## 6. Riscos principais
 
