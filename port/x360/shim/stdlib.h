@@ -12,6 +12,7 @@ void Port_Abortar(void);
 #define abort Port_Abortar
 int abs(int);
 int atoi(const char *);
+double atof(const char *); /* (o gs_draw.c: sem a declaração o cl assume int, e o valor vem do registrador errado) */
 long strtol(const char *, char **, int);
 unsigned long strtoul(const char *, char **, int);
 char *getenv(const char *);

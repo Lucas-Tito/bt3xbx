@@ -376,6 +376,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   - o `fxc` do XDK roda no wine e gera o microcódigo (`xvs_3_0`) em header: shaders só no build.
   - Um print da tela gravado pelo próprio programa (`tela.bmp`) dispensa descrição do usuário, desde que
     tenha uma referência que não dependa do que se testa (um retângulo de `Clear` com cor pura).
+- **`atof` sem declaração no C89 do `cl`:** "C4013: assuming extern returning int", e no PowerPC o valor viria do
+  registrador de inteiro, não do de float. O shim (`port/x360/shim/stdlib.h`) declara o que a CRT tem; procure `C4013`
+  nos `.txt` da build depois de cada fonte novo.
 - **`wsl.sh enviar` recusado** (commit ainda não enviado ao GitHub) não para um `enviar | tail && ...`:
   o status do pipe é o do `tail`, e o resto roda com a árvore velha do WSL. Faça push antes e confira a
   linha "WSL em <commit>".
