@@ -118,7 +118,7 @@ Fora do escopo: netplay, versão PAL/japonesa, 60 fps (interpolação ou lógica
 ### F4 em etapas (13/10/2026)
 
 Escopo e decisões na decisão 22. A queda do menu principal (`MainMenu_Init`, `src/menu/menu_a.c`) é a primeira das
-76 chamadas de `Sprite_Unpack` sem conversor (`formatos/menus.md` seção 11). Para não ir caindo uma por uma no console,
+77 chamadas de `Sprite_Unpack` sem conversor (`formatos/menus.md` seção 11; a contagem antiga dizia 76). Para não ir caindo uma por uma no console,
 quatro redes de cobertura:
 
 - o código: verificador que falha em `Sprite_Unpack` sem gancho;
@@ -128,7 +128,7 @@ quatro redes de cobertura:
 
 | # | Onde | O que | Critério |
 |---|---|---|---|
-| 1 | WSL | Inventário das 76 chamadas (id, seção, formato, leitores), censo do `--disco` por faixa, verificador `unpacks.py`, uma tabela de formatos só em `conv.c` | toda chamada com formato proposto; `unpacks.py` lista as pendentes |
+| 1 | WSL | Inventário das 77 chamadas (id, seção, formato, leitores), censo do `--disco` por faixa, verificador `unpacks.py`, uma tabela de formatos só em `conv.c` | toda chamada com formato proposto; `unpacks.py` lista as pendentes |
 | 2 | WSL | Guarda em `sprite.c` (`PORT_BIG_ENDIAN`); Dragon Net Battle escondido no 360 e nos roteiros | a PPC sem mapa para com "sem conversor em MainMenu_Init"; a `.text` da x86 inalterada |
 | 3 | console | Save em `game:\saves` robusto: gravação em temporário e troca de nome, `fclose` conferido | salvar, sair e abrir de novo: o título tem Continue e a opção volta como estava |
 | 4 | WSL | Roteiros de controle em texto, ancorados na troca de tela; desbloqueio de tudo no headless; um roteiro por modo | cada roteiro repete na x86 as telas de referência; o "sem conversor" do `--mapa` é igual ao inventário |
@@ -138,6 +138,16 @@ quatro redes de cobertura:
 | 8 | WSL e console | Save entre builds (PPC e 360) | os dois sentidos carregam; save de PC cai no fluxo de "dados danificados" do jogo, sem queda |
 | 9 | WSL | Os outros modos pela mesma linha de produção | `unpacks.py` sem pendência; `--disco` 100% em todas as faixas de menu |
 | 10 | console | Sessão de 30 min com o Lucas pelos modos | o critério da F4 sem queda |
+
+Etapas 1 e 2 concluídas em 13/10/2026. O inventário está em `formatos/menus-modos.md`: 82 chamadas, 5 com gancho, 77
+pendentes (16 no caminho essencial), 33 formatos novos (6 no essencial: `menu_texfile`, `menu_principal`,
+`menu_duelo`, `menu_selecao`, `menu_treino`, `menu_opcoes`). Arquivo e seção para formato estão numa tabela só
+(`sFaixas`, `port/x360/conv/conv.c`), e o `--disco` termina com o censo dos menus por faixa (seção 6 de lá). O
+`unpacks.py` lista as pendentes; a guarda faz a PPC sem mapa parar com "Sprite_Unpack sem conversor em
+MainMenu_Init" (`port/x360/tools/guarda_menu.sh`), com a `.text` da x86 inalterada. O Dragon Net Battle sai do menu
+no 360 (padrão do `ambiente.txt`) e nos roteiros (`BT3_MENU_ITEM4=0`). Duas perguntas para o Lucas antes da etapa 5
+(`menus-modos.md` 5): o "submenu dos modos" é o `DuelMenu` (o `ModeMenu` só serve à História), e o DcSave só existe
+no Data Center e no Evolution Z (as Opções salvam pelo `McFlow`, que já tem gancho).
 
 Critério da F4: no console, com o controle, do boot ao começo da luta pelo Duelo e pelo Treino, Opções com salvar e
 carregar, e os outros modos navegáveis; a sequência de telas igual à x86. Antes da etapa 5, um revisor independente
