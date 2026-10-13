@@ -8,6 +8,7 @@
  */
 #include <stdint.h>
 #include <string.h>
+#include "gs_internal.h" /* PS2_PKT64: the packet is the game's, two words per 64-bit value */
 
 extern void Port_GsGifChannel(uint32_t addr, uint32_t qwc, int chain);
 int gGsMainFbp = -1; /* frame-buffer address of the frame being drawn (from sceGsSwapDBuff); -1 before the first swap */
@@ -26,15 +27,15 @@ typedef struct {
 } DBuff;
 
 static void set(Reg *r, uint64_t v, uint64_t addr) {
-    r->v = v;
-    r->addr = addr;
+    r->v = PS2_PKT64(v);
+    r->addr = PS2_PKT64(addr);
 }
 
 static void fill(uint64_t *tag, DrawEnv *d, Clear *c, uint32_t fbp, uint32_t zbp, int psm, int w, int h, int ztest, int zpsm, int clear) {
     uint64_t test = ztest ? (1ull << 16) | ((uint64_t)(ztest & 3) << 17) : 0;
 
-    tag[0] = (uint64_t)(clear ? 14 : 8) | (1ull << 15) | (1ull << 60); /* NLOOP, EOP, one register per loop */
-    tag[1] = 0xE;                                                      /* A+D */
+    tag[0] = PS2_PKT64((uint64_t)(clear ? 14 : 8) | (1ull << 15) | (1ull << 60)); /* NLOOP, EOP, one register per loop */
+    tag[1] = PS2_PKT64(0xE);                                                      /* A+D */
     set(&d->frame, fbp | (uint64_t)((w + 63) / 64) << 16 | (uint64_t)psm << 24, 0x4C);
     set(&d->zbuf, zbp | (uint64_t)(zpsm & 15) << 24 | (uint64_t)(ztest == 0) << 32, 0x4E);
     set(&d->xyoffset, (uint64_t)((2048 - w / 2) << 4) | (uint64_t)((2048 - h / 2) << 4) << 32, 0x18);
@@ -62,13 +63,13 @@ int sceGsSetDefDBuff(void *p, int psm, int w, int h, int ztest, int zpsm, int cl
 }
 
 int sceGsPutDrawEnv(uint64_t *giftag) {
-    Port_GsGifChannel((uint32_t)(uintptr_t)giftag, 1 + (uint32_t)(giftag[0] & 0x7FFF), 0);
+    Port_GsGifChannel((uint32_t)(uintptr_t)giftag, 1 + (uint32_t)(PS2_PKT64(giftag[0]) & 0x7FFF), 0);
     return 0;
 }
 
 int sceGsSwapDBuff(void *p, int id) {
     DBuff *db = p;
     /* the buffer this frame is drawn into: what the renderer shows when the frame is finished */
-    gGsMainFbp = (int)(((id & 1) ? db->draw1.frame.v : db->draw0.frame.v) & 0x1FF);
+    gGsMainFbp = (int)(PS2_PKT64((id & 1) ? db->draw1.frame.v : db->draw0.frame.v) & 0x1FF);
     return sceGsPutDrawEnv((id & 1) ? db->giftag1 : db->giftag0);
 }

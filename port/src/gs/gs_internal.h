@@ -4,6 +4,29 @@
 #define GS_INTERNAL_H
 #include <stdint.h>
 
+/* Byte order (docs/x360/formatos/gpu.md). What the game hands the GS is 32-bit words of the host's order (DMA and
+   VIF codes, VU memory) with every 64-bit field as two of them, the low one first, as on the PS2: PS2_PKT64 turns
+   such a field loaded as a native 64-bit number into its value (and a value into the field). GS memory (sVram) and
+   the IMAGE data of an upload are the PS2's bytes: GS_LE32 reads or writes a 32-bit pixel of GS memory. Both are
+   nothing on a little-endian host. */
+#ifdef PORT_BIG_ENDIAN
+static inline uint64_t Gs_Pkt64(uint64_t v) {
+    return v << 32 | v >> 32;
+}
+static inline uint32_t Gs_Le32(uint32_t v) {
+    return v << 24 | (v & 0xFF00u) << 8 | (v >> 8 & 0xFF00u) | v >> 24;
+}
+#ifndef PS2_PKT64 /* (the game's own, port/include/port_compat.h, does the same) */
+#define PS2_PKT64(x) Gs_Pkt64((uint64_t)(x))
+#endif
+#define GS_LE32(x) Gs_Le32(x)
+#else
+#ifndef PS2_PKT64
+#define PS2_PKT64(x) (x)
+#endif
+#define GS_LE32(x) (x)
+#endif
+
 typedef struct GsVertex {
     float x, y;       /* frame-buffer pixels */
     uint32_t z;

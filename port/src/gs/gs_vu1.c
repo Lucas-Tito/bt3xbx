@@ -100,6 +100,17 @@ uint32_t GsVu1_UnpackWords(uint32_t cmd, uint32_t num) {
     return (n * bits + 31) / 32;
 }
 
+#ifdef PORT_BIG_ENDIAN
+/* An element of 8 or 16 bits at byte b of an UNPACK's data. The data is 32-bit words of the host (decision 19), and
+   the PS2 packs the narrow elements from the low end of each word: the element at byte b of the PS2's memory is in
+   the word at b & ~3, (b & 3) * 8 bits up. */
+static inline uint32_t unpack_elem(const uint8_t *data, uint32_t b, uint32_t bits) {
+    uint32_t w;
+    memcpy(&w, data + (b & ~3u), 4);
+    return (w >> ((b & 3) * 8)) & (bits == 8 ? 0xFFu : 0xFFFFu);
+}
+#endif
+
 void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data) {
     uint32_t vn = (cmd >> 2) & 3, vl = cmd & 3, masked = (cmd >> 4) & 1, usn = (imm >> 14) & 1;
     uint32_t addr = (imm & 0x3FF) + ((imm >> 15) & 1 ? vu.tops : 0), n = num ? num : 256;
@@ -130,14 +141,23 @@ void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data
                 src += comps * 4;
             } else if (vl == 1) {
                 for (c = 0; c < comps; c++) {
+#ifdef PORT_BIG_ENDIAN
+                    uint16_t w = (uint16_t)unpack_elem((const uint8_t *)data, (uint32_t)(src - (const uint8_t *)data) + c * 2, 16);
+#else
                     uint16_t w;
                     memcpy(&w, src + c * 2, 2);
+#endif
                     out[c] = usn ? (uint32_t)w : (uint32_t)(int32_t)(int16_t)w;
                 }
                 src += comps * 2;
             } else {
                 for (c = 0; c < comps; c++) {
+#ifdef PORT_BIG_ENDIAN
+                    uint8_t b = (uint8_t)unpack_elem((const uint8_t *)data, (uint32_t)(src - (const uint8_t *)data) + c, 8);
+                    out[c] = usn ? (uint32_t)b : (uint32_t)(int32_t)(int8_t)b;
+#else
                     out[c] = usn ? (uint32_t)src[c] : (uint32_t)(int32_t)(int8_t)src[c];
+#endif
                 }
                 src += comps;
             }
@@ -151,14 +171,26 @@ void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data
 
         if (have) {
             if (vn == 3 && vl == 3) {
+#ifdef PORT_BIG_ENDIAN
+                uint32_t w = unpack_elem(src, bitpos / 8, 16);
+#else
                 uint32_t w = src[bitpos / 8] | src[bitpos / 8 + 1] << 8;
+#endif
                 v[0] = (w & 31) << 3; v[1] = ((w >> 5) & 31) << 3; v[2] = ((w >> 10) & 31) << 3; v[3] = ((w >> 15) & 1) << 7;
                 bitpos += 16;
             } else {
                 uint32_t size = 32u >> vl;
                 for (c = 0; c <= vn; c++) {
                     uint32_t w = 0;
+#ifdef PORT_BIG_ENDIAN
+                    if (size < 32) {
+                        w = unpack_elem(src, bitpos / 8, size);
+                    } else {
+                        memcpy(&w, &src[bitpos / 8], 4);
+                    }
+#else
                     memcpy(&w, &src[bitpos / 8], size / 8);
+#endif
                     if (!usn && size == 16) { w = (uint32_t)(int32_t)(int16_t)w; }
                     if (!usn && size == 8) { w = (uint32_t)(int32_t)(int8_t)w; }
                     v[c] = w;
@@ -211,6 +243,8 @@ static void kick(uint32_t addr) {
         uint32_t nloop, flg, nreg, qw;
         memcpy(&lo, &vu.mem[a & 0x3FFF], 8);
         memcpy(&hi, &vu.mem[(a + 8) & 0x3FFF], 8);
+        lo = PS2_PKT64(lo); /* VU memory is 32-bit words: a 64-bit field is two of them, the low one first */
+        hi = PS2_PKT64(hi);
         nloop = lo & 0x7FFF;
         flg = (lo >> 58) & 3;
         nreg = (lo >> 60) & 15;
@@ -509,7 +543,7 @@ static int hle_program0(void) {
     int layer;
 
     memcpy(tag, &vu.mem[(top + 3) * 16], 16);
-    count = (uint32_t)(tag[0] & 0x7FFF);
+    count = (uint32_t)(PS2_PKT64(tag[0]) & 0x7FFF);
     if (count < 3 || top + 5 + count * 3 > 1024) {
         return 0;
     }
@@ -518,8 +552,8 @@ static int hle_program0(void) {
         memcpy(pkt + 16, &vu.mem[(top + 1 + (uint32_t)layer) * 16], 16);
         Gs_Gif(pkt, 2); /* the layer's TEX0 */
         memcpy(tag, &vu.mem[(top + 3 + (uint32_t)layer) * 16], 16);
-        Gs_RegWrite(0, (tag[0] >> 47) & 0x7FF); /* PRIM from the tag */
-        GsGpu_DrawVu0(layer, (int)((tag[0] >> 56) & 1), (const float *)&vu.mem[(top + 5) * 16], count, (const float *)vu.mem);
+        Gs_RegWrite(0, (PS2_PKT64(tag[0]) >> 47) & 0x7FF); /* PRIM from the tag */
+        GsGpu_DrawVu0(layer, (int)((PS2_PKT64(tag[0]) >> 56) & 1), (const float *)&vu.mem[(top + 5) * 16], count, (const float *)vu.mem);
     }
     sStatKicks++;
     return 1;
@@ -536,7 +570,7 @@ static int hle_program1(void) {
     int layer;
 
     memcpy(tag, &vu.mem[(top + 3) * 16], 16);
-    count = (uint32_t)(tag[0] & 0x7FFF);
+    count = (uint32_t)(PS2_PKT64(tag[0]) & 0x7FFF);
     if (count < 3 || top + 5 + count * 3 > 1024) {
         return 0;
     }
@@ -549,8 +583,8 @@ static int hle_program1(void) {
         memcpy(pkt + 16, layer == 0 ? &vu.mem[(top + 1) * 16] : &vu.mem[26 * 16], 16);
         Gs_Gif(pkt, 2); /* the layer's TEX0 */
         memcpy(tag, &vu.mem[(top + 3 + (uint32_t)layer) * 16], 16);
-        Gs_RegWrite(0, (tag[0] >> 47) & 0x7FF); /* PRIM from the tag */
-        GsGpu_DrawVu0(layer == 0 ? 0 : 5, (int)((tag[0] >> 56) & 1), (const float *)&vu.mem[(top + 5) * 16], count, (const float *)vu.mem);
+        Gs_RegWrite(0, (PS2_PKT64(tag[0]) >> 47) & 0x7FF); /* PRIM from the tag */
+        GsGpu_DrawVu0(layer == 0 ? 0 : 5, (int)((PS2_PKT64(tag[0]) >> 56) & 1), (const float *)&vu.mem[(top + 5) * 16], count, (const float *)vu.mem);
     }
     sStatKicks++;
     return 1;
@@ -567,13 +601,13 @@ static int hle_program4(void) {
     uint32_t top = vu.top & 0x3FF, count;
 
     memcpy(tag, &vu.mem[(top + 2) * 16], 16);
-    count = (uint32_t)(tag[0] & 0x7FFF);
+    count = (uint32_t)(PS2_PKT64(tag[0]) & 0x7FFF);
     if (count < 3 || top + 3 + count * 3 > 1024) {
         return 0;
     }
     Gs_Gif(&vu.mem[top * 16], 2);
-    Gs_RegWrite(0, (tag[0] >> 47) & 0x7FF);
-    GsGpu_DrawVu4((int)((tag[0] >> 56) & 1), (const float *)&vu.mem[(top + 3) * 16], count, (const float *)vu.mem);
+    Gs_RegWrite(0, (PS2_PKT64(tag[0]) >> 47) & 0x7FF);
+    GsGpu_DrawVu4((int)((PS2_PKT64(tag[0]) >> 56) & 1), (const float *)&vu.mem[(top + 3) * 16], count, (const float *)vu.mem);
     sStatKicks++;
     return 1;
 }
@@ -591,7 +625,7 @@ static int hle_program2(void) {
     uint32_t top = vu.top & 0x3FF, count;
 
     memcpy(tag, &vu.mem[(top + 4) * 16], 16);
-    count = (uint32_t)(tag[0] & 0x7FFF);
+    count = (uint32_t)(PS2_PKT64(tag[0]) & 0x7FFF);
     if (count < 3 || top + 5 + count * 3 > 1024) {
         return 0;
     }
@@ -600,7 +634,7 @@ static int hle_program2(void) {
     memcpy(&consts[56], &vu.mem[11 * 16], 4 * 16);    /* screen matrix: program 0 has it at 14..17 */
     memcpy(&consts[88], &vu.mem[10 * 16], 16);        /* colour: program 0's layer 0 colour at 22 */
     Gs_Gif(&vu.mem[top * 16], 2);
-    Gs_RegWrite(0, (tag[0] >> 47) & 0x7FF); /* PRIM from the tag */
+    Gs_RegWrite(0, (PS2_PKT64(tag[0]) >> 47) & 0x7FF); /* PRIM from the tag */
     /* the context is the one of the PRIM in force, not the tag's: the shadow passes run with PRMODECONT.AC = 0,
        where the attributes (texturing, blending, context) come from PRMODE and the tag only gives the type */
     GsGpu_DrawVu0(2, (int)((gGs.prim >> 9) & 1), (const float *)&vu.mem[(top + 5) * 16], count, consts);
@@ -623,7 +657,7 @@ static int hle_program78(int layer) {
     uint32_t top = vu.top & 0x3FF, count;
 
     memcpy(tag, &vu.mem[(top + 2) * 16], 16);
-    count = (uint32_t)(tag[0] & 0x7FFF);
+    count = (uint32_t)(PS2_PKT64(tag[0]) & 0x7FFF);
     if (count < 3 || top + 3 + count * 3 > 1024) {
         return 0;
     }
@@ -638,8 +672,8 @@ static int hle_program78(int layer) {
         memcpy(&consts[91], &vu.mem[12 * 16 + 12], 4);  /* the mesh's alpha */
     }
     Gs_Gif(&vu.mem[top * 16], 2);
-    Gs_RegWrite(0, (tag[0] >> 47) & 0x7FF);
-    GsGpu_DrawVu0(layer, (int)((tag[0] >> 56) & 1), (const float *)&vu.mem[(top + 3) * 16], count, consts);
+    Gs_RegWrite(0, (PS2_PKT64(tag[0]) >> 47) & 0x7FF);
+    GsGpu_DrawVu0(layer, (int)((PS2_PKT64(tag[0]) >> 56) & 1), (const float *)&vu.mem[(top + 3) * 16], count, consts);
     sStatKicks++;
     return 1;
 }
@@ -651,11 +685,11 @@ static int hle_program6(void) {
     uint32_t top = vu.top & 0x3FF, count;
 
     memcpy(tag, &vu.mem[(top + 2) * 16], 16);
-    count = (uint32_t)(tag[0] & 0x7FFF);
+    count = (uint32_t)(PS2_PKT64(tag[0]) & 0x7FFF);
     if (count < 3 || top + 3 + count * 4 > 1024) {
         return 0;
     }
-    Gs_RegWrite(0, (tag[0] >> 47) & 0x7FF);
+    Gs_RegWrite(0, (PS2_PKT64(tag[0]) >> 47) & 0x7FF);
     GsGpu_DrawVu6((int)((gGs.prim >> 9) & 1), (const float *)&vu.mem[(top + 3) * 16], count, (const float *)vu.mem);
     sStatKicks++;
     return 1;

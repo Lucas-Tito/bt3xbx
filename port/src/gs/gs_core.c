@@ -118,7 +118,8 @@ static void tables_init(void) {
     }
 }
 
-/* Reads (write = 0) or writes the pixel (x, y) of a buffer at bp, width bw, format psm. Value: the stored bits. */
+/* Reads (write = 0) or writes the pixel (x, y) of a buffer at bp, width bw, format psm. Value: the stored bits.
+   GS memory holds the PS2's bytes (GS_LE32: a 32-bit word of it as a number). */
 static uint32_t vram_rw(uint32_t bp, uint32_t bw, uint32_t psm, uint32_t x, uint32_t y, int write, uint32_t v) {
     uint32_t a, *w;
 
@@ -136,27 +137,27 @@ static uint32_t vram_rw(uint32_t bp, uint32_t bw, uint32_t psm, uint32_t x, uint
         a = ((bp + ((y >> 1) & ~0x1Fu) * bw + ((x >> 1) & ~0x1Fu) +
               ((psm == 0x0A ? kBlock16S : kBlock16)[(y >> 3) & 7][(x >> 4) & 3] ^ zx)) << 7) + kCol16[y & 7][x & 15];
         w = &sVram[(a >> 1) & 0xFFFFF];
-        if (write) { *w = (*w & ~(0xFFFFu << ((a & 1) * 16))) | (v & 0xFFFF) << ((a & 1) * 16); return 0; }
-        return (*w >> ((a & 1) * 16)) & 0xFFFF;
+        if (write) { *w = GS_LE32((GS_LE32(*w) & ~(0xFFFFu << ((a & 1) * 16))) | (v & 0xFFFF) << ((a & 1) * 16)); return 0; }
+        return (GS_LE32(*w) >> ((a & 1) * 16)) & 0xFFFF;
     case 0x13: /* 8 bits */
         a = ((bp + ((y >> 1) & ~0x1Fu) * (bw >> 1) + ((x >> 2) & ~0x1Fu) + kBlock32[(y >> 4) & 3][(x >> 4) & 7]) << 8) + sCol8[y & 15][x & 15];
         w = &sVram[(a >> 2) & 0xFFFFF];
-        if (write) { *w = (*w & ~(0xFFu << ((a & 3) * 8))) | (v & 0xFF) << ((a & 3) * 8); return 0; }
-        return (*w >> ((a & 3) * 8)) & 0xFF;
+        if (write) { *w = GS_LE32((GS_LE32(*w) & ~(0xFFu << ((a & 3) * 8))) | (v & 0xFF) << ((a & 3) * 8)); return 0; }
+        return (GS_LE32(*w) >> ((a & 3) * 8)) & 0xFF;
     case 0x14: /* 4 bits */
         a = ((bp + ((y >> 2) & ~0x1Fu) * (bw >> 1) + ((x >> 2) & ~0x1Fu) + kBlock16[(y >> 4) & 7][(x >> 5) & 3]) << 9) + sCol4[y & 15][x & 31];
         w = &sVram[(a >> 3) & 0xFFFFF];
-        if (write) { *w = (*w & ~(0xFu << ((a & 7) * 4))) | (v & 0xF) << ((a & 7) * 4); return 0; }
-        return (*w >> ((a & 7) * 4)) & 0xF;
+        if (write) { *w = GS_LE32((GS_LE32(*w) & ~(0xFu << ((a & 7) * 4))) | (v & 0xF) << ((a & 7) * 4)); return 0; }
+        return (GS_LE32(*w) >> ((a & 7) * 4)) & 0xF;
     default: /* 32 bits, and the formats that live inside a 32-bit pixel */
         a = ((bp + (y & ~0x1Fu) * bw + ((x >> 1) & ~0x1Fu) + (kBlock32[(y >> 3) & 3][(x >> 3) & 7] ^ zx)) << 6) + kCol32[y & 7][x & 7];
         w = &sVram[a & 0xFFFFF];
         switch (psm) {
-        case 0x01: if (write) { *w = (*w & 0xFF000000u) | (v & 0xFFFFFF); return 0; } return *w & 0xFFFFFF;
-        case 0x1B: if (write) { *w = (*w & 0x00FFFFFFu) | v << 24; return 0; } return *w >> 24;
-        case 0x24: if (write) { *w = (*w & 0xF0FFFFFFu) | (v & 15) << 24; return 0; } return (*w >> 24) & 15;
-        case 0x2C: if (write) { *w = (*w & 0x0FFFFFFFu) | (v & 15) << 28; return 0; } return *w >> 28;
-        default: if (write) { *w = v; return 0; } return *w;
+        case 0x01: if (write) { *w = GS_LE32((GS_LE32(*w) & 0xFF000000u) | (v & 0xFFFFFF)); return 0; } return GS_LE32(*w) & 0xFFFFFF;
+        case 0x1B: if (write) { *w = GS_LE32((GS_LE32(*w) & 0x00FFFFFFu) | v << 24); return 0; } return GS_LE32(*w) >> 24;
+        case 0x24: if (write) { *w = GS_LE32((GS_LE32(*w) & 0xF0FFFFFFu) | (v & 15) << 24); return 0; } return (GS_LE32(*w) >> 24) & 15;
+        case 0x2C: if (write) { *w = GS_LE32((GS_LE32(*w) & 0x0FFFFFFFu) | (v & 15) << 28); return 0; } return GS_LE32(*w) >> 28;
+        default: if (write) { *w = GS_LE32(v); return 0; } return GS_LE32(*w);
         }
     }
 }
@@ -584,7 +585,11 @@ static void vertex(uint32_t x, uint32_t y, uint32_t z, int kick) {
     v.y = ((float)(int)y - (float)((gs.xyoffset[ctx] >> 32) & 0xFFFF)) / 16.0f;
     v.z = z;
     v.r = gs.rgbaq & 0xFF; v.g = (gs.rgbaq >> 8) & 0xFF; v.b = (gs.rgbaq >> 16) & 0xFF; v.a = (gs.rgbaq >> 24) & 0xFF;
+#ifdef PORT_BIG_ENDIAN /* S is the low half of the register's value, which a big-endian host stores second */
+    { uint32_t ss = (uint32_t)gs.st; memcpy(&v.s, &ss, 4); }
+#else
     memcpy(&v.s, &gs.st, 4);
+#endif
     { uint32_t tt = (uint32_t)(gs.st >> 32); memcpy(&v.t, &tt, 4); }
     v.q = gs.q;
     v.u = gs.uv & 0x3FFF; v.v = (gs.uv >> 16) & 0x3FFF;
@@ -725,7 +730,7 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
     i = 0;
     if (dpsm == 0x00 || dpsm == 0x02 || dpsm == 0x0A || dpsm == 0x13 || dpsm == 0x14) {
         uint32_t bw = dbw ? dbw : 1, count = bytes * 8 / bits;
-        uint8_t *vram8 = (uint8_t *)sVram; /* (little-endian hosts only, as everything here) */
+        uint8_t *vram8 = (uint8_t *)sVram; /* GS memory and the IMAGE data are the PS2's bytes, on any host */
         uint16_t *vram16 = (uint16_t *)sVram;
         while (i < count && gs.tpos < total) {
             uint32_t col = gs.tpos % gs.tw, y = gs.ty + gs.tpos / gs.tw, x = gs.tx + col, run = gs.tw - col, j;
@@ -851,8 +856,8 @@ void Gs_Gif(const uint8_t *p, uint32_t qwc) {
 
         if (loops == 0) {
             sStat[3]++;
-            tag_lo = q[0];
-            tag_hi = q[1];
+            tag_lo = PS2_PKT64(q[0]);
+            tag_hi = PS2_PKT64(q[1]);
             q += 2;
             qwc--;
             loops = tag_lo & 0x7FFF;
@@ -869,7 +874,7 @@ void Gs_Gif(const uint8_t *p, uint32_t qwc) {
         }
         if (flg == 0) { /* PACKED: one quadword per register */
             uint32_t r = (tag_hi >> (4 * reg)) & 15;
-            uint64_t lo = q[0], hi = q[1];
+            uint64_t lo = PS2_PKT64(q[0]), hi = PS2_PKT64(q[1]);
 
             switch (r) {
             case 0x0: reg_write(0, lo & 0x7FF); break;
@@ -896,7 +901,7 @@ void Gs_Gif(const uint8_t *p, uint32_t qwc) {
             for (half = 0; half < 2 && loops != 0; half++) {
                 uint32_t r = (tag_hi >> (4 * reg)) & 15;
                 if (r != 0xE && r != 0xF) {
-                    reg_write(r, q[half]);
+                    reg_write(r, PS2_PKT64(q[half]));
                 }
                 if (++reg == nreg) {
                     reg = 0;
@@ -1040,7 +1045,11 @@ static void screenshot(void) {
                     if (Gs_PsmBits(fpsm) == 16) {
                         c = (c & 31) << 3 | ((c >> 5) & 31) << 11 | ((c >> 10) & 31) << 19;
                     }
+#ifdef PORT_BIG_ENDIAN /* R, G, B: the low three bytes of c */
+                    { uint8_t rgb[3] = {(uint8_t)c, (uint8_t)(c >> 8), (uint8_t)(c >> 16)}; fwrite(rgb, 1, 3, fp); }
+#else
                     fwrite(&c, 1, 3, fp);
+#endif
                 }
             }
             fclose(fp);
