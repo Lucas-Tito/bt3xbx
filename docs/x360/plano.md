@@ -178,6 +178,64 @@ sair e abrir de novo o boot o carrega (linha "mc: leu ... 16384 de 16384 bytes",
 o título oferece Continue. "A opção volta como estava" fica para depois da etapa 7, quando as Opções forem alcançáveis
 no console.
 
+Etapa 4 concluída em 13/10/2026 (WSL). O controle sai de roteiros em texto (`BT3_ROTEIRO`, `port/x360/roteiros`),
+lidos por `port/x360/headless/roteiro.c` nas três builds (x86 e PPC pelo `sem_janela.c`, 360 pelo `pad360.c`, que
+compila com os mesmos 103 stubs). Cada espera é uma condição sobre o estado do jogo: a tela (`gProgress->mode`, ou
+`inicio`, `carga` e `luta`), o estado do McFlow, a luta; o log guarda cada troca com o vblank, e um passo que não se
+cumpre para a rodada com o arquivo e a linha. O formato está no guia (seção 2, "Roteiros de controle"). O desbloqueio
+é o passo `desbloqueia` (o `Save_UnlockAll` do próprio jogo), só com `BT3_DESBLOQUEIO=1`, no `boot.txt` quando o fluxo
+do cartão do New Game termina, antes do `MainMenu_Init`; o Dragon Net Battle segue escondido (`BT3_MENU_ITEM4=0`).
+
+Roteiros (todos do boot com o cartão vazio: `boot.txt` cria o save e desbloqueia):
+
+| Roteiro | Alcança |
+| --- | --- |
+| `duelo` | `DuelMenu` (38), `CharSel` (39) com retratos e estágios, luta simples |
+| `duelo_time` | `DuelMenu`, `TeamSel` (40) com dois membros e o COM, luta em time |
+| `treino` | `Train` (44) com seis páginas de uma aula, treino livre, `CharSel` do treino (45), luta |
+| `opcoes` | `Option` (62): som em mono, salvar, estéreo, carregar (o mono volta), sair |
+| `historia` | `HistSel` (6), `ModeMenu` (7) com a imagem do episódio, luta do primeiro episódio |
+| `ultimate` | `UbMenu` (13), Missão (14, 15 `UbTeamSel`), Sobrevivência (17), Disc Fusion (24), Sim Dragon (20, 21 `SoloSel`, 22 tabuleiro) |
+| `torneio` | `TourMenu` (33), `EntrySel` (34), chave (35), primeira luta |
+| `evolution` | `EvoTop` (48), `EvoZ` (49), loja (50) |
+| `datacenter` | `DcMenu` (53), senha (54), lista (55) |
+| `referencia` | `CharRef` (60) com os detalhes de um personagem |
+| `shenlong` | `Shen` (70) até a lista de desejos |
+
+O ciclo é `port/x360/tools/roteiros.sh` (e `roteiros.py`). Resultado do critério:
+
+- **Repetição na x86:** os 11 roteiros repetem o rastro (trocas de tela, esperas, vblanks) entre duas rodadas e contra a
+  referência guardada no WSL (`~/referencias`, fora do repositório); a x86r do rastreio faz o mesmo rastro.
+- **"Sem conversor" do `--mapa` contra o inventário:** em cada roteiro, o conteúdo que o `conv_tool --mapa` dá como sem
+  conversor (por arquivo e seção, sobre o rastreio da mesma rodada) é exatamente o das chamadas pendentes que a rodada
+  fez, e o das 5 com gancho sai convertido. Juntos, os 4 roteiros do essencial alcançam as 16 pendentes dele e as 5
+  com gancho; os 7 dos outros modos alcançam 39 das 61 pendentes deles. Uma nota explicada: no `datacenter` o
+  `DcList_Init` (menu_y_b.c:1008) descomprime um retrato que ninguém lê como número (o `DcList_UpdateFace` descomprime
+  de novo antes de ler, `menus-modos.md` 3.2), então ele não aparece no rastreio; nada a converter ali.
+- **PPC com o mapa** (`PPC=1`, guarda só anotando): repete o rastro da x86 do boot até o menu principal e nomeia
+  `MainMenu_Init`, e para no `Flash_Create` dele: o mapa por posição não inverte os registros do Flash (conflitos
+  "[4, 8]"). Até o conversor do Flash (etapa 5), a PPC confere só até o primeiro menu sem conversor.
+
+As 22 pendentes que nenhum roteiro alcança (todas da etapa 9), cada uma por uma condição do jogo:
+
+- pedem uma luta terminada: `HistOutro_Init` (2), `HistResult_Init` (3), `HistSave_Init`, `MisResult_Init`,
+  `SurvResult_Init`, `SimResult_Init`, `UbResult_Init`, `Bracket_LoadImages` (2, a chave depois de uma luta) e
+  `SimDay_UpdateFaceLoad` (2, o adversário de um dia do Sim Dragon);
+- pedem os ramos do Disc Fusion, cujo X abre um diálogo do cartão: `UbzSel_Init`, `UbRank_Init`,
+  `UbRank_UpdateFaceLoad` (2);
+- pedem algo que o desbloqueio não dá ou tira: `ShenSave_Init` (um desejo concedido; com tudo desbloqueado o dragão
+  recusa todos), `DcList_UpdateFace` (um registro; o `Save_UnlockAll` esvazia a lista), `DcPass_UpdateFace` (uma senha
+  válida);
+- `ReplayMenu_Init`: a tela de replay cai nas builds sem janela (abaixo).
+
+Riscos para a etapa 5: o mapa por posição não passa dos menus, então a conferência "PPC sem mapa igual à x86 em cada
+roteiro" só existe com os conversores (um conversor que falte para a PPC no primeiro menu dele, e a guarda o nomeia);
+esperas por quadros dentro de uma tela (o `CharSel`, o diálogo do cartão que só aceita entrada 40 quadros depois)
+valem enquanto o jogo andar igual por quadro, o que no console depende de as cargas e as falas não o atrasarem (o
+rastro mostra onde); e a tela de replay cai nas builds sem janela (divisão por zero em `menu_za_d.c:409`; causa provável, o `pow` de
+double da libm de float em hardware chamado do código de float em software), o que a etapa 9 tem de resolver antes de
+usar o `ReplayMenu`.
+
 Critério da F4: no console, com o controle, do boot ao começo da luta pelo Duelo e pelo Treino, Opções com salvar e
 carregar, e os outros modos navegáveis; a sequência de telas igual à x86. Antes da etapa 5, um revisor independente
 (guia, seção 4).
