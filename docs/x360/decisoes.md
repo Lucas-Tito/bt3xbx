@@ -580,3 +580,28 @@ Detalhes que a revisão crítica trouxe:
   segurados mascarados até soltar.
 - **Teste sem ninguém no console:** o boot pelos menus agora exige um controle ligado, e o `BT3_PAD_PLAY` não toca sem
   controle. Uma chave do `ambiente.txt` pode dar o controle como sempre ligado.
+
+## 22. F4: todos os menus, o essencial antes; save nativo em `game:\saves` (13/10/2026)
+
+Escolhas do Lucas para a F4 (plano, "F4 em etapas"):
+
+- **Escopo: todos os pacotes de menu, o caminho essencial antes.** O essencial é o menu principal, o submenu dos
+  modos, o Duelo, o Treino até a luta começar, as Opções e o save. Os outros modos vêm na etapa 9, pela mesma linha
+  de produção: as peças se repetem, e o disco valida em lote. Se a F4 crescer demais, a etapa 9 se corta sem afetar
+  o resto. Referência de personagens e Shenlong desenham 3D (VU1) e só aparecem por inteiro depois da F5.
+- **Save no formato nativo do 360** (números na ordem do host, soma de `McCard_Checksum` sobre esses bytes). Serve
+  entre builds big-endian (360 e PPC do qemu); o save do PC ou do PCSX2 cai no fluxo de "dados danificados" do
+  próprio jogo. Importar e exportar vira um item da F8.
+  - **Recusado:** little-endian canônico agora. Exigiria tipar os 0x4000 bytes de `SaveData`, cheios de campos
+    desconhecidos.
+- **Save na pasta `game:\saves`,** como hoje (`BT3_SAVES`, `posix360.c`) e como a CollectionUI e o MKart360. A F4
+  só o torna robusto a queda de energia: gravar em temporário e trocar o nome, conferir o `fclose`.
+  - **Recusado:** XContent (pacote no Armazenamento do console, seletor de dispositivo). Seria mais trabalho e
+    teria comportamento sem perfil a medir.
+- **A F4 inteira antes do teto de memória** (o primeiro item da F5). Se um passeio pelos menus esgotar a memória no
+  console, o teto entra quando acontecer.
+- **Decisões menores, como a proposta recomendou:**
+  - roteiros de controle em texto versionado, ancorados na troca de tela;
+  - Dragon Net Battle escondido no 360, com o mesmo valor em x86, PPC e console, para os roteiros não se
+    desalinharem no menu.
+

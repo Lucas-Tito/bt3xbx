@@ -115,6 +115,34 @@ Filme e som ficam para a F6; VU1, outline e o resto da luta para a F5. Riscos an
 
 Fora do escopo: netplay, versão PAL/japonesa, 60 fps (interpolação ou lógica a 60; decisão 15: 720p a 30).
 
+### F4 em etapas (13/10/2026)
+
+Escopo e decisões na decisão 22. A queda do menu principal (`MainMenu_Init`, `src/menu/menu_a.c`) é a primeira das
+76 chamadas de `Sprite_Unpack` sem conversor (`formatos/menus.md` seção 11). Para não ir caindo uma por uma no console,
+quatro redes de cobertura:
+
+- o código: verificador que falha em `Sprite_Unpack` sem gancho;
+- o disco inteiro: o "sem conversor" do `conv_tool --disco` por faixa de id;
+- roteiros de controle no WSL, com rastreio;
+- uma guarda no jogo, que nomeia o chamador sem conversor em vez de cair num endereço inválido.
+
+| # | Onde | O que | Critério |
+|---|---|---|---|
+| 1 | WSL | Inventário das 76 chamadas (id, seção, formato, leitores), censo do `--disco` por faixa, verificador `unpacks.py`, uma tabela de formatos só em `conv.c` | toda chamada com formato proposto; `unpacks.py` lista as pendentes |
+| 2 | WSL | Guarda em `sprite.c` (`PORT_BIG_ENDIAN`); Dragon Net Battle escondido no 360 e nos roteiros | a PPC sem mapa para com "sem conversor em MainMenu_Init"; a `.text` da x86 inalterada |
+| 3 | console | Save em `game:\saves` robusto: gravação em temporário e troca de nome, `fclose` conferido | salvar, sair e abrir de novo: o título tem Continue e a opção volta como estava |
+| 4 | WSL | Roteiros de controle em texto, ancorados na troca de tela; desbloqueio de tudo no headless; um roteiro por modo | cada roteiro repete na x86 as telas de referência; o "sem conversor" do `--mapa` é igual ao inventário |
+| 5 | WSL | Especificações e conversores do caminho essencial: menu principal, submenu dos modos, Duelo (personagem, time, estágio), Treino, Opções, DcSave | `--disco` 100% nessas faixas; `--mapa` sem divergência; PPC sem mapa igual à x86 em cada roteiro |
+| 6 | WSL | Rasterizador x86 e PPC nas telas essenciais | PPM idênticos |
+| 7 | console | Caminho essencial no console, pelos roteiros (`BT3_PAD_PLAY`) | mesmas telas da x86; capturas no patamar da F3; nenhuma queda |
+| 8 | WSL e console | Save entre builds (PPC e 360) | os dois sentidos carregam; save de PC cai no fluxo de "dados danificados" do jogo, sem queda |
+| 9 | WSL | Os outros modos pela mesma linha de produção | `unpacks.py` sem pendência; `--disco` 100% em todas as faixas de menu |
+| 10 | console | Sessão de 30 min com o Lucas pelos modos | o critério da F4 sem queda |
+
+Critério da F4: no console, com o controle, do boot ao começo da luta pelo Duelo e pelo Treino, Opções com salvar e
+carregar, e os outros modos navegáveis; a sequência de telas igual à x86. Antes da etapa 5, um revisor independente
+(guia, seção 4).
+
 ## 6. Riscos principais
 
 1. **Desempenho no Xenon.** No PC, softfloat e interpretador de VU1 dominam o frame. F2 existe para medir isso antes de investir em gráficos.
