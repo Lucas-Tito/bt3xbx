@@ -2,6 +2,7 @@
 """F4, etapa 1: confere que toda chamada de Sprite_Unpack no código do jogo tem o gancho de conversão logo depois.
 
     unpacks.py [--lista]        (em qualquer máquina, na raiz; só lê src/ e port/x360/conv/)
+    (roteiros.py importa levantar(): a lista das chamadas, para classificar as que um roteiro alcança)
 
 Cada Sprite_Unpack (src/sys/sprite.c) descomprime um formato que só quem chama conhece (docs/x360/formatos/menus.md 4),
 então o gancho fica em cada chamador, sob #ifdef PORT_BIG_ENDIAN, logo depois do comando da chamada:
@@ -106,8 +107,9 @@ def gancho(depois):
     return None
 
 
-def main():
-    lista = "--lista" in sys.argv
+def levantar():
+    """(res, erros, funcs): res é [(situação, "arquivo:linha função", formato)] de cada chamada, na ordem do fonte
+    (situação: "com gancho", "sem números", "pendente" ou "bpe-direto"). Também usado por roteiros.py."""
     formatos = formatos_do_conversor()
     res, erros, funcs = [], [], set()
     for arq in sorted((ROOT / "src").glob("**/*.c")):
@@ -149,6 +151,12 @@ def main():
             if problemas:
                 erros.append((onde, "; ".join(problemas)))
             res.append(("com gancho" if h != "Port_UnpackSemNumeros" else "sem números", onde, f))
+    return res, erros, funcs
+
+
+def main():
+    lista = "--lista" in sys.argv
+    res, erros, funcs = levantar()
     tabela = chamadores_da_guarda()
     for f in sorted(funcs - tabela):
         erros.append((f, "chama Sprite_Unpack e falta na tabela CHAMADORES de port/x360/conv/conv_jogo.c"))
@@ -168,4 +176,5 @@ def main():
              else 0)
 
 
-main()
+if __name__ == "__main__":
+    main()

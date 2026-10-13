@@ -1,0 +1,74 @@
+# Opções com salvar e carregar pelo McFlow (decisão 22): menu principal, Option (modo 62); som em mono, salva;
+# volta a estéreo, carrega (o save traz o mono de volta: a opção volta como estava); sai para o menu principal.
+# Caminho essencial.
+inclui boot.txt
+quadros 90
+aperta CIMA 2                     # Opções (com tudo desbloqueado: o Shenlong fica entre elas e a História)
+aperta X ate tela 62              # Option
+quadros 150
+# som: estéreo para mono (o cursor começa em salvar/carregar)
+aperta BAIXO 2                    # som
+quadros 20
+aperta X
+quadros 60
+aperta X                          # estéreo/mono
+quadros 30
+aperta DIREITA
+quadros 20
+aperta X
+quadros 40
+aperta TRIANGULO                  # de volta ao topo, no som
+quadros 60
+# salvar: o seletor salvar/carregar começa em salvar
+aperta CIMA 2
+quadros 20
+aperta X
+quadros 40
+aperta X
+espera mcflow 12 max 300          # "salvar?" (McFlow_Start(0))
+# cada pergunta começa no "não" (ESQUERDA para o "sim"); as mensagens sem escolha só pedem X
+repete ate mcflow 0 max 3000
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+marca salvo
+quadros 60
+aperta TRIANGULO                  # o seletor fecha
+quadros 40
+# som: de volta a estéreo
+aperta BAIXO 2
+quadros 20
+aperta X
+quadros 60
+aperta X
+quadros 30
+aperta DIREITA
+quadros 20
+aperta X
+quadros 40
+aperta TRIANGULO
+quadros 60
+# carregar
+aperta CIMA 2
+quadros 20
+aperta X
+quadros 40
+aperta DIREITA                    # carregar
+quadros 20
+aperta X
+espera mcflow 2 max 300           # "carregar?" (McFlow_Start(1))
+repete ate mcflow 0 max 3000
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+marca carregado
+quadros 60
+aperta TRIANGULO                  # o seletor fecha
+quadros 40
+aperta TRIANGULO ate tela 4 max 300   # sair (o cursor vai a "sair" e o segundo TRIANGULO sai)
+quadros 60
+fim

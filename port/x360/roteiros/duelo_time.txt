@@ -1,0 +1,55 @@
+# Duelo, 1P contra COM, luta em time: menu principal, DuelMenu (modo 38), TeamSel (modo 40) com dois membros no
+# time do jogador e um no do COM, o cursor andando nos personagens e nos estágios, até a luta começar. Caminho
+# essencial (decisão 22).
+inclui boot.txt
+quadros 90
+aperta BAIXO 3                    # Duelo
+aperta X ate tela 38              # DuelMenu
+quadros 120
+aperta X                          # 1P contra COM
+quadros 40
+aperta BAIXO                      # luta em time
+quadros 20
+aperta X
+espera tela 40 max 600            # TeamSel
+quadros 150
+# cada membro: X no personagem (quadro de personagens), X nos itens, X na cor; volta à lista do time com o cursor
+# na vaga seguinte
+aperta DIREITA 2                  # cada passo carrega um retrato (TeamSel_UpdateFaceLoad)
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta X                          # a vaga 2: de volta ao quadro de personagens
+quadros 50
+aperta DIREITA
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta DIREITA                    # da vaga 3 para "time completo"
+quadros 20
+aperta X                          # time completo: o mesmo controle passa ao time do COM
+quadros 50
+aperta DIREITA 3
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta DIREITA                    # "time completo"
+quadros 20
+aperta X
+quadros 60
+# estágio: dois à direita (TeamSel_UpdateStageLoad), X confirma
+aperta DIREITA 2
+quadros 30
+aperta X
+espera luta max 3000
+quadros 60
+fim

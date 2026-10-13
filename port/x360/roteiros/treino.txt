@@ -1,0 +1,51 @@
+# Treino: menu principal, Train (modo 44) com as páginas da primeira aula (cada uma carrega a imagem dela:
+# Train_UpdateImage), de volta ao topo do Treino, treino livre, CharSel do treino (modo 45) com o cursor andando nos
+# personagens e nos estágios, até a luta começar. Caminho essencial (decisão 22).
+inclui boot.txt
+quadros 90
+aperta BAIXO 5                    # História, Ultimate Battle, Torneio, Duelo, Evolution Z, Treino
+aperta X ate tela 44              # Train
+quadros 150
+aperta BAIXO                      # aulas
+quadros 30
+aperta X                          # a primeira classe
+quadros 60
+aperta X                          # a primeira aula
+quadros 60
+aperta X                          # a apresentação (a fala do instrutor tem de acabar antes)
+quadros 72
+# seis páginas da aula, uma a cada 72 quadros
+ritmo 4 68
+aperta X 6
+ritmo 4 8
+aperta TRIANGULO                  # de volta à lista de aulas
+quadros 40
+aperta TRIANGULO                  # às classes
+quadros 40
+aperta TRIANGULO                  # ao topo do Treino
+quadros 40
+aperta CIMA                       # treino livre
+quadros 30
+aperta X ate tela 45 max 600      # CharSel do treino
+quadros 150
+# jogador: dois à direita, X no personagem, nos itens e na cor; o adversário: três à direita e os mesmos X
+aperta DIREITA 2
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta DIREITA 3
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta DIREITA 2                  # estágio
+quadros 30
+aperta X
+espera luta max 3000
+quadros 60
+fim

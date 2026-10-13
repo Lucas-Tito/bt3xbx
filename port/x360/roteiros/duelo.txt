@@ -1,0 +1,36 @@
+# Duelo, 1P contra COM, luta simples: menu principal, DuelMenu (modo 38), CharSel (modo 39) com o cursor andando
+# nos personagens e nos estágios, até a luta começar. Caminho essencial (decisão 22).
+inclui boot.txt
+quadros 90                        # o menu principal aceita entrada depois do fade e da animação
+aperta BAIXO 3                    # História, Ultimate Battle, Torneio, Duelo (com tudo desbloqueado)
+aperta X ate tela 38              # DuelMenu (o modo muda no X, ainda com o menu principal na tela)
+quadros 120
+aperta X                          # 1P contra COM
+quadros 40
+aperta X                          # luta simples
+espera tela 39 max 600            # CharSel
+quadros 150
+# jogador 1: dois à direita no quadro de personagens (cada um carrega um retrato: CharSel_UpdateFaceLoad), X no
+# personagem, X na lista de itens, X na cor
+aperta DIREITA 2
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+# o COM (o mesmo controle escolhe): três à direita, e os mesmos três X
+aperta DIREITA 3
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+# estágio: dois à direita (cada um carrega a imagem do estágio: CharSel_UpdateStageLoad), X confirma
+aperta DIREITA 2
+quadros 30
+aperta X
+espera luta max 3000              # a tela de carregamento e a apresentação vêm antes
+quadros 60
+fim

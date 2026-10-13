@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""F4, etapa 4: o que os roteiros de controle (port/x360/roteiros, BT3_ROTEIRO) alcançam, comparado com o inventário
+das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
+
+    roteiros.py telas SAIDA                 o rastro de uma rodada: as linhas "tela", "mcflow" e "roteiro:" da saída
+    roteiros.py compara A B                 dois rastros (arquivos de "telas"): iguais, ou a primeira diferença
+    roteiros.py chamadas LOG --prog P       as chamadas de Sprite_Unpack que a rodada fez, pelo log do gdb (linhas
+                                            "UNPACK vblank modo retorno"), cada uma casada com a lista do unpacks.py
+    roteiros.py confere LOG --prog P --conv CONV --dados D
+                                            cruza as chamadas da rodada com o "sem conversor" do conv_tool --mapa
+                                            (CONV) sobre o rastreio da mesma rodada: o conteúdo de cada chamada
+                                            pendente alcançada tem de sair "sem conversor", e só ele
+    roteiros.py soma LOG... --prog P        as chamadas de várias rodadas juntas contra o inventário: as pendentes do
+                                            caminho essencial (16) e as dos outros modos
+
+O conteúdo de cada chamada (arquivo e seção, ou a faixa de arquivos inteiros) é o da tabela CONTEUDO abaixo, transcrita
+do inventário (menus-modos.md 1 e 3). O "confere" lê a tabela de seções de cada pacote de menu em DADOS para dizer a
+seção de um deslocamento: roda no WSL, onde estão os dados, e só imprime números.
+"""
+import argparse, collections, pathlib, re, struct, subprocess, sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "port/x360/tools"))
+import unpacks  # noqa: E402
+
+# O conteúdo que cada chamada descomprime (menus-modos.md): "NNN sK" é a seção K do pacote de menu de índice NNN; um
+# nome é uma faixa de arquivos inteiros (FAIXAS).
+CONTEUDO = {
+    "menu_a.c:55": "449 s2", "menu_a_c.c:56": "449 s1",
+    "menu_a_d.c:76": "episodio", "menu_a_d.c:126": "460 s2", "menu_a_d.c:128": "saga",
+    "menu_b_c.c:79": "460 s2", "menu_b_c.c:107": "saga", "menu_b_d.c:147": "460 s1",
+    "menu_c_c.c:180": "460 s3", "menu_c_c.c:182": "saga", "menu_c_c.c:191": "fundo_resultado",
+    "menu_c_d.c:25": "460 s4",
+    "menu_c_e.c:226": "retrato", "menu_c_e.c:294": "estagio", "menu_c_e.c:388": "461 s2", "menu_c_e.c:391": "448 s2",
+    "menu_c_e.c:722": "retrato", "menu_c_e.c:729": "estagio",
+    "menu_e_b.c:290": "retrato", "menu_e_b.c:361": "estagio", "menu_e_b.c:457": "448 s2",
+    "menu_e_b.c:753": "retrato", "menu_e_b.c:760": "estagio",
+    "menu_g_c.c:195": "448 s1",
+    "menu_h_b.c:49": "463 s1", "menu_h_b.c:119": "retrato", "menu_h_b.c:849": "retrato",
+    "menu_h_d.c:650": "461 s1", "menu_h_d.c:1215": "pagina_treino",
+    "menu_i_b.c:24": "473 s2", "menu_i_c.c:173": "473 s3",
+    "menu_i_d.c:98": "retrato", "menu_i_d.c:166": "450 s2", "menu_i_d.c:334": "retrato",
+    "menu_j_b.c:59": "450 s1", "menu_j_b.c:117": "convite", "menu_k_d.c:24": "fundo_torneio",
+    "menu_k_f.c:31": "chave", "menu_k_f.c:805": "retrato", "menu_k_f.c:806": "retrato",
+    "menu_k_f.c:830": "retrato", "menu_k_f.c:831": "retrato",
+    "menu_l_b.c:83": "retrato", "menu_l_b.c:148": "451 s4", "menu_l_b.c:254": "retrato",
+    "menu_m_b.c:184": "retrato", "menu_m_b.c:266": "451 s4", "menu_m_b.c:421": "retrato",
+    "menu_n_b.c:98": "ub_cursos", "menu_n_c.c:140": "ub_ranking", "menu_n_c.c:714": "retrato",
+    "menu_n_c.c:715": "retrato", "menu_n_d.c:53": "451 s3", "menu_o_b.c:63": "451 s6", "menu_o_d.c:146": "451 s2",
+    "menu_p_b.c:67": "451 s3", "menu_p_c.c:70": "451 s1",
+    "menu_q_b.c:899": "sim_dia", "menu_q_b.c:1970": "retrato", "menu_q_b.c:1971": "retrato",
+    "menu_r_c.c:38": "451 s3", "menu_r_d.c:53": "451 s5", "menu_s_b.c:93": "451 s2", "menu_s_c.c:30": "451 s3",
+    "menu_u_g.c:60": "retrato", "menu_u_h.c:542": "452 s3", "menu_u_h.c:544": "estagio", "menu_v_b.c:759": "retrato",
+    "menu_v_d.c:146": "452 s2", "menu_w_c.c:133": "452 s1", "menu_x_c.c:39": "453 s1",
+    "menu_y_b.c:957": "retrato", "menu_y_b.c:1002": "459 s2", "menu_y_b.c:1008": "retrato",
+    "menu_z_c.c:211": "459 s1", "menu_z_d.c:535": "retrato", "menu_z_d.c:952": "459 s3",
+    "menu_za_d.c:254": "459 s4", "late_a.c:555": "472 s2", "late_a_c.c:52": "472 s2",
+    "loading.c:166": "folha", "mcflow_a.c:2636": "mcflow",
+}
+
+# arquivos inteiros (um contêiner BPE no deslocamento 0), por índice na partição 1 (menus-modos.md 1)
+FAIXAS = [("chave", 454, 458), ("saga", 464, 471), ("sim_dia", 474, 474), ("ub_ranking", 475, 475),
+          ("ub_cursos", 476, 476), ("mcflow", 477, 477), ("retrato", 760, 923), ("estagio", 924, 959),
+          ("folha", 960, 962), ("convite", 963, 967), ("fundo_torneio", 968, 972), ("episodio", 973, 1020),
+          ("fundo_resultado", 1021, 1024), ("pagina_treino", 1025, 1422)]
+PACOTES = {448, 449, 450, 451, 452, 453, 459, 460, 461, 462, 463, 472, 473}
+
+# O caminho essencial da decisão 22 (menus-modos.md 4: 16 pendentes, 5 com gancho)
+ESSENCIAL = {"menu_a.c:55", "menu_c_e.c:226", "menu_c_e.c:294", "menu_c_e.c:388", "menu_c_e.c:391", "menu_c_e.c:722",
+             "menu_c_e.c:729", "menu_e_b.c:290", "menu_e_b.c:361", "menu_e_b.c:457", "menu_e_b.c:753",
+             "menu_e_b.c:760", "menu_g_c.c:195", "menu_h_d.c:650", "menu_h_d.c:1215", "menu_x_c.c:39",
+             "menu_a_c.c:56", "menu_i_b.c:24", "menu_i_c.c:173", "loading.c:166", "mcflow_a.c:2636"}
+
+
+def chave(onde):
+    """"src/menu/menu_a.c:55 MainMenu_Init" -> "menu_a.c:55" """
+    arq, resto = onde.split(":", 1)
+    return f"{pathlib.Path(arq).name}:{resto.split()[0]}"
+
+
+def lista_unpacks():
+    """{chave: (situação, função)} das 82 chamadas (unpacks.py)"""
+    res, _, _ = unpacks.levantar()
+    return {chave(onde): (s, onde.split()[1]) for s, onde, _ in res if s != "bpe-direto"}
+
+
+def linhas_de_chamada():
+    """{(arquivo, função): [linhas das chamadas]}, para casar o addr2line com a chamada mais próxima"""
+    out = collections.defaultdict(list)
+    for k, (s, f) in lista_unpacks().items():
+        arq, n = k.split(":")
+        out[(arq, f)].append(int(n))
+    return out
+
+
+def telas(caminho):
+    out = []
+    for l in pathlib.Path(caminho).read_text(errors="replace").splitlines():
+        if l.startswith(("tela ", "mcflow ", "roteiro: ")) and not re.match(r"roteiro: \S+, \d+ passos$", l):
+            out.append(l)
+    return out
+
+
+def chamadas(log, prog):
+    """[(vblank, modo, chave)] das linhas "UNPACK vblank modo 0xRET" do log do gdb"""
+    ev = []
+    for l in pathlib.Path(log).read_text(errors="replace").splitlines():
+        m = re.match(r"UNPACK (\d+) (-?\d+) (0x[0-9a-fA-F]+)$", l.strip())
+        if m:
+            ev.append((int(m.group(1)), int(m.group(2)), int(m.group(3), 16)))
+    if not ev:
+        return []
+    enderecos = sorted({r for _, _, r in ev})
+    a2l = subprocess.run(["addr2line", "-f", "-e", prog] + [hex(r - 1) for r in enderecos], capture_output=True,
+                         text=True).stdout.split("\n")
+    onde = {}
+    linhas = linhas_de_chamada()
+    for i, r in enumerate(enderecos):
+        func, pos = a2l[2 * i], a2l[2 * i + 1]
+        arq, n = pos.split(" ")[0].rsplit(":", 1)
+        arq = pathlib.Path(arq).name
+        cand = linhas.get((arq, func), [])
+        n = int(n) if n.isdigit() else 0
+        # a linha da chamada no fonte (o addr2line dá a do comando, que pode ter várias linhas: a mais próxima antes)
+        antes = [c for c in cand if c <= n + 1]
+        onde[r] = (arq, func, max(antes) if antes else (min(cand) if cand else n))
+    out = []
+    for vb, modo, r in ev:
+        arq, func, n = onde[r]
+        k = f"{arq}:{n}"
+        # CharSel_Init: o compilador juntou as duas chamadas do pacote (:388 no treino, modo 45; :391 no duelo) numa
+        # só (menu_c_e.c, CharSel_Init): o modo diz qual
+        if k in ("menu_c_e.c:388", "menu_c_e.c:391"):
+            k = "menu_c_e.c:388" if modo == 45 else "menu_c_e.c:391"
+        out.append((vb, modo, k))
+    return out
+
+
+def classe(nome, dados):
+    """o conteúdo de um nome do rastreio ("pzs3us1/00449.bin@0xAB5C0#bpe" ou "pzs3us1/00449.bin") pela tabela"""
+    m = re.match(r"pzs3us1/(\d{5})\.bin(?:@0x([0-9A-Fa-f]+)#bpe)?$", nome)
+    if not m:
+        return None
+    i, ofs = int(m.group(1)), m.group(2)
+    for c, a, b in FAIXAS:
+        if a <= i <= b:
+            return c if ofs is None or int(ofs, 16) == 0 else f"{c}@0x{ofs}"
+    if i in PACOTES:
+        if ofs is None:
+            return f"{i}"
+        dados_arq = (pathlib.Path(dados) / f"pzs3us1/{i:05d}.bin").read_bytes()
+        n = struct.unpack_from("<I", dados_arq, 0)[0]
+        for s in range(1, n + 1):
+            if struct.unpack_from("<I", dados_arq, 4 * s)[0] == int(ofs, 16):
+                return f"{i} s{s}"
+        return f"{i}@0x{ofs}"
+    return None
+
+
+def conv(caminho, dados):
+    """{nome: "sem conversor" | "convertido" | outra mensagem} das linhas do conv_tool"""
+    out = {}
+    for l in pathlib.Path(caminho).read_text(errors="replace").splitlines():
+        m = re.match(r"(\S+): (sem conversor|convertido|.*)", l)
+        if m:
+            out[m.group(1)] = "convertido" if m.group(2).startswith("convertido") else m.group(2)
+    return out
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma"])
+    ap.add_argument("arqs", nargs="*")
+    ap.add_argument("--prog")
+    ap.add_argument("--conv")
+    ap.add_argument("--dados", default="gamedata")
+    a = ap.parse_args()
+
+    if a.acao == "telas":
+        print("\n".join(telas(a.arqs[0])))
+        return 0
+    if a.acao == "compara":
+        x, y = (pathlib.Path(p).read_text().splitlines() for p in a.arqs[:2])
+        for i, (l1, l2) in enumerate(zip(x, y)):
+            if l1 != l2:
+                print(f"DIFERENTES na linha {i + 1}:\n  {l1}\n  {l2}")
+                return 1
+        if len(x) != len(y):
+            curto = x if len(x) < len(y) else y
+            print(f"DIFERENTES: {len(x)} e {len(y)} linhas; as {len(curto)} do mais curto são o começo do outro, até "
+                  f"\"{curto[-1] if curto else ''}\"")
+            return 1
+        print(f"iguais ({len(x)} linhas)")
+        return 0
+
+    todas = lista_unpacks()
+    if a.acao == "chamadas":
+        ev = chamadas(a.arqs[0], a.prog)
+        cont = collections.Counter(k for _, _, k in ev)
+        for k in sorted(cont, key=lambda k: min(vb for vb, _, kk in ev if kk == k)):
+            s, f = todas.get(k, ("FORA DA LISTA", "?"))
+            print(f"  {s:10s} {k:18s} {f:24s} {cont[k]:3d}x  {CONTEUDO.get(k, '?')}")
+        return 0
+
+    if a.acao == "soma":
+        vistas = set()
+        for log in a.arqs:
+            vistas |= {k for _, _, k in chamadas(log, a.prog)}
+        pend = {k for k, (s, _) in todas.items() if s == "pendente"}
+        ess = pend & ESSENCIAL
+        print(f"pendentes do essencial alcançadas: {len(ess & vistas)} de {len(ess)}")
+        for k in sorted(ess - vistas):
+            print(f"  FALTA (essencial): {k} {todas[k][1]}")
+        print(f"pendentes dos outros modos alcançadas: {len((pend - ESSENCIAL) & vistas)} de {len(pend - ESSENCIAL)}")
+        for k in sorted((pend - ESSENCIAL) - vistas):
+            print(f"  não alcançada: {k} {todas[k][1]} ({CONTEUDO.get(k, '?')})")
+        gancho = {k for k, (s, _) in todas.items() if s != "pendente"}
+        print(f"com gancho alcançadas: {len(gancho & vistas)} de {len(gancho)}")
+        return 1 if ess - vistas else 0
+
+    # confere: as chamadas da rodada contra o "sem conversor" do --mapa da mesma rodada
+    ev = chamadas(a.arqs[0], a.prog)
+    vistas = {k for _, _, k in ev}
+    resultado = conv(a.conv, a.dados)
+    sem = collections.Counter()
+    com = collections.Counter()
+    for nome, r in resultado.items():
+        if not nome.endswith("#bpe"):
+            continue
+        c = classe(nome, a.dados)
+        if c is None:
+            continue  # (as animações do lutador, Bpe_Decode direto, e o que não é de menu)
+        (sem if r == "sem conversor" else com)[c] += 1
+    esperado_sem = {CONTEUDO[k] for k in vistas if todas.get(k, ("",))[0] == "pendente"}
+    esperado_com = {CONTEUDO[k] for k in vistas if todas.get(k, ("",))[0] != "pendente"}
+    print("conteúdo sem conversor no --mapa: " + ", ".join(f"{c} ({n})" for c, n in sorted(sem.items())))
+    print("conteúdo convertido no --mapa:    " + ", ".join(f"{c} ({n})" for c, n in sorted(com.items())))
+    erros = 0
+    for c in sorted(esperado_sem - set(sem)):
+        print(f"  DIFERENÇA: chamada pendente alcançada e o conteúdo dela ({c}) não saiu sem conversor")
+        erros += 1
+    for c in sorted(set(sem) - esperado_sem):
+        print(f"  DIFERENÇA: {c} saiu sem conversor e nenhuma chamada pendente alcançada o descomprime")
+        erros += 1
+    for c in sorted(esperado_com - set(com)):
+        print(f"  DIFERENÇA: chamada com gancho alcançada e o conteúdo dela ({c}) não saiu convertido")
+        erros += 1
+    for c in sorted(set(com) - esperado_com):
+        print(f"  DIFERENÇA: {c} saiu convertido e nenhuma chamada com gancho alcançada o descomprime")
+        erros += 1
+    # os arquivos de menu inteiros (antes da descompressão): os que o essencial pede no formato_de (menus-modos.md 4)
+    arqs = collections.Counter()
+    for nome, r in resultado.items():
+        if not nome.endswith("#bpe") and r == "sem conversor":
+            c = classe(nome, a.dados)
+            if c is not None:
+                arqs[c] += 1
+    print("arquivos de menu sem conversor:    " + ", ".join(f"{c} ({n})" for c, n in sorted(arqs.items())))
+    print("igual ao inventário" if erros == 0 else f"{erros} diferenças")
+    return 1 if erros else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

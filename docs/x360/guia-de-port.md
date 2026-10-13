@@ -92,7 +92,9 @@ própria só para isso). Para cá só volta texto.
 | `headless.py --alvo x86\|ppc [--rastreio\|--chamadas]` | builds sem janela do port de PC: x86 de 32 bits (clang `-m32`, a referência little-endian com ponteiros de 32 bits como o 360) e PowerPC 32 bits big-endian (GCC cross, roda no `qemu-ppc`). As duas usam float por software (o do PS2), então uma diferença entre elas só pode vir da ordem dos bytes |
 | `f1.sh` | o ciclo inteiro: builds, rastreio, mapa, luta na PPC, comparações. `F1_SEM_RASTREIO=1` reaproveita o rastreio (que leva cerca de 1 h) |
 | `menus.sh` | o ciclo dos menus (F3, etapa 3): boot até as demos sem `BT3_DEMO`, PPC sem mapa com os arquivos que a x86 lê, lutas das demos e memória num quadro comparadas |
-| `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X num ciclo de 90 leituras) entra no menu principal pelo New Game, sem criar o save (responde "não" ao "criar o save?"); a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Modelo para os roteiros da etapa 4 |
+| `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X num ciclo de 90 leituras) entra no menu principal pelo New Game, sem criar o save (responde "não" ao "criar o save?"); a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Os testes novos usam os roteiros de controle (abaixo) |
+| `roteiros.sh [NOME...\|todos]` | os roteiros de controle (F4, etapa 4; formato abaixo) contra as referências e o inventário: cada roteiro duas vezes na x86 (o rastro de telas igual nas duas e igual à referência em `~/referencias` do WSL), sob o gdb (cada `Sprite_Unpack` alcançado, casado com o `unpacks.py`), na x86r com o rastreio e o `conv_tool --mapa` (o "sem conversor" por conteúdo tem de ser o das chamadas pendentes alcançadas); com `PPC=1`, também a PPC com o mapa e a guarda só anotando, que tem de repetir o rastro da x86. No fim, as chamadas de todos juntos contra o inventário |
+| `roteiros.py` | as peças do `roteiros.sh`: `telas` (o rastro de uma rodada), `compara`, `chamadas` (do log do gdb), `confere` (chamadas contra o `--mapa`), `soma` (contra o inventário). A tabela `CONTEUDO` diz o que cada uma das 82 chamadas descomprime (`menus-modos.md`) |
 | `save_mc.sh` | a gravação atômica do cartão (F4, etapa 3, `port/src/plat_mc.c` com `PORT_MC_ATOMIC`): o `teste_mc` (`port/x360/headless/teste_mc.c`, a camada sem o jogo, com quedas de energia simuladas por `BT3_MC_FALHA`) na x86 e na PPC; o jogo na x86 e na PPC sem mapa até o `MainMenu_Init` com um controle que cria o save (ciclo de 120 leituras), a sequência de estados do McFlow comparada entre as duas; na PPC, criação, falha de escrita, `.tmp` truncado e `.new` deixado por uma queda |
 | `compara.py` | compara a luta quadro a quadro (vida, posição, relógio, gerador aleatório) pelo `hash.txt` do `state.c` |
 | `memdiff.py` | compara a memória do jogo das duas builds num quadro: heap pareado pelos blocos do alocador do jogo, globais pelo nome, cada palavra numa classe (igual, igual sem inverter, 2xu16, u64...) |
@@ -102,6 +104,77 @@ própria só para isso). Para cá só volta texto.
 | `pacotes64.py` | todo acesso de 64 bits à memória no código do jogo (AST dos `.i`), classificado em pacote da GPU ou número; falha se uma gravação em pacote estiver sem `PS2_PKT64` (decisão 19, `formatos/gpu.md`) |
 | `mem.py` | lista as variáveis globais do jogo para o dump de memória |
 | `unpacks.py` | toda chamada de `Sprite_Unpack` em `src/` com o gancho de conversão logo depois (`#ifdef PORT_BIG_ENDIAN`, `Port_ConvertMenuPack(buffer, rawSize, "formato")` ou a marca `Port_UnpackSemNumeros`), com buffer, tamanho e formato conferidos contra a tabela do conversor; a tabela de chamadores da guarda igual ao código; lista as pendentes e sai com 1 enquanto houver (F4, `formatos/menus-modos.md` 7). Roda em qualquer máquina, sem build |
+
+### Roteiros de controle (F4, etapa 4)
+
+O controle do jogador 1 sai de um arquivo de texto (`BT3_ROTEIRO=arquivo`), lido por `port/x360/headless/roteiro.c`
+nas três builds: x86 e PPC sem janela (pelo `Port_PadRead` do `sem_janela.c`) e 360 (pelo `pad360.c`, que com um
+roteiro dá os dois controles como ligados e não lê o XInput). Sem a variável nada muda. Os roteiros ficam em
+`port/x360/roteiros/`; cada um começa com `inclui boot.txt` (do boot ao menu principal com o cartão vazio, criando o
+save e desbloqueando tudo).
+
+**Por que texto ancorado na tela, e não um controle gravado.** O `BT3_PAD_PLAY` repete leituras do controle, uma por
+quadro; uma diferença de tempo (uma carga mais lenta, um diálogo que só aceita entrada 40 quadros depois de abrir)
+desalinha o resto em silêncio (guia, seção 6: o ciclo de 90 leituras respondia "não" ao "criar o save?"). No roteiro,
+cada espera é uma condição sobre o estado do jogo, e um passo que não se cumpre para a rodada com o nome da linha.
+
+**A tela atual**, como o rastro e as esperas a veem, sai do estado do jogo:
+
+- `inicio`: o boot (logos e cartão, `gProgress->flags` com `MPROG_FIRST_RUN`);
+- um número: o modo do gerenciador de menus (`gProgress->mode`, `Progress_Main` em `src/menu/menu_a_b.c`): 1 título,
+  4 menu principal, 38 `DuelMenu`, 39 `CharSel`, 40 `TeamSel`, 44 `Train`, 45 `CharSel` do treino, 62 `Option`
+  (a lista inteira está no comentário de `Progress_Main`);
+- `luta`: a luta andando (`gBtlSeq->state >= 2`, fora dos menus); `carga`: entre os menus e a luta.
+
+Ao lado, o estado do fluxo do cartão (`gMcFlow->state`, -1 sem fluxo). Com o roteiro ligado, cada troca vai ao log
+("`tela 39 vblank 3266 quadro 3260`", "`mcflow 10 ...`"), e cada espera cumprida também
+("`roteiro: duelo.txt:11 ok tela 39 vblank 3266 quadro 3260`"): é o rastro que se compara. Sem janela o log é a
+saída padrão; no 360, o `bt3xbx.log`.
+
+**O formato.** Uma instrução por linha; `#` começa comentário; maiúsculas não importam. O "quadro" é uma leitura do
+controle do jogador 1 (não um vblank: o Shenlong, a 30 quadros por segundo, lê o controle a cada 2 vblanks).
+
+| Instrução | O que faz |
+| --- | --- |
+| `espera tela N` \| `espera mcflow N` \| `espera luta` [`max Q`] | controle parado até a condição; mais de Q quadros (6000 por padrão) é falha |
+| `aperta B[+B]` [`N`] | aperta e solta, N vezes (o ritmo padrão: 4 quadros apertado, 8 solto) |
+| `aperta B ate COND` [`max Q`] | aperta e solta até a condição (para no quadro em que ela se cumpre) |
+| `segura B N` | apertado N quadros, sem soltar no fim |
+| `quadros N` | controle parado N quadros |
+| `ritmo SEGURA SOLTA` | o ritmo dos `aperta` seguintes |
+| `repete ate COND` [`max Q`] ... `volta` | repete o bloco até a condição, que se confere a cada quadro, em qualquer ponto do bloco |
+| `desbloqueia` | `Save_UnlockAll` do próprio jogo (o da aba de truques da janela do PC): todo personagem, estágio, música, item e as sete esferas. Só com `BT3_DESBLOQUEIO=1`; sem ela o roteiro para com erro |
+| `marca TEXTO` | uma linha no rastro |
+| `inclui ARQUIVO` | outro roteiro, relativo à pasta deste |
+| `fim` | sem janela, encerra o programa (saída 0); no 360, solta o controle |
+
+Botões: `X`, `CIRCULO`, `QUADRADO`, `TRIANGULO`, `START`, `SELECT`, `CIMA`, `BAIXO`, `ESQUERDA`, `DIREITA`, `L1`,
+`R1`, `L2`, `R2`, `L3`, `R3`. Falha (espera esgotada, arquivo ruim): "`roteiro: FALHA: ...`" com o arquivo e a linha,
+saída 2 sem janela, tela vermelha no 360. Exemplo (de `duelo.txt`):
+
+```
+inclui boot.txt
+quadros 90                        # o menu principal aceita entrada depois do fade e da animação
+aperta BAIXO 3                    # História, Ultimate Battle, Torneio, Duelo
+aperta X ate tela 38              # DuelMenu
+quadros 120
+aperta X                          # 1P contra COM
+quadros 40
+aperta X                          # luta simples
+espera tela 39 max 600            # CharSel
+```
+
+**O desbloqueio** (só para os roteiros): o passo `desbloqueia` do `boot.txt` roda quando o fluxo do cartão do New Game
+termina (`espera mcflow 0` depois da gravação), antes do `MainMenu_Init`, que monta a lista de itens (o Shenlong só
+entra com as sete esferas). É determinístico: o mesmo quadro na x86 e na PPC (o `Save_UnlockAll` sorteia os itens
+"novos" pelo gerador do jogo, que anda igual nas duas). Muda só o save em memória; o do cartão continua o do New Game
+até o jogo salvar de novo. Onde mexe: `roteiro.c` (o passo) e mais nada; o jogo normal nunca tem `BT3_ROTEIRO` nem
+`BT3_DESBLOQUEIO`.
+
+**Como escrever um roteiro novo** sem ver a tela: rode-o na x86 sob o gdb com um `break *Snd_PlaySe` (cada aperto que
+o jogo aceita toca um efeito: 1 0 mover, 1 1 confirmar, 1 2 voltar, 1 7 recusado) e um `break *Sprite_Unpack` com
+`info symbol *(int*)$esp`; para o estado interno de uma tela, imprima os campos dela no mesmo comando (`gCharSel->side[0]->state`).
+Uma rodada da x86 até a luta leva uns 10 s.
 
 ### Achar o que depende da ordem dos bytes
 
@@ -442,7 +515,8 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **`wsl.sh enviar` recusado** (commit ainda não enviado ao GitHub) não para um `enviar | tail && ...`:
   o status do pipe é o do `tail`, e o resto roda com a árvore velha do WSL. Faça push antes e confira a
   linha "WSL em <commit>".
-- **Controle sintético para os menus (`BT3_PAD_PLAY`):** o diálogo do cartão começa com o cursor no "não"
+- **Controle sintético para os menus (`BT3_PAD_PLAY`; desde a F4, etapa 4, os roteiros de controle da seção 2 o
+  substituem nos testes novos):** o diálogo do cartão começa com o cursor no "não"
   (`Dialog_SetCursor(1)`), então só apertar X volta ao título a cada tentativa; e o START só abre o menu do título
   depois do logo e da animação, então uma fase de START com tempo fixo acaba cedo demais. O que passou: um ciclo único,
   START, ESQUERDA e X espaçados, repetido do boot ao fim (o START e a ESQUERDA não fazem nada onde não cabem).
@@ -453,16 +527,32 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     menu principal, cartão vazio. Com um ciclo de 120 (ESQUERDA em 90, X em 110; também 150 e 180) o save sai. Confira
     pelos arquivos do cartão e pela sequência de estados do McFlow (`dprintf McFlow_Update` com `gMcFlow->state`), não
     pela tela a que se chega.
-- **A PPC com o mapa nos menus sem conversor (F4, etapa 4)**, para conferir o "sem conversor" pela guarda (que só
-  anota, com `BT3_GUARDA=anota`): o o conteúdo de um arquivo que já tem conversor (o menu principal, seção 2 do
-  00449, que tem `menu_pacote`) não recebia o mapa: o `inverter.c` deixava o descomprimido desses arquivos para o
-  gancho do chamador, que não existe. O `MPACK_AT` do `MainMenu_Init` leu a tabela crua e o ponteiro errado caiu no
-  `Res_RelocateOffsets`, antes de a guarda acusar. Agora, com `anota`, o conteúdo de seção sem formato na tabela
-  única (`Conv_FormatoSecao`, a mesma escolha do `conv_tool`) recebe o mapa na saída da descompressão. Mesmo assim a
-  PPC para logo adiante, no `Flash_Create` do menu principal: o Flash copia registros de 8 bytes (`Flash_GetRecord`,
-  `memcpy`) sobre campos de 4, e o mapa não inverte posição lida com duas larguras (três conflitos "[4, 8]" só nesse
-  conteúdo). O mapa por posição não passa pelos menus; quem passa é o conversor do Flash (`menus.md` 7). A PPC com o
-  mapa confere o rastro e a guarda só até o primeiro menu sem conversor.
+- **Roteiros de controle (F4, etapa 4), o que custou rodadas:**
+  - **O modo muda na escolha, não na tela nova.** O `gProgress->mode` passa a 38 no X do menu principal, ainda com o
+    menu na tela (o fade de saída e o `DuelMenu_Init` vêm depois): a espera "`tela 38`" se cumpre uns 40 quadros antes
+    de a tela aceitar entrada. Depois de cada `espera tela`, uma folga (`quadros 120` a `150`) ou um `aperta ... ate`.
+  - **O desbloqueio tem de vir antes do `MainMenu_Init`:** a lista de itens do menu principal se monta no Init (o
+    Shenlong só entra com as sete esferas), então desbloquear já no menu muda o anel só na visita seguinte. O
+    `boot.txt` desbloqueia quando o fluxo do cartão do New Game volta a 0, enquanto o título sai.
+  - **Duas chamadas iguais do fonte viram uma no binário.** O clang juntou os dois `Sprite_Unpack` do pacote do
+    `CharSel_Init` (o do treino e o do duelo, menu_c_e.c:388 e :391) num só endereço: o endereço de retorno não diz
+    qual foi, e o `roteiros.py` decide pelo modo (45 é o treino). Na PPC cada uma tem o seu gancho e não se juntam.
+  - **Um `roteiros.sh` por vez no WSL.** O `rastreio.py mapa` guarda o rastreio inteiro na memória (uns 5 GB com os
+    13 milhões de posições da Ultimate Battle); dois ciclos ao mesmo tempo esgotaram os 8 GB do WSL, o SSH parou de
+    responder por meia hora e o mapa de um roteiro morreu (`Killed`), o que o `confere` acusou como 10 diferenças. O
+    ciclo agora para o roteiro com "FALHA: rastreio.py mapa" em vez de comparar com um mapa que não existe.
+  - **gdb: dois `break` no mesmo endereço, cada um com `commands ... continue`,** só rodam os comandos do primeiro (o
+    `continue` dele retoma antes do segundo). Junte num só, com `if` dentro.
+  - **A PPC com o mapa passa adiante nos menus sem conversor** (para conferir o "sem conversor" pela guarda, que só
+    anota com `BT3_GUARDA=anota`), mas o conteúdo de um arquivo que já tem conversor (o menu principal, seção 2 do
+    00449, que tem `menu_pacote`) não recebia o mapa: o `inverter.c` deixava o descomprimido desses arquivos para o
+    gancho do chamador, que não existe. O `MPACK_AT` do `MainMenu_Init` leu a tabela crua e o ponteiro errado caiu no
+    `Res_RelocateOffsets`, antes de a guarda acusar. Agora, com `anota`, o conteúdo de seção sem formato na tabela
+    única (`Conv_FormatoSecao`, a mesma escolha do `conv_tool`) recebe o mapa na saída da descompressão. Mesmo assim a
+    PPC para logo adiante, no `Flash_Create` do menu principal: o Flash copia registros de 8 bytes (`Flash_GetRecord`,
+    `memcpy`) sobre campos de 4, e o mapa não inverte posição lida com duas larguras (três conflitos "[4, 8]" só nesse
+    conteúdo). O mapa por posição não passa pelos menus; quem passa é o conversor do Flash (`menus.md` 7). A PPC com o
+    mapa confere o rastro e a guarda só até o primeiro menu sem conversor.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).

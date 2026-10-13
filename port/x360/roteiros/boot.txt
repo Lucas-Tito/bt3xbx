@@ -1,0 +1,20 @@
+# Do boot ao menu principal com o cartão vazio: New Game, "sim" ao "criar o save?", tudo desbloqueado.
+# Incluído no começo dos outros roteiros (pede BT3_DESBLOQUEIO=1).
+espera tela 1 max 20000           # título (antes: logos e o cartão, tela "inicio")
+# START abre o menu do título só depois do logo e da animação, e X escolhe o New Game (o único item com o cartão
+# vazio): o par se repete até o fluxo do cartão perguntar "criar o save?" (McFlow 0xA)
+repete ate mcflow 10 max 4000
+    aperta START
+    quadros 30
+    aperta X
+    quadros 30
+volta
+# o diálogo começa no "não" e só aceita entrada uns 40 quadros depois de abrir (guia, seção 6)
+quadros 60
+aperta ESQUERDA
+quadros 10
+aperta X
+espera mcflow 15 max 600          # gravando o save (a gravação passa pelos estados 11, 15 e 16)
+espera mcflow 0 max 600           # o fluxo terminou: o save do jogo está na memória
+desbloqueia                       # antes do MainMenu_Init, que lista o Shenlong só com as sete esferas
+espera tela 4 max 600             # menu principal
