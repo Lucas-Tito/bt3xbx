@@ -527,8 +527,11 @@ carga da demo 98,9%. Três problemas, corrigidos na segunda versão:
 - **O console congelou no começo da luta** (vblank 4433), sem erro e sem a Guide. Causa provável, ainda não
   confirmada no console: os blocos do `DrawPrimitiveUP` passavam do limite do ring buffer (acima). Para o caso de outro travamento, a main vigia a thread do jogo e registra
   onde ela está parada (a etapa do fim do quadro, o quadro do GS, o vblank, o progresso da VU1), e os primeiros quadros
-  da luta saem passo a passo no log. `BT3_VU1=0` desliga os programas da VU1 (o backend ainda não desenha o que eles
-  produzem: F5).
+  da luta saem passo a passo no log.
+- **Os programas da VU1 ficam desligados no 360** (`BT3_VU1=1` liga): o backend ainda não desenha o que eles produzem,
+  e em big-endian o microcódigo das tabelas ainda vem na ordem errada (`formatos/gpu.md` seção 6). No qemu, com o
+  rasterizador ligado a partir do quadro 4400, a PPC teve um programa que rodou 4 milhões de instruções sem terminar
+  logo no começo da luta (a x86, nenhum): no console isso parece o jogo congelado. Segundo suspeito do travamento.
 - **1,8 vez o tempo real nos menus:** as capturas (`BT3_SHOT=20`) custavam cerca de 260 ms cada, três a cada 60
   quadros; descontadas pela conta, o quadro inteiro fica perto dos 16,7 ms (a confirmar na segunda rodada). A captura passou a sair do tiling de uma vez e a ser
   gravada num `WriteFile` só, e o log mede os quadros com captura à parte.

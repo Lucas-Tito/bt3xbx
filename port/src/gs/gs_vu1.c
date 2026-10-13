@@ -724,10 +724,13 @@ void GsVu1_Call(int addr) {
 #ifdef PORT_X360
     gGsVu1Prog = sProgSize;
     {
-        /* BT3_VU1=0: the programs are not run, as above (the Xbox 360 back end does not draw their output yet) */
+        /* Not run unless BT3_VU1=1, as above: the Xbox 360 back end does not draw their output yet, and on a big-endian
+           host the microcode from the executable's tables is still in the wrong byte order (docs/x360/formatos/gpu.md,
+           section 6): under qemu one program ran 4 million instructions without ending, which on the console looks like
+           a frozen game. */
         static int on = -1;
         if (on < 0) {
-            on = getenv("BT3_VU1") == NULL || atoi(getenv("BT3_VU1")) != 0;
+            on = getenv("BT3_VU1") != NULL && atoi(getenv("BT3_VU1")) != 0;
         }
         if (!on) {
             return;
