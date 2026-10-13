@@ -73,6 +73,8 @@ def grupos():
         out.append(("pc_", f, base + extra, not nomes))
     out.append(("hl_", ROOT / "port/x360/headless/sem_janela.c", ["-std=gnu99", "-DX360_GS_D3D", I("port/x360/headless")],
                 False))
+    # o roteiro de controle (F4, etapa 4): o mesmo leitor das builds sem janela
+    out.append(("hl_", ROOT / "port/x360/headless/roteiro.c", ["-std=gnu99", I("port/x360/headless")], False))
     return out
 
 

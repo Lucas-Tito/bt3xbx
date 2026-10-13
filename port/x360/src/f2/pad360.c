@@ -50,11 +50,20 @@ static int ler(int quadrante, XINPUT_STATE *e) {
     return XInputGetState((DWORD)quadrante, e) == ERROR_SUCCESS;
 }
 
+/* Roteiro de controle (BT3_ROTEIRO, port/x360/headless/roteiro.c, F4 etapa 4): o jogador 1 vem do roteiro e os
+   dois controles contam como ligados, como na build sem janela (scePad2GetState sempre "pronto"); o XInput não é
+   lido. */
+extern int Roteiro_Ativo(void);
+extern int Roteiro_Pad(int socket, unsigned char *data);
+
 int Port_PadConnected(int socket) {
     int q;
 
     if (socket < 0 || socket > 1) {
         return 0;
+    }
+    if (Roteiro_Ativo()) {
+        return 1;
     }
     sLigado[socket] = 1;
     if (sQuadrante[socket] >= 0 && ler(sQuadrante[socket], &sEstado[socket])) {
@@ -80,6 +89,9 @@ int Port_PadRead(int socket, unsigned char *data) {
     const XINPUT_STATE *e;
     unsigned btn = 0, i;
 
+    if (Roteiro_Ativo()) {
+        return Roteiro_Pad(socket, data);
+    }
     if (socket < 0 || socket > 1 || !sLigado[socket]) {
         return 0;
     }

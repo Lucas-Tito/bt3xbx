@@ -171,7 +171,7 @@ def construir(alvo):
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
-    extras = ["sem_janela"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
+    extras = ["sem_janela", "roteiro"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
