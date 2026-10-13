@@ -285,6 +285,13 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
   rodadas da mesma x86 (13 palavras: endereços da pilha e afins). Prove pela seção `.text` (`objcopy -O binary
   --only-section=.text` e `sha1sum`: a mesma antes e depois), pelos valores da luta (`compara.py`) e pela memória
   comparada com uma segunda rodada da base.
+- **Float em hardware na PPC: o GCC junta `a * b + c` num `fmadd`**, que arredonda uma vez só; a x86 com SSE2 não tem
+  FMA. O rasterizador de referência saiu com 1 a 9 pixels de borda diferentes em 4 de 125 quadros do título, sem nada
+  de ordem de bytes. O resto do port já compilava com `-ffp-contract=off`; o GS da PPC passou a compilar também. Antes
+  de procurar troca de bytes numa diferença pequena de imagem, conte os `fmadd` no objeto
+  (`objdump -d | grep -c fmadd`).
+- **A última linha de uma rodada cortada pelo `timeout` sai pela metade** (o stdio grava em blocos de 4 KB): o
+  `compara.py` acusava 1 quadro diferente, o último. Agora ele ignora a linha sem o fim de linha.
 - **Soma de verificação sobre bytes de números nativos** (`McCard_Checksum` do cartão de memória) dá outro valor em
   big-endian, e confere em cada build: é esperado enquanto o save não sai de uma máquina para outra.
 

@@ -14,8 +14,8 @@ def ler(caminho, big=False):
     out = {}
     for l in open(caminho):
         p = l.split()
-        if " hp " not in l:
-            continue
+        if " hp " not in l or not l.endswith("\n"):
+            continue  # (sem o fim de linha: a última linha de uma rodada cortada pelo timeout, que o stdio gravou pela metade)
         if big and "rnd" in p:
             r = p[p.index("rnd") + 1]
             p[p.index("rnd") + 1] = r[8:] + r[:8]

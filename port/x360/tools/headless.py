@@ -147,12 +147,15 @@ def construir(alvo):
                                ["-fno-strict-aliasing", "-ffp-contract=off", "-fno-builtin", "-w", "-Iport/include",
                                 f"-I{f.parent}", "-include", "newlib_shim.h"], f, o, be=alvo.be))
 
-    # o GS do port, o som e o checksum de estado, sem janela (float em hardware, como na build de PC)
+    # o GS do port, o som e o checksum de estado, sem janela (float em hardware, como na build de PC). Na PPC sem
+    # multiplicação-soma fundida: o GCC junta a * b + c num fmadd, que arredonda uma vez só, e o rasterizador de
+    # referência saía com pixels de borda diferentes da x86 (que não tem FMA) em 4 de 125 quadros do título
+    fma = ["-ffp-contract=off"] if alvo.be else []
     for f in sorted((ROOT / "port/src/gs").glob("*.c")):
         if f.stem in GS_SEM_SDL:
             o = alvo.obj / ("gs_" + f.stem + ".o")
             junta(f, o, compile_ee(alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w"] +
-                                   alvo.hard + (alvo.instr if f.stem != "state" else []) +  # o checksum lê tudo em blocos de 8
+                                   alvo.hard + fma + (alvo.instr if f.stem != "state" else []) +  # o checksum lê tudo em blocos de 8
                                    ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], f, o, ee=False, be=alvo.be))
 
     # a camada do port: aritmética do PS2 em software, menos as duas pontes com a FPU (interface só de inteiros)
