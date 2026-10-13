@@ -159,6 +159,35 @@ size_t __wrap_Port_FileReadAt(const char *rel, long offset, void *buf, size_t by
     return got;
 }
 
+const char *Conv_FormatoSecao(const char *nome, int secao); /* port/x360/conv/conv.c */
+
+/* BT3_GUARDA=anota (F4, etapa 4: os roteiros de controle na PPC com o mapa, port/x360/tools/roteiros.sh): o conteúdo
+   descomprimido de um arquivo convertido por formato que nenhum gancho vai converter (a seção dele não tem formato na
+   tabela única, Conv_FormatoSecao; é a mesma escolha do conv_tool) recebe o mapa aqui, na saída da descompressão.
+   Sem isso o jogo leria a tabela dele crua antes de qualquer conferência: o MPACK_AT do MainMenu_Init calcula o
+   ponteiro que passa ao Res_RelocateOffsets, e a guarda, que só anota, acusa lá dentro, tarde demais. */
+static int sem_gancho(const char *arq, const uint8_t *buf, uint32_t bufOfs, uint32_t ofs) {
+    static int anota = -1;
+    int secao = -2;
+    if (anota < 0) {
+        anota = getenv("BT3_GUARDA") != NULL && strcmp(getenv("BT3_GUARDA"), "anota") == 0;
+    }
+    if (!anota) {
+        return 0;
+    }
+    if (ofs == 0) {
+        secao = 0;
+    } else if (bufOfs == 0) { /* um menu_pacote lido inteiro: a tabela já está convertida (números nativos) */
+        uint32_t n = ((const uint32_t *)buf)[0], k;
+        for (k = 1; k <= n && k < 256; k++) {
+            if (((const uint32_t *)buf)[k] == ofs) {
+                secao = (int)k;
+            }
+        }
+    }
+    return Conv_FormatoSecao(arq, secao) == NULL;
+}
+
 extern void *__real_Bpe_Decode(void *src, void *dst, int32_t *rawSize);
 void *__wrap_Bpe_Decode(void *src, void *dst, int32_t *rawSize) {
     void *out;
@@ -181,7 +210,8 @@ void *__wrap_Bpe_Decode(void *src, void *dst, int32_t *rawSize) {
             char nome[256];
             snprintf(nome, sizeof(nome), "%s@0x%X#bpe", sLeit[i].nome, (unsigned)(sLeit[i].ofs + (uint32_t)(s - sLeit[i].buf)));
             /* de um arquivo convertido por formato, quem converte o descomprimido é o jogo (Port_ConvertAnim) */
-            if (!convertido(sLeit[i].nome)) {
+            if (!convertido(sLeit[i].nome) ||
+                sem_gancho(sLeit[i].nome, sLeit[i].buf, sLeit[i].ofs, sLeit[i].ofs + (uint32_t)(s - sLeit[i].buf))) {
                 aplicar(nome, 0, out, (uint32_t)*rawSize);
             }
             if (getenv("BT3_INVERTER_LOG") != NULL) {

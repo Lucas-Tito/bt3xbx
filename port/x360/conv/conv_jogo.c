@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "conv.h"
 
@@ -88,9 +89,31 @@ static const char *quem(void *ret, char *s) {
     return s;
 }
 
+/* BT3_GUARDA=anota (só sem janela, F4 etapa 4): a PPC com o mapa do rastreio (BT3_MAPA, inverter.c), em que o mapa
+   já trocou o conteúdo sem gancho (inclusive o de um arquivo convertido por formato: inverter.c, sem_gancho), segue
+   adiante e a guarda só nomeia cada chamada sem conversor, numa linha "guarda: ..." da saída
+   (port/x360/tools/roteiros.sh). Sem o mapa o jogo cairia logo depois. */
+static int anotar(void) {
+#ifdef _XBOX
+    return 0;
+#else
+    static int a = -1;
+    if (a < 0) {
+        a = getenv("BT3_GUARDA") != NULL && strcmp(getenv("BT3_GUARDA"), "anota") == 0;
+    }
+    return a;
+#endif
+}
+
 void Port_UnpackCheck(const char *onde) {
     char s[160];
     if (sPendente != NULL) {
+        if (anotar()) {
+            printf("guarda: Sprite_Unpack sem conversor em %s, até o %s\n", quem(sPendenteDe, s), onde);
+            fflush(stdout);
+            sPendente = NULL;
+            return;
+        }
         falha("Sprite_Unpack sem conversor em %s: o conteúdo ficou cru até o %s", quem(sPendenteDe, s), onde);
     }
 }

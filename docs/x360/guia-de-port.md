@@ -453,6 +453,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     menu principal, cartão vazio. Com um ciclo de 120 (ESQUERDA em 90, X em 110; também 150 e 180) o save sai. Confira
     pelos arquivos do cartão e pela sequência de estados do McFlow (`dprintf McFlow_Update` com `gMcFlow->state`), não
     pela tela a que se chega.
+- **A PPC com o mapa nos menus sem conversor (F4, etapa 4)**, para conferir o "sem conversor" pela guarda (que só
+  anota, com `BT3_GUARDA=anota`): o o conteúdo de um arquivo que já tem conversor (o menu principal, seção 2 do
+  00449, que tem `menu_pacote`) não recebia o mapa: o `inverter.c` deixava o descomprimido desses arquivos para o
+  gancho do chamador, que não existe. O `MPACK_AT` do `MainMenu_Init` leu a tabela crua e o ponteiro errado caiu no
+  `Res_RelocateOffsets`, antes de a guarda acusar. Agora, com `anota`, o conteúdo de seção sem formato na tabela
+  única (`Conv_FormatoSecao`, a mesma escolha do `conv_tool`) recebe o mapa na saída da descompressão. Mesmo assim a
+  PPC para logo adiante, no `Flash_Create` do menu principal: o Flash copia registros de 8 bytes (`Flash_GetRecord`,
+  `memcpy`) sobre campos de 4, e o mapa não inverte posição lida com duas larguras (três conflitos "[4, 8]" só nesse
+  conteúdo). O mapa por posição não passa pelos menus; quem passa é o conversor do Flash (`menus.md` 7). A PPC com o
+  mapa confere o rastro e a guarda só até o primeiro menu sem conversor.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
