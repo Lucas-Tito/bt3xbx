@@ -92,6 +92,7 @@ própria só para isso). Para cá só volta texto.
 | `headless.py --alvo x86\|ppc [--rastreio\|--chamadas]` | builds sem janela do port de PC: x86 de 32 bits (clang `-m32`, a referência little-endian com ponteiros de 32 bits como o 360) e PowerPC 32 bits big-endian (GCC cross, roda no `qemu-ppc`). As duas usam float por software (o do PS2), então uma diferença entre elas só pode vir da ordem dos bytes |
 | `f1.sh` | o ciclo inteiro: builds, rastreio, mapa, luta na PPC, comparações. `F1_SEM_RASTREIO=1` reaproveita o rastreio (que leva cerca de 1 h) |
 | `menus.sh` | o ciclo dos menus (F3, etapa 3): boot até as demos sem `BT3_DEMO`, PPC sem mapa com os arquivos que a x86 lê, lutas das demos e memória num quadro comparadas |
+| `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X em ciclo) cria o save num cartão vazio e entra no menu principal; a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Modelo para os roteiros da etapa 4 |
 | `compara.py` | compara a luta quadro a quadro (vida, posição, relógio, gerador aleatório) pelo `hash.txt` do `state.c` |
 | `memdiff.py` | compara a memória do jogo das duas builds num quadro: heap pareado pelos blocos do alocador do jogo, globais pelo nome, cada palavra numa classe (igual, igual sem inverter, 2xu16, u64...) |
 | `memdiff.py --marcas` | o mesmo, campo a campo num bloco que guarda um arquivo, pela largura que o conversor deu a cada byte (`conv_tool --marcas`) |
@@ -109,7 +110,7 @@ própria só para isso). Para cá só volta texto.
 | `headless/inverter.c` | aplica o mapa na PPC (na leitura do arquivo e na saída da descompressão) |
 | detector de visões (`BT3_VISOES` no `rastreio.c`, `visoes.py`) | acusa memória gravada com uma largura e lida com outra (u8 de um s32, u64 sobre dois u32). A lista de pares já tratados fica em `visoes_resolvidas.tsv` |
 | `tipos.py` | liga cada leitura do rastreio a struct e campo do código (coluna do DWARF + AST JSON do clang) |
-| `port/x360/conv/` (`conv_tool`) | conversores por formato em C89, para o instalador do 360 e para o PC: troca in-place com limite conferido e cada byte marcado; `conv_tool --mapa` confere contra o rastreio e mede a cobertura (decisão 12) |
+| `port/x360/conv/` (`conv_tool`) | conversores por formato em C89, para o instalador do 360 e para o PC: troca in-place com limite conferido e cada byte marcado; `conv_tool --mapa` confere contra o rastreio e mede a cobertura (decisão 12); `--disco` termina com o censo dos arquivos de menu por faixa de id (quantos arquivos e contêineres BPE ainda sem conversor). Arquivo e seção para formato numa tabela só (`sFaixas`, conv.c). A `conv_tool` se compila sem `conv_jogo.c`, a ponte do jogo, que cita funções dele |
 | `elfdados.py` | retipa as tabelas de dados do executável (o splat põe `.long` em tudo) pela largura lida |
 | `bitfields.py` | reescreve os campos de bits do C pré-processado para o GCC big-endian ter a ordem do PS2 (no 360 é `#pragma bitfield_order(lsb_to_msb)`) |
 | `headless/chamadas.c`, `chamadas.py` | sequência de funções chamadas nas duas builds, para achar onde a execução se separa |
@@ -318,6 +319,12 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
   fica em cada chamador, com o nome do formato, porque só quem chama sabe o que descomprimiu. A ferramenta de teste
   repete essa escolha numa tabela (arquivo e seção para formato) e converte o conteúdo pelo nome que o rastreio dá
   (`arquivo@0xDESL#bpe`), no `--mapa` e no `--disco`.
+- **Gancho por chamador precisa de rede.** Com dezenas de chamadores, um esquecido deixa o conteúdo cru e o jogo cai
+  longe (no BT3, o menu principal no console, uma rodada inteira). Duas redes: um verificador estático
+  (`unpacks.py`: chamada sem gancho, buffer ou formato errados) e uma guarda em tempo de jogo, só em big-endian, que
+  anota o buffer descomprimido e quem pediu e para com o nome no primeiro ponto em que ele seria lido cru. **O ponto
+  de conferência tem de ser o primeiro leitor, não o vblank:** a queda vem na linha seguinte ao `Sprite_Unpack`, no
+  mesmo quadro (`Res_RelocateOffsets`), antes de qualquer vblank ou da descompressão seguinte.
 - Fluxo de tags sem alinhamento (o Flash dos menus): percorra pelo mesmo caminho do leitor do jogo e exija que cada
   bloco feche exatamente no tamanho declarado. É essa conferência que pega um passo de leitura errado, porque um
   campo medido errado desalinha tudo o que vem depois.
@@ -416,6 +423,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     (`ReleaseThreadOwnership` numa, `AcquireThreadOwnership` na outra).
   - Um print da tela gravado pelo próprio programa (`tela.bmp`) dispensa descrição do usuário, desde que
     tenha uma referência que não dependa do que se testa (um retângulo de `Clear` com cor pura).
+- **Endereço de retorno no `cl` do 360:** `_ReturnAddress()` é intrínseca do compilador PowerPC do XDK mesmo sem
+  `#pragma intrinsic` e sem header (declare `void *_ReturnAddress(void);`): numa função com prólogo vira a leitura do LR
+  salvo (`lwz rX,-8(r1)` depois do prólogo), numa folha vira `mflr`. Numa função cujo único chamado é de cauda (`b x`)
+  o compilador não salva o LR e mesmo assim lê `-8(r1)`: lixo. Chame-a numa função que faça uma chamada comum antes
+  ou depois (a guarda do `Sprite_Unpack` chama dois ganchos e o `Bpe_Decode`). No GCC, `__builtin_return_address(0)`.
 - **`docker run ... | tr` com o `cl -Zi` dentro não termina:** o `cl` sobe o `mspdbsrv.exe`, que herda a saída e fica
   vivo depois do `cl`; o pipe nunca fecha. Redirecione a saída do `cl` para arquivo (como o `build_f2.sh`) e leia depois.
 - **`atof` sem declaração no C89 do `cl`:** "C4013: assuming extern returning int", e no PowerPC o valor viria do
@@ -424,6 +436,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **`wsl.sh enviar` recusado** (commit ainda não enviado ao GitHub) não para um `enviar | tail && ...`:
   o status do pipe é o do `tail`, e o resto roda com a árvore velha do WSL. Faça push antes e confira a
   linha "WSL em <commit>".
+- **Controle sintético para os menus (`BT3_PAD_PLAY`):** o diálogo do cartão começa com o cursor no "não"
+  (`Dialog_SetCursor(1)`), então só apertar X volta ao título a cada tentativa; e o START só abre o menu do título
+  depois do logo e da animação, então uma fase de START com tempo fixo acaba cedo demais. O que passou: um ciclo único,
+  START, ESQUERDA e X espaçados, repetido do boot ao fim (o START e a ESQUERDA não fazem nada onde não cabem).
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).

@@ -92,7 +92,7 @@ int main(void) {
 }
 EOF
 # referência das entradas com conversor: o conv_tool sobre os arquivos extraídos
-gcc -std=c89 -O2 -w -o "$T/conv_tool" port/x360/conv/*.c
+gcc -std=c89 -O2 -w -o "$T/conv_tool" $(ls port/x360/conv/*.c | grep -v conv_jogo)
 lista=$(cd gamedata && ls pzs3us1/*.bin)
 rm -rf port/build/iso_ref && mkdir -p port/build/iso_ref
 "$T/conv_tool" --saida port/build/iso_ref gamedata $lista > "$T/conv.txt" 2>&1 || true

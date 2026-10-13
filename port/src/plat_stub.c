@@ -217,6 +217,12 @@ void Port_VBlank(void) {
         Port_SyncTest(gPortVBlanks);
     }
     Port_Trace(gPortVBlanks);
+#ifdef PORT_BIG_ENDIAN
+    {   /* a Sprite_Unpack whose caller converted nothing is caught within a frame (port/x360/conv/conv_jogo.c) */
+        extern void Port_UnpackCheck(const char *where);
+        Port_UnpackCheck("vblank");
+    }
+#endif
     if (sVsyncHandler != NULL) {
         sVsyncHandler(0);
     }

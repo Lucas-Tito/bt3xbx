@@ -6,9 +6,32 @@
 
 extern void TexFile_UploadOne(SpriteRes *res, s32 index, s32 tbp, s32 cbp); /* uploads one texture and its palette */
 
+#ifdef PORT_BIG_ENDIAN
+/* The unpacked data's numbers are converted by each caller, right after this call (Port_ConvertMenuPack, docs/x360/
+   formatos/menus.md 4). The guard (port/x360/conv/conv_jogo.c) remembers the unpacked buffer and who asked for it,
+   and stops the game, naming that caller, if the buffer is still unconverted when anything else runs. */
+extern void Port_UnpackBefore(void *src, void *caller);
+extern void Port_UnpackAfter(void *res, void *caller);
+#ifdef _XBOX
+void *_ReturnAddress(void); /* the 360 compiler's intrinsic (the saved link register) */
+#define SPRITE_CALLER() _ReturnAddress()
+#else
+#define SPRITE_CALLER() __builtin_return_address(0)
+#endif
+#endif
+
 /* Unpacks a BPE-compressed sprite sheet. */
 void *Sprite_Unpack(void *src, void *dst, s32 *rawSize) {
+#ifdef PORT_BIG_ENDIAN
+    void *res;
+
+    Port_UnpackBefore(src, SPRITE_CALLER());
+    res = Bpe_Decode(src, dst, rawSize);
+    Port_UnpackAfter(res, SPRITE_CALLER());
+    return res;
+#else
     return Bpe_Decode(src, dst, rawSize);
+#endif
 }
 
 /* Converts a screen Y; the identity in this build. */

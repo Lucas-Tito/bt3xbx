@@ -245,6 +245,13 @@ void Res_RelocateOffsets(TexFile **out, u8 *base, TexFile *hdr) {
     u32 i;
     TexEntry *e;
 
+#ifdef PORT_BIG_ENDIAN /* the first reader of nearly every unpacked menu screen: a Sprite_Unpack left unconverted is
+                          named here, before its offsets are used (port/x360/conv/conv_jogo.c) */
+    {
+        extern void Port_UnpackCheck(const char *where);
+        Port_UnpackCheck("Res_RelocateOffsets");
+    }
+#endif
     *out = hdr;
     hdr->ent = (TexEntry *)(base + hdr->entOfs * 4);
     for (i = 0; i < (*out)->count; i++) {

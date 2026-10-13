@@ -34,6 +34,7 @@ void Port_X360FecharSaida(void);           /* posix360.c */
 void Iso_Iniciar(void);                    /* iso360.c */
 extern const char *volatile gPortStage;    /* plat_mem.c: até onde o arranque chegou */
 void GsD3d_Soltar(void);                   /* port/x360/src/gs/gs_d3d.cpp */
+int Port_UnpackPendenteNaQueda(char *linha, int n); /* port/x360/conv/conv_jogo.c: a guarda do Sprite_Unpack */
 D3DDevice *gX360Dev;                       /* o dispositivo, para o backend do GS */
 /* o que o vigia lê da thread do jogo (sem xbdm não há como ler o contexto de outra thread no console) */
 extern volatile const char *gGsD3dEtapa;   /* gs_d3d.cpp: onde o fim do quadro está */
@@ -112,6 +113,12 @@ static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
                         acesso ? "escrevendo" : "lendo", onde, gPortStage);
     } else {
         Diario_Escrever("CRASH sem contexto (fase: %s)", gPortStage);
+    }
+    {   /* um Sprite_Unpack ainda sem gancho é a causa provável (dados de menu little-endian): diz quem chamou */
+        static char linha[256]; /* (fora da pilha, que pode ser o problema) */
+        if (Port_UnpackPendenteNaQueda(linha, sizeof(linha))) {
+            Diario_Escrever("%s", linha);
+        }
     }
     _flushall();
     gCor = 0xFFC02020;

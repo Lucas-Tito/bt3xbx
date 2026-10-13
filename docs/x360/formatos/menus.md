@@ -141,8 +141,38 @@ existe no 360, e de uma tabela que repete o que cada chamador já sabe; quebrari
 buffers reaproveitados (o `loadPack` fixo da tela de carregamento). Um gancho por chamador é uma linha onde a
 informação já está, e a lista de chamadores (seção 11) diz exatamente o que falta.
 
-Na ferramenta de teste a mesma escolha está numa tabela (`formato_bpe` em port/x360/conv/conv_tool.c), para
+Na ferramenta de teste a mesma escolha está na tabela única de formatos (`sFaixas` em port/x360/conv/conv.c: arquivo e
+seção para formato, F4 etapa 1), que o `formato_de` e o `formato_bpe` de port/x360/conv/conv_tool.c consultam, para
 `--mapa` e `--disco` converterem o conteúdo descomprimido pelo nome do rastreio (`pzs3us1/00449.bin@0x40#bpe`).
+
+### 4.1 A guarda e o verificador (F4, etapa 2)
+
+Um gancho esquecido deixa o conteúdo little-endian, e o jogo cai depois num endereço sem relação: foi assim no console
+(F3, etapa 8), em `Res_RelocateOffsets` logo depois do `Sprite_Unpack` sem gancho de `MainMenu_Init`. Duas redes:
+
+- **Antes de rodar:** `port/x360/tools/unpacks.py` lê `src/` e falha em toda chamada sem o bloco `#ifdef
+  PORT_BIG_ENDIAN` com o gancho (ou a marca `Port_UnpackSemNumeros(buffer)`, para conteúdo só de bytes) logo depois,
+  com buffer, tamanho ou formato errados, e lista as pendentes (`menus-modos.md` 7.1).
+- **Rodando, só em host big-endian:** `Sprite_Unpack` anota o buffer descomprimido e o endereço de retorno; o gancho
+  limpa a anotação (e só a do mesmo buffer: gancho sobre outro buffer, ou sem `Sprite_Unpack` antes, é falha). Com a
+  anotação ainda lá, `Port_UnpackCheck` (port/x360/conv/conv_jogo.c) para o jogo dizendo "Sprite_Unpack sem conversor
+  em <função>" em três pontos:
+  - no **`Res_RelocateOffsets`** (src/sys/gfxm_b_b.c), o primeiro leitor de quase toda tela (32 das chamadas o têm
+    logo depois): é o ponto que pega o caso do console antes de os deslocamentos crus virarem ponteiros. O vblank e
+    o `Sprite_Unpack` seguinte chegariam tarde, porque a queda vem no mesmo quadro, na linha seguinte;
+  - no **`Sprite_Unpack` seguinte**, para chamadas em sequência (retratos e estágio em laço);
+  - no **vblank** (port/src/plat_stub.c), para o conteúdo que ninguém reloca: no máximo um quadro de atraso.
+
+  Antes de descomprimir, um cabeçalho BPE impossível (tamanho negativo ou acima de 16 MB) também para com o nome: o
+  arquivo chegou sem conversor (`formato_de`). O nome sai de uma tabela das funções que chamam `Sprite_Unpack`
+  (`CHAMADORES` em conv_jogo.c, conferida pelo `unpacks.py`): a de maior endereço que não passa do retorno; o
+  endereço vai junto, para conferir pelo `addr2line` (qemu) ou pelo `.map` (360). No 360, uma queda com anotação
+  pendente também põe o nome no log (`AoMorrer`, main360.cpp). A build x86 não muda (tudo em `#ifdef
+  PORT_BIG_ENDIAN`; a seção `.text` tem o mesmo sha1).
+
+  Fora do alcance da guarda: um arquivo de pacote sem `formato_de` chega cru e o `MPACK_AT` dá um ponteiro sem sentido
+  antes do `Sprite_Unpack` (a guarda pode cair lendo o cabeçalho nesse endereço, ou recusá-lo); o censo do `--disco`
+  (`menus-modos.md` 6) é a rede desse caso.
 
 ## 5. Os pacotes de tela descomprimidos
 
@@ -474,7 +504,9 @@ quatro somas do `McFlow` (coincidência).
 **Outros chamadores de `Sprite_Unpack`/`Bpe_Decode`.** Cada um descomprime um formato próprio e precisa do seu
 gancho e da sua especificação. Convertidos: `BtlObjAnim_Load` (animações), `Load_InitScreen` (folha da tela de
 carregamento), `BootCard_Init`, `FirstRun_Main`, `McFlow_Init` e `Title_Init`. Pendentes (arquivo:linha da chamada,
-função), 76 chamadas:
+função), 77 chamadas (a contagem antiga dizia 76; a lista sempre teve 77). O inventário de cada uma (arquivo, seção,
+leitores, formato proposto, tela, essencial) está em `menus-modos.md`, e `port/x360/tools/unpacks.py` lista as que
+seguem pendentes:
 
 - `src/menu/menu_a.c:55` `MainMenu_Init` (o menu principal, seção 2 do 00449: 28 seções, com filme, janelas de
   mensagem e de ícones, legendas e textos; o próximo da fila, porque START no título leva a ele);

@@ -18,7 +18,7 @@ BT3_SAVES=$T/l BT3_HASH=$T/l.txt timeout 900 gdb -batch -nx -x $T/lista.gdb --ar
     grep '^LEU ' | cut -d' ' -f2 | grep -v '^disc/' | sort -u > $B/menus/abertos.txt
 echo "x86 leu $(wc -l < $B/menus/abertos.txt) arquivos até o vblank $ATE"
 BT3_SAVES=$T/x BT3_HASH_AT=$Q BT3_HASH=$B/menus/q_x86.txt timeout ${TX:-120} $B/x86/bt3_x86 > $B/menus/run_x86.txt 2>&1
-gcc -std=c89 -O2 -w -o $B/conv_tool port/x360/conv/*.c || exit 1
+gcc -std=c89 -O2 -w -o $B/conv_tool $(ls port/x360/conv/*.c | grep -v conv_jogo) || exit 1  # (conv_jogo.c é a ponte do jogo)
 rm -rf $B/dados_menus $B/menus/marcas && mkdir -p $B/dados_menus/mods $B/menus/marcas
 for d in gamedata/*; do ln -s "$(realpath "$d")" $B/dados_menus/; done
 $B/conv_tool --saida $B/dados_menus/mods gamedata $(cat $B/menus/abertos.txt) | grep -v "sem conversor$" |
