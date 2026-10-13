@@ -2,7 +2,9 @@
 # F4, etapa 2 (no WSL, na raiz): a guarda do Sprite_Unpack (port/x360/conv/conv_jogo.c) na PPC sem mapa, entrando no
 # menu principal com o controle gravado. Pede as builds x86 e ppc (headless.py --alvo x86|ppc).
 #   1. um controle sintético (BT3_PAD_PLAY, 18 bytes por leitura, botões ativos em 0): a cada 90 leituras START, depois
-#      ESQUERDA (o diálogo do cartão começa no "não") e X; do cartão vazio ele cria o save e entra no menu principal;
+#      ESQUERDA (o diálogo do cartão começa no "não") e X; do cartão vazio ele entra no menu principal pelo New Game
+#      SEM criar o save: a ESQUERDA chega antes de o "criar o save?" aceitar entrada, e o X responde "não" e "seguir
+#      sem salvar" (para criar o save, o ciclo de 120 do save_mc.sh);
 #   2. a x86 até o MainMenu_Init (gdb), listando os arquivos lidos, que a conv_tool converte para a PPC;
 #   3. a PPC no qemu, sem mapa: com o menu principal ainda sem conversor, ela tem de parar com "Sprite_Unpack sem
 #      conversor em MainMenu_Init", e o addr2line da chamada confere o nome.

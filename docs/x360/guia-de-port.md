@@ -92,7 +92,7 @@ própria só para isso). Para cá só volta texto.
 | `headless.py --alvo x86\|ppc [--rastreio\|--chamadas]` | builds sem janela do port de PC: x86 de 32 bits (clang `-m32`, a referência little-endian com ponteiros de 32 bits como o 360) e PowerPC 32 bits big-endian (GCC cross, roda no `qemu-ppc`). As duas usam float por software (o do PS2), então uma diferença entre elas só pode vir da ordem dos bytes |
 | `f1.sh` | o ciclo inteiro: builds, rastreio, mapa, luta na PPC, comparações. `F1_SEM_RASTREIO=1` reaproveita o rastreio (que leva cerca de 1 h) |
 | `menus.sh` | o ciclo dos menus (F3, etapa 3): boot até as demos sem `BT3_DEMO`, PPC sem mapa com os arquivos que a x86 lê, lutas das demos e memória num quadro comparadas |
-| `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X em ciclo) cria o save num cartão vazio e entra no menu principal; a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Modelo para os roteiros da etapa 4 |
+| `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X num ciclo de 90 leituras) entra no menu principal pelo New Game, sem criar o save (responde "não" ao "criar o save?"); a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Modelo para os roteiros da etapa 4 |
 | `compara.py` | compara a luta quadro a quadro (vida, posição, relógio, gerador aleatório) pelo `hash.txt` do `state.c` |
 | `memdiff.py` | compara a memória do jogo das duas builds num quadro: heap pareado pelos blocos do alocador do jogo, globais pelo nome, cada palavra numa classe (igual, igual sem inverter, 2xu16, u64...) |
 | `memdiff.py --marcas` | o mesmo, campo a campo num bloco que guarda um arquivo, pela largura que o conversor deu a cada byte (`conv_tool --marcas`) |
@@ -441,6 +441,13 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   (`Dialog_SetCursor(1)`), então só apertar X volta ao título a cada tentativa; e o START só abre o menu do título
   depois do logo e da animação, então uma fase de START com tempo fixo acaba cedo demais. O que passou: um ciclo único,
   START, ESQUERDA e X espaçados, repetido do boot ao fim (o START e a ESQUERDA não fazem nada onde não cabem).
+  - **Chegar ao menu principal não prova que o save foi criado** (F4, etapa 3). O ciclo de 90 leituras do
+    `guarda_menu.sh` parecia criar o save e não criava: o "criar o save?" do New Game (estado 0xA do McFlow) só aceita
+    entrada uns 40 quadros depois de abrir, quase um ciclo depois do X que escolheu o New Game. A ESQUERDA chegava
+    antes de ele aceitar, o X respondia "não", e o "seguir sem salvar?" (estado 9) recebia a ESQUERDA e o X a tempo:
+    menu principal, cartão vazio. Com um ciclo de 120 (ESQUERDA em 90, X em 110; também 150 e 180) o save sai. Confira
+    pelos arquivos do cartão e pela sequência de estados do McFlow (`dprintf McFlow_Update` com `gMcFlow->state`), não
+    pela tela a que se chega.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
