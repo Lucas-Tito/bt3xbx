@@ -175,7 +175,9 @@ def baixar_pasta(f, pasta, para):
     f.cwd(pasta)
     linhas = []
     f.retrlines("LIST", linhas.append)
-    nomes = sorted(l.split(None, 8)[-1] for l in linhas if l.strip() and not l.startswith("d"))
+    # (o servidor da FreeStyle lista "." e ".." sem o "d" de pasta)
+    nomes = sorted(n for n in (l.split(None, 8)[-1] for l in linhas if l.strip() and not l.startswith("d"))
+                   if n not in (".", ".."))
     os.makedirs(para, exist_ok=True)
     total = 0
     for nome in nomes:
