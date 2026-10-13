@@ -236,6 +236,10 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 - Instrumentar a pilha também (`-asan-stack=0` só tira as zonas vermelhas, e
   `-asan-skip-promotable-allocas=0`, `-asan-use-stack-safety=0`).
 - Rode com `setarch -R` para o resultado não depender do ASLR.
+- **A tabela do rastreio enche nos menus.** 2^23 posições bastavam para a luta da F1; um roteiro do boot até a luta do
+  Duelo lê 7,4 milhões de posições, e a de 2^23 só aceita 7,34 (enche a 7/8): a saída diz "TABELA CHEIA" e o mapa fica
+  sem o resto, em silêncio para quem não lê a última linha. `BT3_RASTREIO_BITS=24` (uns 940 MB) nos roteiros; até 24
+  bits o espalhamento é o de sempre, e o `rastreio.tsv` da F1 não muda.
 - Conflito (byte e número, duas larguras, leitura começando dentro de um número) **nunca**
   gera inversão. Ele vai para uma lista e se resolve pelo tipo do campo (`tipos.py`).
   Exemplo real: as flags de polígono do cenário são s32 no disco e o jogo lê um byte delas numa

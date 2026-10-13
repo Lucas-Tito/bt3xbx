@@ -98,15 +98,24 @@ typedef struct Uso {
     uint8_t desal;    /* lida como número num endereço de memória desalinhado para a largura */
 } Uso;
 
-#define TAB (1u << 23)
+/* 2^23 posições por padrão (uns 470 MB); BT3_RASTREIO_BITS=24 ou 25 para rodadas que leem mais (os roteiros de
+   controle dos menus, F4 etapa 4, enchem a de 2^23 antes da luta) */
+static uint32_t TAB = 1u << 23, sTabBits = 23;
 static Uso *sTab;
 static uint32_t sTabN, sPerdidos;
 
 static Uso *uso(uint64_t chave) {
-    uint32_t h = (uint32_t)((chave * 0x9E3779B97F4A7C15ull) >> 40) & (TAB - 1);
+    uint32_t h;
     if (sTab == NULL) {
+        const char *e = getenv("BT3_RASTREIO_BITS");
+        if (e != NULL && atoi(e) >= 16 && atoi(e) <= 28) {
+            sTabBits = (uint32_t)atoi(e);
+            TAB = 1u << sTabBits;
+        }
         sTab = calloc(TAB, sizeof(Uso));
     }
+    /* (até 24 bits, o mesmo espalhamento de sempre: a ordem do rastreio.tsv da F1 não muda) */
+    h = (uint32_t)((chave * 0x9E3779B97F4A7C15ull) >> (sTabBits <= 24 ? 40 : 64 - sTabBits)) & (TAB - 1);
     while (sTab[h].chave != 0 && sTab[h].chave != chave) {
         h = (h + 1) & (TAB - 1);
     }
