@@ -35,6 +35,42 @@ void Iso_Iniciar(void);                    /* iso360.c */
 extern const char *volatile gPortStage;    /* plat_mem.c: até onde o arranque chegou */
 void GsD3d_Soltar(void);                   /* port/x360/src/gs/gs_d3d.cpp */
 D3DDevice *gX360Dev;                       /* o dispositivo, para o backend do GS */
+/* o que o vigia lê da thread do jogo (sem xbdm não há como ler o contexto de outra thread no console) */
+extern volatile const char *gGsD3dEtapa;   /* gs_d3d.cpp: onde o fim do quadro está */
+extern volatile unsigned gGsD3dQuadros;    /* quadros apresentados */
+extern volatile unsigned gGsVu1Instr, gGsVu1Prog; /* port/src/gs/gs_vu1.c: instruções interpretadas, programa */
+extern unsigned gGsFrame, gPortVBlanks;    /* gs_core.c, plat_stub.c */
+extern volatile unsigned gX360Luta;        /* estado360.c */
+}
+
+/* BT3_GS=gpu: a main só espera; a cada 50 ms olha se a thread do jogo andou (vblank ou quadro apresentado). Parada
+   há 3 s, o log diz onde ela estava, de novo a cada 5 s: a primeira rodada travou no começo da luta sem dizer nada, e
+   com o jogo parado ninguém apresenta (nem a Guide abre). */
+static void Vigiar(void) {
+    static unsigned vb = ~0u, qd = ~0u, vu, falas;
+    static DWORD desde, ultimaFala;
+    DWORD agora = GetTickCount();
+    if (gPortVBlanks != vb || gGsD3dQuadros != qd) {
+        if (falas != 0 && agora - desde >= 3000) {
+            Diario_Escrever("vigia: a thread do jogo voltou a andar depois de %u ms", (unsigned)(agora - desde));
+        }
+        vb = gPortVBlanks;
+        qd = gGsD3dQuadros;
+        vu = gGsVu1Instr;
+        desde = agora;
+        falas = 0;
+        return;
+    }
+    if (agora - desde < 3000 || (falas != 0 && agora - ultimaFala < 5000) || falas >= 30) {
+        return;
+    }
+    Diario_Escrever("vigia: a thread do jogo está parada há %u ms: vblank %u, quadro do GS %u, %u apresentados, %s, luta "
+                    "desde o vblank %u; VU1: programa de %u instruções, %u instruções interpretadas desde a última olhada",
+                    (unsigned)(agora - desde), gPortVBlanks, gGsFrame, gGsD3dQuadros, (const char *)gGsD3dEtapa, gX360Luta,
+                    gGsVu1Prog, gGsVu1Instr - vu);
+    vu = gGsVu1Instr;
+    ultimaFala = agora;
+    falas++;
 }
 
 static volatile DWORD gCor = 0xFFE0C000;     /* amarelo */
@@ -175,6 +211,7 @@ void __cdecl main() {
         if (gpu) {
             if (!gTerminou) {
                 Sleep(50);
+                Vigiar();
                 continue;
             }
             /* o jogo terminou: o dispositivo volta (GsD3d_Soltar); se ele morreu sem soltar, toma-se à força */

@@ -391,6 +391,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     (o canto do pixel), que cai na borda do texel; com o filtro bilinear que o jogo pede, cada pixel vira a média de
     quatro texels. O rasterizador de referência lê o texel do pixel inteiro (`u >> 4`). Desenhada texel por pixel, a
     arte 2D é lida no ponto (`gs_d3d.hlsl`).
+  - **`DrawPrimitiveUP` grande trava o console sem erro.** Ele copia os vértices para o ring buffer secundário, e um
+    bloco só pode ter um quarto dele (512 KB no padrão de 2 MB; documentação do `BeginVertices`), não só "menos de
+    65.535 vértices" como diz a do `DrawPrimitiveUP`. Com blocos de até 1,8 MB os menus passaram (nunca mais de 190 KB
+    num quadro) e o console congelou no começo da luta, sem a Guide abrir (a causa provável; a confirmar). Divida em
+    blocos de até 448 KB.
+  - **Uma captura de tela pixel a pixel custa caro no console:** `XGAddress2DTiledOffset` por pixel e um `WriteFile`
+    por linha levavam cerca de 260 ms por imagem, e três capturas a cada 60 quadros pareciam o jogo a 1,8 vez o tempo
+    real. Destile de uma vez (`XGUntileSurface`), grave num `WriteFile` só, e meça os quadros com captura à parte.
+  - **Sem xbdm não há como ler o contexto de outra thread** (`DmGetThreadContext` é do xbdm, `XcrashGetThreadContext`
+    lê arquivo de queda): para achar onde uma thread parou, ela grava marcas e contadores, e outra thread os registra
+    quando ela para de andar (o vigia da `main360.cpp`).
   - Da documentação, ainda não medido no console: recurso preso no dispositivo (`SetTexture`) fica `IsBusy` até ser
     solto, e `LockRect` ou o último `Release` esperam por ele, então solte as texturas antes de ler uma de volta e só
     libere as soltas depois de `InsertFence` e `IsBusy() == FALSE`; o destino do `Resolve` não deve estar preso como

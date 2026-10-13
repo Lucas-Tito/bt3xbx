@@ -38,6 +38,10 @@ extern "C" {
 #include "gs_draw.h"
 #include "gs_texpack.h"
 extern D3DDevice *gX360Dev; /* main360.cpp */
+extern volatile unsigned gX360Luta; /* estado360.c: o vblank em que a luta começou (0: fora da luta) */
+/* Para o vigia da main (main360.cpp): onde o fim do quadro está e quantos quadros já foram apresentados. */
+volatile const char *gGsD3dEtapa = "antes do primeiro quadro";
+volatile unsigned gGsD3dQuadros;
 int Port_AspectMilli(void);  /* plat_stub.c */
 }
 #include "gs_vs.h" /* gerados pelo fxc no build (gs_d3d.hlsl): kGsVs, kGsPs, kCopiaVs, kCopiaPs */
@@ -49,7 +53,11 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #define TELA_W 1280
 #define TELA_H 720
 #define EDRAM_TILES 2048    /* 10 MB em tiles de 5.120 bytes */
-#define MAX_UP 65532        /* vértices por DrawPrimitiveUP: abaixo de 65.535, múltiplo de 2, 3 e 6 */
+/* Vértices por DrawPrimitiveUP. Ele copia para o ring buffer secundário, e um bloco tem de caber em um quarto dele
+   (documentação do BeginVertices: 512 KB com o padrão de 2 MB), além de ter menos de 65.535 vértices. A primeira
+   versão usava 65.532 (1,8 MB com 28 bytes por vértice): os menus nunca passaram de 512 KB num desenho, e o console
+   congelou no começo da luta. 16.380 vértices são 448 KB, múltiplo de 2, 3 e 6. */
+#define MAX_UP 16380
 #define MAX_COVA 4096
 #define MEM_TEXTURAS (128u << 20) /* bytes de textura decodificada antes de recusar novas (o gs_draw.c usa a branca) */
 
@@ -82,8 +90,9 @@ static unsigned sMemTex;
 /* o que o quadro teve e o que ficou de fora, para o log */
 static struct {
     unsigned quadros, desenhos, vertices, texNovas, trocas, restauros, semVu, semNativo[8], semFb, semTextura;
-    double msFim, msFimPior, msQuadro, msQuadroPior;
-    unsigned acima16, acima33;
+    double msFim, msFimPior, msQuadro, msQuadroPior, msPresent, msPresentPior;
+    unsigned acima16, acima33, capturas, maiorDesenho;
+    double msCaptura;
 } sConta;
 static LARGE_INTEGER sFreq, sUltimoFim;
 static unsigned sAvisado; /* bits: o que já foi dito uma vez no log */
@@ -213,7 +222,10 @@ static D3DTexture *textura_alvo(void) {
 /* ---- alvos --------------------------------------------------------------------------------------------------- */
 
 static void target_ensure(int i) {
+    const char *antes = (const char *)gGsD3dEtapa;
+    gGsD3dEtapa = "criando a textura de um alvo";
     sAlvos[i].tex = textura_alvo();
+    gGsD3dEtapa = antes;
     sAlvos[i].conteudo.x0 = sAlvos[i].conteudo.x1 = 0;
     if (sResidente == i) {
         sResidente = -1; /* (a vaga mudou de dono: o que estava na EDRAM era do antigo) */
@@ -501,17 +513,23 @@ static int d3d_init(void) {
 /* ---- captura (BT3_SHOT) -------------------------------------------------------------------------------------- */
 
 /* A cor do alvo mostrado, já resolvida na textura dele, no formato do rasterizador de software (gs_core.c,
-   screenshot): P6 640 x 448, as colunas além da largura do quadro (FRAME.FBW * 64) em preto. */
+   screenshot): P6 640 x 448, as colunas além da largura do quadro (FRAME.FBW * 64) em preto. A textura sai do tiling
+   de uma vez (XGUntileSurface) e o arquivo vai num WriteFile só: pixel a pixel, com uma escrita por linha, cada
+   captura levava 260 ms (a primeira rodada no console). */
 static void captura(int alvo) {
     static int criou;
-    static unsigned char linha[640 * 3];
+    static DWORD linear[640 * 448];
+    static unsigned char ppm[16 + 640 * 448 * 3];
+    static const char cab[] = "P6\n640 448\n255\n";
     char nome[64];
     D3DLOCKED_RECT r;
     HANDLE h;
     DWORD n;
+    RECT ret;
     uint64_t fr = (gGs.frame[0] & 0x1FF) == gsTargets[alvo].fbp ? gGs.frame[0] :
                   (gGs.frame[1] & 0x1FF) == gsTargets[alvo].fbp ? gGs.frame[1] : (8ull << 16);
     int fbw = (int)((fr >> 16) & 0x3F), x, y;
+    unsigned char *o;
     LARGE_INTEGER t0;
 
     QueryPerformanceCounter(&t0);
@@ -520,6 +538,7 @@ static void captura(int alvo) {
         criou = 1;
     }
     fbw = (fbw ? fbw : 10) * 64;
+    if (fbw > 640) fbw = 640;
     /* textura presa no dispositivo fica ocupada para sempre (IsBusy): o LockRect esperaria sem fim */
     sDev->SetTexture(0, NULL);
     sDev->SetTexture(1, NULL);
@@ -528,28 +547,27 @@ static void captura(int alvo) {
     if (FAILED(sAlvos[alvo].tex->LockRect(0, &r, NULL, D3DLOCK_READONLY))) {
         return;
     }
+    ret.left = 0; ret.top = 0; ret.right = fbw; ret.bottom = 448;
+    XGUntileSurface(linear, 640 * 4, NULL, r.pBits, TAM, TAM, &ret, 4);
+    sAlvos[alvo].tex->UnlockRect(0);
+    memcpy(ppm, cab, sizeof(cab) - 1);
+    o = ppm + sizeof(cab) - 1;
+    for (y = 0; y < 448; y++) {
+        for (x = 0; x < 640; x++, o += 3) {
+            DWORD c = x < fbw ? linear[y * 640 + x] : 0; /* A8R8G8B8 como u32 nativo */
+            o[0] = (unsigned char)(c >> 16);
+            o[1] = (unsigned char)(c >> 8);
+            o[2] = (unsigned char)c;
+        }
+    }
     _snprintf(nome, sizeof(nome), "game:\\shots\\gpu_%05u.ppm", gGsFrame);
     h = CreateFile(nome, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h != INVALID_HANDLE_VALUE) {
-        static const char cab[] = "P6\n640 448\n255\n";
-        WriteFile(h, cab, sizeof(cab) - 1, &n, NULL);
-        for (y = 0; y < 448; y++) {
-            const DWORD *p = (const DWORD *)r.pBits;
-            for (x = 0; x < 640; x++) {
-                DWORD c = x < fbw && x < TAM ? p[XGAddress2DTiledOffset(x, y, TAM, 4)] : 0; /* A8R8G8B8 como u32 nativo */
-                linha[x * 3 + 0] = (unsigned char)(c >> 16);
-                linha[x * 3 + 1] = (unsigned char)(c >> 8);
-                linha[x * 3 + 2] = (unsigned char)c;
-            }
-            WriteFile(h, linha, sizeof(linha), &n, NULL);
-        }
+        WriteFile(h, ppm, (DWORD)(o - ppm), &n, NULL);
         CloseHandle(h);
     }
-    sAlvos[alvo].tex->UnlockRect(0);
-    if (!(sAvisado & 1)) {
-        sAvisado |= 1;
-        Diario_Escrever("gs_d3d: captura %s em %.1f ms (as seguintes não vão para o log)", nome, ms_desde(&t0));
-    }
+    sConta.capturas++;
+    sConta.msCaptura += ms_desde(&t0);
 }
 
 /* ---- o quadro ------------------------------------------------------------------------------------------------ */
@@ -631,14 +649,23 @@ static void desenha(const GsDraw *d) {
     ret_une(&sSujo, x0, y0, x1, y1);
     sConta.desenhos++;
     sConta.vertices += d->count;
+    if (d->count > sConta.maiorDesenho) sConta.maiorDesenho = d->count;
 }
 
 static void log_quadros(void) {
-    unsigned q = sConta.quadros;
-    Diario_Escrever("gs_d3d: quadro %u: %u quadros, fim do quadro %.2f ms (pior %.2f), quadro inteiro %.2f ms (pior %.2f), "
-                    "%u acima de 16,7 e %u acima de 33,4 ms; por quadro: %.1f desenhos, %.0f vértices, %.1f trocas de alvo",
-                    gGsFrame, q, sConta.msFim / q, sConta.msFimPior, sConta.msQuadro / q, sConta.msQuadroPior, sConta.acima16,
-                    sConta.acima33, (double)sConta.desenhos / q, (double)sConta.vertices / q, (double)sConta.trocas / q);
+    /* os tempos sem os quadros que tiveram captura (cada uma pesa centenas de ms e encobria o resto) */
+    unsigned q = sConta.quadros, t = sConta.quadros + sConta.capturas;
+    if (q == 0) {
+        q = 1;
+    }
+    Diario_Escrever("gs_d3d: quadro %u: %u quadros sem captura: quadro inteiro %.2f ms (pior %.2f), dos quais fim do quadro "
+                    "%.2f (pior %.2f) e nele o Present %.2f (pior %.2f); jogo e gravação %.2f; %u acima de 16,7 e %u acima "
+                    "de 33,4 ms; %u capturas, %.1f ms cada", gGsFrame, sConta.quadros, sConta.msQuadro / q, sConta.msQuadroPior,
+                    sConta.msFim / q, sConta.msFimPior, sConta.msPresent / q, sConta.msPresentPior,
+                    (sConta.msQuadro - sConta.msFim) / q, sConta.acima16, sConta.acima33, sConta.capturas,
+                    sConta.capturas ? sConta.msCaptura / sConta.capturas : 0.0);
+    Diario_Escrever("gs_d3d:   por quadro: %.1f desenhos, %.0f vértices, %.1f trocas de alvo; maior desenho %u vértices",
+                    (double)sConta.desenhos / t, (double)sConta.vertices / t, (double)sConta.trocas / t, sConta.maiorDesenho);
     Diario_Escrever("gs_d3d:   %u texturas novas (%u KB de textura viva, %d no cache), %d alvos, %d pipelines; fora: %u VU1, "
                     "nativos %u/%u/%u/%u (contorno, chave, tabela, ids), %u imagens direto no quadro, %u texturas recusadas; "
                     "%u MB livres", sConta.texNovas, sMemTex >> 10, gsTexCount, gsTargetCount, sPipeCount, sConta.semVu,
@@ -648,13 +675,24 @@ static void log_quadros(void) {
 }
 
 static void frame_end(void) {
-    LARGE_INTEGER t0;
+    LARGE_INTEGER t0, tp;
+    double msFim, msPresent;
+    unsigned capturas = sConta.capturas;
     int cur = -1, mostrado, i;
     uint32_t n;
     double ms;
     static int every = -1;
 
     QueryPerformanceCounter(&t0);
+    gGsD3dEtapa = "fim do quadro: refazendo a lista";
+    if (gX360Luta != sLutaVista) { /* os primeiros quadros da luta, passo a passo (a primeira rodada travou ali) */
+        sLutaVista = gX360Luta;
+        sPassoAPasso = gX360Luta != 0 ? 8 : 0;
+    }
+    if (sPassoAPasso > 0) {
+        Diario_Escrever("gs_d3d: quadro %u (luta): %u desenhos, %u vértices, %u da VU1, %d alvos, %d texturas", gGsFrame,
+                        gsDrawCount, gsVertCount, gsVuVertCount, gsTargetCount, gsTexCount);
+    }
     sDateFonte = NULL;
     for (n = 0; n < gsDrawCount; n++) {
         const GsDraw *d = &gsDraws[n];
@@ -701,7 +739,12 @@ static void frame_end(void) {
         }
         desenha(d);
     }
+    gGsD3dEtapa = "fim do quadro: o último alvo volta para a textura";
     sai_da_edram();
+    if (sPassoAPasso > 0) {
+        Diario_Escrever("gs_d3d: quadro %u (luta): lista refeita (maior desenho até aqui %u vértices)", gGsFrame,
+                        sConta.maiorDesenho);
+    }
 
     /* a imagem mostrada: a que o sceGsSwapDBuff montou para este quadro, senão o primeiro alvo (como o gs_gl.c) */
     mostrado = gGsMainFbp >= 0 ? GsDraw_TargetGet((uint32_t)gGsMainFbp, 0) : -1;
@@ -714,8 +757,10 @@ static void frame_end(void) {
     if (every > 0 && gGsFrame % (unsigned)every == 0 && mostrado >= 0 && gsTargets[mostrado].cleared &&
         sAlvos[mostrado].tex != NULL && (getenv("BT3_SHOT_FROM") == NULL || (int)gGsFrame >= atoi(getenv("BT3_SHOT_FROM"))) &&
         (getenv("BT3_SHOT_TO") == NULL || (int)gGsFrame <= atoi(getenv("BT3_SHOT_TO")))) {
+        gGsD3dEtapa = "fim do quadro: captura";
         captura(mostrado);
     }
+    gGsD3dEtapa = "fim do quadro: cópia para a tela";
     {
         D3DVIEWPORT9 vp = {0, 0, TELA_W, TELA_H, 0.0f, 1.0f};
         sDev->SetRenderTarget(0, sTela);
@@ -733,7 +778,11 @@ static void frame_end(void) {
                   512.0f / TAM, 448.0f / TAM, 1);
         }
     }
+    QueryPerformanceCounter(&tp);
+    gGsD3dEtapa = "fim do quadro: Present";
     sDev->Present(NULL, NULL, NULL, NULL);
+    msPresent = ms_desde(&tp);
+    gGsD3dEtapa = "fim do quadro: texturas soltas";
     /* nada do quadro fica preso no dispositivo: as texturas soltas podem ir quando a GPU terminar com elas */
     sDev->SetTexture(0, NULL);
     sDev->SetTexture(1, NULL);
@@ -741,18 +790,29 @@ static void frame_end(void) {
     sDev->InsertFence();
     cova_varre();
 
-    ms = ms_desde(&t0);
-    sConta.msFim += ms;
-    if (ms > sConta.msFimPior) sConta.msFimPior = ms;
+    msFim = ms_desde(&t0);
     ms = ms_desde(&sUltimoFim);
     QueryPerformanceCounter(&sUltimoFim);
-    sConta.msQuadro += ms;
-    if (ms > sConta.msQuadroPior) sConta.msQuadroPior = ms;
-    sConta.acima16 += ms > 16.7;
-    sConta.acima33 += ms > 33.4;
-    if (++sConta.quadros == 60) {
+    if (capturas == sConta.capturas) {
+        sConta.msFim += msFim;
+        if (msFim > sConta.msFimPior) sConta.msFimPior = msFim;
+        sConta.msPresent += msPresent;
+        if (msPresent > sConta.msPresentPior) sConta.msPresentPior = msPresent;
+        sConta.msQuadro += ms;
+        if (ms > sConta.msQuadroPior) sConta.msQuadroPior = ms;
+        sConta.acima16 += ms > 16.7;
+        sConta.acima33 += ms > 33.4;
+        sConta.quadros++;
+    }
+    if (sConta.quadros + sConta.capturas >= 60) {
         log_quadros();
     }
+    if (sPassoAPasso > 0) {
+        Diario_Escrever("gs_d3d: quadro %u (luta): apresentado em %.2f ms (Present %.2f)", gGsFrame, msFim, msPresent);
+        sPassoAPasso--;
+    }
+    gGsD3dQuadros++;
+    gGsD3dEtapa = "jogo e gravação do quadro";
 
     for (i = 0; i < gsTargetCount; i++) {
         gsTargets[i].draws = 0;

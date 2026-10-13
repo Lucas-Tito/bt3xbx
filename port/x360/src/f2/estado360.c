@@ -25,6 +25,7 @@ void Port_SessionPoll(void) {}
 void Port_SyncTest(unsigned vblank) { (void)vblank; }
 long Port_PadPlayPos(void);
 
+volatile unsigned gX360Luta; /* o vblank em que a luta começou, 0 fora dela (o backend do GS registra os primeiros quadros) */
 static FILE *sArq;
 static int sModo = -1;
 static LARGE_INTEGER sAntes, sFreq;
@@ -128,6 +129,7 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
     if ((fight != NULL) != luta) {
         luta = fight != NULL;
         Diario_Escrever("vblank %u: %s", vblank, luta ? "luta começou" : "luta terminou");
+        gX360Luta = luta ? vblank : 0;
     }
     Port_X360FecharSaida(); /* o fprintf(stderr) do jogo chega ao disco mesmo num travamento sem exceção */
     QueryPerformanceCounter(&sAntes); /* sem o tempo da própria gravação */

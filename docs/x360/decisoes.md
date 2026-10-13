@@ -501,13 +501,34 @@ Escolhas de implementação, dentro desses padrões:
   ligado; o FBA grava alfa 1 (o GS liga o bit 7). Os efeitos nativos que precisam do byte (contorno, tabela de
   profundidade, cópia dos ids) ficam para a F5, os programas de vértice (VU1) também, e as imagens copiadas direto para
   o quadro (filmes) para a F6: são contados no log e não desenhados.
-- **Vértices por `DrawPrimitiveUP`** (até 65.532 por chamada), sem buffer próprio: o 2D dos menus tem poucos.
+- **Vértices por `DrawPrimitiveUP`**, sem buffer próprio: o 2D dos menus tem poucos.
 - **Texturas decodificadas** em `D3DFMT_LIN_A8B8G8R8` (o u32 do `gs_draw.c` sem troca, etapa 6), soltas só quando a
   GPU terminou com elas (`IsBusy` depois do `InsertFence`). Sem pacote de texturas no 360.
 - **Ordem de bytes das texturas:** o `gs_draw.c` decodifica pela `Gs_VramRead`, que já lê a `sVram` (os bytes do PS2)
   como little-endian em qualquer host (`GS_LE32`, decisão 19). O backend de GPU do PC não lê a `sVram` direto; só o
   leitor de pacote de texturas usa `Gs_BlockPtr`, e para um hash de bytes.
 
+- **Vértices por `DrawPrimitiveUP`** em blocos de até 16.380 (448 KB), um quarto do ring buffer secundário. A
+  primeira versão usava até 65.532 e travou o console no começo da luta (primeira rodada, 13/10).
+
 Conferência: o backend grava as imagens mostradas (`BT3_SHOT`, `game:\shots\gpu_NNNNN.ppm`, no formato e na numeração
 do rasterizador de software) e `port/x360/tools/compara_quadros.py` as mede contra as da etapa 4 no WSL. O teste no
 console está pendente (o console estava desligado quando o código ficou pronto).
+
+**Primeira rodada no console (13/10/2026).** Logos, cartão e título na tela; comparados com o rasterizador da etapa 4
+(`compara_quadros.py`, pixels com diferença de até 8): cartão 96,7% (PSNR 22), logos 97,5%, título 83,1% (PSNR 25),
+carga da demo 98,9%. Três problemas, corrigidos na segunda versão:
+
+- **O texto do cartão não aparecia:** os glifos vêm com z `0x0FFFFFF0` num buffer Z24, z / zmax perto de 16, e o D3D9
+  do 360 corta a primitiva (o PC liga `GL_DEPTH_CLAMP`). O shader prende z em 0..1.
+- **O título saía macio:** a arte 2D era lida com o filtro linear no canto do pixel do GS, a borda do texel. Desenhada
+  texel por pixel, ela agora é lida no ponto, como o rasterizador. Ampliada ou reduzida, segue o filtro do jogo (o GS
+  de verdade filtraria; o rasterizador não).
+- **O console congelou no começo da luta** (vblank 4433), sem erro e sem a Guide. Causa provável, ainda não
+  confirmada no console: os blocos do `DrawPrimitiveUP` passavam do limite do ring buffer (acima). Para o caso de outro travamento, a main vigia a thread do jogo e registra
+  onde ela está parada (a etapa do fim do quadro, o quadro do GS, o vblank, o progresso da VU1), e os primeiros quadros
+  da luta saem passo a passo no log. `BT3_VU1=0` desliga os programas da VU1 (o backend ainda não desenha o que eles
+  produzem: F5).
+- **1,8 vez o tempo real nos menus:** as capturas (`BT3_SHOT=20`) custavam cerca de 260 ms cada, três a cada 60
+  quadros; descontadas pela conta, o quadro inteiro fica perto dos 16,7 ms (a confirmar na segunda rodada). A captura passou a sair do tiling de uma vez e a ser
+  gravada num `WriteFile` só, e o log mede os quadros com captura à parte.

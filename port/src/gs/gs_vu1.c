@@ -57,6 +57,11 @@ static unsigned sUnknown[2][128];
 static unsigned sStatRuns, sStatInstr, sStatKicks;
 static unsigned sProgSize;
 static unsigned sHle; /* program calls served by shader versions this frame */
+#ifdef PORT_X360
+/* The Xbox 360's main thread watches the game thread (port/x360/src/f2/main360.cpp) and reports, when a frame stalls,
+   how far the vertex unit got: instructions interpreted so far and the program running (its size). */
+volatile unsigned gGsVu1Instr, gGsVu1Prog;
+#endif
 static struct { unsigned size, runs, instr, kicks; } sProg[16]; /* per loaded program, this frame */
 
 static inline float clampf(float v) {
@@ -289,6 +294,9 @@ static void run(uint32_t start) {
         memcpy(&hi, &vu.micro[vu.pc * 8 + 4], 4);
         vu.cycle++;
         sStatInstr++;
+#ifdef PORT_X360
+        gGsVu1Instr++;
+#endif
         if (vu.qReady != 0 && vu.cycle >= vu.qReady) {
             vu.q = vu.qPending;
             vu.qReady = 0;
@@ -713,6 +721,19 @@ void GsVu1_Call(int addr) {
            by the rest of the list, which is still walked. */
         return;
     }
+#ifdef PORT_X360
+    gGsVu1Prog = sProgSize;
+    {
+        /* BT3_VU1=0: the programs are not run, as above (the Xbox 360 back end does not draw their output yet) */
+        static int on = -1;
+        if (on < 0) {
+            on = getenv("BT3_VU1") == NULL || atoi(getenv("BT3_VU1")) != 0;
+        }
+        if (!on) {
+            return;
+        }
+    }
+#endif
     if (getenv("BT3_VU_DUMP") != NULL && (int)gGsFrame == atoi(getenv("BT3_VU_DUMP")) && sProgSize == 127) {
         static int shown;
         if (shown < 3 && addr < 0) {
