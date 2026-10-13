@@ -65,11 +65,16 @@ for n in "${NOMES[@]}"; do
     echo "   x86r saiu com $?: $(grep -a '^rastreio:' $D/x86r.txt)"
     python3 port/x360/tools/roteiros.py telas $D/x86r.txt > $D/telas_r.txt
     echo "   x86r contra x86: $(python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_r.txt | tr '\n' ' ')"
-    # (o rastreio.py guarda tudo na memória: uns 5 GB com os 13 milhões de posições da Ultimate Battle; um roteiros.sh
-    # por vez no WSL de 8 GB)
-    if ! python3 port/x360/tools/rastreio.py mapa $D/rastreio.tsv -o $D/mapa.tsv --prog $B/x86r/bt3_x86r > $D/mapa.txt 2>&1; then
-        echo "   FALHA: rastreio.py mapa saiu com erro (memória?): $(tail -1 $D/mapa.txt)"; continue
-    fi
+    # (o rastreio.py guarda tudo na memória, e os 13 milhões de posições da Ultimate Battle não cabem nos 8 GB do WSL:
+    # o rastreio vai em partes, cada arquivo inteiro numa só, e os mapas das partes se juntam; e um roteiros.sh por vez)
+    rm -rf $D/partes; python3 port/x360/tools/roteiros.py partes $D/rastreio.tsv $D/partes | sed 's/^/   /'
+    ok=1; : > $D/mapa.txt
+    for p in $D/partes/parte_*.tsv; do
+        python3 port/x360/tools/rastreio.py mapa $p -o ${p%.tsv}.mapa --prog $B/x86r/bt3_x86r >> $D/mapa.txt 2>&1 || ok=
+    done
+    if [ -z "$ok" ]; then echo "   FALHA: rastreio.py mapa saiu com erro (memória?): $(tail -1 $D/mapa.txt)"; continue; fi
+    cat $D/partes/*.mapa | LC_ALL=C sort -t$'\t' -k1,1 -k2,2n > $D/mapa.tsv
+    cat $D/partes/*.mapa.conflitos | LC_ALL=C sort -t$'\t' -k1,1 -k2,2n > $D/mapa.tsv.conflitos
     # o que o rastreio viu ler como número e todo arquivo aberto (gdb): a PPC do passo 4 lê todos, e um que tem
     # conversor e chegasse sem conversão pararia o inverter.c (00001 a 00005 só se leem como número na luta)
     { cut -f1 $D/rastreio.tsv; grep -a '^LEU ' $D/gdb.txt | cut -d' ' -f2; } | grep -v -e '^ELF:' -e '^disc/' | sort -u > $D/lidos.txt

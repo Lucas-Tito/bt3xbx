@@ -12,6 +12,11 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             pendente alcançada tem de sair "sem conversor", e só ele
     roteiros.py soma LOG... --prog P        as chamadas de várias rodadas juntas contra o inventário: as pendentes do
                                             caminho essencial (16) e as dos outros modos
+    roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
+                                            parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
+                                            os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
+                                            a memória de uma parte (a Ultimate Battle lê 13 milhões de posições, e o
+                                            rastreio.py não cabia nos 8 GB do WSL)
 
 O conteúdo de cada chamada (arquivo e seção, ou a faixa de arquivos inteiros) é o da tabela CONTEUDO abaixo, transcrita
 do inventário (menus-modos.md 1 e 3). O "confere" lê a tabela de seções de cada pacote de menu em DADOS para dizer a
@@ -121,8 +126,9 @@ def chamadas(log, prog):
         arq = pathlib.Path(arq).name
         cand = linhas.get((arq, func), [])
         n = int(n) if n.isdigit() else 0
-        # a linha da chamada no fonte (o addr2line dá a do comando, que pode ter várias linhas: a mais próxima antes)
-        antes = [c for c in cand if c <= n + 1]
+        # a linha da chamada no fonte: a mais próxima que não passa da que o addr2line deu (o comando pode ter várias
+        # linhas; e há chamadas em linhas seguidas, como as de Bracket_UpdateImages, :805 e :806)
+        antes = [c for c in cand if c <= n]
         onde[r] = (arq, func, max(antes) if antes else (min(cand) if cand else n))
     out = []
     for vb, modo, r in ev:
@@ -167,15 +173,40 @@ def conv(caminho, dados):
     return out
 
 
+def partes(entrada, pasta, limite):
+    cont = collections.Counter()
+    with open(entrada, encoding="utf-8", errors="replace") as f:
+        for l in f:
+            cont[l.split("\t", 1)[0]] += 1
+    grupo, atual, n = {}, 0, 0
+    for arq in sorted(cont):
+        if n and n + cont[arq] > limite:
+            atual, n = atual + 1, 0
+        grupo[arq] = atual
+        n += cont[arq]
+    pasta = pathlib.Path(pasta)
+    pasta.mkdir(parents=True, exist_ok=True)
+    saidas = [open(pasta / f"parte_{i:02d}.tsv", "w") for i in range(atual + 1)]
+    with open(entrada, encoding="utf-8", errors="replace") as f:
+        for l in f:
+            saidas[grupo[l.split("\t", 1)[0]]].write(l)
+    for g in saidas:
+        g.close()
+    print(f"partes: {atual + 1} de até {limite} posições ({sum(cont.values())} no total, {len(cont)} arquivos)")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma"])
+    ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes"])
     ap.add_argument("arqs", nargs="*")
     ap.add_argument("--prog")
     ap.add_argument("--conv")
     ap.add_argument("--dados", default="gamedata")
     a = ap.parse_args()
 
+    if a.acao == "partes":
+        partes(a.arqs[0], a.arqs[1], int(a.arqs[2]) if len(a.arqs) > 2 else 4000000)
+        return 0
     if a.acao == "telas":
         print("\n".join(telas(a.arqs[0])))
         return 0
@@ -237,6 +268,11 @@ def main():
     print("conteúdo convertido no --mapa:    " + ", ".join(f"{c} ({n})" for c, n in sorted(com.items())))
     erros = 0
     for c in sorted(esperado_sem - set(sem)):
+        if c not in com:
+            # o rastreio só vê o conteúdo lido como número: um descomprimido que ninguém lê não aparece (o DcList_Init
+            # descomprime um retrato que o DcList_UpdateFace descomprime de novo antes de ler, menus-modos.md 3.2)
+            print(f"  NOTA: chamada pendente alcançada e o conteúdo dela ({c}) nunca lido como número: nada a converter")
+            continue
         print(f"  DIFERENÇA: chamada pendente alcançada e o conteúdo dela ({c}) não saiu sem conversor")
         erros += 1
     for c in sorted(set(sem) - esperado_sem):

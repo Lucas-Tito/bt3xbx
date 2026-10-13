@@ -540,7 +540,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   - **Um `roteiros.sh` por vez no WSL.** O `rastreio.py mapa` guarda o rastreio inteiro na memória (uns 5 GB com os
     13 milhões de posições da Ultimate Battle); dois ciclos ao mesmo tempo esgotaram os 8 GB do WSL, o SSH parou de
     responder por meia hora e o mapa de um roteiro morreu (`Killed`), o que o `confere` acusou como 10 diferenças. O
-    ciclo agora para o roteiro com "FALHA: rastreio.py mapa" em vez de comparar com um mapa que não existe.
+    ciclo agora para o roteiro com "FALHA: rastreio.py mapa" em vez de comparar com um mapa que não existe. E mesmo
+    sozinho o da Ultimate Battle não cabia (6,8 milhões de posições só no 00451). Tirar as posições lidas só como
+    byte longe de números não adiantou (sobraram 93%); o que resolve é que o `rastreio.py` decide cada posição só com
+    as do mesmo arquivo: `roteiros.py partes` corta o rastreio em partes de até 4 milhões de posições, cada arquivo
+    inteiro numa só, e os mapas das partes, juntos e ordenados, são o mapa inteiro (conferido no Duelo, cortado em
+    partes de 1 milhão: `mapa.tsv` e conflitos idênticos).
   - **gdb: dois `break` no mesmo endereço, cada um com `commands ... continue`,** só rodam os comandos do primeiro (o
     `continue` dele retoma antes do segundo). Junte num só, com `if` dentro.
   - **A PPC com o mapa passa adiante nos menus sem conversor** (para conferir o "sem conversor" pela guarda, que só
