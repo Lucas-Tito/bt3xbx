@@ -177,7 +177,7 @@ def construir(alvo):
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
-    extras = ["sem_janela", "roteiro"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
+    extras = ["sem_janela", "roteiro", "imagens"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
@@ -206,7 +206,10 @@ def ligar(alvo, objs):
     # 0x20000000: longe das regiões do PS2 (0x100000.., 0x10000000, 0x12000000, 0x70000000), como a build de 64 bits.
     base = alvo.ld + ["-no-pie", "-w", "-o", alvo.exe] + objs
     resto = ["-lm", "-lpthread", "-Wl,-Ttext-segment=0x20000000", "-Wl,--defsym=D_3BE71C=0x3BE71C",
-             "-Wl,--wrap=Progress_Main", f"-Wl,-Map={alvo.exe}.map"]
+             "-Wl,--wrap=Progress_Main", f"-Wl,-Map={alvo.exe}.map",
+             # as imagens das telas (port/x360/headless/imagens.c, F4 etapa 6): a lista de cada quadro e as cargas fora
+             # dela passam por lá, que desenha só as janelas antes de cada imagem e grava a imagem
+             "-Wl,--wrap=Port_GsVif1Chain", "-Wl,--wrap=Port_GsGifChannel"]
     if alvo.rastreio:
         resto += ["-Wl,--wrap=memcpy", "-Wl,--wrap=memmove", "-Wl,--wrap=memset"]
     if alvo.rastreio or alvo.nome == "ppc":  # o rastreio marca a origem; a PowerPC inverte os bytes (inverter.c)

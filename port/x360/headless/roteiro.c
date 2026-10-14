@@ -45,12 +45,21 @@ void Diario_Escrever(const char *formato, ...);
 void Port_Abortar(void); /* main360.cpp: log e tela vermelha */
 #endif
 
+#ifndef PORT_X360
+/* as imagens das telas (imagens.c, F4 etapa 6, BT3_IMAGENS): cada linha do rastro pode ser a âncora de uma imagem, e
+   cada leitura do controle diz se o quadro seguinte se desenha e se grava */
+void Imagens_Evento(const char *linha, unsigned q);
+void Imagens_Quadro(unsigned q);
+#endif
+static unsigned sQuadro;        /* leituras do jogador 1 desde o começo do roteiro */
+
 static void diz(const char *linha) {
 #ifdef PORT_X360
     Diario_Escrever("%s", linha);
 #else
     printf("%s\n", linha);
     fflush(stdout);
+    Imagens_Evento(linha, sQuadro);
 #endif
 }
 
@@ -120,7 +129,6 @@ typedef struct Passo {
 static Passo *sPassos;
 static int sN, sCap;
 static int sPasso, sT;          /* o passo atual e os quadros dele */
-static unsigned sQuadro;        /* leituras do jogador 1 desde o começo do roteiro */
 static int sAtivo = -1;         /* -1: ainda não lido */
 static int sTela = 99999, sMcflow = -99999;
 static int sSegura = 4, sSolta = 8, sMax = 6000;
@@ -632,6 +640,9 @@ int Roteiro_Pad(int socket, unsigned char *data) {
         diz(s);
     }
     b = quadro();
+#ifndef PORT_X360
+    Imagens_Quadro(sQuadro);
+#endif
     sQuadro++;
     memset(data, 0, 18);
     data[0] = (unsigned char)(~b & 0xFF);

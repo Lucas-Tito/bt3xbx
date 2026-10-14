@@ -16,7 +16,18 @@ aperta X                          # a apresentação (a fala do instrutor tem de
 quadros 72
 # seis páginas da aula, uma a cada 72 quadros
 ritmo 4 68
-aperta X 6
+aperta X
+marca pagina 1                    # (a página carregada: a imagem dela, roteiros.sh IMG=1)
+aperta X
+marca pagina 2
+aperta X
+marca pagina 3
+aperta X
+marca pagina 4
+aperta X
+marca pagina 5
+aperta X
+marca pagina 6
 ritmo 4 8
 aperta TRIANGULO                  # de volta à lista de aulas
 quadros 40

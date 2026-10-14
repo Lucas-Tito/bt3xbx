@@ -32,6 +32,11 @@
 # No fim, as chamadas de todos os roteiros juntos contra o inventário (roteiros.py soma).
 # Sai com 1 se qualquer conferência falhar em qualquer roteiro (a x86 sem "fim" ou com FALHA, a repetição, a
 # referência, a x86r, o rastreio.py, o conv_tool, o confere, a PPC, a soma), com a lista no fim; 0 só com tudo certo.
+#   6. com IMG=1 (F4, etapa 6): as imagens das telas pelo rasterizador de software, na x86 e na PPC sem mapa, no mesmo
+#      momento do roteiro (ancorado numa linha do rastro: roteiros.py imagens), idênticas byte a byte (roteiros.py
+#      compara_imagens; a diferença diz a tela, o quadro e quantos pixels). As imagens ficam em $O/NOME/img (no WSL,
+#      nunca no repositório). JANELA=8: quadros pintados antes de cada imagem (port/x360/headless/imagens.c).
+#      IMG=luta: também a luta, que sai diferente até a F5 (a cor dos vértices dos efeitos, formatos/gpu.md seção 6)
 #   TP=3600     segundos da PPC no qemu
 #   MEM=menu    a memória no menu principal em vez do fim (SEMMAPA=1)
 #   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
@@ -61,12 +66,12 @@ continue
 end
 run
 G
-echo "x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO)$([ -z "${PPC:-}${SEMMAPA:-}" ] || echo " | ppc $(cat $B/ppc/CARIMBO)")"
+echo "x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO)$([ -z "${PPC:-}${SEMMAPA:-}${IMG:-}" ] || echo " | ppc $(cat $B/ppc/CARIMBO)")"
 # As builds comparadas têm de sair do mesmo commit, o de agora, sem nada fora de commit (o carimbo do headless.py:
 # "COMMIT diff:HASH", e o HASH da diferença vazia é da39a3ee5e), e a árvore daqui sem alteração: a revisão da etapa 5
 # achou a tabela final feita com a x86 de um estado e a PPC de outro que não estava em commit nenhum. DESENVOLVIMENTO=1
 # deixa rodar assim, e o fim diz que a rodada não vale como critério.
-CARIMBOS=(x86 x86r); [ -z "${PPC:-}${SEMMAPA:-}" ] || CARIMBOS+=(ppc)
+CARIMBOS=(x86 x86r); [ -z "${PPC:-}${SEMMAPA:-}${IMG:-}" ] || CARIMBOS+=(ppc)
 AGORA=$(git rev-parse --short HEAD)
 ORIGEM=()
 for b in "${CARIMBOS[@]}"; do
@@ -258,6 +263,43 @@ for n in "${NOMES[@]}"; do
                 [ $r = 0 ] || falhou "memória na tela $t diferente (memdiff)"
             done < $D/mem_telas.txt
         fi
+    fi
+    if [ -n "${IMG:-}" ]; then
+        # as imagens das telas (F4, etapa 6): o rasterizador de software na x86 e na PPC sem mapa (os mesmos arquivos
+        # convertidos do passo 5), no mesmo momento de cada tela, ancorado no rastro (roteiros.py imagens: a entrada e
+        # a saída de cada tela de menu do essencial, a carga, cada marca, cada "ok som", cada pergunta do cartão; a
+        # luta só com IMG=luta),
+        # gravado em PPM por port/x360/headless/imagens.c. Só as janelas antes de cada imagem se pintam
+        # (BT3_IMAGENS_JANELA, BT3_GS_FROM): pintando tudo, a PPC levaria umas três horas por roteiro. O rastro de cada
+        # rodada tem de ser o da x86 (o mesmo momento), e as imagens idênticas byte a byte (roteiros.py
+        # compara_imagens: a tela, o quadro e quantos pixels diferem)
+        I=$D/img
+        LUTAARG=(); [ "$IMG" != luta ] || LUTAARG=(--luta)
+        python3 port/x360/tools/roteiros.py imagens $D/telas_a.txt "${LUTAARG[@]}" > $D/imagens.txt
+        [ -s $D/imagens.txt ] || falhou "imagens: lista vazia (o rastro da x86?)"
+        IMGENV=(BT3_GS=1 BT3_GS_FROM=1000000000 BT3_IMAGENS_JANELA=${JANELA:-8})
+        for b in x86 ppc; do
+            if { [ $b = x86 ] && roda_x86; } || { [ $b = ppc ] && roda_ppc; }; then
+                rm -rf $I/$b; mkdir -p $I/$b; cp $D/imagens.txt $I/$b/lista.txt
+                if [ $b = x86 ]; then
+                    env "${IMGENV[@]}" BT3_IMAGENS=$I/$b/lista.txt BT3_ROTEIRO=$R BT3_SAVES=$I/$b/s timeout 900 \
+                        $B/x86/bt3_x86 > $I/$b/saida.txt 2>&1 < /dev/null
+                else
+                    env "${IMGENV[@]}" BT3_IMAGENS=$I/$b/lista.txt BT3_DATA=$D/dados \
+                        BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_ROTEIRO=$R BT3_SAVES=$I/$b/s \
+                        timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $I/$b/saida.txt 2>&1 < /dev/null
+                fi
+            fi
+            python3 port/x360/tools/roteiros.py telas $I/$b/saida.txt > $I/$b/telas.txt
+            cmp_i=$(python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $I/$b/telas.txt)
+            echo "   imagens ($b): $(grep -c '^imagem: ' $I/$b/saida.txt) gravadas; rastro: $cmp_i"
+            grep -q '^iguais' <<< "$cmp_i" || falhou "imagens: o rastro da $b com o rasterizador diferente do da x86"
+        done
+        python3 port/x360/tools/roteiros.py compara_imagens $D/imagens.txt $I/x86 $I/ppc \
+            --saidas $I/x86/saida.txt $I/ppc/saida.txt > $D/imagens_compara.txt
+        r=$?
+        sed 's/^/   /' $D/imagens_compara.txt
+        [ $r = 0 ] || falhou "imagens das telas diferentes entre a x86 e a PPC"
     fi
     rm -f bt3_crash.txt
 done
