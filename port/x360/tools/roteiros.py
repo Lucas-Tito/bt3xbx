@@ -214,6 +214,8 @@ def conv(caminho):
             ultimo = None
             continue
         ultimo, r = m.group(1), m.group(2)
+        if out.get(ultimo, "").startswith("ERRO"):
+            continue  # (um erro do mesmo nome numa linha anterior fica: o conv_tool pode dizer mais de uma coisa dele)
         if r == "sem conversor":
             out[ultimo] = r
         elif r.startswith("convertido; cobertura "):

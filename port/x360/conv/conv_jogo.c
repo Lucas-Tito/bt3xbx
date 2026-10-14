@@ -182,21 +182,38 @@ void Port_ConvertAnim(void *buf, int size) {
     }
 }
 
+/* O mapa da conversão em jogo: um bit por byte do conteúdo (Conv_FormatoBits, que só precisa saber o que já foi
+   convertido), reservado uma vez, na primeira conversão (a do BootCard_Init, no boot, com o heap ainda inteiro), com o
+   tamanho do maior conteúdo (CONV_JOGO_MAX, conv.h: 1 MB de mapa). Antes era um byte por byte, alocado a cada tela:
+   7 MB contíguos a cada entrada na seleção, depois de uma luta, num heap já fragmentado (revisão da etapa 5 da F4). */
+static conv_u8 *sMapa;
+
+static conv_u8 *mapa_de(const char *formato, int size) {
+    if (sMapa == NULL) {
+        sMapa = (conv_u8 *)malloc((size_t)(CONV_JOGO_MAX / 8));
+        if (sMapa == NULL) {
+            falha("conv: sem memória para o mapa da conversão em jogo (%lu bytes, reservados uma vez, na primeira "
+                  "conversão: %s)", (unsigned long)(CONV_JOGO_MAX / 8), formato);
+        }
+    }
+    if ((unsigned long)size > CONV_JOGO_MAX) {
+        falha("conv: %s com 0x%X bytes descomprimidos, acima do mapa reservado (CONV_JOGO_MAX 0x%lX, conv.h)", formato,
+              (unsigned)size, (unsigned long)CONV_JOGO_MAX);
+    }
+    memset(sMapa, 0, ((size_t)size + 7) / 8);
+    return sMapa;
+}
+
 /* src/sys/loading.c, Load_InitScreen: a folha da tela de carregamento logo depois de Sprite_Unpack */
 void Port_ConvertLoadSheet(void *buf, int size) {
     char msg[240];
-    conv_u8 *feito;
     int r;
     convertido(buf, "folha");
     if (size <= 0) {
         return;
     }
-    feito = (conv_u8 *)calloc((size_t)size, 1);
-    if (feito == NULL) {
-        falha("conv: folha da tela de carregamento: sem memória");
-    }
-    r = Conv_Formato("folha", "folha da tela de carregamento", (conv_u8 *)buf, (conv_ofs)size, feito, msg, sizeof(msg));
-    free(feito);
+    r = Conv_FormatoBits("folha", "folha da tela de carregamento", (conv_u8 *)buf, (conv_ofs)size,
+                         mapa_de("folha", size), msg, sizeof(msg));
     if (r < 0) {
         falha("conv: folha da tela de carregamento de 0x%X bytes: %s", (unsigned)size, msg);
     }
@@ -207,19 +224,13 @@ void Port_ConvertLoadSheet(void *buf, int size) {
    Title_Init ("menu_titulo"). Cada Sprite_Unpack desses aloca um buffer novo: não há conversão dupla. */
 void Port_ConvertMenuPack(void *buf, int size, const char *formato) {
     char msg[240];
-    conv_u8 *feito;
     int r;
     convertido(buf, formato);
     if (size <= 0) {
         falha("conv: %s com 0x%X bytes descomprimidos", formato, (unsigned)size);
     }
-    feito = (conv_u8 *)calloc((size_t)size, 1);
-    if (feito == NULL) {
-        falha("conv: %s: sem memória", formato);
-    }
     msg[0] = '\0';
-    r = Conv_Formato(formato, formato, (conv_u8 *)buf, (conv_ofs)size, feito, msg, sizeof(msg));
-    free(feito);
+    r = Conv_FormatoBits(formato, formato, (conv_u8 *)buf, (conv_ofs)size, mapa_de(formato, size), msg, sizeof(msg));
     if (r == 0) {
         falha("conv: formato %s desconhecido", formato);
     }

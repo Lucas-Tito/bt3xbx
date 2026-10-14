@@ -19,7 +19,9 @@
  * campo a campo, pela largura de cada número, em vez de palavra a palavra. Ao lado de cada .marcas, o .orig: o conteúdo
  * antes da conversão (bytes do jogo: só no WSL), com que o memdiff.py acha o bloco do heap pelo conteúdo.
  * Um ARQUIVO "pzs3us1/00449.bin@0x40#bpe" (o nome que o rastreio dá) é o contêiner BPE nesse deslocamento do arquivo,
- * descomprimido aqui e convertido com o formato que o chamador do jogo aplica (formato_bpe), sem --saida.
+ * descomprimido aqui e convertido com o formato que o chamador do jogo aplica (formato_bpe), sem --saida; e de novo
+ * pelo caminho do jogo (Conv_FormatoBits, o mapa de bits de conv_jogo.c), que tem de dar os mesmos bytes, o mesmo
+ * resultado e a mesma cobertura, num conteúdo de até CONV_JOGO_MAX bytes.
  *   conv_tool --pecas DADOS [--mapa MAPA.tsv]   as peças comuns dos menus (menus-pecas.md), cada uma só na seção dela
  *                                  dentro do conteúdo descomprimido de cada pacote que a usa (a tabela sUsos), antes
  *                                  de o pacote inteiro ganhar conversor; com --mapa, só as posições dessas seções
@@ -76,6 +78,8 @@ static void criar_pastas(char *caminho) {
 
 static const char *formato, *mapa, *saida, *marcas;
 static int detalhe = 10;
+static long sMaiorJogo; /* o maior conteúdo descomprimido convertido (o que o jogo converte em tempo de jogo) */
+static char sMaiorJogoNome[96];
 
 /* lê o arquivo inteiro (tam + 1 bytes alocados); NULL se não abre */
 static conv_u8 *ler_arquivo(const char *dados, const char *rel, long *tam) {
@@ -300,7 +304,7 @@ static int um(const char *dados, const char *rel) {
     char caminho[1024], msg[256], base[512];
     FILE *fp;
     long tam;
-    conv_u8 *buf, *feito;
+    conv_u8 *buf, *feito, *copia = NULL, *bits = NULL;
     int r;
     unsigned long k, cobertos = 0, trocados = 0;
     const char *arroba = strstr(rel, "@0x"), *f = formato;
@@ -358,12 +362,23 @@ static int um(const char *dados, const char *rel) {
             fclose(fp);
         }
     }
+    if (bpe) {
+        copia = (conv_u8 *)malloc((size_t)tam + 1);
+        bits = (conv_u8 *)calloc(((size_t)tam + 7) / 8 + 1, 1);
+        if (copia == NULL || bits == NULL) {
+            printf("%s: sem memória para a conferência do mapa de bits\n", rel);
+            return 1;
+        }
+        memcpy(copia, buf, (size_t)tam);
+    }
     r = f ? Conv_Formato(f, rel, buf, (conv_ofs)tam, feito, msg, sizeof(msg))
           : Conv_Arquivo(rel, buf, (conv_ofs)tam, feito, msg, sizeof(msg));
     if (r == 0) {
         printf("%s: sem conversor\n", rel);
         free(buf);
         free(feito);
+        free(copia);
+        free(bits);
         return 0;
     }
     for (k = 0; k < (unsigned long)tam; k++) {
@@ -374,6 +389,37 @@ static int um(const char *dados, const char *rel) {
            r < 0 ? msg : "convertido", cobertos, tam, tam ? 100.0 * cobertos / tam : 0.0, trocados);
     if (r < 0) {
         falhas++;
+    }
+    if (bpe) {
+        /* o conteúdo que o jogo converte em tempo de jogo, de novo pelo caminho do jogo (Conv_FormatoBits, conv_jogo.c,
+           com o mapa de bits): os mesmos bytes, o mesmo resultado e a mesma cobertura que o mapa de bytes. Depois da
+           linha da cobertura, para a linha de erro ser a última do nome (roteiros.py, conv()) */
+        char msg2[256];
+        unsigned long cob2 = 0;
+        int r2;
+        msg2[0] = '\0';
+        r2 = Conv_FormatoBits(f, rel, copia, (conv_ofs)tam, bits, msg2, sizeof(msg2));
+        for (k = 0; k < (unsigned long)tam; k++) {
+            cob2 += (bits[k >> 3] >> (k & 7)) & 1;
+        }
+        if (r2 != r || (r > 0 && memcmp(copia, buf, (size_t)tam) != 0) || (r < 0 && strcmp(msg, msg2) != 0) ||
+            (r > 0 && cob2 != cobertos)) {
+            printf("%s: o mapa de bits da conversão em jogo diverge do mapa de bytes (resultado %d e %d, cobertura %lu "
+                   "e %lu, bytes %s)\n", rel, r, r2, cobertos, cob2,
+                   memcmp(copia, buf, (size_t)tam) == 0 ? "iguais" : "diferentes");
+            falhas++;
+        }
+        if (tam > sMaiorJogo) {
+            sMaiorJogo = tam;
+            sprintf(sMaiorJogoNome, "%.95s", rel);
+        }
+        if ((unsigned long)tam > CONV_JOGO_MAX) {
+            printf("%s: 0x%lX bytes descomprimidos, acima do mapa da conversão em jogo (CONV_JOGO_MAX 0x%lX, conv.h)\n",
+                   rel, (unsigned long)tam, (unsigned long)CONV_JOGO_MAX);
+            falhas++;
+        }
+        free(copia);
+        free(bits);
     }
     if (mapa != NULL) {
         falhas += contra_mapa(rel, buf, feito, (unsigned long)tam, 0, (unsigned long)tam);
@@ -778,6 +824,8 @@ int main(int argc, char **argv) {
                 }
             }
             printf("disco (descomprimidos): %d convertidos sem erro, %d com erro\n", ok, erros);
+            printf("conversão em jogo: o maior conteúdo tem 0x%lX bytes (%s); o mapa de bits do jogo se reserva para "
+                   "0x%lX (CONV_JOGO_MAX)\n", (unsigned long)sMaiorJogo, sMaiorJogoNome, (unsigned long)CONV_JOGO_MAX);
             falhas += erros;
         }
         censo(dados);

@@ -11,6 +11,7 @@ void Conv_Iniciar(ConvCtx *c, const char *nome, conv_u8 *buf, conv_ofs tam, conv
     c->tam = tam;
     c->nome = nome;
     c->feito = feito;
+    c->bits = 0;
     c->erro = 0;
     c->msg[0] = '\0';
 }
@@ -68,17 +69,29 @@ conv_u16 Conv_Ler16(ConvCtx *c, conv_ofs ofs) {
     return (conv_u16)(p[0] | p[1] << 8);
 }
 
+/* a marca do byte i: a largura (mapa de bytes), ou só CONV_BYTE / CONV_LIVRE (mapa de bits) */
+static conv_u8 marca_de(const ConvCtx *c, conv_ofs i) {
+    if (c->bits) {
+        return (c->feito[i >> 3] >> (i & 7)) & 1 ? CONV_BYTE : CONV_LIVRE;
+    }
+    return c->feito[i];
+}
+
 /* marca [ofs, ofs+w) como um número de largura w (ou bytes, w = CONV_BYTE com n bytes); 0 se já estava marcado */
 static int marcar(ConvCtx *c, conv_ofs ofs, conv_ofs n, conv_u8 w) {
     conv_ofs i;
     for (i = 0; i < n; i++) {
-        if (c->feito[ofs + i] != CONV_LIVRE) {
+        if (marca_de(c, ofs + i) != CONV_LIVRE) {
             Conv_Erro(c, "0x%lX convertido duas vezes (marca %u, agora %u)", (unsigned long)(ofs + i),
-                      (unsigned)c->feito[ofs + i], (unsigned)w);
+                      (unsigned)marca_de(c, ofs + i), (unsigned)w);
             return 0;
         }
     }
-    if (w == CONV_BYTE) {
+    if (c->bits) {
+        for (i = ofs; i < ofs + n; i++) {
+            c->feito[i >> 3] |= (conv_u8)(1u << (i & 7));
+        }
+    } else if (w == CONV_BYTE) {
         memset(c->feito + ofs, CONV_BYTE, n);
     } else {
         c->feito[ofs] = w;
@@ -145,7 +158,7 @@ void Conv_Bytes(ConvCtx *c, conv_ofs ofs, conv_ofs n) {
 }
 
 conv_u8 Conv_Marca(ConvCtx *c, conv_ofs ofs) {
-    return ofs < c->tam ? c->feito[ofs] : CONV_LIVRE;
+    return ofs < c->tam ? marca_de(c, ofs) : CONV_LIVRE;
 }
 
 void Conv_Zeros(ConvCtx *c, conv_ofs ini, conv_ofs fim, const char *oque) {
@@ -154,12 +167,12 @@ void Conv_Zeros(ConvCtx *c, conv_ofs ini, conv_ofs fim, const char *oque) {
         return;
     }
     for (i = ini; i < fim; i++) {
-        if (c->feito[i] == CONV_LIVRE) {
+        if (marca_de(c, i) == CONV_LIVRE) {
             if (c->buf[i] != 0) {
                 Conv_Erro(c, "%s: byte 0x%lX não reconhecido (não é enchimento)", oque, (unsigned long)i);
                 return;
             }
-            c->feito[i] = CONV_BYTE;
+            marcar(c, i, 1, CONV_BYTE);
         }
     }
 }
@@ -359,9 +372,11 @@ const char *Conv_FormatoSecao(const char *nome, int secao) {
     return da_tabela(i, secao);
 }
 
-static int converter(ConvFn fn, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg, int nmsg) {
+static int converter(ConvFn fn, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, int bits, char *msg,
+                     int nmsg) {
     ConvCtx c;
     Conv_Iniciar(&c, nome, buf, tam, feito);
+    c.bits = bits;
     fn(&c, 0, tam);
     if (c.erro) {
         if (msg != NULL && nmsg > 0) {
@@ -373,15 +388,25 @@ static int converter(ConvFn fn, const char *nome, conv_u8 *buf, conv_ofs tam, co
     return 1;
 }
 
-int Conv_Formato(const char *formato, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg,
-                 int nmsg) {
+static int com_formato(const char *formato, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, int bits,
+                       char *msg, int nmsg) {
     unsigned i;
     for (i = 0; i < sizeof(sFormatos) / sizeof(sFormatos[0]); i++) {
         if (strcmp(sFormatos[i].nome, formato) == 0) {
-            return converter(sFormatos[i].fn, nome, buf, tam, feito, msg, nmsg);
+            return converter(sFormatos[i].fn, nome, buf, tam, feito, bits, msg, nmsg);
         }
     }
     return 0;
+}
+
+int Conv_Formato(const char *formato, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg,
+                 int nmsg) {
+    return com_formato(formato, nome, buf, tam, feito, 0, msg, nmsg);
+}
+
+int Conv_FormatoBits(const char *formato, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *bits, char *msg,
+                     int nmsg) {
+    return com_formato(formato, nome, buf, tam, bits, 1, msg, nmsg);
 }
 
 int Conv_Arquivo(const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg, int nmsg) {

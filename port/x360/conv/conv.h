@@ -32,7 +32,8 @@ typedef struct ConvCtx {
     conv_u8 *buf;
     conv_ofs tam;
     const char *nome;
-    conv_u8 *feito; /* tam bytes, zerados pelo chamador */
+    conv_u8 *feito; /* tam bytes, zerados pelo chamador; com bits, (tam + 7) / 8 bytes, um bit por byte */
+    int bits;       /* 1: feito é um mapa de bits (Conv_FormatoBits): só "marcado" ou não, sem a largura */
     int erro;
     char msg[240];
 } ConvCtx;
@@ -73,6 +74,19 @@ int Conv_Arquivo(const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, c
 /* Converte com um formato pedido pelo nome do formato ("personagem"...); mesmos retornos. */
 int Conv_Formato(const char *formato, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg,
                  int nmsg);
+
+/* O mesmo, com a marcação num mapa de bits (bits: (tam + 7) / 8 bytes zerados pelo chamador), 8 vezes menor: a
+   conversão em tempo de jogo (conv_jogo.c), que só precisa de "já convertido" e não da largura. Converte igual ao
+   Conv_Formato (o conv_tool --disco confere, conteúdo a conteúdo: os mesmos bytes, o mesmo erro, a mesma cobertura).
+   Conv_Marca devolve CONV_BYTE para todo byte marcado. */
+int Conv_FormatoBits(const char *formato, const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *bits, char *msg,
+                     int nmsg);
+
+/* O maior conteúdo descomprimido que o jogo converte em tempo de jogo (as seções dos menus, as folhas, os retratos,
+   estágios e páginas do Treino): o mapa de bits da conversão em jogo se reserva uma vez com este tamanho
+   (conv_jogo.c). O maior do disco USA tem 0x6BF440 bytes (a seleção, 448 s2 e 461 s2); o conv_tool --disco falha se
+   algum passar daqui. */
+#define CONV_JOGO_MAX 0x800000UL
 
 /* Uma animação de personagem descomprimida (BobjAnim), em tempo de jogo: chamada por BtlObjAnim_Load logo depois
    de Bpe_Decode, só em host big-endian. Aloca a marcação. 1: convertida; -1: erro (msg). */
