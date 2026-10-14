@@ -690,6 +690,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     passava, e se uma alocação do boot mudasse o índice seria outro bloco. Agora a região é a de 0x100000 bytes pedidos,
     e só passam trechos com a forma dos campos não iniciados do `GfxPostSpritePkt` (uv0.pad, uv1.pad, nop: começo em 12
     ou 8 mod 16, com 4, 8, 0x14 ou 0x24 bytes), com teto de trechos e de palavras.
+  - **Global do port com caminho e números: aceite só o caminho.** `gPortAdxView` ({stat, paused, left, vol, pan,
+    path}) e `sMc` ({open, mode, pos, path}) eram aceitas inteiras porque o caminho do host difere nas duas rodadas;
+    uma diferença em `left` ou `pos` passaria. Agora só o `path` de cada elemento (`campo(passo, início, tamanho)` na
+    `DIFERENTES_CONHECIDAS`).
   - **Conteúdo que só aparece de passagem pede um quadro próprio.** Os retratos dos marcadores (aleatório 921 e
     personagem salvo 923) só ficam vivos enquanto o cursor está na célula; o roteiro do Duelo passa por elas (CIMA do
     canto dá a volta para a célula 0xA3; ESQUERDA na penúltima linha dá a volta para a 0xA1), espera o retrato carregar

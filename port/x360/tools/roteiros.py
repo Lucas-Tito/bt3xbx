@@ -330,8 +330,12 @@ DIFERENTES_CONHECIDAS = [
                          "SndQueue (u8 e u16), com o resto do último RPC de cada largura; o snd_se.c lê cada RPC pela "
                          "forma dele (a fila, na ordem nativa em PORT_BIG_ENDIAN)"),
     ("gPortMoviePath", None, "caminho do host (BT3_DATA diferente nas duas rodadas): a variável é só o caminho"),
-    ("gPortAdxView", None, "caminhos do host (BT3_DATA diferente nas duas rodadas)"),
-    ("sMc", None, "caminhos do host do cartão de memória (BT3_SAVES diferente nas duas rodadas)"),
+    # PortAdxView (port/src/plat_sndstate.c) = {stat, paused, left, vol, pan[2], path[256]}, 0x118 bytes, 16 jogadores:
+    # só o path, nunca os números (revisão da etapa 5)
+    ("gPortAdxView", campo(0x118, 0x18, 0x100), "PortAdxView.path: caminho do host (BT3_DATA diferente nas duas rodadas)"),
+    # sMc (port/src/plat_mc.c) = {open, mode, pos, path[600]}, 0x264 bytes por arquivo: só o path
+    ("sMc", campo(0x264, 0xC, 600), "o path de cada arquivo do cartão: caminho do host (BT3_SAVES diferente nas duas "
+                                    "rodadas)"),
 ]
 
 # As regiões em que as classes SUSPEITAS são esperadas, fora dos blocos com marcas e dos tipados (globais pelo DWARF
