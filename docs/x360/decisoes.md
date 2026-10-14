@@ -471,7 +471,9 @@ nativas, a metade baixa primeiro**, na memória principal e na da VU.
   em 4 quadros do título: era o `fmadd` do GCC na PPC (a x86 não tem FMA), não ordem de bytes; o GS da PPC passou a
   compilar com `-ffp-contract=off`, como o resto do port.
 - **Fica para a F5:** os vetores `u8 rgba[4]` dos vértices dos efeitos da luta e os pacotes da VU1 das tabelas do
-  executável (`vu1_micro.data`), tipados como `u8[]` (`gpu.md` seção 6).
+  executável (`vu1_micro.data`), tipados como `u8[]` (`gpu.md` seção 6). Nota (14/10/2026, F4 etapa 6): os pacotes da
+  VU1 saíram antes, como palavras u32 (`FLUXOS_VIF` do `elftipos.py`), porque a comparação das imagens da luta os
+  acusou; os `rgba[4]` continuam na F5.
 
 ## 20. O GsBackend D3D9 do 360: um alvo na EDRAM, os outros em texturas (13/10/2026)
 

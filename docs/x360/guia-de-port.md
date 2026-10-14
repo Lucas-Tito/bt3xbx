@@ -716,7 +716,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**
   - **O rasterizador pintando todo quadro leva umas três horas por roteiro na PPC** (no qemu, uns 30 quadros por
     minuto nos menus; a x86, 7 minutos). O que custa é pintar: com o GS ligado e nada pintado (`BT3_GS_FROM` alto) a
-    PPC faz o roteiro do Duelo em uns 7 minutos, e a x86 em 15 segundos. As imagens só pintam uma janela de quadros
+    PPC faz o roteiro do Duelo em uns 7 minutos (20 com o microcódigo da VU1 cru, abaixo), e a x86 em 15 segundos. As imagens só pintam uma janela de quadros
     antes de cada uma (`headless/imagens.c`). Conferido na x86: com janela de 8, de 2 e de 0 quadros as 9 imagens do
     Duelo saíram idênticas às da rodada pintando tudo, porque cada quadro começa limpando o buffer que vai desenhar
     (`sceGsSwapDBuff`) e as texturas chegam por carga, que o GS processa sempre.
@@ -732,6 +732,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     do programa, nas duas builds. Para uma imagem no meio de uma tela, uma `marca` no roteiro (instantânea: não muda
     quadro nenhum, só acrescenta a linha ao rastro, e a referência se regrava com `REF=1`); as páginas do Treino
     ganharam `marca pagina 1..6`.
+  - **A imagem da luta achou o microcódigo da VU1 cru.** Os pacotes da VU1 das tabelas do executável
+    (`vu1_micro.data`) eram `u8[]` no C, e o mapa das tabelas os deixava como vieram: a VU1 da PPC rodava instruções
+    inexistentes ("unimplemented lower instruction", programas sem fim), a rodada levava 20 minutos em vez de 7 e a
+    imagem da luta saía com 229 mil pixels diferentes. Tipados como fluxo VIF (`FLUXOS_VIF` do `elftipos.py`), sobram
+    17.673 pixels (desvio até 7), todos de 26 primitivas com os quatro bytes da cor invertidos: os `u8 rgba[4]` dos
+    efeitos da luta (`formatos/gpu.md` seção 6, F5). Por isso a luta fica fora do critério (`IMG=luta` a inclui).
+  - **Para achar a causa de uma imagem diferente, compare as primitivas, não os pixels:** `BT3_GS_DUMP` com o quadro
+    do GS da imagem (o "gs G" da linha `imagem:`) mais o `BT3_GS_FROM`, nas duas builds, e o `diff` das linhas
+    `prim`/`tex` (no WSL; só as contagens voltam). Cuidado: a "clut" que o dump imprime para textura de 32 bits é a
+    memória em `cbp` 0, o próprio buffer do quadro; diferente ali é consequência, não causa.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).

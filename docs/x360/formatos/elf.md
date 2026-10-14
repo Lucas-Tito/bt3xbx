@@ -218,7 +218,8 @@ Pendências:
    linker, ou uma struct por objeto com os rótulos como membros).
 4. **O resíduo vivo.**
    - Microcódigo da VU1 (15.568 bytes): pela convenção da decisão 12 para fluxos VIF, palavras u32. O emulador do port
-     (`gs_vu1.c`) lê `lo`/`hi` com `memcpy` de 4 bytes; confirmar na F3.
+     (`gs_vu1.c`) lê `lo`/`hi` com `memcpy` de 4 bytes; confirmar na F3. Feito na F4, etapa 6 (`FLUXOS_VIF` do
+     `elftipos.py`, `gpu.md` seção 6): 3.892 palavras u32 a mais no mapa, conferidas pela imagem da luta.
    - `D_002EC2C0`: 16 bytes depois dos tipos declarados, 8 não nulos. Declarar o tamanho real no C ou confirmar que
      ninguém lê.
    - 6 floats e 138 bytes de texto que só o splat tipou: declarar no C. Gravar o palpite do splat no mapa exigiria

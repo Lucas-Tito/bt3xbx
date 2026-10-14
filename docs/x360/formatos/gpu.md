@@ -92,6 +92,9 @@ de 16 bits a metade little-endian, os índices de 8 e 4 bits o byte e o nibble q
   índice trocado (cerca de 150 em `src/battle`). Fase da luta (F5).
 - Os pacotes da VU1 nas tabelas do executável (`vu1_micro.data`, `D_002BF6B0`..., `include/sys/vu1_packet.h`: códigos
   VIF, microcódigo e constantes) são declarados `u8[]`, e o mapa das tabelas os deixa como vieram do disco (15.568
-  bytes de largura 1); o VIF e a VU1 os leem como `u32`. Têm de ser tipados como palavras antes da F5.
+  bytes de largura 1); o VIF e a VU1 os leem como `u32`. Têm de ser tipados como palavras antes da F5. **Feito na F4,
+  etapa 6:** o `elftipos.py` trata o objeto como fluxo VIF (`FLUXOS_VIF`: cada rótulo um vetor de u32 até o próximo),
+  e o mapa das tabelas troca as 3.892 palavras. Antes, a VU1 da PPC rodava instruções inexistentes ("unimplemented
+  lower instruction", programas que não terminavam) e a imagem da luta saía com 229 mil pixels diferentes da x86.
 - `sceGsExecStoreImage` (leitura da memória do GS de volta, `ScrXfade`) e o `BT3_GS_ZDUMP` (depuração) gravam na
   ordem do host.

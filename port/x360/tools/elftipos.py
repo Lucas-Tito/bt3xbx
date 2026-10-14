@@ -59,6 +59,13 @@ GENERICOS = {"void", "char", "signed char", "unsigned char", "u8", "s8", "u_char
 # Pacotes da GPU nas tabelas (decisão 19): um campo de 64 bits fica como duas palavras de 32, a baixa primeiro, e se
 # troca como dois u32. Só o TexBltPacket tem u64 vivo nas tabelas (gTexBltPacket, include/sys/gfxm_b_b.h).
 PACOTES_GPU = re.compile(r"^(typedef |struct )?TexBltPacket\b")
+# Fluxos VIF nas tabelas: os pacotes da VU1 (vu1_micro.data, D_002BF6B0..D_002C3080: códigos VIF, microcódigo e
+# constantes, que o Vu1Pkt_LoadProgN manda por DMA como estão) são declarados u8[] no C (include/sys/vu1_packet.h), e
+# o VIF e a VU1 os leem como palavras de 32 bits na ordem do host (decisão 12, formatos/gpu.md seções 1 e 6; a
+# instrução de 64 bits da VU1 é o par de palavras, a baixa primeiro, como gs_vu1.c a lê). Cada rótulo desses objetos é
+# um vetor de u32 até o próximo, no lugar da declaração. F4, etapa 6: sem isto o microcódigo chegava trocado à VU1 da
+# PPC, que rodava instruções inexistentes, e a imagem da luta saía diferente da x86.
+FLUXOS_VIF = {"vu1_micro.data"}
 
 
 # ------------------------------------------------------------------------------------------------ 1. os objetos
@@ -987,6 +994,13 @@ def main():
             if not any(c[1] == chave for c in cands[nome]):
                 cands[nome].append(("visao", chave, lay, desl))
                 visoes_tipos[nome].add(("visao", q))
+    for o in objetos.values():
+        if o.nome in FLUXOS_VIF:
+            for r in o.rotulos:
+                lay = {"desc": "u32[] (fluxo VIF, FLUXOS_VIF)", "completo": False, "tam": 0, "generico": False,
+                       "elem": (4, [(0, 4, "int", "", None)]), "notas": {}}
+                cands[r] = [("decl", ("decl", "u32[] (fluxo VIF)"), lay, 0)]
+                visoes_tipos[r] = {("decl", "u32[] (fluxo VIF)")}
     rodadas, sem_tipo = 0, collections.Counter()
     while True:
         mapas, notas_atr = atribuir(objetos, cands)
