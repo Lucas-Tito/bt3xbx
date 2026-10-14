@@ -637,7 +637,8 @@ void Conv_MenuTreino(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         case 21: /* sem leitor, com a forma das aulas */
         case 22: Conv_LicoesTreino(c, ENT(i)); break;
         case 23: case 25: /* sem leitor, com a forma de lista de ids */
-        case 24: case 26: Conv_ListaIds(c, ENT(i)); break;
+        case 26: Conv_ListaIds(c, ENT(i)); break;
+        case 24: Conv_ListaIdsFaixa(c, ENT(24), 0, 397); break; /* páginas: a última é a 397 (as aulas, 0x18E) */
         default: Conv_TexFileMin(c, ENT(i), minimo[i]); break;
         }
         Conv_Onde(c, "seção %lu do Treino", (unsigned long)i);

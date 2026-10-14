@@ -226,7 +226,8 @@ void Conv_ListaIdsFaixa(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo, con
      seleção 39 (estágios): Conv_ListaIdsFaixa(c, SEC(39), 36, 0x25)
      seleção 56 (músicas):  Conv_ListaIdsFaixa(c, SEC(56), 5, 0x19)
      Opções 37 (músicas):   Conv_ListaIdsFaixa(c, SEC(37), 11, 0x19)
-     Treino 24 e 26:        Conv_ListaIds */
+     Treino 24 (páginas):   Conv_ListaIdsFaixa(c, SEC(24), 0, 397)
+     Treino 26:             Conv_ListaIds */
 void Conv_ListaIds(ConvCtx *c, conv_ofs a, conv_ofs b) {
     Conv_ListaIdsFaixa(c, a, b, 0, 0x7FFFFFFFu);
 }

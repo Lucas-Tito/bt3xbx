@@ -113,7 +113,7 @@ Tabela: N = 26. Conteúdo descomprimido: 2.507.584 bytes.
 | 21 | sem leitor, 640 bytes, com a forma das aulas (4.2) | | ninguém: `Conv_LicoesTreino` pela forma |
 | 22 | as aulas (4.2) | | `gTrain->tbl.lessons`: `Train_BuildLists`, `Train_FindLesson`, `Train_FindLessonIndex`, `Train_Leave` |
 | 23, 25 | sem leitor, 128 bytes, com a forma de lista de ids | | ninguém: `Conv_ListaIds` pela forma |
-| 24 | ListaIds: páginas fora das listas ("tu_noraml_botu"), 24 ids, de 9 a 397 | | `gTrain->tbl.skip`, `skipNum` (`*(u32 *)`); `Train_IsSkipped` |
+| 24 | ListaIds: páginas fora das listas ("tu_noraml_botu"), 24 ids, de 9 a 397; teto 397 (`Conv_ListaIdsFaixa`, como as aulas) | | `gTrain->tbl.skip`, `skipNum` (`*(u32 *)`); `Train_IsSkipped` |
 | 26 | ListaIds: falas sem figura ("tu_noraml_notexture"), 27 ids | | `gTrain->tbl.noImage`, `noImageNum`; `Train_PageHasImage` |
 
 ### 4.2 As aulas (`TrainLesson`, include/menu/menu_i.h:62)

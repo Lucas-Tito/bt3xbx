@@ -357,7 +357,9 @@ A comparação de memória x86 contra PPC (`menus.md` 10.4) tem de saber que ess
   0x19 (**hipótese**: 0..0x18 no disco, 0x19 só gravado pelo jogo).
 - Músicas das Opções (37): n >= 11 (`Option_Draw` desenha 6 linhas a partir de `bgmTop` sobre n - 5 entradas;
   **hipótese** de que o cursor nunca passe de n - 5); mesmo teto.
-- Treino (24, 26): ids são números de página e de fala, sem teto no código; só n.
+- Treino (24, 26): ids são números de página e de fala, sem teto no código; só n. A 24 (páginas) leva o teto 397
+  do dado (a última página das aulas, `menus-telas.md` 4.2; revisão da etapa 5): um id maior apareceria só como
+  contêiner cru na guarda, em tempo de jogo.
 
 #### 5.3.5 Uso
 
