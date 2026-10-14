@@ -643,6 +643,14 @@ continua sendo erro (visto com uma linha forjada no mapa sobre o cabeçalho "FOD
 Visto falhando: com as peças trocadas na tabela (a lista de estágios como células, as células como lista de estágios,
 o ItemPanel como ItemHelp), a `conv_tool --pecas` sai com 1 e diz o porquê de cada uma.
 
+### 7.4 A PPC sem mapa (o critério da etapa 5)
+
+Nos quatro roteiros do essencial a PPC sem mapa, só com os conversores, passa do menu principal com o rastro e as
+leituras de arquivo iguais aos da x86 e para na guarda da tela seguinte (`DuelMenu_Init`, `Train_Init`,
+`Option_Init`). No último vblank da primeira visita ao menu, a memória das duas builds: 133 blocos do heap no lugar, e
+o arquivo 00449 (1.544.708 números e bytes) e o pacote do menu (2.653.772) conformes, nenhum fora do formato
+(`roteiros.sh` com `SEMMAPA=1`; plano, etapa 5a).
+
 ## 8. Hipóteses e o que fica aberto
 
 - O N das JanelaMsg e JanelaIcone das outras telas: o conversor exige 2; o disco já o confirmou nas do Duelo, do

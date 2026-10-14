@@ -281,6 +281,64 @@ Ordem de trabalho da etapa 5:
 As faixas por hipótese (retratos 921..923, estágios 0x24 e 0x25, o fim das páginas do Treino) só entram no
 `formato_de` depois de conferir pelos `lidos.txt` de todos os roteiros que nenhum outro código lê esses arquivos.
 
+**Etapa 5, parte 5a (13/10/2026, WSL): o modo PPC sem mapa, as peças comuns e o menu principal.** Feito:
+
+- **Modo PPC sem mapa** (`roteiros.sh` com `SEMMAPA=1`, `roteiros.py semmapa`): a PPC só com os conversores, como o
+  360 (os arquivos pelo `conv_tool --saida`, o conteúdo pelos ganchos, sem `BT3_MAPA`, guarda fatal), com as leituras
+  de arquivo (`BT3_LEU=1`). Ela tem de chegar ao fim do roteiro com o rastro, as linhas `LEU` e a luta (`BT3_HASH`)
+  iguais às da x86, ou parar na guarda, que nomeia o próximo bloqueio, com o rastro e as leituras até ali iguais ao
+  começo dos da x86; outro fim é falha. A memória das duas builds no último vblank da primeira visita ao menu principal
+  (`memdiff.py --marcas-tam`): o heap no lugar, e o arquivo 00449 e o pacote do menu conformes número a número. O
+  quarto item do critério (a memória no passo `fim`) ainda não existe: um roteiro que chegue ao fim falha com
+  "FALTA: memdiff no passo fim" até a 5b ligá-lo. Visto falhando com saídas estragadas numa cópia (vblank, leitura,
+  guarda apagada, rastro mais longo, função fora da lista, erro de conversor, luta diferente, número do pacote na
+  ordem errada no dump).
+- **As peças comuns** especificadas do código em `formatos/menus-pecas.md` e implementadas em `port/x360/conv/
+  menus_pecas.c`: JanelaMsg, JanelaIcone, LipPack (legendas com a boca, contagem s32), ItemPanel, ItemHelp, ListaIds
+  (com os limites de estágios, músicas e Opções), Células e SubpacoteTex (fichas de 165, ícones de 38); o Flash, os
+  textos, o diálogo e a tabela de seções de `menus.c` exportados. `conv_tool --pecas` aplica cada peça só à seção
+  dela em todo pacote do disco que a usa: 75 usos sem erro (também os dos outros modos), e contra o mapa dos onze
+  roteiros nenhuma posição divergente. O disco decidiu as hipóteses (N exatos; a seção 5 do ItemPanel é filme; a 4 do
+  ItemHelp não é peça conhecida e fica em bytes, sem leitor).
+- **O menu principal** (`menu_principal`, 449 seção 2, as 28 seções) com o gancho no `MainMenu_Init`; 448, 453 e 461
+  como `menu_pacote` no `sFaixas`, para a guarda nomear a tela seguinte. O Flash dele, que parava a PPC com o mapa,
+  passa pelo conversor do Flash (os registros de 8 bytes lidos sobre campos de 4 são o u32 do cabeçalho de registro;
+  `menus-pecas.md` 6.1).
+
+Números: `unpacks.py` com 76 pendentes (eram 77; 15 do essencial); `--disco` com 2.386 arquivos e 8 conteúdos sem
+erro, censo dos menus com 6 de 30 arquivos e 5 de 49 contêineres com conversor; `--mapa` do menu principal sem
+divergência nos onze roteiros (12.099 a 16.251 posições por roteiro); a `.text` da x86 com o mesmo sha1 antes e
+depois (`02fd5df74264e3f467da6d4b1f735d3bdbc7b47f`).
+
+Resultado por roteiro (rodada inteira em `a11fbc2`: x86 duas vezes, gdb, x86r com o rastreio, `--mapa`, inventário;
+e a PPC sem mapa de novo com as builds x86 e PPC de `a6ed060`, `REUSA=x86`): a x86 repete a referência em todos, o
+"sem conversor" do `--mapa` é o do inventário, e a PPC sem mapa passa do menu principal em todos:
+
+| Roteiro | Próximo bloqueio (guarda) | Rastro igual ao da x86 | Leituras (`LEU`) iguais | Memória no menu principal |
+| --- | --- | --- | --- | --- |
+| `duelo` | `DuelMenu_Init` (448 s1), na tela 38, vblank 3000 | 31 de 37 linhas | 15 de 40 | 133 blocos no lugar; 00449 e o pacote conformes |
+| `duelo_time` | `DuelMenu_Init`, tela 38, vblank 3000 | 31 de 37 | 15 de 45 | idem |
+| `treino` | `Train_Init` (461 s1), tela 44, vblank 3024 | 31 de 37 | 15 de 45 | idem |
+| `opcoes` | `Option_Init` (453 s1), tela 62, vblank 2988 | 31 de 63 | 15 de 17 | idem |
+
+O que a 5b precisa saber:
+
+- A ordem continua a do item 4 da lista acima: `menu_duelo` (448 s1), `menu_selecao` (448 s2 e 461 s2), `menu_treino`
+  (461 s1), `menu_opcoes` (453 s1), mais `menu_texfile` para retratos, estágios e páginas do Treino (as faixas no
+  `formato_de` só depois de conferir os `lidos.txt`). As peças já estão prontas e validadas no disco: cada conversor
+  de tela é a tabela de seções chamando-as (`menus-pecas.md` 1 e 5.6 dizem qual seção é qual peça).
+- Rode `SEMMAPA=1` sem `PPC=1`: a PPC com o mapa trava no Flash da tela seguinte ao menu e gasta o `TP` inteiro (uma
+  hora por roteiro). `REUSA=x86` serve depois de mudar só conversores e ganchos, com a `.text` da x86 conferida.
+- Quando um roteiro chegar ao fim na PPC, falta ligar a memória no passo `fim` (o `semmapa` falha até lá): o mesmo
+  `BT3_HASH_AT` com o vblank da linha `fim`, e as marcas de cada arquivo e conteúdo vivo nesse quadro.
+- O `--mapa` do conteúdo dessas telas tem posições de rótulo do Flash que o rastreio dá como número de 4 bytes; a
+  `conv_tool` as conta à parte ("cadeia de texto lida por inteiro").
+- O jogo grava nas listas de ids depois da conversão (desbloqueios): a comparação de memória dessas telas tem de
+  contar com isso.
+
+Perguntas para o Lucas (etapa 5): nenhuma nova na 5a; as escolhas foram técnicas e reversíveis (a seção 4 sem leitor
+do ItemHelp fica em bytes; a memória comparada no menu principal até o passo `fim` existir).
+
 ## 6. Riscos principais
 
 1. **Desempenho no Xenon.** No PC, softfloat e interpretador de VU1 dominam o frame. F2 existe para medir isso antes de investir em gráficos.
