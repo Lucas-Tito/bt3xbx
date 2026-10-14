@@ -61,3 +61,13 @@ Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddr
 - Sair para o dashboard: desmontar threads, áudio e texturas, depois `XLaunchNewImage(NULL, 0)` de
   outra thread (é `NORETURN`).
 - Todo `.obj` depende de todos os headers e do Makefile (já saiu binário misto).
+
+## Lições das ferramentas do port que custaram horas
+
+- **Roteiros na PPC: `SEMMAPA=1`, nunca `PPC=1`.** A PPC com o mapa passa do menu principal e trava no Flash da tela
+  seguinte, que o mapa por posição não inverte: uma hora por roteiro sem resultado (a etapa 5a da F4 perdeu quatro).
+  A PPC sem mapa para na guarda em minutos. Detalhes no guia, "Roteiros na etapa 5a da F4".
+- **Um ciclo de emulador por vez no WSL** (dois `roteiros.sh` ou dois qemu juntos travam o WSL), e nada de
+  `wsl.sh enviar` com um `roteiros.sh` rodando.
+- **Todo verificador tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer: na F4
+  o `roteiros.sh` dava "ok" com erro de conversor e nunca saía com 1.
