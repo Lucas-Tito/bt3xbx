@@ -159,8 +159,9 @@ for n in "${NOMES[@]}"; do
     touch $D/dados/mods/convertidos.txt
     echo "   conv_tool --mapa saiu com $r ($(wc -l < $D/lidos.txt) arquivos e conteúdos lidos)"
     # (a saída 1 só por posições "com outra largura" que estão certas, uma a uma em LARGURA_CONHECIDA do roteiros.py:
-    # um s32 que o jogo lê pela metade baixa; F4, etapa 9a)
-    [ $r = 0 ] || { [ $r = 1 ] && python3 port/x360/tools/roteiros.py larguras $D/conv.txt | sed 's/^/   /' &&
+    # um s32 que o jogo lê pela metade baixa, e só pelas funções da entrada no rastreio desta rodada; F4, etapa 9a)
+    [ $r = 0 ] || { [ $r = 1 ] && python3 port/x360/tools/roteiros.py larguras $D/conv.txt $D/rastreio.tsv \
+        --prog $B/x86r/bt3_x86r | sed 's/^/   /' &&
         [ "${PIPESTATUS[0]}" = 0 ]; } || falhou "conv_tool --mapa saiu com $r"
     # (o "sem conversor" de cada arquivo e conteúdo, o do que não é de menu inclusive, o confere julga logo abaixo)
     grep -v -e "sem conversor$" -e ': convertido; cobertura [0-9]* de [0-9]* bytes (100.0%)' \

@@ -104,17 +104,34 @@ correção a PPC e o 360 leem a contagem e o id errados no primeiro comando e o 
 
 ### 2.6 Os ids de item: `BtlFacadeItem` (correção no código, aplicada na etapa 9a)
 
-Os comandos 13 e 14 (`BtlScriptCmd_SetStatus0/1`) guardam os ids de item do membro como s32
-(`BtlScriptCmdItems.id[8]`, cópias de `Gsc_GetInt`) e os entregam ao `BtlFacade_SetMemberItems` como
-`BtlFacadeItem *`, que lê `id` como o u16 do começo de cada s32. No big-endian esse u16 é a metade alta (0): o item
-viraria o 1. É visão com outra largura no código, não no arquivo (o valor do GSDT está certo como u32): a correção é
-permutar `BtlFacadeItem` em `PORT_BIG_ENDIAN` ({unk2, id}) e acrescentá-la a `layout.PERMUTADAS`. O
-`BattleSetup_SetMemberByItemIds` já lê a metade baixa com `PS2_LOW(u16, itemIds[i])`. Efeito no `--mapa`: as posições
-desses valores que o rastreio só viu ler pela metade (duas no 00510, 0x2368 e 0x236C) saem "com outra largura" (o
-rastreio da x86 leu 2 bytes no começo do valor, o conversor trocou 4); as que ele viu também pelo `Gsc_GetInt` estão
-nos conflitos ([2, 4]). É o resultado certo para um valor s32 lido pela metade baixa, e o `--mapa` não tem classe para
-isso: o `roteiros.py confere` as aceita uma a uma, pela posição, na lista `LARGURA_CONHECIDA` (com o porquê), e
-qualquer outra posição com outra largura continua erro.
+Os ids de item de um membro são s32 no roteiro e o jogo os lê pela metade baixa (u16) em dois lugares:
+
+- o comando 12 (`BtlScriptCmd_SetMember`) lê os oito ids por `Gsc_GetInt` numa cópia local (`BtlScriptCmdItems
+  items`, os operandos 7 a 13 e o 5), entrega essa cópia ao `BattleSetup_SetMemberByItemIds`, que lê cada um com
+  `PS2_LOW(u16, itemIds[i])` (battle_load.c:1579, certo nas duas ordens), e a guarda em `work->items[lado][membro]`;
+- os comandos 13 e 14 (`BtlScriptCmd_SetStatus0/1`) mudam ids nessa cópia guardada (as opções `-0`..`-6` e `-a`) e a
+  entregam ao `BtlFacade_SetMemberItems` como `BtlFacadeItem *`, que lê `id` como o u16 do começo de cada s32. No
+  big-endian esse u16 é a metade alta (0): o item viraria o 1.
+
+O segundo é visão com outra largura no código, não no arquivo (o valor do GSDT está certo como u32): a correção é
+permutar `BtlFacadeItem` em `PORT_BIG_ENDIAN` ({unk2, id}) e acrescentá-la a `layout.PERMUTADAS`.
+
+Efeito no `--mapa`: as posições desses valores que o rastreio só viu ler pela metade saem "com outra largura" (o
+rastreio da x86 leu 2 bytes no começo do valor, o conversor trocou 4); as que ele viu também por um leitor de 4 bytes
+estão nos conflitos ([2, 4], seção 5). No 00510 são duas, 0x2368 (301) e 0x236C (125): no GSDT, cada uma é operando
+só do comando 12 (os operandos 8 e 9, `items.id[1]` e `id[2]`), e o rastreio da x86r as viu ler só pelo
+`BattleSetup_SetMemberByItemIds` e pelo `BtlFacade_SetMemberItems`. É o resultado certo para um valor s32 lido pela
+metade baixa **por esses dois leitores**, e o `--mapa` não tem classe para isso: o `roteiros.py larguras` aceita a
+posição uma a uma, na lista `LARGURA_CONHECIDA`, com o porquê e os leitores, e confere no rastreio da rodada
+(`rastreio.tsv`, os pcs que ele grava por posição, pelo programa da x86r) que nenhuma outra função a leu; com outro
+leitor, com a lista de pcs cheia (4: pode haver um leitor não anotado) ou sem a posição no rastreio, falha. Qualquer
+outra posição com outra largura continua erro.
+
+Por que o leitor e não só a posição: o GSDT é um pool de constantes deduplicadas (0x2310 = -1 é operando de 44
+lugares, 0x2300 = 0 de 96), e a mesma posição pode ser operando de vários comandos; um leitor novo de 2 bytes sem
+`PS2_LOW` nem struct permutada leria a metade errada no big-endian e passaria por uma lista só de posições. E o
+`--mapa` não vê o endereço lido no big-endian: o rastreio é da x86. Na 9b e na 9c isso pesa (das 1.846 leituras de id
+de item nos 48 roteiros, 891 distinguem as metades).
 
 ## 3. Os textos das falas (`textos_luta`)
 

@@ -810,8 +810,13 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     depuração (DWARF, `-g`) muda com elas. A prova de que o código não mudou é o objeto sem ela
     (`objcopy --strip-debug` nos dois e `cmp`): na 9a, 321 de 322 iguais, só o `roteiro.c` diferente.
   - **Valor s32 lido pela metade baixa sai "com outra largura" no `--mapa`** (o rastreio viu 2 bytes, o conversor trocou
-    4), e está certo (o caso do `PS2_LOW`). O `conv_tool` não tem classe para isso; o `roteiros.py` aceita a posição só
-    se ela estiver em `LARGURA_CONHECIDA`, uma a uma, com o porquê.
+    4), e está certo **só se todo leitor estreito daquela posição lê a metade certa no big-endian** (`PS2_LOW` ou uma
+    struct permutada); confira os leitores, não a posição. Num arquivo de constantes deduplicadas (o GSDT do roteiro
+    de evento) a mesma posição serve a vários comandos, e um leitor novo sem a correção passaria. O `conv_tool` não tem
+    classe para isso; o `roteiros.py larguras` aceita a posição só se ela estiver em `LARGURA_CONHECIDA`, uma a uma, com
+    o porquê e as funções que a leem, e falha se o rastreio da rodada (os pcs do `rastreio.tsv`, pelo programa da x86r)
+    mostrar outra função, ou a lista de pcs cheia. A primeira versão dava o porquê errado (dizia `SetStatus`; eram
+    operandos do `SetMember`), e nada o conferia: o revisor achou pela análise do GSDT.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).

@@ -40,9 +40,12 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             memória ("ok saga N" no rastro TELAS, o passo "confere saga N") com o fim
                                             visto (MSLOT_OUTRO_SEEN) também no arquivo das duas: o save da História
                                             gravado, não só em memória
-    roteiros.py larguras CONV               (F4, etapa 9a) a saída do conv_tool --mapa que saiu com 1 só pelas posições
-                                            de LARGURA_CONHECIDA: 0 se nenhum arquivo deu erro e todo "com outra
-                                            largura" está na lista (o roteiros.sh aceita então a saída 1 do conv_tool)
+    roteiros.py larguras CONV RASTREIO --prog X86R
+                                            (F4, etapa 9a) a saída do conv_tool --mapa que saiu com 1 só pelas posições
+                                            de LARGURA_CONHECIDA: 0 se nenhum arquivo deu erro, todo "com outra
+                                            largura" está na lista e cada uma foi lida no rastreio da x86r (RASTREIO,
+                                            pelo programa X86R) só pelas funções da entrada (o roteiros.sh aceita então
+                                            a saída 1 do conv_tool)
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -113,15 +116,26 @@ CONHECIDOS = {
 }
 
 # Posições que o --mapa dá "com outra largura" e que estão certas, uma a uma (arquivo, deslocamento, largura lida pelo
-# rastreio, largura trocada pelo conversor): valores s32 que o jogo só lê pela metade baixa, o caso do PS2_LOW, para os
-# quais o conv_tool não tem classe. O "confere" aceita a linha "contra o mapa" de um arquivo só se cada posição com
-# outra largura dele estiver aqui (o conv_tool lista as 10 primeiras: --detalhe); qualquer outra é erro.
+# rastreio, largura trocada pelo conversor): valores s32 que o jogo só lê pela metade baixa, para os quais o conv_tool
+# não tem classe. O valor é (porquê, leitores): a posição só está certa se TODO leitor estreito dela no big-endian
+# lê a metade certa (PS2_LOW ou uma struct permutada), e isso depende de quem lê, não da posição (o GSDT de um roteiro
+# é um pool de constantes deduplicadas: a mesma posição pode ser operando de vários comandos). Por isso a entrada
+# guarda as funções que a leram no rastreio da x86r (as do mapa.tsv.conflitos e as do "rastreio.py resumo"), e o
+# "larguras" falha se o rastreio da rodada mostrar outra, ou se a lista de leitores do rastreio estiver cheia (4 pcs:
+# pode haver um leitor que ele não anotou). O "confere" aceita a linha "contra o mapa" de um arquivo só se cada
+# posição com outra largura dele estiver aqui (o conv_tool lista as 10 primeiras: --detalhe); qualquer outra é erro.
 LARGURA_CONHECIDA = {
-    # o roteiro de evento da luta do primeiro episódio da História (formatos/historia-luta.md 2.6): ids de item do
-    # SetStatus (comandos 13 e 14) no GSDT, s32 que o jogo lê pela metade baixa (BtlFacadeItem, permutada em
-    # PORT_BIG_ENDIAN; PS2_LOW em battle_load.c:1579); trocados como u32, certos nas duas leituras
-    ("pzs3us1/00510.bin", 0x2368, 2, 4): "id de item s32 do GSDT lido pela metade baixa (BtlFacadeItem)",
-    ("pzs3us1/00510.bin", 0x236C, 2, 4): "id de item s32 do GSDT lido pela metade baixa (BtlFacadeItem)",
+    # o roteiro de evento da luta do primeiro episódio da História (formatos/historia-luta.md 2.6): no GSDT, 301 e 125
+    # são só operandos do comando 12 (SetMember, BtlScriptCmd_SetMember), os itens id[1] e id[2] de um membro (os
+    # operandos 8 e 9), lidos pela metade baixa pelo PS2_LOW do BattleSetup_SetMemberByItemIds (battle_load.c:1579, a
+    # cópia items) e, pela cópia em work->items, pelo BtlFacadeItem do BtlFacade_SetMemberItems (btl_facade.c:218,
+    # permutada em PORT_BIG_ENDIAN); trocados como u32, os dois leem a metade certa no big-endian
+    ("pzs3us1/00510.bin", 0x2368, 2, 4): (
+        "id de item s32 do GSDT (comando 12, item 1) lido pela metade baixa",
+        {"BattleSetup_SetMemberByItemIds", "BtlFacade_SetMemberItems"}),
+    ("pzs3us1/00510.bin", 0x236C, 2, 4): (
+        "id de item s32 do GSDT (comando 12, item 2) lido pela metade baixa",
+        {"BattleSetup_SetMemberByItemIds", "BtlFacade_SetMemberItems"}),
 }
 NOTAS_CONV = []  # (conv(): as posições de LARGURA_CONHECIDA achadas, para o confere dizer)
 
@@ -216,6 +230,53 @@ def classe(nome, dados):
                 return f"{i} s{s}"
         return f"{i}@0x{ofs}"
     return None
+
+
+def leitores(rastreio, prog, chaves):
+    """{(arquivo, deslocamento): (funções que leram, cheia)} das posições dadas, pelos pcs que o rastreio da x86r gravou
+    (port/x360/headless/rastreio.c: até 4 pcs diferentes por posição, a coluna 6; com os 4 ocupados pode haver outro
+    leitor que ele não anotou). Posição que o rastreio não tem fica de fora."""
+    padroes = "".join(f"{a}\t{o}\t\n" for a, o in chaves)
+    linhas = subprocess.run(["grep", "-aF", "-f", "-", rastreio], input=padroes, capture_output=True,
+                            text=True).stdout.splitlines()
+    pcs_de = {}
+    for l in linhas:
+        c = l.split("\t")
+        k = (c[0], int(c[1])) if len(c) > 5 and c[1].isdigit() else None
+        if k in chaves:
+            pcs_de[k] = pcs_de.get(k, []) + [[int(p, 16) for p in c[5].split(",") if int(p, 16)]]
+    todos = sorted({pc for ls in pcs_de.values() for pcs in ls for pc in pcs})
+    # (o nome pelo addr2line, como em chamadas(); o rastreio.py não se importa: ele roda o main() ao carregar)
+    a2l = subprocess.run(["addr2line", "-f", "-e", prog] + [hex(pc) for pc in todos], capture_output=True, text=True,
+                         stdin=subprocess.DEVNULL).stdout.split("\n") if todos else []
+    nome = {pc: a2l[2 * i] for i, pc in enumerate(todos)}
+    return {k: ({nome[pc] for pcs in ls for pc in pcs}, any(len(pcs) >= 4 for pcs in ls)) for k, ls in pcs_de.items()}
+
+
+def confere_leitores(rastreio, prog):
+    """As posições de LARGURA_CONHECIDA achadas (NOTAS_CONV) contra os leitores que o rastreio da rodada viu: True se
+    cada uma foi lida só pelas funções da entrada, e a lista do rastreio não encheu."""
+    chaves = {(k[0], k[1]) for k in NOTAS_CONV}
+    vistos = leitores(rastreio, prog, chaves)
+    ok = True
+    for k in NOTAS_CONV:
+        _, previstos = LARGURA_CONHECIDA[k]
+        fs, cheia = vistos.get((k[0], k[1]), (set(), False))
+        erros = []
+        if not fs:
+            erros.append("o rastreio não tem a posição (leitores não conferidos)")
+        if fs - previstos:
+            erros.append(f"lida também por {', '.join(sorted(fs - previstos))} (a entrada de LARGURA_CONHECIDA só "
+                         f"aceita {', '.join(sorted(previstos))}): confira se o novo leitor lê a metade certa no "
+                         "big-endian")
+        if cheia:
+            erros.append("a lista de leitores do rastreio encheu (4 pcs): pode haver um leitor não anotado")
+        for e in erros:
+            print(f"  DIFERENÇA: {k[0]} 0x{k[1]:X}: {e}")
+        if not erros:
+            print(f"  leitores de {k[0]} 0x{k[1]:X}: {', '.join(sorted(fs))}")
+        ok = ok and not erros
+    return ok
 
 
 def conv(caminho):
@@ -938,12 +999,15 @@ def main():
     if a.acao == "save":
         return confere_saves(*a.arqs[:3])
     if a.acao == "larguras":
+        if len(a.arqs) < 2 or not a.prog:
+            print("larguras CONV RASTREIO --prog X86R: sem o rastreio e o programa os leitores não se conferem")
+            return 1
         erros = {n: r for n, r in conv(a.arqs[0]).items() if r.startswith("ERRO")}
         for n, r in sorted(erros.items()):
             print(f"  {n}: {r}")
         for k in NOTAS_CONV:
-            print(f"  conhecida: {k[0]} 0x{k[1]:X} ({k[2]} lidos, {k[3]} trocados): {LARGURA_CONHECIDA[k]}")
-        ok = not erros and NOTAS_CONV
+            print(f"  conhecida: {k[0]} 0x{k[1]:X} ({k[2]} lidos, {k[3]} trocados): {LARGURA_CONHECIDA[k][0]}")
+        ok = not erros and NOTAS_CONV and confere_leitores(a.arqs[1], a.prog)
         print("conv_tool: só larguras conhecidas" if ok else "conv_tool: erro fora de LARGURA_CONHECIDA")
         return 0 if ok else 1
     if a.acao == "memoria":
@@ -1036,7 +1100,7 @@ def main():
             erros += 1
     for k in NOTAS_CONV:
         print(f"  NOTA: {k[0]} 0x{k[1]:X} contra o mapa com outra largura ({k[2]} lidos, {k[3]} trocados), conhecida: "
-              f"{LARGURA_CONHECIDA[k]}")
+              f"{LARGURA_CONHECIDA[k][0]}")
     # o que não é de menu e saiu sem conversor (fora do disc/, que o jogo lê por outro caminho): só as exceções
     # conhecidas, uma a uma
     for nome, r in sorted(resultado.items()):

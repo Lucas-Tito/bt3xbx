@@ -746,7 +746,9 @@ idênticos. Feito:
   por deslocamento, `GSC_BYTE1`... em `include/sys/gsc.h`, um `#ifdef` com a linha original no `#else` em cada um dos
   23 lugares de `gsc.c` e `btl_script.c`); e os ids de item do roteiro, s32 lidos como u16 pela `BtlFacadeItem`
   (permutada, em `layout.PERMUTADAS`). Duas posições do 00510 saem "com outra largura" no `--mapa` (s32 lidos pela
-  metade baixa) e passam uma a uma por `LARGURA_CONHECIDA` do `roteiros.py`.
+  metade baixa) e passam uma a uma por `LARGURA_CONHECIDA` do `roteiros.py`, com os leitores (depois da revisão:
+  operandos do comando 12, lidos só pelo `PS2_LOW` do `BattleSetup_SetMemberByItemIds` e pelo `BtlFacadeItem`; o
+  `roteiros.py larguras` confere os leitores no rastreio da rodada, `historia-luta.md` 2.6).
 - **As conferências novas do `roteiros.sh`:** a memória também nas telas da História (6 a 10, `TELAS_MEM`, com os
   conteúdos de cada uma vivos e conformes), as imagens delas (`TELAS_IMG`), e o save que a rodada deixou no cartão da x86
   e da PPC sem mapa campo a campo, com cada saga do `confere saga` também no arquivo (`roteiros.py save`). Os buffers da
@@ -808,6 +810,22 @@ Perguntas para o Lucas (etapa 9a), com a opção conservadora aplicada:
 4. **Valor s32 lido pela metade baixa no `--mapa`:** aceito posição por posição (`LARGURA_CONHECIDA`). Cada episódio
    novo que um roteiro jogar traz as dele; a alternativa é o conversor marcar esses valores do GSDT como "u32 lido pela
    metade baixa" e o `conv_tool` contá-los à parte.
+
+**Revisão da etapa 9a (14/10/2026) e as correções.** O revisor achou 0 graves, 3 médios e 7 menores, sem erro de ordem
+de bytes que quebre o jogo. Corrigidos sem rodada nova (o Lucas sem tempo para rodada longa; as saídas da rodada final
+da 9a no WSL serviram de entrada):
+
+1. **M1, `LARGURA_CONHECIDA`.** O porquê dizia `SetStatus` (comandos 13 e 14); 0x2368 e 0x236C do 00510 são operandos
+   do comando 12 (`SetMember`), lidos pela metade pelo `PS2_LOW` do `BattleSetup_SetMemberByItemIds` e pelo
+   `BtlFacadeItem` (`historia-luta.md` 2.6). Decisão do Lucas: lista por posição com os leitores. Cada entrada guarda
+   as funções que a leem, e o `roteiros.py larguras` (que o `roteiros.sh` chama com o `rastreio.tsv` e a x86r) confere
+   no rastreio da rodada que nenhuma outra a leu. O dado já estava nas saídas: o `rastreio.tsv` grava até 4 pcs por
+   posição. Visto falhando sobre a rodada final da 9a (cópias pequenas do rastreio no WSL, saída 1 e a linha da falha;
+   intacto, o rastreio inteiro e a cópia passam com "leitores ...: BattleSetup_SetMemberByItemIds,
+   BtlFacade_SetMemberItems"): um pc do `Gsc_GetInt` acrescentado aos leitores de 0x2368 ("lida também por
+   Gsc_GetInt"); a lista de 0x236C cheia ("a lista de leitores do rastreio encheu"); a linha de 0x2368 apagada do
+   rastreio ("o rastreio não tem a posição"); uma posição de outra largura fora da lista no `conv.txt`; e sem o rastreio
+   na linha de comando.
 
 ## 6. Riscos principais
 
