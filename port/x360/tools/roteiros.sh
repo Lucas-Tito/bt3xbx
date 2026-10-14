@@ -24,7 +24,9 @@
 #      (BT3_HASH_AT, uma rodada a mais da x86): o heap no lugar, cada bloco vivo com um arquivo ou conteúdo lido
 #      conforme número a número pelas marcas do conversor (memdiff.py --marcas-vivas) e nenhuma palavra diferente
 #      fora deles (roteiros.py memoria). MEM=menu compara no último vblank da primeira visita ao menu principal (o
-#      critério da etapa 5a), e aí a memória se julga mesmo com a PPC parando depois.
+#      critério da etapa 5a), e aí a memória se julga mesmo com a PPC parando depois. Sem MEM=menu, a memória também
+#      no último vblank de cada tela de menu do essencial visitada (38, 39, 40, 44, 45, 62: roteiros.py TELAS_MEM), com
+#      os conteúdos convertidos da tela vivos e conformes (uma rodada a mais da PPC e da x86 por tela).
 # Antes de tudo, as builds: x86, x86r e ppc do commit de agora, sem nada fora de commit (o CARIMBO de cada uma), e a
 # árvore sem alteração; senão sai com 1. DESENVOLVIMENTO=1 roda assim mesmo, e o fim diz "NÃO VALE COMO CRITÉRIO".
 # No fim, as chamadas de todos os roteiros juntos contra o inventário (roteiros.py soma).
@@ -208,6 +210,35 @@ for n in "${NOMES[@]}"; do
             python3 port/x360/tools/roteiros.py memoria $D/memdiff.txt | sed 's/^/     /'
             python3 port/x360/tools/roteiros.py memoria $D/memdiff.txt > /dev/null ||
                 falhou "memória no menu principal diferente (memdiff)"
+        else
+            # a memória também no último vblank de cada tela de menu do essencial que o roteiro visita (DuelMenu,
+            # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
+            # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
+            # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela
+            python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt > $D/mem_telas.txt ||
+                falhou "vblanks_mem sem as telas"
+            while read -r t VT; do
+                M=$D/mem_$t
+                if roda_ppc; then
+                    rm -rf $M; mkdir -p $M
+                    BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_ROTEIRO=$R BT3_SAVES=$M/sq \
+                        BT3_HASH=$M/hq.txt BT3_HASH_AT=$VT timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $M/ppc.txt 2>&1 \
+                        < /dev/null
+                    BT3_ROTEIRO=$R BT3_SAVES=$M/sm BT3_HASH=$M/hm.txt BT3_HASH_AT=$VT timeout 900 $B/x86/bt3_x86 \
+                        > /dev/null 2>&1 < /dev/null
+                fi
+                rm -f $M/memdiff.txt
+                if [ -s $M/hq.txt.dump ] && [ -s $M/hm.txt.dump ]; then
+                    python3 port/x360/tools/memdiff.py $M/hm.txt.dump $M/hq.txt.dump $B/x86/bt3_x86 $B/ppc/bt3_ppc \
+                        --so-em-uso --marcas-vivas $D/marcas --max 400 | sed 's/  x86 [0-9a-f]\{8\} .*ppc [0-9a-f ]*$//' \
+                        > $M/memdiff.txt
+                    echo "memdiff saiu com ${PIPESTATUS[0]}" >> $M/memdiff.txt
+                fi
+                python3 port/x360/tools/roteiros.py memoria $M/memdiff.txt --tela $t > $M/memoria.txt
+                r=$?
+                echo "   memória na tela $t (vblank $VT):"; sed 's/^/     /' $M/memoria.txt
+                [ $r = 0 ] || falhou "memória na tela $t diferente (memdiff)"
+            done < $D/mem_telas.txt
         fi
     fi
     rm -f bt3_crash.txt

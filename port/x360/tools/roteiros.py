@@ -27,6 +27,12 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             (o pacote dele ainda vivo, antes da tela seguinte; o critério da etapa 5a)
     roteiros.py vblank_fim TELAS           o último vblank antes do passo "fim" num rastro: o quadro em que o
                                             roteiros.sh compara a memória das duas builds (o critério da etapa 5)
+    roteiros.py vblanks_mem TELAS          as telas de menu do essencial que o rastro visita (TELAS_MEM), uma linha
+                                            "TELA VBLANK" com o último vblank da primeira visita: o roteiros.sh compara
+                                            a memória das duas builds também ali, com o pacote e as imagens da tela
+                                            vivos (no fim da luta já foram liberados)
+    roteiros.py memoria MEMDIFF [--tela N]  com --tela, também exige vivos e conformes os conteúdos da tela
+                                            (TELAS_MEM): "sem bloco" não serve
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -308,6 +314,34 @@ DIFERENTES_CONHECIDAS = [
 PROIBIDAS_EM_PACOTE = ("u64", "u64-com-zero", "2xu16", "misto", "float-proximo")
 
 
+# As telas de menu do caminho essencial em que a memória se compara no último vblank (roteiros.sh, vblanks_mem), com o
+# conteúdo convertido em tempo de jogo que tem de estar vivo e conforme ali (o nome do conteúdo pela classe(): o pacote e
+# a seção, ou a faixa). Sem isto, a memória no fim da luta não via nenhuma conversão da etapa 5b (revisão da etapa 5).
+TELAS_MEM = {
+    38: ["448 s1"],                                 # DuelMenu (menu_duelo)
+    39: ["448 s2", "retrato", "estagio"],           # CharSel (menu_selecao, menu_texfile, menu_fundo)
+    40: ["448 s2", "retrato", "estagio"],           # TeamSel
+    44: ["461 s1", "pagina_treino"],                # Train (menu_treino, menu_texfile)
+    45: ["461 s2", "retrato", "estagio"],           # CharSel do treino
+    62: ["453 s1"],                                 # Option (menu_opcoes)
+}
+
+
+def vivos_conformes(linhas, dados):
+    """{classe: [nomes]} dos conteúdos descomprimidos (#bpe) com bloco vivo e conforme nas linhas "marcas heap#N
+    NOME.marcas: conforme N, fora-do-formato 0" do memdiff"""
+    out = collections.defaultdict(list)
+    for l in linhas:
+        m = re.match(r"marcas heap#\d+ (\S+)\.marcas: conforme (\d+), fora-do-formato 0$", l)
+        if not m or not m.group(1).endswith("#bpe") or int(m.group(2)) == 0:
+            continue
+        rel = m.group(1).replace("_", "/", 1)
+        c = classe(rel, dados)
+        if c is not None:
+            out[c].append(rel)
+    return out
+
+
 def conhecida(regiao, desl):
     for r, d, porque in DIFERENTES_CONHECIDAS:
         if r == regiao and (d is None or d == desl):
@@ -315,7 +349,7 @@ def conhecida(regiao, desl):
     return None
 
 
-def memoria(caminho, pre=""):
+def memoria(caminho, pre="", tela=None, dados="gamedata"):
     p = pathlib.Path(caminho)
     if not p.exists():
         print(f"{pre}DIFERENÇA: memória: sem {caminho} (a PPC não chegou ao vblank do dump?)")
@@ -345,6 +379,19 @@ def memoria(caminho, pre=""):
     for l in fora:
         print(f"{pre}DIFERENÇA: memória: {l}")
         ok = False
+    if tela is not None:
+        tela = int(tela)
+        if tela not in TELAS_MEM:
+            print(f"{pre}DIFERENÇA: memória: tela {tela} fora de TELAS_MEM")
+            return False
+        vivos = vivos_conformes(linhas, dados)
+        for c in TELAS_MEM[tela]:
+            if c in vivos:
+                print(f"{pre}  tela {tela}: {c} vivo e conforme ({', '.join(sorted(vivos[c]))})")
+            else:
+                print(f"{pre}DIFERENÇA: memória: tela {tela} sem o conteúdo {c} vivo e conforme (sem bloco não prova "
+                      "a conversão)")
+                ok = False
     # os trechos "diferentes" de cada região, um a um contra a lista
     regiao, esperados, vistos, explicados = None, 0, 0, collections.Counter()
 
@@ -467,19 +514,20 @@ def semmapa(a):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes", "semmapa",
-                                     "vblank_menu", "vblank_fim", "memoria"])
+                                     "vblank_menu", "vblank_fim", "vblanks_mem", "memoria"])
     ap.add_argument("arqs", nargs="*")
     ap.add_argument("--prog")
     ap.add_argument("--conv")
     ap.add_argument("--dados", default="gamedata")
     ap.add_argument("--hash", nargs=2)
     ap.add_argument("--mem")
+    ap.add_argument("--tela")
     a = ap.parse_args()
 
     if a.acao == "semmapa":
         return semmapa(a)
     if a.acao == "memoria":
-        ok = memoria(a.arqs[0])
+        ok = memoria(a.arqs[0], tela=a.tela, dados=a.dados)
         print("memória igual" if ok else "memória DIFERENTE")
         return 0 if ok else 1
     if a.acao == "vblank_fim":
@@ -489,6 +537,15 @@ def main():
                 print(int(m.group(1)) - 1)
                 return 0
         return 1
+    if a.acao == "vblanks_mem":
+        linhas = [l for l in pathlib.Path(a.arqs[0]).read_text().splitlines() if l.startswith("tela ")]
+        vistas = set()
+        for i, l in enumerate(linhas[:-1]):
+            t = l.split()[1]
+            if t.isdigit() and int(t) in TELAS_MEM and int(t) not in vistas:
+                vistas.add(int(t))
+                print(t, int(linhas[i + 1].split()[3]) - 1)
+        return 0
     if a.acao == "vblank_menu":
         linhas = [l for l in pathlib.Path(a.arqs[0]).read_text().splitlines() if l.startswith("tela ")]
         for i, l in enumerate(linhas[:-1]):
