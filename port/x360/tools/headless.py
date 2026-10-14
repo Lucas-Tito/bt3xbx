@@ -34,6 +34,12 @@ import bitfields  # noqa: E402
 # (state.c) entram com a SDL de mentira de port/x360/headless/SDL3/SDL.h. O que ainda faltar vira stub
 # que avisa e para.
 GS_SEM_SDL = {"gs_core", "gs_sony", "gs_vu1", "namefont", "state", "snd_adx", "snd_se"}
+# Fora do rastreio (compilados sem a instrumentação na x86r): o checksum de estado (state.c), que lê tudo em blocos de
+# 8, e as letras dos nomes de estágio e de música (namefont.c, F4 etapa 5b), código do port que copia os pixels e a
+# paleta das folhas de nomes do CharSel e do TeamSel em blocos de 4 bytes: o rastreio via essas cópias como leitura de
+# número, e a origem delas ia junto para a pilha, onde o FlashDraw_TransformQuad lia um FlashQuad local "do arquivo".
+# Os números que o namefont lê (o cabeçalho do TexEntry e do pacote de imagem) o jogo também lê
+SEM_RASTREIO = {"state", "namefont"}
 
 
 class Alvo:
@@ -155,7 +161,7 @@ def construir(alvo):
         if f.stem in GS_SEM_SDL:
             o = alvo.obj / ("gs_" + f.stem + ".o")
             junta(f, o, compile_ee(alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w"] +
-                                   alvo.hard + fma + (alvo.instr if f.stem != "state" else []) +  # o checksum lê tudo em blocos de 8
+                                   alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) +
                                    ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], f, o, ee=False, be=alvo.be))
 
     # a camada do port: aritmética do PS2 em software, menos as duas pontes com a FPU (interface só de inteiros)
