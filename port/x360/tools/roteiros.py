@@ -33,6 +33,7 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             vivos (no fim da luta já foram liberados)
     roteiros.py memoria MEMDIFF [--tela N]  com --tela, também exige vivos e conformes os conteúdos da tela
                                             (TELAS_MEM): "sem bloco" não serve; com --tela CONTEÚDO (de um passo
+                                            "marca memoria CONTEÚDO" do roteiro, '/' trocada por '_'), aquele
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -277,40 +278,95 @@ BLOQUEIO = [re.compile(r"Sprite_Unpack sem conversor em (\w+) \(retorno [^)]*\):
             re.compile(r"Sprite_Unpack em (\w+) \(retorno [^)]*\) sobre um contêiner BPE cru")]
 
 
-# A memória das duas builds num vblank (memdiff.py --so-em-uso --marcas-vivas, gravado pelo roteiros.sh): o critério
-# da etapa 5.
+# A memória das duas builds num vblank (memdiff.py --so-em-uso --marcas-vivas --tipos, gravado pelo roteiros.sh): o
+# critério da etapa 5.
 #   - o memdiff terminou (a linha "memdiff saiu com 0" que o roteiros.sh acrescenta; 2 é marca ambígua ou bloco que
 #     falta);
 #   - o heap no lugar: os mesmos blocos, de mesmo tamanho, nas duas builds;
 #   - todo bloco vivo que guarda um arquivo ou um conteúdo convertido (achado pelo conteúdo) conforme número a número
-#     pela largura que o conversor deu ("marcas ...: conforme N, fora-do-formato 0"), e pelo menos um;
-#   - cada trecho de palavras "diferentes" fora desses blocos explicado em DIFERENTES_CONHECIDAS (o que o port ou o
-#     ambiente deixam diferente sem ser ordem de bytes), e nenhum trecho sem listar (o memdiff lista até --max por
-#     região: a contagem "N trechos a olhar" tem de bater com os listados).
-# As classes "misto" (u8, u8 e u16 na mesma palavra) e "float-proximo" (arredondamento) não são diferença de ordem de
-# bytes (memdiff.py) e contam à parte.
+#     pela largura que o conversor deu ("marcas ...: conforme N, fora-do-formato 0"), e pelo menos um; numa tela de
+#     menu (--tela), os conteúdos da tela (TELAS_MEM) entre eles;
+#   - as globais com tipo no DWARF campo a campo (--tipos): o que sai do formato vira trecho, como "diferente";
+#   - cada trecho fora do formato ou "diferente" fora desses blocos explicado em DIFERENTES_CONHECIDAS (o que o port
+#     ou o ambiente deixam diferente sem ser ordem de bytes), e nenhum trecho sem listar (o memdiff lista até --max
+#     por região: a contagem "N trechos a olhar" tem de bater com os listados);
+#   - as classes que são certas para uma largura e erradas para outra (memdiff.py SUSPEITAS: igual-sem-inverter,
+#     2xu16, u64, u64-com-zero, misto, float-proximo), fora dos blocos com marcas e das globais com tipo, só nas regiões
+#     de CLASSES_CONHECIDAS, cada uma com o porquê e um teto; e a soma delas nas regiões listadas igual à do total (uma
+#     palavra dessas classes fora de uma linha de região não passa calada);
+#   - os dois buffers de pacotes da GPU (pedido 0x100000) com "diferente" só sem palavra de troca de ordem de pacote.
+# Uma região do heap se nomeia pelo tamanho pedido ("heap:0x4000"), não pelo índice, que muda de um quadro e de um
+# roteiro para outro (o dono de cada uma, conferido com campos.py --donos, vai no comentário); uma global, pelo nome.
+SUSPEITAS = ("igual-sem-inverter", "2xu16", "u64", "u64-com-zero", "misto", "float-proximo")
+
+
+def campo(passo, ini, tam):
+    """onde de DIFERENTES_CONHECIDAS: o trecho cai inteiro em [ini, ini + tam) de um elemento de `passo` bytes"""
+    return ("campo", passo, ini, tam)
+
+
 DIFERENTES_CONHECIDAS = [
-    # (região, deslocamento ou None para a região inteira, por quê); formatos/menus-telas.md 8.4
-    ("heap#0", 0x290, "SndMgr.iopBuf (Snd_Init): ponteiro do host (sceSifAllocIopHeap, calloc em 32 bits)"),
-    ("heap#21", 0x34, "SaveData.unk0 e unk4 (Save_Init): a soma McCard_Checksum sobre os bytes de números nativos, "
-                      "outra em cada build e conferida em cada uma"),
+    # (região, onde, por quê). Onde: o deslocamento exato do começo do trecho, None para a região inteira, ou campo();
+    # num bloco do heap, contado do começo dos dados (HeapBlock.data). Cada um conferido no código e, os do port, no gdb
+    # (formatos/menus-telas.md 8.4; revisão da etapa 5)
+    ("heap:0x2a8", 0x260, "SndMgr.iopBuf (Snd_Init, include/sys/snd.h): ponteiro do host (sceSifAllocIopHeap, calloc "
+                          "em 32 bits)"),
+    ("heap:0x4000", 0x0, "SaveData.unk0 e unk4 (Save_Init): a soma McCard_Checksum sobre os bytes de números nativos, "
+                         "outra em cada build e conferida em cada uma"),
+    ("heap:0x39f90", 0x38, "McFlow.saveBuf (McFlow_Init, include/sys/mcflow_a.h): a cópia do SaveData lida do cartão, "
+                           "com a mesma soma unk0/unk4"),
+    ("heap:0x39f90", 0x4038, "McFlow.repSave.hdr.sum e hdrSum (McFlowHeader): as somas do arquivo de replay, pela mesma "
+                             "McCard_Checksum"),
+    # os pools do motor de scripts (Gsc_Init, src/sys/gsc.c:55-70): Heap_Alloc sem memset, e cada elemento só é posto na
+    # lista livre (o link). O resto de um elemento que nunca foi usado guarda o que ocupava a memória antes (bytes
+    # iguais nas duas builds); a tarefa ou o arquivo usados gravam esses campos na ordem do host
+    ("heap:0xfa0", campo(0x50, 0x08, 0x28), "GscTask livre do pool: unk8..abort nunca gravados desde a alocação"),
+    ("heap:0x168", campo(0x24, 0x08, 0x1c), "GscFile livre do pool: unk8..data nunca gravados desde a alocação"),
     ("gColWalkBox", 0, "ponteiro para um local da pilha do host (ColMesh_WalkBox; gravado e nunca lido)"),
     ("gColWalkCtx", 0, "idem"),
     ("gPortDataStripped", 0, "as tabelas do executável: a PPC liga o esqueleto e copia do SLUS (decisão 13)"),
-    ("gSndRpcBuf", 0, "união s32/s16: a metade alta do count u32 da fila de som (RPC 0xD) sob o h[0] = 0 do RPC 0xF, "
-                      "resto que ninguém lê"),
-    ("gPortMoviePath", None, "caminho do host (BT3_DATA diferente nas duas rodadas)"),
+    ("gSndRpcBuf", None, "o buffer de envio dos RPC de som (SndRpcBuf, include/sys/snd.h): união de s32, s16 e da fila "
+                         "SndQueue (u8 e u16), com o resto do último RPC de cada largura; o snd_se.c lê cada RPC pela "
+                         "forma dele (a fila, na ordem nativa em PORT_BIG_ENDIAN)"),
+    ("gPortMoviePath", None, "caminho do host (BT3_DATA diferente nas duas rodadas): a variável é só o caminho"),
     ("gPortAdxView", None, "caminhos do host (BT3_DATA diferente nas duas rodadas)"),
     ("sMc", None, "caminhos do host do cartão de memória (BT3_SAVES diferente nas duas rodadas)"),
-    # os dois buffers de pacotes da GPU (Dma_InitBuffers): o pacote de sprite pronto (GfxPostSpritePkt, src/sys/
-    # gfxm_a.c) é um local copiado inteiro para o pacote (StgPanBlur_DrawView), com uv0.pad, uv1.pad e nop nunca
-    # iniciados: lixo da pilha, outro em cada build, em bits que o GS ignora (a metade alta de UV, o dado do NOP). Só
-    # vale sem nenhuma palavra das classes de troca de ordem de um pacote (decisão 19: u64, u64-com-zero, 2xu16,
-    # misto) na região
-    ("heap#24", None, "pacotes da GPU: campos não iniciados do pacote de sprite copiados da pilha (o GS os ignora)"),
-    ("heap#25", None, "idem, o outro buffer"),
 ]
-# classes que, numa região aceita por inteiro na lista acima, denunciariam erro de ordem de bytes e não lixo
+
+# As regiões em que as classes SUSPEITAS são esperadas, fora dos blocos com marcas e dos tipados (globais pelo DWARF
+# ou pelas declarações, blocos do heap pelo tipo que a alocação pede): (região, {classe: teto}, por quê). O teto é o
+# maior número visto nos quatro roteiros do essencial (no fim e em cada tela de menu) com folga, ou o bloco inteiro
+# num buffer de bytes; passar dele é diferença. O dono de cada uma pelo campos.py --donos.
+CLASSES_CONHECIDAS = [
+    ("heap:0x3000", {"igual-sem-inverter": 0x3000 // 4},
+     "gProgress->loadPack (Progress_Init, src/battle/view_a_e.c:48): o arquivo da folha da tela de carregamento, um "
+     "contêiner BPE (fluxo de bytes); as marcas conferem o arquivo lido na rodada, o resto do buffer são bytes"),
+    ("heap:0x6800", {"igual-sem-inverter": 0x6800 // 4},
+     "gProgress->loadRes (view_a_e.c:49): o conteúdo descomprimido da folha (pixels, bytes) e o resto do buffer; os "
+     "números dele as marcas conferem"),
+    ("heap:0x16800", {"igual-sem-inverter": 0x16800 // 4},
+     "faceFile[0] e [1] do CharSel e do TeamSel (menu_c_e.c:700, menu_e_b.c:699): o arquivo do retrato como veio do "
+     "disco, um contêiner BPE (fluxo de bytes); o conteúdo convertido mora no faceRes, que as marcas conferem"),
+    ("heap:0x68", {"igual-sem-inverter": 8},
+     "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
+     "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
+    ("heap:0x100000", {"igual-sem-inverter": 256},
+     "os buffers de pacotes da GPU (Dma_InitBuffers): cores RGBA gravadas byte a byte nos pacotes (r, g, b, a: o "
+     "3c3c3cNN do fade), como o GS as lê; o rasterizador da etapa 6 confere a imagem (visto: 108 no máximo)"),
+    ("heap:0x83040", {"igual-sem-inverter": 160},
+     "a tabela de ordenação (Ot_Init, gfx_ot.c:62: o pacote e as entradas num bloco só): as mesmas cores RGBA byte a "
+     "byte nos primitivos (visto: 78)"),
+    ("heap:0x1a0800", {"igual-sem-inverter": 320, "2xu16": 660, "misto": 80, "u64": 930, "float-proximo": 16},
+     "a arena do BtlPool (BtlPool_Init, btl_pool.c:29): as estruturas da cena da luta num alocador próprio, sem tipo "
+     "por estrutura (u8, u16 e u64 de campo); float-proximo: as tabelas do EftGlow_BuildTables (cosf e sinf da libm "
+     "do host). Só teto (visto: 244, 522, 59, 742 e 8): tipar a arena por sub-bloco fica pendente (plano, etapa 5)"),
+]
+
+# Os dois buffers de pacotes da GPU (Dma_InitBuffers, 0x100000 bytes cada): o pacote de sprite pronto
+# (GfxPostSpritePkt, src/sys/gfxm_a.c) é um local copiado inteiro para o pacote (StgPanBlur_DrawView), com uv0.pad,
+# uv1.pad e nop nunca iniciados: lixo da pilha, outro em cada build, em bits que o GS ignora. Os "diferentes" ali são
+# aceitos pela região inteira, desde que não haja palavra das classes de troca de ordem de um pacote (decisão 19)
+PACOTE_GPU = "heap:0x100000"
 PROIBIDAS_EM_PACOTE = ("u64", "u64-com-zero", "2xu16", "misto", "float-proximo")
 
 
@@ -342,11 +398,27 @@ def vivos_conformes(linhas, dados):
     return out
 
 
-def conhecida(regiao, desl):
+def chave_regiao(nome, estado):
+    """a chave de uma região do memdiff: "heap:0xPEDIDO" para um bloco do heap em uso, o nome para o resto"""
+    m = re.search(r"pedido (0x[0-9a-f]+)", estado or "")
+    return f"heap:{m.group(1)}" if nome.startswith("heap#") and m else nome
+
+
+def conhecida(regiao, desl, tam):
     for r, d, porque in DIFERENTES_CONHECIDAS:
-        if r == regiao and (d is None or d == desl):
+        if r != regiao:
+            continue
+        if d is None or d == desl:
             return porque
+        if isinstance(d, tuple) and d[0] == "campo":
+            _, passo, ini, n = d
+            if ini <= desl % passo and desl % passo + tam <= ini + n:
+                return porque
     return None
+
+
+def classes_da_linha(texto):
+    return {k: int(v) for k, v in re.findall(r"([a-z0-9-]+) (\d+)", texto)}
 
 
 def memoria(caminho, pre="", tela=None, dados="gamedata"):
@@ -367,8 +439,14 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
     else:
         print(f"{pre}memória: {heap[6:]}")
     for l in linhas:
-        if l.startswith(("marcas ambíguas", "--marcas-vivas", "--marcas-tam", "livres:")):
+        if l.startswith(("marcas ambíguas", "--marcas-vivas", "--marcas-tam", "livres:", "--tipos:", "--donos:")):
             print(f"{pre}  {l}")
+    if not any(l.startswith("--tipos: ") for l in linhas):
+        print(f"{pre}DIFERENÇA: memória: o memdiff sem --tipos (as globais sem o tipo)")
+        ok = False
+    if not any(l.startswith("--donos: ") for l in linhas):
+        print(f"{pre}DIFERENÇA: memória: o memdiff sem --donos (os blocos do heap sem o tipo pedido)")
+        ok = False
     marcas = [l for l in linhas if l.startswith("marcas heap")]
     fora = [l for l in marcas if not l.endswith("fora-do-formato 0")]
     if not marcas:
@@ -401,8 +479,9 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
                 print(f"{pre}DIFERENÇA: memória: tela {tela} sem o conteúdo {c} vivo e conforme (sem bloco não prova "
                       "a conversão)")
                 ok = False
-    # os trechos "diferentes" de cada região, um a um contra a lista
-    regiao, esperados, vistos, explicados = None, 0, 0, collections.Counter()
+    # região a região: as classes suspeitas contra CLASSES_CONHECIDAS, e os trechos um a um contra a lista
+    regiao, chave_r, esperados, vistos = None, None, 0, 0
+    explicados, suspeitas, somadas = collections.Counter(), collections.Counter(), collections.Counter()
 
     def fecha():
         nonlocal ok
@@ -410,27 +489,51 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
             print(f"{pre}DIFERENÇA: memória: {regiao} com {esperados} trechos e {vistos} listados (aumente o --max)")
             ok = False
     for l in linhas:
-        m = re.match(r"região (\S+?)(?: \(.*?\))? x86 .*; (\d+) trechos a olhar", l)
+        m = re.match(r"região (\S+?)(?: \((.*?)\))? x86 \S+ ppc \S+ \(\+[0-9a-f]+\): (.*); (\d+) trechos a olhar$", l)
         if m:
             fecha()
-            regiao, esperados, vistos = m.group(1), int(m.group(2)), 0
-            if regiao in ("heap#24", "heap#25"):
-                ruins = [c for c in PROIBIDAS_EM_PACOTE if re.search(r"\b" + re.escape(c) + r" \d", l)]
+            regiao, esperados, vistos = m.group(1), int(m.group(4)), 0
+            chave_r = chave_regiao(regiao, m.group(2))
+            # (num bloco do heap, o deslocamento dos trechos conta do começo dos dados, HeapBlock.data: o enchimento de
+            # alinhamento entre o cabeçalho e os dados muda de um bloco para outro)
+            md0 = re.search(r"dados \+(0x[0-9a-f]+)", m.group(2) or "")
+            dados0 = int(md0.group(1), 16) if md0 else 0
+            cl = classes_da_linha(m.group(3))
+            for c in SUSPEITAS:
+                somadas[c] += cl.get(c, 0)
+            if chave_r == PACOTE_GPU:
+                ruins = [c for c in PROIBIDAS_EM_PACOTE if cl.get(c)]
                 if ruins:
                     print(f"{pre}DIFERENÇA: memória: {regiao} (pacotes da GPU) com palavras {', '.join(ruins)}: "
                           "troca de ordem num pacote, não lixo")
                     ok = False
+            for c in SUSPEITAS:
+                n = cl.get(c, 0)
+                if not n or (chave_r == PACOTE_GPU and c in PROIBIDAS_EM_PACOTE):
+                    continue  # (nos pacotes da GPU as proibidas já são diferença, acima)
+                teto = next((t[c] for r, t, _ in CLASSES_CONHECIDAS if r == chave_r and c in t), None)
+                if teto is None or n > teto:
+                    print(f"{pre}DIFERENÇA: memória: {regiao} ({chave_r}) com {n} palavras {c}" +
+                          (f", acima do teto {teto}" if teto is not None else ", classe não explicada ali "
+                           "(CLASSES_CONHECIDAS)"))
+                    ok = False
+                else:
+                    suspeitas[c] += n
             continue
-        m = re.match(r"  [0-9a-f]{8} \+([0-9a-f]+)\s+\((\S+?)\+0x([0-9a-f]+)\)", l)
+        m = re.match(r"  ([0-9a-f]{8}) \+([0-9a-f]+)\s+\((\S+?)\+0x([0-9a-f]+)\)", l)
         if m and regiao is not None:
             vistos += 1
-            r, d = m.group(2), int(m.group(3), 16)
-            porque = conhecida(r, d)
+            ender, tam, d = int(m.group(1), 16), int(m.group(2), 16), int(m.group(4), 16)
+            if chave_r == PACOTE_GPU:
+                explicados["pacotes da GPU"] += 1
+                continue
+            porque = conhecida(chave_r, d - dados0, tam)
             if porque is None:
-                print(f"{pre}DIFERENÇA: memória: {r}+0x{d:x} (+0x{m.group(1)} bytes) diferente e não explicado")
+                print(f"{pre}DIFERENÇA: memória: {regiao}+0x{d:x} ({chave_r}" +
+                      (f", dados+0x{d - dados0:x}" if dados0 else "") + f", +0x{tam:x} bytes) diferente e não explicado")
                 ok = False
             else:
-                explicados[r] += 1
+                explicados[chave_r] += 1
             continue
         if m is None and re.match(r"  [0-9a-f]{8} \+", l) and regiao is not None:
             vistos += 1
@@ -439,9 +542,18 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
     fecha()
     tot = next((l for l in linhas if l.startswith("total: ")), "")
     print(f"{pre}  palavras: {tot[7:]}")
+    total = classes_da_linha(tot[7:])
+    for c in SUSPEITAS:
+        if total.get(c, 0) != somadas[c]:
+            print(f"{pre}DIFERENÇA: memória: {total.get(c, 0)} palavras {c} no total e {somadas[c]} nas regiões "
+                  "listadas (palavra suspeita fora de uma linha de região)")
+            ok = False
     if explicados:
-        print(f"{pre}  trechos diferentes explicados (DIFERENTES_CONHECIDAS): " +
+        print(f"{pre}  trechos diferentes explicados (DIFERENTES_CONHECIDAS e pacotes da GPU): " +
               ", ".join(f"{r} {n}" for r, n in sorted(explicados.items())))
+    if suspeitas:
+        print(f"{pre}  classes suspeitas explicadas (CLASSES_CONHECIDAS): " +
+              ", ".join(f"{c} {n}" for c, n in sorted(suspeitas.items())))
     return ok
 
 

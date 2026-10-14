@@ -82,6 +82,12 @@ if [ ${#ORIGEM[@]} -gt 0 ]; then
     fi
 fi
 LOGS=()
+# a largura de cada byte das globais da x86 pelo tipo do DWARF, para o memdiff comparar as globais campo a campo
+# (memdiff.py --tipos; sem isso um u16 ou um byte numa palavra saíam como classe ambígua, sem julgamento)
+if [ -n "${SEMMAPA:-}" ]; then
+    python3 port/x360/tools/campos.py --globais $B/x86/bt3_x86 $O/globais > $O/globais.txt 2>&1
+    grep -q '^GLOBAIS ' $O/globais.txt && [ -s $O/globais.tsv ] || { echo "campos.py --globais falhou:"; cat $O/globais.txt; exit 1; }
+fi
 # (o que roda de novo: com REUSA=1 nada; com REUSA=x86 só a PPC)
 roda_x86() { [ -z "${REUSA:-}" ]; }
 roda_ppc() { [ "${REUSA:-}" != 1 ]; }
@@ -185,6 +191,13 @@ for n in "${NOMES[@]}"; do
                 BT3_HASH=$D/hq.txt BT3_HASH_AT=$V timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $D/ppcsm.txt 2>&1
             BT3_ROTEIRO=$R BT3_SAVES=$D/sm BT3_HASH=$D/hm.txt BT3_HASH_AT=$V timeout 900 $B/x86/bt3_x86 > /dev/null 2>&1
         fi
+        # quem alocou cada bloco vivo nesse vblank e o tipo que pediu (Heap_Alloc(sizeof(T))): o memdiff compara esses
+        # blocos campo a campo (--donos). A x86 sob o gdb até o vblank; com REUSA=1, só se ainda não houver
+        if roda_ppc || [ ! -s $D/donos.tsv ]; then
+            rm -rf $D/sd $D/donos.*
+            BT3_ROTEIRO=$R BT3_SAVES=$D/sd BT3_HASH=$D/hd.txt timeout 1800 python3 port/x360/tools/campos.py --donos \
+                $B/x86/bt3_x86 $V --tipos $D/donos > $D/donos.txt 2>&1 < /dev/null
+        fi
         # memdiff no vblank V: o heap em uso pareado pelos blocos, e cada bloco vivo que guarda um arquivo ou um
         # conteúdo lido na rodada (lidos.txt), número a número pela largura que o conversor deu (--marcas-vivas, o
         # bloco achado pelo conteúdo, o .orig ao lado das marcas); sem os bytes: o sed corta o hexa das linhas de
@@ -193,7 +206,7 @@ for n in "${NOMES[@]}"; do
         if [ -s $D/hq.txt.dump ] && [ -s $D/hm.txt.dump ]; then
             $O/conv_tool --marcas $D/marcas gamedata $(cat $D/lidos.txt) > /dev/null
             python3 port/x360/tools/memdiff.py $D/hm.txt.dump $D/hq.txt.dump $B/x86/bt3_x86 $B/ppc/bt3_ppc \
-                --so-em-uso --marcas-vivas $D/marcas --max 400 | sed 's/  x86 [0-9a-f]\{8\} .*ppc [0-9a-f ]*$//' \
+                --so-em-uso --marcas-vivas $D/marcas --tipos $O/globais --donos $D/donos --max 400 | sed 's/  x86 [0-9a-f]\{8\} .*ppc [0-9a-f ]*$//' \
                 > $D/memdiff.txt
             echo "memdiff saiu com ${PIPESTATUS[0]}" >> $D/memdiff.txt
         fi
@@ -227,10 +240,15 @@ for n in "${NOMES[@]}"; do
                     BT3_ROTEIRO=$R BT3_SAVES=$M/sm BT3_HASH=$M/hm.txt BT3_HASH_AT=$VT timeout 900 $B/x86/bt3_x86 \
                         > /dev/null 2>&1 < /dev/null
                 fi
+                if roda_ppc || [ ! -s $M/donos.tsv ]; then
+                    rm -rf $M/sd $M/donos.*
+                    BT3_ROTEIRO=$R BT3_SAVES=$M/sd BT3_HASH=$M/hd.txt timeout 1800 python3 port/x360/tools/campos.py \
+                        --donos $B/x86/bt3_x86 $VT --tipos $M/donos > $M/donos.txt 2>&1 < /dev/null
+                fi
                 rm -f $M/memdiff.txt
                 if [ -s $M/hq.txt.dump ] && [ -s $M/hm.txt.dump ]; then
                     python3 port/x360/tools/memdiff.py $M/hm.txt.dump $M/hq.txt.dump $B/x86/bt3_x86 $B/ppc/bt3_ppc \
-                        --so-em-uso --marcas-vivas $D/marcas --max 400 | sed 's/  x86 [0-9a-f]\{8\} .*ppc [0-9a-f ]*$//' \
+                        --so-em-uso --marcas-vivas $D/marcas --tipos $O/globais --donos $M/donos --max 400 | sed 's/  x86 [0-9a-f]\{8\} .*ppc [0-9a-f ]*$//' \
                         > $M/memdiff.txt
                     echo "memdiff saiu com ${PIPESTATUS[0]}" >> $M/memdiff.txt
                 fi

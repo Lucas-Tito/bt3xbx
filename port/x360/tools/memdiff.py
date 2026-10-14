@@ -2,7 +2,8 @@
 """F1: compara a memória do jogo de duas builds de ordem de bytes diferente num mesmo quadro.
 
     memdiff.py X86.dump PPC.dump PROG_X86 PROG_PPC [--max N] [--faixa INI-FIM] [--estrito] [--resumo]
-               [--marcas REGIAO=ARQ.marcas]... [--marcas-tam ARQ.marcas]... [--marcas-vivas DIR]
+               [--marcas REGIAO=ARQ.marcas]... [--marcas-tam ARQ.marcas]... [--marcas-vivas DIR] [--tipos BASE]
+               [--donos BASE]
 
 Os .dump são os de port/src/gs/state.c (BT3_HASH=<arq> BT3_HASH_AT=<quadro> -> <arq>.dump): heap,
 scratchpad e as variáveis globais do jogo (<programa>.mem, escrito por tools/mem.py).
@@ -56,6 +57,17 @@ nunca grava) ficam fora da comparação por palavra: é resto de uso anterior qu
 ..." diz quanto ficou de fora. Um jogo que lesse memória não escrita se separaria da x86 no rastro ou na luta, que se
 comparam à parte.
 
+--tipos BASE (F4, revisão da etapa 5): as globais com tipo no DWARF (campos.py --globais PROG_X86 BASE) se comparam
+campo a campo pelo tipo (pelo_tipo): o que a classe por palavra não decide (bytes e u16 na mesma palavra, um u64, um
+float que só arredondou) sai "conforme" ou "fora-do-formato", e cada trecho fora do formato é listado (só bytes
+contíguos). O vetor de bytes e o campo unk*/pad* da decomp são "opaco": vale qualquer leitura de uma largura só, menos
+"diferente"; o que o port não usa é "morto-no-port", fora da comparação. O espaço entre o fim do tipo e o símbolo
+seguinte fica na classe por palavra.
+
+--donos BASE (idem): os blocos do heap em uso cuja chamada pediu sizeof(T) (campos.py --donos PROG VBLANK --tipos BASE,
+no mesmo vblank do dump) se comparam campo a campo por T, repetido pelo tamanho pedido; a linha da região diz o tipo e
+quem alocou.
+
 Para cada região com marcação, uma linha "marcas REGIAO ARQ: conforme N, fora-do-formato M" (também com --resumo).
 """
 import bisect, os, struct, subprocess, sys
@@ -63,11 +75,21 @@ from collections import Counter
 
 BASE = 0x20000000  # -Ttext-segment de headless.py
 MAGIC = 0x53484254
+# as classes que são certas para uma largura e erradas para outra (ou arredondamento): fora de um bloco com marcas,
+# o roteiros.py memoria exige que cada uma seja explicada (CLASSES_CONHECIDAS)
+SUSPEITAS = {"igual-sem-inverter", "2xu16", "u64", "u64-com-zero", "misto", "float-proximo"}
+
+
+HEAP_FAIXA = [0, 0]  # [início, fim) do heap do jogo no dump (main): ponteiro ali nunca é "float-proximo"
 
 
 def float_proximo(va, vb):
     """os dois u32 (nativos de cada build) são floats normais do mesmo sinal e expoente a até 64 unidades da última
-    casa um do outro: arredondamento de float (a libm do host, F2), nunca troca de bytes, que daria outro número"""
+    casa um do outro: arredondamento de float (a libm do host, F2), nunca troca de bytes, que daria outro número. Um
+    valor dentro da faixa do heap do jogo não entra: um ponteiro deslocado de poucos bytes (struct de tamanho errado)
+    também tem o mesmo expoente (revisão da etapa 5); o roteiros.py só aceita a classe nas regiões listadas"""
+    if HEAP_FAIXA[0] <= va < HEAP_FAIXA[1] or HEAP_FAIXA[0] <= vb < HEAP_FAIXA[1]:
+        return False
     ea, eb = (va >> 23) & 0xFF, (vb >> 23) & 0xFF
     return va >> 31 == vb >> 31 and ea == eb and 0 < ea < 0xFF and va != vb and abs(va - vb) <= 64
 
@@ -200,11 +222,101 @@ def pelo_formato(ax, dx, dp, marcas):
     return ini, fim, classes, trechos
 
 
+def ler_tipos(base):
+    """{nome: marcas} das globais (campos.py --globais: BASE.tsv e BASE.bin)"""
+    b = open(base + ".bin", "rb").read()
+    out = {}
+    for l in open(base + ".tsv"):
+        nome, _, tam, pos = l.split()
+        out[nome] = b[int(pos, 16):int(pos, 16) + int(tam, 16)]
+    return out
+
+
+def ler_donos(base):
+    """{endereço dos dados: (tipo, marcas, quem alocou)} dos blocos do heap (campos.py --donos --tipos)"""
+    b = open(base + ".bin", "rb").read()
+    out = {}
+    for l in open(base + ".tsv"):
+        q = l.rstrip("\n").split("\t")
+        out[int(q[0], 16)] = (q[1], b[int(q[3], 16):int(q[3], 16) + int(q[2], 16)], q[4] if len(q) > 4 else "?")
+    return out
+
+
+def pelo_tipo(dx, dp, m, fx, fp, n, base=0):
+    """Compara [0, n) de uma global pelos códigos do campos.py --globais (o tipo do DWARF): inteiro de largura w com
+    os bytes invertidos, byte igual, float invertido, ponteiro invertido ou ponteiro do port nos dois lados (a imagem
+    e o heap do C ficam em outro lugar em cada build), enchimento igual. O resto é "fora-do-formato" (com
+    "float-proximo" contado à parte quando um float só difere no arredondamento). Devolve (classes, trechos)."""
+    classes, trechos, k = Counter(), [], 0
+    fim = min(n, len(m))
+    while k < fim:
+        c = m[k]
+        if c == 0xFF:  # tabela do executável que o port não usa (campos.py --globais): fora da comparação
+            classes["morto-no-port"] += 1
+            k += 1
+            continue
+        if c == 0xFE or (c == 0 and k % 4 == 0 and k + 4 <= fim and not any(m[k:k + 4])):
+            # campo opaco (unk*, pad*, vetor de bytes) ou enchimento do tipo: ninguém tipou o conteúdo; por palavra,
+            # aceito qualquer leitura de uma largura (u32 invertido, bytes iguais, dois u16, u8+u8+u16, o u64 com o par
+            # pelo endereço, o ponteiro do port), contado à parte ("opaco"); só "diferente" é fora do formato
+            w = 4 if k % 4 == 0 and k + 4 <= fim and all(x in (0, 0xFE) for x in m[k:k + 4]) else 1
+            a, b = dx[k:k + w], dp[k:k + w]
+            ok = a == b or a == b[::-1]
+            if not ok and w == 4:
+                va, vb = struct.unpack("<I", a)[0], struct.unpack(">I", b)[0]
+                par = ((base + k) ^ 4) - base
+                ok = (fx[0] <= va < fx[1] and fp[0] <= vb < fp[1]) or (a[:2] == b[1::-1] and a[2:] == b[:1:-1]) or \
+                    (a[:2] == b[:2] and a[2:] == b[:1:-1]) or (a[:2] == b[1::-1] and a[2:] == b[2:]) or \
+                    (a[0] == b[0] and a[3] == b[3] and a[1:3] == b[2:0:-1]) or \
+                    (0 <= par and par + 4 <= len(dp) and a == dp[par:par + 4][::-1])
+            classes["opaco" if ok else "fora-do-formato"] += 1
+            if not ok:
+                if trechos and k == trechos[-1][1]:
+                    trechos[-1][1] = k + w
+                else:
+                    trechos.append([k, k + w])
+            k += w
+            continue
+        w = c if c in (2, 4, 8) else (c & 0xF if c in (0x44, 0x48, 0x84) else 1)
+        if k + w > fim:
+            w = fim - k
+        a, b = dx[k:k + w], dp[k:k + w]
+        prox = False
+        if c in (2, 4, 8, 0x44, 0x48):
+            ok = a == b[::-1]
+            if not ok and c == 8 and w == 8:
+                # um u64 de pacote da GPU fica como dois u32, a baixa primeiro (decisão 19, PS2_PKT64): o tipo do C não
+                # separa o pacote de um u64 de verdade
+                ok = a[:4] == b[3::-1] and a[4:] == b[:3:-1]
+            if not ok and c == 0x44 and w == 4:
+                prox = float_proximo(struct.unpack("<I", a)[0], struct.unpack(">I", b)[0])
+        elif c == 0x84 and w == 4:
+            va, vb = struct.unpack("<I", a)[0], struct.unpack(">I", b)[0]
+            ok = a == b[::-1] or (fx[0] <= va < fx[1] and fp[0] <= vb < fp[1])
+        else:  # byte, enchimento, continuação solta
+            ok = a == b
+        classes["conforme" if ok else "float-proximo" if prox else "fora-do-formato"] += 1
+        if not ok:
+            # (só junta o que é contíguo: o roteiros.py confere cada trecho contra os campos explicados)
+            if trechos and k == trechos[-1][1]:
+                trechos[-1][1] = k + w
+            else:
+                trechos.append([k, k + w])
+        k += w
+    return classes, [tuple(t) for t in trechos]
+
+
 def main():
     args, opc, it = [], {}, iter(sys.argv[1:])
-    marcas, por_tam, nome_marcas, vivas = {}, [], {}, []
+    marcas, por_tam, nome_marcas, vivas, tipos, donos = {}, [], {}, [], {}, {}
     for a in it:
-        if a == "--marcas":
+        if a == "--tipos":
+            tipos = ler_tipos(next(it))
+            opc[a] = True
+        elif a == "--donos":
+            donos = ler_donos(next(it))
+            opc[a] = True
+        elif a == "--marcas":
             r, arq = next(it).split("=", 1)
             marcas[r] = open(arq, "rb").read()
             nome_marcas[r] = arq
@@ -231,6 +343,9 @@ def main():
     tot = Counter()
     rp = {n: (a, d) for n, a, d in p if not n.startswith("global")}
     pares = []
+    for n, a, d in x:
+        if n.startswith("heap"):
+            HEAP_FAIXA[:] = [a, a + len(d)]
     for n, a, d in x:
         if n.startswith("global") or n not in rp:
             continue
@@ -315,13 +430,15 @@ def main():
               f"{sum(len(a) == 1 for a in reclamados.values())} blocos, {sem_bloco} sem bloco, {ambiguas} ambíguos")
     listar = {"diferente"} | ({"2xu16", "u64", "u64-com-zero", "igual-sem-inverter"} if estrito else set())
     livres = Counter()
+    tipadas, tipados_heap = [0], [0]
     for (nx, ax, dx), (np_, ap, dp) in pares:
         n = min(len(dx), len(dp)) // 4 * 4
         estado = ""
         if nx.startswith("heap") and "#" in nx and len(dx) >= 0x20:
             magic, usado = struct.unpack_from("<Ii", dx, 0)
             pedido, = struct.unpack_from("<i", dx, 0x18)
-            estado = f" (em uso, pedido {pedido:#x})" if usado else " (livre)"
+            estado = (f" (em uso, pedido {pedido:#x}, dados +{struct.unpack_from('<I', dx, 0x14)[0] - ax:#x})" if usado
+                      else " (livre)")
             if not usado and so_em_uso:
                 livres["blocos"] += 1
                 livres["bytes"] += n
@@ -336,7 +453,28 @@ def main():
             livres["enchimento"] += sum(max(0, b_ - a_) for a_, b_ in pula)
         trechos, ini, fim = [], None, None
         fmt_ini = fmt_fim = 0
-        if nx in marcas:
+        dono = None
+        if estado.startswith(" (em uso") and nx not in marcas and donos:
+            dono = donos.get(struct.unpack_from("<I", dx, 0x14)[0])
+        if nx in tipos and not nx.startswith(("heap", "scratch")):
+            # uma global com o tipo do DWARF: campo a campo, e fora disso (o espaço até o símbolo seguinte) por palavra
+            ct, tt = pelo_tipo(dx, dp, tipos[nx], fx, fp, n, ax)
+            classes.update(ct)
+            trechos += tt
+            fmt_ini, fmt_fim = 0, min(n, len(tipos[nx]))
+            tipadas[0] += 1
+        elif dono is not None:
+            # um bloco do heap com o tipo que a chamada pediu (Heap_Alloc(sizeof(T) ...), campos.py --donos --tipos):
+            # campo a campo, T repetido pelo tamanho pedido quando ele é múltiplo de sizeof(T)
+            d0 = struct.unpack_from("<I", dx, 0x14)[0] - ax
+            m = dono[1] * (pedido // len(dono[1]) if pedido % len(dono[1]) == 0 else 1)
+            ct, tt = pelo_tipo(dx[d0:], dp[d0:], m, fx, fp, min(n - d0, len(m)), ax + d0)
+            classes.update(ct)
+            trechos += [(a_ + d0, b_ + d0) for a_, b_ in tt]
+            fmt_ini, fmt_fim = d0, d0 + min(n - d0, len(m))
+            estado = estado[:-1] + f", {dono[0]} de {dono[2]})"
+            tipados_heap[0] += 1
+        elif nx in marcas:
             fmt_ini, fmt_fim, cf, tf = pelo_formato(ax, dx, dp, marcas[nx])
             classes.update(cf)
             trechos += [tuple(t) for t in tf]
@@ -381,7 +519,9 @@ def main():
             trechos.append((ini, fim))
         trechos.sort()
         tot.update(classes)
-        if not trechos or "--resumo" in opc:
+        # (a linha da região sai também sem trecho a listar quando a região tem palavra de uma classe que pode ser erro
+        # de ordem de bytes: o roteiros.py memoria julga as classes por região, e a soma delas tem de bater com o total)
+        if (not trechos and not set(classes) & SUSPEITAS) or "--resumo" in opc:
             continue
         print(f"região {nx}{estado} x86 {ax:08x} ppc {ap:08x} (+{n:x}): " +
               ", ".join(f"{k} {v}" for k, v in classes.most_common()) + f"; {len(trechos)} trechos a olhar")
@@ -397,6 +537,10 @@ def main():
     if so_em_uso:
         print(f"livres: {livres['blocos']} blocos livres do heap fora da comparação ({livres['bytes']:#x} bytes), e "
               f"{livres['enchimento']:#x} bytes de enchimento do alocador nos blocos em uso")
+    if "--tipos" in opc:
+        print(f"--tipos: {tipadas[0]} globais comparadas pelo tipo do DWARF, de {len(tipos)} com tipo")
+    if "--donos" in opc:
+        print(f"--donos: {tipados_heap[0]} blocos do heap comparados pelo tipo pedido, de {len(donos)} com tipo")
     print("total: " + ", ".join(f"{k} {v}" for k, v in tot.most_common()))
     if vivas and ambiguas:
         sys.exit(2)
