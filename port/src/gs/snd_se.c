@@ -96,6 +96,16 @@ static uint32_t bank32(const uint8_t *p) { return (uint32_t)p[3] | (uint32_t)p[2
 #else
 #define bank32 le32
 #endif
+/* The command queue (RPC 0xD) is not from the disc: the game writes it in memory (Snd_RpcFlush, SndQueue in
+   include/sys/snd.h: u32 count, u16 handle, s32 pitch), so its numbers are in the host's own order. A big-endian host
+   reads them as they are; the banks (sesq, vagi) stay little-endian, as the disc has them. */
+#ifdef PORT_BIG_ENDIAN
+static uint32_t queue32(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v; }
+static uint32_t queue16(const uint8_t *p) { uint16_t v; memcpy(&v, p, 2); return v; }
+#else
+#define queue32 le32
+#define queue16 le16
+#endif
 
 /* The chunk "SCEI<name>" inside a table (searched over at most `limit` bytes). */
 static const uint8_t *chunk(const uint8_t *p, const char *name, uint32_t limit) {
@@ -513,15 +523,15 @@ int sceSifCallRpc(void *client, int fno, int mode, void *send, int sendSize, voi
     case 0xA: stop(w[0], -1, -1); break; /* STOP_BANK */
     case 0xD: { /* QUEUE: count, then 12-byte commands { type, loop, u16 handle, bank, id, volume, pan, s32 pitch } */
         const uint8_t *q = send;
-        uint32_t count = le32(q);
+        uint32_t count = queue32(q);
         for (i = 0; ready && i < (int)count && i < 32; i++) {
             const uint8_t *c = q + 4 + i * 12;
             if (c[0] == 0) {
-                play(c[4], c[5], c[6], c[7], (int32_t)le32(c + 8), (int)le16(c + 2));
+                play(c[4], c[5], c[6], c[7], (int32_t)queue32(c + 8), (int)queue16(c + 2));
             } else if (c[0] == 1) {
                 stop(c[4], c[5], -1);
             } else if (c[0] == 2) {
-                stop(0, -1, (int)le16(c + 2));
+                stop(0, -1, (int)queue16(c + 2));
             }
         }
         break;

@@ -637,9 +637,15 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     HEAD`). Confira a contagem "(N alterados)" da linha "WSL em" antes de rodar.
   - **gdb: `dprintf` numa função inline** dá "value has been optimized out" (o `Snd_RpcCall` tem 35 cópias). Pare na
     função de baixo que não é inline (`break *sceSifCallRpc`) e leia os argumentos pela pilha (`*(int*)($esp+8)`).
-  - **Achado para a F6:** a camada de som do port (`port/src/gs/snd_se.c`, `sceSifCallRpc` caso 0xD) lê a fila de
-    comandos com `le32`/`le16`, mas o jogo a grava em números nativos: no big-endian a contagem sai trocada. Sem efeito
-    nas builds sem janela (sem fluxo de áudio, o laço não roda); a F6 tem de ler nativo.
+  - **Dado que o jogo grava não é dado do disco, mesmo que a camada do port o leia junto com o disco.** A camada de som
+    (`port/src/gs/snd_se.c`, `sceSifCallRpc` caso 0xD) lia a fila de comandos com `le32`/`le16`, como os bancos do
+    disco, mas a fila (`SndQueue`: contagem u32, handle u16, pitch s32) o jogo grava em números nativos
+    (`Snd_RpcFlush`). No big-endian a contagem viraria 0x0N000000 (o laço repetiria comandos velhos), o handle trocado
+    impediria o STOP e um pitch trocado travaria o `mix()`. Agora a fila se lê na ordem nativa em `PORT_BIG_ENDIAN`
+    (`queue32`/`queue16`); os bancos continuam little-endian. Sem fluxo de áudio o laço não roda, então a prova foi a
+    fila lida, registrada numa build de teste da PPC (não guardada) e comparada com a da x86 pelo gdb no roteiro do
+    Duelo: 33 filas e 34 comandos iguais (contagem e handle; o pitch foi 0 em todos). Em cada leitura de número de uma
+    camada do port, pergunte quem gravou: o disco ou o jogo.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
