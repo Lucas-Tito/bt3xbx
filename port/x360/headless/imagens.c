@@ -117,10 +117,18 @@ void Imagens_Evento(const char *linha, unsigned q) {
     if (sN < 0) {
         iniciar();
     }
+    /* o texto da linha, sem o "roteiro: arquivo:linha " das esperas e marcas (o mesmo que o roteiros.py imagens conta):
+       a âncora é o texto inteiro antes do " vblank ", então "tela 4" não casa com "tela 44" nem com "ok tela 4" */
+    if (strncmp(linha, "roteiro: ", 9) == 0) {
+        linha += 9;
+        linha += strcspn(linha, " ");
+        if (*linha == ' ') {
+            linha++;
+        }
+    }
     for (i = 0; i < sN; i++) {
-        const char *p = strstr(linha, sImg[i].ancora);
-        /* (a âncora é o texto inteiro antes do " vblank ": "tela 4" não casa com "tela 44") */
-        if (sImg[i].alvo < 0 && p != NULL && (p == linha || p[-1] == ' ') && ++sImg[i].vistas == sImg[i].vez) {
+        if (sImg[i].alvo < 0 && strncmp(linha, sImg[i].ancora, strlen(sImg[i].ancora)) == 0 &&
+            ++sImg[i].vistas == sImg[i].vez) {
             sImg[i].alvo = (long)q + sImg[i].n;
         }
     }

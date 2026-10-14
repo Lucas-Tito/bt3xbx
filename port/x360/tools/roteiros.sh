@@ -296,7 +296,7 @@ for n in "${NOMES[@]}"; do
             grep -q '^iguais' <<< "$cmp_i" || falhou "imagens: o rastro da $b com o rasterizador diferente do da x86"
         done
         python3 port/x360/tools/roteiros.py compara_imagens $D/imagens.txt $I/x86 $I/ppc \
-            --saidas $I/x86/saida.txt $I/ppc/saida.txt > $D/imagens_compara.txt
+            --saidas $I/x86/saida.txt $I/ppc/saida.txt --telas $D/telas_a.txt > $D/imagens_compara.txt
         r=$?
         sed 's/^/   /' $D/imagens_compara.txt
         [ $r = 0 ] || falhou "imagens das telas diferentes entre a x86 e a PPC"

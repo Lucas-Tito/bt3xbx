@@ -675,18 +675,32 @@ TELAS_IMG = {4, 38, 39, 40, 44, 45, 62}
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
 
 
+def eventos_rastro(caminho):
+    """[(quadro, texto)] das linhas do rastro com vblank e quadro: o texto é o da linha antes do " vblank ", sem o
+    "roteiro: arquivo:linha " (o mesmo que o imagens.c compara com a âncora)"""
+    out = []
+    for l in pathlib.Path(caminho).read_text().splitlines():
+        m = re.match(r"(?:roteiro: \S+ )?(.*?) vblank \d+ quadro (\d+)$", l)
+        if m:
+            out.append((int(m.group(2)), m.group(1)))
+    return out
+
+
+def quadro_esperado(eventos, n, anc):
+    """o quadro do roteiro da imagem ancorada em anc ("TEXTO" ou "TEXTO#K") n quadros depois, pelo rastro"""
+    texto, _, k = anc.partition("#")
+    vistas = [q for q, t in eventos if t == texto]
+    k = int(k) if k else 1
+    return vistas[k - 1] + n if len(vistas) >= k else None
+
+
 def lista_imagens(caminho, luta=False):
     """[(nome, n, âncora)] do rastro de referência (um arquivo de "telas"): a âncora é o texto da linha antes do
     " vblank " (com "#K" a K-ésima vez), n os quadros do roteiro depois dela. A luta só com luta=True (IMG=luta): os
     efeitos dela gravam a cor dos vértices byte a byte (u8 rgba[4], formatos/gpu.md seção 6), a corrigir na F5, e a
     imagem sai diferente até lá (plano, etapa 6)"""
-    linhas = pathlib.Path(caminho).read_text().splitlines()
     out, vezes = [], collections.Counter()
-    eventos = []  # (quadro, texto da âncora sem o #K, linha)
-    for l in linhas:
-        m = re.match(r"(?:roteiro: \S+ )?(.*?) vblank \d+ quadro (\d+)$", l)
-        if m:
-            eventos.append((int(m.group(2)), m.group(1)))
+    eventos = eventos_rastro(caminho)  # (quadro, texto da âncora sem o #K)
     telas_vistas = [(q, t) for q, t in eventos if t.startswith("tela ")]
     for i, (q, t) in enumerate(eventos):
         vezes[t] += 1
@@ -736,10 +750,11 @@ def ler_ppm(caminho):
     return w, h, px
 
 
-def compara_imagens(lista, dx, dp, sx=None, sp=None):
+def compara_imagens(lista, dx, dp, sx=None, sp=None, telas=None):
     """as imagens da LISTA (lista_imagens) nas pastas da x86 (dx) e da PPC (dp): cada uma presente nas duas, P6 de
     640 x 448, e idêntica byte a byte. Uma diferença diz a tela (a âncora), o quadro e o vblank de cada build (das
-    linhas "imagem:" das saídas sx e sp), quantos pixels diferem, o retângulo deles e o maior desvio por canal."""
+    linhas "imagem:" das saídas sx e sp), quantos pixels diferem, o retângulo deles e o maior desvio por canal. Com o
+    rastro de referência (telas), a imagem da x86 tem de ser do quadro que a lista pede (a âncora certa)."""
     def quadros(saida):
         out = {}
         if saida and pathlib.Path(saida).exists():
@@ -749,6 +764,7 @@ def compara_imagens(lista, dx, dp, sx=None, sp=None):
                     out[m.group(1)] = f"quadro {m.group(2)} vblank {m.group(3)}"
         return out
     qx, qp = quadros(sx), quadros(sp)
+    eventos = eventos_rastro(telas) if telas else None
     erros = iguais = 0
     for nome, n, anc in lista:
         onde = f"{nome} ({anc} +{n}; x86 {qx.get(nome, 'sem linha imagem:')}, ppc {qp.get(nome, 'sem linha imagem:')})"
@@ -761,6 +777,12 @@ def compara_imagens(lista, dx, dp, sx=None, sp=None):
         if qx.get(nome) != qp.get(nome):
             print(f"  DIFERENÇA: {onde}: capturada em outro momento")
             erros += 1
+        if eventos is not None:
+            esp = quadro_esperado(eventos, n, anc)
+            got = re.match(r"quadro (\d+)", qx.get(nome, ""))
+            if esp is None or got is None or int(got.group(1)) != esp:
+                print(f"  DIFERENÇA: {onde}: a lista pede o quadro {esp} (a âncora no rastro de referência)")
+                erros += 1
         try:
             wa, ha, pa = ler_ppm(a)
             wb, hb, pb = ler_ppm(b)
@@ -811,6 +833,7 @@ def main():
     ap.add_argument("--tela")
     ap.add_argument("--saidas", nargs=2)
     ap.add_argument("--luta", action="store_true")
+    ap.add_argument("--telas")
     a = ap.parse_args()
 
     if a.acao == "imagens":
@@ -820,7 +843,7 @@ def main():
     if a.acao == "compara_imagens":
         lista = [tuple(l.split(" ", 2)) for l in pathlib.Path(a.arqs[0]).read_text().splitlines() if l.strip()]
         lista = [(nome, int(n), anc) for nome, n, anc in lista]
-        return compara_imagens(lista, a.arqs[1], a.arqs[2], *(a.saidas or (None, None)))
+        return compara_imagens(lista, a.arqs[1], a.arqs[2], *(a.saidas or (None, None)), telas=a.telas)
 
     if a.acao == "semmapa":
         return semmapa(a)

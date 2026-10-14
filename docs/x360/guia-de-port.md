@@ -746,6 +746,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   - **Duas imagens no mesmo quadro do roteiro** (a `marca carregado` e o `ok som 1` das Opções saem na mesma leitura do
     controle): a primeira versão do `imagens.c` guardava uma só e a outra faltava nas duas builds; agora cada imagem
     tem a sua marca de pendente.
+  - **Imagens idênticas não provam que o momento é o certo.** A primeira versão casava a âncora "tela 4" também com o
+    "ok tela 4" da espera do roteiro; a "segunda visita ao menu principal" das Opções saiu da primeira, nas duas builds
+    igual, e a comparação passou. A âncora agora é o texto inteiro da linha antes do " vblank " (sem o
+    "roteiro: arquivo:linha "), o mesmo que o `roteiros.py imagens` conta, e o `compara_imagens` confere o quadro de
+    cada imagem contra o rastro de referência.
   - **Para achar a causa de uma imagem diferente, compare as primitivas, não os pixels:** `BT3_GS_DUMP` com o quadro
     do GS da imagem (o "gs G" da linha `imagem:`) mais o `BT3_GS_FROM`, nas duas builds, e o `diff` das linhas
     `prim`/`tex` (no WSL; só as contagens voltam). Cuidado: a "clut" que o dump imprime para textura de 32 bits é a
