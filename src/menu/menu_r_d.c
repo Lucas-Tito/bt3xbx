@@ -51,6 +51,12 @@ void SimTop_Init(s32 section) {
     memset(gSimTop, 0, sizeof(SimTop));
     gSimTop->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gSimTop->res = Sprite_Unpack(gSimTop->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gSimTop->res, ((s32 *)gSimTop->pack)[0], "menu_sim_inicio");
+    }
+#endif
 
     res = (MTexRes *)MPACK_AT(gSimTop->res, 4);
     Res_RelocateOffsets(&res, res, res);

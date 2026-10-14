@@ -91,6 +91,12 @@ void SurvSel_Init(s32 section) {
     memset(gSurvSel, 0, sizeof(SurvSel));
     gSurvSel->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gSurvSel->res = Sprite_Unpack(gSurvSel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gSurvSel->res, ((s32 *)gSurvSel->pack)[0], "menu_ub_selecao");
+    }
+#endif
     gSurvSel->courses = (SurvCourse *)MPACK_AT(gSurvSel->res, 12);
     gSurvSel->randomChara = (s32 *)MPACK_AT(gSurvSel->res, 14);
     gSurvSel->opps = (SurvOpp *)MPACK_AT(gSurvSel->res, 13);

@@ -65,6 +65,12 @@ void MisResult_Init(s32 section) {
     memset(MR, 0, sizeof(MisResult));
     MR->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     MR->res = Sprite_Unpack(MR->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(MR->res, ((s32 *)MR->pack)[0], "menu_ub_resultado");
+    }
+#endif
     MR_RES(5);
     MR->bg = res;
     MR_RES(7);

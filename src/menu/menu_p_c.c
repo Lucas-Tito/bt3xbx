@@ -68,6 +68,12 @@ void UbMenu_Init(s32 section) {
     memset(gUbMenu, 0, sizeof(UbMenu));
     gUbMenu->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gUbMenu->res = Sprite_Unpack(gUbMenu->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gUbMenu->res, ((s32 *)gUbMenu->pack)[0], "menu_ub_menu");
+    }
+#endif
     UM_RES(2);
     gUbMenu->bg = res;
     UM_RES(5);

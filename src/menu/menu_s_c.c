@@ -28,6 +28,12 @@ void SurvResult_Init(s32 section) {
     memset(gSurvResult, 0, sizeof(SurvResult));
     gSurvResult->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gSurvResult->res = Sprite_Unpack(gSurvResult->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gSurvResult->res, ((s32 *)gSurvResult->pack)[0], "menu_ub_resultado");
+    }
+#endif
     SR_RES(5);
     gSurvResult->bg = res;
     SR_RES(7);

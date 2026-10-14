@@ -82,12 +82,12 @@ CONTEUDO = {
     "menu_j_b.c:59": "450 s1", "menu_j_b.c:117": "convite", "menu_k_d.c:24": "fundo_torneio",
     "menu_k_f.c:31": "chave", "menu_k_f.c:805": "retrato", "menu_k_f.c:806": "retrato",
     "menu_k_f.c:830": "retrato", "menu_k_f.c:831": "retrato",
-    "menu_l_b.c:83": "retrato", "menu_l_b.c:148": "451 s4", "menu_l_b.c:254": "retrato",
-    "menu_m_b.c:184": "retrato", "menu_m_b.c:266": "451 s4", "menu_m_b.c:421": "retrato",
-    "menu_n_b.c:98": "ub_cursos", "menu_n_c.c:140": "ub_ranking", "menu_n_c.c:714": "retrato",
-    "menu_n_c.c:715": "retrato", "menu_n_d.c:53": "451 s3", "menu_o_b.c:63": "451 s6", "menu_o_d.c:146": "451 s2",
+    "menu_l_b.c:83": "retrato", "menu_l_b.c:154": "451 s4", "menu_l_b.c:266": "retrato",
+    "menu_m_b.c:184": "retrato", "menu_m_b.c:272": "451 s4", "menu_m_b.c:433": "retrato",
+    "menu_n_b.c:98": "ub_cursos", "menu_n_c.c:140": "ub_ranking", "menu_n_c.c:720": "retrato",
+    "menu_n_c.c:727": "retrato", "menu_n_d.c:53": "451 s3", "menu_o_b.c:63": "451 s6", "menu_o_d.c:146": "451 s2",
     "menu_p_b.c:67": "451 s3", "menu_p_c.c:70": "451 s1",
-    "menu_q_b.c:899": "sim_dia", "menu_q_b.c:1970": "retrato", "menu_q_b.c:1971": "retrato",
+    "menu_q_b.c:899": "sim_dia", "menu_q_b.c:1976": "retrato", "menu_q_b.c:1983": "retrato",
     "menu_r_c.c:38": "451 s3", "menu_r_d.c:53": "451 s5", "menu_s_b.c:93": "451 s2", "menu_s_c.c:30": "451 s3",
     "menu_u_g.c:60": "retrato", "menu_u_h.c:542": "452 s3", "menu_u_h.c:544": "estagio", "menu_v_b.c:759": "retrato",
     "menu_v_d.c:146": "452 s2", "menu_w_c.c:133": "452 s1", "menu_x_c.c:39": "453 s1",
@@ -512,6 +512,26 @@ TELAS_MEM = {
     44: ["461 s1", "pagina_treino"],                # Train (menu_treino, menu_texfile)
     45: ["461 s2", "retrato", "estagio"],           # CharSel do treino
     62: ["453 s1"],                                 # Option (menu_opcoes)
+    # o Ultimate Battle (etapa 9b, menus-ub.md): o pacote 00451 por seção, o tabuleiro, o ranking e os cursos inteiros;
+    # nas seleções, o retrato do cursor (os retratos do tabuleiro e do ranking só existem no anúncio da luta)
+    13: ["451 s1"],                                 # UbMenu (menu_ub_menu)
+    14: ["451 s2"],                                 # MisSel (menu_ub_selecao)
+    15: ["451 s4", "retrato"],                      # SoloSel ou UbTeamSel da Missão (menu_ubsel, menu_texfile)
+    16: ["451 s3"],                                 # MisResult (menu_ub_resultado)
+    17: ["451 s2"],                                 # SurvSel
+    18: ["451 s4", "retrato"],                      # SoloSel da Sobrevivência
+    19: ["451 s3"],                                 # SurvResult
+    20: ["451 s5"],                                 # SimTop (menu_sim_inicio)
+    21: ["451 s4", "retrato"],                      # SoloSel do Sim Dragon
+    22: ["sim_dia"],                                # SimDay (menu_sim_dia)
+    23: ["451 s3"],                                 # SimResult
+    24: ["451 s6"],                                 # DiscFusion (menu_discfusion)
+    25: ["451 s4", "retrato"],                      # SoloSel do ranking
+    26: ["ub_ranking"],                             # UbRank (menu_ub_ranking)
+    27: ["451 s3"],                                 # UbResult do ranking
+    28: ["ub_cursos"],                              # UbzSel (menu_ub_cursos)
+    29: ["451 s4", "retrato"],                      # SoloSel dos cursos
+    30: ["451 s3"],                                 # UbResult dos cursos
 }
 
 
@@ -801,7 +821,8 @@ def semmapa(a):
 # antes da luta; a luta (LUTA quadros depois de começar, só com IMG=luta); e cada "marca" do
 # roteiro (os retratos 923 e 921 vivos, as páginas do Treino, salvo e carregado), cada "ok som" (a opção mudada) e
 # cada pergunta do cartão ("ok mcflow 12" e "ok mcflow 2", PERGUNTA quadros depois, com o diálogo aberto).
-TELAS_IMG = {4, 38, 39, 40, 44, 45, 62, 6, 7, 8, 9, 10}  # (o essencial e, desde a etapa 9a, a História)
+TELAS_IMG = {4, 38, 39, 40, 44, 45, 62, 6, 7, 8, 9, 10} | set(range(13, 31))  # (o essencial, a História da 9a e o
+# Ultimate Battle da 9b)
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
 
 

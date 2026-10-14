@@ -81,6 +81,12 @@ void SoloSel_UpdateImage(void) {
         break;
     case SOLOSEL_LOAD_UNPACK:
         Sprite_Unpack(gSoloSel->imageFile, gSoloSel->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gSoloSel->imageRes, ((s32 *)gSoloSel->imageFile)[0], "menu_texfile");
+        }
+#endif
         res = gSoloSel->imageRes;
         Res_RelocateOffsets(&res, res, res);
         gSoloSel->texA[17] = MTEX(res, 0);
@@ -146,6 +152,12 @@ void SoloSel_Init(s32 section) {
     memset(gSoloSel, 0, 0x1AA4);
     gSoloSel->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gSoloSel->res = Sprite_Unpack(gSoloSel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gSoloSel->res, ((s32 *)gSoloSel->pack)[0], "menu_ubsel");
+    }
+#endif
     if (gProgress->mode == 21) {
         gSoloSel->flags |= SOLOSEL_NO_CUSTOM;
     }
@@ -252,6 +264,12 @@ void SoloSel_Init(s32 section) {
     gSoloSel->voiceLine = -1;
     File_LoadSync(gSoloSel->sel->image + 0x2F9, gSoloSel->imageFile, 0x16800);
     Sprite_Unpack(gSoloSel->imageFile, gSoloSel->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gSoloSel->imageRes, ((s32 *)gSoloSel->imageFile)[0], "menu_texfile");
+    }
+#endif
     res = gSoloSel->imageRes;
     Res_RelocateOffsets(&res, res, res);
     gSoloSel->texA[17] = MTEX(res, 0);

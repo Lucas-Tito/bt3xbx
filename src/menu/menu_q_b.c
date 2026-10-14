@@ -897,6 +897,12 @@ void SimDay_Init(s32 section) {
     gSimDay->pack = File_LoadSync(QPROG->baseFile + 0x1A, NULL, 0);
     check = gSimDay->pack;
     gSimDay->res = Sprite_Unpack(gSimDay->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gSimDay->res, ((s32 *)gSimDay->pack)[0], "menu_sim_dia");
+    }
+#endif
     check = gSimDay->res;
     gSimDay->faceFile[0] = Heap_Alloc(SIMDAY_FACE_SIZE, 0x40, 0, 2);
     gSimDay->faceFile[1] = Heap_Alloc(SIMDAY_FACE_SIZE, 0x40, 0, 2);
@@ -1968,7 +1974,19 @@ void SimDay_UpdateFaceLoad(void) {
         break;
     case SIMDAY_LOAD_UNPACK:
         Sprite_Unpack(gSimDay->faceFile[0], gSimDay->faceRes[0], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gSimDay->faceRes[0], ((s32 *)gSimDay->faceFile[0])[0], "menu_texfile");
+        }
+#endif
         Sprite_Unpack(gSimDay->faceFile[1], gSimDay->faceRes[1], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gSimDay->faceRes[1], ((s32 *)gSimDay->faceFile[1])[0], "menu_texfile");
+        }
+#endif
         res = gSimDay->faceRes[0];
         Res_RelocateOffsets(&res, res, res);
         gSimDay->tex6[14] = res->tex;

@@ -144,6 +144,12 @@ void MisSel_Init(s32 section) {
     memset(gMisSel, 0, sizeof(MisSel));
     gMisSel->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gMisSel->res = Sprite_Unpack(gMisSel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gMisSel->res, ((s32 *)gMisSel->pack)[0], "menu_ub_selecao");
+    }
+#endif
     gMisSel->missions = (MisSelDef *)MPACK_AT(gMisSel->res, 10);
     gMisSel->opps = (MisSelOpp *)MPACK_AT(gMisSel->res, 11);
     MS_RES(4);

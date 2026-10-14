@@ -182,6 +182,12 @@ void UbTeamSel_UpdateFaceLoad(void) {
         break;
     case UBSEL_LOAD_UNPACK:
         Sprite_Unpack(gUbTeamSel->faceFile, gUbTeamSel->faceRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gUbTeamSel->faceRes, ((s32 *)gUbTeamSel->faceFile)[0], "menu_texfile");
+        }
+#endif
         res = gUbTeamSel->faceRes;
         Res_RelocateOffsets(&res, res, res);
         gUbTeamSel->texA[17] = MTEX(res, 0);
@@ -264,6 +270,12 @@ void UbTeamSel_Init(s32 section) {
     memset(gUbTeamSel, 0, sizeof(UbTeamSel));
     gUbTeamSel->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gUbTeamSel->res = Sprite_Unpack(gUbTeamSel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gUbTeamSel->res, ((s32 *)gUbTeamSel->pack)[0], "menu_ubsel");
+    }
+#endif
     switch (UB_PROG->dpRule) {
     case 0:
         break;
@@ -419,6 +431,12 @@ void UbTeamSel_Init(s32 section) {
     gUbTeamSel->voiceLine = -1;
     File_LoadSync(gUbTeamSel->sel->chara + UB_FACE_FILE, gUbTeamSel->faceFile, 0x16800);
     Sprite_Unpack(gUbTeamSel->faceFile, gUbTeamSel->faceRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gUbTeamSel->faceRes, ((s32 *)gUbTeamSel->faceFile)[0], "menu_texfile");
+    }
+#endif
     res = gUbTeamSel->faceRes;
     Res_RelocateOffsets(&res, res, res);
     gUbTeamSel->texA[17] = MTEX(res, 0);

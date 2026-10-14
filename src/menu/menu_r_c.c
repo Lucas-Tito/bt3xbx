@@ -36,6 +36,12 @@ void SimResult_Init(s32 section) {
     memset(gSimResult, 0, sizeof(SimResult));
     gSimResult->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gSimResult->res = Sprite_Unpack(gSimResult->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gSimResult->res, ((s32 *)gSimResult->pack)[0], "menu_ub_resultado");
+    }
+#endif
 
     res = (MTexRes *)MPACK_AT(gSimResult->res, 6);
     Res_RelocateOffsets(&res, res, res);

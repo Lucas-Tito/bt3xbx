@@ -51,6 +51,12 @@ void UbResult_Init(s32 section) {
     memset(gUbResult, 0, sizeof(UbResult));
     gUbResult->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gUbResult->res = Sprite_Unpack(gUbResult->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gUbResult->res, ((s32 *)gUbResult->pack)[0], "menu_ub_resultado");
+    }
+#endif
     RS_RES(5);
     gUbResult->bg = res;
     RS_RES(7);

@@ -138,6 +138,12 @@ void UbRank_Init(void) {
     memset(gUbRank, 0, sizeof(UbRank));
     gUbRank->file = File_LoadSync(gProgress->baseFile + 0x1B, NULL, 0);
     gUbRank->res = Sprite_Unpack(gUbRank->file, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gUbRank->res, ((s32 *)gUbRank->file)[0], "menu_ub_ranking");
+    }
+#endif
     gUbRank->faceFile[0] = Heap_Alloc(0x16800, 0x40, 0, 2);
     gUbRank->faceFile[1] = Heap_Alloc(0x16800, 0x40, 0, 2);
     gUbRank->faceRes[0] = Heap_Alloc(0x20800, 0x20, 0, 2);
@@ -712,7 +718,19 @@ void UbRank_UpdateFaceLoad(void) {
         break;
     case UBRANK_LOAD_UNPACK:
         Sprite_Unpack(gUbRank->faceFile[0], gUbRank->faceRes[0], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gUbRank->faceRes[0], ((s32 *)gUbRank->faceFile[0])[0], "menu_texfile");
+        }
+#endif
         Sprite_Unpack(gUbRank->faceFile[1], gUbRank->faceRes[1], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gUbRank->faceRes[1], ((s32 *)gUbRank->faceFile[1])[0], "menu_texfile");
+        }
+#endif
         res = gUbRank->faceRes[0];
         Res_RelocateOffsets(&res, res, res);
         gUbRank->texC[11] = MTEX(res, 0);

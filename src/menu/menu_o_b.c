@@ -61,6 +61,12 @@ void DiscFusion_Init(s32 section) {
     memset(gDiscFusion, 0, sizeof(DiscFusion));
     gDiscFusion->pack = (u32 *)MPACK_AT(gMenuArc3, section);
     gDiscFusion->res = Sprite_Unpack(gDiscFusion->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gDiscFusion->res, ((s32 *)gDiscFusion->pack)[0], "menu_discfusion");
+    }
+#endif
     DF_RES(8);
     gDiscFusion->bg = res;
     DF_RES(9);

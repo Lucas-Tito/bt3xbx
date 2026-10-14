@@ -96,6 +96,12 @@ void UbzSel_Init(void) {
     memset(gUbzSel, 0, sizeof(UbzSel));
     gUbzSel->file = File_LoadSync(gProgress->baseFile + 0x1C, NULL, 0);
     gUbzSel->res = Sprite_Unpack(gUbzSel->file, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gUbzSel->res, ((s32 *)gUbzSel->file)[0], "menu_ub_cursos");
+    }
+#endif
     gUbzSel->course = (NCourse *)MPACK_AT(gUbzSel->res, 8);
     gUbzSel->foe = (NFoe *)MPACK_AT(gUbzSel->res, 9);
     UZ_RES(4);
