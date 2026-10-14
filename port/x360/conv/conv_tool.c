@@ -618,7 +618,7 @@ static const struct { const char *nome; ConvFn fn; } sPecas[] = {
     {"ListaEstagios", Conv_ListaEstagios}, {"ListaMusicas", Conv_ListaMusicas},
     {"ListaMusicasOpcoes", Conv_ListaMusicasOpcoes}, {"Celulas", Conv_Celulas},
     {"FichasPersonagem", Conv_FichasPersonagem}, {"IconesEstagio", Conv_IconesEstagio},
-    {"LicoesTreino", Conv_LicoesTreino},
+    {"LicoesTreino", Conv_LicoesTreino}, {"GetWin", Conv_GetWin},
 };
 typedef struct UsoPeca { int ini, fim, secao, sub; const char *peca; } UsoPeca;
 static const UsoPeca sUsos[] = {
@@ -653,6 +653,9 @@ static const UsoPeca sUsos[] = {
     {454, 458, 0, 23, "FichasPersonagem"}, {454, 458, 0, 24, "Celulas"},
     {459, 459, 2, 16, "ItemHelp"}, {459, 459, 3, 20, "Celulas"}, {459, 459, 4, 8, "FichasPersonagem"},
     {475, 475, 0, 6, "FichasPersonagem"}, {476, 476, 0, 6, "FichasPersonagem"},
+    /* a janela de recompensa (menus-historia.md 6): o resultado da História (460 s3, etapa 9a), a chave do torneio
+       (454..458) e o Shenlong (472 s2) */
+    {460, 460, 3, 5, "GetWin"}, {454, 458, 0, 42, "GetWin"}, {472, 472, 2, 11, "GetWin"},
 };
 
 static int pecas(const char *dados) {

@@ -671,3 +671,184 @@ void Conv_MenuOpcoes(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         Conv_Onde(c, "seção %lu das Opções", (unsigned long)i);
     }
 }
+
+/* ================================================================== a História (F4, etapa 9a)
+   Especificação: docs/x360/formatos/menus-historia.md. O arquivo 0x1CD (baseFile + 0xC, gMenuArc2) tem quatro telas:
+   a seleção de saga (s1), a lista de episódios e o fim da saga (s2), o resultado (s3) e o save (s4); cada saga tem o
+   próprio arquivo (0x1D1 + saga, um contêiner BPE inteiro), lido pela lista, pelo fim e pelo resultado. */
+
+/* §2: a seleção de saga (HistSel_Init, src/menu/menu_b_d.c:137, seção 1 de 0x1CD), N = 40. 1 o fundo
+   (Sprite_DrawPicture, 8 registros), 2..9 e 12 TexFile (SEL_RES/SEL_TEX; a 5 lê os registros 7..22, MTEX(res, i) +
+   7 * 0x40), 10 o filme, 11 os ícones da janela de ícone, 13 a janela de ícone, 14 a de mensagem, 15..23 os textos da
+   janela de mensagem (um por fala do guia), 24..32 as legendas com a boca (uma por fala), 33..40 os ícones de cada
+   saga (registros 0, 1 e 3) */
+void Conv_MenuHistSagas(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_u8 minimo[13] = {0, 8, 4, 4, 6, 23, 4, 1, 9, 9, 0, 1, 2};
+    conv_u32 ent[42], i;
+    if (!Conv_Secoes(c, base, tam, ent, 40, "seleção de saga")) {
+        return;
+    }
+    for (i = 1; i <= 40 && !c->erro; i++) {
+        if (i == 10) {
+            Conv_Flash(c, ENT(10));
+        } else if (i == 13) {
+            Conv_JanelaIcone(c, ENT(13));
+        } else if (i == 14) {
+            Conv_JanelaMsg(c, ENT(14));
+        } else if (i >= 15 && i <= 23) {
+            Conv_Textos(c, ENT(i));
+        } else if (i >= 24 && i <= 32) {
+            Conv_LipPack(c, ENT(i));
+        } else if (i >= 33) {
+            Conv_TexFileMin(c, ENT(i), 4);
+        } else {
+            Conv_TexFileMin(c, ENT(i), minimo[i]);
+        }
+        Conv_Onde(c, "seção %lu da seleção de saga", (unsigned long)i);
+    }
+}
+
+/* §3: a lista de episódios e o fim da saga (ModeMenu_Init, src/menu/menu_a_d.c:119; HistOutro_Init,
+   src/menu/menu_b_c.c:71; seção 2 de 0x1CD), N = 8. 1 TexFile (ModeMenu: registros 0..2, 4..8; HistOutro: 7), 2
+   TexFile (0), 3 o filme da lista, 4 TexFile (HistOutro: 0), 5 o filme do fim, 6 os textos da descrição
+   (TextBox_Init, linha = ModeMenuDescr.line + i), 7 TexFile (1), 8 a janela de mensagem */
+void Conv_MenuHistLista(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_u8 minimo[9] = {0, 9, 1, 0, 1, 0, 0, 2, 0};
+    conv_u32 ent[10], i;
+    if (!Conv_Secoes(c, base, tam, ent, 8, "lista de episódios")) {
+        return;
+    }
+    for (i = 1; i <= 8 && !c->erro; i++) {
+        switch (i) {
+        case 3: case 5: Conv_Flash(c, ENT(i)); break;
+        case 6: Conv_Textos(c, ENT(6)); break;
+        case 8: Conv_JanelaMsg(c, ENT(8)); break;
+        default: Conv_TexFileMin(c, ENT(i), minimo[i]); break;
+        }
+        Conv_Onde(c, "seção %lu da lista de episódios", (unsigned long)i);
+    }
+}
+
+/* §4: o resultado (HistResult_Init, src/menu/menu_c_c.c:171, seção 3 de 0x1CD), N = 5. 1 o fundo
+   (HistResult_Draw: Sprite_DrawPicture, 8 registros), 2 TexFile (0..5), 3 TexFile (0, 1), 4 o filme, 5 a janela de
+   recompensa (GetWin_Init(pack, 1), menus-historia.md 6) */
+void Conv_MenuHistResultado(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_u8 minimo[4] = {0, 8, 6, 2};
+    conv_u32 ent[7], i;
+    if (!Conv_Secoes(c, base, tam, ent, 5, "resultado da História")) {
+        return;
+    }
+    for (i = 1; i <= 5 && !c->erro; i++) {
+        switch (i) {
+        case 4: Conv_Flash(c, ENT(4)); break;
+        case 5: Conv_GetWin(c, ENT(5)); break;
+        default: Conv_TexFileMin(c, ENT(i), minimo[i]); break;
+        }
+        Conv_Onde(c, "seção %lu do resultado da História", (unsigned long)i);
+    }
+}
+
+/* §5: o save da História (HistSave_Init, src/menu/menu_c_d.c:21, seção 4 de 0x1CD): só o diálogo do cartão
+   (Dialog_Init), N = 1, a forma da tela do cartão (menus.md 5.1) */
+void Conv_MenuHistSave(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    conv_u32 ent[4];
+    if (Conv_Secoes(c, base, tam, ent, 1, "save da História")) {
+        Conv_Dialogo(c, ENT(1));
+    }
+}
+
+/* o índice na partição 1 de um nome de arquivo do disco ("pzs3us1/00464.bin@0x0#bpe": 464), ou -1. No jogo o nome é o
+   do formato (Port_ConvertMenuPack) e dá -1: o que depende do arquivo (os mínimos de cada saga, o fundo 0 do
+   resultado) só se confere na conv_tool, que tem o nome do arquivo e valida o disco inteiro */
+static int indice_do_nome(const char *nome) {
+    int k, d, v;
+    for (k = 0; nome != 0 && nome[k] != '\0'; k++) {
+        if (nome[k] == '/') {
+            for (d = 1, v = 0; d <= 5 && nome[k + d] >= '0' && nome[k + d] <= '9'; d++) {
+                v = v * 10 + (nome[k + d] - '0');
+            }
+            if (d == 6 && nome[k + 6] == '.') {
+                return v;
+            }
+        }
+    }
+    return -1;
+}
+
+/* a saga (0..7) de um nome do arquivo de saga (índices 464..471), ou -1 */
+static int saga_do_nome(const char *nome) {
+    int i = indice_do_nome(nome);
+    return i >= 464 && i <= 471 ? i - 464 : -1;
+}
+
+/* §7.2: as descrições dos episódios (ModeMenuDescr, include/menu/menu_b.h:21; seção 6 da saga): registros de 0x20
+   com oito s32 (count, line, delay[6]). A lista lê o registro de cada episódio (0..itemMax - 1), o fim lê o de
+   itemMax: itemMax + 1 registros (itemMax = 3, 4, 7, 5, 16, 5, 4, 4 por saga). count vai a 3 (as três caixas de
+   texto) e delay até count - 1. O jogo grava descr[0].count = 2 na saga 7 (ModeMenu_Init, menu_a_d.c:222), depois da
+   conversão, em ordem nativa */
+static void descricoes(ConvCtx *c, conv_ofs a, conv_ofs b, int saga) {
+    static const conv_u32 itens[8] = {3, 4, 7, 5, 16, 5, 4, 4};
+    conv_u32 n, minimo, i, cont;
+    if (!c->erro && a % 4 != 0) {
+        Conv_Erro(c, "descrições em 0x%lX: início fora de múltiplo de 4", (unsigned long)a);
+        return;
+    }
+    n = (conv_u32)((b - a) / 0x20);
+    minimo = saga >= 0 ? itens[saga] + 1 : 4;
+    if (!c->erro && n < minimo) {
+        Conv_Erro(c, "descrições: %lu registros, o leitor usa %lu", (unsigned long)n, (unsigned long)minimo);
+        return;
+    }
+    for (i = 0; i < n && !c->erro; i++) {
+        cont = Conv_U32(c, a + i * 0x20);
+        Conv_U32s(c, a + i * 0x20 + 4, 7);
+        if (!c->erro && cont > 3) {
+            Conv_Erro(c, "descrição %lu com %lu linhas (as caixas são três)", (unsigned long)i, (unsigned long)cont);
+        }
+    }
+    Conv_Zeros(c, a, b, "depois das descrições");
+}
+
+/* §7: o arquivo de uma saga (0x1D1 + saga, o contêiner inteiro; ModeMenu_Init, HistOutro_Init, HistResult_Init e
+   ModeBg_Init, src/menu/menu_b_b.c:14), N = 10. 1 o fundo (ModeBg_Draw: Sprite_DrawPicture, 8 registros), 2 TexFile
+   (0, 1), 3 TexFile (0, 1), 4 os textos da janela de mensagem, 5 as legendas com a boca, 6 as descrições, 7 os ícones
+   da saga e 8 os do parceiro no fim (0, 1, 3), 9 o filme do fundo, 10 as texturas dele (ModeBg_Init: o maior registro
+   lido vai de 2 a 12 conforme a saga; a saga 3 não lê nem a 9 nem a 10, vazias no disco) */
+void Conv_MenuSaga(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_u8 minimo[11] = {0, 8, 2, 2, 0, 0, 0, 4, 4, 0, 3};
+    static const conv_u8 fundo[8] = {6, 6, 3, 0, 6, 3, 13, 4}; /* seção 10 por saga (a saga 3 não a lê) */
+    conv_u32 ent[12], i;
+    int saga = saga_do_nome(c->nome);
+    if (!Conv_Secoes(c, base, tam, ent, 10, "saga")) {
+        return;
+    }
+    for (i = 1; i <= 10 && !c->erro; i++) {
+        switch (i) {
+        case 4: Conv_Textos(c, ENT(4)); break;
+        case 5: Conv_LipPack(c, ENT(5)); break;
+        case 6: descricoes(c, ENT(6), saga); break;
+        case 9: case 10:
+            /* a saga 3 (00467) não tem fundo animado: as duas vazias no disco, e ModeBg_Init não as lê. Nas outras
+               o leitor as usa: a conv_tool, que sabe a saga pelo nome, exige as duas cheias */
+            if (ent[i] == ent[i + 1]) {
+                if (saga >= 0 && saga != 3) {
+                    Conv_Erro(c, "saga %d sem a seção %lu (ModeBg_Init a lê)", saga, (unsigned long)i);
+                }
+            } else if (i == 9) {
+                Conv_Flash(c, ENT(9));
+            } else {
+                Conv_TexFileMin(c, ENT(10), saga >= 0 ? fundo[saga] : minimo[10]);
+            }
+            break;
+        default: Conv_TexFileMin(c, ENT(i), minimo[i]); break;
+        }
+        Conv_Onde(c, "seção %lu da saga", (unsigned long)i);
+    }
+}
+
+/* §8: um fundo do resultado (0x3FE + fundo, HistResult_Init, menu_c_c.c:190): o fundo 0 (01021) lê os registros 0 e
+   1, os outros (01022..01024, um registro cada no disco) só o 0. A chamada é uma só para os quatro, com um formato: no
+   jogo o mínimo é 1; a conv_tool, que tem o nome do arquivo, exige 2 no 01021 */
+void Conv_MenuHistFundo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    Conv_TexFileMin(c, base, base + tam, indice_do_nome(c->nome) == 1021 ? 2 : 1);
+}

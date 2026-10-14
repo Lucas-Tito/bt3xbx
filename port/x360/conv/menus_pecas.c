@@ -331,3 +331,47 @@ void Conv_FichasPersonagem(ConvCtx *c, conv_ofs a, conv_ofs b) { /* 165 fichas: 
 void Conv_IconesEstagio(ConvCtx *c, conv_ofs a, conv_ofs b) { /* 36 estágios, travado e vazio */
     Conv_SubpacoteTexN(c, a, b, 38);
 }
+
+/* ================================================================== a janela de recompensa (menus-historia.md 6) */
+
+/* §6.2: a tabela de itens da GetWin (GetWinItem, include/battle/view_a.h:111; seção 10): registros de 0x28 com a forma
+   dos itens de 00003 (ItemTblEntry, include/battle/view_b.h:121; comuns.md 4.4): 4 bytes (type, unk1[2], slots),
+   dois u32, quatro s16 (stat), cinco s32 (flags, ability). O jogo só lê o u8 type (GetWin_Setup, view_a.c:280); o
+   resto se converte pela forma. Depois dos registros, zeros */
+static void itens_getwin(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    conv_ofs r;
+    if (!alinhada(c, a, "itens da janela de recompensa")) {
+        return;
+    }
+    if (b - a < 0x28) {
+        Conv_Erro(c, "itens da janela de recompensa em 0x%lX: 0x%lX bytes", (unsigned long)a, (unsigned long)(b - a));
+        return;
+    }
+    for (r = a; r + 0x28 <= b && !c->erro; r += 0x28) {
+        Conv_Bytes(c, r, 4);
+        Conv_U32s(c, r + 4, 2);
+        Conv_U16s(c, r + 0x0C, 4);
+        Conv_U32s(c, r + 0x14, 5);
+    }
+    Conv_Zeros(c, a, b, "depois dos itens da janela de recompensa");
+}
+
+/* §6: a janela de recompensa (GetWin_Init, src/battle/view_a.c:42): N = 11. 1..4 TexFile (registros 0..3, 0..2, 0..2
+   e 0: res->tex + FLASH_TEX_SIZE * k), 5 e 6 o filme (5 com lang = 1, 6 nas outras: os dois se convertem), 7, 8, 9 e
+   11 textos (TextBox_Init), 10 a tabela de itens */
+void Conv_GetWin(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    static const conv_u32 minimo[5] = {0, 4, 3, 3, 1};
+    conv_u32 ent[11 + 2], i;
+    if (!Conv_Secoes(c, a, b - a, ent, 11, "janela de recompensa") || !cheias(c, ent, 11, "janela de recompensa")) {
+        return;
+    }
+    for (i = 1; i <= 11 && !c->erro; i++) {
+        switch (i) {
+        case 5: case 6: Conv_Flash(c, SEC(i)); break;
+        case 7: case 8: case 9: case 11: Conv_Textos(c, SEC(i)); break;
+        case 10: itens_getwin(c, SEC(10)); break;
+        default: Conv_TexFileMin(c, SEC(i), minimo[i]); break;
+        }
+        Conv_Onde(c, "seção %lu da janela de recompensa", (unsigned long)i);
+    }
+}

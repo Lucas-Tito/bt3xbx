@@ -190,6 +190,9 @@ void Conv_Comum3(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Comum4(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Hud(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Cenario(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_RoteiroLuta(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_TextosLuta(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_LabioLuta(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_BancoSom(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_FolhaBpe(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_Folha(ConvCtx *c, conv_ofs base, conv_ofs tam);
@@ -207,6 +210,12 @@ void Conv_MenuTreino(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuOpcoes(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuTexFile(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuFundo(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuHistSagas(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuHistLista(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuHistResultado(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuHistSave(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuSaga(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuHistFundo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
@@ -224,6 +233,10 @@ static const Formato sFormatos[] = {
     {"folha", Conv_Folha},                     /* 2.3: a folha descomprimida (em tempo de jogo) */
     {"rosto", Conv_Rosto},                     /* 3: rosto de membro */
     {"cenario", Conv_Cenario},                 /* cenario.md: pacote de 25 entradas do cenário da luta */
+    /* historia-luta.md: os arquivos da luta de um episódio da História (F4, etapa 9a) */
+    {"roteiro_luta", Conv_RoteiroLuta},        /* 2: o roteiro de evento (GSCF, Gsc_LoadFile) */
+    {"textos_luta", Conv_TextosLuta},          /* 3: os textos das falas (BtlScript_GetText) */
+    {"labio_luta", Conv_LabioLuta},            /* 4: as faixas de boca das falas (BtlScript_GetFile8Entry) */
     {"menu_pacote", Conv_MenuPacote},          /* menus.md 2: arquivo de menu (tabela de seções em BPE) */
     {"menu_bpe", Conv_MenuBpe},                /* 3: um contêiner BPE inteiro (recursos do cartão, imagens) */
     /* menus.md 5: pacotes de tela descomprimidos, em tempo de jogo (Port_ConvertMenuPack, um por chamador) */
@@ -239,6 +252,13 @@ static const Formato sFormatos[] = {
     {"menu_opcoes", Conv_MenuOpcoes},          /* 5: Opções (Option_Init) */
     {"menu_texfile", Conv_MenuTexFile},        /* 6: imagem única (retratos, páginas do Treino) */
     {"menu_fundo", Conv_MenuFundo},            /* 6: imagem de fundo (estágios) */
+    /* menus-historia.md: a História (F4, etapa 9a) */
+    {"menu_hist_sagas", Conv_MenuHistSagas},   /* 2: seleção de saga (HistSel_Init) */
+    {"menu_hist_lista", Conv_MenuHistLista},   /* 3: lista de episódios e fim da saga (ModeMenu_Init, HistOutro_Init) */
+    {"menu_hist_resultado", Conv_MenuHistResultado}, /* 4: resultado (HistResult_Init) */
+    {"menu_hist_save", Conv_MenuHistSave},     /* 5: save (HistSave_Init) */
+    {"menu_saga", Conv_MenuSaga},              /* 7: o arquivo de uma saga */
+    {"menu_hist_fundo", Conv_MenuHistFundo},   /* 8: fundo do resultado */
 };
 
 /* Que formato tem cada arquivo do disco e cada conteúdo descomprimido dele: a tabela única (arquivo e seção para
@@ -265,6 +285,14 @@ static const ConvFaixa sFaixas[] = {
        dividida (BTL_FILE_STAGE_SPLIT), ShenScene 0x194 + dragão e ChrView 0x197; ids 0x171..0x1BE, índices
        368..445, todos com a tabela de 25 entradas (conferida no conversor) */
     {0x171 - 1, 0x1BE - 1, CONV_ARQ, "cenario"},
+    /* historia-luta.md 1: os arquivos da luta de um episódio da História, lidos inteiros na carga da luta. O roteiro de
+       evento é 0x1FF + script (BTL_FILE_SCRIPT, battle_load.c; o script do ModeMenu_GetLine, 0..47, e o disco tem 50
+       roteiros, ids 0x1FF..0x230); os textos das falas, 0x231 + história (inglês) e 0x263 + história (comando 701,
+       BtlScriptCmd_LoadText); as bocas das falas, 0x295 + história e 0x2C7 + história (comando 702, pelo conjunto de
+       vozes do save), até os retratos em 0x2F9 */
+    {0x1FF - 1, 0x230 - 1, CONV_ARQ, "roteiro_luta"},
+    {0x231 - 1, 0x294 - 1, CONV_ARQ, "textos_luta"},
+    {0x295 - 1, 0x2F8 - 1, CONV_ARQ, "labio_luta"},
     /* folhas da tela de carregamento (som-e-sprites.md 2, id 0x3C1 + tipo): o arquivo é um contêiner BPE, e a folha
        descomprimida se converte em Load_InitScreen (Port_ConvertLoadSheet) */
     {960, 962, CONV_ARQ, "folha_bpe"},
@@ -306,6 +334,22 @@ static const ConvFaixa sFaixas[] = {
     {0x39D - 1, 0x3C0 - 1, 0, "menu_fundo"},
     {0x402 - 1, 0x58F - 1, CONV_ARQ, "menu_bpe"},
     {0x402 - 1, 0x58F - 1, 0, "menu_texfile"},
+    /* a História (menus-historia.md): baseFile + 0xC (0x1CD, gMenuArc2), pacote de quatro seções: 1 a seleção de saga
+       (HistSel_Run(1)), 2 a lista de episódios e o fim da saga (ModeMenu_Run(2), HistOutro_Run(2)), 3 o resultado
+       (HistResult_Run(3)), 4 o save (HistSave_Run(4)); o arquivo de cada saga, baseFile + 0x10 + saga (0x1D1..0x1D8),
+       um contêiner BPE inteiro; as imagens dos episódios (imageBase + episódio, imageBase de 0x3CE a 0x3FA por saga:
+       ids 0x3CE..0x3FD, lidas pelo registro 0) e os fundos do resultado (0x3FE + fundo, 0..3) */
+    {0x1CD - 1, 0x1CD - 1, CONV_ARQ, "menu_pacote"},
+    {0x1CD - 1, 0x1CD - 1, 1, "menu_hist_sagas"},
+    {0x1CD - 1, 0x1CD - 1, 2, "menu_hist_lista"},
+    {0x1CD - 1, 0x1CD - 1, 3, "menu_hist_resultado"},
+    {0x1CD - 1, 0x1CD - 1, 4, "menu_hist_save"},
+    {0x1D1 - 1, 0x1D8 - 1, CONV_ARQ, "menu_bpe"},
+    {0x1D1 - 1, 0x1D8 - 1, 0, "menu_saga"},
+    {0x3CE - 1, 0x3FD - 1, CONV_ARQ, "menu_bpe"},
+    {0x3CE - 1, 0x3FD - 1, 0, "menu_texfile"},
+    {0x3FE - 1, 0x401 - 1, CONV_ARQ, "menu_bpe"},
+    {0x3FE - 1, 0x401 - 1, 0, "menu_hist_fundo"},
 };
 
 const ConvFaixa *Conv_Faixas(int *n) {
