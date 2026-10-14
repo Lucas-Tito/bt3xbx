@@ -6,18 +6,19 @@
  */
 #include "conv.h"
 #include "conv_pecas.h"
+#include "conv_menus.h"
 
 /* entrada n de uma tabela já lida; b == a quando vazia */
 #define ENT(n) (base + ent[n]), (base + ent[(n) + 1])
 
-static void vazia(ConvCtx *c, const conv_u32 *ent, conv_u32 n) {
+void Conv_Vazia(ConvCtx *c, const conv_u32 *ent, conv_u32 n) {
     if (!c->erro && ent[n] != ent[n + 1]) {
         Conv_Erro(c, "seção %lu: esperada vazia (sem leitor)", (unsigned long)n);
     }
 }
 
 /* tabela de seções com exatamente `n` entradas (§2.1, a de personagem.md 2) */
-static int secoes(ConvCtx *c, conv_ofs base, conv_ofs tam, conv_u32 *ent, conv_u32 n, const char *oque) {
+int Conv_Secoes(ConvCtx *c, conv_ofs base, conv_ofs tam, conv_u32 *ent, conv_u32 n, const char *oque) {
     conv_u32 lidas = Conv_Tabela(c, base, tam, ent, n);
     if (!c->erro && lidas != n) {
         Conv_Erro(c, "%s com %lu seções (esperado %lu)", oque, (unsigned long)lidas, (unsigned long)n);
@@ -293,7 +294,7 @@ static conv_u32 cabecalho(ConvCtx *c, conv_ofs o, conv_ofs fim, conv_u32 *cont) 
 }
 
 /* §7: filme Flash ("FOD" 0x11 "LIT") em [a, b) */
-static void flash(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_Flash(ConvCtx *c, conv_ofs a, conv_ofs b) {
     static const conv_u8 magia[8] = {'F', 'O', 'D', 0x11, 'L', 'I', 'T', 0};
     conv_ofs o, r, fimtag;
     conv_u32 cod, cont, tam, i, rcont, rtam;
@@ -385,7 +386,7 @@ static void flash(ConvCtx *c, conv_ofs a, conv_ofs b) {
 /* ------------------------------------------------------------------ diálogo (§6) */
 
 /* §6.4: tabela de textos (Dialog_GetTitleTable, DIALOG_TEXT): a tabela de §2.1 e um texto u16 por entrada */
-static void textos(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_Textos(ConvCtx *c, conv_ofs a, conv_ofs b) {
     static conv_u32 ent[0x100 + 2];
     conv_u32 n, i;
     n = Conv_Tabela(c, a, b - a, ent, 0x100);
@@ -396,18 +397,18 @@ static void textos(ConvCtx *c, conv_ofs a, conv_ofs b) {
 }
 
 /* §6: arquivo do diálogo (Dialog_Init): seis partes */
-static void dialogo(ConvCtx *c, conv_ofs a, conv_ofs b) {
+void Conv_Dialogo(ConvCtx *c, conv_ofs a, conv_ofs b) {
     conv_u32 ent[8], i;
     conv_ofs base = a;
-    if (!secoes(c, a, b - a, ent, 6, "diálogo")) {
+    if (!Conv_Secoes(c, a, b - a, ent, 6, "diálogo")) {
         return;
     }
     for (i = 1; i <= 4 && !c->erro; i++) {
         Conv_TexFile(c, ENT(i), 0);
         Conv_Onde(c, "parte %lu do diálogo", (unsigned long)i);
     }
-    flash(c, ENT(5));
-    textos(c, ENT(6));
+    Conv_Flash(c, ENT(5));
+    Conv_Textos(c, ENT(6));
 }
 
 /* ------------------------------------------------------------------ pacotes de tela, em tempo de jogo (§5) */
@@ -415,19 +416,19 @@ static void dialogo(ConvCtx *c, conv_ofs a, conv_ofs b) {
 /* §5.1: tela do cartão (BootCard_Init, seção 2 de 00473): só o diálogo */
 void Conv_MenuCartao(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     conv_u32 ent[4];
-    if (secoes(c, base, tam, ent, 1, "tela do cartão")) {
-        dialogo(c, ENT(1));
+    if (Conv_Secoes(c, base, tam, ent, 1, "tela do cartão")) {
+        Conv_Dialogo(c, ENT(1));
     }
 }
 
 /* §5.2: logos (FirstRun_Main, seção 3 de 00473): 3..8 lidas por Logo_Show, 2 sem leitor (TexFile pela forma) */
 void Conv_MenuLogos(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     conv_u32 ent[12], i;
-    if (!secoes(c, base, tam, ent, 9, "logos")) {
+    if (!Conv_Secoes(c, base, tam, ent, 9, "logos")) {
         return;
     }
-    vazia(c, ent, 1);
-    vazia(c, ent, 9);
+    Conv_Vazia(c, ent, 1);
+    Conv_Vazia(c, ent, 9);
     for (i = 2; i <= 8 && !c->erro; i++) {
         Conv_TexFile(c, ENT(i), 0);
         Conv_Onde(c, "logo %lu", (unsigned long)i);
@@ -439,7 +440,7 @@ void Conv_MenuLogos(ConvCtx *c, conv_ofs base, conv_ofs tam) {
 void Conv_MenuMcFlow(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     static const conv_ofs icone[2] = {0x9C9A, 0xBE8A}; /* McFlow_SetupRequest */
     conv_u32 ent[6], i;
-    if (!secoes(c, base, tam, ent, 3, "recursos do cartão")) {
+    if (!Conv_Secoes(c, base, tam, ent, 3, "recursos do cartão")) {
         return;
     }
     for (i = 1; i <= 2 && !c->erro; i++) {
@@ -451,21 +452,21 @@ void Conv_MenuMcFlow(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         Conv_Bytes(c, base + ent[i], icone[i - 1]);
         Conv_Zeros(c, ENT(i), "ícone do cartão");
     }
-    vazia(c, ent, 3);
+    Conv_Vazia(c, ent, 3);
 }
 
 /* §5.4: título (Title_Init, seção 1 de 00449): 1..3, 5..10 e 14 relocadas por Title_Init, 4 sem leitor (TexFile pela
    forma), 11 o filme, 12 o diálogo */
 void Conv_MenuTitulo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     conv_u32 ent[16], i;
-    if (!secoes(c, base, tam, ent, 14, "título")) {
+    if (!Conv_Secoes(c, base, tam, ent, 14, "título")) {
         return;
     }
     for (i = 1; i <= 14 && !c->erro; i++) {
         switch (i) {
-        case 11: flash(c, ENT(11)); break;
-        case 12: dialogo(c, ENT(12)); break;
-        case 13: vazia(c, ent, 13); break;
+        case 11: Conv_Flash(c, ENT(11)); break;
+        case 12: Conv_Dialogo(c, ENT(12)); break;
+        case 13: Conv_Vazia(c, ent, 13); break;
         default: Conv_TexFile(c, ENT(i), 0); break;
         }
         Conv_Onde(c, "seção %lu do título", (unsigned long)i);
