@@ -1,6 +1,6 @@
 # Dragon History sem o desbloqueio (F4, etapa 9b; os pendentes 2 e 3 da revisão da 9a): do boot com o cartão vazio,
-# sem nada ganho, ao primeiro episódio, com a luta andando uns 45 segundos antes do KO (os eventos de tempo do roteiro
-# de evento: 10 s, 20 s, 30 s e 40 s; as ações que começam vão ao rastro, "gsc acao N"), e o resultado de verdade: os
+# sem nada ganho, ao primeiro episódio, com a luta andando uns 70 segundos antes do KO (as ações de evento de 20 s e de
+# 40 s, que pedem o R3; as ações que começam vão ao rastro, "gsc acao N"), e o resultado de verdade: os
 # pontos e a janela de recompensa do episódio novo aberto (GetWin, tipo 8), o save da História e a lista de episódios.
 inclui boot_novo.txt
 quadros 90
@@ -17,9 +17,11 @@ repete ate luta max 6000          # o primeiro episódio e a apresentação dele
 volta
 quadros 750                       # a luta anda pelo controle parado; aos 20 s o roteiro de evento pede a ação 10001
 aperta R3 10                      # o botão do evento (R3, BTLB_R3 0x2000, evento 0x50): a ação começa quando o Goku pode agir
-quadros 600                       # a 10001 pede a 10002 aos 40 s (evento de tempo 6)
+quadros 600                       # a 10001 registra a 10002 para os 40 s (o evento de tempo 6)
 aperta R3 10
-quadros 600                       # o KO só depois do fim da 10002 (um KO no meio de uma ação de evento não termina a luta)
+quadros 600
+aperta R3 10                      # a 10002
+quadros 600                       # o KO só depois do fim dela (um KO no meio de uma ação de evento não termina a luta)
 termina luta vence
 espera tela 8 max 6000            # HistResult
 quadros 150
