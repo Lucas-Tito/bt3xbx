@@ -224,6 +224,12 @@ void CharSel_UpdateFaceLoad(void) {
         break;
     case CHARSEL_LOAD_UNPACK:
         Sprite_Unpack(gCharSel->faceFile[gCharSel->faceSide], gCharSel->faceRes[gCharSel->faceSide], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gCharSel->faceRes[gCharSel->faceSide], ((s32 *)gCharSel->faceFile[gCharSel->faceSide])[0], "menu_texfile");
+        }
+#endif
         res = gCharSel->faceRes[gCharSel->faceSide];
         Res_RelocateOffsets(&res, res, res);
         if (gCharSel->faceSide == 0) {
@@ -292,6 +298,12 @@ void CharSel_UpdateStageLoad(void) {
         break;
     case CHARSEL_LOAD_UNPACK:
         Sprite_Unpack(gCharSel->stageFile, gCharSel->stageRes[gCharSel->stageBuf], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gCharSel->stageRes[gCharSel->stageBuf], ((s32 *)gCharSel->stageFile)[0], "menu_fundo");
+        }
+#endif
         res = gCharSel->stageRes[gCharSel->stageBuf];
         Res_RelocateOffsets(&res, res, res);
         gCharSel->bg[0] = res;
@@ -386,9 +398,21 @@ void CharSel_Init(s32 section) {
     if (gProgress->mode == 0x2D) {
         gCharSel->pack = (u32 *)MPACK_AT(gMenuArc6, section);
         gCharSel->res = Sprite_Unpack(gCharSel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gCharSel->res, ((s32 *)gCharSel->pack)[0], "menu_selecao");
+        }
+#endif
     } else {
         gCharSel->pack = (u32 *)MPACK_AT(gMenuArc5, section);
         gCharSel->res = Sprite_Unpack(gCharSel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gCharSel->res, ((s32 *)gCharSel->pack)[0], "menu_selecao");
+        }
+#endif
     }
     if (gProgress->mode == 0x2D) {
         CSPROG->players = 0;
@@ -720,6 +744,12 @@ void CharSel_Init(s32 section) {
     for (i = 0; i < CHARSEL_SIDES; i++) {
         File_LoadSync(gCharSel->side[i]->chara + CHARSEL_FACE_FILE, gCharSel->faceFile[i], 0x16800);
         Sprite_Unpack(gCharSel->faceFile[i], gCharSel->faceRes[i], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gCharSel->faceRes[i], ((s32 *)gCharSel->faceFile[i])[0], "menu_texfile");
+        }
+#endif
         res = gCharSel->faceRes[i];
         Res_RelocateOffsets(&res, res, res);
         gCharSel->tex[i != 0 ? 22 : 23] = MTEX(res, 0);
@@ -727,6 +757,12 @@ void CharSel_Init(s32 section) {
     }
     File_LoadSync(CHARSEL_STAGE_FILE_ID(gCharSel->stage->stage), gCharSel->stageFile, 0x3B800);
     Sprite_Unpack(gCharSel->stageFile, gCharSel->stageRes[gCharSel->stageBuf], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gCharSel->stageRes[gCharSel->stageBuf], ((s32 *)gCharSel->stageFile)[0], "menu_fundo");
+    }
+#endif
     res = gCharSel->stageRes[gCharSel->stageBuf];
     Res_RelocateOffsets(&res, res, res);
     gCharSel->bg[0] = res;

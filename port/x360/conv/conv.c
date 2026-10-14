@@ -189,6 +189,9 @@ void Conv_MenuMcFlow(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuTitulo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuPrincipal(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuDuelo(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuSelecao(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuTexFile(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuFundo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
@@ -207,7 +210,7 @@ static const Formato sFormatos[] = {
     {"rosto", Conv_Rosto},                     /* 3: rosto de membro */
     {"cenario", Conv_Cenario},                 /* cenario.md: pacote de 25 entradas do cenário da luta */
     {"menu_pacote", Conv_MenuPacote},          /* menus.md 2: arquivo de menu (tabela de seções em BPE) */
-    {"menu_bpe", Conv_MenuBpe},                /* 3: recursos do cartão, um contêiner BPE inteiro */
+    {"menu_bpe", Conv_MenuBpe},                /* 3: um contêiner BPE inteiro (recursos do cartão, imagens) */
     /* menus.md 5: pacotes de tela descomprimidos, em tempo de jogo (Port_ConvertMenuPack, um por chamador) */
     {"menu_cartao", Conv_MenuCartao},          /* 5.1: tela do cartão (BootCard_Init) */
     {"menu_logos", Conv_MenuLogos},            /* 5.2: logos do boot (FirstRun_Main) */
@@ -216,6 +219,9 @@ static const Formato sFormatos[] = {
     {"menu_principal", Conv_MenuPrincipal},    /* menus-pecas.md 6: menu principal (MainMenu_Init) */
     /* menus-telas.md: o resto do caminho essencial (F4, etapa 5b) */
     {"menu_duelo", Conv_MenuDuelo},            /* 2: submenu do Duelo (DuelMenu_Init) */
+    {"menu_selecao", Conv_MenuSelecao},        /* 3: CharSel e TeamSel (CharSel_Init, TeamSel_Init) */
+    {"menu_texfile", Conv_MenuTexFile},        /* 6: imagem única (retratos, páginas do Treino) */
+    {"menu_fundo", Conv_MenuFundo},            /* 6: imagem de fundo (estágios) */
 };
 
 /* Que formato tem cada arquivo do disco e cada conteúdo descomprimido dele: a tabela única (arquivo e seção para
@@ -266,8 +272,21 @@ static const ConvFaixa sFaixas[] = {
        Duelo) */
     {0x1C1 - 1, 0x1C1 - 1, CONV_ARQ, "menu_pacote"},
     {0x1C1 - 1, 0x1C1 - 1, 1, "menu_duelo"},
+    {0x1C1 - 1, 0x1C1 - 1, 2, "menu_selecao"},
     {0x1C6 - 1, 0x1C6 - 1, CONV_ARQ, "menu_pacote"},
     {0x1CE - 1, 0x1CE - 1, CONV_ARQ, "menu_pacote"},
+    {0x1CE - 1, 0x1CE - 1, 2, "menu_selecao"},
+    /* imagens únicas, o arquivo inteiro num contêiner BPE (menus-telas.md 6): os retratos (0x2F9 + personagem, todos
+       os leitores somam 0x2F9 a um personagem: 0..0xA0 e os marcadores 0xA1..0xA3, ids 0x2F9..0x39C), as imagens de
+       estágio (0x39D + estágio, 0..0x23; o cursor da grade só para em estágio desbloqueado, StgGrid_Move*, e os
+       marcadores travado e vazio, 0x24 e 0x25 no PS2, dariam as folhas de carregamento) e as páginas do Treino
+       (0x402 + página; as aulas vão da página 0 à 397, a última antes dos slots de lutador em 0x590) */
+    {0x2F9 - 1, 0x39C - 1, CONV_ARQ, "menu_bpe"},
+    {0x2F9 - 1, 0x39C - 1, 0, "menu_texfile"},
+    {0x39D - 1, 0x3C0 - 1, CONV_ARQ, "menu_bpe"},
+    {0x39D - 1, 0x3C0 - 1, 0, "menu_fundo"},
+    {0x402 - 1, 0x58F - 1, CONV_ARQ, "menu_bpe"},
+    {0x402 - 1, 0x58F - 1, 0, "menu_texfile"},
 };
 
 const ConvFaixa *Conv_Faixas(int *n) {

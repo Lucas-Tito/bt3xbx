@@ -46,10 +46,10 @@ CONTEUDO = {
     "menu_b_c.c:79": "460 s2", "menu_b_c.c:107": "saga", "menu_b_d.c:147": "460 s1",
     "menu_c_c.c:180": "460 s3", "menu_c_c.c:182": "saga", "menu_c_c.c:191": "fundo_resultado",
     "menu_c_d.c:25": "460 s4",
-    "menu_c_e.c:226": "retrato", "menu_c_e.c:294": "estagio", "menu_c_e.c:388": "461 s2", "menu_c_e.c:391": "448 s2",
-    "menu_c_e.c:722": "retrato", "menu_c_e.c:729": "estagio",
-    "menu_e_b.c:290": "retrato", "menu_e_b.c:361": "estagio", "menu_e_b.c:457": "448 s2",
-    "menu_e_b.c:753": "retrato", "menu_e_b.c:760": "estagio",
+    "menu_c_e.c:226": "retrato", "menu_c_e.c:300": "estagio", "menu_c_e.c:400": "461 s2", "menu_c_e.c:409": "448 s2",
+    "menu_c_e.c:746": "retrato", "menu_c_e.c:759": "estagio",
+    "menu_e_b.c:290": "retrato", "menu_e_b.c:367": "estagio", "menu_e_b.c:469": "448 s2",
+    "menu_e_b.c:771": "retrato", "menu_e_b.c:784": "estagio",
     "menu_g_c.c:195": "448 s1",
     "menu_h_b.c:49": "463 s1", "menu_h_b.c:119": "retrato", "menu_h_b.c:849": "retrato",
     "menu_h_d.c:650": "461 s1", "menu_h_d.c:1215": "pagina_treino",
@@ -95,9 +95,9 @@ CONHECIDOS = {
 }
 
 # O caminho essencial da decisão 22 (menus-modos.md 4: 16 pendentes, 5 com gancho)
-ESSENCIAL = {"menu_a.c:55", "menu_c_e.c:226", "menu_c_e.c:294", "menu_c_e.c:388", "menu_c_e.c:391", "menu_c_e.c:722",
-             "menu_c_e.c:729", "menu_e_b.c:290", "menu_e_b.c:361", "menu_e_b.c:457", "menu_e_b.c:753",
-             "menu_e_b.c:760", "menu_g_c.c:195", "menu_h_d.c:650", "menu_h_d.c:1215", "menu_x_c.c:39",
+ESSENCIAL = {"menu_a.c:55", "menu_c_e.c:226", "menu_c_e.c:300", "menu_c_e.c:400", "menu_c_e.c:409", "menu_c_e.c:746",
+             "menu_c_e.c:759", "menu_e_b.c:290", "menu_e_b.c:367", "menu_e_b.c:469", "menu_e_b.c:771",
+             "menu_e_b.c:784", "menu_g_c.c:195", "menu_h_d.c:650", "menu_h_d.c:1215", "menu_x_c.c:39",
              "menu_a_c.c:56", "menu_i_b.c:24", "menu_i_c.c:173", "loading.c:166", "mcflow_a.c:2636"}
 
 
@@ -158,10 +158,10 @@ def chamadas(log, prog):
     for vb, modo, r in ev:
         arq, func, n = onde[r]
         k = f"{arq}:{n}"
-        # CharSel_Init: o compilador juntou as duas chamadas do pacote (:388 no treino, modo 45; :391 no duelo) numa
+        # CharSel_Init: o compilador juntou as duas chamadas do pacote (:400 no treino, modo 45; :409 no duelo) numa
         # só (menu_c_e.c, CharSel_Init): o modo diz qual
-        if k in ("menu_c_e.c:388", "menu_c_e.c:391"):
-            k = "menu_c_e.c:388" if modo == 45 else "menu_c_e.c:391"
+        if k in ("menu_c_e.c:400", "menu_c_e.c:409"):
+            k = "menu_c_e.c:400" if modo == 45 else "menu_c_e.c:409"
         out.append((vb, modo, k))
     return out
 

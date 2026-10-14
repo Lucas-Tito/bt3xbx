@@ -288,6 +288,12 @@ void TeamSel_UpdateFaceLoad(void) {
         break;
     case TEAMSEL_LOAD_UNPACK:
         Sprite_Unpack(gTeamSel->faceFile[gTeamSel->faceSide], gTeamSel->faceRes[gTeamSel->faceSide], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gTeamSel->faceRes[gTeamSel->faceSide], ((s32 *)gTeamSel->faceFile[gTeamSel->faceSide])[0], "menu_texfile");
+        }
+#endif
         res = gTeamSel->faceRes[gTeamSel->faceSide];
         Res_RelocateOffsets(&res, res, res);
         if (gTeamSel->faceSide == 0) {
@@ -359,6 +365,12 @@ void TeamSel_UpdateStageLoad(void) {
         break;
     case TEAMSEL_LOAD_UNPACK:
         Sprite_Unpack(gTeamSel->stageFile, gTeamSel->stageRes[gTeamSel->stageBuf], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gTeamSel->stageRes[gTeamSel->stageBuf], ((s32 *)gTeamSel->stageFile)[0], "menu_fundo");
+        }
+#endif
         res = gTeamSel->stageRes[gTeamSel->stageBuf];
         Res_RelocateOffsets(&res, res, res);
         gTeamSel->bg[0] = res;
@@ -455,6 +467,12 @@ void TeamSel_Init(s32 section) {
     memset(gTeamSel, 0, sizeof(TeamSel));
     gTeamSel->pack = (u32 *)MPACK_AT(gMenuArc5, section);
     gTeamSel->res = Sprite_Unpack(gTeamSel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gTeamSel->res, ((s32 *)gTeamSel->pack)[0], "menu_selecao");
+    }
+#endif
     TS_RES(47);
     gTeamSel->tex[0] = MTEX(res, 0);
     TS_RES(1);
@@ -751,6 +769,12 @@ void TeamSel_Init(s32 section) {
     for (i = 0; i < TEAMSEL_SIDES; i++) {
         File_LoadSync(gTeamSel->side[i]->chara + TS_FACE_FILE, gTeamSel->faceFile[i], 0x16800);
         Sprite_Unpack(gTeamSel->faceFile[i], gTeamSel->faceRes[i], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gTeamSel->faceRes[i], ((s32 *)gTeamSel->faceFile[i])[0], "menu_texfile");
+        }
+#endif
         res = gTeamSel->faceRes[i];
         Res_RelocateOffsets(&res, res, res);
         gTeamSel->tex[i ? 22 : 23] = MTEX(res, 0);
@@ -758,6 +782,12 @@ void TeamSel_Init(s32 section) {
     }
     File_LoadSync(gTeamSel->stage->stage + TS_STAGE_FILE, gTeamSel->stageFile, 0x3B800);
     Sprite_Unpack(gTeamSel->stageFile, gTeamSel->stageRes[gTeamSel->stageBuf], NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gTeamSel->stageRes[gTeamSel->stageBuf], ((s32 *)gTeamSel->stageFile)[0], "menu_fundo");
+    }
+#endif
     res = gTeamSel->stageRes[gTeamSel->stageBuf];
     Res_RelocateOffsets(&res, res, res);
     gTeamSel->bg[0] = res;

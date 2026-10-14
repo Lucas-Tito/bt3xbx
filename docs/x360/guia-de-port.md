@@ -550,7 +550,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     conferida no depurador). É do teste sem janela (o 360 compila tudo com float em hardware); o roteiro do Data
     Center não entra no replay até isso se resolver na etapa 9.
   - **Duas chamadas iguais do fonte viram uma no binário.** O clang juntou os dois `Sprite_Unpack` do pacote do
-    `CharSel_Init` (o do treino e o do duelo, menu_c_e.c:388 e :391) num só endereço: o endereço de retorno não diz
+    `CharSel_Init` (o do treino e o do duelo, menu_c_e.c:400 e :409 desde os ganchos da etapa 5b) num só endereço: o endereço de retorno não diz
     qual foi, e o `roteiros.py` decide pelo modo (45 é o treino). Na PPC cada uma tem o seu gancho e não se juntam.
   - **Um `roteiros.sh` por vez no WSL.** O `rastreio.py mapa` guarda o rastreio inteiro na memória (uns 5 GB com os
     13 milhões de posições da Ultimate Battle); dois ciclos ao mesmo tempo esgotaram os 8 GB do WSL, o SSH parou de

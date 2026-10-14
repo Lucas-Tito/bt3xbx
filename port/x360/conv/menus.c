@@ -523,3 +523,53 @@ void Conv_MenuDuelo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         Conv_Onde(c, "seção %lu do Duelo", (unsigned long)i);
     }
 }
+
+/* §3: as seleções de personagem e de time (CharSel_Init, src/menu/menu_c_e.c; TeamSel_Init, src/menu/menu_e_b.c),
+   seção 2 de 00448 e, no CharSel do Treino (modo 0x2D), seção 2 de 00461, com as mesmas peças nas mesmas seções.
+   A união das duas telas: TexFile 1..14, 16..23, 26..31, 34..36, 47..50, 55; filmes 15, 24, 25, 32, 33, 37, 38; 39
+   lista de estágios, 42 células, 43 e 44 textos de nomes, 45 fichas, 46 ícones de estágio, 51 ItemHelp, 53
+   ItemPanel, 54 janela de ícone, 56 lista de músicas. 40, 41 e 52 sem leitor (menus-telas.md 3.3): a 41 tem a forma
+   de células e se converte como tal; a 40 e a 52 não têm a forma de nenhuma peça e ficam em bytes */
+void Conv_MenuSelecao(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_u8 minimo[57] = {
+        0, 2, 2, 1, 1, 2, 1, 1, 5, 2, 1, 4, 2, 2, 2, 0, 3, 2, 2, 5, 5, 1, 1, 2, 0, 0, 2, 2, 2, 2, 2, 2, 0, 0,
+        1, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 1, 0, 0, 0, 0, 1, 0};
+    conv_u32 ent[58], i;
+    if (!Conv_Secoes(c, base, tam, ent, 56, "seleção")) {
+        return;
+    }
+    for (i = 1; i <= 56 && !c->erro; i++) {
+        switch (i) {
+        case 15: case 24: case 25: case 32: case 33: case 37: case 38:
+            Conv_Flash(c, ENT(i));
+            break;
+        case 39: Conv_ListaEstagios(c, ENT(39)); break;
+        case 40: case 52: /* sem leitor e sem forma conhecida (menus-telas.md 3.3): ficam em bytes */
+            Conv_RestoBytes(c, ENT(i));
+            break;
+        case 41: /* sem leitor, com a forma de células (menus-telas.md 3.3) */
+        case 42: Conv_Celulas(c, ENT(i)); break;
+        case 43: case 44: Conv_Textos(c, ENT(i)); break;
+        case 45: Conv_FichasPersonagem(c, ENT(45)); break;
+        case 46: Conv_IconesEstagio(c, ENT(46)); break;
+        case 51: Conv_ItemHelp(c, ENT(51)); break;
+        case 53: Conv_ItemPanel(c, ENT(53)); break;
+        case 54: Conv_JanelaIcone(c, ENT(54)); break;
+        case 56: Conv_ListaMusicas(c, ENT(56)); break;
+        default: Conv_TexFileMin(c, ENT(i), minimo[i]); break;
+        }
+        Conv_Onde(c, "seção %lu da seleção", (unsigned long)i);
+    }
+}
+
+/* §6: uma imagem única (o arquivo inteiro é um contêiner BPE, e o conteúdo, um TexFile): retratos (0x2F9 +
+   personagem) e páginas do Treino (0x402 + página), lidos pelo registro 0 (MTEX(res, 0)) */
+void Conv_MenuTexFile(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    Conv_TexFileMin(c, base, base + tam, 1);
+}
+
+/* §6: uma imagem de fundo (o mesmo, desenhada por Sprite_DrawPicture, que lê as texturas 0..7): as imagens de
+   estágio (0x39D + estágio) do CharSel e do TeamSel */
+void Conv_MenuFundo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    Conv_TexFileMin(c, base, base + tam, 8);
+}
