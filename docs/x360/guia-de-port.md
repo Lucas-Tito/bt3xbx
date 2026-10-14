@@ -437,7 +437,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 
 - **WSL por SSH:**
   - aspas passam pelo `cmd` do Windows, então use `wsl.sh script` com o script na entrada;
-  - processo em segundo plano morre com a sessão.
+  - processo em segundo plano morre com a sessão;
+  - a sessão morre junto com o notebook suspenso ou o Windows desligado: a rodada final da etapa 6 da F4 se perdeu
+    assim no quarto roteiro. Numa rodada de horas, confira antes que nenhuma das duas máquinas vai dormir, e depois de
+    uma queda refaça do começo (as builds do HEAD e todos os roteiros), não a partir do meio.
 - **IP por DHCP:** o Windows e o console mudam de IP entre um dia e outro. Ache o Windows pela porta 22 e o console
   pela porta 21 (`subir.py --achar`). No `~/.ssh/config`, o `HostKeyAlias bt3win` deixa a chave do host presa ao
   nome, e uma troca de IP só muda o `HostName`.
