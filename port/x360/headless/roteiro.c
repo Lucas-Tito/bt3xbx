@@ -8,8 +8,9 @@
  *   BT3_ROTEIRO=<arquivo>   liga o roteiro (sem ela, nada muda: Roteiro_Pad devolve 0 e o controle fica parado)
  *   BT3_DESBLOQUEIO=1       permite os passos que mudam o estado do jogo: "desbloqueia" (Save_UnlockAll do próprio
  *                           jogo, o mesmo da aba de truques da janela do PC) e "termina luta" (o adversário derrubado
- *                           pelo dano do próprio jogo, BtlMember_Damage; o jogo decide a luta); sem ela o passo para
- *                           o roteiro com erro.
+ *                           pelo dano do próprio jogo, BtlMember_Damage; o jogo decide a luta) e "funde discos" (o
+ *                           Disc Fusion sem a troca de disco: gProgress->discFlags); sem ela o passo para o roteiro
+ *                           com erro.
  *                           Nunca no jogo normal. E só com o cartão vazio no começo da rodada (sem o arquivo de dados
  *                           do save na pasta de saves, BT3_SAVES): o desbloqueio e a vitória dada iriam para o save de
  *                           verdade na próxima gravação
@@ -54,6 +55,7 @@ int BtlMember_Damage(void *chr, int amount, int flags);
 #define TERMINA_DANO_FLAGS (0x1 | 0x2 | 0x8 | 0x10 | 0x20 | 0x40 | 0x80 | 0x100)
 #define TERMINA_DANO 100000000 /* mais que qualquer barra de vida (o jogo prende em 0) */
 static int sDerruba = -1;        /* o lado a derrubar no quadro do jogo em andamento (-1: nenhum) */
+static int sDerrubados1;         /* adversários (lado 1) derrubados pelo passo em andamento ("perde apos N") */
 static char sDerrubaOnde[80];    /* o passo que pediu, para o rastro */
 extern int gPortMenuMode;                                      /* port/src/headless.c: 1 enquanto os menus rodam */
 extern unsigned gPortVBlanks;                                  /* port/src/plat_stub.c */
@@ -129,7 +131,8 @@ static void nome_tela(int t, char *s) {
 
 /* ------------------------------------------------------------------ o roteiro */
 
-enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA };
+enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA,
+       P_FUNDE };
 enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA };
 
 typedef struct Passo {
@@ -137,10 +140,11 @@ typedef struct Passo {
     unsigned botoes;    /* P_APERTA, P_SEGURA: os bits de pad360.c (1 = apertado) */
     int n;              /* P_QUADROS, P_SEGURA: quadros; P_APERTA: vezes (sem "ate") */
     int segura, solta;  /* P_APERTA: o ritmo de cada vez */
-    int cond, valor;    /* P_ESPERA e P_APERTA com "ate": a condição e o valor; P_CONFERE: cond 0 som, 1 saga, e
-                           o valor esperado ou a saga; P_TERMINA: valor 1 vence, 0 perde */
+    int cond, valor;    /* P_ESPERA e P_APERTA com "ate": a condição e o valor; P_CONFERE: cond 0 som, 1 saga, 2 um
+                           u8 e 3 um s32 do save (n: o deslocamento), e o valor esperado ou a saga; P_TERMINA: valor 1
+                           vence, 0 perde */
     int max;            /* quadros até a falha */
-    int par;            /* P_REPETE: o índice do P_VOLTA; P_VOLTA: o do P_REPETE */
+    int par;            /* P_REPETE: o índice do P_VOLTA; P_VOLTA: o do P_REPETE; P_TERMINA "perde apos N": N */
     char onde[80];      /* arquivo:linha, para o log */
     char texto[80];     /* P_MARCA */
 } Passo;
@@ -326,6 +330,20 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
     } else if (igual(pal[0], "desbloqueia")) {
         p = novo(onde, P_DESBLOQUEIA);
         i = 1;
+    } else if (igual(pal[0], "confere") && n > 2 && igual(pal[1], "save")) {
+        /* confere save u8|s32 DESL N: um campo do save em memória (gSaveData, include/sys/save.h), pelo deslocamento:
+           o que um modo grava no fim (a missão cumprida, os adversários vencidos), conferido no quadro do passo */
+        p = novo(onde, P_CONFERE);
+        if (n != 5 || !(igual(pal[2], "u8") || igual(pal[2], "s32"))) {
+            erro_linha(onde, "confere save u8|s32 DESL N", NULL);
+        }
+        p->cond = igual(pal[2], "u8") ? 2 : 3;
+        p->n = numero(onde, pal[3]);
+        if (p->n < 0 || p->n + (p->cond == 2 ? 1 : 4) > (int)sizeof(SaveData) || (p->cond == 3 && p->n % 4 != 0)) {
+            erro_linha(onde, "confere save: deslocamento fora do SaveData (ou s32 desalinhado)", pal[3]);
+        }
+        p->valor = numero(onde, pal[4]);
+        i = 5;
     } else if (igual(pal[0], "confere")) { /* confere som N | confere saga N: o save em memória (gSaveData) */
         if (n < 2 || !(igual(pal[1], "som") || igual(pal[1], "saga"))) {
             erro_linha(onde, "confere som N | confere saga N", n > 1 ? pal[1] : NULL);
@@ -337,9 +355,9 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
             erro_linha(onde, "confere saga N: N de 0 a 7", pal[2]);
         }
         i = 3;
-    } else if (igual(pal[0], "termina")) { /* termina luta [vence|perde] [max Q]: o resultado da luta pelo jogo */
+    } else if (igual(pal[0], "termina")) { /* termina luta [vence|perde [apos N]] [max Q]: o resultado pelo jogo */
         if (n < 2 || !igual(pal[1], "luta")) {
-            erro_linha(onde, "termina luta [vence|perde] [max Q]", n > 1 ? pal[1] : NULL);
+            erro_linha(onde, "termina luta [vence|perde [apos N]] [max Q]", n > 1 ? pal[1] : NULL);
         }
         p = novo(onde, P_TERMINA);
         p->valor = 1;
@@ -348,11 +366,26 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         if (i < n && (igual(pal[i], "vence") || igual(pal[i], "perde"))) {
             p->valor = igual(pal[i], "vence");
             i++;
+            /* perde apos N: derruba antes N adversários (os que entram um depois do outro, como na Sobrevivência) e só
+               então o lutador do jogador */
+            if (!p->valor && i < n && igual(pal[i], "apos")) {
+                p->par = numero(onde, i + 1 < n ? pal[i + 1] : NULL);
+                if (p->par < 1) {
+                    erro_linha(onde, "perde apos N: N de 1 em diante", pal[i + 1]);
+                }
+                i += 2;
+            }
         }
         if (i < n && igual(pal[i], "max")) {
             p->max = numero(onde, i + 1 < n ? pal[i + 1] : NULL);
             i += 2;
         }
+    } else if (igual(pal[0], "funde")) { /* funde discos: o Disc Fusion sem trocar de disco (só para os roteiros) */
+        if (n != 2 || !igual(pal[1], "discos")) {
+            erro_linha(onde, "funde discos", NULL);
+        }
+        p = novo(onde, P_FUNDE);
+        i = 2;
     } else if (igual(pal[0], "marca")) { /* marca TEXTO: uma linha no rastro */
         p = novo(onde, P_MARCA);
         for (i = 1; i < n; i++) {
@@ -635,6 +668,21 @@ static unsigned quadro(void) {
                 sprintf(s, "%s: confere sem save na memória", p->onde);
                 falha(s);
             }
+            if (p->cond >= 2) {
+                /* confere save u8|s32 DESL N */
+                const unsigned char *b = (const unsigned char *)gSaveData + p->n;
+                int v = p->cond == 2 ? (int)b[0] : *(const int *)b;
+                if (v != p->valor) {
+                    sprintf(s, "%s: save +0x%X (%s) %d, esperado %d", p->onde, (unsigned)p->n, p->cond == 2 ? "u8" : "s32",
+                            v, p->valor);
+                    falha(s);
+                }
+                sprintf(s, "roteiro: %s ok save +0x%X %d vblank %u quadro %u", p->onde, (unsigned)p->n, v, gPortVBlanks,
+                        sQuadro);
+                diz(s);
+                proximo();
+                continue;
+            }
             if (p->cond) {
                 /* confere saga N: o fim da saga N da História visto (MSLOT_OUTRO_SEEN no SaveSlot N, include/menu/
                    menu_c.h, que o HistOutro_Init grava e o HistSave leva ao cartão) */
@@ -703,7 +751,10 @@ static unsigned quadro(void) {
                 continue;
             }
             /* o pedido para o quadro do jogo em andamento: o golpe sai no BtlChars_SampleInput dele */
-            sDerruba = p->valor ? 1 : 0;
+            if (!p->n) {
+                sDerrubados1 = 0; /* (a primeira vez do passo na luta) */
+            }
+            sDerruba = p->valor || sDerrubados1 < p->par ? 1 : 0;
             strcpy(sDerrubaOnde, p->onde);
             p->n = 1;
             if (sT >= p->max) {
@@ -712,6 +763,24 @@ static unsigned quadro(void) {
             }
             sT++;
             return consome(0);
+        case P_FUNDE:
+            /* O Disc Fusion pede o disco do BT1 ou do BT2 na bandeja (DiscFusion_UpdateDisc, src/menu/menu_o_b.c): o
+               jogo lê o executável do outro disco e só então grava UB_DISC_0 ou UB_DISC_1 em gProgress->discFlags
+               (UoProgress +0x684, include/menu/menu_o.h), da sessão, não do save; DiscFusion_Init os lê. No port a
+               unidade nunca abre a bandeja (sceCdStatus, port/src/plat_file.c) e o diálogo fica preso. O passo grava os
+               dois bits, como se os dois discos tivessem sido lidos, antes da tela; o resto do jogo segue o caminho
+               dele. Com as proteções do desbloqueia (só para os roteiros) */
+            so_teste(p, "funde discos");
+            if (gProgress == NULL) {
+                sprintf(s, "%s: funde discos sem gProgress", p->onde);
+                falha(s);
+            }
+            ((int *)gProgress)[0x684 / 4] |= 1 | 2; /* UB_DISC_0 | UB_DISC_1 */
+            sprintf(s, "roteiro: %s discos fundidos (gProgress->discFlags 0x%x) vblank %u quadro %u", p->onde,
+                    (unsigned)((int *)gProgress)[0x684 / 4], gPortVBlanks, sQuadro);
+            diz(s);
+            proximo();
+            continue;
         case P_MARCA:
             sprintf(s, "roteiro: %s marca %s vblank %u quadro %u", p->onde, p->texto, gPortVBlanks, sQuadro);
             diz(s);
@@ -786,6 +855,9 @@ void __wrap_BtlChars_SampleInput(void) {
         return;
     }
     BtlMember_Damage(BtlChar_Get(sDerruba), TERMINA_DANO, TERMINA_DANO_FLAGS);
+    if (sDerruba == 1) {
+        sDerrubados1++;
+    }
     sprintf(s, "roteiro: %s derrubado lado %d vblank %u quadro %u", sDerrubaOnde, sDerruba, gPortVBlanks, sQuadro);
     diz(s);
 }
