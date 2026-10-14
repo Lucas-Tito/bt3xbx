@@ -212,7 +212,10 @@ def ligar(alvo, objs):
              "-Wl,--wrap=Port_GsVif1Chain", "-Wl,--wrap=Port_GsGifChannel",
              # o golpe do passo "termina luta" dos roteiros (port/x360/headless/roteiro.c, F4 etapa 9a): no quadro da
              # luta, depois do giro dos eventos e antes do Battle_Update, onde o jogo dá os seus
-             "-Wl,--wrap=BtlChars_SampleInput"]
+             "-Wl,--wrap=BtlChars_SampleInput",
+             # as ações do roteiro de evento da luta que começam, no rastro dos roteiros (roteiro.c, F4 etapa 9b): os
+             # gatilhos do btl_script.c, a ação principal do battle_work.c e a da carga do battle_load.c
+             "-Wl,--wrap=Gsc_StartAction", "-Wl,--wrap=Gsc_StartMain", "-Wl,--wrap=Gsc_RunAction"]
     if alvo.rastreio:
         resto += ["-Wl,--wrap=memcpy", "-Wl,--wrap=memmove", "-Wl,--wrap=memset"]
     if alvo.rastreio or alvo.nome == "ppc":  # o rastreio marca a origem; a PowerPC inverte os bytes (inverter.c)

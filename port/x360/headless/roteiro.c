@@ -789,3 +789,39 @@ void __wrap_BtlChars_SampleInput(void) {
     sprintf(s, "roteiro: %s derrubado lado %d vblank %u quadro %u", sDerrubaOnde, sDerruba, gPortVBlanks, sQuadro);
     diz(s);
 }
+
+#ifndef PORT_X360
+/* (F4, etapa 9b) As ações do roteiro de evento da luta (o GSCF, src/sys/gsc.c) que começam, no rastro: o critério
+   diz quais eventos rodaram nas duas builds, não só que a luta terminou igual. Entram por --wrap (headless.py) nas
+   três chamadas de fora do gsc.c: Gsc_StartAction, dos gatilhos do btl_script.c (BtlScript_StartPending e
+   BtlScript_StartWaitEvents: as ações de evento, 10001...); Gsc_StartMain, a ação principal (-1) do battle_work.c; e
+   Gsc_RunAction, a da carga (1000) do battle_load.c, rodada até o fim. As chamadas de dentro do gsc.c (uma ação que
+   chama outra, Gsc_CallAction) não passam pelo --wrap e não aparecem. Só com o roteiro ligado; o 360 não tem --wrap e
+   não as escreve (o rastro dele não tem estas linhas). */
+int __real_Gsc_StartAction(int handle, int action);
+int __real_Gsc_StartMain(int handle);
+void __real_Gsc_RunAction(int handle, int action);
+
+static void gsc_rastro(const char *como, int action) {
+    char s[160];
+    if (Roteiro_Ativo()) {
+        sprintf(s, "roteiro: gsc %s %d vblank %u quadro %u", como, action, gPortVBlanks, sQuadro);
+        diz(s);
+    }
+}
+
+int __wrap_Gsc_StartAction(int handle, int action) {
+    gsc_rastro("acao", action);
+    return __real_Gsc_StartAction(handle, action);
+}
+
+int __wrap_Gsc_StartMain(int handle) {
+    gsc_rastro("principal", -1);
+    return __real_Gsc_StartMain(handle);
+}
+
+void __wrap_Gsc_RunAction(int handle, int action) {
+    gsc_rastro("roda", action);
+    __real_Gsc_RunAction(handle, action);
+}
+#endif

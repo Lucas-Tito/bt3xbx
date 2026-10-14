@@ -195,6 +195,12 @@ dentro dele), e o `roteiro.c` chama a original pelo nome (`#ifdef PORT_X360`), c
 `Progress_Main`. O upstream não muda, e a `.text` da x86 também não (o `roteiro.c` da x86 sai igual depois do
 pré-processador). Sem o passo, o embrulho só compara o pedido (`sDerruba`) e volta.
 
+**As ações do roteiro de evento da luta no rastro** (F4, etapa 9b): nas builds sem janela, cada ação do GSCF que
+começa vai ao rastro, "`roteiro: gsc acao 10001 vblank V quadro Q`" (`gsc principal -1` na ação principal, `gsc roda
+1000` na da carga), por `--wrap` no `Gsc_StartAction`, no `Gsc_StartMain` e no `Gsc_RunAction` (`headless.py`,
+`roteiro.c`): o critério diz quais eventos da História rodaram nas duas builds, não só que a luta acabou igual. As
+chamadas de dentro do `gsc.c` (uma ação que chama outra) não passam pelo `--wrap`; o 360 não escreve essas linhas.
+
 **Como escrever um roteiro novo** sem ver a tela: rode-o na x86 sob o gdb com um `break *Snd_PlaySe` (cada aperto que
 o jogo aceita toca um efeito: 1 0 mover, 1 1 confirmar, 1 2 voltar, 1 7 recusado) e um `break *Sprite_Unpack` com
 `info symbol *(int*)$esp`; para o estado interno de uma tela, imprima os campos dela no mesmo comando (`gCharSel->side[0]->state`).
@@ -823,6 +829,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     o porquê e as funções que a leem, e falha se o rastreio da rodada (os pcs do `rastreio.tsv`, pelo programa da x86r)
     mostrar outra função, ou a lista de pcs cheia. A primeira versão dava o porquê errado (dizia `SetStatus`; eram
     operandos do `SetMember`), e nada o conferia: o revisor achou pela análise do GSDT.
+- **A etapa 9b da F4 (o Ultimate Battle e os pendentes da História), o que custou rodadas:**
+  - **Os eventos de meio de luta da História pedem o R3.** Com o controle parado, a luta do primeiro episódio andou 45
+    segundos e só a ação do KO rodou: o gatilho de tempo (evento 2, 20 s) põe a ação 10001 como pendente, mas ela só
+    começa com o lutador do jogador livre para agir e o evento 0x50 novo, que é o R3 (`BTLB_R3`, 0x2000,
+    `btl_char_mgr.c`; o aviso na HUD é o `BtlScript_UpdateHud`). O gdb mostrou o porquê (`dprintf
+    BtlScript_AddEvent` com o gatilho e a ação, e na linha do `BtlScript_StartPending` o estado de cada lado). O roteiro
+    `historia_novo` aperta R3 aos 20 e aos 40 segundos.
+  - **Um KO no meio de uma ação de evento não termina a luta.** Derrubado durante a 10002, o adversário caiu, a ação
+    seguinte pôs gatilhos novos e o KO já tinha passado: a luta seguiu sem fim (as ações 10003..10006 rodaram sozinhas,
+    porque com um lado caído toda ação pendente começa) e o `termina luta` esgotou o `max`. O passo vem depois do fim da
+    ação em andamento (o rastro das linhas `gsc` diz quando).
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
