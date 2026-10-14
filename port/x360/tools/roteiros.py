@@ -443,17 +443,18 @@ CLASSES_CONHECIDAS = [
     ("heap:0x16800", {"igual-sem-inverter": 0x16800 // 4},
      "faceFile[0] e [1] do CharSel e do TeamSel (menu_c_e.c:700, menu_e_b.c:699): o arquivo do retrato como veio do "
      "disco, um contêiner BPE (fluxo de bytes); o conteúdo convertido mora no faceRes, que as marcas conferem"),
-    ("heap:0x1c000", {"igual-sem-inverter": 0x1c000 // 4},
+    ("heap:0x1c000", {"igual-sem-inverter": (0x1c000 - 69760) // 4},
      "gModeMenu->imageFile (ModeMenu_Init, src/menu/menu_a_d.c:256): o arquivo da imagem do episódio como veio do disco, "
      "um contêiner BPE (fluxo de bytes), lido num buffer fixo maior que ele; as marcas conferem o arquivo, o resto do "
-     "buffer são bytes de antes (Heap_Alloc não limpa). Etapa 9a"),
+     "buffer são bytes de antes (Heap_Alloc não limpa). Etapa 9a. O teto é o resto depois do menor arquivo de episódio "
+     "(00973..01020: 69.760 a 113.872 bytes), e só na tela 7 (SO_NAS_TELAS; revisão da 9a, apertado na 9b)"),
     ("heap:0x20800", {"igual-sem-inverter": (0x20800 - 0x20560) // 4},
-     "gModeMenu->imageRes (menu_a_d.c:257): o episódio descomprimido (0x20560 bytes, conferido pelas marcas) num buffer "
-     "de 0x20800; o resto, 0x2A0 bytes depois do conteúdo, são bytes de antes (Heap_Alloc não limpa e o Bpe_Decode só "
-     "grava o conteúdo). O teto é esse resto. Etapa 9a. A classe se nomeia pelo tamanho pedido, e 0x20800 é também o "
-     "faceRes do CharSel (menu_c_e.c:702) e do TeamSel (menu_e_b.c:701) e outros buffers de retrato e imagem dos "
-     "outros modos (menu_m_b.c, menu_n_c.c, menu_y_b.c...): eles ganham a mesma tolerância de 168 palavras no fim do "
-     "buffer (plano.md, revisão da 9a)"),
+     "gModeMenu->imageRes (menu_a_d.c:257): o episódio descomprimido (0x20560 bytes nos 48, conferido pelas marcas) num "
+     "buffer de 0x20800; o resto, 0x2A0 bytes depois do conteúdo, são bytes de antes (Heap_Alloc não limpa e o "
+     "Bpe_Decode só grava o conteúdo). O teto é esse resto. Etapa 9a. A classe se nomeia pelo tamanho pedido, e 0x20800 "
+     "é também o faceRes do CharSel (menu_c_e.c:702) e do TeamSel (menu_e_b.c:701) e outros buffers de retrato e imagem "
+     "dos outros modos (menu_m_b.c, menu_n_c.c, menu_y_b.c...): por isso só vale na tela 7, a do ModeMenu "
+     "(SO_NAS_TELAS; revisão da 9a, apertado na 9b), e em nenhuma outra tela nem no fim"),
     ("heap:0x68", {"igual-sem-inverter": 8},
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
@@ -475,6 +476,11 @@ CLASSES_CONHECIDAS = [
 # efeitos da luta byte a byte (F5). Nos menus a etapa 6 comparou as imagens (idênticas) e a memória das telas não tem
 # nenhuma dessas palavras: uma que aparecesse seria cor de menu na ordem errada.
 SO_NA_LUTA = {"heap:0x100000", "heap:0x83040"}
+
+# As regiões de CLASSES_CONHECIDAS que só valem na memória de certas telas (memoria --tela N), nunca no fim nem noutra
+# tela: a classe se nomeia pelo tamanho pedido ao alocador, e outro dono do mesmo tamanho noutra tela (o faceRes dos
+# retratos das seleções também pede 0x20800) ganharia a tolerância sem ter o porquê (revisão da 9a, item m6)
+SO_NAS_TELAS = {"heap:0x1c000": {7}, "heap:0x20800": {7}}
 
 # Os dois buffers de pacotes da GPU (Dma_InitBuffers, 0x100000 bytes cada): o pacote de sprite pronto
 # (GfxPostSpritePkt, src/sys/gfxm_a.c, 0x60 bytes, alinhado a 16) é um local copiado inteiro para o pacote
@@ -655,11 +661,17 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
                 teto = next((t[c] for r, t, _ in CLASSES_CONHECIDAS if r == chave_r and c in t), None)
                 if tela is not None and chave_r in SO_NA_LUTA:
                     teto = None  # (numa tela de menu, nenhuma: SO_NA_LUTA)
+                fora_da_tela = chave_r in SO_NAS_TELAS and not (tela is not None and str(tela).isdigit() and
+                                                                  int(tela) in SO_NAS_TELAS[chave_r])
+                if fora_da_tela:
+                    teto = None  # (só nas telas de SO_NAS_TELAS)
                 if teto is None or n > teto:
                     print(f"{pre}DIFERENÇA: memória: {regiao} ({chave_r}) com {n} palavras {c}" +
                           (f", acima do teto {teto}" if teto is not None else
                            ", numa tela de menu (só no fim da luta: SO_NA_LUTA)" if tela is not None and
-                           chave_r in SO_NA_LUTA else ", classe não explicada ali (CLASSES_CONHECIDAS)"))
+                           chave_r in SO_NA_LUTA else
+                           f", fora das telas {sorted(SO_NAS_TELAS[chave_r])} (SO_NAS_TELAS)" if fora_da_tela else
+                           ", classe não explicada ali (CLASSES_CONHECIDAS)"))
                     ok = False
                 else:
                     suspeitas[c] += n
