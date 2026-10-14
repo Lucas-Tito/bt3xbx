@@ -1,0 +1,36 @@
+# Sobrevivência (F4, etapa 9b): UbMenu (13), a seleção de curso (SurvSel, 17; a placa só abre com 30 missões
+# cumpridas, que o desbloqueio dá), o curso 0 (50 adversários em fila), a seleção do lutador (SoloSel, 18), a luta
+# terminada pelo passo "termina luta perde apos 3": três adversários derrubados pelo dano do jogo, cada um substituído
+# pelo seguinte da fila (BtlColl_NextPoolMember), e então o lutador do jogador; o fim é o do jogo, que acaba a
+# Sobrevivência quando o jogador cai. O resultado (SurvResult, 19) grava o recorde também na derrota: os três vencidos
+# no save em memória, e a volta à seleção. (Os 50 vencidos, com "termina luta vence", também terminam a luta na x86,
+# com uns 14.000 vblanks de luta: longo demais para a PPC no qemu.)
+inclui boot.txt
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+aperta BAIXO 2                    # Sobrevivência (a terceira placa)
+quadros 30
+aperta X ate tela 17 max 600
+quadros 200
+confere save s32 0x73C 0          # o curso 0 sem recorde (UbSaveBestB.vencidos, include/menu/menu_p.h)
+aperta X                          # abre a janela do curso 0
+quadros 60
+aperta X ate tela 18 max 1200     # escolhe
+quadros 300
+repete ate luta max 6000          # o lutador: X no personagem, nas placas e na cor
+    aperta X
+    quadros 60
+volta
+quadros 60
+termina luta perde apos 3        # três adversários derrubados, um depois do outro, e então o lutador do jogador
+espera tela 19 max 6000           # SurvResult
+quadros 150
+repete ate tela 17 max 4000       # a contagem, a folha e o pagamento
+    aperta X
+    quadros 60
+volta
+confere save s32 0x73C 3          # os três vencidos: o SurvResult gravou o recorde do curso 0 (grava também na derrota)
+quadros 150
+fim

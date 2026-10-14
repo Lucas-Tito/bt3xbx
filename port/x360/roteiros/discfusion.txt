@@ -1,0 +1,67 @@
+# Disc Fusion (F4, etapa 9b): o modo pede o disco do BT1 ou do BT2 na bandeja (a troca de disco, DiscFusion_UpdateDisc);
+# o passo "funde discos" grava os dois discos como lidos na sessão (gProgress->discFlags), como o jogo faz ao achar o
+# outro disco, e o resto é o caminho do jogo. UbMenu (13), Disc Fusion (24), o ramo do ranking: a seleção do lutador
+# (SoloSel, 25), o ranking de 100 lugares (UbRank, 26: um lugar acima, o anúncio com os dois retratos), a luta terminada
+# pelo passo "termina luta", o resultado (UbResult, 27) e a volta ao ranking; e o ramo dos cursos: os cinco cursos
+# (UbzSel, 28), a seleção (SoloSel, 29), a luta, o resultado (UbResult, 30) com o curso no save em memória e a volta
+# aos cursos.
+inclui boot.txt
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+funde discos                      # (antes do DiscFusion_Init, que lê os discos)
+aperta BAIXO 3                    # Disc Fusion (a quarta placa)
+quadros 30
+aperta X ate tela 24 max 600
+quadros 300
+aperta X ate tela 25 max 1200     # a placa do ranking
+quadros 300
+repete ate tela 26 max 3000       # X no personagem, nas placas e na cor
+    aperta X
+    quadros 100
+volta
+quadros 300
+confere save s32 0x77C 99         # o jogador no lugar 100 (UoSave.rank 99, include/menu/menu_o.h)
+aperta CIMA                       # o lugar 99, acima do jogador
+quadros 30
+repete ate luta max 6000          # X no lugar, o anúncio e o versus
+    aperta X
+    quadros 100
+volta
+quadros 60
+termina luta vence
+espera tela 27 max 6000           # UbResult do ranking
+quadros 150
+repete ate tela 26 max 4000
+    aperta X
+    quadros 60
+volta
+quadros 300
+confere save s32 0x77C 98         # a vitória o subiu um lugar (UbRank, na volta ao ranking)
+aperta TRIANGULO ate tela 24 max 1200
+quadros 300
+aperta BAIXO                      # a placa dos cursos
+quadros 30
+aperta X ate tela 28 max 1200
+quadros 300
+confere save u8 0x780 0           # o curso 0 não vencido (UoSave.course[0].cleared, include/menu/menu_o.h)
+aperta X                          # a ficha do curso 0
+quadros 60
+aperta X ate tela 29 max 1200     # escolhe
+quadros 300
+repete ate luta max 6000          # X no personagem, nas placas e na cor
+    aperta X
+    quadros 100
+volta
+quadros 60
+termina luta vence max 20000      # (os adversários do curso entram um depois do outro)
+espera tela 30 max 6000           # UbResult do curso
+quadros 150
+repete ate tela 28 max 4000
+    aperta X
+    quadros 60
+volta
+confere save u8 0x780 1           # o curso 0 vencido
+quadros 300
+fim

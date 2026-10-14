@@ -31,7 +31,7 @@ repete ate tela 13 max 3000
     quadros 80
 volta
 quadros 200
-# Disc Fusion (o X lá dentro abre um diálogo do cartão: só a tela)
+# Disc Fusion (o X lá dentro abre a troca de disco, que no port não passa: só a tela; o modo inteiro, discfusion.txt)
 aperta BAIXO
 quadros 30
 aperta X ate tela 24 max 600

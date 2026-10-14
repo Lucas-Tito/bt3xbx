@@ -51,7 +51,7 @@ FALHAS=()
 falhou() { FALHAS+=("$n: $*"); echo "   >> FALHA: $*"; }
 export BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1
 NOMES=("$@"); [ ${#NOMES[@]} -gt 0 ] || NOMES=(duelo duelo_time treino opcoes)
-[ "${NOMES[0]}" != todos ] || NOMES=(duelo duelo_time treino opcoes historia historia_novo historia_perde ultimate torneio evolution datacenter \
+[ "${NOMES[0]}" != todos ] || NOMES=(duelo duelo_time treino opcoes historia historia_novo historia_perde ultimate missao sobrevivencia simdragon discfusion torneio evolution datacenter \
     referencia shenlong)
 mkdir -p $O $REFS
 gcc -std=c89 -O2 -w -o $O/conv_tool $(ls port/x360/conv/*.c | grep -v conv_jogo) || exit 1

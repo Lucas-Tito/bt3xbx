@@ -1,0 +1,32 @@
+# Sim Dragon (F4, etapa 9b): UbMenu (13), o topo (SimTop, 20), a seleção do lutador (SoloSel, 21), o tabuleiro (SimDay,
+# 22): dez turnos só com X (o treino 0 e, com a vida baixa, o descanso; cada turno roda o roteiro de evento do dia), e no
+# fim da rodada o adversário, o anúncio com os dois retratos e a luta, terminada pelo passo "termina luta"; o resultado
+# (SimResult, 23), o "continuar?" com o "sim" e a volta ao tabuleiro, na rodada seguinte.
+inclui boot.txt
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+aperta X ate tela 20 max 600      # Sim Dragon (a primeira placa)
+quadros 300
+aperta X ate tela 21 max 600      # a primeira placa do topo: começar
+quadros 300
+repete ate tela 22 max 3000       # X no personagem, na placa e na cor
+    aperta X
+    quadros 100
+volta
+quadros 300
+repete ate luta max 40000         # os dez turnos, o anúncio e a rodada
+    aperta X
+    quadros 60
+volta
+quadros 60
+termina luta vence
+espera tela 23 max 6000           # SimResult
+quadros 150
+repete ate tela 22 max 4000       # a contagem, as páginas e o "continuar?" (sim)
+    aperta X
+    quadros 60
+volta
+quadros 300
+fim

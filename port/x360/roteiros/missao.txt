@@ -1,0 +1,35 @@
+# Missão 100 (F4, etapa 9b): UbMenu (13), a seleção de missão (MisSel, 14), a missão 0 (um time de dois contra quatro
+# adversários), a seleção do time (UbTeamSel, 15), a luta terminada pelo passo "termina luta" (cada adversário que
+# entra é derrubado pelo dano do jogo; o fim é o do jogo, BtlSeq_CheckBattleEnd com o time da CPU caído), o resultado
+# (MisResult, 16), a missão cumprida no save em memória e a volta à seleção.
+inclui boot.txt
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+aperta BAIXO                      # Missão 100 (a segunda placa)
+quadros 30
+aperta X ate tela 14 max 600
+quadros 200
+confere save u8 0x28C 0           # a missão 0 ainda não cumprida (UoSave.mission[0], include/menu/menu_o.h)
+aperta X                          # abre a janela da missão 0
+quadros 60
+aperta X ate tela 15 max 1200     # escolhe
+quadros 300
+repete ate luta max 6000          # o time: X escolhe e DIREITA muda o personagem, a forma, a cor ou a placa
+    aperta X
+    quadros 30
+    aperta DIREITA
+    quadros 30
+volta
+quadros 60
+termina luta vence max 20000
+espera tela 16 max 6000           # MisResult
+quadros 150
+repete ate tela 14 max 4000       # a contagem, a folha, o pagamento e a recompensa
+    aperta X
+    quadros 60
+volta
+confere save u8 0x28C 1           # a missão 0 cumprida: o MisResult a gravou (só com o resultado 0, o lado 0 venceu)
+quadros 150
+fim
