@@ -336,8 +336,76 @@ O que a 5b precisa saber:
 - O jogo grava nas listas de ids depois da conversão (desbloqueios): a comparação de memória dessas telas tem de
   contar com isso.
 
-Perguntas para o Lucas (etapa 5): nenhuma nova na 5a; as escolhas foram técnicas e reversíveis (a seção 4 sem leitor
-do ItemHelp fica em bytes; a memória comparada no menu principal até o passo `fim` existir).
+**Etapa 5, parte 5b (13/10/2026, WSL): o resto do caminho essencial e a memória no passo `fim`. Etapa 5 concluída.**
+Feito:
+
+- **Especificação das telas** (`formatos/menus-telas.md`) e os conversores em `port/x360/conv/menus.c`, cada um a tabela
+  de seções chamando as peças: `menu_duelo` (448 s1, N = 27), `menu_selecao` (448 s2 e 461 s2, N = 56, o CharSel e o
+  TeamSel), `menu_treino` (461 s1, N = 26, com as aulas `TrainLesson`, peça nova `Conv_LicoesTreino`), `menu_opcoes`
+  (453 s1, N = 38) e as imagens únicas: `menu_texfile` (retratos 760..923, páginas do Treino 1025..1422) e
+  `menu_fundo` (estágios 924..959, 8 registros, que o `Sprite_DrawPicture` lê). Cada `TexFile` de tela confere o mínimo
+  de registros que o leitor usa. As faixas por hipótese decididas: retratos inteiros (todo leitor soma 0x2F9 a um
+  personagem; nenhum roteiro lê outro formato ali), páginas até 397 (o dado das aulas), estágios 0x24 e 0x25 nunca
+  carregados pela grade.
+- **Os 15 ganchos** do essencial em `src/menu` (`DuelMenu_Init`, `CharSel_*`, `TeamSel_*`, `Train_Init`,
+  `Train_UpdateImage`, `Option_Init`), em `#ifdef PORT_BIG_ENDIAN`; os do retrato e do estágio dentro dos laços.
+- **A memória no passo `fim`** (`roteiros.sh` com `SEMMAPA=1`; `MEM=menu` guarda o critério da 5a): as duas builds no
+  último vblank antes do `fim`; o heap em uso no lugar; cada bloco vivo que guarda um arquivo ou um conteúdo lido na
+  rodada, achado pelo conteúdo (`memdiff.py --marcas-vivas`, o `.orig` ao lado das marcas), conforme número a número;
+  blocos livres, enchimento do alocador e `HeapBlock.unk1C` fora (`--so-em-uso`); e cada palavra diferente fora deles
+  explicada na lista `DIFERENTES_CONHECIDAS` do `roteiros.py` (`menus-telas.md` 8.4).
+- **Duas visões de outra largura que a memória achou**, corrigidas: o `McCardIconSys.titleBreak` (s32 gravado, u16
+  lido; `PS2_LOW` em `PORT_BIG_ENDIAN`) e o `mark` que a HUD grava na folha do rosto do lutador (o conversor do
+  personagem trata a entrada 1 como as folhas da HUD).
+- **O namefont fora do rastreio** (`SEM_RASTREIO` do `headless.py`): as letras dos nomes do port copiavam pixels em
+  blocos de 4 bytes e a origem ia para a pilha; o `--mapa` da seleção acusava 484 mil posições.
+
+Os verificadores novos vistos falhando (guia, seção 4): o `roteiros.sh` (`REUSA=1`) numa cópia das saídas do Duelo com
+um u32 do 00001 sem troca e uma palavra do `BtlObjWork` estragada no dump da PPC sai com 1; o `roteiros.py memoria`
+acusa saídas forjadas (marca fora do formato, bloco fora do lugar, memdiff com erro ou cortado, deslocamento ou global
+fora da lista, trecho não listado, pacote da GPU com `u64`); o `vblank_fim` sem a linha do fim sai com 1; o
+`unpacks.py` numa cópia de `src/` acusa formato fora da tabela e gancho sobre o buffer errado; os conversores das
+telas, sobre cópias estragadas dos conteúdos, saem com erro e o nome da seção (`menus-telas.md` 8.4).
+
+**O "hash da luta igual".** As duas builds do WSL usam o float do PS2 por software, então a luta da PPC sem mapa é
+comparável quadro a quadro com a da x86, e saiu idêntica (vida, posição, relógio e gerador em todos os vblanks de luta
+até o `fim`). A separação pelo float é só no console (decisão 17): lá o critério é o rastro, não o hash.
+
+Números: `unpacks.py` com 21 chamadas com gancho e 61 pendentes, nenhuma do essencial (eram 76, 15 do essencial); a
+soma dos roteiros, "pendentes do essencial alcançadas: 0 de 0" e as 21 com gancho alcançadas; `--disco` com 2.984
+arquivos e 611 conteúdos sem erro, todos com 100% de cobertura (censo: 6 de 30 arquivos de menu, 10 de 49 contêineres,
+os retratos, estágios e páginas inteiros); `--mapa` sem nenhuma posição divergente nos quatro roteiros (as posições por
+conteúdo em `menus-telas.md` 8.2); a `.text` da x86 com o mesmo sha1 (`02fd5df74264e3f467da6d4b1f735d3bdbc7b47f`); o 360
+compila com os mesmos 103 stubs, e o `chamadores_bl` passa (81 `bl Sprite_Unpack` em 62 funções, todas da tabela).
+
+Resultado por roteiro (rodada inteira, `SEMMAPA=1`, sem `REUSA`: x86 duas vezes, gdb, x86r com o rastreio, `--mapa`,
+inventário, PPC sem mapa até o `fim`, memória; "tudo certo"):
+
+| Roteiro | PPC sem mapa | Rastro | Leituras (`LEU`) | Luta (`BT3_HASH`) | Memória no `fim` |
+| --- | --- | --- | --- | --- | --- |
+| `duelo` | chega ao `fim` (luta, vblank 5.208) | 37 de 37 linhas | 40 de 40 | 122 vblanks de luta, 0 diferentes | 180 blocos no lugar; 16 com arquivo, 8.481.591 conformes; 13 trechos explicados |
+| `duelo_time` | chega ao `fim` (vblank 5.712) | 37 de 37 | 45 de 45 | 122, 0 diferentes | 180 no lugar; 17 com arquivo; 56 trechos explicados (43 nos pacotes da GPU) |
+| `treino` | chega ao `fim` (vblank 5.186) | 37 de 37 | 45 de 45 | 120, 0 diferentes | 180 no lugar; 16 com arquivo; 11 trechos explicados |
+| `opcoes` | chega ao `fim` (menu principal, vblank 5.334) | 63 de 63, com os três `confere som` (o mono volta depois do carregar) | 17 de 17 | não chega à luta | 133 no lugar; 6 com arquivo, 5.501.132 conformes; 7 trechos explicados |
+
+Próximo bloqueio de cada roteiro: nenhum no WSL. A etapa 6 (rasterizador nas telas essenciais) e a 7 (o caminho no
+console) vêm a seguir; a guarda continua nomeando qualquer `Sprite_Unpack` sem conversor dos outros modos (etapa 9).
+
+Perguntas para o Lucas (etapa 5), cada uma com a escolha conservadora já feita, reversível:
+
+1. **Som no big-endian (achado para a F6):** `port/src/gs/snd_se.c` lê a fila de comandos do RPC 0xD com `le32`/`le16`,
+   e o jogo a grava em números nativos; no 360 a contagem sairia trocada. Nas builds sem janela não tem efeito (sem
+   fluxo de áudio o laço não roda). Deixei para a F6, sem mexer (é código do upstream e o som não é testável aqui).
+   Corrigir já, em `PORT_BIG_ENDIAN`?
+2. **Lixo nos pacotes da GPU aceito na comparação:** os campos não iniciados do `GfxPostSpritePkt` (pilha copiada para
+   o pacote) entram como explicados nos dois buffers de pacotes, desde que não haja palavra das classes de troca de
+   ordem (`u64`, `2xu16`...) ali. Mais rigoroso seria um leitor do fluxo de pacotes que diga quais bits o GS ignora;
+   fica para quando a etapa 6 olhar os pacotes, se você quiser.
+3. **Seções sem leitor:** as que têm a forma de uma peça conhecida se convertem pela forma (seleção 41 como células,
+   Treino 21 como aulas e 23 e 25 como listas de ids); as sem forma ficam em bytes (seleção 40 e 52, Opções 7). Como
+   ninguém as lê, nada muda no jogo; se preferir tudo sem leitor em bytes, é trocar quatro linhas.
+4. **Retratos 921..923 (aleatório, travado, custom) no `formato_de`:** entraram (o disco os tem no mesmo formato e
+   todo leitor de retrato é o mesmo); nenhum roteiro os lê, então ainda não foram vistos carregando.
 
 ## 6. Riscos principais
 
