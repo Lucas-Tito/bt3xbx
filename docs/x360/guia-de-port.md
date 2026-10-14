@@ -844,6 +844,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `BootCard_Init`, `Logo_Init`, `Title_Init` com `gGsFrame`). Compare as imagens lá e traga só contagens.
 - **Build com falha intermitente:** uma vez 8 objetos falharam e passaram na repetição sem
   mudança. O ciclo agora mostra as linhas `FALHOU` em vez de cortá-las com `tail`.
+- **Capturas do console nos mesmos quadros da referência:** `BT3_SHOT_LISTA=G,G...` (até 32 quadros do GS) no
+  `ambiente.txt` grava só esses quadros, com ou sem o `BT3_SHOT`. Os números vêm da linha "imagem: ... gs G" da build
+  sem janela, e o `compara_quadros.py` mede uma contra a outra.
 
 ---
 

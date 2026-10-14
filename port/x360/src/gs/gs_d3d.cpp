@@ -25,6 +25,8 @@
  *   BT3_SHOT=N        a imagem mostrada a cada N quadros do GS em game:\shots\gpu_NNNNN.ppm, no formato do
  *                     rasterizador de software (640 x 448, as colunas além da largura do quadro em preto), com o
  *                     número do quadro do GS dele; BT3_SHOT_FROM / BT3_SHOT_TO limitam a faixa;
+ *   BT3_SHOT_LISTA=G,G...  só esses quadros do GS (até 32), com ou sem o BT3_SHOT: os das imagens da etapa 6 da F4
+ *                     (a linha "imagem: ... gs G" da build sem janela), para medir os menus contra elas;
  *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado.
  */
 #include <xtl.h>
@@ -512,6 +514,36 @@ static int d3d_init(void) {
 
 /* ---- captura (BT3_SHOT) -------------------------------------------------------------------------------------- */
 
+/* BT3_SHOT_LISTA: os quadros do GS a capturar, lidos uma vez (-1 enquanto não lidos) */
+static int sListaN = -1;
+static unsigned sLista[32];
+
+static int na_lista(unsigned quadro) {
+    int i;
+
+    if (sListaN < 0) {
+        const char *p = getenv("BT3_SHOT_LISTA");
+
+        sListaN = 0;
+        while (p != NULL && *p != '\0' && sListaN < 32) {
+            if (*p >= '0' && *p <= '9') {
+                sLista[sListaN++] = (unsigned)strtoul(p, (char **)&p, 10);
+            } else {
+                p++;
+            }
+        }
+        if (sListaN > 0) {
+            Diario_Escrever("gs_d3d: BT3_SHOT_LISTA com %d quadros do GS", sListaN);
+        }
+    }
+    for (i = 0; i < sListaN; i++) {
+        if (sLista[i] == quadro) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* A cor do alvo mostrado, já resolvida na textura dele, no formato do rasterizador de software (gs_core.c,
    screenshot): P6 640 x 448, as colunas além da largura do quadro (FRAME.FBW * 64) em preto. A textura sai do tiling
    de uma vez (XGUntileSurface) e o arquivo vai num WriteFile só: pixel a pixel, com uma escrita por linha, cada
@@ -754,9 +786,11 @@ static void frame_end(void) {
     if (every < 0) {
         every = getenv("BT3_SHOT") != NULL ? atoi(getenv("BT3_SHOT")) : 0;
     }
-    if (every > 0 && gGsFrame % (unsigned)every == 0 && mostrado >= 0 && gsTargets[mostrado].cleared &&
-        sAlvos[mostrado].tex != NULL && (getenv("BT3_SHOT_FROM") == NULL || (int)gGsFrame >= atoi(getenv("BT3_SHOT_FROM"))) &&
-        (getenv("BT3_SHOT_TO") == NULL || (int)gGsFrame <= atoi(getenv("BT3_SHOT_TO")))) {
+    if (((every > 0 && gGsFrame % (unsigned)every == 0 &&
+          (getenv("BT3_SHOT_FROM") == NULL || (int)gGsFrame >= atoi(getenv("BT3_SHOT_FROM"))) &&
+          (getenv("BT3_SHOT_TO") == NULL || (int)gGsFrame <= atoi(getenv("BT3_SHOT_TO")))) ||
+         na_lista(gGsFrame)) &&
+        mostrado >= 0 && gsTargets[mostrado].cleared && sAlvos[mostrado].tex != NULL) {
         gGsD3dEtapa = "fim do quadro: captura";
         captura(mostrado);
     }
