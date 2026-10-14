@@ -32,7 +32,7 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             a memória das duas builds também ali, com o pacote e as imagens da tela
                                             vivos (no fim da luta já foram liberados)
     roteiros.py memoria MEMDIFF [--tela N]  com --tela, também exige vivos e conformes os conteúdos da tela
-                                            (TELAS_MEM): "sem bloco" não serve
+                                            (TELAS_MEM): "sem bloco" não serve; com --tela CONTEÚDO (de um passo
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -379,7 +379,16 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
     for l in fora:
         print(f"{pre}DIFERENÇA: memória: {l}")
         ok = False
-    if tela is not None:
+    if tela is not None and not str(tela).isdigit():
+        # um passo "marca memoria CONTEÚDO" (vblanks_mem): aquele conteúdo vivo e conforme
+        rel = str(tela).replace("_", "/", 1)
+        if any(re.match(r"marcas heap#\d+ " + re.escape(str(tela)) + r"\.marcas: conforme [1-9]\d*, fora-do-formato 0$", l)
+               for l in linhas):
+            print(f"{pre}  {rel} vivo e conforme")
+        else:
+            print(f"{pre}DIFERENÇA: memória: {rel} sem bloco vivo e conforme no vblank da marca")
+            ok = False
+    elif tela is not None:
         tela = int(tela)
         if tela not in TELAS_MEM:
             print(f"{pre}DIFERENÇA: memória: tela {tela} fora de TELAS_MEM")
@@ -545,6 +554,12 @@ def main():
             if t.isdigit() and int(t) in TELAS_MEM and int(t) not in vistas:
                 vistas.add(int(t))
                 print(t, int(linhas[i + 1].split()[3]) - 1)
+        # e os passos "marca memoria NNNNN" do roteiro: a memória naquele vblank, com o conteúdo do arquivo NNNNN da
+        # partição 1 (um contêiner BPE inteiro: retrato, estágio, página) vivo e conforme
+        for l in pathlib.Path(a.arqs[0]).read_text().splitlines():
+            m = re.match(r"roteiro: \S+ marca memoria (\d{5}) vblank (\d+) ", l)
+            if m:
+                print(f"pzs3us1_{m.group(1)}.bin@0x0#bpe", m.group(2))
         return 0
     if a.acao == "vblank_menu":
         linhas = [l for l in pathlib.Path(a.arqs[0]).read_text().splitlines() if l.startswith("tela ")]

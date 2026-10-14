@@ -10,6 +10,21 @@ quadros 40
 aperta X                          # luta simples
 espera tela 39 max 600            # CharSel
 quadros 150
+# os retratos dos marcadores (menu_texfile, arquivos 921..923): o cursor passa pela célula do personagem salvo
+# (0xA3, a primeira da última linha: CIMA do canto dá a volta) e pela do aleatório (0xA1, a última da penúltima),
+# esperando cada retrato carregar, e volta ao canto. O travado (0xA2) não aparece com tudo desbloqueado.
+aperta CIMA                       # 0xA3, o personagem salvo
+quadros 40
+marca memoria 00923                # (o roteiros.sh compara a memória aqui, com este retrato vivo)
+aperta CIMA                       # a penúltima linha
+quadros 40
+aperta ESQUERDA                   # 0xA1, o aleatório (dá a volta na linha)
+quadros 40
+marca memoria 00921
+aperta DIREITA                    # de volta à primeira coluna
+quadros 40
+aperta BAIXO 2                    # de volta ao canto (a última linha e a primeira)
+quadros 40
 # jogador 1: dois à direita no quadro de personagens (cada um carrega um retrato: CharSel_UpdateFaceLoad), X no
 # personagem, X na lista de itens, X na cor
 aperta DIREITA 2

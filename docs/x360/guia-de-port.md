@@ -147,7 +147,7 @@ controle do jogador 1 (não um vblank: o Shenlong, a 30 quadros por segundo, lê
 | `repete ate COND` [`max Q`] ... `volta` | repete o bloco até a condição, que se confere a cada quadro, em qualquer ponto do bloco; aninhados, a de cada um (a de fora encerra também os de dentro) |
 | `desbloqueia` | `Save_UnlockAll` do próprio jogo (o da aba de truques da janela do PC): todo personagem, estágio, música, item e as sete esferas. Só com `BT3_DESBLOQUEIO=1` e com o cartão vazio no começo da rodada (sem o arquivo de dados do save em `BT3_SAVES`, que no 360 é `game:\saves`): fora disso o roteiro para com erro, para o desbloqueio nunca ir para um save de verdade |
 | `confere som N` | o som do save em memória (`gSaveData->soundMode`: 0 estéreo, 1 mono) igual a N, ou falha com arquivo e linha |
-| `marca TEXTO` | uma linha no rastro |
+| `marca TEXTO` | uma linha no rastro; `marca memoria NNNNN` pede ao `roteiros.sh` (`SEMMAPA=1`) a memória das duas builds naquele vblank, com o conteúdo do arquivo NNNNN da partição 1 (um contêiner BPE inteiro: retrato, estágio, página) vivo e conforme |
 | `inclui ARQUIVO` | outro roteiro, relativo à pasta deste |
 | `fim` | sem janela, encerra o programa (saída 0); no 360, solta o controle |
 
@@ -662,6 +662,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     `roteiros.py vblanks_mem` e `TELAS_MEM`), uma rodada a mais da PPC e da x86 por tela, e a tela exige os conteúdos
     dela vivos e conformes pelas marcas (`memoria --tela N`): "sem bloco" não prova a conversão. Antes de dizer o que
     uma comparação de memória prova, liste o que estava vivo no quadro comparado.
+  - **Conteúdo que só aparece de passagem pede um quadro próprio.** Os retratos dos marcadores (aleatório 921 e
+    personagem salvo 923) só ficam vivos enquanto o cursor está na célula; o roteiro do Duelo passa por elas (CIMA do
+    canto dá a volta para a célula 0xA3; ESQUERDA na penúltima linha dá a volta para a 0xA1), espera o retrato carregar
+    e marca `marca memoria 00923`, e o `roteiros.sh` compara a memória ali. O travado (922) não aparece com tudo
+    desbloqueado. A grade e a célula sob o cursor se acham no gdb (`gCharSel->cells[0][i].id`, `side[0]->chara`).
   - **Só compare builds do mesmo commit, e o ciclo tem de recusar as outras.** A tabela final da 5b saiu de uma x86 de
     um estado e de uma PPC e uma x86r de outro, que não estava em commit nenhum (a revisão recalculou o carimbo). O guia
     já dizia "só compare builds do mesmo carimbo", mas o `roteiros.sh` só imprimia os carimbos. Agora ele sai com 1
