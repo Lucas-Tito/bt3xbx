@@ -48,7 +48,7 @@ bytes no disco, menos que os 0x20800 do buffer), então converter depois de cada
 ## 2. A seleção de saga (`menu_hist_sagas`: 00460, seção 1)
 
 `HistSel_Init(1)` (src/menu/menu_b_d.c:137). Tabela: N = 40 (o inventário dizia 40; o disco confirma). Conteúdo
-descomprimido: 4.960.256 bytes, o maior da História (abaixo dos 8 MB de `CONV_JOGO_MAX`).
+descomprimido: 4.960.256 bytes, o maior da História (abaixo dos 8 MB de então de `CONV_JOGO_MAX`, 9 MB desde a etapa 9b).
 
 | Seção | Formato | Registros mínimos | Quem lê |
 |---|---|---|---|

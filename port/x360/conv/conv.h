@@ -84,9 +84,10 @@ int Conv_FormatoBits(const char *formato, const char *nome, conv_u8 *buf, conv_o
 
 /* O maior conteúdo descomprimido que o jogo converte em tempo de jogo (as seções dos menus, as folhas, os retratos,
    estágios e páginas do Treino): o mapa de bits da conversão em jogo se reserva uma vez com este tamanho
-   (conv_jogo.c). O maior do disco USA tem 0x6BF440 bytes (a seleção, 448 s2 e 461 s2); o conv_tool --disco falha se
-   algum passar daqui. */
-#define CONV_JOGO_MAX 0x800000UL
+   (conv_jogo.c). O maior do disco USA tem 0x81C580 bytes (o tabuleiro do Sim Dragon, 00474 inteiro; antes dele, a
+   seleção, 448 s2 e 461 s2, com 0x6BF440); o conv_tool --disco falha se algum passar daqui. 9 MB de conteúdo, 1,125 MB
+   de mapa */
+#define CONV_JOGO_MAX 0x900000UL
 
 /* Uma animação de personagem descomprimida (BobjAnim), em tempo de jogo: chamada por BtlObjAnim_Load logo depois
    de Bpe_Decode, só em host big-endian. Aloca a marcação. 1: convertida; -1: erro (msg). */

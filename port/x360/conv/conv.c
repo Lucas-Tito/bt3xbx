@@ -216,6 +216,15 @@ void Conv_MenuHistResultado(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuHistSave(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuSaga(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuHistFundo(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuUbMenu(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuSimInicio(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuDiscFusion(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuUbSelecao(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuUbResultado(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuUbSel(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuSimDia(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuUbRanking(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuUbCursos(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
@@ -259,6 +268,17 @@ static const Formato sFormatos[] = {
     {"menu_hist_save", Conv_MenuHistSave},     /* 5: save (HistSave_Init) */
     {"menu_saga", Conv_MenuSaga},              /* 7: o arquivo de uma saga */
     {"menu_hist_fundo", Conv_MenuHistFundo},   /* 8: fundo do resultado */
+    /* menus-ub.md: o Ultimate Battle (F4, etapa 9b) */
+    {"menu_ub_menu", Conv_MenuUbMenu},         /* A: menu do Ultimate Battle (UbMenu_Init, modo 13) */
+    {"menu_sim_inicio", Conv_MenuSimInicio},   /* A: topo do Sim Dragon (SimTop_Init, modo 20) */
+    {"menu_discfusion", Conv_MenuDiscFusion},  /* A: Disc Fusion (DiscFusion_Init, modo 24) */
+    {"menu_ub_selecao", Conv_MenuUbSelecao},   /* B: seleção da Missão 100 e da Sobrevivência (MisSel_Init, SurvSel_Init) */
+    {"menu_ub_resultado", Conv_MenuUbResultado}, /* B: resultados (MisResult_Init, SurvResult_Init, SimResult_Init,
+                                                     UbResult_Init) */
+    {"menu_ubsel", Conv_MenuUbSel},            /* C: seleção de um lutador e de um time (SoloSel_Init, UbTeamSel_Init) */
+    {"menu_sim_dia", Conv_MenuSimDia},         /* D: o tabuleiro do Sim Dragon (SimDay_Init, 0x1DB inteiro) */
+    {"menu_ub_ranking", Conv_MenuUbRanking},   /* E: o ranking de 100 lugares (UbRank_Init, modo 26) */
+    {"menu_ub_cursos", Conv_MenuUbCursos},     /* E: os cinco cursos (UbzSel_Init, modo 28) */
 };
 
 /* Que formato tem cada arquivo do disco e cada conteúdo descomprimido dele: a tabela única (arquivo e seção para
@@ -350,6 +370,26 @@ static const ConvFaixa sFaixas[] = {
     {0x3CE - 1, 0x3FD - 1, 0, "menu_texfile"},
     {0x3FE - 1, 0x401 - 1, CONV_ARQ, "menu_bpe"},
     {0x3FE - 1, 0x401 - 1, 0, "menu_hist_fundo"},
+    /* o Ultimate Battle (menus-ub.md): baseFile + 3 (0x1C4, gMenuArc3, Ub_Main), pacote de seis seções: 1 o menu
+       (UbMenu_Run(1)), 2 a seleção da Missão 100 e da Sobrevivência (MisSel_Run(2), SurvSel_Run(2)), 3 os resultados
+       (MisResult, SurvResult, SimResult e UbResult _Run(3)), 4 a seleção de um lutador e de um time (SoloSel_Run(4),
+       UbTeamSel_Run(4)), 5 o topo do Sim Dragon (SimTop_Run(5)), 6 o Disc Fusion (DiscFusion_Run(6)); o tabuleiro do
+       Sim Dragon, baseFile + 0x1A (0x1DB, SimDay_Init), o ranking, + 0x1B (0x1DC, UbRank_Init), e os cursos, + 0x1C
+       (0x1DD, UbzSel_Init), cada um um contêiner BPE inteiro. Os retratos que essas telas carregam já estão na faixa
+       dos retratos */
+    {0x1C4 - 1, 0x1C4 - 1, CONV_ARQ, "menu_pacote"},
+    {0x1C4 - 1, 0x1C4 - 1, 1, "menu_ub_menu"},
+    {0x1C4 - 1, 0x1C4 - 1, 2, "menu_ub_selecao"},
+    {0x1C4 - 1, 0x1C4 - 1, 3, "menu_ub_resultado"},
+    {0x1C4 - 1, 0x1C4 - 1, 4, "menu_ubsel"},
+    {0x1C4 - 1, 0x1C4 - 1, 5, "menu_sim_inicio"},
+    {0x1C4 - 1, 0x1C4 - 1, 6, "menu_discfusion"},
+    {0x1DB - 1, 0x1DB - 1, CONV_ARQ, "menu_bpe"},
+    {0x1DB - 1, 0x1DB - 1, 0, "menu_sim_dia"},
+    {0x1DC - 1, 0x1DC - 1, CONV_ARQ, "menu_bpe"},
+    {0x1DC - 1, 0x1DC - 1, 0, "menu_ub_ranking"},
+    {0x1DD - 1, 0x1DD - 1, CONV_ARQ, "menu_bpe"},
+    {0x1DD - 1, 0x1DD - 1, 0, "menu_ub_cursos"},
 };
 
 const ConvFaixa *Conv_Faixas(int *n) {

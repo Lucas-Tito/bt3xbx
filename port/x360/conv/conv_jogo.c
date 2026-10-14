@@ -184,7 +184,7 @@ void Port_ConvertAnim(void *buf, int size) {
 
 /* O mapa da conversão em jogo: um bit por byte do conteúdo (Conv_FormatoBits, que só precisa saber o que já foi
    convertido), reservado uma vez, na primeira conversão (a do BootCard_Init, no boot, com o heap ainda inteiro), com o
-   tamanho do maior conteúdo (CONV_JOGO_MAX, conv.h: 1 MB de mapa). Antes era um byte por byte, alocado a cada tela:
+   tamanho do maior conteúdo (CONV_JOGO_MAX, conv.h: 1,125 MB de mapa). Antes era um byte por byte, alocado a cada tela:
    7 MB contíguos a cada entrada na seleção, depois de uma luta, num heap já fragmentado (revisão da etapa 5 da F4). */
 static conv_u8 *sMapa;
 

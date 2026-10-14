@@ -696,7 +696,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     por byte do conteúdo, com a largura) era alocado a cada tela: 7 MB contíguos a cada entrada na seleção, depois de
     uma luta, no console onde a F3 viu a luta esgotar a memória. O jogo só precisa de "já convertido"
     (`Conv_FormatoBits`, mapa de bits); `conv_jogo.c` o reserva na primeira conversão (o `BootCard_Init`, no boot) para
-    `CONV_JOGO_MAX` (8 MB de conteúdo, 1 MB de mapa), e falha com nome se não houver memória ou se um conteúdo passar
+    `CONV_JOGO_MAX` (8 MB de conteúdo, 1 MB de mapa; 9 MB e 1,125 MB desde a etapa 9b, pelo tabuleiro do Sim Dragon), e falha com nome se não houver memória ou se um conteúdo passar
     disso. O `conv_tool` converte cada conteúdo de jogo dos dois jeitos e exige os mesmos bytes, o mesmo resultado e a
     mesma cobertura; o `--disco` diz o maior conteúdo e falha acima da reserva. Uma linha de erro do `conv_tool` vem
     antes ou depois da de cobertura do mesmo nome: o `roteiros.py` guarda o erro (antes ficava com a última linha).

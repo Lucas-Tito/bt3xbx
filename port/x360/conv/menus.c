@@ -183,6 +183,12 @@ static conv_ofs acoes(ConvCtx *c, conv_ofs o, conv_ofs fim) {
             break;
         case 0: case 4: case 5: case 6: case 7: case -1:
             break;
+        case 0x1C: case 0x96: case 0x9F:
+            /* códigos que o jogo não trata: o switch de FlashTl_TagActions e FlashTl_SkipActions (gfxm_c.c) não tem
+               default, então o código consome só o próprio byte e a leitura segue no byte seguinte. Vistos só no
+               filme do evento do tabuleiro do Sim Dragon (00474, seção 18: duas vezes 0x96, 0x1C, 0x9F); o quadro
+               fecha no tamanho do bloco lido assim. Um código fora desta lista continua erro (menus.md 7.6) */
+            break;
         default:
             Conv_Erro(c, "Flash: ação 0x%X em 0x%lX sem leitor", (unsigned)a, (unsigned long)(o - 1));
             break;

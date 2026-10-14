@@ -371,8 +371,10 @@ Um código u8 por ação, até o 0. As duas funções consomem os mesmos bytes (
 | 0x8A | WaitForFrame | 3 bytes que o jogo pula sem ler | bytes |
 | 0x8B, 0x8C | SetTarget, GotoLabel | uma cadeia | bytes |
 
-Um código fora dessa lista não consome nada no jogo; o conversor o trata como erro. Vistos no caminho: 0, 6, 7,
-0x83, 0x8C.
+Um código fora dessa lista consome só o próprio byte no jogo (os dois `switch` não têm `default`); o conversor o trata
+como erro, menos 0x1C, 0x96 e 0x9F, aceitos como um byte (etapa 9b: vistos só no filme do evento do tabuleiro do Sim
+Dragon, 00474 seção 18, `menus-ub.md` parte D 6.1; o quadro fecha no tamanho do bloco lido assim). Vistos no caminho:
+0, 6, 7, 0x83, 0x8C.
 
 ### 7.7 Matriz e transformação de cor: campos de bits
 
