@@ -868,7 +868,13 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Fundo mais "serrilhado" na referência do que no console não é erro do console.** O jogo pede filtro bilinear
   (`TEX1`), e o fundo da seleção de personagem é uma textura de 1024 x 512 reduzida para 512 x 448. O console filtra; o
   rasterizador de software amostra no ponto e pula linhas. Isso derrubou a seleção para 82,3% de pixels iguais. Antes
-  de procurar um erro numa tela com nota baixa, compare a nitidez (gradiente médio) só do fundo e só do resto.
+  de procurar um erro numa tela com nota baixa, compare a nitidez (gradiente médio) só do fundo e só do resto. Os
+  números da etapa 7 da F4: o `TEX1` pedido é 0x60 (bilinear); nitidez do fundo 35,6 no PC e 30,9 no console, o resto
+  13,4 nos dois. Um protótipo do rasterizador que filtra como o GS (branch `investiga-filtro-gs`, commits `be5d764` e
+  `1df9c3b`, fora da main) leva o fundo de 71,2% para 98,4% e as 36 imagens de 92,0% para 99,2% de média (mínimo
+  98,6%): a diferença era toda o filtro. O Lucas decidiu não ligar esse modo nas comparações; a regra é aceitar a tela
+  com textura reduzida por volta de 82% e medir a nitidez separada antes de procurar erro. A arte dos personagens vem
+  sem o meio texel e pela fórmula estrita do GS sairia um pouco macia (anotado, sem decisão).
 
 ---
 

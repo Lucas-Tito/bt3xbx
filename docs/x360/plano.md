@@ -558,14 +558,15 @@ Resultado da rodada final (14/10/2026, builds x86, x86r e ppc refeitas no WSL do
 O 360 compila com os mesmos 103 stubs, o `chamadores_bl` passa (81 `bl Sprite_Unpack` em 62 funções) e o
 `default.swap` tem 7.062 posições (3.170 antes do microcódigo da VU1).
 
-Perguntas para o Lucas (etapa 6), com a escolha conservadora feita:
+Perguntas para o Lucas (etapa 6), com a escolha conservadora feita, e as respostas dele (14/10/2026):
 
 1. **A `.text` da x86 mudou** por código só do teste (`port/x360/headless/imagens.c` e o `--wrap`), não do jogo nem
    do port: a prova de que o upstream não mudou passou a ser os 318 objetos idênticos, e o sha1 novo (`0c516517...`)
    é a referência daqui em diante. Se preferir manter o sha1 antigo como prova, o caminho é uma build à parte só para
-   imagens.
+   imagens. **Resposta:** aceita a nova referência da `.text`.
 2. **A luta fica fora do critério da etapa 6** até a F5 corrigir os `u8 rgba[4]` dos efeitos (uns 150 pontos em
-   `src/battle`). Se quiser a luta já na etapa 7, a correção vem antes.
+   `src/battle`). Se quiser a luta já na etapa 7, a correção vem antes. **Resposta:** a luta fica fora do critério das
+   imagens até a F5.
 
 **Etapa 7 (14/10/2026, console, com o Lucas): o caminho essencial no console. Concluída.** Build do `4ec8067` com a
 captura por lista (`BT3_SHOT_LISTA=G,G...` em `port/x360/src/gs/gs_d3d.cpp`: só os quadros do GS dados, os das
@@ -583,6 +584,17 @@ imagens da etapa 6, que a build sem janela registra na linha "imagem: ... gs G")
   bilinear para um fundo de 1024 x 512 reduzido a 512 x 448, o console filtra e o rasterizador de software amostra no
   ponto. Nenhuma peça faltando, nenhuma imagem preta, nenhuma queda (lado a lado em `build/capturas/etapa7/`, fora
   do git).
+- **O filtro das capturas (investigado depois; decisão do Lucas: não implementar o modo de teste).** O jogo pede
+  filtro bilinear (`TEX1` 0x60) e o fundo do CharSel e do TeamSel é uma textura de 1024 x 512 reduzida a 512 x 448; o
+  console filtra e o rasterizador de software amostra no ponto. Nitidez do fundo (gradiente médio): 35,6 no PC contra
+  30,9 no console; o resto da tela, 13,4 nos dois. Com um protótipo que filtra como o GS, o fundo sobe de 71,2% para
+  98,4% de pixels iguais, e as 36 imagens da etapa, de 92,0% para 99,2% de média (mínimo 98,6%). Pela fórmula do GS o
+  console está mais perto do PS2 que o rasterizador (sem captura do PS2 para confirmar). A arte dos personagens vem
+  sem o meio texel e, pela fórmula estrita, sairia um pouco macia: anotado, sem decisão. O protótipo fica fora da
+  main, no branch `investiga-filtro-gs` do GitHub (commits `be5d764`, o despejo do quadro com o `TEX1`, o `CLAMP` e as
+  coordenadas cruas, e `1df9c3b`, o rasterizador filtrando como o GS pede). **Regra para as comparações de imagem
+  console contra rasterizador:** tela com textura reduzida (o fundo da seleção) fica abaixo, por volta de 82%, sem ser
+  erro; antes de procurar um erro, medir a nitidez do fundo e do resto separadamente (guia, seção 6).
 - **Para a F5 e a F6:** a boca de quem fala (Videl no menu, Dende nas Opções) sai em outro quadro da animação, que segue
   a voz (sem som até a F6). Os menus levam 19,35 ms por quadro de mediana com o desenho na GPU (de 17,5 a 34,9 ms, em
   397 janelas de 60 quadros); o título da F3 levava 16,2 ms.
@@ -666,7 +678,7 @@ certo" (rastros 39, 37, 43 e 63 linhas iguais aos da x86; imagens 8, 6, 12 e 11 
 gancho alcançadas). A `.text` da x86: `0c516517b6d124fb1ac868c9c43877082b3bb0ed`. O 360 compila com os mesmos 103
 stubs, e o `chamadores_bl` passa (81 chamadas em 62 funções).
 
-Perguntas para o Lucas (etapa 8), com a opção conservadora aplicada:
+Perguntas para o Lucas (etapa 8), com a opção conservadora aplicada, e as respostas dele (14/10/2026):
 
 1. **O save de PC no big-endian.** Feita a regra do cabeçalho (acima), que recusa todo save de little-endian menos o
    de soma exatamente 0. Outras opções: (a) somar à regra uma conferência de plausibilidade de campos que o jogo limita
@@ -674,10 +686,12 @@ Perguntas para o Lucas (etapa 8), com a opção conservadora aplicada:
    todo o resto, ao custo de recusar como danificado um save big-endian com esses campos fora da faixa, que o PS2
    aceitaria; (b) uma marca de formato no save do 360 (uma palavra numa região sem uso), que muda o formato da decisão
    22; (c) converter o save de PC na carga (importar), que é o item da F8 e pede tipar os 0x4000 bytes.
+   **Resposta:** fica a regra do cabeçalho; importar save de PC fica para a F8.
 2. **A soma do PS2 é fraca:** aceita o bloco quando uma das palavras confere, então um byte ímpar mudado nunca é pego
    (o caso "bit") e um par só quando vai um. Ficou como no PS2. Exigir as duas palavras no 360 pegaria toda mudança de um
-   byte sem mudar o formato, mas se afasta do jogo original.
-3. **Arquivo zerado carrega como save zerado** (som 0, nada desbloqueado), como no PS2. Ficou assim.
+   byte sem mudar o formato, mas se afasta do jogo original. **Resposta:** soma fraca igual ao PS2.
+3. **Arquivo zerado carrega como save zerado** (som 0, nada desbloqueado), como no PS2. Ficou assim. **Resposta:**
+   arquivo zerado igual ao PS2.
 
 **O que falta no console** (com a build do 360 deste commit em diante; as Opções só depois da etapa 7, quando o menu
 passar no console: antes dela, os passos 5 e 9 valem até o título). Os saves vêm do WSL para `build/saves` daqui
@@ -798,20 +812,24 @@ disco, mas nenhum roteiro os lê (o `descr[0].count = 2` da saga 7, menu_a_d.c:2
 conversão e conta para a memória quando a saga 7 for visitada); as posições de `LARGURA_CONHECIDA` dos outros
 episódios aparecem quando um roteiro os jogar.
 
-Perguntas para o Lucas (etapa 9a), com a opção conservadora aplicada:
+Perguntas para o Lucas (etapa 9a), com a opção conservadora aplicada, e as respostas dele (14/10/2026):
 
 1. **As leituras da palavra do roteiro em `gsc.c`:** feitas com um `#ifdef PORT_BIG_ENDIAN` em cada um dos 24 lugares,
    a linha original no `#else`, como a regra pede. A alternativa mais curta é a das macros `PS2_LOW` (já usadas fora de
    `#ifdef` em `battle_load.c` e `col_c.c`): as macros `GSC_BYTE1`... definidas também no little-endian com a leitura
-   original, e cada lugar com uma linha só, mudando o texto do upstream fora do `#ifdef`.
+   original, e cada lugar com uma linha só, mudando o texto do upstream fora do `#ifdef`. **Resposta:** fica o
+   `#ifdef PORT_BIG_ENDIAN` em cada um dos 24 lugares, sem as macros.
 2. **O `termina luta` só nas builds sem janela:** no 360 o passo para com erro, porque o golpe sai por `--wrap`, que o
    link do XDK não tem. Para a sessão da etapa 10 no console, um ponto de chamada no código do port (por exemplo antes do
-   `Battle_Update`, em `PORT_X360`) o levaria para lá.
+   `Battle_Update`, em `PORT_X360`) o levaria para lá. **Resposta:** o atalho no 360 como opção; feito na revisão (abaixo,
+   item 6), com o teste no console pendente.
 3. **A `.text` da x86 mudou** por código só do teste (como na etapa 6): a prova de que o jogo e o port não mudaram são
    os 321 objetos iguais sem a depuração, e o sha1 novo (`415d1c7b...`) é a referência daqui em diante.
+   **Resposta:** aceita a nova referência da `.text`.
 4. **Valor s32 lido pela metade baixa no `--mapa`:** aceito posição por posição (`LARGURA_CONHECIDA`). Cada episódio
    novo que um roteiro jogar traz as dele; a alternativa é o conversor marcar esses valores do GSDT como "u32 lido pela
-   metade baixa" e o `conv_tool` contá-los à parte.
+   metade baixa" e o `conv_tool` contá-los à parte. **Resposta:** lista por posição com o leitor; feito na revisão
+   (abaixo, item 1).
 
 **Revisão da etapa 9a (14/10/2026) e as correções.** O revisor achou 0 graves, 3 médios e 7 menores, sem erro de ordem
 de bytes que quebre o jogo. Corrigidos sem rodada nova (o Lucas sem tempo para rodada longa; as saídas da rodada final
@@ -878,6 +896,27 @@ da 9a no WSL serviram de entrada):
       "idênticos", com o fim da saga 0 (flags 0x1d no slot 0). Diferença só no `item[]` é o desbloqueio noutro quadro.
    6. Opcional, com `BT3_GS=gpu` e o `BT3_SHOT_LISTA` dos quadros das telas 8 a 10: as capturas contra as imagens da
       9a. Se a luta travar por memória, é o item da F5, não o atalho.
+
+**Pendentes da revisão para o começo da 9b** (anotados, não feitos; cada um pede rodada):
+
+1. Uma linha no rastro por `Gsc_StartAction` (o id da ação) na build sem janela, para o critério dizer quais eventos do
+   roteiro de evento rodaram nas duas builds (M2).
+2. Uma variante do roteiro `historia` sem o passo `desbloqueia` (o `so_teste` só exige `BT3_DESBLOQUEIO=1` e o cartão
+   vazio): a vitória no episódio 1 abre o 2 e mostra a janela de recompensa com item (a GetWin com a tabela convertida),
+   que hoje só tem a validação do `--disco` (M2).
+3. A luta durar mais antes do KO (um `quadros N` antes do `termina luta`), para os eventos de meio de luta (as ações
+   10001 a 10007 do 00510) dispararem (M2).
+4. O caminho de derrota (`termina luta perde`) e o que a História faz depois dele (M2).
+5. Ver falhar de propósito o que ainda não foi (m2): o `confere saga` em memória (um `confere saga 1` num roteiro de
+   teste); o `termina luta` esgotando o `max` durante a luta e o "saiu do estado 3 sem derrubar ninguém"; e as duas
+   correções de código revertidas numa cópia, cada uma numa rodada `SEMMAPA=1` da PPC (a permutação do
+   `BtlFacadeItem` e as leituras `GSC_*`), anotando a primeira diferença.
+6. A chamada nova do `roteiros.py larguras` dentro do `roteiros.sh` (com o `rastreio.tsv` e a x86r) só rodou fora
+   dele, sobre as saídas da 9a: a primeira rodada da 9b a exercita no ciclo inteiro.
+
+**Pendente no console, quando ele voltar:** o teste do atalho (item 6 acima) e apagar as pastas de teste (`saves8`,
+`saves10` a `saves17` e as `shots_*`), listando e identificando o conteúdo antes, como manda o CLAUDE.md; o save do
+Lucas fica em `saves`.
 
 ## 6. Riscos principais
 
