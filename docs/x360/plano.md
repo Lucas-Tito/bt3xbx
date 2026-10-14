@@ -138,7 +138,7 @@ quatro redes de cobertura:
 | 6 | WSL | Rasterizador x86 e PPC nas telas essenciais | PPM idênticos |
 | 7 | console | Caminho essencial no console, pelos roteiros (`BT3_ROTEIRO`) | mesmas telas da x86; capturas no patamar da F3; nenhuma queda |
 | 8 | WSL e console | Save entre builds (PPC e 360) | os dois sentidos carregam; save de PC cai no fluxo de "dados danificados" do jogo, sem queda |
-| 9 | WSL | Os outros modos pela mesma linha de produção | `unpacks.py` sem pendência; `--disco` 100% em todas as faixas de menu |
+| 9 | WSL | Os outros modos pela mesma linha de produção (9a História, 9b Ultimate Battle, 9c o resto) | `unpacks.py` sem pendência; `--disco` 100% em todas as faixas de menu |
 | 10 | console | Sessão de 30 min com o Lucas pelos modos | o critério da F4 sem queda |
 
 Etapas 1 e 2 concluídas em 13/10/2026. O inventário está em `formatos/menus-modos.md`: 82 chamadas, 5 com gancho, 77
@@ -196,7 +196,7 @@ Roteiros (todos do boot com o cartão vazio: `boot.txt` cria o save e desbloquei
 | `duelo_time` | `DuelMenu`, `TeamSel` (40) com dois membros e o COM, luta em time |
 | `treino` | `Train` (44) com seis páginas de uma aula, treino livre, `CharSel` do treino (45), luta |
 | `opcoes` | `Option` (62): som em mono, salvar, estéreo, carregar (o mono volta), sair |
-| `historia` | `HistSel` (6), `ModeMenu` (7) com a imagem do episódio, luta do primeiro episódio |
+| `historia` | `HistSel` (6), `ModeMenu` (7) com a imagem do episódio, luta do primeiro episódio; desde a etapa 9a, `termina luta`, `HistResult` (8), `HistOutro` (9), `HistSave` (10) e o `HistSel` de novo |
 | `ultimate` | `UbMenu` (13), Missão (14, 15 `UbTeamSel`), Sobrevivência (17), Disc Fusion (24), Sim Dragon (20, 21 `SoloSel`, 22 tabuleiro) |
 | `torneio` | `TourMenu` (33), `EntrySel` (34), chave (35), primeira luta |
 | `evolution` | `EvoTop` (48), `EvoZ` (49), loja (50) |
@@ -220,7 +220,8 @@ O ciclo é `port/x360/tools/roteiros.sh` (e `roteiros.py`). Resultado do critér
 
 As 22 pendentes que nenhum roteiro alcança (todas da etapa 9), cada uma por uma condição do jogo:
 
-- pedem uma luta terminada: `HistOutro_Init` (2), `HistResult_Init` (3), `HistSave_Init`, `MisResult_Init`,
+- pedem uma luta terminada (as da História alcançadas na etapa 9a, pelo passo `termina luta`): `HistOutro_Init` (2),
+  `HistResult_Init` (3), `HistSave_Init`, `MisResult_Init`,
   `SurvResult_Init`, `SimResult_Init`, `UbResult_Init`, `Bracket_LoadImages` (2, a chave depois de uma luta) e
   `SimDay_UpdateFaceLoad` (2, o adversário de um dia do Sim Dragon);
 - pedem os ramos do Disc Fusion, cujo X abre um diálogo do cartão: `UbzSel_Init`, `UbRank_Init`,
@@ -682,6 +683,100 @@ FreeStyle. Para os roteiros no console, a pasta `port/x360/roteiros` em `game:\r
    a mensagem de dados danificados, "sim" continua, o título só com o New Game, sem queda.
 10. Devolver o save do Lucas: `save_console.sh envia build/saves/console_antes saves`, e tirar do `ambiente.txt` as
     linhas dos passos 5 e 6.
+
+**Etapa 9a (14/10/2026, WSL): a História. Concluída.** A etapa 9 se dividiu em 9a (a História), 9b (o Ultimate Battle) e
+9c (o resto). Critério da 9a: o roteiro `historia` na PPC sem mapa igual à x86, do `HistSel` (6) e do `ModeMenu` (7)
+até a luta do primeiro episódio e depois dela: o resultado (`HistResult`, 8), o fim da saga (`HistOutro`, 9) e o save
+da História (`HistSave`, 10), com rastro, leituras, luta, memória por tela, save no cartão e imagens dos menus
+idênticos. Feito:
+
+- **O passo `termina luta`** (`port/x360/headless/roteiro.c`; guia, seção 2): a luta anda pelo roteiro e o passo
+  derruba o adversário pelo dano do próprio jogo (`BtlMember_Damage` com a vida inteira, que levanta os eventos de KO);
+  o jogo decide o resto: o `BtlSeq_CheckBattleEnd` nos outros modos, e na História (modo 1, em que o KO não se confere
+  sozinho) o roteiro de evento do episódio, que dispara com o KO e grava o resultado pelo comando 9 (`SetResult`,
+  `BtlFacade_SetResult(1)`: vencedor o lado 0, KO). Chamar o `BtlFacade_SetResult` direto derrubou a x86 (o
+  `BtlSeqWinTalk_Enter` lê o evento de roteiro em andamento, nulo fora de um evento); e o golpe dado na leitura do
+  controle se perdia no giro dos eventos do `Battle_UpdateWork`: ele sai por `--wrap` no `BtlChars_SampleInput`
+  (`headless.py`), logo antes do `Battle_Update`, onde o jogo dá os seus. Fora do jogo normal como o `desbloqueia`
+  (`BT3_ROTEIRO`, `BT3_DESBLOQUEIO=1`, cartão vazio no começo da rodada); só nas builds sem janela (no 360 para com
+  erro). Genérico para a 9b e a 9c (`vence`/`perde`; num time, derruba cada membro que entra). Com ele, o passo
+  `confere saga N` (o fim da saga no save em memória).
+- **Os conversores da História** (`formatos/menus-historia.md`, `port/x360/conv/menus.c`): `menu_hist_sagas` (460 s1,
+  N = 40), `menu_hist_lista` (460 s2, N = 8), `menu_hist_resultado` (460 s3, N = 5, com a peça nova `GetWin`, a janela
+  de recompensa, N = 11), `menu_hist_save` (460 s4, um diálogo), `menu_saga` (464..471, N = 10), `menu_texfile` nos
+  episódios 973..1020 e `menu_hist_fundo` nos fundos do resultado 1021..1024 (o 01021 lê dois registros). Os ganchos das
+  10 chamadas em `src/menu` (`PORT_BIG_ENDIAN`).
+- **Os três arquivos da luta do primeiro episódio** (`formatos/historia-luta.md`, `port/x360/conv/historia_luta.c`)
+  saíram da tabela `CONHECIDOS`: são dados do roteiro da História, não da F5. 00510 é o roteiro de evento GSCF
+  (`roteiro_luta`, ids 0x1FF..0x230, índices 510..559, `Gsc_LoadFile`), 00560 os textos das falas (`textos_luta`,
+  560..659, as duas línguas), 00710 as bocas das falas (`labio_luta`, 660..759, os dois conjuntos de vozes,
+  `BObjLipData`). Duas correções no código, em `PORT_BIG_ENDIAN`: a palavra do roteiro é lida como u32 e também pelos
+  bytes e pela metade alta (nenhuma ordem no arquivo serve às duas: o conversor a troca como u32 e o código lê os campos
+  por deslocamento, `GSC_BYTE1`... em `include/sys/gsc.h`, um `#ifdef` com a linha original no `#else` em cada um dos
+  23 lugares de `gsc.c` e `btl_script.c`); e os ids de item do roteiro, s32 lidos como u16 pela `BtlFacadeItem`
+  (permutada, em `layout.PERMUTADAS`). Duas posições do 00510 saem "com outra largura" no `--mapa` (s32 lidos pela
+  metade baixa) e passam uma a uma por `LARGURA_CONHECIDA` do `roteiros.py`.
+- **As conferências novas do `roteiros.sh`:** a memória também nas telas da História (6 a 10, `TELAS_MEM`, com os
+  conteúdos de cada uma vivos e conformes), as imagens delas (`TELAS_IMG`), e o save que a rodada deixou no cartão da x86
+  e da PPC sem mapa campo a campo, com cada saga do `confere saga` também no arquivo (`roteiros.py save`). Os buffers da
+  imagem do episódio (o arquivo cru e o resto do buffer depois do conteúdo) em `CLASSES_CONHECIDAS`, com teto; o
+  `memdiff.py` aceita um bloco reclamado por dois arquivos de mesmo conteúdo e mesmas marcas (o diálogo do save da
+  História é o da tela do cartão, 473 s2).
+
+Números: `unpacks.py` com 31 chamadas com gancho e 51 pendentes (eram 21 e 61); `--disco` com 3.295 arquivos e 675
+conteúdos sem erro, as faixas novas a 100% (460, 464..471, 973..1024, 510..759); `--mapa` do roteiro `historia` sem
+posição divergente (fora as duas de `LARGURA_CONHECIDA`). A `.text` da x86 mudou, por código só do teste (o passo no
+`roteiro.c` e o `--wrap`): de `0c516517b6d124fb1ac868c9c43877082b3bb0ed` para `415d1c7bfcd86798ef3f7d3f62bd926ba3dee3f1`;
+os outros 321 objetos da x86 (`src/`, `port/src`, GS e o resto do port) saíram iguais aos da build de `4ec8067` sem a
+informação de depuração (`objcopy --strip-debug`; com ela, 9 mudam só nas linhas, pelos ganchos e pelos `#ifdef`). O 360
+compila com os mesmos 103 stubs, e o `chamadores_bl` passa (81 chamadas em 62 funções).
+
+Os verificadores novos vistos falhando (cópias estragadas no WSL, cada uma saindo com código diferente de 0 e a linha
+da falha; intactas, passam): o `termina luta` sem `BT3_DESBLOQUEIO`, com um save no cartão no começo da rodada e com o
+`max` esgotado antes da luta; o `roteiros.py save` com o som do save da PPC trocado e com o bit da saga apagado no save
+da PPC; o `roteiros.py larguras` com uma posição de outra largura fora da lista, com uma a mais e com uma não trocada; o
+`memdiff.py` "marcas iguais" com as marcas do 473 s2 mudadas num byte (volta a "ambíguas" e a tela 10 acusa o 460 s4
+sem bloco); o teto do `heap:0x20800` com 169 palavras (o teto é 168); e os conversores novos, sobre cópias estragadas de
+cada formato (`menus-historia.md` e `historia-luta.md`).
+
+Resultado da rodada final (14/10/2026, builds x86, x86r e ppc refeitas no WSL do HEAD `93227ed`, carimbo
+`93227ed diff:da39a3ee5e` nas três; `SEMMAPA=1 IMG=1`, sem `REUSA`, um roteiro por vez; a referência do `historia`
+regravada com `REF=1`, porque o roteiro mudou):
+
+| Roteiro | Rastro | Leituras (`LEU`) | Luta (`BT3_HASH`) | Memória por tela (conteúdos vivos e conformes) | Save no cartão | Imagens |
+| --- | --- | --- | --- | --- | --- | --- |
+| `historia` | 63 de 63 linhas (até o `HistSel` depois do save) | 42 de 42 | 868 vblanks de luta, 0 diferentes | fim: 129 blocos no lugar, 8 com arquivo; 6: 460 s1; 7: 460 s2, saga 464, episódio 973; 8: 460 s3, saga, fundo 1022; 9: 460 s2, saga; 10: 460 s4 | os mesmos valores, a saga 0 com o fim visto nas duas (flags 0x1d) | 13 de 13 (entrada e saída de 6 a 10, a carga, "salvar?", o `HistSel` na volta) |
+| `duelo` | 39 de 39 | 46 de 46 | 122, 0 diferentes | 38, 39 e os retratos 923 e 921 | os mesmos valores | 8 de 8 |
+| `duelo_time` | 37 de 37 | 45 de 45 | 122, 0 diferentes | 38, 40 | os mesmos valores | 6 de 6 |
+| `treino` | 43 de 43 | 45 de 45 | 120, 0 diferentes | 44, 45 | os mesmos valores | 12 de 12 |
+| `opcoes` | 63 de 63, com os três `confere som` | 17 de 17 | não chega à luta | 62 | os mesmos valores | 11 de 11 |
+
+"Tudo certo" nas duas chamadas do `roteiros.sh` (o `historia` com `REF=1`; os quatro do essencial juntos, com a soma:
+as 21 chamadas com gancho do essencial alcançadas). O `save_mc.sh` passa (os casos do `teste_mc` nas duas, A, F, B1 e
+B2) e o `save_entre.sh` também ("tudo certo", os 7 pares de rastros iguais). A imagem da luta continua fora do critério
+até a F5 (as cores `rgba[4]` dos efeitos), como na etapa 6.
+
+O que fica para a 9b e a 9c: as 51 pendentes (Ultimate Battle, Torneio, Evolution Z, Data Center, Referência,
+Shenlong); o `termina luta` serve às que pedem uma luta terminada. Da História, o roteiro só visita a primeira saga e o
+primeiro episódio: as outras sagas, os outros episódios e os outros arquivos da luta estão convertidos e conferidos no
+disco, mas nenhum roteiro os lê (o `descr[0].count = 2` da saga 7, menu_a_d.c:222, é gravado pelo jogo depois da
+conversão e conta para a memória quando a saga 7 for visitada); as posições de `LARGURA_CONHECIDA` dos outros
+episódios aparecem quando um roteiro os jogar.
+
+Perguntas para o Lucas (etapa 9a), com a opção conservadora aplicada:
+
+1. **As leituras da palavra do roteiro em `gsc.c`:** feitas com um `#ifdef PORT_BIG_ENDIAN` em cada um dos 23 lugares,
+   a linha original no `#else`, como a regra pede. A alternativa mais curta é a das macros `PS2_LOW` (já usadas fora de
+   `#ifdef` em `battle_load.c` e `col_c.c`): as macros `GSC_BYTE1`... definidas também no little-endian com a leitura
+   original, e cada lugar com uma linha só, mudando o texto do upstream fora do `#ifdef`.
+2. **O `termina luta` só nas builds sem janela:** no 360 o passo para com erro, porque o golpe sai por `--wrap`, que o
+   link do XDK não tem. Para a sessão da etapa 10 no console, um ponto de chamada no código do port (por exemplo antes do
+   `Battle_Update`, em `PORT_X360`) o levaria para lá.
+3. **A `.text` da x86 mudou** por código só do teste (como na etapa 6): a prova de que o jogo e o port não mudaram são
+   os 321 objetos iguais sem a depuração, e o sha1 novo (`415d1c7b...`) é a referência daqui em diante.
+4. **Valor s32 lido pela metade baixa no `--mapa`:** aceito posição por posição (`LARGURA_CONHECIDA`). Cada episódio
+   novo que um roteiro jogar traz as dele; a alternativa é o conversor marcar esses valores do GSDT como "u32 lido pela
+   metade baixa" e o `conv_tool` contá-los à parte.
 
 ## 6. Riscos principais
 
