@@ -391,21 +391,82 @@ inventário, PPC sem mapa até o `fim`, memória; "tudo certo"):
 Próximo bloqueio de cada roteiro: nenhum no WSL. A etapa 6 (rasterizador nas telas essenciais) e a 7 (o caminho no
 console) vêm a seguir; a guarda continua nomeando qualquer `Sprite_Unpack` sem conversor dos outros modos (etapa 9).
 
-Perguntas para o Lucas (etapa 5), cada uma com a escolha conservadora já feita, reversível:
+Perguntas para o Lucas (etapa 5) e as respostas dele (14/10/2026):
 
-1. **Som no big-endian (achado para a F6):** `port/src/gs/snd_se.c` lê a fila de comandos do RPC 0xD com `le32`/`le16`,
-   e o jogo a grava em números nativos; no 360 a contagem sairia trocada. Nas builds sem janela não tem efeito (sem
-   fluxo de áudio o laço não roda). Deixei para a F6, sem mexer (é código do upstream e o som não é testável aqui).
-   Corrigir já, em `PORT_BIG_ENDIAN`?
-2. **Lixo nos pacotes da GPU aceito na comparação:** os campos não iniciados do `GfxPostSpritePkt` (pilha copiada para
-   o pacote) entram como explicados nos dois buffers de pacotes, desde que não haja palavra das classes de troca de
-   ordem (`u64`, `2xu16`...) ali. Mais rigoroso seria um leitor do fluxo de pacotes que diga quais bits o GS ignora;
-   fica para quando a etapa 6 olhar os pacotes, se você quiser.
-3. **Seções sem leitor:** as que têm a forma de uma peça conhecida se convertem pela forma (seleção 41 como células,
-   Treino 21 como aulas e 23 e 25 como listas de ids); as sem forma ficam em bytes (seleção 40 e 52, Opções 7). Como
-   ninguém as lê, nada muda no jogo; se preferir tudo sem leitor em bytes, é trocar quatro linhas.
-4. **Retratos 921..923 (aleatório, travado, custom) no `formato_de`:** entraram (o disco os tem no mesmo formato e
-   todo leitor de retrato é o mesmo); nenhum roteiro os lê, então ainda não foram vistos carregando.
+1. **Som no big-endian:** corrigir já, em `PORT_BIG_ENDIAN`. Feito (abaixo): a fila do RPC 0xD se lê na ordem nativa.
+2. **Lixo nos pacotes da GPU aceito na comparação:** apertar já. Feito pela forma dos campos não iniciados e com teto
+   (abaixo, item 4).
+3. **Seções sem leitor:** ficam como estão (as com forma conhecida convertidas pela forma, as outras em bytes).
+4. **Retratos 921..923 no `formato_de`:** ficam, e o roteiro do Duelo passa a carregá-los e conferi-los (abaixo).
+
+**Revisão da etapa 5 (14/10/2026) e as correções.** O revisor achou oito pontos; o Lucas decidiu corrigir todos. Cada
+verificador corrigido foi visto passando com a entrada boa e falhando (saída 1) com uma estragada numa cópia:
+
+1. **Memória por tela** (achado 1: a memória no `fim` não conferia nenhuma conversão da 5b, já liberada). O
+   `roteiros.sh` compara também no último vblank de cada tela de menu do essencial que o roteiro visita (38, 39, 40,
+   44, 45, 62) e cada tela exige os conteúdos dela vivos e conformes (`roteiros.py TELAS_MEM`): 448 s1; 448 s2 com
+   retratos e estágios; 461 s1 com a página; 461 s2 com retratos e estágios; 453 s1. Falha: a marca do 448 s2 tirada
+   do memdiff da tela 39.
+2. **Classes que denunciam erro de largura** (achado 2). As globais e os blocos do heap se comparam campo a campo pelo
+   tipo (`campos.py --globais` e `--donos --tipos`, `memdiff.py --tipos --donos`): as globais do port pelo DWARF, as do
+   jogo pelo mapa do `elftipos.py` e pelas declarações `extern`, os blocos do heap pelo tipo que a alocação pede ou que
+   quem recebe o bloco aponta. Vetores de bytes e campos `unk*` da decomp são opacos (qualquer leitura de uma largura
+   só, menos "diferente"). O que sobra sem tipo só passa em `CLASSES_CONHECIDAS`, com o porquê e um teto, e a soma das
+   classes nas regiões tem de dar o total; `float-proximo` nunca com valor na faixa do heap. Falhas: o forjado do
+   revisor (90.000 `igual-sem-inverter` e 20.000 `2xu16` só no total), uma classe numa região sem lista, um s32 do
+   `CharSel` sem trocar no dump da PPC, e `float_proximo(0x0187a570, 0x0187a5a0)`, que agora é falso.
+3. **Pacotes da GPU** (achado 3, pergunta 2): a região é a de 0x100000 bytes pedidos (não o índice), só com trechos
+   da forma de uv0.pad, uv1.pad e nop do `GfxPostSpritePkt`, até 64 trechos e 160 palavras por buffer (o maior visto:
+   22 e 88). Falha: o forjado do revisor (5.000 diferentes em dois trechos).
+4. **`gPortAdxView` e `sMc`** (achado 4) aceitos só no `path` de cada elemento. Falha: um trecho no `left`.
+5. **Builds de origens diferentes** (achado 5): o `roteiros.sh` sai com 1 se x86, x86r e ppc não forem do commit de
+   agora sem diferença, ou se a árvore tiver alteração; `DESENVOLVIMENTO=1` roda assim mesmo e o fim diz "NÃO VALE
+   COMO CRITÉRIO". Falha: as builds de 7db2bad com a árvore alterada.
+6. **Memória da conversão em jogo** (achado 6): um bit por byte do conteúdo (`Conv_FormatoBits`), reservado uma vez na
+   primeira conversão (o `BootCard_Init`, no boot) para `CONV_JOGO_MAX` (8 MB de conteúdo, 1 MB de mapa), sem
+   alocação por tela; falta de memória ou conteúdo maior é falha com nome no log. O `conv_tool` converte cada conteúdo
+   de jogo dos dois jeitos: no `--disco`, 611 conteúdos com os mesmos bytes, o mesmo resultado e a mesma cobertura; o
+   maior tem 0x6BF440 bytes (448 s2). Falhas: o mapa de bits estragado e a reserva de 1 MB.
+7. **Páginas do Treino** (achado 7): a seção 24 do 461 s1 com o teto 397. Falha: a última página trocada por 398.
+8. **Letras dos nomes no big-endian** (achado 8): o `sheet_decode` conferia o byte do registrador do GS como o primeiro
+   da palavra; no big-endian é o último (`PKT_LOW8`). A PPC agora corta os 36 nomes de estágio e os 24 de música com as
+   mesmas letras, contorno e espaço da x86 (`BT3_NAMEFONT_TEST`). **Pendente:** as imagens de teste da PPC diferem das
+   da x86 em uns 3% dos bytes (até 123 de diferença), causa não achada; só vale para estágio ou música de fora do
+   disco, que o 360 não tem.
+
+E as decisões do Lucas:
+
+- **Som** (`port/src/gs/snd_se.c`): a fila (contagem u32, handle u16, pitch s32, gravada pelo jogo em `Snd_RpcFlush`)
+  se lê na ordem nativa em `PORT_BIG_ENDIAN` (`queue32`/`queue16`); os bancos do disco seguem little-endian. Prova
+  numa build de teste da PPC (não guardada), a fila lida contra a da x86 pelo gdb no Duelo: 33 filas e 34 comandos
+  iguais, com o handle; o pitch foi 0 em todos os comandos do roteiro.
+- **Retratos especiais**: o roteiro do Duelo passa o cursor pela célula do personagem salvo (0xA3, arquivo 923) e pela
+  do aleatório (0xA1, 921), espera cada retrato carregar e volta ao canto (o resto e a luta iguais); o passo
+  `marca memoria NNNNN` faz o `roteiros.sh` comparar a memória com aquele retrato vivo. O travado (922) não aparece com
+  tudo desbloqueado: fica sem roteiro. Referência do Duelo regravada.
+
+O que a tipagem achou e ficou explicado (`roteiros.py`, cada um conferido no código): as somas do cartão (`SaveData`,
+`McFlow.saveBuf` e o cabeçalho do replay), o `SndMgr.iopBuf`, os elementos livres dos pools do motor de scripts
+(`Gsc_Init` não os zera), o buffer de envio dos RPC de som, e sem tipo os buffers de arquivo (folha de carregamento,
+retrato cru), as cores RGBA byte a byte nos pacotes da GPU e na tabela de ordenação (a conferir na etapa 6, pelo
+rasterizador) e a arena do BtlPool. **Riscos que ficam:** a arena do BtlPool (0x1A0800 bytes, o alocador próprio da
+cena da luta) passa só por teto de classe, sem tipo por estrutura; os campos opacos da decomp aceitam qualquer
+largura única; um campo de uma tarefa do motor de scripts em uso, fora do link, cairia na explicação dos elementos
+livres. Tipar a arena por sub-bloco fica para quando a luta for olhada de novo (F5).
+
+Resultado da rodada final (14/10/2026, builds x86, x86r e ppc refeitas no WSL do HEAD `012b1f5`, carimbo
+`012b1f5 diff:da39a3ee5e (0 alterados, 0 apagados)` nas três; `SEMMAPA=1`, sem `REUSA`, um roteiro por vez; "tudo
+certo" nos quatro; a `.text` da x86 com o mesmo sha1, `02fd5df74264e3f467da6d4b1f735d3bdbc7b47f`):
+
+| Roteiro | Rastro | Leituras (`LEU`) | Luta (`BT3_HASH`) | Memória no `fim` | Memória por tela (conteúdos vivos e conformes) |
+| --- | --- | --- | --- | --- | --- |
+| `duelo` | 39 de 39 linhas | 46 de 46 | 122 vblanks, 0 diferentes | 180 blocos no lugar; 16 com arquivo, 8.481.591 conformes; 2.354 globais e 70 blocos pelo tipo | 38: 448 s1; 39: 448 s2, retratos 782 e 785, estágios 947 e 948; e os retratos 923 e 921 nas marcas |
+| `duelo_time` | 37 de 37 | 45 de 45 | 122, 0 diferentes | 180 no lugar; 17 com arquivo, 8.484.759 conformes; 43 trechos dos pacotes da GPU na forma | 38: 448 s1; 40: 448 s2, retratos 782 e 785, estágios 947 e 948 |
+| `treino` | 37 de 37 | 45 de 45 | 120, 0 diferentes | 180 no lugar; 16 com arquivo, 8.481.591 conformes | 44: 461 s1 e a página 1030; 45: 461 s2, retratos 782 e 785, estágios 947 e 948 |
+| `opcoes` | 63 de 63, com os três `confere som` | 17 de 17 | não chega à luta | 133 no lugar (menu principal); 6 com arquivo, 5.501.132 conformes | 62: 453 s1, e as somas do `McFlow` explicadas |
+
+O 360 compila com os mesmos 103 stubs, e o `chamadores_bl` passa (81 `bl Sprite_Unpack` em 62 funções, todas da
+tabela).
 
 ## 6. Riscos principais
 
