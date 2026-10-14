@@ -12,6 +12,13 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             pendente alcançada tem de sair "sem conversor", e só ele
     roteiros.py soma LOG... --prog P        as chamadas de várias rodadas juntas contra o inventário: as pendentes do
                                             caminho essencial (16) e as dos outros modos
+    roteiros.py semmapa PPC X86 GDB [--hash HX HP]
+                                            a PPC sem mapa (só os conversores, como o 360) contra a x86 do mesmo
+                                            roteiro (F4, etapa 5): ou ela chega ao "fim" com o rastro, a sequência de
+                                            arquivos lidos (linhas LEU) e a luta (BT3_HASH) iguais aos da x86, ou para
+                                            na guarda do Sprite_Unpack, que nomeia o próximo bloqueio, com o rastro e
+                                            os arquivos lidos até ali iguais ao começo dos da x86. Qualquer outro fim
+                                            (queda, tempo esgotado, erro de conversor, falha do roteiro) é falha
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -230,14 +237,113 @@ def partes(entrada, pasta, limite):
     print(f"partes: {atual + 1} de até {limite} posições ({sum(cont.values())} no total, {len(cont)} arquivos)")
 
 
+def leu(caminho):
+    """a sequência de arquivos lidos: as linhas "LEU arquivo" (o dprintf do gdb na x86, BT3_LEU=1 na PPC)"""
+    return [l.split(" ", 1)[1] for l in pathlib.Path(caminho).read_text(errors="replace").splitlines()
+            if l.startswith("LEU ") and " " in l]
+
+
+def comeco(a, b, oque):
+    """a (a rodada que parou) é o começo de b (a da x86)? Imprime e devolve True/False"""
+    for i, (l1, l2) in enumerate(zip(a, b)):
+        if l1 != l2:
+            print(f"  DIFERENÇA: {oque}, linha {i + 1}:\n    ppc {l1}\n    x86 {l2}")
+            return False
+    if len(a) > len(b):
+        print(f"  DIFERENÇA: {oque}: a PPC tem {len(a)} linhas, a x86 {len(b)}")
+        return False
+    return True
+
+
+# como a PPC sem mapa pode parar: a guarda do Sprite_Unpack (port/x360/conv/conv_jogo.c) nomeia o bloqueio; o resto
+# é falha (sem nome não há o que fazer a seguir)
+BLOQUEIO = [re.compile(r"Sprite_Unpack sem conversor em (\w+) \(retorno [^)]*\): o conteúdo ficou cru até o (.*)$"),
+            re.compile(r"Sprite_Unpack em (\w+) \(retorno [^)]*\) sobre um contêiner BPE cru")]
+
+
+def semmapa(a):
+    ppc, x86, gdb = a.arqs[:3]
+    saida = pathlib.Path(ppc).read_text(errors="replace").splitlines()
+    tp, tx = telas(ppc), telas(x86)
+    lp, lx = leu(ppc), leu(gdb)
+    fim = any(re.match(r"roteiro: \S+ fim vblank", l) for l in tp)
+    bloqueio = None
+    for l in saida:
+        for r in BLOQUEIO:
+            m = r.search(l)
+            if m and bloqueio is None:
+                bloqueio = (m.group(1), m.group(2) if r.groups > 1 else "Bpe_Decode (arquivo sem conversor)")
+    ok = True
+    if not lx:
+        print("  DIFERENÇA: a x86 sob o gdb não tem linhas LEU (o unpack.gdb mudou?)")
+        ok = False
+    if not lp:
+        print("  DIFERENÇA: a PPC sem linhas LEU (sem BT3_LEU=1, ou a build sem o inverter.c)")
+        ok = False
+    ultima = next((l for l in reversed(tp) if l.startswith("tela ")), "nenhuma tela")
+    if fim and bloqueio is None:
+        print(f"ppc sem mapa: chegou ao fim do roteiro ({ultima})")
+        if tp != tx:
+            if comeco(tp, tx, "rastro (telas, mcflow, esperas)"):
+                print(f"  DIFERENÇA: rastro com {len(tp)} linhas, a x86 com {len(tx)}")
+            ok = False
+        else:
+            print(f"  rastro igual ao da x86 ({len(tp)} linhas)")
+        if lp != lx:
+            if comeco(lp, lx, "arquivos lidos (LEU)"):
+                print(f"  DIFERENÇA: {len(lp)} leituras, a x86 {len(lx)}")
+            ok = False
+        else:
+            print(f"  arquivos lidos iguais aos da x86 ({len(lp)} leituras)")
+        if a.hash:
+            luta_x = any(" hp " in l for l in pathlib.Path(a.hash[0]).read_text(errors="replace").splitlines())
+            if luta_x:
+                r = subprocess.run([sys.executable, str(ROOT / "port/x360/tools/compara.py"), a.hash[0], a.hash[1],
+                                    "--big"], capture_output=True, text=True)
+                print("  luta (BT3_HASH): " + r.stdout.strip().replace("\n", "\n  "))
+                ok &= r.returncode == 0
+            else:
+                print("  luta (BT3_HASH): o roteiro não chega à luta")
+        # o quarto item do critério (plano, F4 etapa 5): a memória no passo fim, campo a campo pelas marcas
+        print("  FALTA: memdiff --marcas no passo fim (etapa 5b): sem ele a rodada inteira não está provada")
+        ok = False
+    elif bloqueio is not None:
+        print(f"ppc sem mapa: próximo bloqueio {bloqueio[0]} (o conteúdo cru até o {bloqueio[1]}); "
+              f"última {ultima}")
+        if comeco(tp, tx, "rastro (telas, mcflow, esperas)"):
+            print(f"  rastro igual ao começo do da x86 ({len(tp)} de {len(tx)} linhas)")
+        else:
+            ok = False
+        if comeco(lp, lx, "arquivos lidos (LEU)"):
+            print(f"  arquivos lidos iguais ao começo dos da x86 ({len(lp)} de {len(lx)} leituras)")
+        else:
+            ok = False
+        if bloqueio[0] not in {f for _, f in lista_unpacks().values()}:
+            print(f"  DIFERENÇA: {bloqueio[0]} não é uma função que chama Sprite_Unpack (unpacks.py)")
+            ok = False
+        print("  luta (BT3_HASH) e memória no fim: não alcançadas (bloqueio)")
+    else:
+        print(f"ppc sem mapa: parou sem chegar ao fim nem a um bloqueio nomeado; última {ultima}")
+        for l in saida[-200:]:
+            if l.startswith(("conv:", "inverter:", "roteiro: FALHA", "gancho", "qemu:")) or "Sprite_Unpack" in l:
+                print(f"  {l[:300]}")
+        ok = False
+    print("igual à x86" if ok else "DIFERENTE da x86")
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes"])
+    ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes", "semmapa"])
     ap.add_argument("arqs", nargs="*")
     ap.add_argument("--prog")
     ap.add_argument("--conv")
     ap.add_argument("--dados", default="gamedata")
+    ap.add_argument("--hash", nargs=2)
     a = ap.parse_args()
+
+    if a.acao == "semmapa":
+        return semmapa(a)
 
     if a.acao == "partes":
         partes(a.arqs[0], a.arqs[1], int(a.arqs[2]) if len(a.arqs) > 2 else 4000000)

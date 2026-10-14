@@ -12,15 +12,21 @@
 #      leu: o "sem conversor" por conteúdo tem de ser o das chamadas pendentes alcançadas (roteiros.py confere);
 #   4. com PPC=1: a PPC no qemu com os arquivos que têm conversor convertidos, o mapa no resto (BT3_MAPA, como o
 #      F1_COM_MAPA do f1.sh) e a guarda só anotando (BT3_GUARDA=anota): o rastro tem de ser o começo do da x86, e a
-#      guarda nomeia a chamada sem conversor. Hoje a PPC para no Flash_Create do menu principal (o mapa não inverte os
-#      registros do Flash, lidos com duas larguras: guia, seção 6): até o conversor dele (etapa 5), o passo 4 confere
-#      do boot ao MainMenu_Init.
+#      guarda nomeia cada chamada sem conversor. O mapa por posição não passa de todos os menus (o Flash lê registros
+#      com duas larguras, guia, seção 6): é a ferramenta para conferir a guarda, não o critério;
+#   5. com SEMMAPA=1 (F4, etapa 5, o critério): a PPC sem mapa, só com os conversores, como o 360 (os arquivos pelo
+#      conv_tool --saida, o conteúdo descomprimido pelos ganchos, sem BT3_MAPA, a guarda fatal), com as leituras
+#      (BT3_LEU=1). roteiros.py semmapa: ou ela chega ao fim com o rastro, os arquivos lidos e a luta iguais aos da
+#      x86, ou para na guarda, que nomeia o próximo bloqueio, com o rastro e os arquivos lidos até ali iguais ao
+#      começo dos da x86; qualquer outro fim é falha.
 # No fim, as chamadas de todos os roteiros juntos contra o inventário (roteiros.py soma).
 # Sai com 1 se qualquer conferência falhar em qualquer roteiro (a x86 sem "fim" ou com FALHA, a repetição, a
 # referência, a x86r, o rastreio.py, o conv_tool, o confere, a PPC, a soma), com a lista no fim; 0 só com tudo certo.
 #   TP=3600     segundos da PPC no qemu
 #   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
 #               verificadores; a x86 tem de ser a mesma build que gravou o gdb.txt, pelo addr2line)
+#   REUSA=x86   reaproveita só as rodadas da x86 e da x86r (e o mapa); roda as da PPC (PPC=1, SEMMAPA=1) de novo: depois
+#               de mudar só conversores, ganchos (em PORT_BIG_ENDIAN) ou o port/x360, com a .text da x86 conferida igual
 #   O=pasta     onde ficam as saídas (port/build/roteiros); REFS=pasta, as referências (~/referencias)
 set -uo pipefail
 B=port/build; O=${O:-$B/roteiros}; REFS=${REFS:-~/referencias}
@@ -44,14 +50,17 @@ continue
 end
 run
 G
-echo "x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO)"
+echo "x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO)$([ -z "${PPC:-}${SEMMAPA:-}" ] || echo " | ppc $(cat $B/ppc/CARIMBO)")"
 LOGS=()
+# (o que roda de novo: com REUSA=1 nada; com REUSA=x86 só a PPC)
+roda_x86() { [ -z "${REUSA:-}" ]; }
+roda_ppc() { [ "${REUSA:-}" != 1 ]; }
 for n in "${NOMES[@]}"; do
-    D=$O/$n; [ -n "${REUSA:-}" ] || { rm -rf $D; mkdir -p $D; }
+    D=$O/$n; roda_x86 && { rm -rf $D; mkdir -p $D; }
     R=port/x360/roteiros/$n.txt
     echo "== $n"
     for v in a b; do
-        if [ -z "${REUSA:-}" ]; then
+        if roda_x86; then
             BT3_ROTEIRO=$R BT3_SAVES=$D/s$v BT3_HASH=$D/h$v.txt timeout 900 $B/x86/bt3_x86 > $D/x86_$v.txt 2>&1
             r=$?
         else
@@ -73,12 +82,12 @@ for n in "${NOMES[@]}"; do
             falhou "rastro diferente da referência $REFS/$n.telas"
     fi
     grep '^tela ' $D/telas_a.txt | cut -d' ' -f2,4 | tr '\n' ' ' | sed 's/^/   telas (vblank): /'; echo
-    [ -n "${REUSA:-}" ] || BT3_ROTEIRO=$R BT3_SAVES=$D/sg BT3_HASH=$D/hg.txt timeout 900 gdb -batch -nx -x $O/unpack.gdb \
+    roda_x86 && BT3_ROTEIRO=$R BT3_SAVES=$D/sg BT3_HASH=$D/hg.txt timeout 900 gdb -batch -nx -x $O/unpack.gdb \
         --args $B/x86/bt3_x86 > $D/gdb.txt 2>&1
     grep -aq '^roteiro: .* fim ' $D/gdb.txt || falhou "x86 sob o gdb sem chegar ao fim do roteiro"
     LOGS+=($D/gdb.txt)
     echo "   Sprite_Unpack alcançados:"; python3 port/x360/tools/roteiros.py chamadas $D/gdb.txt --prog $B/x86/bt3_x86
-    [ -n "${REUSA:-}" ] || BT3_RASTREIO_BITS=24 BT3_ROTEIRO=$R BT3_SAVES=$D/sr BT3_HASH=$D/hr.txt \
+    roda_x86 && BT3_RASTREIO_BITS=24 BT3_ROTEIRO=$R BT3_SAVES=$D/sr BT3_HASH=$D/hr.txt \
         BT3_RASTREIO=$D/rastreio.tsv timeout 3600 setarch -R $B/x86r/bt3_x86r > $D/x86r.txt 2>&1
     echo "   x86r: $(grep -a '^rastreio:' $D/x86r.txt)"
     python3 port/x360/tools/roteiros.py telas $D/x86r.txt > $D/telas_r.txt
@@ -86,7 +95,7 @@ for n in "${NOMES[@]}"; do
     python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_r.txt > /dev/null || falhou "x86r com outro rastro"
     # (o rastreio.py guarda tudo na memória, e os 13 milhões de posições da Ultimate Battle não cabem nos 8 GB do WSL:
     # o rastreio vai em partes, cada arquivo inteiro numa só, e os mapas das partes se juntam; e um roteiros.sh por vez)
-    if [ -z "${REUSA:-}" ]; then
+    if roda_x86; then
         rm -rf $D/partes; python3 port/x360/tools/roteiros.py partes $D/rastreio.tsv $D/partes | sed 's/^/   /'
         ok=1; : > $D/mapa.txt
         for p in $D/partes/parte_*.tsv; do
@@ -98,10 +107,11 @@ for n in "${NOMES[@]}"; do
     fi
     # o que o rastreio viu ler como número e todo arquivo aberto (gdb): a PPC do passo 4 lê todos, e um que tem
     # conversor e chegasse sem conversão pararia o inverter.c (00001 a 00005 só se leem como número na luta)
-    [ -n "${REUSA:-}" ] || { cut -f1 $D/rastreio.tsv; grep -a '^LEU ' $D/gdb.txt | cut -d' ' -f2; } |
+    roda_x86 && { cut -f1 $D/rastreio.tsv; grep -a '^LEU ' $D/gdb.txt | cut -d' ' -f2; } |
         grep -v -e '^ELF:' -e '^disc/' | sort -u > $D/lidos.txt
     # (com --saida: os arquivos que têm conversor, convertidos para a PPC do passo 4, como no f1.sh)
-    mkdir -p $D/dados/mods; for d in gamedata/*; do [ -e $D/dados/$(basename $d) ] || ln -s "$(realpath "$d")" $D/dados/; done
+    # (os convertidos de agora: o conv_tool --saida acrescenta à lista, e um REUSA a duplicaria)
+    rm -rf $D/dados/mods; mkdir -p $D/dados/mods; for d in gamedata/*; do [ -e $D/dados/$(basename $d) ] || ln -s "$(realpath "$d")" $D/dados/; done
     $O/conv_tool --mapa $D/mapa.tsv --saida $D/dados/mods gamedata $(cat $D/lidos.txt) > $D/conv.txt
     r=$?
     touch $D/dados/mods/convertidos.txt
@@ -115,7 +125,7 @@ for n in "${NOMES[@]}"; do
     sed 's/^/   /' $D/confere.txt
     [ $r = 0 ] || falhou "confere: o sem conversor do --mapa diferente do inventário"
     if [ -n "${PPC:-}" ]; then
-        [ -n "${REUSA:-}" ] || BT3_MAPA=$D/mapa.tsv BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt \
+        roda_ppc && BT3_MAPA=$D/mapa.tsv BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt \
             BT3_GUARDA=anota BT3_ROTEIRO=$R BT3_SAVES=$D/sp BT3_HASH=$D/hp.txt timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc \
             > $D/ppc.txt 2>&1
         echo "   ppc com mapa: $(grep -a '^roteiro: .* fim \|FALHA\|abort' $D/ppc.txt | head -1)"
@@ -127,6 +137,15 @@ for n in "${NOMES[@]}"; do
         grep -q -e '^iguais' -e 'do mais curto são o começo do outro' <<< "$cmp_p" || falhou "PPC com outro rastro que a x86"
         [ "$(wc -l < $D/telas_p.txt)" -le "$(wc -l < $D/telas_a.txt)" ] || falhou "PPC com rastro mais longo que a x86"
         grep -a '^guarda: ' $D/ppc.txt | sed 's/ (retorno.*//' | sort | uniq -c | sed 's/^/   /'
+    fi
+    if [ -n "${SEMMAPA:-}" ]; then
+        roda_ppc && BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_LEU=1 BT3_ROTEIRO=$R \
+            BT3_SAVES=$D/sq BT3_HASH=$D/hq.txt timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $D/ppcsm.txt 2>&1
+        python3 port/x360/tools/roteiros.py semmapa $D/ppcsm.txt $D/x86_a.txt $D/gdb.txt --hash $D/ha.txt $D/hq.txt \
+            > $D/semmapa.txt
+        r=$?
+        sed 's/^/   /' $D/semmapa.txt
+        [ $r = 0 ] || falhou "PPC sem mapa diferente da x86 (ou parou sem nome)"
     fi
     rm -f bt3_crash.txt
 done

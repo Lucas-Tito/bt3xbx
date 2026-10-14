@@ -135,7 +135,18 @@ static int sLeitPos;
 
 extern size_t __real_Port_FileReadAt(const char *rel, long offset, void *buf, size_t bytes);
 size_t __wrap_Port_FileReadAt(const char *rel, long offset, void *buf, size_t bytes) {
-    size_t got = __real_Port_FileReadAt(rel, offset, buf, bytes);
+    static int leu = -1;
+    size_t got;
+    /* BT3_LEU=1 (roteiros.sh, a PPC sem mapa): uma linha "LEU arquivo" por leitura, na saída padrão e na ordem, a
+       mesma do dprintf do gdb em Port_FileReadAt na x86, para comparar a sequência de arquivos lidos */
+    if (leu < 0) {
+        leu = getenv("BT3_LEU") != NULL && strcmp(getenv("BT3_LEU"), "1") == 0;
+    }
+    if (leu) {
+        printf("LEU %s\n", rel);
+        fflush(stdout);
+    }
+    got = __real_Port_FileReadAt(rel, offset, buf, bytes);
     if (!sLido) {
         carregar();
     }
