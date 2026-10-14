@@ -16,7 +16,8 @@
  * Com --marcas grava em DIR a marcação de cada byte (a largura com que o conversor o trocou, 1 para byte, 0 se nenhum
  * conversor o reconheceu, 0x80 na continuação de um número), um arquivo por ARQUIVO com '/' trocado por '_' e
  * ".marcas" no fim: só larguras, nenhum byte do jogo. É o que memdiff.py --marcas usa para comparar um buffer do jogo
- * campo a campo, pela largura de cada número, em vez de palavra a palavra.
+ * campo a campo, pela largura de cada número, em vez de palavra a palavra. Ao lado de cada .marcas, o .orig: o conteúdo
+ * antes da conversão (bytes do jogo: só no WSL), com que o memdiff.py acha o bloco do heap pelo conteúdo.
  * Um ARQUIVO "pzs3us1/00449.bin@0x40#bpe" (o nome que o rastreio dá) é o contêiner BPE nesse deslocamento do arquivo,
  * descomprimido aqui e convertido com o formato que o chamador do jogo aplica (formato_bpe), sem --saida.
  *   conv_tool --pecas DADOS [--mapa MAPA.tsv]   as peças comuns dos menus (menus-pecas.md), cada uma só na seção dela
@@ -337,6 +338,26 @@ static int um(const char *dados, const char *rel) {
     }
     feito = calloc((size_t)tam + 1, 1);
     msg[0] = '\0';
+    if (marcas != NULL) {
+        /* ao lado das marcas, o conteúdo como o jogo o carrega (antes da conversão): o memdiff.py --marcas-vivas acha
+           pelo conteúdo o bloco do heap que guarda este arquivo, quando há vários do mesmo tamanho. Fica no WSL, como
+           os dados (port/build) */
+        char *q;
+        sprintf(caminho, "%s/%s.orig", marcas, rel);
+        for (q = caminho + strlen(marcas) + 1; *q; q++) {
+            if (*q == '/') {
+                *q = '_';
+            }
+        }
+        fp = fopen(caminho, "wb");
+        if (fp == NULL || fwrite(buf, 1, (size_t)tam, fp) != (size_t)tam) {
+            printf("%s: não gravou\n", caminho);
+            falhas++;
+        }
+        if (fp != NULL) {
+            fclose(fp);
+        }
+    }
     r = f ? Conv_Formato(f, rel, buf, (conv_ofs)tam, feito, msg, sizeof(msg))
           : Conv_Arquivo(rel, buf, (conv_ofs)tam, feito, msg, sizeof(msg));
     if (r == 0) {

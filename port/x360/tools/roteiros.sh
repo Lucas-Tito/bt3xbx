@@ -20,13 +20,16 @@
 #      conv_tool --saida, o conteúdo descomprimido pelos ganchos, sem BT3_MAPA, a guarda fatal), com as leituras
 #      (BT3_LEU=1). roteiros.py semmapa: ou ela chega ao fim com o rastro, os arquivos lidos e a luta iguais aos da
 #      x86, ou para na guarda, que nomeia o próximo bloqueio, com o rastro e os arquivos lidos até ali iguais ao
-#      começo dos da x86; qualquer outro fim é falha. E a memória das duas no último vblank da primeira visita ao menu
-#      principal (BT3_HASH_AT, uma rodada a mais da x86): o heap no lugar, e o arquivo 00449 e o pacote do menu
-#      conformes número a número pelas marcas do conversor (memdiff.py --marcas-tam).
+#      começo dos da x86; qualquer outro fim é falha. A memória das duas no último vblank antes do passo fim
+#      (BT3_HASH_AT, uma rodada a mais da x86): o heap no lugar, cada bloco vivo com um arquivo ou conteúdo lido
+#      conforme número a número pelas marcas do conversor (memdiff.py --marcas-vivas) e nenhuma palavra diferente
+#      fora deles (roteiros.py memoria). MEM=menu compara no último vblank da primeira visita ao menu principal (o
+#      critério da etapa 5a), e aí a memória se julga mesmo com a PPC parando depois.
 # No fim, as chamadas de todos os roteiros juntos contra o inventário (roteiros.py soma).
 # Sai com 1 se qualquer conferência falhar em qualquer roteiro (a x86 sem "fim" ou com FALHA, a repetição, a
 # referência, a x86r, o rastreio.py, o conv_tool, o confere, a PPC, a soma), com a lista no fim; 0 só com tudo certo.
 #   TP=3600     segundos da PPC no qemu
+#   MEM=menu    a memória no menu principal em vez do fim (SEMMAPA=1)
 #   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
 #               verificadores; a x86 tem de ser a mesma build que gravou o gdb.txt, pelo addr2line)
 #   REUSA=x86   reaproveita só as rodadas da x86 e da x86r (e o mapa); roda as da PPC (PPC=1, SEMMAPA=1) de novo: depois
@@ -146,35 +149,44 @@ for n in "${NOMES[@]}"; do
         grep -a '^guarda: ' $D/ppc.txt | sed 's/ (retorno.*//' | sort | uniq -c | sed 's/^/   /'
     fi
     if [ -n "${SEMMAPA:-}" ]; then
-        # (a memória das duas builds no último vblank da primeira visita ao menu principal, com o pacote dele vivo)
-        V=$(python3 port/x360/tools/roteiros.py vblank_menu $D/telas_a.txt) || V=-1
+        # (a memória das duas builds no último vblank antes do passo fim, o critério da etapa 5; com MEM=menu, no
+        # último vblank da primeira visita ao menu principal, o da etapa 5a)
+        if [ "${MEM:-fim}" = menu ]; then
+            V=$(python3 port/x360/tools/roteiros.py vblank_menu $D/telas_a.txt) || V=-1
+        else
+            V=$(python3 port/x360/tools/roteiros.py vblank_fim $D/telas_a.txt) || V=-1
+        fi
         if roda_ppc; then
             rm -rf $D/hm.txt* $D/hq.txt* $D/sq $D/sm
             BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_LEU=1 BT3_ROTEIRO=$R BT3_SAVES=$D/sq \
                 BT3_HASH=$D/hq.txt BT3_HASH_AT=$V timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $D/ppcsm.txt 2>&1
             BT3_ROTEIRO=$R BT3_SAVES=$D/sm BT3_HASH=$D/hm.txt BT3_HASH_AT=$V timeout 900 $B/x86/bt3_x86 > /dev/null 2>&1
         fi
+        # memdiff no vblank V: o heap em uso pareado pelos blocos, e cada bloco vivo que guarda um arquivo ou um
+        # conteúdo lido na rodada (lidos.txt), número a número pela largura que o conversor deu (--marcas-vivas, o
+        # bloco achado pelo conteúdo, o .orig ao lado das marcas); sem os bytes: o sed corta o hexa das linhas de
+        # trecho e deixa a região e o deslocamento. O semmapa julga (roteiros.py memoria)
+        rm -rf $D/marcas $D/memdiff.txt; mkdir -p $D/marcas
+        if [ -s $D/hq.txt.dump ] && [ -s $D/hm.txt.dump ]; then
+            $O/conv_tool --marcas $D/marcas gamedata $(cat $D/lidos.txt) > /dev/null
+            python3 port/x360/tools/memdiff.py $D/hm.txt.dump $D/hq.txt.dump $B/x86/bt3_x86 $B/ppc/bt3_ppc \
+                --so-em-uso --marcas-vivas $D/marcas --max 400 | sed 's/  x86 [0-9a-f]\{8\} .*ppc [0-9a-f ]*$//' \
+                > $D/memdiff.txt
+            echo "memdiff saiu com ${PIPESTATUS[0]}" >> $D/memdiff.txt
+        fi
+        # (com MEM=menu o semmapa não recebe a memória: uma PPC que chegasse ao fim não está provada nele)
+        MD=(--mem $D/memdiff.txt); [ "${MEM:-fim}" != menu ] || MD=()
         python3 port/x360/tools/roteiros.py semmapa $D/ppcsm.txt $D/x86_a.txt $D/gdb.txt --hash $D/ha.txt $D/hq.txt \
-            > $D/semmapa.txt
+            "${MD[@]}" > $D/semmapa.txt
         r=$?
         sed 's/^/   /' $D/semmapa.txt
         [ $r = 0 ] || falhou "PPC sem mapa diferente da x86 (ou parou sem nome)"
-        # memdiff --marcas no menu principal: o arquivo 00449 inteiro e o pacote do menu, número a número pela largura
-        # que o conversor deu (o heap pareado pelos blocos; sem os bytes: o sed corta o hexa)
-        if [ -s $D/hq.txt.dump ] && [ -s $D/hm.txt.dump ]; then
-            rm -rf $D/marcas; mkdir -p $D/marcas
-            $O/conv_tool --marcas $D/marcas gamedata pzs3us1/00449.bin 'pzs3us1/00449.bin@0xAB5C0#bpe' > /dev/null
-            python3 port/x360/tools/memdiff.py $D/hm.txt.dump $D/hq.txt.dump $B/x86/bt3_x86 $B/ppc/bt3_ppc --resumo \
-                --marcas-tam $D/marcas/pzs3us1_00449.bin.marcas \
-                --marcas-tam "$D/marcas/pzs3us1_00449.bin@0xAB5C0#bpe.marcas" | sed 's/  x86 .*//' > $D/memdiff.txt
-            r=${PIPESTATUS[0]}
+        if [ "${MEM:-fim}" = menu ]; then
+            # (MEM=menu: a PPC passa do menu principal e a memória dele se confere mesmo que ela pare depois)
             echo "   memória no vblank $V (menu principal):"
-            grep -E '^(marcas|heap:|total:|--marcas-tam)' $D/memdiff.txt | sed 's/^/     /'
-            { [ $r = 0 ] && grep -q '^heap: .*, 0 em lugar ou tamanho diferente' $D/memdiff.txt &&
-              [ "$(grep -c '^marcas heap#' $D/memdiff.txt)" = 2 ] && ! grep -q 'fora-do-formato [1-9]' $D/memdiff.txt; } ||
-                falhou "memória no menu principal: bloco fora do lugar ou número fora do formato (memdiff)"
-        else
-            falhou "sem o dump da memória no vblank $V (a PPC parou antes do fim do menu principal?)"
+            python3 port/x360/tools/roteiros.py memoria $D/memdiff.txt | sed 's/^/     /'
+            python3 port/x360/tools/roteiros.py memoria $D/memdiff.txt > /dev/null ||
+                falhou "memória no menu principal diferente (memdiff)"
         fi
     fi
     rm -f bt3_crash.txt

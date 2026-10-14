@@ -18,8 +18,9 @@ case "${1:-}" in
         cd "$RAIZ"
         sha=$(git rev-parse HEAD)
         git branch -r --contains "$sha" | grep -q . || { echo "o commit $sha não está no GitHub: faça push antes"; exit 1; }
-        mapfile -t arquivos < <(git ls-files -m -o --exclude-standard)
-        mapfile -t apagados < <(git ls-files -d)
+        # (contra o HEAD, não contra o índice: o que já está no git add também vai; ls-files -m só via a árvore)
+        mapfile -t arquivos < <({ git diff --name-only --diff-filter=d HEAD; git ls-files -o --exclude-standard; } | sort -u)
+        mapfile -t apagados < <(git diff --name-only --diff-filter=D HEAD)
         # a diferença inclui o conteúdo dos arquivos novos (git diff não mostra os não rastreados)
         dif=$({ git diff HEAD; git ls-files -o --exclude-standard -z | xargs -0 -r sha1sum; } | sha1sum | cut -c1-10)
         carimbo="$(git rev-parse --short HEAD) diff:$dif (${#arquivos[@]} alterados, ${#apagados[@]} apagados)"

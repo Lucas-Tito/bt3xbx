@@ -12,16 +12,21 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             pendente alcançada tem de sair "sem conversor", e só ele
     roteiros.py soma LOG... --prog P        as chamadas de várias rodadas juntas contra o inventário: as pendentes do
                                             caminho essencial (16) e as dos outros modos
-    roteiros.py semmapa PPC X86 GDB [--hash HX HP]
+    roteiros.py semmapa PPC X86 GDB [--hash HX HP] [--mem MEMDIFF]
                                             a PPC sem mapa (só os conversores, como o 360) contra a x86 do mesmo
                                             roteiro (F4, etapa 5): ou ela chega ao "fim" com o rastro, a sequência de
-                                            arquivos lidos (linhas LEU) e a luta (BT3_HASH) iguais aos da x86, ou para
-                                            na guarda do Sprite_Unpack, que nomeia o próximo bloqueio, com o rastro e
-                                            os arquivos lidos até ali iguais ao começo dos da x86. Qualquer outro fim
-                                            (queda, tempo esgotado, erro de conversor, falha do roteiro) é falha
+                                            arquivos lidos (linhas LEU), a luta (BT3_HASH) e a memória no último vblank
+                                            antes do fim (MEMDIFF, a saída do memdiff.py que o roteiros.sh grava; o
+                                            critério em memoria()) iguais aos da x86, ou para na guarda do
+                                            Sprite_Unpack, que nomeia o próximo bloqueio, com o rastro e os arquivos
+                                            lidos até ali iguais ao começo dos da x86. Qualquer outro fim (queda, tempo
+                                            esgotado, erro de conversor, falha do roteiro) é falha
+    roteiros.py memoria MEMDIFF             só o critério da memória (memoria()) sobre a saída de um memdiff.py
     roteiros.py vblank_menu TELAS          o último vblank da primeira visita ao menu principal (tela 4) num rastro: o
-                                            quadro em que o roteiros.sh compara a memória das duas builds (o pacote
-                                            dele ainda vivo, antes da tela seguinte)
+                                            quadro em que o roteiros.sh compara a memória das duas builds com MEM=menu
+                                            (o pacote dele ainda vivo, antes da tela seguinte; o critério da etapa 5a)
+    roteiros.py vblank_fim TELAS           o último vblank antes do passo "fim" num rastro: o quadro em que o
+                                            roteiros.sh compara a memória das duas builds (o critério da etapa 5)
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -264,6 +269,124 @@ BLOQUEIO = [re.compile(r"Sprite_Unpack sem conversor em (\w+) \(retorno [^)]*\):
             re.compile(r"Sprite_Unpack em (\w+) \(retorno [^)]*\) sobre um contêiner BPE cru")]
 
 
+# A memória das duas builds num vblank (memdiff.py --so-em-uso --marcas-vivas, gravado pelo roteiros.sh): o critério
+# da etapa 5.
+#   - o memdiff terminou (a linha "memdiff saiu com 0" que o roteiros.sh acrescenta; 2 é marca ambígua ou bloco que
+#     falta);
+#   - o heap no lugar: os mesmos blocos, de mesmo tamanho, nas duas builds;
+#   - todo bloco vivo que guarda um arquivo ou um conteúdo convertido (achado pelo conteúdo) conforme número a número
+#     pela largura que o conversor deu ("marcas ...: conforme N, fora-do-formato 0"), e pelo menos um;
+#   - cada trecho de palavras "diferentes" fora desses blocos explicado em DIFERENTES_CONHECIDAS (o que o port ou o
+#     ambiente deixam diferente sem ser ordem de bytes), e nenhum trecho sem listar (o memdiff lista até --max por
+#     região: a contagem "N trechos a olhar" tem de bater com os listados).
+# As classes "misto" (u8, u8 e u16 na mesma palavra) e "float-proximo" (arredondamento) não são diferença de ordem de
+# bytes (memdiff.py) e contam à parte.
+DIFERENTES_CONHECIDAS = [
+    # (região, deslocamento ou None para a região inteira, por quê); formatos/menus-telas.md 8.4
+    ("heap#0", 0x290, "SndMgr.iopBuf (Snd_Init): ponteiro do host (sceSifAllocIopHeap, calloc em 32 bits)"),
+    ("heap#21", 0x34, "SaveData.unk0 e unk4 (Save_Init): a soma McCard_Checksum sobre os bytes de números nativos, "
+                      "outra em cada build e conferida em cada uma"),
+    ("gColWalkBox", 0, "ponteiro para um local da pilha do host (ColMesh_WalkBox; gravado e nunca lido)"),
+    ("gColWalkCtx", 0, "idem"),
+    ("gPortDataStripped", 0, "as tabelas do executável: a PPC liga o esqueleto e copia do SLUS (decisão 13)"),
+    ("gSndRpcBuf", 0, "união s32/s16: a metade alta do count u32 da fila de som (RPC 0xD) sob o h[0] = 0 do RPC 0xF, "
+                      "resto que ninguém lê"),
+    ("gPortMoviePath", None, "caminho do host (BT3_DATA diferente nas duas rodadas)"),
+    ("gPortAdxView", None, "caminhos do host (BT3_DATA diferente nas duas rodadas)"),
+    ("sMc", None, "caminhos do host do cartão de memória (BT3_SAVES diferente nas duas rodadas)"),
+    # os dois buffers de pacotes da GPU (Dma_InitBuffers): o pacote de sprite pronto (GfxPostSpritePkt, src/sys/
+    # gfxm_a.c) é um local copiado inteiro para o pacote (StgPanBlur_DrawView), com uv0.pad, uv1.pad e nop nunca
+    # iniciados: lixo da pilha, outro em cada build, em bits que o GS ignora (a metade alta de UV, o dado do NOP). Só
+    # vale sem nenhuma palavra das classes de troca de ordem de um pacote (decisão 19: u64, u64-com-zero, 2xu16,
+    # misto) na região
+    ("heap#24", None, "pacotes da GPU: campos não iniciados do pacote de sprite copiados da pilha (o GS os ignora)"),
+    ("heap#25", None, "idem, o outro buffer"),
+]
+# classes que, numa região aceita por inteiro na lista acima, denunciariam erro de ordem de bytes e não lixo
+PROIBIDAS_EM_PACOTE = ("u64", "u64-com-zero", "2xu16", "misto", "float-proximo")
+
+
+def conhecida(regiao, desl):
+    for r, d, porque in DIFERENTES_CONHECIDAS:
+        if r == regiao and (d is None or d == desl):
+            return porque
+    return None
+
+
+def memoria(caminho, pre=""):
+    p = pathlib.Path(caminho)
+    if not p.exists():
+        print(f"{pre}DIFERENÇA: memória: sem {caminho} (a PPC não chegou ao vblank do dump?)")
+        return False
+    linhas = p.read_text(errors="replace").splitlines()
+    ok = True
+    saida = next((l for l in linhas if l.startswith("memdiff saiu com ")), None)
+    if saida != "memdiff saiu com 0":
+        print(f"{pre}DIFERENÇA: memória: {saida or 'o memdiff não terminou'}")
+        ok = False
+    heap = next((l for l in linhas if l.startswith("heap: ") and " blocos na x86" in l), None)
+    if heap is None or not heap.endswith(", 0 em lugar ou tamanho diferente"):
+        print(f"{pre}DIFERENÇA: memória: {heap or 'sem a linha do heap'}")
+        ok = False
+    else:
+        print(f"{pre}memória: {heap[6:]}")
+    for l in linhas:
+        if l.startswith(("marcas ambíguas", "--marcas-vivas", "--marcas-tam", "livres:")):
+            print(f"{pre}  {l}")
+    marcas = [l for l in linhas if l.startswith("marcas heap")]
+    fora = [l for l in marcas if not l.endswith("fora-do-formato 0")]
+    if not marcas:
+        print(f"{pre}DIFERENÇA: memória: nenhum bloco vivo com arquivo ou conteúdo convertido achado")
+        ok = False
+    conf = sum(int(re.search(r"conforme (\d+)", l).group(1)) for l in marcas)
+    print(f"{pre}  {len(marcas)} blocos com arquivo ou conteúdo convertido, {conf} números e bytes conformes")
+    for l in fora:
+        print(f"{pre}DIFERENÇA: memória: {l}")
+        ok = False
+    # os trechos "diferentes" de cada região, um a um contra a lista
+    regiao, esperados, vistos, explicados = None, 0, 0, collections.Counter()
+
+    def fecha():
+        nonlocal ok
+        if regiao is not None and vistos != esperados:
+            print(f"{pre}DIFERENÇA: memória: {regiao} com {esperados} trechos e {vistos} listados (aumente o --max)")
+            ok = False
+    for l in linhas:
+        m = re.match(r"região (\S+?)(?: \(.*?\))? x86 .*; (\d+) trechos a olhar", l)
+        if m:
+            fecha()
+            regiao, esperados, vistos = m.group(1), int(m.group(2)), 0
+            if regiao in ("heap#24", "heap#25"):
+                ruins = [c for c in PROIBIDAS_EM_PACOTE if re.search(r"\b" + re.escape(c) + r" \d", l)]
+                if ruins:
+                    print(f"{pre}DIFERENÇA: memória: {regiao} (pacotes da GPU) com palavras {', '.join(ruins)}: "
+                          "troca de ordem num pacote, não lixo")
+                    ok = False
+            continue
+        m = re.match(r"  [0-9a-f]{8} \+([0-9a-f]+)\s+\((\S+?)\+0x([0-9a-f]+)\)", l)
+        if m and regiao is not None:
+            vistos += 1
+            r, d = m.group(2), int(m.group(3), 16)
+            porque = conhecida(r, d)
+            if porque is None:
+                print(f"{pre}DIFERENÇA: memória: {r}+0x{d:x} (+0x{m.group(1)} bytes) diferente e não explicado")
+                ok = False
+            else:
+                explicados[r] += 1
+            continue
+        if m is None and re.match(r"  [0-9a-f]{8} \+", l) and regiao is not None:
+            vistos += 1
+            print(f"{pre}DIFERENÇA: memória: trecho sem nome em {regiao}: {l.strip()}")
+            ok = False
+    fecha()
+    tot = next((l for l in linhas if l.startswith("total: ")), "")
+    print(f"{pre}  palavras: {tot[7:]}")
+    if explicados:
+        print(f"{pre}  trechos diferentes explicados (DIFERENTES_CONHECIDAS): " +
+              ", ".join(f"{r} {n}" for r, n in sorted(explicados.items())))
+    return ok
+
+
 def semmapa(a):
     ppc, x86, gdb = a.arqs[:3]
     saida = pathlib.Path(ppc).read_text(errors="replace").splitlines()
@@ -307,9 +430,13 @@ def semmapa(a):
                 ok &= r.returncode == 0
             else:
                 print("  luta (BT3_HASH): o roteiro não chega à luta")
-        # o quarto item do critério (plano, F4 etapa 5): a memória no passo fim, campo a campo pelas marcas
-        print("  FALTA: memdiff --marcas no passo fim (etapa 5b): sem ele a rodada inteira não está provada")
-        ok = False
+        # o quarto item do critério (plano, F4 etapa 5): a memória no último vblank antes do fim, campo a campo pelas
+        # marcas de cada arquivo e conteúdo vivo
+        if not a.mem:
+            print("  FALTA: a memória no fim (--mem, a saída do memdiff.py): sem ela a rodada inteira não está provada")
+            ok = False
+        else:
+            ok &= memoria(a.mem, "  ")
     elif bloqueio is not None:
         print(f"ppc sem mapa: próximo bloqueio {bloqueio[0]} (o conteúdo cru até o {bloqueio[1]}); "
               f"última {ultima}")
@@ -338,16 +465,28 @@ def semmapa(a):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes", "semmapa",
-                                     "vblank_menu"])
+                                     "vblank_menu", "vblank_fim", "memoria"])
     ap.add_argument("arqs", nargs="*")
     ap.add_argument("--prog")
     ap.add_argument("--conv")
     ap.add_argument("--dados", default="gamedata")
     ap.add_argument("--hash", nargs=2)
+    ap.add_argument("--mem")
     a = ap.parse_args()
 
     if a.acao == "semmapa":
         return semmapa(a)
+    if a.acao == "memoria":
+        ok = memoria(a.arqs[0])
+        print("memória igual" if ok else "memória DIFERENTE")
+        return 0 if ok else 1
+    if a.acao == "vblank_fim":
+        for l in pathlib.Path(a.arqs[0]).read_text().splitlines():
+            m = re.match(r"roteiro: \S+ fim vblank (\d+) ", l)
+            if m:
+                print(int(m.group(1)) - 1)
+                return 0
+        return 1
     if a.acao == "vblank_menu":
         linhas = [l for l in pathlib.Path(a.arqs[0]).read_text().splitlines() if l.startswith("tela ")]
         for i, l in enumerate(linhas[:-1]):

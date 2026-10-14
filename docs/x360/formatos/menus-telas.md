@@ -202,7 +202,70 @@ São as 15 pendentes do essencial; com elas, `unpacks.py` dá 21 com gancho e 61
 
 ## 8. Cobertura conferida
 
-Com a rodada dos roteiros (plano, etapa 5b).
+### 8.1 Contra o disco (`conv_tool --disco`)
+
+2.984 arquivos sem erro (eram 2.386: entram os 164 retratos, os 36 estágios e as 398 páginas do Treino como
+`menu_bpe`) e 611 conteúdos descomprimidos sem erro (eram 8: entram 448 s1 e s2, 453 s1, 461 s1 e s2 e as 598 imagens
+únicas), todos com 100% de cobertura. Censo dos menus: 6 de 30 arquivos de menu e 10 de 49 contêineres com conversor;
+retratos, estágios e páginas do Treino inteiros (164, 36 e 398 de cada). O `--pecas` continua sem erro (76 usos, com as
+aulas do Treino).
+
+### 8.2 Contra o rastreio (`conv_tool --mapa`, rodada inteira dos quatro roteiros)
+
+Nenhuma posição com outra largura nem não trocada; as cadeias de texto lidas por inteiro são rótulos do Flash
+(`menus-pecas.md` 7.3).
+
+| Conteúdo | duelo | duelo_time | treino | opcoes |
+|---|---|---|---|---|
+| `menu_duelo` (448 s1) | 5.704 | 6.399 | | |
+| `menu_selecao` (448 s2; 461 s2 no Treino) | 23.009 | 26.361 | 23.012 | |
+| `menu_treino` (461 s1) | | | 13.895 | |
+| `menu_opcoes` (453 s1) | | | | 17.063 |
+| retratos (5 por roteiro), estágios (3), páginas do Treino (5) | 50, 198 | 50, 198 | 50, 198, 50 | |
+
+Na primeira rodada, 484 mil posições da seleção saíram "não trocadas": as letras dos nomes de estágio e de música do
+port (`port/src/gs/namefont.c`, só do PC) copiam os pixels e a paleta das folhas em blocos de 4 bytes, e a origem dessas
+cópias ia para a pilha. O namefont agora compila sem a instrumentação na x86r (guia, seção 6).
+
+### 8.3 A PPC sem mapa contra a x86 (o critério da etapa 5)
+
+Os quatro roteiros chegam ao passo `fim` na PPC sem mapa, só com os conversores, com o rastro, as leituras de arquivo
+e a luta iguais aos da x86 (plano, etapa 5b). A luta: os 122 vblanks de luta do Duelo e do Time e os 120 do Treino com
+vida, posição, relógio e gerador iguais (as duas builds sem janela usam o float do PS2 por software, então a igualdade
+é exata; no console a luta se separa no primeiro quadro pelo float do 360, decisão 17).
+
+### 8.4 A memória no último vblank antes do `fim`
+
+`memdiff.py --so-em-uso --marcas-vivas` e `roteiros.py memoria`: o heap em uso no lugar (180 blocos nas lutas, 133 nas
+Opções), cada bloco vivo com arquivo ou conteúdo convertido conforme número a número (16 ou 17 nas lutas: os quatro
+arquivos comuns, a HUD, o cenário, os três arquivos de cada lutador, os rostos, a folha de carregamento; 6 nas Opções,
+com o menu principal), e cada palavra "diferente" fora deles explicada:
+
+| Onde | O que é | Por quê |
+|---|---|---|
+| heap#0 +0x290 (`SndMgr.iopBuf`) | ponteiro do host | `calloc` em 32 bits, outro em cada build |
+| heap#21 +0x34 (`SaveData.unk0`, `unk4`) | a soma do save | `McCard_Checksum` sobre os bytes de números nativos |
+| `gColWalkBox`, `gColWalkCtx` | ponteiros para a pilha do host | `ColMesh_WalkBox` guarda o endereço de locais (gravado, nunca lido) |
+| `gPortDataStripped` | estado das tabelas do executável | a PPC liga o esqueleto (decisão 13) |
+| `gSndRpcBuf` +0 | a metade alta do count u32 da fila de som sob o s16 do RPC 0xF | união s32/s16; ninguém lê |
+| `gPortMoviePath`, `gPortAdxView`, `sMc` | caminhos do host | `BT3_DATA` e `BT3_SAVES` diferentes nas duas rodadas |
+| heap#24 e #25 (pacotes da GPU), só no Time | `uv0.pad`, `uv1.pad` e `nop` do `GfxPostSpritePkt` | o pacote de sprite é um local copiado inteiro (`StgPanBlur_DrawView`) com esses campos nunca iniciados: lixo da pilha em bits que o GS ignora; sem nenhuma palavra das classes de troca de ordem de um pacote |
+
+Fora da lista e sem ser diferença: `misto` (u8, u8 e u16 na mesma palavra: o `FontIconDef` e o `FlashTl` que a F3
+já explicou pelo `campos.py`, e nos objetos e pools da luta; 38 a 64), `float-proximo` (8, os `cosf`/`sinf` do `EftGlow_BuildTables`: a libm do host, F2) e as classes de
+largura que a F1 e a F3 já explicaram.
+
+Duas diferenças reais que essa comparação achou, corrigidas na 5b: o `McCardIconSys.titleBreak` (o `McFlowReq` guarda
+um s32 e o `McCardFile` lê u16; no big-endian vinha 0: `PS2_LOW` em `src/battle/stgm_a_b.c`) e o `mark` que a HUD grava
+na folha do rosto do lutador (entrada 1 do file[0], vista `HudCTex`; `personagem.md` 4.4).
+
+Visto falhando: numa cópia das saídas do Duelo com um u32 do 00001 sem troca e uma palavra do `BtlObjWork` estragada
+no dump da PPC, o `roteiros.sh` (`REUSA=1`) sai com 1 ("fora-do-formato 1", "heap#14+0x100 diferente e não explicado",
+"heap#31+0x202c ..."); o `roteiros.py memoria` com saídas forjadas acusa marca fora do formato, bloco fora do lugar,
+memdiff com erro ou cortado, deslocamento ou global fora da lista, trecho não listado e pacote com palavra `u64`. Os
+conversores das telas, sobre cópias estragadas dos conteúdos no WSL: N errado, filme sem "FOD", 10 estágios, 170
+células, aula sem `TRAIN_LESSON_LAST`, página fora dos arquivos, fundo com 3 registros, retrato como fundo, as Opções
+como Duelo: todos saem com erro e o nome da seção.
 
 ## 9. Hipóteses e o que fica aberto
 
