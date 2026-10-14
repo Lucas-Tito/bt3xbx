@@ -17,5 +17,19 @@ void Conv_Dialogo(ConvCtx *c, conv_ofs a, conv_ofs b); /* menus.md 6: arquivo de
 void Conv_JanelaMsg(ConvCtx *c, conv_ofs a, conv_ofs b);   /* 2: MsgWin_Init */
 void Conv_JanelaIcone(ConvCtx *c, conv_ofs a, conv_ofs b); /* 3: IconWin_Init */
 void Conv_LipPack(ConvCtx *c, conv_ofs a, conv_ofs b);     /* 4: Voice_PlayWithSubtitle, LipSync_Start */
+void Conv_ItemPanel(ConvCtx *c, conv_ofs a, conv_ofs b);   /* 5.1: ItemPanel_Init */
+void Conv_ItemHelp(ConvCtx *c, conv_ofs a, conv_ofs b);    /* 5.2: ItemHelp_Init */
+/* 5.3: lista de ids (contagem em +0, ids em +0x10), com a contagem mínima e o maior id que o leitor aceita */
+void Conv_ListaIdsFaixa(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo, conv_u32 teto);
+void Conv_ListaIds(ConvCtx *c, conv_ofs a, conv_ofs b);            /* sem limites (Treino) */
+void Conv_ListaEstagios(ConvCtx *c, conv_ofs a, conv_ofs b);       /* seleção 39 */
+void Conv_ListaMusicas(ConvCtx *c, conv_ofs a, conv_ofs b);        /* seleção 56 */
+void Conv_ListaMusicasOpcoes(ConvCtx *c, conv_ofs a, conv_ofs b);  /* Opções 37 */
+void Conv_Celulas(ConvCtx *c, conv_ofs a, conv_ofs b);     /* 5.4: ChrGrid_Build */
+/* 5.5: subpacote de TexFile; esperado = N exato (0: qualquer) */
+void Conv_SubpacoteTexN(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 esperado);
+void Conv_SubpacoteTex(ConvCtx *c, conv_ofs a, conv_ofs b);
+void Conv_FichasPersonagem(ConvCtx *c, conv_ofs a, conv_ofs b);    /* 165 subseções */
+void Conv_IconesEstagio(ConvCtx *c, conv_ofs a, conv_ofs b);       /* 38 subseções */
 
 #endif

@@ -19,6 +19,9 @@
  * campo a campo, pela largura de cada número, em vez de palavra a palavra.
  * Um ARQUIVO "pzs3us1/00449.bin@0x40#bpe" (o nome que o rastreio dá) é o contêiner BPE nesse deslocamento do arquivo,
  * descomprimido aqui e convertido com o formato que o chamador do jogo aplica (formato_bpe), sem --saida.
+ *   conv_tool --pecas DADOS [--mapa MAPA.tsv]   as peças comuns dos menus (menus-pecas.md), cada uma só na seção dela
+ *                                  dentro do conteúdo descomprimido de cada pacote que a usa (a tabela sUsos), antes
+ *                                  de o pacote inteiro ganhar conversor; com --mapa, só as posições dessas seções
  * Sai com 1 se algum arquivo deu erro ou discordou do mapa.
  */
 #include <stdio.h>
@@ -27,6 +30,7 @@
 #include <sys/stat.h>
 
 #include "conv.h"
+#include "conv_menus.h"
 
 typedef struct Trecho { unsigned long ofs, n; int w; } Trecho;
 
@@ -217,6 +221,78 @@ static const char *formato_bpe(const char *rel, const conv_u8 *arq, long tam, un
     return Conv_FormatoSecao(rel, secao_de(rel, arq, tam, ofs));
 }
 
+/* Uma leitura de w bytes no meio de uma cadeia de texto que o conversor deixou em bytes: o rastreio vê o laço que
+   procura o fim do rótulo de um quadro do Flash (FlashTl_RunFrame, `while (frame[ofs++] != 0)`, que o compilador da
+   x86r pode trocar por strlen) e as cópias de nome (Flash_ReadString, memcpy do tamanho da cadeia) como leituras de 2,
+   4 ou 8 bytes, e o mapa as dá como número. É cadeia quando os w bytes estão marcados como byte e são todos texto
+   imprimível ou o zero do fim. Contados à parte na linha "contra o mapa", nunca em silêncio. */
+static int cadeia_lida(const conv_u8 *buf, const conv_u8 *feito, unsigned long tam, unsigned long a, int w) {
+    int k;
+    if (a + (unsigned long)w > tam) {
+        return 0;
+    }
+    for (k = 0; k < w; k++) {
+        conv_u8 x = buf[a + k];
+        if (feito[a + k] != CONV_BYTE || !((x >= 0x20 && x < 0x7F) || (x == 0 && k > 0))) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* confere a marcação contra o rastreio (--mapa): cada posição que o jogo leu como número de largura w, dentro de
+   [ini, fim), tem de ter sido trocada com largura w (ou ser uma cadeia lida por inteiro, cadeia_lida). Imprime a linha
+   "contra o mapa" e devolve 1 se discordou */
+static int contra_mapa(const char *rel, const conv_u8 *buf, const conv_u8 *feito, unsigned long tam, unsigned long ini,
+                       unsigned long fim) {
+    unsigned n, t;
+    unsigned long certo = 0, outra = 0, sem = 0, vistos = 0, fora = 0, cadeias = 0;
+    int mostrados = 0;
+    Trecho *tr = ler_mapa(mapa, rel, &n);
+    for (t = 0; t < n; t++) {
+        unsigned long j;
+        for (j = 0; j < tr[t].n; j++) {
+            unsigned long a = tr[t].ofs + j * (unsigned long)tr[t].w;
+            const char *oque = NULL;
+            if (a < ini || a >= fim) {
+                continue;
+            }
+            vistos++;
+            if (a >= tam) {
+                fora++;
+                continue;
+            }
+            if (feito[a] == tr[t].w) {
+                certo++;
+                continue;
+            }
+            if (cadeia_lida(buf, feito, tam, a, tr[t].w)) {
+                cadeias++;
+                continue;
+            }
+            if (feito[a] == 2 || feito[a] == 4 || feito[a] == 8) {
+                outra++;
+                oque = "trocou com outra largura";
+            } else {
+                sem++;
+                oque = feito[a] == CONV_LIVRE ? "não reconheceu" : feito[a] == CONV_BYTE ? "tratou como byte" :
+                                                                        "no meio de outro número";
+            }
+            if (mostrados++ < detalhe) {
+                printf("    0x%lX: rastreio leu %d, conversor marca %u (%s)\n", a, tr[t].w, (unsigned)feito[a], oque);
+            }
+        }
+    }
+    printf("  contra o mapa: %lu posições; %lu iguais, %lu com outra largura, %lu não trocadas%s", vistos, certo, outra,
+           sem, fora ? " (e algumas fora do arquivo)" : "");
+    if (cadeias) {
+        printf("; %lu em cadeia de texto lida por inteiro", cadeias);
+    }
+    printf("\n");
+    free(tr);
+    return outra || sem;
+}
+
 /* converte e confere um arquivo; devolve 1 se falhou */
 static int um(const char *dados, const char *rel) {
     int falhas = 0;
@@ -279,43 +355,7 @@ static int um(const char *dados, const char *rel) {
         falhas++;
     }
     if (mapa != NULL) {
-        unsigned n, t;
-        unsigned long certo = 0, outra = 0, sem = 0, vistos = 0, fora = 0;
-        int mostrados = 0;
-        Trecho *tr = ler_mapa(mapa, rel, &n);
-        for (t = 0; t < n; t++) {
-            unsigned long j;
-            for (j = 0; j < tr[t].n; j++) {
-                unsigned long a = tr[t].ofs + j * (unsigned long)tr[t].w;
-                const char *oque = NULL;
-                vistos++;
-                if (a >= (unsigned long)tam) {
-                    fora++;
-                    continue;
-                }
-                if (feito[a] == tr[t].w) {
-                    certo++;
-                    continue;
-                }
-                if (feito[a] == 2 || feito[a] == 4 || feito[a] == 8) {
-                    outra++;
-                    oque = "trocou com outra largura";
-                } else {
-                    sem++;
-                    oque = feito[a] == CONV_LIVRE ? "não reconheceu" : feito[a] == CONV_BYTE ? "tratou como byte" :
-                                                                            "no meio de outro número";
-                }
-                if (mostrados++ < detalhe) {
-                    printf("    0x%lX: rastreio leu %d, conversor marca %u (%s)\n", a, tr[t].w, (unsigned)feito[a], oque);
-                }
-            }
-        }
-        printf("  contra o mapa: %lu posições; %lu iguais, %lu com outra largura, %lu não trocadas%s\n", vistos,
-               certo, outra, sem, fora ? " (e algumas fora do arquivo)" : "");
-        if (outra || sem) {
-            falhas++;
-        }
-        free(tr);
+        falhas += contra_mapa(rel, buf, feito, (unsigned long)tam, 0, (unsigned long)tam);
     }
     if (marcas != NULL && r > 0) {
         char *q;
@@ -496,9 +536,137 @@ static int faixas_conferidas(void) {
     return erros == 0;
 }
 
+/* --pecas (F4, etapa 5a): as peças comuns dos menus (docs/x360/formatos/menus-pecas.md) validadas sozinhas, antes de
+   o pacote de tela que as contém ganhar conversor. Para cada uso da tabela abaixo (arquivo, seção do pacote externo ou
+   0 para o contêiner no começo, seção do conteúdo descomprimido, peça), em cada arquivo da faixa: descomprime, aplica
+   a peça só à seção dela e diz a cobertura dela; com --mapa, confere as posições do rastreio que caem nessa seção
+   (o nome do conteúdo é o do rastreio, "pzs3us1/00448.bin@0x40#bpe"). Os usos vêm da tabela de uso por pacote de
+   menus-pecas.md (seções 1 e 5); as peças das telas fora do caminho essencial entram também, para o disco dizer já
+   o que as especificações ainda não cobrem. */
+static const struct { const char *nome; ConvFn fn; } sPecas[] = {
+    {"JanelaMsg", Conv_JanelaMsg}, {"JanelaIcone", Conv_JanelaIcone}, {"LipPack", Conv_LipPack},
+    {"Textos", Conv_Textos}, {"Flash", Conv_Flash}, {"Dialogo", Conv_Dialogo},
+    {"ItemPanel", Conv_ItemPanel}, {"ItemHelp", Conv_ItemHelp}, {"ListaIds", Conv_ListaIds},
+    {"ListaEstagios", Conv_ListaEstagios}, {"ListaMusicas", Conv_ListaMusicas},
+    {"ListaMusicasOpcoes", Conv_ListaMusicasOpcoes}, {"Celulas", Conv_Celulas},
+    {"FichasPersonagem", Conv_FichasPersonagem}, {"IconesEstagio", Conv_IconesEstagio},
+};
+typedef struct UsoPeca { int ini, fim, secao, sub; const char *peca; } UsoPeca;
+static const UsoPeca sUsos[] = {
+    /* caminho essencial: Duelo (448 s1), seleção (448 s2 e 461 s2), Treino (461 s1), Opções (453 s1) */
+    {448, 448, 1, 21, "Textos"}, {448, 448, 1, 22, "JanelaMsg"}, {448, 448, 1, 23, "JanelaIcone"},
+    {448, 448, 1, 25, "Dialogo"}, {448, 448, 1, 26, "LipPack"}, {448, 448, 1, 27, "Textos"},
+    {448, 448, 1, 19, "Flash"},
+    {448, 448, 2, 39, "ListaEstagios"}, {448, 448, 2, 42, "Celulas"}, {448, 448, 2, 43, "Textos"},
+    {448, 448, 2, 44, "Textos"}, {448, 448, 2, 45, "FichasPersonagem"}, {448, 448, 2, 46, "IconesEstagio"},
+    {448, 448, 2, 51, "ItemHelp"}, {448, 448, 2, 53, "ItemPanel"}, {448, 448, 2, 54, "JanelaIcone"},
+    {448, 448, 2, 56, "ListaMusicas"},
+    {461, 461, 2, 39, "ListaEstagios"}, {461, 461, 2, 42, "Celulas"}, {461, 461, 2, 43, "Textos"},
+    {461, 461, 2, 44, "Textos"}, {461, 461, 2, 45, "FichasPersonagem"}, {461, 461, 2, 46, "IconesEstagio"},
+    {461, 461, 2, 51, "ItemHelp"}, {461, 461, 2, 53, "ItemPanel"}, {461, 461, 2, 54, "JanelaIcone"},
+    {461, 461, 2, 56, "ListaMusicas"},
+    {461, 461, 1, 1, "Flash"}, {461, 461, 1, 10, "JanelaIcone"}, {461, 461, 1, 11, "JanelaMsg"},
+    {461, 461, 1, 12, "LipPack"}, {461, 461, 1, 13, "LipPack"}, {461, 461, 1, 14, "Textos"},
+    {461, 461, 1, 15, "Textos"}, {461, 461, 1, 16, "Textos"}, {461, 461, 1, 17, "Textos"},
+    {461, 461, 1, 24, "ListaIds"}, {461, 461, 1, 26, "ListaIds"},
+    {453, 453, 1, 8, "Flash"}, {453, 453, 1, 31, "JanelaMsg"}, {453, 453, 1, 32, "JanelaIcone"},
+    {453, 453, 1, 33, "Textos"}, {453, 453, 1, 35, "Dialogo"}, {453, 453, 1, 36, "LipPack"},
+    {453, 453, 1, 37, "ListaMusicasOpcoes"}, {453, 453, 1, 38, "Textos"},
+    /* os outros modos (etapa 9): EntrySel (450 s2), SoloSel e UbTeamSel (451 s4), MisSel (451 s2), SimTop (451 s5),
+       Loja e EvoZ (452 s2, s3), chave do torneio (454..458), Data Center (459 s2..s4), ranking e cursos do Disc
+       Fusion (475, 476) */
+    {450, 450, 2, 29, "Celulas"}, {450, 450, 2, 32, "FichasPersonagem"}, {450, 450, 2, 35, "ItemHelp"},
+    {450, 450, 2, 39, "ItemPanel"},
+    {451, 451, 4, 22, "ItemPanel"}, {451, 451, 4, 24, "ItemHelp"}, {451, 451, 4, 27, "FichasPersonagem"},
+    {451, 451, 4, 30, "Celulas"}, {451, 451, 2, 15, "FichasPersonagem"}, {451, 451, 5, 7, "FichasPersonagem"},
+    {452, 452, 2, 25, "ItemHelp"}, {452, 452, 3, 2, "ItemHelp"}, {452, 452, 3, 33, "Celulas"},
+    {452, 452, 3, 36, "FichasPersonagem"},
+    {454, 458, 0, 23, "FichasPersonagem"}, {454, 458, 0, 24, "Celulas"},
+    {459, 459, 2, 16, "ItemHelp"}, {459, 459, 3, 20, "Celulas"}, {459, 459, 4, 8, "FichasPersonagem"},
+    {475, 475, 0, 6, "FichasPersonagem"}, {476, 476, 0, 6, "FichasPersonagem"},
+};
+
+static int pecas(const char *dados) {
+    unsigned u, k;
+    int ok = 0, erros = 0, i;
+    for (u = 0; u < sizeof(sUsos) / sizeof(sUsos[0]); u++) {
+        ConvFn fn = NULL;
+        for (k = 0; k < sizeof(sPecas) / sizeof(sPecas[0]); k++) {
+            if (strcmp(sPecas[k].nome, sUsos[u].peca) == 0) {
+                fn = sPecas[k].fn;
+            }
+        }
+        if (fn == NULL) {
+            printf("--pecas: peça %s sem função\n", sUsos[u].peca);
+            erros++;
+            continue;
+        }
+        for (i = sUsos[u].ini; i <= sUsos[u].fim; i++) {
+            char arqrel[64], rel[96];
+            long tarq, tam;
+            unsigned long ofs = 0, n, a, b, cob = 0, j;
+            conv_u8 *arq, *buf, *feito;
+            ConvCtx c;
+            sprintf(arqrel, "pzs3us1/%05d.bin", i);
+            arq = ler_arquivo(dados, arqrel, &tarq);
+            if (arq == NULL) {
+                printf("%s: não abre\n", arqrel);
+                erros++;
+                continue;
+            }
+            if (sUsos[u].secao > 0) {
+                ofs = (unsigned long)(sUsos[u].secao + 1) * 4 <= (unsigned long)tarq ? le32(arq + sUsos[u].secao * 4) : 0;
+            }
+            sprintf(rel, "%s@0x%lX#bpe", arqrel, ofs);
+            buf = descomprimir(arq, tarq, ofs, &tam);
+            free(arq);
+            if (buf == NULL) {
+                printf("%s: BPE inválido\n", rel);
+                erros++;
+                continue;
+            }
+            n = tam >= 4 ? le32(buf) : 0;
+            if (sUsos[u].sub > (int)n || (unsigned long)(sUsos[u].sub + 2) * 4 > (unsigned long)tam) {
+                printf("%s seção %d (%s): o conteúdo tem %lu seções\n", rel, sUsos[u].sub, sUsos[u].peca, n);
+                free(buf);
+                erros++;
+                continue;
+            }
+            a = le32(buf + sUsos[u].sub * 4) >> 2 << 2; /* MPACK_AT */
+            b = le32(buf + (sUsos[u].sub + 1) * 4);
+            if (a > b || b > (unsigned long)tam) {
+                printf("%s seção %d (%s): 0x%lX..0x%lX fora do conteúdo\n", rel, sUsos[u].sub, sUsos[u].peca, a, b);
+                free(buf);
+                erros++;
+                continue;
+            }
+            feito = calloc((size_t)tam + 1, 1);
+            Conv_Iniciar(&c, rel, buf, (conv_ofs)tam, feito);
+            fn(&c, (conv_ofs)a, (conv_ofs)b);
+            for (j = a; j < b; j++) {
+                cob += feito[j] != CONV_LIVRE;
+            }
+            printf("%s seção %d (%s): %s; cobertura %lu de %lu bytes (%.1f%%)\n", rel, sUsos[u].sub, sUsos[u].peca,
+                   c.erro ? c.msg : "convertido", cob, b - a, b > a ? 100.0 * cob / (b - a) : 100.0);
+            if (c.erro || cob != b - a) {
+                erros++;
+            } else {
+                ok++;
+            }
+            if (mapa != NULL) {
+                erros += contra_mapa(rel, buf, feito, (unsigned long)tam, a, b);
+            }
+            free(feito);
+            free(buf);
+        }
+    }
+    printf("peças: %d usos convertidos sem erro, %d com erro\n", ok, erros);
+    return erros;
+}
+
 int main(int argc, char **argv) {
     const char *dados = NULL;
-    int i, falhas = 0, disco = 0;
+    int i, falhas = 0, disco = 0, so_pecas = 0;
     if (!faixas_conferidas()) {
         return 1;
     }
@@ -515,6 +683,8 @@ int main(int argc, char **argv) {
             detalhe = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--disco") == 0) {
             disco = 1;
+        } else if (strcmp(argv[i], "--pecas") == 0) {
+            so_pecas = 1;
         } else if (dados == NULL) {
             dados = argv[i];
         } else {
@@ -522,9 +692,12 @@ int main(int argc, char **argv) {
         }
     }
     if (dados == NULL) {
-        fprintf(stderr, "uso: conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--marcas DIR] [--detalhe N] [--disco] DADOS "
+        fprintf(stderr, "uso: conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--marcas DIR] [--detalhe N] [--disco] [--pecas] DADOS "
                         "ARQUIVO...\n");
         return 2;
+    }
+    if (so_pecas) {
+        falhas += pecas(dados);
     }
     if (disco) {
         int p, n, ok = 0, erros = 0;

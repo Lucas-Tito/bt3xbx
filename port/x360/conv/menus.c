@@ -387,9 +387,9 @@ void Conv_Flash(ConvCtx *c, conv_ofs a, conv_ofs b) {
 
 /* §6.4: tabela de textos (Dialog_GetTitleTable, DIALOG_TEXT): a tabela de §2.1 e um texto u16 por entrada */
 void Conv_Textos(ConvCtx *c, conv_ofs a, conv_ofs b) {
-    static conv_u32 ent[0x100 + 2];
+    static conv_u32 ent[0x400 + 2]; /* os textos de item têm um por item (SAVE_ITEM_COUNT = 350; menus-pecas.md 5.1) */
     conv_u32 n, i;
-    n = Conv_Tabela(c, a, b - a, ent, 0x100);
+    n = Conv_Tabela(c, a, b - a, ent, 0x400);
     for (i = 1; i <= n && !c->erro; i++) {
         Conv_Texto(c, a + ent[i], a + ent[i + 1]);
         Conv_Onde(c, "texto %lu", (unsigned long)i);
