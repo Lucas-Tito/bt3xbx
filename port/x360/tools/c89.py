@@ -43,6 +43,10 @@ def renomes(f):
         return ["-Dmain=__real_main", "-DProgress_Main=__wrap_Progress_Main"]
     if rel == "src/menu/menu_a_b.c":
         return ["-DProgress_Main=__real_Progress_Main"]
+    if rel == "src/battle/battle.c":
+        # o golpe do passo "termina luta" dos roteiros (port/x360/headless/roteiro.c, F4 etapa 9a; headless.py:
+        # --wrap=BtlChars_SampleInput): só a chamada do Battle_Loop passa pelo embrulho, que chama a original
+        return ["-DBtlChars_SampleInput=__wrap_BtlChars_SampleInput"]
     return []
 
 

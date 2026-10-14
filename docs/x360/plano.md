@@ -847,8 +847,37 @@ da 9a no WSL serviram de entrada):
    Risco baixo (o conteúdo convertido as marcas conferem); anotado na descrição da classe no `roteiros.py`. Apertar
    (teto pelo maior conteúdo de cada dono, ou a classe restrita à tela) fica para a 9b, quando esses modos entram.
 5. **As telas 8 a 10 da História no console** (P1): o `HistResult`, o `HistOutro` e o `HistSave` só se veem no
-   console jogando a luta à mão ou pelo atalho do `termina luta` no 360 (abaixo, tarefa do atalho); o roteiro
-   `historia` sem o atalho para no passo com erro.
+   console jogando a luta à mão ou pelo atalho do `termina luta` no 360 (item 6); antes dele o roteiro `historia`
+   parava no passo com erro.
+6. **O atalho `termina luta` no 360, como opção** (decisão do Lucas, pergunta 2 da 9a). O link do XDK não tem `--wrap`;
+   o mesmo embrulho entra pela preparação, como o do `main` e do `Progress_Main`: o `c89.py` (`renomes`) compila só o
+   `src/battle/battle.c` com `-DBtlChars_SampleInput=__wrap_BtlChars_SampleInput` (a chamada do `Battle_Loop`), e o
+   `__wrap_BtlChars_SampleInput` do `roteiro.c` passa a existir também no 360, chamando a original pelo nome
+   (`#ifdef PORT_X360`). O erro "só nas builds sem janela" saiu. O golpe só nasce no passo, depois das mesmas
+   proteções do PC (`BT3_DESBLOQUEIO=1` e o cartão sem save no começo da rodada); sem roteiro, o embrulho só compara
+   o pedido e volta. Nada muda no upstream, e a `.text` da x86 continua `415d1c7bfcd86798ef3f7d3f62bd926ba3dee3f1`
+   (compilada no WSL num clone à parte, `headless.py --alvo x86`, com todas as mudanças desta revisão). O 360 compila
+   com os mesmos 103 stubs e o `chamadores_bl` passa (81 chamadas em 62 funções); no `c89/battle_battle.c` a chamada
+   é `__wrap_BtlChars_SampleInput()`, e o `default.map` tem o embrulho no `hl_roteiro.obj` e a original no
+   `battle_btl_char_mgr.obj`. **Pendente: o teste no console**, quando ele voltar:
+   1. `port/x360/tools/build_f2.sh` deste commit em diante; subir o `default.xex` e os roteiros (`subir.py --destino
+      /Hdd1/HOMEBREW/bt3xbx/roteiros port/x360/roteiros/*.txt`).
+   2. No `ambiente.txt`: `BT3_ROTEIRO=game:\roteiros\historia.txt`, `BT3_DESBLOQUEIO=1` e `BT3_SAVES=game:\saves18`
+      (pasta nova e vazia; listar antes); sem `BT3_GS=gpu` (a luta sem desenho: com o D3D9 ela esgota a memória, o
+      primeiro item da F5) e sem `BT3_ATE`.
+   3. Abrir o `.xex`. O `bt3xbx.log` tem de ter, em ordem: as telas 6 e 7, a luta, "roteiro: historia.txt:20
+      derrubado lado 1", "roteiro: historia.txt:20 luta terminada (vence)", a tela 8, a tela 9, "ok saga 0", a tela
+      10, os `mcflow` do "salvar?" até o 0, o segundo "ok saga 0", a tela 6 e o "fim"; nenhuma falha nem tela vermelha.
+      Com `BT3_DESBLOQUEIO` faltando ou um save em `saves18`, o log tem de dizer o erro do `so_teste` (vale como a
+      prova de falha no console).
+   4. O rastro: `roteiros.py telas` sobre o log contra a referência do WSL (`~/referencias/historia.telas`, 63
+      linhas), com `roteiros.py compara`: igual.
+   5. O save: `save_console.sh baixa saves18 build/saves/historia_console`, `save_console.sh traz-wsl
+      ../roteiros/historia/sq build/saves/historia_ppc` (o cartão da PPC sem mapa da rodada `historia`, enquanto ele
+      estiver lá) e `save_console.sh confere build/saves/historia_console build/saves/historia_ppc`: esperado
+      "idênticos", com o fim da saga 0 (flags 0x1d no slot 0). Diferença só no `item[]` é o desbloqueio noutro quadro.
+   6. Opcional, com `BT3_GS=gpu` e o `BT3_SHOT_LISTA` dos quadros das telas 8 a 10: as capturas contra as imagens da
+      9a. Se a luta travar por memória, é o item da F5, não o atalho.
 
 ## 6. Riscos principais
 

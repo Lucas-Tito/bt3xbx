@@ -155,7 +155,7 @@ controle do jogador 1 (não um vblank: o Shenlong, a 30 quadros por segundo, lê
 | `desbloqueia` | `Save_UnlockAll` do próprio jogo (o da aba de truques da janela do PC): todo personagem, estágio, música, item e as sete esferas. Só com `BT3_DESBLOQUEIO=1` e com o cartão vazio no começo da rodada (sem o arquivo de dados do save em `BT3_SAVES`, que no 360 é `game:\saves`): fora disso o roteiro para com erro, para o desbloqueio nunca ir para um save de verdade |
 | `confere som N` | o som do save em memória (`gSaveData->soundMode`: 0 estéreo, 1 mono) igual a N, ou falha com arquivo e linha |
 | `confere saga N` | (F4, etapa 9a) o fim da saga N da História visto no save em memória (`MSLOT_OUTRO_SEEN`, o valor 4, bit 2, de `gSaveData->slot[N].flags`, que o `HistOutro_Init` grava e o `HistSave` leva ao cartão). Com `SEMMAPA=1` o `roteiros.sh` confere também o arquivo do cartão das duas builds (`roteiros.py save`) |
-| `termina luta` [`vence`\|`perde`] [`max Q`] | (F4, etapa 9a) termina a luta que está andando pelo caminho do próprio jogo: espera o estado 3 da sequência da luta (`BtlSeqFight`) e derruba o lutador ativo do lado que perde (`vence`, o padrão: o lado 1; `perde`: o 0) com o dano do jogo (`BtlMember_Damage` com a vida inteira, que levanta os eventos de KO 0x4A e 0x48); o jogo decide o resto: no Duelo e nos outros modos o `BtlSeq_CheckBattleEnd` grava o vencedor por KO; na História (modo 1, em que o KO não se confere sozinho) o roteiro de evento do episódio dispara com o KO e grava o resultado (comando 9, `BtlFacade_SetResult`). Num time, derruba cada membro que entra. Termina quando a sequência sai do 3 (o anúncio do fim); mais de Q quadros (6000) é falha. Só nas builds sem janela (o golpe sai por `--wrap` no `BtlChars_SampleInput`, seção 6) e com as mesmas proteções do `desbloqueia` |
+| `termina luta` [`vence`\|`perde`] [`max Q`] | (F4, etapa 9a) termina a luta que está andando pelo caminho do próprio jogo: espera o estado 3 da sequência da luta (`BtlSeqFight`) e derruba o lutador ativo do lado que perde (`vence`, o padrão: o lado 1; `perde`: o 0) com o dano do jogo (`BtlMember_Damage` com a vida inteira, que levanta os eventos de KO 0x4A e 0x48); o jogo decide o resto: no Duelo e nos outros modos o `BtlSeq_CheckBattleEnd` grava o vencedor por KO; na História (modo 1, em que o KO não se confere sozinho) o roteiro de evento do episódio dispara com o KO e grava o resultado (comando 9, `BtlFacade_SetResult`). Num time, derruba cada membro que entra. Termina quando a sequência sai do 3 (o anúncio do fim); mais de Q quadros (6000) é falha. O golpe sai no `BtlChars_SampleInput` (seção 6): por `--wrap` nas builds sem janela e, no 360, pela renomeação da chamada no `battle.c` (`c89.py`, `renomes`); com as mesmas proteções do `desbloqueia` |
 | `marca TEXTO` | uma linha no rastro; `marca memoria NNNNN` pede ao `roteiros.sh` (`SEMMAPA=1`) a memória das duas builds naquele vblank, com o conteúdo do arquivo NNNNN da partição 1 (um contêiner BPE inteiro: retrato, estágio, página) vivo e conforme |
 | `inclui ARQUIVO` | outro roteiro, relativo à pasta deste |
 | `fim` | sem janela, encerra o programa (saída 0); no 360, solta o controle |
@@ -188,8 +188,12 @@ de uma luta terminada (o resultado e o save da História; na 9b e na 9c, Missão
 luta começa e anda pelo roteiro como qualquer outra, e o passo derruba o adversário pelo dano do jogo, sem tocar no
 código do jogo nem do port (`port/x360/headless/roteiro.c` e o `--wrap` do `headless.py`). Fica fora do jogo normal
 como o `desbloqueia`: sem `BT3_ROTEIRO` o roteiro nem existe, sem `BT3_DESBLOQUEIO=1` o passo para o roteiro com erro,
-e com um save no cartão no começo da rodada também (a vitória iria para o save de verdade). No 360 o passo para com erro
-(o golpe precisa do `--wrap`, que o link do XDK não tem).
+e com um save no cartão no começo da rodada também (a vitória iria para o save de verdade). No 360, onde o link do XDK
+não tem `--wrap`, o mesmo embrulho entra pela preparação: o `c89.py` compila o `src/battle/battle.c` com
+`-DBtlChars_SampleInput=__wrap_BtlChars_SampleInput` (a única chamada, a do `Battle_Loop`, e a declaração do header
+dentro dele), e o `roteiro.c` chama a original pelo nome (`#ifdef PORT_X360`), como já se fazia com o `main` e o
+`Progress_Main`. O upstream não muda, e a `.text` da x86 também não (o `roteiro.c` da x86 sai igual depois do
+pré-processador). Sem o passo, o embrulho só compara o pedido (`sDerruba`) e volta.
 
 **Como escrever um roteiro novo** sem ver a tela: rode-o na x86 sob o gdb com um `break *Snd_PlaySe` (cada aperto que
 o jogo aceita toca um efeito: 1 0 mover, 1 1 confirmar, 1 2 voltar, 1 7 recusado) e um `break *Sprite_Unpack` com
@@ -798,7 +802,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     roda) vem antes do `Battle_UpdateWork`, que gira os eventos ("agora" vira "anterior"), e o roteiro de evento
     (`BtlScript_Update`, no começo do quadro seguinte) só dispara com evento novo: o KO dado ali nunca disparou nada, e o
     passo esgotou os 6000 quadros com o adversário caído. O golpe sai depois do giro e antes do `Battle_Update`, onde o
-    jogo dá os seus: `--wrap` no `BtlChars_SampleInput` (`headless.py`, `roteiro.c`). Antes de mexer no estado do jogo
+    jogo dá os seus: `--wrap` no `BtlChars_SampleInput` (`headless.py`, `roteiro.c`; no 360, que não tem `--wrap`,
+    a chamada renomeada só no `battle.c` pelo `c89.py`: **um `--wrap` de uma chamada que vem de outro objeto vira, no
+    link da Microsoft, um `-D` só nesse objeto**, sem tocar no código). Antes de mexer no estado do jogo
     de fora, veja em que ponto do quadro o seu código roda e quem consome o que você muda (aqui, a ordem do
     `Battle_Loop`, battle.c).
   - **Palavra lida com duas larguras no próprio arquivo:** o roteiro de evento (GSCF, `gsc.c`) lê cada palavra como u32

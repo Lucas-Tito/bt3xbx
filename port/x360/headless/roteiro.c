@@ -667,16 +667,12 @@ static unsigned quadro(void) {
                andamento, que não existe, e a x86 caiu. O golpe não pode sair daqui (a leitura do controle, no
                Pad_Update): os eventos levantados ali giram para "anteriores" no Battle_UpdateWork do mesmo quadro, e
                o roteiro de evento (BtlScript_Update, no começo do quadro seguinte) só vê os novos. Ele sai depois do
-               giro, onde o jogo dá os golpes: no BtlChars_SampleInput (--wrap, abaixo), logo antes do Battle_Update.
+               giro, onde o jogo dá os golpes: no BtlChars_SampleInput (--wrap nas builds sem janela; no 360, a
+               renomeação da chamada no battle.c pelo c89.py; abaixo), logo antes do Battle_Update.
                Espera a luta andar (o estado 3 da sequência); enquanto ela estiver no 3, derruba o ativo do lado que
                perde que estiver de pé (de novo o próximo membro de um time); termina quando a sequência sai do 3 (o
                anúncio do fim). "vence": cai o lado 1; "perde": o 0 */
             so_teste(p, "termina luta");
-#ifdef PORT_X360
-            sprintf(s, "%s: termina luta só nas builds sem janela (o golpe sai por --wrap no BtlChars_SampleInput)",
-                    p->onde);
-            falha(s);
-#endif
             if (gPortMenuMode || gBtlSeq == NULL || gBtlSeq->state < BTL_SEQ_LUTANDO) {
                 if (p->n) { /* (já derrubou e a luta saiu: não acontece, a sequência passa pelo 4) */
                     p->n = 0;
@@ -769,11 +765,19 @@ int Roteiro_Pad(int socket, unsigned char *data) {
     return 18;
 }
 
-#ifndef PORT_X360
 /* O golpe do passo "termina luta" (acima): no quadro do jogo, depois do giro dos eventos (Battle_UpdateWork) e logo
    antes do Battle_Update, onde o jogo dá os seus. Entra por --wrap no BtlChars_SampleInput (chamado do Battle_Loop,
-   src/battle/battle.c, outro objeto; headless.py); sem roteiro, ou sem pedido, só chama o original. */
+   src/battle/battle.c, outro objeto; headless.py); sem roteiro, ou sem pedido, só chama o original. No 360 o link do
+   XDK não tem --wrap: o c89.py (renomes) compila o battle.c com BtlChars_SampleInput renomeada para
+   __wrap_BtlChars_SampleInput, e o original é chamado pelo próprio nome. O pedido (sDerruba) só nasce no passo
+   "termina luta", depois do so_teste (BT3_DESBLOQUEIO=1 e o cartão vazio no começo): sem ele, uma comparação por
+   quadro e nada mais. */
+#ifdef PORT_X360
+void BtlChars_SampleInput(void);
+#define __real_BtlChars_SampleInput BtlChars_SampleInput
+#else
 void __real_BtlChars_SampleInput(void);
+#endif
 void __wrap_BtlChars_SampleInput(void) {
     char s[200];
     __real_BtlChars_SampleInput();
@@ -785,4 +789,3 @@ void __wrap_BtlChars_SampleInput(void) {
     sprintf(s, "roteiro: %s derrubado lado %d vblank %u quadro %u", sDerrubaOnde, sDerruba, gPortVBlanks, sQuadro);
     diz(s);
 }
-#endif

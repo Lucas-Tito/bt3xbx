@@ -17,7 +17,7 @@ repete ate luta max 6000          # o primeiro episódio e a apresentação dele
     quadros 150
 volta
 quadros 60
-termina luta vence                # o lado 0 vence por KO (BtlFacade_SetResult(1), o que o roteiro de evento grava)
+termina luta vence                # o lado 0 vence por KO (o lado 1 derrubado; o roteiro de evento grava o resultado)
 espera tela 8 max 6000            # HistResult: o anúncio, a fala do vencedor e a volta aos menus vêm antes
 quadros 150
 repete ate tela 9 max 3000        # a contagem dos pontos, as recompensas e a saída
