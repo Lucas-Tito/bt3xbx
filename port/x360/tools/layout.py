@@ -23,6 +23,7 @@ PERMUTADAS = {
     "BtlCapiBPose": "include/battle/btl_capi_b.h: groundFlags gravado como s32, lido como campo de bits de u8",
     "BObjModelBytes": "include/battle/bobj_b.h: flags do cabeçalho do modelo (u32 no arquivo), byte alto lido como char",
     "EftAuraCfgFlame": "include/battle/eft_m.h: s32 dos dados da aura (00002) com o byte baixo lido como u8",
+    "BtlFacadeItem": "include/battle/btl_facade.h: id do item gravado como s32 (BtlScriptCmdItems), lido como u16",
     # pacotes da GPU (decisão 19): o registro de 64 bits é duas palavras de 32, a baixa primeiro; os campos de bits do
     # XYZF2 (PS2_PKT64_FIELDS) vêm com a metade alta declarada primeiro, e os bytes e metades de uma palavra invertidos
     "EftSprPkt": "src/battle/eft_ad_c.c: R, G, B, A do RGBAQ na palavra do pacote da GPU",

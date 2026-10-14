@@ -116,7 +116,11 @@ void BtlScript_ScanEvents(s32 script) {
             ev->kind = 0;
             while ((*cmd & 0xF) != GSC_WORD_END) {
                 if ((*cmd & 0xF) == GSC_WORD_COMMAND) {
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+                    switch (GSC_HALF1(cmd)) {
+#else
                     switch (((u16 *)cmd)[1]) {
+#endif
                     case 0x4B1:
                         ev->cmd4B1 = 1;
                         break;

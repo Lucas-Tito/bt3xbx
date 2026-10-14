@@ -41,8 +41,15 @@
 
 /* One entry of the item list handed to BtlFacade_SetMemberItems; only `id` is read. */
 typedef struct BtlFacadeItem {
+#ifdef PORT_BIG_ENDIAN /* the list is the s32 item ids of the script work (BtlScriptCmdItems) read through this view:
+                          the id is the low half of each s32, the second u16 on a big-endian host
+                          (docs/x360/formatos/historia-luta.md) */
+    /* 0x00 */ u16 unk2;
+    /* 0x02 */ u16 id;
+#else
     /* 0x00 */ u16 id;
     /* 0x02 */ u16 unk2;
+#endif
 } BtlFacadeItem; /* size 4 */
 
 /* Argument of BtlFacade_SetResult. */

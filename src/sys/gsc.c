@@ -129,7 +129,11 @@ void Gsc_NotifyAll(void) {
             do {
                 gGscCurTask = task;
                 if ((*task->pc & 0xF) == GSC_WORD_COMMAND) {
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+                    handler = Gsc_FindHandler(GSC_HALF1(task->pc));
+#else
                     handler = Gsc_FindHandler(((u16 *)task->pc)[1]);
+#endif
                     Gsc_ResetOperands();
                     handler(GSC_PHASE_NOTIFY, task->work);
                 }
@@ -162,14 +166,22 @@ void Gsc_StepTask(GscTask *task) {
             run = 0;
             break;
         case GSC_WORD_CALL:
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            Gsc_CallAction(GSC_SHALF1(cmd));
+#else
             Gsc_CallAction(((s16 *)cmd)[1]);
+#endif
             next = task->pc;
             task->flags = 0;
             task->time = 0;
             task->pc = next + 1;
             break;
         case GSC_WORD_CALL_WAIT:
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            action = GSC_SHALF1(cmd);
+#else
             action = ((s16 *)cmd)[1];
+#endif
             if (!(task->flags & 1)) {
                 task->child = Gsc_CallAction(action);
                 task->flags |= 1;
@@ -188,7 +200,11 @@ void Gsc_StepTask(GscTask *task) {
             break;
         case GSC_WORD_COMMAND:
             done = 0;
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            handler = Gsc_FindHandler(GSC_HALF1(cmd));
+#else
             handler = Gsc_FindHandler(((u16 *)cmd)[1]);
+#endif
             if (task->abort) {
                 if (!(task->flags & 2)) {
                     Gsc_ResetOperands();
@@ -427,16 +443,32 @@ void Gsc_DumpCommand(u32 *cmd, GscChunk *data) {
         kind = *cmd & 0xF;
         switch (kind) {
         case GSC_WORD_COMMAND:
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            kind = GSC_BYTE1(cmd);
+#else
             kind = ((u8 *)cmd)[1];
+#endif
             break;
         case GSC_WORD_CALL:
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            kind = GSC_SHALF1(cmd);
+#else
             kind = ((s16 *)cmd)[1];
+#endif
             break;
         case GSC_WORD_CALL_WAIT:
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            kind = GSC_SHALF1(cmd);
+#else
             kind = ((s16 *)cmd)[1];
+#endif
             break;
         case GSC_WORD_OPTION:
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            kind = GSC_BYTE2(cmd);
+#else
             kind = ((u8 *)cmd)[2];
+#endif
             break;
         case GSC_WORD_OPERAND:
             kind = (*cmd >> 4) & 0xF;
@@ -475,7 +507,11 @@ void Gsc_DumpCommandsById(GscFile *file, s32 id) {
     while (GSC_SWAP(action->tag) == GSC_TAG_GSAC) {
         cmd = (u32 *)((u8 *)action + action->headSize);
         while ((*cmd & 0xF) != GSC_WORD_END) {
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            if ((*cmd & 0xF) == GSC_WORD_COMMAND && GSC_HALF1(cmd) == id) {
+#else
             if ((*cmd & 0xF) == GSC_WORD_COMMAND && ((u16 *)cmd)[1] == id) {
+#endif
                 Gsc_DumpCommand(cmd, (GscChunk *)data);
             }
             cmd = Gsc_NextCommand(cmd);
@@ -557,16 +593,28 @@ s32 Gsc_FindOptionN(s8 letter, s32 n) {
     s32 found = 0;
     s32 count = 0;
 
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+    word = (u8 *)(task->pc + GSC_BYTE1(task->pc) + 1);
+#else
     word = (u8 *)(task->pc + ((u8 *)task->pc)[1] + 1);
+#endif
     while (type = *(u32 *)word & 0xF, *(u32 *)word & GSC_WORD_ARG) {
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+        if (type == GSC_WORD_OPTION && GSC_BYTE1(word) == letter) {
+#else
         if (type == GSC_WORD_OPTION && word[1] == letter) {
+#endif
             if (count >= n) {
                 found = 1;
                 task->operand = (u32 *)word + 1;
                 break;
             }
             count++;
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            word = word + GSC_BYTE2(word) * 4 + 4;
+#else
             word = word + word[2] * 4 + 4;
+#endif
         } else {
             word += 4;
         }
@@ -582,16 +630,28 @@ s32 Gsc_SeekOption(s32 n) {
     s32 letter = 0;
     s32 count = 0;
 
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+    word = (u8 *)(task->pc + GSC_BYTE1(task->pc) + 1);
+#else
     word = (u8 *)(task->pc + ((u8 *)task->pc)[1] + 1);
+#endif
     while (type = *(u32 *)word & 0xF, *(u32 *)word & GSC_WORD_ARG) {
         if (type == GSC_WORD_OPTION) {
             if (count >= n) {
                 task->operand = (u32 *)word + 1;
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+                letter = (s8)GSC_BYTE1(word);
+#else
                 letter = (s8)word[1];
+#endif
                 break;
             }
             count++;
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            word = word + GSC_BYTE2(word) * 4 + 4;
+#else
             word = word + word[2] * 4 + 4;
+#endif
         } else {
             word += 4;
         }
@@ -602,12 +662,20 @@ s32 Gsc_SeekOption(s32 n) {
 /* Returns the number of options of the current command. */
 s32 Gsc_CountOptions(void) {
     s8 count = 0;
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+    u8 *word = (u8 *)(gGscCurTask->pc + GSC_BYTE1(gGscCurTask->pc) + 1);
+#else
     u8 *word = (u8 *)(gGscCurTask->pc + ((u8 *)gGscCurTask->pc)[1] + 1);
+#endif
 
     while (*(u32 *)word & GSC_WORD_ARG) {
         if ((*(u32 *)word & 0xF) == GSC_WORD_OPTION) {
             count++;
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            word = word + GSC_BYTE2(word) * 4 + 4;
+#else
             word = word + word[2] * 4 + 4;
+#endif
         } else {
             word += 4;
         }
@@ -618,14 +686,26 @@ s32 Gsc_CountOptions(void) {
 /* Returns how many options of the current command have this letter. */
 s32 Gsc_CountOption(s8 letter) {
     s8 count = 0;
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+    u8 *word = (u8 *)(gGscCurTask->pc + GSC_BYTE1(gGscCurTask->pc) + 1);
+#else
     u8 *word = (u8 *)(gGscCurTask->pc + ((u8 *)gGscCurTask->pc)[1] + 1);
+#endif
 
     while (*(u32 *)word & GSC_WORD_ARG) {
         if ((*(u32 *)word & 0xF) == GSC_WORD_OPTION) {
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            if (GSC_BYTE1(word) == letter) {
+#else
             if (word[1] == letter) {
+#endif
                 count++;
             }
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            word = word + GSC_BYTE2(word) * 4 + 4;
+#else
             word = word + word[2] * 4 + 4;
+#endif
         } else {
             word += 4;
         }
@@ -655,14 +735,26 @@ s32 Gsc_GetFileHandle(s32 id) {
 
 /* Returns the command word that follows a command, its operands and its options. */
 u32 *Gsc_NextCommand(u32 *cmd) {
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+    s32 count = GSC_BYTE1(cmd);
+#else
     s32 count = ((u8 *)cmd)[1];
+#endif
     u8 *word = (u8 *)(cmd + count + 1);
     s32 n;
 
     while (*(u32 *)word & GSC_WORD_ARG) {
         if ((*(u32 *)word & 0xF) == GSC_WORD_OPTION) {
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            n = GSC_BYTE2(word) + 1;
+#else
             n = word[2] + 1;
+#endif
+#ifdef PORT_BIG_ENDIAN /* the script word's byte and half fields (GSC_BYTE1..., include/sys/gsc.h) */
+            word = word + GSC_BYTE2(word) * 4 + 4;
+#else
             word = word + word[2] * 4 + 4;
+#endif
             count += n;
         } else {
             word += 4;

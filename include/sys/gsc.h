@@ -21,6 +21,17 @@
 #define GSC_WORD_OPERAND 10 /* bits 8..31 = index of a 4-byte value in the GSDT chunk, bits 4..7 = type (unread) */
 #define GSC_WORD_ARG 8      /* bit set in every word that belongs to the preceding command */
 
+#ifdef PORT_BIG_ENDIAN
+/* The byte and half-word fields of a script word: byte 1 (operand count, option letter), byte 2 (option operand
+   count) and the upper half (command id, action id). The game reads them as bytes and halves of the word, and the
+   operand index and the kind as the whole u32; a big-endian build gets every word converted as one u32
+   (port/x360/conv/historia_luta.c, docs/x360/formatos/historia-luta.md) and reads the fields by shifting it. */
+#define GSC_BYTE1(w) ((u8)(*(u32 *)(w) >> 8))
+#define GSC_BYTE2(w) ((u8)(*(u32 *)(w) >> 16))
+#define GSC_HALF1(w) ((u16)(*(u32 *)(w) >> 16))
+#define GSC_SHALF1(w) ((s16)(*(u32 *)(w) >> 16))
+#endif
+
 /* Phase handed to a command handler. */
 #define GSC_PHASE_BEGIN 0       /* first frame; a non-zero return ends the command at once */
 #define GSC_PHASE_END 1         /* the command is over */

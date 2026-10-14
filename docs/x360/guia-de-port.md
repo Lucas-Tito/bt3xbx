@@ -776,6 +776,15 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     do GS da imagem (o "gs G" da linha `imagem:`) mais o `BT3_GS_FROM`, nas duas builds, e o `diff` das linhas
     `prim`/`tex` (no WSL; só as contagens voltam). Cuidado: a "clut" que o dump imprime para textura de 32 bits é a
     memória em `cbp` 0, o próprio buffer do quadro; diferente ali é consequência, não causa.
+- **A etapa 9a da F4 (a História e a vitória dada nos roteiros), o que custou rodadas:**
+  - **Palavra lida com duas larguras no próprio arquivo:** o roteiro de evento (GSCF, `gsc.c`) lê cada palavra como u32
+    (o tipo, o índice do operando) e também os bytes e a metade alta dela (a contagem, a letra da opção, o id do
+    comando). Nenhuma ordem no arquivo serve às duas; o conversor troca a palavra como u32 e o código lê os campos por
+    deslocamento em `PORT_BIG_ENDIAN` (`GSC_BYTE1`... em `include/sys/gsc.h`, um `#ifdef` com a linha original no
+    `#else` em cada um dos 23 lugares). O rastreio já dizia: 1.779 posições do 00510 nos conflitos.
+  - **Gancho em `src/` muda o `.o` da x86 mesmo dentro do `#ifdef`:** as linhas se deslocam, e a informação de
+    depuração (DWARF, `-g`) muda com elas. A prova de que o código não mudou é o objeto sem ela
+    (`objcopy --strip-debug` nos dois e `cmp`): na 9a, 321 de 322 iguais, só o `roteiro.c` diferente.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
