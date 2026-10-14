@@ -52,7 +52,7 @@ CONTEUDO = {
     "menu_e_b.c:771": "retrato", "menu_e_b.c:784": "estagio",
     "menu_g_c.c:195": "448 s1",
     "menu_h_b.c:49": "463 s1", "menu_h_b.c:119": "retrato", "menu_h_b.c:849": "retrato",
-    "menu_h_d.c:650": "461 s1", "menu_h_d.c:1215": "pagina_treino",
+    "menu_h_d.c:650": "461 s1", "menu_h_d.c:1221": "pagina_treino",
     "menu_i_b.c:24": "473 s2", "menu_i_c.c:173": "473 s3",
     "menu_i_d.c:98": "retrato", "menu_i_d.c:166": "450 s2", "menu_i_d.c:334": "retrato",
     "menu_j_b.c:59": "450 s1", "menu_j_b.c:117": "convite", "menu_k_d.c:24": "fundo_torneio",
@@ -97,7 +97,7 @@ CONHECIDOS = {
 # O caminho essencial da decisão 22 (menus-modos.md 4: 16 pendentes, 5 com gancho)
 ESSENCIAL = {"menu_a.c:55", "menu_c_e.c:226", "menu_c_e.c:300", "menu_c_e.c:400", "menu_c_e.c:409", "menu_c_e.c:746",
              "menu_c_e.c:759", "menu_e_b.c:290", "menu_e_b.c:367", "menu_e_b.c:469", "menu_e_b.c:771",
-             "menu_e_b.c:784", "menu_g_c.c:195", "menu_h_d.c:650", "menu_h_d.c:1215", "menu_x_c.c:39",
+             "menu_e_b.c:784", "menu_g_c.c:195", "menu_h_d.c:650", "menu_h_d.c:1221", "menu_x_c.c:39",
              "menu_a_c.c:56", "menu_i_b.c:24", "menu_i_c.c:173", "loading.c:166", "mcflow_a.c:2636"}
 
 

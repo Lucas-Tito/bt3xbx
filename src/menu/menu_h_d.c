@@ -648,6 +648,12 @@ void Train_Init(s32 section) {
     memset(gTrain, 0, 0x1BE0);
     gTrain->pack = (u32 *)MPACK_AT(gMenuArc6, section);
     gTrain->res = Sprite_Unpack(gTrain->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gTrain->res, ((s32 *)gTrain->pack)[0], "menu_treino");
+    }
+#endif
     TR_RES(2, TR_HOST "ut_bg_PS2_.dbt");
     gTrain->bg = res;
     TR_RES(7, TR_HOST "ut_select_tex_PS2_.dbt");
@@ -1213,6 +1219,12 @@ void Train_UpdateImage(void) {
                 gTrain->flags ^= TRAIN_IMAGE_LOADING;
             }
             Sprite_Unpack(gTrain->imageFile, gTrain->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+            {
+                extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+                Port_ConvertMenuPack(gTrain->imageRes, ((s32 *)gTrain->imageFile)[0], "menu_texfile");
+            }
+#endif
             res = gTrain->imageRes;
             Res_RelocateOffsets(&res, res, res);
             gTrain->tex[9] = MTEX(res, 0);

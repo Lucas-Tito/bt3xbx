@@ -190,6 +190,7 @@ void Conv_MenuTitulo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuPrincipal(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuDuelo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuSelecao(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuTreino(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuTexFile(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuFundo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
@@ -220,6 +221,7 @@ static const Formato sFormatos[] = {
     /* menus-telas.md: o resto do caminho essencial (F4, etapa 5b) */
     {"menu_duelo", Conv_MenuDuelo},            /* 2: submenu do Duelo (DuelMenu_Init) */
     {"menu_selecao", Conv_MenuSelecao},        /* 3: CharSel e TeamSel (CharSel_Init, TeamSel_Init) */
+    {"menu_treino", Conv_MenuTreino},          /* 4: Treino (Train_Init) */
     {"menu_texfile", Conv_MenuTexFile},        /* 6: imagem única (retratos, páginas do Treino) */
     {"menu_fundo", Conv_MenuFundo},            /* 6: imagem de fundo (estágios) */
 };
@@ -275,6 +277,7 @@ static const ConvFaixa sFaixas[] = {
     {0x1C1 - 1, 0x1C1 - 1, 2, "menu_selecao"},
     {0x1C6 - 1, 0x1C6 - 1, CONV_ARQ, "menu_pacote"},
     {0x1CE - 1, 0x1CE - 1, CONV_ARQ, "menu_pacote"},
+    {0x1CE - 1, 0x1CE - 1, 1, "menu_treino"},
     {0x1CE - 1, 0x1CE - 1, 2, "menu_selecao"},
     /* imagens únicas, o arquivo inteiro num contêiner BPE (menus-telas.md 6): os retratos (0x2F9 + personagem, todos
        os leitores somam 0x2F9 a um personagem: 0..0xA0 e os marcadores 0xA1..0xA3, ids 0x2F9..0x39C), as imagens de

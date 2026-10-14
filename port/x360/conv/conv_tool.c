@@ -485,8 +485,9 @@ static void censo(const char *dados) {
         {0x39D - 1, 0x3C0 - 1, "imagens de estágio (0x39D + estágio)", 0},
         {0x3C4 - 1, 0x3CD - 1, "convites (0x3C4 + torneio) e fundos (0x3C9 + torneio) do torneio", 0},
         {0x3CE - 1, 0x401 - 1, "imagens da História (0x3CE.. episódios, 0x3FE.. fundos do resultado)", 0},
-        /* as páginas do Treino (0x402 + página, Train_UpdateImage): o teto é hipótese, até os slots de lutador */
-        {0x402 - 1, 0x590 - 2, "páginas do Treino (0x402 + página; o fim da faixa é hipótese)", 0},
+        /* as páginas do Treino (0x402 + página, Train_UpdateImage): as aulas vão da página 0 à 397
+           (menus-telas.md 4.2), a última antes dos slots de lutador */
+        {0x402 - 1, 0x590 - 2, "páginas do Treino (0x402 + página, 0..397 pelas aulas)", 0},
     };
     unsigned f;
     for (f = 0; f < sizeof(faixas) / sizeof(faixas[0]); f++) {
@@ -550,6 +551,7 @@ static const struct { const char *nome; ConvFn fn; } sPecas[] = {
     {"ListaEstagios", Conv_ListaEstagios}, {"ListaMusicas", Conv_ListaMusicas},
     {"ListaMusicasOpcoes", Conv_ListaMusicasOpcoes}, {"Celulas", Conv_Celulas},
     {"FichasPersonagem", Conv_FichasPersonagem}, {"IconesEstagio", Conv_IconesEstagio},
+    {"LicoesTreino", Conv_LicoesTreino},
 };
 typedef struct UsoPeca { int ini, fim, secao, sub; const char *peca; } UsoPeca;
 static const UsoPeca sUsos[] = {
@@ -568,7 +570,7 @@ static const UsoPeca sUsos[] = {
     {461, 461, 1, 1, "Flash"}, {461, 461, 1, 10, "JanelaIcone"}, {461, 461, 1, 11, "JanelaMsg"},
     {461, 461, 1, 12, "LipPack"}, {461, 461, 1, 13, "LipPack"}, {461, 461, 1, 14, "Textos"},
     {461, 461, 1, 15, "Textos"}, {461, 461, 1, 16, "Textos"}, {461, 461, 1, 17, "Textos"},
-    {461, 461, 1, 24, "ListaIds"}, {461, 461, 1, 26, "ListaIds"},
+    {461, 461, 1, 24, "ListaIds"}, {461, 461, 1, 26, "ListaIds"}, {461, 461, 1, 22, "LicoesTreino"},
     {453, 453, 1, 8, "Flash"}, {453, 453, 1, 31, "JanelaMsg"}, {453, 453, 1, 32, "JanelaIcone"},
     {453, 453, 1, 33, "Textos"}, {453, 453, 1, 35, "Dialogo"}, {453, 453, 1, 36, "LipPack"},
     {453, 453, 1, 37, "ListaMusicasOpcoes"}, {453, 453, 1, 38, "Textos"},

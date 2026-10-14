@@ -34,5 +34,7 @@ void Conv_SubpacoteTexN(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 esperado);
 void Conv_SubpacoteTex(ConvCtx *c, conv_ofs a, conv_ofs b);
 void Conv_FichasPersonagem(ConvCtx *c, conv_ofs a, conv_ofs b);    /* 165 subseções */
 void Conv_IconesEstagio(ConvCtx *c, conv_ofs a, conv_ofs b);       /* 38 subseções */
+/* menus-telas.md 4.2: as aulas do Treino (TrainLesson, 38 registros de 0x10) */
+void Conv_LicoesTreino(ConvCtx *c, conv_ofs a, conv_ofs b);
 
 #endif

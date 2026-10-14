@@ -573,3 +573,73 @@ void Conv_MenuTexFile(ConvCtx *c, conv_ofs base, conv_ofs tam) {
 void Conv_MenuFundo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     Conv_TexFileMin(c, base, base + tam, 8);
 }
+
+/* §4.2: as aulas do Treino (TrainLesson, include/menu/menu_i.h:62; seção 22 de 461 s1): 13, 11 e 14 registros de
+   0x10 seguidos, um por classe, o último de cada classe com TRAIN_LESSON_LAST (Train_BuildLists anda até ele);
+   depois, zeros. Por registro: u16 id, u8 pageNum, u8 flags, s32 firstPage, s32 voice, u8 stage, u8 bgm, u8 chara[2]
+   (Train_BuildLists, Train_FindLesson, Train_Leave). As páginas são os arquivos 0x402 + página, antes dos slots de
+   lutador (0x590): firstPage + pageNum <= 0x18E; e cabem nas listas (TRAIN_PAGE_MAX = 30) */
+void Conv_LicoesTreino(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    static const conv_u32 fimClasse[3] = {13, 13 + 11, 13 + 11 + 14};
+    conv_u32 i, k = 0, primeira, n, flags;
+    if (!Conv_Cabe(c, a, 38 * 0x10, "aulas do Treino") || b - a < 38 * 0x10) {
+        Conv_Erro(c, "aulas do Treino em 0x%lX: 0x%lX bytes (38 registros de 0x10)", (unsigned long)a,
+                  (unsigned long)(b - a));
+        return;
+    }
+    if (a % 4 != 0) {
+        Conv_Erro(c, "aulas do Treino em 0x%lX: início fora de múltiplo de 4", (unsigned long)a);
+        return;
+    }
+    for (i = 0; i < 38 && !c->erro; i++) {
+        conv_ofs r = a + (conv_ofs)i * 0x10;
+        Conv_U16(c, r);
+        Conv_Bytes(c, r + 2, 2);
+        n = c->buf[r + 2];
+        flags = c->buf[r + 3];
+        primeira = Conv_U32(c, r + 4);
+        Conv_U32(c, r + 8);
+        Conv_Bytes(c, r + 0xC, 4);
+        if (!c->erro && ((flags & 4) != 0) != (i + 1 == fimClasse[k])) {
+            Conv_Erro(c, "aula %lu: TRAIN_LESSON_LAST %s", (unsigned long)i, (flags & 4) ? "fora do fim da classe" :
+                      "faltando no fim da classe");
+        }
+        if (!c->erro && (n > 30 || primeira > 0x18E || primeira + n > 0x18E)) {
+            Conv_Erro(c, "aula %lu: páginas %lu + %lu fora dos arquivos de página", (unsigned long)i,
+                      (unsigned long)primeira, (unsigned long)n);
+        }
+        if (i + 1 == fimClasse[k]) {
+            k++;
+        }
+    }
+    Conv_Zeros(c, a, b, "depois das aulas do Treino");
+}
+
+/* §4: o Treino (Train_Init, src/menu/menu_h_d.c, seção 1 de 00461). 1 o filme, 2..9 TexFile (2 o fundo, 5 os ícones
+   da janela de ícone), 10 a janela de ícone, 11 a de mensagem, 12 e 13 as legendas com a boca (duas falas), 14..17
+   textos (14 e 15 da janela de mensagem, 16 da caixa de texto, 17 das páginas), 22 as aulas, 24 e 26 listas de ids
+   (páginas fora das listas, falas sem figura); 18..20 vazias; 21, 23 e 25 sem leitor (menus-telas.md 4.3), com a
+   forma de uma tabela de aulas (21) e de listas de ids (23, 25): convertidas pela forma */
+void Conv_MenuTreino(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_u8 minimo[10] = {0, 0, 8, 9, 5, 1, 4, 16, 1, 5};
+    conv_u32 ent[28], i;
+    if (!Conv_Secoes(c, base, tam, ent, 26, "Treino")) {
+        return;
+    }
+    for (i = 1; i <= 26 && !c->erro; i++) {
+        switch (i) {
+        case 1: Conv_Flash(c, ENT(1)); break;
+        case 10: Conv_JanelaIcone(c, ENT(10)); break;
+        case 11: Conv_JanelaMsg(c, ENT(11)); break;
+        case 12: case 13: Conv_LipPack(c, ENT(i)); break;
+        case 14: case 15: case 16: case 17: Conv_Textos(c, ENT(i)); break;
+        case 18: case 19: case 20: Conv_Vazia(c, ent, i); break;
+        case 21: /* sem leitor, com a forma das aulas */
+        case 22: Conv_LicoesTreino(c, ENT(i)); break;
+        case 23: case 25: /* sem leitor, com a forma de lista de ids */
+        case 24: case 26: Conv_ListaIds(c, ENT(i)); break;
+        default: Conv_TexFileMin(c, ENT(i), minimo[i]); break;
+        }
+        Conv_Onde(c, "seção %lu do Treino", (unsigned long)i);
+    }
+}
