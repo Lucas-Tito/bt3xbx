@@ -6,10 +6,12 @@
  * console (uma carga mais lenta, uma tela que demora a aceitar entrada) não desalinha o resto do roteiro.
  *
  *   BT3_ROTEIRO=<arquivo>   liga o roteiro (sem ela, nada muda: Roteiro_Pad devolve 0 e o controle fica parado)
- *   BT3_DESBLOQUEIO=1       permite o passo "desbloqueia" (Save_UnlockAll do próprio jogo, o mesmo da aba de truques
- *                           da janela do PC); sem ela o passo para o roteiro com erro. Nunca no jogo normal. E só com
- *                           o cartão vazio no começo da rodada (sem o arquivo de dados do save na pasta de saves,
- *                           BT3_SAVES): o desbloqueio iria para o save de verdade na próxima gravação
+ *   BT3_DESBLOQUEIO=1       permite os passos que mudam o estado do jogo: "desbloqueia" (Save_UnlockAll do próprio
+ *                           jogo, o mesmo da aba de truques da janela do PC) e "termina luta" (o resultado da luta pela
+ *                           função do próprio jogo, BtlFacade_SetResult); sem ela o passo para o roteiro com erro.
+ *                           Nunca no jogo normal. E só com o cartão vazio no começo da rodada (sem o arquivo de dados
+ *                           do save na pasta de saves, BT3_SAVES): o desbloqueio e a vitória dada iriam para o save de
+ *                           verdade na próxima gravação
  *
  * Com o roteiro ligado, cada troca de tela vai ao log ("tela N vblank V quadro Q"), e cada espera cumprida também
  * ("roteiro: arquivo:linha ok ..."): é o rastro que os roteiros e as comparações usam. Na build sem janela (x86 e
@@ -31,12 +33,27 @@
    (port_compat.h, forçado como nos fontes do jogo: s64 de 64 bits); sem eles o SaveData sai menor e o campo cai em
    0x1694, lendo outra opção. A build para aqui se isso voltar a acontecer. */
 typedef char RoteiroSaveConfere[offsetof(SaveData, soundMode) == 0x16A4 ? 1 : -1];
+typedef char RoteiroSagaConfere[offsetof(SaveData, slot) == 0x10 && sizeof(SaveSlot) == 0x10 ? 1 : -1];
 
 /* O estado do jogo que identifica a tela. Os tipos completos são do jogo; aqui só os campos lidos, nos mesmos
    deslocamentos (as três builds têm ponteiros de 32 bits). */
 extern struct { int unk0[5]; int flags; int mode; } *gProgress; /* include/menu/menu_a.h: flags 0x14, mode 0x18 */
 extern struct { int unk0[9]; int state; } *gMcFlow;             /* include/sys/mcflow_a.h: state 0x24; NULL fora */
 extern struct { int state; } *gBtlSeq;                         /* include/battle/btl_seq.h: >= 2 com a luta andando */
+/* o golpe que derruba (passo "termina luta"): o lutador ativo de um lado (BtlChar_Get, src/battle/btl_char_get.c; cada
+   arquivo do jogo o declara com a sua visão da struct), se ainda tem vida (BtlCtrl_IsActiveDead, btl_capi_b.c), e o
+   dano do próprio jogo (BtlMember_Damage, src/battle/btl_char_member.c) */
+void *BtlChar_Get(int side);
+int BtlCtrl_IsActiveDead(int side);
+int BtlMember_Damage(void *chr, int amount, int flags);
+#define BTL_SEQ_LUTANDO 3 /* include/battle/btl_seq.h: o estado 3 (BtlSeqFight), o único em que o fim se confere */
+/* include/battle/btl_char_member.h: sem defesa, exato, sem contar como golpe do combo nem mexer no total e no tempo
+   dele, a qualquer estado, sem a metade da animação e sem a escala do combo (e sem BTL_DMG_NO_KILL nem
+   BTL_DMG_DRAIN, que deixam 1 de vida) */
+#define TERMINA_DANO_FLAGS (0x1 | 0x2 | 0x8 | 0x10 | 0x20 | 0x40 | 0x80 | 0x100)
+#define TERMINA_DANO 100000000 /* mais que qualquer barra de vida (o jogo prende em 0) */
+static int sDerruba = -1;        /* o lado a derrubar no quadro do jogo em andamento (-1: nenhum) */
+static char sDerrubaOnde[80];    /* o passo que pediu, para o rastro */
 extern int gPortMenuMode;                                      /* port/src/headless.c: 1 enquanto os menus rodam */
 extern unsigned gPortVBlanks;                                  /* port/src/plat_stub.c */
 
@@ -111,7 +128,7 @@ static void nome_tela(int t, char *s) {
 
 /* ------------------------------------------------------------------ o roteiro */
 
-enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE };
+enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA };
 enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA };
 
 typedef struct Passo {
@@ -119,7 +136,8 @@ typedef struct Passo {
     unsigned botoes;    /* P_APERTA, P_SEGURA: os bits de pad360.c (1 = apertado) */
     int n;              /* P_QUADROS, P_SEGURA: quadros; P_APERTA: vezes (sem "ate") */
     int segura, solta;  /* P_APERTA: o ritmo de cada vez */
-    int cond, valor;    /* P_ESPERA e P_APERTA com "ate": a condição; P_CONFERE: o valor esperado */
+    int cond, valor;    /* P_ESPERA e P_APERTA com "ate": a condição e o valor; P_CONFERE: cond 0 som, 1 saga, e
+                           o valor esperado ou a saga; P_TERMINA: valor 1 vence, 0 perde */
     int max;            /* quadros até a falha */
     int par;            /* P_REPETE: o índice do P_VOLTA; P_VOLTA: o do P_REPETE */
     char onde[80];      /* arquivo:linha, para o log */
@@ -307,13 +325,33 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
     } else if (igual(pal[0], "desbloqueia")) {
         p = novo(onde, P_DESBLOQUEIA);
         i = 1;
-    } else if (igual(pal[0], "confere")) { /* confere som N: o campo do save em memória (gSaveData) igual a N */
-        if (n < 2 || !igual(pal[1], "som")) {
-            erro_linha(onde, "confere som N", n > 1 ? pal[1] : NULL);
+    } else if (igual(pal[0], "confere")) { /* confere som N | confere saga N: o save em memória (gSaveData) */
+        if (n < 2 || !(igual(pal[1], "som") || igual(pal[1], "saga"))) {
+            erro_linha(onde, "confere som N | confere saga N", n > 1 ? pal[1] : NULL);
         }
         p = novo(onde, P_CONFERE);
+        p->cond = igual(pal[1], "saga"); /* 0: som, 1: saga */
         p->valor = numero(onde, n > 2 ? pal[2] : NULL);
+        if (p->cond && (p->valor < 0 || p->valor >= 8)) {
+            erro_linha(onde, "confere saga N: N de 0 a 7", pal[2]);
+        }
         i = 3;
+    } else if (igual(pal[0], "termina")) { /* termina luta [vence|perde] [max Q]: o resultado da luta pelo jogo */
+        if (n < 2 || !igual(pal[1], "luta")) {
+            erro_linha(onde, "termina luta [vence|perde] [max Q]", n > 1 ? pal[1] : NULL);
+        }
+        p = novo(onde, P_TERMINA);
+        p->valor = 1;
+        p->max = sMax;
+        i = 2;
+        if (i < n && (igual(pal[i], "vence") || igual(pal[i], "perde"))) {
+            p->valor = igual(pal[i], "vence");
+            i++;
+        }
+        if (i < n && igual(pal[i], "max")) {
+            p->max = numero(onde, i + 1 < n ? pal[i + 1] : NULL);
+            i += 2;
+        }
     } else if (igual(pal[0], "marca")) { /* marca TEXTO: uma linha no rastro */
         p = novo(onde, P_MARCA);
         for (i = 1; i < n; i++) {
@@ -483,6 +521,21 @@ static void esgotou(const Passo *p) {
     falha(s);
 }
 
+/* os passos que mudam o estado do jogo (desbloqueia, termina luta): só com BT3_DESBLOQUEIO=1 e com o cartão vazio no
+   começo da rodada, para nunca irem a um save de verdade */
+static void so_teste(const Passo *p, const char *nome) {
+    char s[300];
+    if (getenv("BT3_DESBLOQUEIO") == NULL || atoi(getenv("BT3_DESBLOQUEIO")) == 0) {
+        sprintf(s, "%s: %s sem BT3_DESBLOQUEIO=1", p->onde, nome);
+        falha(s);
+    }
+    if (!sCartaoVazio) {
+        sprintf(s, "%s: %s recusado: o cartão já tinha um save no começo da rodada, e o resultado iria para ele (use "
+                "uma pasta de saves vazia em BT3_SAVES)", p->onde, nome);
+        falha(s);
+    }
+}
+
 /* os botões do jogador 1 neste quadro, andando o roteiro */
 static unsigned quadro(void) {
     char s[300];
@@ -566,17 +619,9 @@ static unsigned quadro(void) {
             sT++;
             return consome(p->tipo == P_SEGURA ? p->botoes : 0);
         case P_DESBLOQUEIA:
-            if (getenv("BT3_DESBLOQUEIO") == NULL || atoi(getenv("BT3_DESBLOQUEIO")) == 0) {
-                sprintf(s, "%s: desbloqueia sem BT3_DESBLOQUEIO=1", p->onde);
-                falha(s);
-            }
+            so_teste(p, "desbloqueia");
             if (gSaveData == NULL) {
                 sprintf(s, "%s: desbloqueia sem save na memória", p->onde);
-                falha(s);
-            }
-            if (!sCartaoVazio) {
-                sprintf(s, "%s: desbloqueia recusado: o cartão já tinha um save no começo da rodada, e o desbloqueio "
-                        "iria para ele (use uma pasta de saves vazia em BT3_SAVES)", p->onde);
                 falha(s);
             }
             Save_UnlockAll(gSaveData);
@@ -589,6 +634,19 @@ static unsigned quadro(void) {
                 sprintf(s, "%s: confere sem save na memória", p->onde);
                 falha(s);
             }
+            if (p->cond) {
+                /* confere saga N: o fim da saga N da História visto (MSLOT_OUTRO_SEEN no SaveSlot N, include/menu/
+                   menu_c.h, que o HistOutro_Init grava e o HistSave leva ao cartão) */
+                if (!(gSaveData->slot[p->valor].flags & 4)) {
+                    sprintf(s, "%s: saga %d sem o fim visto (gSaveData->slot[%d].flags 0x%x, sem o bit 4)", p->onde,
+                            p->valor, p->valor, (unsigned)gSaveData->slot[p->valor].flags);
+                    falha(s);
+                }
+                sprintf(s, "roteiro: %s ok saga %d vblank %u quadro %u", p->onde, p->valor, gPortVBlanks, sQuadro);
+                diz(s);
+                proximo();
+                continue;
+            }
             if (gSaveData->soundMode != p->valor) {
                 sprintf(s, "%s: som %d (gSaveData->soundMode), esperado %d", p->onde, (int)gSaveData->soundMode,
                         p->valor);
@@ -598,6 +656,65 @@ static unsigned quadro(void) {
             diz(s);
             proximo();
             continue;
+        case P_TERMINA:
+            /* Derruba o lutador do lado que perde pelo dano do próprio jogo (BtlMember_Damage, com a vida inteira):
+               ele levanta os eventos de KO (0x4A do lado, 0x48 do outro), e o jogo decide a luta pelo caminho de
+               sempre. No Duelo e nos outros modos, BtlSeq_CheckBattleEnd vê o time caído e grava o vencedor (KO); na
+               História (modo 1, em que o fim não se confere sozinho) o roteiro de evento do episódio dispara com o KO
+               e grava o resultado pelo comando 9 (SetResult, BtlFacade_SetResult). Dar o resultado direto
+               (BtlFacade_SetResult fora de um evento) não serve: na História o BtlSeqWinTalk_Enter lê o evento em
+               andamento, que não existe, e a x86 caiu. O golpe não pode sair daqui (a leitura do controle, no
+               Pad_Update): os eventos levantados ali giram para "anteriores" no Battle_UpdateWork do mesmo quadro, e
+               o roteiro de evento (BtlScript_Update, no começo do quadro seguinte) só vê os novos. Ele sai depois do
+               giro, onde o jogo dá os golpes: no BtlChars_SampleInput (--wrap, abaixo), logo antes do Battle_Update.
+               Espera a luta andar (o estado 3 da sequência); enquanto ela estiver no 3, derruba o ativo do lado que
+               perde que estiver de pé (de novo o próximo membro de um time); termina quando a sequência sai do 3 (o
+               anúncio do fim). "vence": cai o lado 1; "perde": o 0 */
+            so_teste(p, "termina luta");
+#ifdef PORT_X360
+            sprintf(s, "%s: termina luta só nas builds sem janela (o golpe sai por --wrap no BtlChars_SampleInput)",
+                    p->onde);
+            falha(s);
+#endif
+            if (gPortMenuMode || gBtlSeq == NULL || gBtlSeq->state < BTL_SEQ_LUTANDO) {
+                if (p->n) { /* (já derrubou e a luta saiu: não acontece, a sequência passa pelo 4) */
+                    p->n = 0;
+                    sDerruba = -1;
+                    proximo();
+                    continue;
+                }
+                if (sT >= p->max) {
+                    sprintf(s, "%s: %d quadros sem a luta andar (o estado 3 da sequência) para terminar", p->onde,
+                            p->max);
+                    falha(s);
+                }
+                sT++;
+                return consome(0);
+            }
+            if (gBtlSeq->state != BTL_SEQ_LUTANDO) {
+                if (!p->n) {
+                    sprintf(s, "%s: a luta saiu do estado 3 (agora %d) sem o passo derrubar ninguém", p->onde,
+                            gBtlSeq->state);
+                    falha(s);
+                }
+                sprintf(s, "roteiro: %s luta terminada (%s) vblank %u quadro %u", p->onde,
+                        p->valor ? "vence" : "perde", gPortVBlanks, sQuadro);
+                diz(s);
+                p->n = 0; /* (o passo pode estar num repete) */
+                sDerruba = -1;
+                proximo();
+                continue;
+            }
+            /* o pedido para o quadro do jogo em andamento: o golpe sai no BtlChars_SampleInput dele */
+            sDerruba = p->valor ? 1 : 0;
+            strcpy(sDerrubaOnde, p->onde);
+            p->n = 1;
+            if (sT >= p->max) {
+                sprintf(s, "%s: %d quadros e a luta não terminou (estado 3 da sequência)", p->onde, p->max);
+                falha(s);
+            }
+            sT++;
+            return consome(0);
         case P_MARCA:
             sprintf(s, "roteiro: %s marca %s vblank %u quadro %u", p->onde, p->texto, gPortVBlanks, sQuadro);
             diz(s);
@@ -650,3 +767,21 @@ int Roteiro_Pad(int socket, unsigned char *data) {
     data[2] = data[3] = data[4] = data[5] = 0x80;
     return 18;
 }
+
+#ifndef PORT_X360
+/* O golpe do passo "termina luta" (acima): no quadro do jogo, depois do giro dos eventos (Battle_UpdateWork) e logo
+   antes do Battle_Update, onde o jogo dá os seus. Entra por --wrap no BtlChars_SampleInput (chamado do Battle_Loop,
+   src/battle/battle.c, outro objeto; headless.py); sem roteiro, ou sem pedido, só chama o original. */
+void __real_BtlChars_SampleInput(void);
+void __wrap_BtlChars_SampleInput(void) {
+    char s[200];
+    __real_BtlChars_SampleInput();
+    if (sDerruba < 0 || gBtlSeq == NULL || gBtlSeq->state != BTL_SEQ_LUTANDO || BtlChar_Get(sDerruba) == NULL ||
+        BtlCtrl_IsActiveDead(sDerruba)) {
+        return;
+    }
+    BtlMember_Damage(BtlChar_Get(sDerruba), TERMINA_DANO, TERMINA_DANO_FLAGS);
+    sprintf(s, "roteiro: %s derrubado lado %d vblank %u quadro %u", sDerrubaOnde, sDerruba, gPortVBlanks, sQuadro);
+    diz(s);
+}
+#endif

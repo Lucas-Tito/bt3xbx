@@ -209,7 +209,10 @@ def ligar(alvo, objs):
              "-Wl,--wrap=Progress_Main", f"-Wl,-Map={alvo.exe}.map",
              # as imagens das telas (port/x360/headless/imagens.c, F4 etapa 6): a lista de cada quadro e as cargas fora
              # dela passam por lá, que desenha só as janelas antes de cada imagem e grava a imagem
-             "-Wl,--wrap=Port_GsVif1Chain", "-Wl,--wrap=Port_GsGifChannel"]
+             "-Wl,--wrap=Port_GsVif1Chain", "-Wl,--wrap=Port_GsGifChannel",
+             # o golpe do passo "termina luta" dos roteiros (port/x360/headless/roteiro.c, F4 etapa 9a): no quadro da
+             # luta, depois do giro dos eventos e antes do Battle_Update, onde o jogo dá os seus
+             "-Wl,--wrap=BtlChars_SampleInput"]
     if alvo.rastreio:
         resto += ["-Wl,--wrap=memcpy", "-Wl,--wrap=memmove", "-Wl,--wrap=memset"]
     if alvo.rastreio or alvo.nome == "ppc":  # o rastreio marca a origem; a PowerPC inverte os bytes (inverter.c)
