@@ -1,0 +1,14 @@
+# F4, etapa 8: o save que o roteiro opcoes deixa no cartão (som em mono, salvo pelo McFlow), carregado num boot
+# seguinte. O som já é o do save no título (o boot carrega antes dele), continua no menu principal pelo Continue e
+# na tela das Opções.
+espera tela 1 max 20000
+confere som 1                     # o boot carregou o mono (no console: a linha "ok som 1" no bt3xbx.log)
+inclui save_continua.txt
+confere som 1
+quadros 90
+aperta CIMA 2                     # Opções (com tudo desbloqueado, como o opcoes deixou o save)
+aperta X ate tela 62 max 300      # Option
+quadros 150
+confere som 1
+quadros 60
+fim

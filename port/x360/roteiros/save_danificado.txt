@@ -1,0 +1,30 @@
+# F4, etapa 8: um save que o jogo recusa (de outra ordem de bytes, truncado, estragado). O boot o lê (McFlow 19) e
+# mostra a mensagem de dados danificados (29); o X segue para a pergunta seguinte (22), e o "sim" continua sem
+# carregar. O título só tem o New Game, que grava um save novo por cima (a pergunta de sobrescrever o arquivo
+# existente também recebe "sim"), e o menu principal abre com as opções padrão (som estéreo).
+espera mcflow 29 max 20000        # dados danificados
+quadros 60
+aperta X
+espera mcflow 22 max 300
+quadros 60                        # (a pergunta começa no "não" e só aceita entrada uns 40 quadros depois)
+aperta ESQUERDA
+quadros 10
+aperta X
+espera mcflow 0 max 600
+espera tela 1 max 20000
+repete ate mcflow 10 max 4000     # New Game, como no boot.txt
+    aperta START
+    quadros 30
+    aperta X
+    quadros 30
+volta
+repete ate mcflow 0 max 3000      # "sim" a cada pergunta do fluxo do cartão
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+espera tela 4 max 600
+confere som 0                     # o save novo, com as opções padrão
+quadros 60
+fim

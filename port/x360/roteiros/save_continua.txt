@@ -1,0 +1,13 @@
+# Do boot ao menu principal com um save no cartão (F4, etapa 8), sem "fim": incluído pelos roteiros save_*.txt.
+# O boot lê o save (McFlow 19) e, se a soma confere, o copia para a memória (20, "carregado"); o título então tem
+# dois itens com o cursor no Continue (Title_Init), e START e X vão direto ao menu principal, sem o fluxo do New Game.
+# Sem save carregado o mesmo X abriria o "criar o save?" (McFlow 10): o save_entre.sh confere pelo rastro que o
+# boot passou por 19 e 20 e que o 10 não apareceu (o roteiro sozinho não basta: o "não" ao 10 e ao 9 também leva ao
+# menu, sem save).
+espera tela 1 max 20000           # título (o boot já leu o save, na tela "inicio")
+repete ate tela 4 max 4000
+    aperta START
+    quadros 30
+    aperta X
+    quadros 30
+volta

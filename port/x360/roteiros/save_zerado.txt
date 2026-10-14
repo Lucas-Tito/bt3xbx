@@ -1,0 +1,9 @@
+# F4, etapa 8: um arquivo de dados todo zerado (16384 bytes). A soma de zeros é zero e as duas palavras dela também:
+# o jogo do PS2 o aceita e carrega um save zerado (som 0, estéreo). O roteiro confere que o boot o carrega, que o
+# Continue leva ao menu principal e que o jogo segue sem queda.
+espera tela 1 max 20000
+confere som 0
+inclui save_continua.txt
+confere som 0
+quadros 300
+fim
