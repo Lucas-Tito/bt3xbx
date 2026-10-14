@@ -20,7 +20,7 @@ save_console.sh; não lê nada do jogo, só os arquivos do cartão (dado do usu�
                                               e foi a 20 (carregado) ou a 29 (dados danificados), como previsto; no carrega,
                                               o New Game (10) nunca abriu; no danificado, o 20 nunca veio e o New Game abriu;
                                               o roteiro chegou ao fim, sem FALHA, sem queda (o código de saída 0)
-    save_entre.py campos X86 PPC              o save da x86 e o da PPC (pastas card1/BASLUS-21678DBZT3) campo a campo pela
+    save_entre.py campos X86 PPC              o save da x86 e o da PPC (a raiz do cartão ou a pasta com os três arquivos) campo a campo pela
                                               largura declarada (SaveData, include/sys/save.h; McCardIconSys,
                                               include/battle/stgm_a_b.h): os mesmos valores, cada um na ordem da sua build.
                                               Com --mesma-ordem, dois saves da mesma ordem (PPC e 360): bytes iguais, ou os
@@ -250,9 +250,10 @@ def compara_campos(a, b, campos, ordem_b, rotulo):
 
 
 def campos(da, db, mesma):
-    da, db = pathlib.Path(da), pathlib.Path(db)
-    pa = next(da.rglob(f"card1/{DADOS}")) if not da.name == DADOS else da
-    pb = next(db.rglob(f"card1/{DADOS}")) if not db.name == DADOS else db
+    def pasta(d):  # a pasta com os três arquivos (a do save_console.sh), ou a raiz de um cartão (card1/...)
+        d = pathlib.Path(d)
+        return d if (d / DADOS).is_file() else next(d.rglob(f"card1/{DADOS}"))
+    pa, pb = pasta(da), pasta(db)
     erros = 0
     for nome, cs in ((DADOS, campos_save()), ("icon.sys", campos_iconsys()), ("dbzsm.ico", None)):
         a, b = (pa / nome).read_bytes(), (pb / nome).read_bytes()
