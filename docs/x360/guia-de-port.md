@@ -685,6 +685,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     bytes no meio); os pools do motor de scripts (`Gsc_Init`) não zeram os elementos livres, e o resto da memória fica
     neles, igual nas duas builds. Um trecho tipado só junta bytes contíguos, e o deslocamento num bloco do heap conta do
     começo dos dados (`dados +0x..` na linha da região), para cada campo listado se ver.
+  - **Aceitar uma região inteira é aceitar o erro que cair nela.** Os dois buffers de pacotes da GPU eram aceitos pelo
+    índice do bloco (heap#24 e #25) com qualquer número de palavras diferentes em qualquer lugar: um forjado com 5.000
+    passava, e se uma alocação do boot mudasse o índice seria outro bloco. Agora a região é a de 0x100000 bytes pedidos,
+    e só passam trechos com a forma dos campos não iniciados do `GfxPostSpritePkt` (uv0.pad, uv1.pad, nop: começo em 12
+    ou 8 mod 16, com 4, 8, 0x14 ou 0x24 bytes), com teto de trechos e de palavras.
   - **Conteúdo que só aparece de passagem pede um quadro próprio.** Os retratos dos marcadores (aleatório 921 e
     personagem salvo 923) só ficam vivos enquanto o cursor está na célula; o roteiro do Duelo passa por elas (CIMA do
     canto dá a volta para a célula 0xA3; ESQUERDA na penúltima linha dá a volta para a 0xA1), espera o retrato carregar

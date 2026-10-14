@@ -294,7 +294,8 @@ BLOQUEIO = [re.compile(r"Sprite_Unpack sem conversor em (\w+) \(retorno [^)]*\):
 #     2xu16, u64, u64-com-zero, misto, float-proximo), fora dos blocos com marcas e das globais com tipo, só nas regiões
 #     de CLASSES_CONHECIDAS, cada uma com o porquê e um teto; e a soma delas nas regiões listadas igual à do total (uma
 #     palavra dessas classes fora de uma linha de região não passa calada);
-#   - os dois buffers de pacotes da GPU (pedido 0x100000) com "diferente" só sem palavra de troca de ordem de pacote.
+#   - os dois buffers de pacotes da GPU (pedido 0x100000) só com "diferente" nos campos não iniciados do pacote de
+#     sprite (PACOTE_GPU) e com teto.
 # Uma região do heap se nomeia pelo tamanho pedido ("heap:0x4000"), não pelo índice, que muda de um quadro e de um
 # roteiro para outro (o dono de cada uma, conferido com campos.py --donos, vai no comentário); uma global, pelo nome.
 SUSPEITAS = ("igual-sem-inverter", "2xu16", "u64", "u64-com-zero", "misto", "float-proximo")
@@ -363,11 +364,17 @@ CLASSES_CONHECIDAS = [
 ]
 
 # Os dois buffers de pacotes da GPU (Dma_InitBuffers, 0x100000 bytes cada): o pacote de sprite pronto
-# (GfxPostSpritePkt, src/sys/gfxm_a.c) é um local copiado inteiro para o pacote (StgPanBlur_DrawView), com uv0.pad,
-# uv1.pad e nop nunca iniciados: lixo da pilha, outro em cada build, em bits que o GS ignora. Os "diferentes" ali são
-# aceitos pela região inteira, desde que não haja palavra das classes de troca de ordem de um pacote (decisão 19)
+# (GfxPostSpritePkt, src/sys/gfxm_a.c, 0x60 bytes, alinhado a 16) é um local copiado inteiro para o pacote
+# (StgPanBlur_DrawView), com uv0.pad (+0x3C), uv1.pad (+0x4C) e nop (+0x58, 8 bytes) nunca iniciados: lixo da pilha,
+# outro em cada build, em bits que o GS ignora. Só valem trechos "diferentes" com a forma desses campos (o memdiff
+# junta palavras a até 16 bytes): começando em 12 mod 16 (uv0.pad, uv1.pad, a metade alta do nop) com 4, 0x14 ou 0x24
+# bytes (até o fim do uv1.pad ou do nop), ou em 8 mod 16 (o nop) com 4 ou 8; e nenhuma palavra das classes de troca de
+# ordem de um pacote (decisão 19).
 PACOTE_GPU = "heap:0x100000"
+FORMAS_GPU = {12: (4, 0x14, 0x24), 8: (4, 8)}
 PROIBIDAS_EM_PACOTE = ("u64", "u64-com-zero", "2xu16", "misto", "float-proximo")
+TETO_TRECHOS_GPU = 64   # trechos por buffer (o maior visto: 22)
+TETO_DIFERENTES_GPU = 160  # palavras "diferente" por buffer (o maior visto: 88)
 
 
 # As telas de menu do caminho essencial em que a memória se compara no último vblank (roteiros.sh, vblanks_mem), com o
@@ -507,6 +514,11 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
                     print(f"{pre}DIFERENÇA: memória: {regiao} (pacotes da GPU) com palavras {', '.join(ruins)}: "
                           "troca de ordem num pacote, não lixo")
                     ok = False
+                if esperados > TETO_TRECHOS_GPU or cl.get("diferente", 0) > TETO_DIFERENTES_GPU:
+                    print(f"{pre}DIFERENÇA: memória: {regiao} (pacotes da GPU) com {esperados} trechos e "
+                          f"{cl.get('diferente', 0)} palavras diferentes (tetos {TETO_TRECHOS_GPU} e "
+                          f"{TETO_DIFERENTES_GPU})")
+                    ok = False
             for c in SUSPEITAS:
                 n = cl.get(c, 0)
                 if not n or (chave_r == PACOTE_GPU and c in PROIBIDAS_EM_PACOTE):
@@ -525,7 +537,12 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
             vistos += 1
             ender, tam, d = int(m.group(1), 16), int(m.group(2), 16), int(m.group(4), 16)
             if chave_r == PACOTE_GPU:
-                explicados["pacotes da GPU"] += 1
+                if tam in FORMAS_GPU.get(ender % 16, ()):
+                    explicados["pacotes da GPU"] += 1
+                else:
+                    print(f"{pre}DIFERENÇA: memória: {regiao}+0x{d:x} (+0x{tam:x} bytes, endereço {ender % 16} mod 16) "
+                          "nos pacotes da GPU fora da forma de uv0.pad, uv1.pad e nop")
+                    ok = False
                 continue
             porque = conhecida(chave_r, d - dados0, tam)
             if porque is None:
