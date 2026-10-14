@@ -1,0 +1,28 @@
+# Dragon History, o caminho da derrota (F4, etapa 9b; o pendente 4 da revisão da 9a): o primeiro episódio perdido pelo
+# passo "termina luta perde" (o Goku derrubado pelo dano do jogo; o roteiro de evento do episódio decide), e o que a
+# História faz depois: o resultado só com a legenda da derrota (HistResult, 8, sem pontos nem recompensa) e a volta à
+# lista de episódios (ModeMenu, 7), sem save.
+inclui boot.txt
+quadros 90
+aperta X ate tela 6               # História (o primeiro item)
+quadros 300
+repete ate tela 7 max 3000        # as falas do Goku e a primeira saga
+    aperta X
+    quadros 120
+volta
+quadros 300
+repete ate luta max 6000          # o primeiro episódio e a apresentação dele
+    aperta X
+    quadros 150
+volta
+quadros 60
+termina luta perde                # o lado 0 derrubado
+espera tela 8 max 6000            # HistResult
+quadros 150
+marca derrota                     # (a legenda da derrota: a imagem)
+repete ate tela 7 max 3000
+    aperta X
+    quadros 60
+volta
+quadros 150
+fim

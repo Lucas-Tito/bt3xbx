@@ -1,0 +1,17 @@
+# Do boot ao menu principal com o cartão vazio, como o boot.txt, mas SEM o desbloqueio (F4, etapa 9b): o New Game, o
+# "sim" ao "criar o save?" e o save do jogo como ele nasce. Para os roteiros que precisam do jogo sem nada ganho (a
+# História com recompensas de verdade). Os passos que mudam o jogo (termina luta) pedem BT3_DESBLOQUEIO=1 assim mesmo.
+espera tela 1 max 20000           # título (antes: logos e o cartão, tela "inicio")
+repete ate mcflow 10 max 4000     # START e X até o "criar o save?" (McFlow 0xA), como no boot.txt
+    aperta START
+    quadros 30
+    aperta X
+    quadros 30
+volta
+quadros 60                        # o diálogo começa no "não" e só aceita entrada uns 40 quadros depois de abrir
+aperta ESQUERDA
+quadros 10
+aperta X
+espera mcflow 15 max 600          # gravando o save
+espera mcflow 0 max 600           # o fluxo terminou
+espera tela 4 max 600             # menu principal
