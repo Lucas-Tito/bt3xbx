@@ -7,8 +7,9 @@
  *
  *   BT3_ROTEIRO=<arquivo>   liga o roteiro (sem ela, nada muda: Roteiro_Pad devolve 0 e o controle fica parado)
  *   BT3_DESBLOQUEIO=1       permite os passos que mudam o estado do jogo: "desbloqueia" (Save_UnlockAll do próprio
- *                           jogo, o mesmo da aba de truques da janela do PC) e "termina luta" (o resultado da luta pela
- *                           função do próprio jogo, BtlFacade_SetResult); sem ela o passo para o roteiro com erro.
+ *                           jogo, o mesmo da aba de truques da janela do PC) e "termina luta" (o adversário derrubado
+ *                           pelo dano do próprio jogo, BtlMember_Damage; o jogo decide a luta); sem ela o passo para
+ *                           o roteiro com erro.
  *                           Nunca no jogo normal. E só com o cartão vazio no começo da rodada (sem o arquivo de dados
  *                           do save na pasta de saves, BT3_SAVES): o desbloqueio e a vitória dada iriam para o save de
  *                           verdade na próxima gravação
@@ -638,7 +639,7 @@ static unsigned quadro(void) {
                 /* confere saga N: o fim da saga N da História visto (MSLOT_OUTRO_SEEN no SaveSlot N, include/menu/
                    menu_c.h, que o HistOutro_Init grava e o HistSave leva ao cartão) */
                 if (!(gSaveData->slot[p->valor].flags & 4)) {
-                    sprintf(s, "%s: saga %d sem o fim visto (gSaveData->slot[%d].flags 0x%x, sem o bit 4)", p->onde,
+                    sprintf(s, "%s: saga %d sem o fim visto (gSaveData->slot[%d].flags 0x%x, sem o bit 2)", p->onde,
                             p->valor, p->valor, (unsigned)gSaveData->slot[p->valor].flags);
                     falha(s);
                 }

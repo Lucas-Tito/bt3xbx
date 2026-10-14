@@ -730,7 +730,9 @@ idênticos. Feito:
   controle se perdia no giro dos eventos do `Battle_UpdateWork`: ele sai por `--wrap` no `BtlChars_SampleInput`
   (`headless.py`), logo antes do `Battle_Update`, onde o jogo dá os seus. Fora do jogo normal como o `desbloqueia`
   (`BT3_ROTEIRO`, `BT3_DESBLOQUEIO=1`, cartão vazio no começo da rodada); só nas builds sem janela (no 360 para com
-  erro). Genérico para a 9b e a 9c (`vence`/`perde`; num time, derruba cada membro que entra). Com ele, o passo
+  erro). Genérico para a 9b e a 9c (`vence`/`perde`; num time, derruba cada membro que entra): na História é provado
+  pela leitura dos 48 roteiros jogáveis (todos terminam pelo gatilho de KO e o comando 9); para Missão, Sobrevivência,
+  Sim Dragon e Torneio é **hipótese** até um roteiro de cada modo terminar uma luta por ele. Com ele, o passo
   `confere saga N` (o fim da saga no save em memória).
 - **Os conversores da História** (`formatos/menus-historia.md`, `port/x360/conv/menus.c`): `menu_hist_sagas` (460 s1,
   N = 40), `menu_hist_lista` (460 s2, N = 8), `menu_hist_resultado` (460 s3, N = 5, com a peça nova `GetWin`, a janela
@@ -744,7 +746,7 @@ idênticos. Feito:
   `BObjLipData`). Duas correções no código, em `PORT_BIG_ENDIAN`: a palavra do roteiro é lida como u32 e também pelos
   bytes e pela metade alta (nenhuma ordem no arquivo serve às duas: o conversor a troca como u32 e o código lê os campos
   por deslocamento, `GSC_BYTE1`... em `include/sys/gsc.h`, um `#ifdef` com a linha original no `#else` em cada um dos
-  23 lugares de `gsc.c` e `btl_script.c`); e os ids de item do roteiro, s32 lidos como u16 pela `BtlFacadeItem`
+  24 lugares, 23 em `gsc.c` e 1 em `btl_script.c`; 14 deles em funções sem chamador, conferidos só por leitura); e os ids de item do roteiro, s32 lidos como u16 pela `BtlFacadeItem`
   (permutada, em `layout.PERMUTADAS`). Duas posições do 00510 saem "com outra largura" no `--mapa` (s32 lidos pela
   metade baixa) e passam uma a uma por `LARGURA_CONHECIDA` do `roteiros.py`, com os leitores (depois da revisão:
   operandos do comando 12, lidos só pelo `PS2_LOW` do `BattleSetup_SetMemberByItemIds` e pelo `BtlFacadeItem`; o
@@ -798,7 +800,7 @@ episódios aparecem quando um roteiro os jogar.
 
 Perguntas para o Lucas (etapa 9a), com a opção conservadora aplicada:
 
-1. **As leituras da palavra do roteiro em `gsc.c`:** feitas com um `#ifdef PORT_BIG_ENDIAN` em cada um dos 23 lugares,
+1. **As leituras da palavra do roteiro em `gsc.c`:** feitas com um `#ifdef PORT_BIG_ENDIAN` em cada um dos 24 lugares,
    a linha original no `#else`, como a regra pede. A alternativa mais curta é a das macros `PS2_LOW` (já usadas fora de
    `#ifdef` em `battle_load.c` e `col_c.c`): as macros `GSC_BYTE1`... definidas também no little-endian com a leitura
    original, e cada lugar com uma linha só, mudando o texto do upstream fora do `#ifdef`.
@@ -826,6 +828,27 @@ da 9a no WSL serviram de entrada):
    Gsc_GetInt"); a lista de 0x236C cheia ("a lista de leitores do rastreio encheu"); a linha de 0x2368 apagada do
    rastreio ("o rastreio não tem a posição"); uma posição de outra largura fora da lista no `conv.txt`; e sem o rastreio
    na linha de comando.
+2. **M3, os conflitos do GSDT do 00510:** os dez (cinco [1, 4], quatro [2, 4], um [8]) listados em `historia-luta.md`
+   5, cada um com os leitores do rastreio e o porquê, conferidos lendo o código. Nenhum é erro: os de [1, 4] têm o
+   `McCard_Checksum` como único leitor de byte (a soma do save, sobre bytes de propósito); 0x2300 (0) e 0x2310 (-1) dão
+   o mesmo valor em qualquer largura e ordem; 0x2370..0x2378 são lidos pela metade só pelo `PS2_LOW` e pelo
+   `BtlFacadeItem`; e o [8] é a cópia da struct `BtlScriptStart`.
+3. **Menores de texto:** 24 lugares, não 23 (23 em `gsc.c` e 1 em `btl_script.c`; 14 em funções sem chamador, só
+   lidos), aqui, no guia e no `historia-luta.md`; o `confere saga` é o valor 4 de `flags` (bit 2, `MSLOT_OUTRO_SEEN`),
+   não o bit 4 (também na mensagem de falha do `roteiro.c`, cadeia do mesmo tamanho: a `.text` da x86 não muda); o
+   cabeçalho do `roteiro.c` cita o
+   `BtlMember_Damage`; a linha em branco do `include/sys/gsc.h` voltou para dentro do `#ifdef` (fora dele o arquivo é
+   o do upstream); o "genérico para a 9b e a 9c" do `termina luta` virou hipótese fora da História.
+4. **As classes `heap:0x1c000` e `heap:0x20800`** (m6): a classe se nomeia pelo tamanho pedido. O 0x1C000 só o
+   `ModeMenu` pede (`grep` em `src/`), mas o 0x20800 é também o `faceRes` do CharSel (menu_c_e.c:702-703) e do TeamSel
+   (menu_e_b.c:701-702), e outros buffers de retrato e imagem dos outros modos (menu_m_b.c:398, menu_n_c.c:143,
+   menu_y_b.c:1004, menu_z_d.c:1058, menu_h_b.c:117, menu_k_b.c:40, menu_l_b.c:238, menu_i_d.c:290). Então o `duelo`,
+   o `duelo_time` e o `treino` também aceitam até 168 palavras iguais sem inverter no fim do buffer dos retratos.
+   Risco baixo (o conteúdo convertido as marcas conferem); anotado na descrição da classe no `roteiros.py`. Apertar
+   (teto pelo maior conteúdo de cada dono, ou a classe restrita à tela) fica para a 9b, quando esses modos entram.
+5. **As telas 8 a 10 da História no console** (P1): o `HistResult`, o `HistOutro` e o `HistSave` só se veem no
+   console jogando a luta à mão ou pelo atalho do `termina luta` no 360 (abaixo, tarefa do atalho); o roteiro
+   `historia` sem o atalho para no passo com erro.
 
 ## 6. Riscos principais
 

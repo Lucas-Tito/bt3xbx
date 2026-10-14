@@ -450,7 +450,10 @@ CLASSES_CONHECIDAS = [
     ("heap:0x20800", {"igual-sem-inverter": (0x20800 - 0x20560) // 4},
      "gModeMenu->imageRes (menu_a_d.c:257): o episódio descomprimido (0x20560 bytes, conferido pelas marcas) num buffer "
      "de 0x20800; o resto, 0x2A0 bytes depois do conteúdo, são bytes de antes (Heap_Alloc não limpa e o Bpe_Decode só "
-     "grava o conteúdo). O teto é esse resto. Etapa 9a"),
+     "grava o conteúdo). O teto é esse resto. Etapa 9a. A classe se nomeia pelo tamanho pedido, e 0x20800 é também o "
+     "faceRes do CharSel (menu_c_e.c:702) e do TeamSel (menu_e_b.c:701) e outros buffers de retrato e imagem dos "
+     "outros modos (menu_m_b.c, menu_n_c.c, menu_y_b.c...): eles ganham a mesma tolerância de 168 palavras no fim do "
+     "buffer (plano.md, revisão da 9a)"),
     ("heap:0x68", {"igual-sem-inverter": 8},
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),

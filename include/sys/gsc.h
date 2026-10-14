@@ -30,8 +30,8 @@
 #define GSC_BYTE2(w) ((u8)(*(u32 *)(w) >> 16))
 #define GSC_HALF1(w) ((u16)(*(u32 *)(w) >> 16))
 #define GSC_SHALF1(w) ((s16)(*(u32 *)(w) >> 16))
-#endif
 
+#endif
 /* Phase handed to a command handler. */
 #define GSC_PHASE_BEGIN 0       /* first frame; a non-zero return ends the command at once */
 #define GSC_PHASE_END 1         /* the command is over */

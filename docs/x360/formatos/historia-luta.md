@@ -97,9 +97,9 @@ include/sys/gsc.h, `GSC_BYTE1(w)` = `(u8)(*(u32 *)w >> 8)`, `GSC_BYTE2(w)` = `(u
 = `(u16)(*(u32 *)w >> 16)` e `GSC_SHALF1(w)` = `(s16)(...)`, definidas só em `PORT_BIG_ENDIAN`; em cada lugar, um
 `#ifdef PORT_BIG_ENDIAN` com a leitura pela macro e, no `#else`, a linha original intacta (o upstream só muda dentro do
 `#ifdef`; os objetos da x86 saem iguais aos de antes, a menos da informação de depuração, que muda com as linhas).
-Aplicada na etapa 9a (23 lugares). Os lugares: `Gsc_NotifyAll`, `Gsc_StepTask` (três), `Gsc_FindOptionN` e
+Aplicada na etapa 9a (24 lugares: 23 em `gsc.c` e 1 em `btl_script.c`). Os lugares: `Gsc_NotifyAll`, `Gsc_StepTask` (três), `Gsc_FindOptionN` e
 `Gsc_SeekOption` (três cada), `Gsc_CountOptions` (duas), `Gsc_CountOption` (três), `Gsc_NextCommand` (três), os dois
-`Gsc_Dump*` (sem efeito: a impressão foi compilada fora) e `BtlScript_ScanEvents` (btl_script.c:119). **Sem essa
+`Gsc_Dump*` (sem efeito: a impressão foi compilada fora) e `BtlScript_ScanEvents` (btl_script.c:119). Desses, 14 estão em funções que nada chama (`Gsc_NotifyAll`, `Gsc_SeekOption`, `Gsc_CountOptions`, `Gsc_CountOption` e os dois `Gsc_Dump*`, sem chamador em `src/` nem em `port/`): nenhuma rodada os executa, e foram conferidos só por leitura. **Sem essa
 correção a PPC e o 360 leem a contagem e o id errados no primeiro comando e o roteiro da luta da História se perde.**
 
 ### 2.6 Os ids de item: `BtlFacadeItem` (correção no código, aplicada na etapa 9a)
@@ -156,7 +156,29 @@ lutador). O conversor é o `Conv_Labio` do lutador.
   675 conteúdos descomprimidos sem erro.
 - `conv_tool --mapa` (rastreio do `historia` da etapa 4): 00510, cobertura 10.768 de 10.768 bytes, 722 posições, 720
   iguais, 2 com outra largura (2.6), 0 não trocadas; 00560, 27.520 de 27.520, 148 posições, todas iguais; 00710, 13.440
-  de 13.440, 70 posições, todas iguais.
+  de 13.440, 70 posições, todas iguais. Na rodada final da 9a (`93227ed`), o 00510 com 752 posições, 750 iguais e as
+  mesmas 2 com outra largura.
+- **Os conflitos do GSDT do 00510** (`mapa.tsv.conflitos` da rodada final da 9a; o `rastreio.py` não inverte conflito,
+  e o `conv_tool --mapa` não os confere): além das 1.779 posições das palavras do GSCD (2.5), dez valores do GSDT. Os
+  leitores são os pcs do `rastreio.tsv` (até 4 por posição; os de byte na última coluna), resolvidos na x86r; os
+  comandos, da análise dos operandos do arquivo. Nenhum é erro de ordem: cada leitura estreita é de uma cópia do
+  número ou de uma leitura que dá o mesmo valor nas duas ordens.
+
+  | Posição | Valor | Larguras | Leitores (rastreio) | Operando de | Por que está certo |
+  |---|---|---|---|---|---|
+  | 0x2300 | 0 | [1, 4, 16] | `Gsc_GetInt`, `Gsc_GetIntOr`, `BtlLoad_StepInitial`, `BtlScript_GetStory` (lista cheia); byte: `McCard_Checksum` | 96 operandos (comandos 2, 7, 8 a 13, 15, 801, 807, 901, 1302...) | o valor é 0: toda leitura, de qualquer largura e em qualquer ponto, dá o mesmo nas duas ordens. A de 16 bytes é uma cópia em bloco que a lista cheia não nomeia |
+  | 0x2314 | 1 | [1, 4] | `Gsc_GetInt`, `Gsc_GetIntOr`, `BtlScript_ScanEvents`, `BtlLoad_StepInitial`; byte: `McCard_Checksum` | 90 operandos | as leituras de 4 são do número (as do roteiro por `Gsc_GetInt` e as das cópias dele em campos s32); o único leitor de byte é o `McCard_Checksum` (stgm_a_b.c:939), que soma os bytes de um bloco de propósito (o save, o cabeçalho de slot ou o replay) e sai na ordem da build (etapa 8) |
+  | 0x2330 | 2 | [1, 4] | `Gsc_GetInt`, `Gsc_GetIntOr`, `BtlScript_ScanEvents`, `File_UpdateRequests`; byte: `McCard_Checksum` | 37 operandos | o mesmo: 4 bytes do número, o byte só pelo `McCard_Checksum` |
+  | 0x233C | 3 | [1, 4] | `Gsc_GetInt`, `BtlScriptCmd_Talk`, `Port_AdxTick`; byte: `McCard_Checksum` | 6 operandos (comandos 10, 12, 15, 1302, 1603) | o mesmo; o `Port_AdxTick` (port/src/plat_sndstate.c:30) lê campos `int` do `PortAdxView` (`stat`, `left`), aonde o rastreio levou uma cópia do valor |
+  | 0x2348 | 15 | [1, 4] | `Gsc_GetInt`, `Battle_GetBgm`, `McCard_Checksum`; byte: `McCard_Checksum` | comando 10 (`SetRule`, a música) e 15 | o `Battle_GetBgm` devolve `SETUP()->rule.bgm` como s32 (battle_load.c:1810); o byte só pelo `McCard_Checksum` |
+  | 0x2310 | -1 | [2, 4] | `BattleSetup_SetMemberByItemIds` (os 4 pcs, lista cheia) | 44 operandos: itens do comando 12, recompensas do 16, comandos 8 e 9 | o valor é -1 (0xFFFFFFFF): toda metade dá 0xFFFF nas duas ordens. A leitura de 2 é o `PS2_LOW` dos itens (item -1 vira 0, sem item) |
+  | 0x2370 | 102 | [2, 4] | `Gsc_GetInt`, `BattleSetup_SetMemberByItemIds`, `BtlFacade_SetMemberItems` | comando 12 (item `id[3]`), 7 e 15 (`-v`, número de fala) | as leituras de 2 são o `PS2_LOW` e o `BtlFacadeItem` permutado (2.6), as de 4 o número da fala por `Gsc_GetInt` |
+  | 0x2374 | 104 | [2, 4] | os mesmos três | comando 12 (`id[4]`), 7 e 15 | idem |
+  | 0x2378 | 95 | [2, 4] | os mesmos três | comando 12 (`id[5]`) e 15 | idem |
+  | 0x25C4 | 10031 | [8], desalinhado | `BtlScript_StartPending` | comando 7 (`-a`, a ação do gatilho) | a cópia da struct `BtlScriptStart` {s32 action, ponteiro} inteira (`*cur = work->pending->u.start`, btl_script.c:638) numa leitura de 8 bytes que começa no `action`: cópia de campos nativos, cada um na ordem da build; nenhum campo é lido por outra largura |
+
+  Regra para os próximos: conflito de arquivo convertido também se explica, leitor a leitor, como as
+  `DIFERENTES_CONHECIDAS`; a coluna de pcs de byte do `rastreio.tsv` diz quem lê o byte.
 - Visto falhando (cópias estragadas no WSL, cada uma com saída 1 e a mensagem com o trecho): a etiqueta da primeira
   ação trocada ("etiqueta em 0x50 não é GSAC [ação 0]"), o dataSize do GSCD aumentado ("etiqueta em 0x2300 não é
   GSDT"), um operando com índice fora do GSDT ("operando em 0x104 com valor 65535 de 444 [ação 3]"), a contagem da
