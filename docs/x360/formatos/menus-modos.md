@@ -87,6 +87,11 @@ Achadas nos leitores; os nomes são os deste inventário.
 | `menu_logos` | `FirstRun_Main`, src/menu/menu_i_c.c:173 | 473, seção 3 (5.2) |
 | `menu_mcflow` | `McFlow_Init`, src/sys/mcflow_a.c:2636 | 477 inteiro (5.3) |
 | `menu_principal` (etapa 5a) | `MainMenu_Init`, src/menu/menu_a.c:55 | 449, seção 2 (`menus-pecas.md` 6) |
+| `menu_duelo` (etapa 5b) | `DuelMenu_Init`, src/menu/menu_g_c.c:195 | 448, seção 1 (`menus-telas.md` 2) |
+| `menu_selecao` (etapa 5b) | `CharSel_Init` menu_c_e.c:400 e :409, `TeamSel_Init` menu_e_b.c:469 | 448 e 461, seção 2 (`menus-telas.md` 3) |
+| `menu_treino` (etapa 5b) | `Train_Init`, src/menu/menu_h_d.c:650 | 461, seção 1 (`menus-telas.md` 4) |
+| `menu_opcoes` (etapa 5b) | `Option_Init`, src/menu/menu_x_c.c:39 | 453, seção 1 (`menus-telas.md` 5) |
+| `menu_texfile`, `menu_fundo` (etapa 5b) | os retratos, os estágios e as páginas do Treino do essencial (as 9 chamadas de 3.2 marcadas "sim") | 760..923, 924..959 (fundo), 1025..1422 (`menus-telas.md` 6) |
 | `folha` (`Port_ConvertLoadSheet`) | `Load_InitScreen`, src/sys/loading.c:166 | 960..962 inteiro |
 | `animacao` (`Port_ConvertAnim`) | `BtlObjAnim_Load`, src/battle/bobj_a.c:368 (`Bpe_Decode` direto) | animação do lutador |
 
@@ -167,7 +172,8 @@ UB resultado 10, MisSel 2/9/12..14, TourMenu 24, EntrySel 27/37/38, Bracket 33/3
 | outros pacotes de tela (27 formatos) | 36 | 0 | 36 |
 | **total de `Sprite_Unpack`** | **82** | **21** | **61** |
 
-Pendentes: 77 (16 essenciais, 61 não); desde a etapa 5a, 76 (15 essenciais), com o `menu_principal`. A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
+Pendentes: 77 (16 essenciais, 61 não); desde a etapa 5a, 76 (15 essenciais), com o `menu_principal`; desde a etapa
+5b, 61 (nenhuma essencial), com o resto do essencial (`menus-telas.md`). A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
 que o `unpacks.py` acha. Formatos novos: 33 (`menu_texfile` e 32 pacotes de tela); 6 deles no essencial
 (`menu_texfile`, `menu_principal`, `menu_duelo`, `menu_selecao`, `menu_treino`, `menu_opcoes`).
 
@@ -232,8 +238,8 @@ Lê `src/` pelo texto (sem build) e confere, para cada `Sprite_Unpack`: o bloco 
 comando com `Port_ConvertMenuPack(buffer, ((s32 *)origem)[0], "formato")`, `Port_ConvertLoadSheet` ou a marca
 `Port_UnpackSemNumeros(buffer)`; o buffer do gancho igual ao resultado do `Sprite_Unpack`; o tamanho igual ao
 `rawSize` da origem; o formato presente em `sFormatos` (conv.c); e a tabela `CHAMADORES` da guarda igual às funções que
-chamam `Sprite_Unpack`. Hoje: `82 chamadas de Sprite_Unpack em 62 funções: bpe-direto 1, com gancho 5, pendente 77; 0
-com erro` (sai com 1 enquanto houver pendente).
+chamam `Sprite_Unpack`. Na etapa 1: `82 chamadas de Sprite_Unpack em 62 funções: bpe-direto 1, com gancho 5, pendente 77; 0
+com erro` (sai com 1 enquanto houver pendente); depois da etapa 5b, `com gancho 21, pendente 61`, nenhuma do essencial.
 
 ### 7.2 A guarda em tempo de jogo
 
@@ -245,10 +251,11 @@ uma queda com anotação pendente põe o nome no log (`AoMorrer`, main360.cpp). 
 
 ## 8. Hipóteses e o que não foi levantado
 
-- N de cada pacote quando o código não lê a última seção (Duelo 27, Opções 38, EvoZ 39, seleção 56, saga, Shenlong);
-  o conversor da etapa 5 confere pela tabela do disco.
+- N de cada pacote quando o código não lê a última seção (EvoZ 39, saga, Shenlong); o conversor da etapa 5 confere
+  pela tabela do disco. Decididos na 5b: Duelo 27, Opções 38, seleção 56 (`menus-telas.md`).
 - O conteúdo das seções sem leitor (seção 3.4) e das palavras não lidas das ListaIds (+4..+0xF).
-- Que 461 seção 2 tenha o layout de 448 seção 2.
-- O teto das faixas: retratos 921..923 (marcadores), páginas do Treino, e se os estágios 0x24 e 0x25 nunca se carregam.
+- Que 461 seção 2 tenha o layout de 448 seção 2 (confirmado na 5b: o mesmo conversor converte as duas inteiras).
+- O teto das faixas: decidido na 5b (`menus-telas.md` 6): os retratos 760..923 inteiros, as páginas 1025..1422 pelas
+  aulas; os estágios 0x24 e 0x25 nunca se carregam pela grade (o cursor só para em estágio desbloqueado).
 - O interior do PassChk, de `ZItemEntry`, de `DcGridCell` e da seção 2 do Shenlong (leitor em assembly).
 - Os campos não nomeados dos registros de larguras misturadas (`TrainLesson`, `LTourCpu`, `ZItemEntry`).

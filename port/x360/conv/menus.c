@@ -643,3 +643,30 @@ void Conv_MenuTreino(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         Conv_Onde(c, "seção %lu do Treino", (unsigned long)i);
     }
 }
+
+/* §5: as Opções (Option_Init, src/menu/menu_x_c.c, seção 1 de 00453). TexFile 1..6, 9..30 e 34 (OPT_RES; 30 o fundo,
+   18 os ícones da janela de ícone), 8 o filme, 31 a janela de mensagem, 32 a de ícone, 33 os textos dela, 35 o
+   diálogo do cartão (McFlow), 36 as legendas com a boca, 37 a lista de músicas do teste de som, 38 os textos do
+   diálogo; 7 sem leitor e sem forma conhecida (menus-telas.md 5.3) */
+void Conv_MenuOpcoes(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_u8 minimo[35] = {0, 2, 1, 2, 1, 1, 3, 0, 0, 1, 3, 2, 1, 2, 3, 3, 3, 3, 1, 10, 1, 4, 1, 4, 1, 1, 1,
+                                       2, 1, 1, 8, 0, 0, 0, 2};
+    conv_u32 ent[40], i;
+    if (!Conv_Secoes(c, base, tam, ent, 38, "Opções")) {
+        return;
+    }
+    for (i = 1; i <= 38 && !c->erro; i++) {
+        switch (i) {
+        case 7: Conv_RestoBytes(c, ENT(7)); break; /* sem leitor: fica em bytes */
+        case 8: Conv_Flash(c, ENT(8)); break;
+        case 31: Conv_JanelaMsg(c, ENT(31)); break;
+        case 32: Conv_JanelaIcone(c, ENT(32)); break;
+        case 33: case 38: Conv_Textos(c, ENT(i)); break;
+        case 35: Conv_Dialogo(c, ENT(35)); break;
+        case 36: Conv_LipPack(c, ENT(36)); break;
+        case 37: Conv_ListaMusicasOpcoes(c, ENT(37)); break;
+        default: Conv_TexFileMin(c, ENT(i), minimo[i]); break;
+        }
+        Conv_Onde(c, "seção %lu das Opções", (unsigned long)i);
+    }
+}

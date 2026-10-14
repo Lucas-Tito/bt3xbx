@@ -546,8 +546,8 @@ Surpresas do código (para a etapa 5b):
 3. **`ItemPanel_Init` roda duas vezes** sobre o mesmo pacote no CharSel e no TeamSel (relocação repetida,
    idempotente): a conversão é por pacote, no gancho do `Sprite_Unpack`, nunca por chamada.
 4. **ItemHelp aninhado** no Shenlong (472 s2, seção 6, seção 4 do `ShenCfm`): entra na etapa 9 com o `menu_shenlong`.
-5. O header do CharSel diz "a pack of 57 sections" (include/menu/menu_d.h:146) e o inventário diz 56: o N do pacote
-   da seleção continua aberto (`menus-modos.md` 8), fora destas peças.
+5. O header do CharSel diz "a pack of 57 sections" (include/menu/menu_d.h:146) e o inventário diz 56: o disco tem 56
+   nos dois pacotes (`menus-telas.md` 3, etapa 5b).
 
 ## 6. Menu principal (`menu_principal`: 00449, seção 2)
 

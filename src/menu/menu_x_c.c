@@ -37,6 +37,12 @@ s32 Option_Init(s32 section) {
     memset(gOption, 0, sizeof(Option));
     gOption->pack = (u32 *)MPACK_AT(gMenuArc10, section);
     gOption->res = Sprite_Unpack(gOption->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gOption->res, ((s32 *)gOption->pack)[0], "menu_opcoes");
+    }
+#endif
     /*
      * The rest of the function sits in a block that the compiler sees as a loop (`do { } while (0)`, most likely
      * from a macro), and the counter of the loop at the end is cleared here, not in its `for`: the original
