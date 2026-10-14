@@ -13,6 +13,9 @@ void Conv_Flash(ConvCtx *c, conv_ofs a, conv_ofs b);   /* menus.md 7: filme Flas
 void Conv_Textos(ConvCtx *c, conv_ofs a, conv_ofs b);  /* menus.md 6.1: tabela de textos u16 */
 void Conv_Dialogo(ConvCtx *c, conv_ofs a, conv_ofs b); /* menus.md 6: arquivo de diálogo (Dialog_Init) */
 
+/* TexFile com pelo menos `minimo` registros (1 + o maior MTEX do leitor; 8 num fundo do Sprite_DrawPicture) */
+void Conv_TexFileMin(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo);
+
 /* menus-pecas.md: as peças comuns das telas */
 void Conv_JanelaMsg(ConvCtx *c, conv_ofs a, conv_ofs b);   /* 2: MsgWin_Init */
 void Conv_JanelaIcone(ConvCtx *c, conv_ofs a, conv_ofs b); /* 3: IconWin_Init */

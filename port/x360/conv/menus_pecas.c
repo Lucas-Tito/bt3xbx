@@ -89,7 +89,7 @@ static int alinhada(ConvCtx *c, conv_ofs a, const char *oque) {
 
 /* TexFile com pelo menos `minimo` registros (o maior índice de MTEX + 1), conferido antes de converter: o código não
    confere, mas um índice além da contagem daria ao filme um registro não relocado */
-static void texfile(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo) {
+void Conv_TexFileMin(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo) {
     conv_u32 n;
     if (c->erro) {
         return;
@@ -147,7 +147,7 @@ void Conv_ItemPanel(ConvCtx *c, conv_ofs a, conv_ofs b) {
             Conv_Textos(c, SEC(15));
             break;
         default:
-            texfile(c, SEC(i), minimo[i]);
+            Conv_TexFileMin(c, SEC(i), minimo[i]);
             break;
         }
         Conv_Onde(c, "seção %lu do ItemPanel", (unsigned long)i);
@@ -167,11 +167,11 @@ void Conv_ItemHelp(ConvCtx *c, conv_ofs a, conv_ofs b) {
         Conv_Erro(c, "ItemHelp: seção lida vazia");
         return;
     }
-    texfile(c, SEC(1), 10); /* MTEX 0, 4, 8, 9 (:23..:26) */
+    Conv_TexFileMin(c, SEC(1), 10); /* MTEX 0, 4, 8, 9 (:23..:26) */
     Conv_Onde(c, "seção 1 do ItemHelp", 0);
     Conv_Flash(c, SEC(2));
     Conv_Onde(c, "seção 2 do ItemHelp", 0);
-    texfile(c, SEC(3), 2); /* MTEX 0, 1 (:30..:31) */
+    Conv_TexFileMin(c, SEC(3), 2); /* MTEX 0, 1 (:30..:31) */
     Conv_Onde(c, "seção 3 do ItemHelp", 0);
     /* seção 4: nenhum leitor em nenhum dos nove chamadores (menus-pecas.md 5.2.3), e o rastreio dos roteiros não a vê
        ler. Não tem a forma de nenhuma peça conhecida (nem filme, nem TexFile, nem tabela): fica como está, em bytes,
@@ -305,7 +305,7 @@ void Conv_SubpacoteTexN(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 esperado) {
             Conv_Erro(c, "subpacote de texturas: subseção %lu em 0x%lX", (unsigned long)i, (unsigned long)ent[i]);
             break;
         }
-        texfile(c, SEC(i), 1);
+        Conv_TexFileMin(c, SEC(i), 1);
         Conv_Onde(c, "subseção %lu", (unsigned long)i);
     }
 }

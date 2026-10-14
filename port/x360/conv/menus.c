@@ -493,3 +493,33 @@ void Conv_MenuPrincipal(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         Conv_Onde(c, "seção %lu do menu principal", (unsigned long)i);
     }
 }
+
+/* ================================================================== as telas do resto do caminho essencial (F4, 5b)
+   Especificação: docs/x360/formatos/menus-telas.md. Cada tela é a tabela de seções do pacote, seção a seção, com
+   as peças de menus_pecas.c; um TexFile leva o mínimo de registros que o leitor usa (1 + o maior índice de MTEX,
+   e 8 no fundo desenhado por Sprite_DrawPicture, que lê as texturas 0..7). */
+
+/* §2 (menus-telas.md): o submenu do Duelo (DuelMenu_Init, src/menu/menu_g_c.c:186, seção 1 de 00448). 1..18 e 24
+   TexFile (DM_RES; 1 o fundo, 24 os ícones da janela de ícone), 19 o filme, 20 vazia, 21 os textos da janela de
+   mensagem, 22 a janela de mensagem, 23 a de ícone, 25 o diálogo (com os textos da 27), 26 as legendas com a boca */
+void Conv_MenuDuelo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    static const conv_u32 minimo[25] = {0, 8, 3, 4, 4, 6, 3, 3, 4, 1, 3, 2, 3, 2, 2, 2, 2, 6, 2, 0, 0, 0, 0, 0, 1};
+    conv_u32 ent[29], i;
+    if (!Conv_Secoes(c, base, tam, ent, 27, "Duelo")) {
+        return;
+    }
+    for (i = 1; i <= 27 && !c->erro; i++) {
+        switch (i) {
+        case 19: Conv_Flash(c, ENT(19)); break;
+        case 20: Conv_Vazia(c, ent, 20); break; /* sem leitor, e vazia no disco */
+        case 21: Conv_Textos(c, ENT(21)); break;
+        case 22: Conv_JanelaMsg(c, ENT(22)); break;
+        case 23: Conv_JanelaIcone(c, ENT(23)); break;
+        case 25: Conv_Dialogo(c, ENT(25)); break;
+        case 26: Conv_LipPack(c, ENT(26)); break;
+        case 27: Conv_Textos(c, ENT(27)); break;
+        default: Conv_TexFileMin(c, ENT(i), minimo[i]); break;
+        }
+        Conv_Onde(c, "seção %lu do Duelo", (unsigned long)i);
+    }
+}

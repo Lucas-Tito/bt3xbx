@@ -188,6 +188,7 @@ void Conv_MenuLogos(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuMcFlow(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuTitulo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuPrincipal(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuDuelo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 static const Formato sFormatos[] = {
@@ -213,6 +214,8 @@ static const Formato sFormatos[] = {
     {"menu_mcflow", Conv_MenuMcFlow},          /* 5.3: recursos do cartão (McFlow_Init) */
     {"menu_titulo", Conv_MenuTitulo},          /* 5.4: tela de título (Title_Init) */
     {"menu_principal", Conv_MenuPrincipal},    /* menus-pecas.md 6: menu principal (MainMenu_Init) */
+    /* menus-telas.md: o resto do caminho essencial (F4, etapa 5b) */
+    {"menu_duelo", Conv_MenuDuelo},            /* 2: submenu do Duelo (DuelMenu_Init) */
 };
 
 /* Que formato tem cada arquivo do disco e cada conteúdo descomprimido dele: a tabela única (arquivo e seção para
@@ -257,11 +260,12 @@ static const ConvFaixa sFaixas[] = {
     {0x1C2 - 1, 0x1C2 - 1, CONV_ARQ, "menu_pacote"},
     {0x1C2 - 1, 0x1C2 - 1, 1, "menu_titulo"},
     {0x1C2 - 1, 0x1C2 - 1, 2, "menu_principal"},
-    /* os arquivos de menu do resto do caminho essencial (menus-modos.md 1), pacotes de seções em BPE como o 0x1C2:
-       baseFile + 0 (0x1C1, Duelo: DuelMenu_Init a seção 1, CharSel e TeamSel a 2), + 5 (0x1C6, Opções:
-       Option_Init a 1) e + 13 (0x1CE, Treino: Train_Init a 1, CharSel do treino a 2). O conteúdo de cada seção entra
-       aqui com o conversor da tela (F4, etapa 5b); até lá a guarda do Sprite_Unpack nomeia a tela */
+    /* os arquivos de menu do resto do caminho essencial (menus-modos.md 1, menus-telas.md), pacotes de seções em BPE
+       como o 0x1C2: baseFile + 0 (0x1C1, Duelo: DuelMenu_Init a seção 1, CharSel e TeamSel a 2), + 5 (0x1C6,
+       Opções: Option_Init a 1) e + 13 (0x1CE, Treino: Train_Init a 1, o CharSel do treino a 2, com o layout da 2 do
+       Duelo) */
     {0x1C1 - 1, 0x1C1 - 1, CONV_ARQ, "menu_pacote"},
+    {0x1C1 - 1, 0x1C1 - 1, 1, "menu_duelo"},
     {0x1C6 - 1, 0x1C6 - 1, CONV_ARQ, "menu_pacote"},
     {0x1CE - 1, 0x1CE - 1, CONV_ARQ, "menu_pacote"},
 };

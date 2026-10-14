@@ -193,6 +193,12 @@ void DuelMenu_Init(s32 section) {
     memset(DM, 0, 0x194);
     DM->pack = (u32 *)MPACK_AT(gMenuArc5, section);
     DM->res = Sprite_Unpack(DM->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(DM->res, ((s32 *)DM->pack)[0], "menu_duelo");
+    }
+#endif
     DM_RES(1);
     DM->bg = res;
     DM_RES(2);
