@@ -98,6 +98,15 @@ static uint32_t rd32(const uint8_t *p) {
     return v;
 }
 
+/* The lowest byte of a packet word (a GS register's address). On a big-endian host the packets come converted as u32
+   words in the host's order (port/x360/conv: a 64-bit register as two words, the low one first), so the byte is the
+   word's low byte and not the first in memory. */
+#ifdef PORT_BIG_ENDIAN
+#define PKT_LOW8(p) ((uint8_t)rd32(p))
+#else
+#define PKT_LOW8(p) ((p)[0])
+#endif
+
 /* One texture of a texture file (TexEntry, include/sys/gfxm_b_b.h; 0x40 bytes, pointers already relocated) to RGBA.
    Only the one layout the name sheets have is taken: 512x256, 8 bits with a 256-colour table of 32-bit colours,
    pixels sent as a 256x128 image of 32 bits. NULL for anything else. */
@@ -123,8 +132,8 @@ static uint8_t *sheet_decode(const uint8_t *e) {
     }
     /* each packet: a DMA tag, a tag with three registers (BITBLTBUF, TRXPOS, TRXREG... as the game patches them),
        the image's tag, the image. The size registers must say what the sizes above say. */
-    if (rd32(pix + 0x30) != SHEET_W / 2 || rd32(pix + 0x34) != SHEET_H / 2 || pix[0x38] != 0x52 || (rd32(pix + 0x50) & 0x7FFF) != SHEET_W * SHEET_H / 16 ||
-        rd32(clut + 0x30) != 16 || rd32(clut + 0x34) != 16 || clut[0x38] != 0x52 || (rd32(clut + 0x50) & 0x7FFF) != 0x40) {
+    if (rd32(pix + 0x30) != SHEET_W / 2 || rd32(pix + 0x34) != SHEET_H / 2 || PKT_LOW8(pix + 0x38) != 0x52 || (rd32(pix + 0x50) & 0x7FFF) != SHEET_W * SHEET_H / 16 ||
+        rd32(clut + 0x30) != 16 || rd32(clut + 0x34) != 16 || PKT_LOW8(clut + 0x38) != 0x52 || (rd32(clut + 0x50) & 0x7FFF) != 0x40) {
         return NULL;
     }
     pix += 0x60;
