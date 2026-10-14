@@ -180,6 +180,11 @@ sair e abrir de novo o boot o carrega (linha "mc: leu ... 16384 de 16384 bytes",
 o título oferece Continue. "A opção volta como estava" fica para depois da etapa 7, quando as Opções forem alcançáveis
 no console.
 
+A outra metade fechou no console em 14/10/2026, com o Lucas (build do `4ec8067`, 103 stubs): no save dele, em `saves`,
+Continue, Duelo, Duelo em time, Treino e Opções na mão, o som posto em mono e salvo; no boot seguinte as Opções
+voltaram em mono. No save, só o `soundMode` (0 para 1), um campo do 0x0a0c (0 para 2) e a soma mudaram. Etapa 3
+concluída.
+
 Etapa 4 concluída em 13/10/2026 (WSL). O controle sai de roteiros em texto (`BT3_ROTEIRO`, `port/x360/roteiros`),
 lidos por `port/x360/headless/roteiro.c` nas três builds (x86 e PPC pelo `sem_janela.c`, 360 pelo `pad360.c`, que
 compila com os mesmos 103 stubs). Cada espera é uma condição sobre o estado do jogo: a tela (`gProgress->mode`, ou
@@ -562,7 +567,27 @@ Perguntas para o Lucas (etapa 6), com a escolha conservadora feita:
 2. **A luta fica fora do critério da etapa 6** até a F5 corrigir os `u8 rgba[4]` dos efeitos (uns 150 pontos em
    `src/battle`). Se quiser a luta já na etapa 7, a correção vem antes.
 
-**Etapa 8 (14/10/2026): o save entre builds. Parte do WSL concluída; falta a do console (roteiro abaixo).** A PPC
+**Etapa 7 (14/10/2026, console, com o Lucas): o caminho essencial no console. Concluída.** Build do `4ec8067` com a
+captura por lista (`BT3_SHOT_LISTA=G,G...` em `port/x360/src/gs/gs_d3d.cpp`: só os quadros do GS dados, os das
+imagens da etapa 6, que a build sem janela registra na linha "imagem: ... gs G"). Cada roteiro rodou com
+`BT3_DESBLOQUEIO=1` numa pasta de save vazia (`saves11` a `saves17` no console).
+
+- **Rastro:** o `opcoes` inteiro saiu igual à referência x86 (63 linhas, os mesmos vblanks). O `duelo`, o
+  `duelo_time` e o `treino` vão até a luta, que é da F5: rodaram com `BT3_ATE` no vblank da "tela carga" mais 60, e o
+  rastro saiu igual ao prefixo da referência até a carga (36, 34 e 40 linhas). O `roteiros.py compara` foi visto
+  falhando com uma cópia estragada.
+- **Capturas**, contra as imagens x86 da etapa 6 no mesmo quadro do GS (`compara_quadros.py`, pixel com diferença até
+  8): duelo 8 imagens, de 82,3% a 100% (a carga); duelo_time 6, de 82,3% a 100%; treino 12, de 82,3% a 100%; opcoes 10,
+  de 89,0% a 96,5%. O pior caso, a seleção de personagem e a de time com 82,3%, fica no patamar do título da F3
+  (83,1%). As diferenças são espalhadas, com média perto de 0, só nas bordas e no fundo da seleção: o jogo pede filtro
+  bilinear para um fundo de 1024 x 512 reduzido a 512 x 448, o console filtra e o rasterizador de software amostra no
+  ponto. Nenhuma peça faltando, nenhuma imagem preta, nenhuma queda (lado a lado em `build/capturas/etapa7/`, fora
+  do git).
+- **Para a F5 e a F6:** a boca de quem fala (Videl no menu, Dende nas Opções) sai em outro quadro da animação, que segue
+  a voz (sem som até a F6). Os menus levam 19,35 ms por quadro de mediana com o desenho na GPU (de 17,5 a 34,9 ms, em
+  397 janelas de 60 quadros); o título da F3 levava 16,2 ms.
+
+**Etapa 8 (14/10/2026): o save entre builds. Concluída (a parte do console em 14/10/2026, com o Lucas).** A PPC
 (big-endian, no qemu) faz o papel do 360. O ciclo é `port/x360/tools/save_entre.sh` (com `save_entre.py`), e os roteiros
 novos `save_continua` (do boot com save ao menu principal pelo Continue, sem `fim`), `save_mono`, `save_zerado` e
 `save_danificado` (`port/x360/roteiros`):
@@ -683,6 +708,12 @@ FreeStyle. Para os roteiros no console, a pasta `port/x360/roteiros` em `game:\r
    a mensagem de dados danificados, "sim" continua, o título só com o New Game, sem queda.
 10. Devolver o save do Lucas: `save_console.sh envia build/saves/console_antes saves`, e tirar do `ambiente.txt` as
     linhas dos passos 5 e 6.
+
+No console (build do `4ec8067`), os passos 1 a 10 passaram. O save que o console gravou pelo roteiro `opcoes` em `saves8`
+saiu idêntico byte a byte ao `c_ppc` nos três arquivos, e o rastro, igual à referência x86 (passo 7). O passo 8 vale
+por essa identidade. O `save_mono` deu "ok som 1" no título, no menu e nas Opções (passo 5). O save de PC (`c_x86`, em
+`saves10`) caiu no fluxo de dados danificados (`mcflow` 19, 29, 22, 0), o New Game gravou e o menu abriu, sem queda
+(passo 9). O save do Lucas voltou para `saves`, com uma cópia em `build/saves/console_antes`.
 
 **Etapa 9a (14/10/2026, WSL): a História. Concluída.** A etapa 9 se dividiu em 9a (a História), 9b (o Ultimate Battle) e
 9c (o resto). Critério da 9a: o roteiro `historia` na PPC sem mapa igual à x86, do `HistSel` (6) e do `ModeMenu` (7)

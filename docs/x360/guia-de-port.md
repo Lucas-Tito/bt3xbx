@@ -75,7 +75,7 @@ própria só para isso). Para cá só volta texto.
 | `build.sh` | compila o `.xex` no Docker do XDK |
 | `make_spa.py` | gera o SPA (XDBF: XTHD, XSTC, nome, ícone 64x64), porque o `spac.exe` é .NET e não roda no wine |
 | `make_icon.py` | ícone próprio, sem arte do jogo |
-| `subir.py` | FTP para o console com conferência de md5; `--baixar` traz o log |
+| `subir.py` | FTP para o console com conferência de md5; `--baixar` traz o log, e antes renomeia o arquivo no console para `NOME.lido` (ler um arquivo que o jogo está gravando trava o servidor) |
 | `build_f2.sh` | o jogo inteiro até o `default.xex` (F2): `c89.py`, `cl.exe`, `coff.py`, link com stubs automáticos para o que falta, `dat360.py`, `imagexex`. Desde a F3 leva o backend D3D9 (`port/x360/src/gs`, shaders pelo `fxc`): sem janela por padrão, desenhando com `BT3_GS=gpu` no `ambiente.txt` |
 | `c89.py` | rebaixa o C do jogo e do port para o C89 do `cl` pelo AST do clang (literal composto, declaração no meio do bloco, `typeof`, expressão-comando, case com intervalo), com os headers mínimos de `port/x360/shim` |
 | `coff.py` | as tabelas do executável (esqueleto `port/data/*.s`) como objetos COFF do 360; `--absoluto NOME=VALOR` faz o papel do `--defsym` |
@@ -844,9 +844,20 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `BootCard_Init`, `Logo_Init`, `Title_Init` com `gGsFrame`). Compare as imagens lá e traga só contagens.
 - **Build com falha intermitente:** uma vez 8 objetos falharam e passaram na repetição sem
   mudança. O ciclo agora mostra as linhas `FALHOU` em vez de cortá-las com `tail`.
+- **`subir.py --baixar NOME` tira o arquivo do lugar no console** (vira `NOME.lido`). Na etapa 7 da F4, para testar a
+  conexão do WSL, baixei o `ambiente.txt`: o jogo abriu sem ele, com os padrões da F2 (a luta sem desenho), e a tela
+  ficou azul e depois verde. Para testar a conexão, use `subir.py --achar` ou baixe um arquivo que não importa.
+- **O `NLST` do FTP da FreeStyle devolve as linhas no formato do `LIST`** (permissões, tamanho, nome): pegue o último
+  campo, como o `subir.py` faz com o `LIST`.
 - **Capturas do console nos mesmos quadros da referência:** `BT3_SHOT_LISTA=G,G...` (até 32 quadros do GS) no
   `ambiente.txt` grava só esses quadros, com ou sem o `BT3_SHOT`. Os números vêm da linha "imagem: ... gs G" da build
   sem janela, e o `compara_quadros.py` mede uma contra a outra.
+- **O WSL não tem numpy:** o `compara_quadros.py` tem um caminho em Python puro, mais lento. Não conte com o numpy em
+  ferramenta que roda lá.
+- **Fundo mais "serrilhado" na referência do que no console não é erro do console.** O jogo pede filtro bilinear
+  (`TEX1`), e o fundo da seleção de personagem é uma textura de 1024 x 512 reduzida para 512 x 448. O console filtra; o
+  rasterizador de software amostra no ponto e pula linhas. Isso derrubou a seleção para 82,3% de pixels iguais. Antes
+  de procurar um erro numa tela com nota baixa, compare a nitidez (gradiente médio) só do fundo e só do resto.
 
 ---
 
