@@ -963,6 +963,17 @@ s32 McCard_Checksum(u32 *buf, s32 size, s32 write) {
         buf[0] = sum >> 8;
         buf[1] = sum & 0xFF;
     } else {
+#ifdef PORT_BIG_ENDIAN
+        /* bt3xbx (F4, etapa 8, docs/x360/plano.md): a block written by a little-endian build (the PC port, PCSX2, a PS2
+           card) holds the two words byte-swapped, so here they read as sum >> 8 << 24 and (sum & 0xFF) << 24. The test
+           below accepts a block when either word matches, and such a block whose sum has a zero byte (2 sums in 256)
+           would load with every number swapped. This build stores both words below 0x100 (above): a word over 0xFF is
+           another byte order, refused like a damaged block. Same file format; only the PC and PS2 blocks change
+           outcome (a sum of exactly 0 still cannot be told apart: both words are 0 in either order). */
+        if (buf[0] > 0xFF || buf[1] > 0xFF) {
+            return 1;
+        }
+#endif
         if (buf[0] != sum >> 8 && buf[1] != (sum & 0xFF)) {
             return 1;
         }

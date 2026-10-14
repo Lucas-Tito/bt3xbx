@@ -609,6 +609,12 @@ Escolhas do Lucas para a F4 (plano, "F4 em etapas"):
     CRT do XDK é o `MoveFile`, que não substitui arquivo existente.
     - **Recusado:** gravar direto no arquivo (como o PC) ou só no `.tmp` com troca de nome sem o `.new`: sem um nome
       que só exista completo, a leitura não sabe se um `.tmp` órfão de uma primeira gravação está inteiro.
+  - **Como ficou (etapa 8, 14/10/2026):** o "save do PC cai no fluxo de dados danificados" não vinha de graça. A soma
+    do jogo é sobre bytes e o teste aceita o bloco quando uma das duas palavras confere; um save de little-endian com
+    um byte zero na soma (um em 128) carregava no big-endian com os números trocados. Nas builds big-endian o
+    `McCard_Checksum` recusa como danificado o bloco com uma palavra da soma acima de 0xFF (de outra ordem), sem mudar
+    o formato. Sobra o save de PC de soma exatamente 0 (1 em 65.536); as alternativas estão nas perguntas da etapa 8
+    do plano.
 - **Ajuste depois do inventário (etapa 1, 13/10/2026):** o "submenu dos modos" do essencial é o `DuelMenu` (modo 38),
   e o save essencial é o das Opções, pelo `McFlow`. O `ModeMenu` (lista de episódios da História) e o DcSave (Data
   Center e Evolution Z) vão para a etapa 9 (`formatos/menus-modos.md` 5).

@@ -292,6 +292,14 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 6. **Float.** O 360 arredonda add/mul para zero e divide no mais próximo; o PS2 tem as regras dele.
    As builds da F1 usam o float do PS2 em software para isolar a ordem de bytes; o float do 360 é
    assunto da F2.
+7. **Dado que o jogo grava e lê de volta (o save).** A imagem de memória vai ao cartão na ordem do host, e a soma do
+   jogo (bytes somados, no BT3 o `McCard_Checksum`) dá o mesmo valor para os mesmos bytes em qualquer ordem: ela não
+   recusa um save de outra ordem, só as palavras onde a soma se guarda é que saem trocadas. No BT3 o teste ainda
+   aceita quando UMA das duas palavras confere, e um save de PC cuja soma tem um byte zero (um em 128) carregava na
+   PPC com todos os números trocados (F4, etapa 8). Não confie que "a soma pega": calcule o que o teste do jogo faz
+   com as palavras lidas na outra ordem, e prove com um save de outra build acertado para o pior caso
+   (`save_entre.py estraga ... soma0`). No BT3 a recusa é pelo cabeçalho (`PORT_BIG_ENDIAN` no `McCard_Checksum`:
+   palavra acima de 0xFF é de outra ordem), sem mudar o formato.
 
 ### 5.2 Achar as visões
 
