@@ -23,6 +23,12 @@ void HistSave_Init(s32 section) {
     memset(gHistSave, 0, 0x14);
     gHistSave->pack = (u32 *)MPACK_AT(gMenuArc2, section);
     gHistSave->res = Sprite_Unpack(gHistSave->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gHistSave->res, ((s32 *)gHistSave->pack)[0], "menu_hist_save");
+    }
+#endif
     Dialog_Init(MPACK_AT(gHistSave->res, 1), NULL, 0);
     McFlow_Init(1);
     McFlow_SetDoneCb(0, HistSave_OnCardDone, NULL);

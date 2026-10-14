@@ -145,6 +145,12 @@ void HistSel_Init(s32 section) {
     memset(gHistSel, 0, 0x254);
     gHistSel->pack = (u32 *)MPACK_AT(gMenuArc2, section);
     gHistSel->res = Sprite_Unpack(gHistSel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gHistSel->res, ((s32 *)gHistSel->pack)[0], "menu_hist_sagas");
+    }
+#endif
     StreamSe_PlayDefault(0, 0x10BDB);
     SEL_RES(1);
     gHistSel->bg = res;

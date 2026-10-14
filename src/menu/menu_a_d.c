@@ -74,6 +74,12 @@ void ModeMenu_UpdateImage(void) {
         break;
     case MODEMENU_LOAD_UNPACK:
         Sprite_Unpack(gModeMenu->imageFile, gModeMenu->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gModeMenu->imageRes, ((s32 *)gModeMenu->imageFile)[0], "menu_texfile");
+        }
+#endif
         res = gModeMenu->imageRes;
         Res_RelocateOffsets(&res, res, res);
         gModeMenu->tex[9] = MTEX(res, 0);
@@ -124,8 +130,20 @@ void ModeMenu_Init(s32 section) {
     memset(gModeMenu, 0, 0x33C);
     gModeMenu->pack = (u32 *)MPACK_AT(gMenuArc2, section);
     gModeMenu->res = Sprite_Unpack(gModeMenu->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gModeMenu->res, ((s32 *)gModeMenu->pack)[0], "menu_hist_lista");
+    }
+#endif
     gModeMenu->file = File_LoadSync(gProgress->baseFile + gProgress->subMenu + 0x10, NULL, 0);
     gModeMenu->fileRes = Sprite_Unpack(gModeMenu->file, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked saga file's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gModeMenu->fileRes, ((s32 *)gModeMenu->file)[0], "menu_saga");
+    }
+#endif
     ModeBg_Init(gModeMenu->fileRes);
     MD_RES(gModeMenu->fileRes, 7);
     switch (gProgress->subMenu) {

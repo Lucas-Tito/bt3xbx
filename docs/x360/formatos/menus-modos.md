@@ -92,6 +92,7 @@ Achadas nos leitores; os nomes são os deste inventário.
 | `menu_treino` (etapa 5b) | `Train_Init`, src/menu/menu_h_d.c:650 | 461, seção 1 (`menus-telas.md` 4) |
 | `menu_opcoes` (etapa 5b) | `Option_Init`, src/menu/menu_x_c.c:39 | 453, seção 1 (`menus-telas.md` 5) |
 | `menu_texfile`, `menu_fundo` (etapa 5b) | os retratos, os estágios e as páginas do Treino do essencial (as 9 chamadas de 3.2 marcadas "sim") | 760..923, 924..959 (fundo), 1025..1422 (`menus-telas.md` 6) |
+| `menu_hist_sagas`, `menu_hist_lista`, `menu_hist_resultado`, `menu_hist_save`, `menu_saga`, `menu_texfile`, `menu_hist_fundo` (etapa 9a) | as 10 chamadas da História: `HistSel_Init`, `ModeMenu_Init` (2), `ModeMenu_UpdateImage`, `HistOutro_Init` (2), `HistResult_Init` (3), `HistSave_Init` | 460 s1..s4, as sagas 464..471, os episódios 973..1020 e os fundos do resultado 1021..1024 (`menus-historia.md`) |
 | `folha` (`Port_ConvertLoadSheet`) | `Load_InitScreen`, src/sys/loading.c:166 | 960..962 inteiro |
 | `animacao` (`Port_ConvertAnim`) | `BtlObjAnim_Load`, src/battle/bobj_a.c:368 (`Bpe_Decode` direto) | animação do lutador |
 
@@ -110,8 +111,8 @@ convites): cada `Sprite_Unpack` reescreve tudo, então converter depois de cada 
 | 959 (fundo do EvoZ) | `EvoZ_Load` menu_u_h.c:544 | não |
 | páginas do Treino 1025.. | `Train_UpdateImage` menu_h_d.c:1215 | sim |
 | convites 963..967 | `TourMenu_Init` menu_j_b.c:117 | não |
-| episódios 973..1020 | `ModeMenu_UpdateImage` menu_a_d.c:76 | não (seção 5, achado 1) |
-| fundos do resultado 1021..1024 | `HistResult_Init` menu_c_c.c:191 | não |
+| episódios 973..1020 | `ModeMenu_UpdateImage` menu_a_d.c:76 | não (seção 5, achado 1); convertido na etapa 9a |
+| fundos do resultado 1021..1024 | `HistResult_Init` menu_c_c.c:203 (era :191 antes dos ganchos) | não; convertido na etapa 9a (`menu_hist_fundo`) |
 
 `DcList_Init` :1008 descomprime um retrato que ninguém lê (`DcList_UpdateFace` descomprime de novo por cima antes de
 ler): o gancho vai mesmo assim, para a regra de um gancho por chamada e para a guarda.
@@ -173,7 +174,8 @@ UB resultado 10, MisSel 2/9/12..14, TourMenu 24, EntrySel 27/37/38, Bracket 33/3
 | **total de `Sprite_Unpack`** | **82** | **21** | **61** |
 
 Pendentes: 77 (16 essenciais, 61 não); desde a etapa 5a, 76 (15 essenciais), com o `menu_principal`; desde a etapa
-5b, 61 (nenhuma essencial), com o resto do essencial (`menus-telas.md`). A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
+5b, 61 (nenhuma essencial), com o resto do essencial (`menus-telas.md`); desde a etapa 9a, 51, com as 10 da História
+(`menus-historia.md`). A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
 que o `unpacks.py` acha. Formatos novos: 33 (`menu_texfile` e 32 pacotes de tela); 6 deles no essencial
 (`menu_texfile`, `menu_principal`, `menu_duelo`, `menu_selecao`, `menu_treino`, `menu_opcoes`).
 
@@ -239,7 +241,9 @@ comando com `Port_ConvertMenuPack(buffer, ((s32 *)origem)[0], "formato")`, `Port
 `Port_UnpackSemNumeros(buffer)`; o buffer do gancho igual ao resultado do `Sprite_Unpack`; o tamanho igual ao
 `rawSize` da origem; o formato presente em `sFormatos` (conv.c); e a tabela `CHAMADORES` da guarda igual às funções que
 chamam `Sprite_Unpack`. Na etapa 1: `82 chamadas de Sprite_Unpack em 62 funções: bpe-direto 1, com gancho 5, pendente 77; 0
-com erro` (sai com 1 enquanto houver pendente); depois da etapa 5b, `com gancho 21, pendente 61`, nenhuma do essencial.
+com erro` (sai com 1 enquanto houver pendente); depois da etapa 5b, `com gancho 21, pendente 61`, nenhuma do essencial; depois da etapa 9a, `com gancho 31, pendente
+51` (as 10 da História com gancho). Os ganchos mudam as linhas das chamadas seguintes do mesmo arquivo: `ModeMenu_Init`
+:132 e :140 (eram :126 e :128), `HistOutro_Init` :113 (era :107), `HistResult_Init` :188 e :203 (eram :182 e :191).
 
 ### 7.2 A guarda em tempo de jogo
 

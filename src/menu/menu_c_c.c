@@ -178,8 +178,20 @@ void HistResult_Init(s32 section) {
     memset(gHistResult, 0, 0x140);
     gHistResult->pack = (u32 *)MPACK_AT(gMenuArc2, section);
     gHistResult->res = Sprite_Unpack(gHistResult->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gHistResult->res, ((s32 *)gHistResult->pack)[0], "menu_hist_resultado");
+    }
+#endif
     gHistResult->file = File_LoadSync(gProgress->baseFile + gProgress->subMenu + 0x10, NULL, 0);
     gHistResult->fileRes = Sprite_Unpack(gHistResult->file, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked saga file's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gHistResult->fileRes, ((s32 *)gHistResult->file)[0], "menu_saga");
+    }
+#endif
     if (flags & 1) {
         bg = Rand_Range(3);
         MSAVE->slot[gProgress->subMenu].val[1] |= (s32)(1U << gProgress->subMenuItem);
@@ -189,6 +201,12 @@ void HistResult_Init(s32 section) {
     }
     gHistResult->bgFile = File_LoadSync(bg + 0x3FE, NULL, 0);
     gHistResult->bgRes = Sprite_Unpack(gHistResult->bgFile, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the picture's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gHistResult->bgRes, ((s32 *)gHistResult->bgFile)[0], "menu_hist_fundo");
+    }
+#endif
     res = gHistResult->bgRes;
     Res_RelocateOffsets(&res, res, res);
     switch (bg) {

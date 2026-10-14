@@ -77,6 +77,12 @@ void HistOutro_Init(s32 section) {
     memset(gHistOutro, 0, 0x2C0);
     gHistOutro->pack = (u32 *)MPACK_AT(gMenuArc2, section);
     gHistOutro->res = Sprite_Unpack(gHistOutro->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gHistOutro->res, ((s32 *)gHistOutro->pack)[0], "menu_hist_lista");
+    }
+#endif
     switch (gProgress->subMenu) {
     case 0:
         OUTRO_SETUP(3, 0x8537, 8, 1);
@@ -105,6 +111,12 @@ void HistOutro_Init(s32 section) {
     }
     gHistOutro->file = File_LoadSync(gProgress->baseFile + gProgress->subMenu + 0x10, NULL, 0);
     gHistOutro->fileRes = Sprite_Unpack(gHistOutro->file, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked saga file's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gHistOutro->fileRes, ((s32 *)gHistOutro->file)[0], "menu_saga");
+    }
+#endif
     ModeBg_Init(gHistOutro->fileRes);
     OUTRO_RES(gHistOutro->fileRes, 7);
     switch (gProgress->subMenu) {

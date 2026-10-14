@@ -54,9 +54,9 @@ import unpacks  # noqa: E402
 # nome é uma faixa de arquivos inteiros (FAIXAS).
 CONTEUDO = {
     "menu_a.c:55": "449 s2", "menu_a_c.c:56": "449 s1",
-    "menu_a_d.c:76": "episodio", "menu_a_d.c:126": "460 s2", "menu_a_d.c:128": "saga",
-    "menu_b_c.c:79": "460 s2", "menu_b_c.c:107": "saga", "menu_b_d.c:147": "460 s1",
-    "menu_c_c.c:180": "460 s3", "menu_c_c.c:182": "saga", "menu_c_c.c:191": "fundo_resultado",
+    "menu_a_d.c:76": "episodio", "menu_a_d.c:132": "460 s2", "menu_a_d.c:140": "saga",
+    "menu_b_c.c:79": "460 s2", "menu_b_c.c:113": "saga", "menu_b_d.c:147": "460 s1",
+    "menu_c_c.c:180": "460 s3", "menu_c_c.c:188": "saga", "menu_c_c.c:203": "fundo_resultado",
     "menu_c_d.c:25": "460 s4",
     "menu_c_e.c:226": "retrato", "menu_c_e.c:300": "estagio", "menu_c_e.c:400": "461 s2", "menu_c_e.c:409": "448 s2",
     "menu_c_e.c:746": "retrato", "menu_c_e.c:759": "estagio",
