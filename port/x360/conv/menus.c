@@ -472,3 +472,24 @@ void Conv_MenuTitulo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         Conv_Onde(c, "seção %lu do título", (unsigned long)i);
     }
 }
+
+/* menus-pecas.md 6: menu principal (MainMenu_Init, src/menu/menu_a.c:45, seção 2 de 00449): 1..19 e 23..26 TexFile
+   relocadas por MainMenu_Init (MM_RES; a 23 são os ícones da janela de ícone), 20 o filme, 21 a janela de mensagem,
+   22 a de ícone, 27 as legendas com a boca, 28 os textos da janela de mensagem */
+void Conv_MenuPrincipal(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+    conv_u32 ent[30], i;
+    if (!Conv_Secoes(c, base, tam, ent, 28, "menu principal")) {
+        return;
+    }
+    for (i = 1; i <= 28 && !c->erro; i++) {
+        switch (i) {
+        case 20: Conv_Flash(c, ENT(20)); break;
+        case 21: Conv_JanelaMsg(c, ENT(21)); break;
+        case 22: Conv_JanelaIcone(c, ENT(22)); break;
+        case 27: Conv_LipPack(c, ENT(27)); break;
+        case 28: Conv_Textos(c, ENT(28)); break;
+        default: Conv_TexFile(c, ENT(i), 0); break;
+        }
+        Conv_Onde(c, "seção %lu do menu principal", (unsigned long)i);
+    }
+}

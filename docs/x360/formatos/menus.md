@@ -508,8 +508,8 @@ função), 77 chamadas (a contagem antiga dizia 76; a lista sempre teve 77). O i
 leitores, formato proposto, tela, essencial) está em `menus-modos.md`, e `port/x360/tools/unpacks.py` lista as que
 seguem pendentes:
 
-- `src/menu/menu_a.c:55` `MainMenu_Init` (o menu principal, seção 2 do 00449: 28 seções, com filme, janelas de
-  mensagem e de ícones, legendas e textos; o próximo da fila, porque START no título leva a ele);
+- `src/menu/menu_a.c:55` `MainMenu_Init` (o menu principal, seção 2 do 00449): convertido desde a etapa 5a da F4
+  (`menu_principal`, `menus-pecas.md` 6);
 - `src/menu/menu_a_d.c:76` `ModeMenu_UpdateImage`, `:126`, `:128` `ModeMenu_Init`;
 - `src/menu/menu_b_c.c:79`, `:107` `HistOutro_Init`; `src/menu/menu_b_d.c:147` `HistSel_Init`;
 - `src/menu/menu_c_c.c:180`, `:182`, `:191` `HistResult_Init`; `src/menu/menu_c_d.c:25` `HistSave_Init`;

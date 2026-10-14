@@ -86,6 +86,7 @@ Achadas nos leitores; os nomes são os deste inventário.
 | `menu_cartao` | `BootCard_Init`, src/menu/menu_i_b.c:24 | 473, seção 2 (5.1) |
 | `menu_logos` | `FirstRun_Main`, src/menu/menu_i_c.c:173 | 473, seção 3 (5.2) |
 | `menu_mcflow` | `McFlow_Init`, src/sys/mcflow_a.c:2636 | 477 inteiro (5.3) |
+| `menu_principal` (etapa 5a) | `MainMenu_Init`, src/menu/menu_a.c:55 | 449, seção 2 (`menus-pecas.md` 6) |
 | `folha` (`Port_ConvertLoadSheet`) | `Load_InitScreen`, src/sys/loading.c:166 | 960..962 inteiro |
 | `animacao` (`Port_ConvertAnim`) | `BtlObjAnim_Load`, src/battle/bobj_a.c:368 (`Bpe_Decode` direto) | animação do lutador |
 
@@ -166,7 +167,7 @@ UB resultado 10, MisSel 2/9/12..14, TourMenu 24, EntrySel 27/37/38, Bracket 33/3
 | outros pacotes de tela (27 formatos) | 36 | 0 | 36 |
 | **total de `Sprite_Unpack`** | **82** | **21** | **61** |
 
-Pendentes: 77 (16 essenciais, 61 não). A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
+Pendentes: 77 (16 essenciais, 61 não); desde a etapa 5a, 76 (15 essenciais), com o `menu_principal`. A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
 que o `unpacks.py` acha. Formatos novos: 33 (`menu_texfile` e 32 pacotes de tela); 6 deles no essencial
 (`menu_texfile`, `menu_principal`, `menu_duelo`, `menu_selecao`, `menu_treino`, `menu_opcoes`).
 

@@ -26,6 +26,7 @@ aqui. **Hipótese** marca o que o código não prova.
 | **JanelaMsg** | `MsgWin_Init` | subpacote: `TexFile`, Flash | 2 |
 | **JanelaIcone** | `IconWin_Init` | subpacote: `TexFile`, Flash | 3 |
 | **LipPack** | `Voice_PlayWithSubtitle`, `LipSync_Start`, `LipSync_Update` | tabela de blocos de chaves da boca | 4 |
+| **ItemPanel**, **ItemHelp**, **ListaIds**, **Células**, **SubpacoteTex** | telas de seleção, Treino, Opções | | 5 |
 
 Nas funções: `Conv_Secoes` (tabela com exatamente N entradas), `Conv_Vazia`, `Conv_Flash`, `Conv_Textos` e
 `Conv_Dialogo` (de `menus.c`, antes estáticas), `Conv_TexFile` (`personagem.c`) e as peças novas de `menus_pecas.c`.
@@ -115,3 +116,72 @@ de uma entrada até a seguinte. No disco não há entrada vazia nem dois idiomas
 chave) e as chaves têm de caber no bloco: o conversor confere as duas. No menu principal as contagens vão de 3 a 29.
 
 Escritas do jogo: nenhuma (o estado fica em `gLipSync`).
+
+## 6. Menu principal (`menu_principal`: 00449, seção 2)
+
+`MainMenu_Init(section)` (src/menu/menu_a.c:45) descomprime a seção 2 de `gMenuArc1` (`Progress_Main` chama
+`MainMenu_Run(2)`, src/menu/menu_a_b.c:132) num buffer novo (`Sprite_Unpack(pack, NULL, NULL)`, :55) e o converte logo
+depois, no gancho (`Port_ConvertMenuPack(..., "menu_principal")`, :56..:61, só em `PORT_BIG_ENDIAN`). O buffer é
+liberado em `MainMenu_Term` (:185, :194): cada visita ao menu descomprime e converte de novo, sem conversão dupla.
+
+Tabela: N = 28, todas as seções lidas. Conteúdo descomprimido: 2.714.752 bytes.
+
+| Seção | Bytes | Formato | Quem lê |
+|---|---|---|---|
+| 1 | 272.960 | `TexFile`, 8 registros | `MM_RES(1)` (:62), o fundo (`gMainMenu->bg`, `Sprite_DrawPicture` em `MainMenu_Draw`) |
+| 2..19 | 5.504 a 264.896 | `TexFile`, 1 a 6 registros | `MM_RES(n)` (:64..:132); `MTEX(res, k)` em `gMainMenu->tex[]`, a tabela de texturas do filme |
+| 20 | 129.664 | filme Flash | `Flash_Create(&gMainMenu->flash[0], MPACK_AT(res, 20), tex)` (:135); `Flash_FindLabel` e `Flash_ClipGotoLabel` (`MainMenu_StartBallLoops`, :27..:37, chamada em :401) e o tocador |
+| 21 | 135.808 | JanelaMsg (2) | `MsgWin_Init(MPACK_AT(res, 21), msgText, 1, 0)` (:142) |
+| 22 | 91.520 | JanelaIcone (3) | `IconWin_Init(MPACK_AT(res, 22), res)` (:138), com os ícones da 23 |
+| 23 | 39.616 | `TexFile`, 2 registros | `MM_RES(23)` (:137): os ícones da janela de ícone |
+| 24..26 | 53.248, 44.992, 53.248 | `TexFile`, 3, 6 e 3 registros | `MM_RES(26)` (:99), `MM_RES(24)` (:112), `MM_RES(25)` (:116) |
+| 27 | 13.888 | LipPack (4), 65 falas | `gMainMenu->subtitles` (:141); `Voice_PlayWithSubtitle(subtitles, MAINMENU_VOICE_BASE, voiceLine)` (:369, :438, :536) |
+| 28 | 9.344 | tabela de textos (`menus.md` 6.1), N = 64 | `gMainMenu->msgText` (:140), o texto da janela de mensagem |
+
+"Todas as variantes": o pacote é um só (só `MainMenu_Run(2)` o abre); os ramos que a tela pode tomar (o item do
+Shenlong, `items[10]`, só com as sete esferas, e o laço das esferas no filme; as duas línguas das falas; o Dragon Net
+Battle escondido no 360) leem as mesmas seções, e o conversor converte todas, lidas ou não na rodada.
+
+Conversor: `Conv_MenuPrincipal` (port/x360/conv/menus.c), que segue a tabela acima seção a seção. Registro: a linha
+`{0x1C2 - 1, 0x1C2 - 1, 2, "menu_principal"}` de `sFaixas` (conv.c).
+
+### 6.1 O Flash e o mapa por posição
+
+A PPC com o mapa do rastreio parava no `Flash_Create` do menu principal (guia, seção 6): o rastreio vê três posições do
+filme da seção 20 lidas com duas larguras, "[4, 8]" (`Flash_GetRecord`, `Flash_SkipRecords`, `FlashDraw_TransformQuad`),
+e o mapa não inverte conflito. As três são o u32 `size` do cabeçalho de um registro (`FlashTag`, `menus.md` 7.2): o
+`Flash_SkipRecords` lê 4 bytes, e uma cópia de 8 bytes (o cabeçalho inteiro) passa por cima. O conversor do Flash
+percorre o filme pela estrutura e marca u32 nessas posições, a largura do leitor. Um quarto conflito, "[1, 4]" (só nos
+roteiros das Opções, da referência e do Shenlong, `FlashTl_RunFrame`, `Flash_SkipNamed`), é o fim de uma cadeia de
+rótulo: o laço `while (p[ofs++] != 0)` lê byte, e a comparação de rótulo por `strcmp` aparece no rastreio como uma
+leitura da cadeia inteira; o conversor deixa bytes. O mapa por posição não serve para o Flash; o conversor serve.
+
+## 7. Cobertura conferida
+
+### 7.1 Contra o rastreio (`conv_tool --mapa`)
+
+`pzs3us1/00449.bin@0xAB5C0#bpe` (o menu principal) contra o `mapa.tsv` de cada um dos onze roteiros da etapa 4:
+convertido, cobertura de 100% (107.790 bytes em números trocados), e todas as posições iguais, sem nenhuma com outra
+largura nem não trocada:
+
+| Roteiro | Posições | Roteiro | Posições |
+|---|---|---|---|
+| duelo | 14.298 | ultimate | 12.795 |
+| duelo_time | 14.298 | torneio | 13.577 |
+| treino | 15.538 | evolution | 15.003 |
+| opcoes | 13.698 | datacenter | 16.251 |
+| historia | 12.099 | referencia | 14.343 |
+| | | shenlong | 12.825 |
+
+### 7.2 Contra o disco (`conv_tool --disco`)
+
+2.386 arquivos sem erro (os 2.383 de antes mais 00448, 00453 e 00461, agora `menu_pacote`) e 8 conteúdos
+descomprimidos sem erro (os 7 de antes mais o menu principal), todos com 100% de cobertura. Censo dos menus: 6 arquivos
+convertidos de 30 (eram 3), 5 contêineres com conversor de 49 (eram 4).
+
+## 8. Hipóteses e o que fica aberto
+
+- O N das JanelaMsg e JanelaIcone das outras telas: o conversor exige 2, e o disco conferirá cada uma quando o pacote
+  dela ganhar conversor.
+- A largura dos 4 últimos bytes da assinatura do bloco de chaves (ninguém lê; ficam bytes, como em `personagem.md`
+  6.6).

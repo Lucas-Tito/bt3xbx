@@ -8,6 +8,9 @@
 #   2. a x86 até o MainMenu_Init (gdb), listando os arquivos lidos, que a conv_tool converte para a PPC;
 #   3. a PPC no qemu, sem mapa: com o menu principal ainda sem conversor, ela tem de parar com "Sprite_Unpack sem
 #      conversor em MainMenu_Init", e o addr2line da chamada confere o nome.
+# Histórico da etapa 2: desde a etapa 5a o menu principal tem conversor (menu_principal) e a PPC passa dele; o controle
+# sintético deste teste não sai do menu. A PPC sem mapa pelos roteiros (roteiros.sh com SEMMAPA=1) o substitui, e a
+# guarda nomeia lá o próximo bloqueio de cada roteiro.
 #   TP=2400  segundos da PPC no qemu
 set -uo pipefail
 B=port/build; G=$B/guarda

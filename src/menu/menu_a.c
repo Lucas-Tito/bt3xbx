@@ -53,6 +53,12 @@ void MainMenu_Init(s32 section) {
     memset(gMainMenu, 0, 0x188);
     gMainMenu->pack = (u32 *)MPACK_AT(gMenuArc1, section);
     gMainMenu->res = Sprite_Unpack(gMainMenu->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* the unpacked screen's numbers exist only once decompressed: converted here (port/x360/conv) */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gMainMenu->res, ((s32 *)gMainMenu->pack)[0], "menu_principal");
+    }
+#endif
     MM_RES(1);
     gMainMenu->bg = res;
     MM_RES(2);
