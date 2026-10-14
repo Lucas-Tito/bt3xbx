@@ -49,7 +49,9 @@ não nulos iguais aos da x86 (o jogo grava pouco no que carrega: a relocação).
 --marcas-tam. Sem bloco é arquivo que não
 está vivo nesse quadro (ou que mora num buffer de tamanho fixo), e só sai a contagem; o mesmo arquivo em dois blocos
 (um rosto carregado duas vezes) confere os dois. Um bloco que dois arquivos reclamam, ou um arquivo sem .orig com mais
-de um bloco do tamanho, não se decide: uma linha "marcas ambíguas" para cada caso e a saída 2 no fim.
+de um bloco do tamanho, não se decide: uma linha "marcas ambíguas" para cada caso e a saída 2 no fim. A menos que os
+arquivos que reclamam o bloco tenham o mesmo conteúdo (.orig) e as mesmas marcas (F4, etapa 9a: o diálogo do save da
+História é o da tela do cartão): então as marcas são as mesmas, e uma linha "marcas iguais: heap#N = a, b" diz quais.
 
 --so-em-uso (F4, etapa 5b): os blocos livres do heap e, nos blocos em uso, o enchimento do alocador (entre o cabeçalho
 de 0x20 bytes e os dados alinhados, e do fim do tamanho pedido ao rodapé) e o HeapBlock.unk1C (que src/sys/heap.c
@@ -415,7 +417,21 @@ def main():
             continue
         for b in achados:
             reclamados.setdefault(b, []).append(arq)
+    def iguais_em_tudo(arqs):
+        """os arquivos têm o mesmo conteúdo (.orig) e as mesmas marcas: o bloco guarda qualquer um deles, e as marcas
+        dizem o mesmo (o diálogo do save da História, 460 s4, é o da tela do cartão, 473 s2; F4, etapa 9a)"""
+        conteudos = set()
+        for a in arqs:
+            orig = a[:-len(".marcas")] + ".orig"
+            if not os.path.exists(orig):
+                return False
+            conteudos.add((open(a, "rb").read(), open(orig, "rb").read()))
+        return len(conteudos) == 1
     for b, arqs in sorted(reclamados.items()):
+        if len(arqs) > 1 and iguais_em_tudo(arqs):
+            print(f"marcas iguais: {b} = " + ", ".join(a.rsplit('/', 1)[-1] for a in arqs) +
+                  " (o mesmo conteúdo e as mesmas marcas)")
+            reclamados[b] = arqs = arqs[:1]
         if len(arqs) > 1:
             print(f"marcas ambíguas: {b} com o tamanho de {len(arqs)} arquivos: " +
                   ", ".join(a.rsplit('/', 1)[-1] for a in arqs))

@@ -25,7 +25,8 @@
 #      conforme número a número pelas marcas do conversor (memdiff.py --marcas-vivas) e nenhuma palavra diferente
 #      fora deles (roteiros.py memoria). MEM=menu compara no último vblank da primeira visita ao menu principal (o
 #      critério da etapa 5a), e aí a memória se julga mesmo com a PPC parando depois. Sem MEM=menu, a memória também
-#      no último vblank de cada tela de menu do essencial visitada (38, 39, 40, 44, 45, 62: roteiros.py TELAS_MEM), com
+#      no último vblank de cada tela de menu do essencial e da História visitada (38, 39, 40, 44, 45, 62; 6 a 10:
+#      roteiros.py TELAS_MEM), com
 #      os conteúdos convertidos da tela vivos e conformes (uma rodada a mais da PPC e da x86 por tela).
 # Antes de tudo, as builds: x86, x86r e ppc do commit de agora, sem nada fora de commit (o CARIMBO de cada uma), e a
 # árvore sem alteração; senão sai com 1. DESENVOLVIMENTO=1 roda assim mesmo, e o fim diz "NÃO VALE COMO CRITÉRIO".
@@ -157,7 +158,10 @@ for n in "${NOMES[@]}"; do
     r=$?
     touch $D/dados/mods/convertidos.txt
     echo "   conv_tool --mapa saiu com $r ($(wc -l < $D/lidos.txt) arquivos e conteúdos lidos)"
-    [ $r = 0 ] || falhou "conv_tool --mapa saiu com $r"
+    # (a saída 1 só por posições "com outra largura" que estão certas, uma a uma em LARGURA_CONHECIDA do roteiros.py:
+    # um s32 que o jogo lê pela metade baixa; F4, etapa 9a)
+    [ $r = 0 ] || { [ $r = 1 ] && python3 port/x360/tools/roteiros.py larguras $D/conv.txt | sed 's/^/   /' &&
+        [ "${PIPESTATUS[0]}" = 0 ]; } || falhou "conv_tool --mapa saiu com $r"
     # (o "sem conversor" de cada arquivo e conteúdo, o do que não é de menu inclusive, o confere julga logo abaixo)
     grep -v -e "sem conversor$" -e ': convertido; cobertura [0-9]* de [0-9]* bytes (100.0%)' \
         -e ' iguais, 0 com outra largura, 0 não trocadas$' $D/conv.txt | sed 's/^/   /' | head -10
@@ -222,6 +226,14 @@ for n in "${NOMES[@]}"; do
         r=$?
         sed 's/^/   /' $D/semmapa.txt
         [ $r = 0 ] || falhou "PPC sem mapa diferente da x86 (ou parou sem nome)"
+        # (F4, etapa 9a) o save que a rodada deixou no cartão, a x86 contra a PPC sem mapa campo a campo, e as sagas
+        # que o roteiro conferiu em memória ("confere saga N") também no arquivo: o save da História gravado
+        if grep -aq '^roteiro: .* fim vblank' $D/ppcsm.txt; then
+            python3 port/x360/tools/roteiros.py save $D/sa $D/sq $D/telas_a.txt > $D/save.txt
+            r=$?
+            echo "   save no cartão (x86 contra PPC sem mapa):"; sed 's/^/     /' $D/save.txt
+            [ $r = 0 ] || falhou "save no cartão diferente entre a x86 e a PPC sem mapa"
+        fi
         if [ "${MEM:-fim}" = menu ]; then
             # (MEM=menu: a PPC passa do menu principal e a memória dele se confere mesmo que ela pare depois)
             echo "   memória no vblank $V (menu principal):"
@@ -229,7 +241,7 @@ for n in "${NOMES[@]}"; do
             python3 port/x360/tools/roteiros.py memoria $D/memdiff.txt > /dev/null ||
                 falhou "memória no menu principal diferente (memdiff)"
         else
-            # a memória também no último vblank de cada tela de menu do essencial que o roteiro visita (DuelMenu,
+            # a memória também no último vblank de cada tela de menu do essencial e da História que o roteiro visita (DuelMenu,
             # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
             # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
             # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela

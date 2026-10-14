@@ -1,6 +1,8 @@
-# Dragon History (etapa 9): HistSel (modo 6; na primeira visita o Goku explica o modo, e cada X passa uma fala), a
-# primeira saga, ModeMenu (modo 7) com a imagem do episódio, até a luta do primeiro episódio começar. O fim da
-# História (HistOutro, 9), o resultado (HistResult, 8) e o save dela (HistSave, 10) pedem lutas ganhas.
+# Dragon History (etapa 9a): HistSel (modo 6; na primeira visita o Goku explica o modo, e cada X passa uma fala), a
+# primeira saga, ModeMenu (modo 7) com a imagem do episódio, a luta do primeiro episódio, terminada pelo passo
+# "termina luta" (a vitória pela função do próprio jogo), e o que vem depois: o resultado (HistResult, 8), o fim da
+# saga (HistOutro, 9: com tudo desbloqueado a saga já tem todos os episódios ganhos, e o primeiro a fecha) e o save
+# da História (HistSave, 10, pelo McFlow), de volta ao HistSel.
 inclui boot.txt
 quadros 90
 aperta X ate tela 6               # História (o primeiro item)
@@ -15,4 +17,28 @@ repete ate luta max 6000          # o primeiro episódio e a apresentação dele
     quadros 150
 volta
 quadros 60
+termina luta vence                # o lado 0 vence por KO (BtlFacade_SetResult(1), o que o roteiro de evento grava)
+espera tela 8 max 6000            # HistResult: o anúncio, a fala do vencedor e a volta aos menus vêm antes
+quadros 150
+repete ate tela 9 max 3000        # a contagem dos pontos, as recompensas e a saída
+    aperta X
+    quadros 60
+volta
+confere saga 0                    # o fim da saga visto (HistOutro_Init grava MSLOT_OUTRO_SEEN)
+quadros 150
+repete ate tela 10 max 6000       # o fim da saga: as falas
+    aperta X
+    quadros 120
+volta
+espera mcflow 12 max 600          # "salvar?" (McFlow_Start(0) do HistSave)
+# cada pergunta começa no "não" (ESQUERDA para o "sim"); as mensagens sem escolha só pedem X
+repete ate mcflow 0 max 3000
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+confere saga 0
+espera tela 6 max 600             # de volta à seleção de saga
+quadros 150
 fim

@@ -27,13 +27,22 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             (o pacote dele ainda vivo, antes da tela seguinte; o critério da etapa 5a)
     roteiros.py vblank_fim TELAS           o último vblank antes do passo "fim" num rastro: o quadro em que o
                                             roteiros.sh compara a memória das duas builds (o critério da etapa 5)
-    roteiros.py vblanks_mem TELAS          as telas de menu do essencial que o rastro visita (TELAS_MEM), uma linha
+    roteiros.py vblanks_mem TELAS          as telas de menu do essencial e da História que o rastro visita (TELAS_MEM), uma linha
                                             "TELA VBLANK" com o último vblank da primeira visita: o roteiros.sh compara
                                             a memória das duas builds também ali, com o pacote e as imagens da tela
                                             vivos (no fim da luta já foram liberados)
     roteiros.py memoria MEMDIFF [--tela N]  com --tela, também exige vivos e conformes os conteúdos da tela
                                             (TELAS_MEM): "sem bloco" não serve; com --tela CONTEÚDO (de um passo
                                             "marca memoria CONTEÚDO" do roteiro, '/' trocada por '_'), aquele
+    roteiros.py save X86 PPC TELAS          (F4, etapa 9a) o save que a rodada deixou no cartão (BT3_SAVES) da x86 e
+                                            o da PPC sem mapa, campo a campo (save_entre.py campos: os mesmos valores,
+                                            cada um na ordem da sua build); e cada saga que o roteiro conferiu na
+                                            memória ("ok saga N" no rastro TELAS, o passo "confere saga N") com o fim
+                                            visto (MSLOT_OUTRO_SEEN) também no arquivo das duas: o save da História
+                                            gravado, não só em memória
+    roteiros.py larguras CONV               (F4, etapa 9a) a saída do conv_tool --mapa que saiu com 1 só pelas posições
+                                            de LARGURA_CONHECIDA: 0 se nenhum arquivo deu erro e todo "com outra
+                                            largura" está na lista (o roteiros.sh aceita então a saída 1 do conv_tool)
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -99,12 +108,22 @@ CONHECIDOS = {
     # atores da cena do Shenlong (ShenScene_*, src/battle/view_b_d.c:366, ids 0xD3D e 0xD46): roteiro shenlong
     "pzs3us1/03388.bin": "Shenlong, ator da cena (id 0xD3D)",
     "pzs3us1/03397.bin": "Shenlong, ator da cena (id 0xD46)",
-    # achados na correção da revisão da etapa 4 (o "confere" antigo pulava o que não é de menu): ids 0x1FF, 0x231 e
-    # 0x2C7, entre os de cenário e os de menu, lidos na luta do primeiro episódio; quem os lê e o formato, a levantar
-    "pzs3us1/00510.bin": "História, luta do primeiro episódio (id 0x1FF)",
-    "pzs3us1/00560.bin": "História, luta do primeiro episódio (id 0x231)",
-    "pzs3us1/00710.bin": "História, luta do primeiro episódio (id 0x2C7)",
+    # (os três da luta do primeiro episódio da História, 00510, 00560 e 00710, saíram na etapa 9a: o roteiro de evento,
+    # os textos e as bocas da luta, formatos/historia-luta.md)
 }
+
+# Posições que o --mapa dá "com outra largura" e que estão certas, uma a uma (arquivo, deslocamento, largura lida pelo
+# rastreio, largura trocada pelo conversor): valores s32 que o jogo só lê pela metade baixa, o caso do PS2_LOW, para os
+# quais o conv_tool não tem classe. O "confere" aceita a linha "contra o mapa" de um arquivo só se cada posição com
+# outra largura dele estiver aqui (o conv_tool lista as 10 primeiras: --detalhe); qualquer outra é erro.
+LARGURA_CONHECIDA = {
+    # o roteiro de evento da luta do primeiro episódio da História (formatos/historia-luta.md 2.6): ids de item do
+    # SetStatus (comandos 13 e 14) no GSDT, s32 que o jogo lê pela metade baixa (BtlFacadeItem, permutada em
+    # PORT_BIG_ENDIAN; PS2_LOW em battle_load.c:1579); trocados como u32, certos nas duas leituras
+    ("pzs3us1/00510.bin", 0x2368, 2, 4): "id de item s32 do GSDT lido pela metade baixa (BtlFacadeItem)",
+    ("pzs3us1/00510.bin", 0x236C, 2, 4): "id de item s32 do GSDT lido pela metade baixa (BtlFacadeItem)",
+}
+NOTAS_CONV = []  # (conv(): as posições de LARGURA_CONHECIDA achadas, para o confere dizer)
 
 # O caminho essencial da decisão 22 (menus-modos.md 4: 16 pendentes, 5 com gancho)
 ESSENCIAL = {"menu_a.c:55", "menu_c_e.c:226", "menu_c_e.c:300", "menu_c_e.c:400", "menu_c_e.c:409", "menu_c_e.c:746",
@@ -205,13 +224,23 @@ def conv(caminho):
     linha "  contra o mapa: ..." que segue a de um arquivo o torna erro com posições de outra largura ou não trocadas."""
     out = {}
     ultimo = None
+    largura = []  # as posições "com outra largura" do arquivo atual (as linhas de detalhe antes do "contra o mapa")
     for l in pathlib.Path(caminho).read_text(errors="replace").splitlines():
+        m = re.match(r"    0x([0-9A-Fa-f]+): rastreio leu (\d+), conversor marca (\d+) \(trocou com outra largura\)$", l)
+        if m:
+            largura.append((int(m.group(1), 16), int(m.group(2)), int(m.group(3))))
+            continue
         m = re.match(r"  contra o mapa: (\d+) posições; (\d+) iguais, (\d+) com outra largura, (\d+) não trocadas", l)
         if m:
+            outra, nao = int(m.group(3)), int(m.group(4))
+            conhecidas = [(ultimo, *x) for x in largura if (ultimo, *x) in LARGURA_CONHECIDA]
             if ultimo is None:
                 out["?"] = f"ERRO: linha \"contra o mapa\" sem arquivo antes: {l.strip()}"
-            elif (int(m.group(3)) or int(m.group(4))) and not out[ultimo].startswith("ERRO"):
+            elif outra and not nao and len(largura) == outra and len(conhecidas) == outra:
+                NOTAS_CONV.extend(conhecidas)  # (todas as de outra largura estão em LARGURA_CONHECIDA: certo)
+            elif (outra or nao) and not out[ultimo].startswith("ERRO"):
                 out[ultimo] = f"ERRO: {l.strip()}"
+            largura = []
             continue
         if l.startswith(" ") or not l.strip():
             continue  # (o detalhe das posições divergentes, "    0x...: rastreio leu ...", já contado na de cima)
@@ -221,6 +250,7 @@ def conv(caminho):
             ultimo = None
             continue
         ultimo, r = m.group(1), m.group(2)
+        largura = []
         if out.get(ultimo, "").startswith("ERRO"):
             continue  # (um erro do mesmo nome numa linha anterior fica: o conv_tool pode dizer mais de uma coisa dele)
         if r == "sem conversor":
@@ -352,6 +382,14 @@ CLASSES_CONHECIDAS = [
     ("heap:0x16800", {"igual-sem-inverter": 0x16800 // 4},
      "faceFile[0] e [1] do CharSel e do TeamSel (menu_c_e.c:700, menu_e_b.c:699): o arquivo do retrato como veio do "
      "disco, um contêiner BPE (fluxo de bytes); o conteúdo convertido mora no faceRes, que as marcas conferem"),
+    ("heap:0x1c000", {"igual-sem-inverter": 0x1c000 // 4},
+     "gModeMenu->imageFile (ModeMenu_Init, src/menu/menu_a_d.c:256): o arquivo da imagem do episódio como veio do disco, "
+     "um contêiner BPE (fluxo de bytes), lido num buffer fixo maior que ele; as marcas conferem o arquivo, o resto do "
+     "buffer são bytes de antes (Heap_Alloc não limpa). Etapa 9a"),
+    ("heap:0x20800", {"igual-sem-inverter": (0x20800 - 0x20560) // 4},
+     "gModeMenu->imageRes (menu_a_d.c:257): o episódio descomprimido (0x20560 bytes, conferido pelas marcas) num buffer "
+     "de 0x20800; o resto, 0x2A0 bytes depois do conteúdo, são bytes de antes (Heap_Alloc não limpa e o Bpe_Decode só "
+     "grava o conteúdo). O teto é esse resto. Etapa 9a"),
     ("heap:0x68", {"igual-sem-inverter": 8},
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
@@ -388,10 +426,16 @@ TETO_TRECHOS_GPU = 64   # trechos por buffer (o maior visto: 22)
 TETO_DIFERENTES_GPU = 160  # palavras "diferente" por buffer (o maior visto: 88)
 
 
-# As telas de menu do caminho essencial em que a memória se compara no último vblank (roteiros.sh, vblanks_mem), com o
-# conteúdo convertido em tempo de jogo que tem de estar vivo e conforme ali (o nome do conteúdo pela classe(): o pacote e
-# a seção, ou a faixa). Sem isto, a memória no fim da luta não via nenhuma conversão da etapa 5b (revisão da etapa 5).
+# As telas de menu do caminho essencial e da História (etapa 9a) em que a memória se compara no último vblank
+# (roteiros.sh, vblanks_mem), com o conteúdo convertido em tempo de jogo que tem de estar vivo e conforme ali (o nome do
+# conteúdo pela classe(): o pacote e a seção, ou a faixa). Sem isto, a memória no fim da luta não via nenhuma conversão
+# da etapa 5b (revisão da etapa 5).
 TELAS_MEM = {
+    6: ["460 s1"],                                  # HistSel (menu_hist_sagas)
+    7: ["460 s2", "saga", "episodio"],              # ModeMenu (menu_hist_lista, menu_saga, menu_texfile)
+    8: ["460 s3", "saga", "fundo_resultado"],       # HistResult (menu_hist_resultado, menu_saga, menu_hist_fundo)
+    9: ["460 s2", "saga"],                          # HistOutro (menu_hist_lista, menu_saga)
+    10: ["460 s4"],                                 # HistSave (menu_hist_save)
     38: ["448 s1"],                                 # DuelMenu (menu_duelo)
     39: ["448 s2", "retrato", "estagio"],           # CharSel (menu_selecao, menu_texfile, menu_fundo)
     40: ["448 s2", "retrato", "estagio"],           # TeamSel
@@ -405,14 +449,23 @@ def vivos_conformes(linhas, dados):
     """{classe: [nomes]} dos conteúdos descomprimidos (#bpe) com bloco vivo e conforme nas linhas "marcas heap#N
     NOME.marcas: conforme N, fora-do-formato 0" do memdiff"""
     out = collections.defaultdict(list)
+    # (um bloco com o mesmo conteúdo e as mesmas marcas de mais de um arquivo, memdiff.py "marcas iguais": vale por todos)
+    iguais = {}
     for l in linhas:
-        m = re.match(r"marcas heap#\d+ (\S+)\.marcas: conforme (\d+), fora-do-formato 0$", l)
-        if not m or not m.group(1).endswith("#bpe") or int(m.group(2)) == 0:
+        m = re.match(r"marcas iguais: (heap#\d+) = (.*) \(o mesmo conteúdo e as mesmas marcas\)$", l)
+        if m:
+            iguais[m.group(1)] = [n[:-len(".marcas")] for n in m.group(2).split(", ")]
+    for l in linhas:
+        m = re.match(r"marcas (heap#\d+) (\S+)\.marcas: conforme (\d+), fora-do-formato 0$", l)
+        if not m or int(m.group(3)) == 0:
             continue
-        rel = m.group(1).replace("_", "/", 1)
-        c = classe(rel, dados)
-        if c is not None:
-            out[c].append(rel)
+        for nome in iguais.get(m.group(1), [m.group(2)]):
+            if not nome.endswith("#bpe"):
+                continue
+            rel = nome.replace("_", "/", 1)
+            c = classe(rel, dados)
+            if c is not None:
+                out[c].append(rel)
     return out
 
 
@@ -457,7 +510,8 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
     else:
         print(f"{pre}memória: {heap[6:]}")
     for l in linhas:
-        if l.startswith(("marcas ambíguas", "--marcas-vivas", "--marcas-tam", "livres:", "--tipos:", "--donos:")):
+        if l.startswith(("marcas ambíguas", "marcas iguais", "--marcas-vivas", "--marcas-tam", "livres:", "--tipos:",
+                         "--donos:")):
             print(f"{pre}  {l}")
     if not any(l.startswith("--tipos: ") for l in linhas):
         print(f"{pre}DIFERENÇA: memória: o memdiff sem --tipos (as globais sem o tipo)")
@@ -665,13 +719,13 @@ def semmapa(a):
 
 # As imagens das telas (F4, etapa 6; port/x360/headless/imagens.c, roteiros.sh com IMG=1): o rasterizador de software
 # da x86 e o da PPC sem mapa no mesmo momento de cada tela, ancorado numa linha do rastro (não num vblank), e as
-# imagens comparadas byte a byte. As telas de menu do essencial (o menu principal e as de TELAS_MEM): logo depois de
+# imagens comparadas byte a byte. As telas de menu do essencial e da História (o menu principal e as de TELAS_MEM): logo depois de
 # entrar (ENTRADA quadros depois da troca, com o fade de entrada acabado) e o último quadro antes da troca seguinte (a
 # tela no estado final: personagens e estágio escolhidos; SAIDA quadros antes, fora do fade de saída); a carga
 # antes da luta; a luta (LUTA quadros depois de começar, só com IMG=luta); e cada "marca" do
 # roteiro (os retratos 923 e 921 vivos, as páginas do Treino, salvo e carregado), cada "ok som" (a opção mudada) e
 # cada pergunta do cartão ("ok mcflow 12" e "ok mcflow 2", PERGUNTA quadros depois, com o diálogo aberto).
-TELAS_IMG = {4, 38, 39, 40, 44, 45, 62}
+TELAS_IMG = {4, 38, 39, 40, 44, 45, 62, 6, 7, 8, 9, 10}  # (o essencial e, desde a etapa 9a, a História)
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
 
 
@@ -820,10 +874,44 @@ def compara_imagens(lista, dx, dp, sx=None, sp=None, telas=None):
     return 1 if erros or not lista else 0
 
 
+def confere_saves(x86, ppc, telas_ref):
+    """o save que cada build deixou no cartão: os mesmos valores (save_entre.campos) e, em cada um, as sagas que o
+    roteiro conferiu em memória com o fim visto (SaveSlot.flags bit 2, MSLOT_OUTRO_SEEN; slot N em 0x10 + N * 0x10)"""
+    import save_entre  # noqa: E402 (port/x360/tools)
+    ok = True
+    arqs = []
+    for rot, d, ordem in (("x86", x86, "<"), ("ppc", ppc, ">")):
+        achados = sorted(pathlib.Path(d).rglob(f"card1/{save_entre.DADOS}/{save_entre.DADOS}"))
+        if len(achados) != 1:
+            print(f"  DIFERENÇA: save da {rot}: {len(achados)} arquivos de dados em {d} (esperado 1)")
+            ok = False
+            continue
+        arqs.append((rot, achados[0], ordem))
+    if not ok:
+        return 1
+    r = save_entre.campos(arqs[0][1].parent, arqs[1][1].parent, False)
+    ok &= r == 0
+    sagas = sorted({int(m.group(1)) for l in pathlib.Path(telas_ref).read_text().splitlines()
+                    for m in [re.match(r"roteiro: \S+ ok saga (\d) vblank ", l)] if m})
+    for n in sagas:
+        for rot, arq, ordem in arqs:
+            b = arq.read_bytes()
+            flags = struct.unpack_from(ordem + "i", b, 0x10 + n * 0x10)[0]
+            if flags & 4:
+                print(f"  saga {n}: o fim visto gravado no save da {rot} (flags 0x{flags:x})")
+            else:
+                print(f"  DIFERENÇA: saga {n}: o save da {rot} sem o fim visto (flags 0x{flags:x}), e a memória o "
+                      "tinha (\"ok saga\")")
+                ok = False
+    print("saves iguais" if ok else "saves DIFERENTES")
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes", "semmapa",
-                                     "vblank_menu", "vblank_fim", "vblanks_mem", "memoria", "imagens", "compara_imagens"])
+                                     "vblank_menu", "vblank_fim", "vblanks_mem", "memoria", "imagens", "compara_imagens",
+                                     "save", "larguras"])
     ap.add_argument("arqs", nargs="*")
     ap.add_argument("--prog")
     ap.add_argument("--conv")
@@ -847,6 +935,17 @@ def main():
 
     if a.acao == "semmapa":
         return semmapa(a)
+    if a.acao == "save":
+        return confere_saves(*a.arqs[:3])
+    if a.acao == "larguras":
+        erros = {n: r for n, r in conv(a.arqs[0]).items() if r.startswith("ERRO")}
+        for n, r in sorted(erros.items()):
+            print(f"  {n}: {r}")
+        for k in NOTAS_CONV:
+            print(f"  conhecida: {k[0]} 0x{k[1]:X} ({k[2]} lidos, {k[3]} trocados): {LARGURA_CONHECIDA[k]}")
+        ok = not erros and NOTAS_CONV
+        print("conv_tool: só larguras conhecidas" if ok else "conv_tool: erro fora de LARGURA_CONHECIDA")
+        return 0 if ok else 1
     if a.acao == "memoria":
         ok = memoria(a.arqs[0], tela=a.tela, dados=a.dados)
         print("memória igual" if ok else "memória DIFERENTE")
@@ -935,6 +1034,9 @@ def main():
         if r.startswith("ERRO"):
             print(f"  DIFERENÇA: conv_tool em {nome}: {r[6:]}")
             erros += 1
+    for k in NOTAS_CONV:
+        print(f"  NOTA: {k[0]} 0x{k[1]:X} contra o mapa com outra largura ({k[2]} lidos, {k[3]} trocados), conhecida: "
+              f"{LARGURA_CONHECIDA[k]}")
     # o que não é de menu e saiu sem conversor (fora do disc/, que o jogo lê por outro caminho): só as exceções
     # conhecidas, uma a uma
     for nome, r in sorted(resultado.items()):
