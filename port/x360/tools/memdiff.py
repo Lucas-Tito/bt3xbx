@@ -2,7 +2,7 @@
 """F1: compara a memória do jogo de duas builds de ordem de bytes diferente num mesmo quadro.
 
     memdiff.py X86.dump PPC.dump PROG_X86 PROG_PPC [--max N] [--faixa INI-FIM] [--estrito] [--resumo]
-               [--marcas REGIAO=ARQ.marcas]...
+               [--marcas REGIAO=ARQ.marcas]... [--marcas-tam ARQ.marcas]...
 
 Os .dump são os de port/src/gs/state.c (BT3_HASH=<arq> BT3_HASH_AT=<quadro> -> <arq>.dump): heap,
 scratchpad e as variáveis globais do jogo (<programa>.mem, escrito por tools/mem.py).
@@ -30,6 +30,13 @@ largura de cada número do formato). Nesse trecho a comparação é campo a camp
 invertidos e byte igual contam como "conforme"; o resto é "fora-do-formato" (listado), e isso separa o que a
 classificação por palavra não separa (bytes e u16 na mesma palavra, u16 desalinhado do Flash). Um campo que o jogo
 grava depois da carga (relocação) continua conforme se gravou um número nativo da mesma largura.
+
+--marcas-tam DIR/pzs3us1_00449.bin@0xAB5C0#bpe.marcas (repetível): o mesmo, com o bloco achado pelo tamanho pedido
+(HeapBlock.dataSize, +0x18, igual ao tamanho da marcação, ou até 0x800 a mais, o arredondamento da leitura de
+arquivo), em vez do índice: o índice de um bloco muda de um quadro e de um roteiro para outro. Tem de haver um só
+bloco em uso com esse tamanho; senão o memdiff para com erro (saída 2).
+
+Para cada região com marcação, uma linha "marcas REGIAO ARQ: conforme N, fora-do-formato M" (também com --resumo).
 """
 import bisect, struct, subprocess, sys
 from collections import Counter
@@ -168,11 +175,14 @@ def pelo_formato(ax, dx, dp, marcas):
 
 def main():
     args, opc, it = [], {}, iter(sys.argv[1:])
-    marcas = {}
+    marcas, por_tam, nome_marcas = {}, [], {}
     for a in it:
         if a == "--marcas":
             r, arq = next(it).split("=", 1)
             marcas[r] = open(arq, "rb").read()
+            nome_marcas[r] = arq
+        elif a == "--marcas-tam":
+            por_tam.append(next(it))
         elif a in ("--max", "--faixa"):
             opc[a] = next(it)
         elif a.startswith("--"):
@@ -198,6 +208,21 @@ def main():
         else:
             pares.append(((n, a, d), (n, *rp[n])))
     pares += globais(x, p, lx, lp)
+    for arq in por_tam:
+        m = open(arq, "rb").read()
+        achados = []
+        for (nx, ax, dx), _ in pares:
+            if nx.startswith("heap") and "#" in nx and len(dx) >= 0x20:
+                magic, usado = struct.unpack_from("<Ii", dx, 0)
+                pedido, = struct.unpack_from("<i", dx, 0x18)
+                if magic == MAGIC and usado and len(m) <= pedido < len(m) + 0x800:
+                    achados.append(nx)
+        if len(achados) != 1:
+            print(f"--marcas-tam {arq}: {len(achados)} blocos em uso com {len(m):#x} bytes pedidos (é preciso um só)")
+            sys.exit(2)
+        print(f"marcas pelo tamanho: {achados[0]} = {arq.rsplit('/', 1)[-1]}")
+        marcas[achados[0]] = m
+        nome_marcas[achados[0]] = arq
     listar = {"diferente"} | ({"2xu16", "u64", "u64-com-zero", "igual-sem-inverter"} if estrito else set())
     for (nx, ax, dx), (np_, ap, dp) in pares:
         n = min(len(dx), len(dp)) // 4 * 4
@@ -208,6 +233,8 @@ def main():
             fmt_ini, fmt_fim, cf, tf = pelo_formato(ax, dx, dp, marcas[nx])
             classes.update(cf)
             trechos += [tuple(t) for t in tf]
+            print(f"marcas {nx} {nome_marcas[nx].rsplit('/', 1)[-1]}: conforme {cf['conforme']}, "
+                  f"fora-do-formato {cf['fora-do-formato']}")
         for o in range(0, n, 4):
             if fmt_ini <= o < fmt_fim or fmt_ini < o + 4 <= fmt_fim:
                 continue

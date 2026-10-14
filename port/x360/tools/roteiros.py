@@ -19,6 +19,9 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             na guarda do Sprite_Unpack, que nomeia o próximo bloqueio, com o rastro e
                                             os arquivos lidos até ali iguais ao começo dos da x86. Qualquer outro fim
                                             (queda, tempo esgotado, erro de conversor, falha do roteiro) é falha
+    roteiros.py vblank_menu TELAS          o último vblank da primeira visita ao menu principal (tela 4) num rastro: o
+                                            quadro em que o roteiros.sh compara a memória das duas builds (o pacote
+                                            dele ainda vivo, antes da tela seguinte)
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -334,7 +337,8 @@ def semmapa(a):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes", "semmapa"])
+    ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes", "semmapa",
+                                     "vblank_menu"])
     ap.add_argument("arqs", nargs="*")
     ap.add_argument("--prog")
     ap.add_argument("--conv")
@@ -344,6 +348,13 @@ def main():
 
     if a.acao == "semmapa":
         return semmapa(a)
+    if a.acao == "vblank_menu":
+        linhas = [l for l in pathlib.Path(a.arqs[0]).read_text().splitlines() if l.startswith("tela ")]
+        for i, l in enumerate(linhas[:-1]):
+            if l.split()[1] == "4":
+                print(int(linhas[i + 1].split()[3]) - 1)
+                return 0
+        return 1
 
     if a.acao == "partes":
         partes(a.arqs[0], a.arqs[1], int(a.arqs[2]) if len(a.arqs) > 2 else 4000000)
