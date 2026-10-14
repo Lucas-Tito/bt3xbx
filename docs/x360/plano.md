@@ -40,11 +40,11 @@ Consolidação dos três estudos em `docs/x360/pesquisa/`:
 
 - **O repositório e o release não levam nenhum byte do jogo.**
 - **Versão aceita:** só a americana SLUS-21678. O SHA-1 do `SLUS_216.78` e do `DBZP.BIN` é conferido no primeiro boot.
-- **Fluxo no console:**
-  1. O usuário copia a própria ISO para `disc/` ao lado do `default.xex`.
-  2. Um instalador dentro do XEX confere os hashes e converte os dados para `gamedata/`: troca de bytes, texturas no formato Xenos, poucos arquivos grandes por causa do limite de entradas por pasta do FATX.
-  3. Tudo isso com barra de progresso e mensagem de erro clara na tela.
-- **Alternativa:** uma ferramenta opcional de PC que faz a mesma conversão.
+- **Hoje (decisão 18):** o usuário copia a própria ISO para a pasta do jogo, e o jogo a lê direto, convertendo cada
+  arquivo na carga. Sem instalador.
+- **Passo futuro (decisão 23, F5 depois do teto de memória):** um script de PC converte a ISO do usuário numa ISO
+  do mesmo tamanho, e o jogo exige essa ISO convertida (a original é recusada com mensagem clara). Os conteúdos
+  comprimidos dos menus continuam convertidos no console até uma etapa posterior (precisa de um compressor BPE).
 
 ## 4. Layout do repositório
 
@@ -110,6 +110,8 @@ Filme e som ficam para a F6; VU1, outline e o resto da luta para a F5. Riscos an
   96 MB); sobram 3 MB, a criação de alvos falha, a thread do jogo para de 8 a 80 s seguidos, e a Guide não abre (o
   console trava). É o primeiro item da F5: um teto de memória no backend, com descarte do que está há mais tempo sem
   uso, e só depois a causa das paradas longas.
+- **ISO convertida no PC** (decisão 23): logo depois do teto de memória, o script de PC que gera a ISO convertida, e
+  o jogo passa a exigi-la.
 - A gravação e a decodificação de texturas do `gs_draw.c` custam 2 a 3 ms no PC e podem passar do que sobra do quadro
   no Xenon.
 

@@ -619,3 +619,23 @@ Escolhas do Lucas para a F4 (plano, "F4 em etapas"):
   - Dragon Net Battle escondido no 360, com o mesmo valor em x86, PPC e console, para os roteiros não se
     desalinharem no menu.
 
+## 23. ISO convertida no PC, exigida pelo jogo (14/10/2026; passo futuro)
+
+Escolha do Lucas: a conversão dos arquivos sai do console e vai para um passo de instalação no PC. Não é opção: é o
+caminho do port, num passo futuro (F5, logo depois do teto de memória).
+
+- **Como:** um script de PC lê a ISO do próprio usuário (SLUS-21678, hashes conferidos) e grava uma ISO convertida,
+  do mesmo tamanho: os conversores trocam no lugar, sem mudar tamanho nem posição (decisão 18), então a estrutura da
+  ISO e dos AFS fica a mesma. O núcleo já existe na `conv_tool` (`--disco` converte todos os conteúdos).
+- **O jogo exige a ISO convertida:** a original é recusada com mensagem clara na tela, sem detecção dupla nem
+  conversão de reserva no console. A conversão na carga (`Conv_Arquivo` no `iso360.c`) sai do 360.
+- **Por quê:** a carga deixa de pagar a conversão (500 ms na luta medida na decisão 18, 264 ms só no cenário), e o
+  console fica com um caminho só. Continua sem instalação no console, com um arquivo só no FATX e nenhum byte do
+  jogo no repositório ou no release: o script roda no PC de quem tem o disco.
+- **Fica para uma etapa posterior:** os conteúdos comprimidos (BPE) dos menus, que só se convertem depois de
+  descomprimidos (`Sprite_Unpack`, F4). Pré-convertê-los exige descomprimir, converter e comprimir de novo, com um
+  compressor BPE que ainda não existe; até lá, eles continuam convertidos no console.
+- **A definir na implementação:** a marca que distingue a ISO convertida da original, e os arquivos de `mods/`.
+- **Substitui**, quando for feito, a conversão na carga da decisão 18; o resto dela (ISO única, sem instalador no
+  console) continua.
+
