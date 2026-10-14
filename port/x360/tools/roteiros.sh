@@ -25,6 +25,8 @@
 #      conforme número a número pelas marcas do conversor (memdiff.py --marcas-vivas) e nenhuma palavra diferente
 #      fora deles (roteiros.py memoria). MEM=menu compara no último vblank da primeira visita ao menu principal (o
 #      critério da etapa 5a), e aí a memória se julga mesmo com a PPC parando depois.
+# Antes de tudo, as builds: x86, x86r e ppc do commit de agora, sem nada fora de commit (o CARIMBO de cada uma), e a
+# árvore sem alteração; senão sai com 1. DESENVOLVIMENTO=1 roda assim mesmo, e o fim diz "NÃO VALE COMO CRITÉRIO".
 # No fim, as chamadas de todos os roteiros juntos contra o inventário (roteiros.py soma).
 # Sai com 1 se qualquer conferência falhar em qualquer roteiro (a x86 sem "fim" ou com FALHA, a repetição, a
 # referência, a x86r, o rastreio.py, o conv_tool, o confere, a PPC, a soma), com a lista no fim; 0 só com tudo certo.
@@ -58,6 +60,25 @@ end
 run
 G
 echo "x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO)$([ -z "${PPC:-}${SEMMAPA:-}" ] || echo " | ppc $(cat $B/ppc/CARIMBO)")"
+# As builds comparadas têm de sair do mesmo commit, o de agora, sem nada fora de commit (o carimbo do headless.py:
+# "COMMIT diff:HASH", e o HASH da diferença vazia é da39a3ee5e), e a árvore daqui sem alteração: a revisão da etapa 5
+# achou a tabela final feita com a x86 de um estado e a PPC de outro que não estava em commit nenhum. DESENVOLVIMENTO=1
+# deixa rodar assim, e o fim diz que a rodada não vale como critério.
+CARIMBOS=(x86 x86r); [ -z "${PPC:-}${SEMMAPA:-}" ] || CARIMBOS+=(ppc)
+AGORA=$(git rev-parse --short HEAD)
+ORIGEM=()
+for b in "${CARIMBOS[@]}"; do
+    c=$(head -1 $B/$b/CARIMBO 2>/dev/null | cut -d' ' -f1,2)
+    [ "$c" = "$AGORA diff:da39a3ee5e" ] || ORIGEM+=("$b é de \"${c:-sem carimbo}\", não do commit de agora ($AGORA) sem diferença")
+done
+[ -z "$(git status --porcelain --untracked-files=normal)" ] || ORIGEM+=("a árvore tem alterações fora de commit")
+if [ ${#ORIGEM[@]} -gt 0 ]; then
+    printf '   >> origem: %s\n' "${ORIGEM[@]}"
+    if [ -z "${DESENVOLVIMENTO:-}" ]; then
+        echo "== builds de origens diferentes ou fora de commit: refaça x86, x86r e ppc do HEAD (ou DESENVOLVIMENTO=1)"
+        exit 1
+    fi
+fi
 LOGS=()
 # (o que roda de novo: com REUSA=1 nada; com REUSA=x86 só a PPC)
 roda_x86() { [ -z "${REUSA:-}" ]; }
@@ -200,6 +221,11 @@ essencial=0; for e in duelo duelo_time treino opcoes; do [[ " ${NOMES[*]} " == *
 [ $r = 0 ] || [ $essencial -lt 4 ] || falhou "pendente do essencial não alcançada"
 if [ ${#FALHAS[@]} -gt 0 ]; then
     echo "== ${#FALHAS[@]} falha(s):"; printf '   %s\n' "${FALHAS[@]}"
+    [ ${#ORIGEM[@]} -eq 0 ] || echo "== NÃO VALE COMO CRITÉRIO: $(printf '%s; ' "${ORIGEM[@]}")"
     exit 1
+fi
+if [ ${#ORIGEM[@]} -gt 0 ]; then
+    echo "== tudo certo, mas NÃO VALE COMO CRITÉRIO (DESENVOLVIMENTO=1): $(printf '%s; ' "${ORIGEM[@]}")"
+    exit 0
 fi
 echo "== tudo certo"

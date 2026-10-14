@@ -655,6 +655,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     disso. O `conv_tool` converte cada conteúdo de jogo dos dois jeitos e exige os mesmos bytes, o mesmo resultado e a
     mesma cobertura; o `--disco` diz o maior conteúdo e falha acima da reserva. Uma linha de erro do `conv_tool` vem
     antes ou depois da de cobertura do mesmo nome: o `roteiros.py` guarda o erro (antes ficava com a última linha).
+  - **Só compare builds do mesmo commit, e o ciclo tem de recusar as outras.** A tabela final da 5b saiu de uma x86 de
+    um estado e de uma PPC e uma x86r de outro, que não estava em commit nenhum (a revisão recalculou o carimbo). O guia
+    já dizia "só compare builds do mesmo carimbo", mas o `roteiros.sh` só imprimia os carimbos. Agora ele sai com 1
+    antes de rodar se x86, x86r e ppc não forem do commit de agora sem diferença (`diff:da39a3ee5e`) ou se a árvore
+    tiver alteração; `DESENVOLVIMENTO=1` deixa rodar e o fim diz "NÃO VALE COMO CRITÉRIO". Regra que não se confere
+    na ferramenta não vale.
   - **Byte de uma palavra de pacote não é o primeiro byte da memória no big-endian.** As letras dos nomes
     (`port/src/gs/namefont.c`) conferiam o endereço do registrador do GS em `pix[0x38]`; o pacote de imagem vem
     convertido em palavras u32 (o registrador de 64 bits como duas, a baixa primeiro), então no big-endian o byte é o
