@@ -738,6 +738,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     imagem da luta saía com 229 mil pixels diferentes. Tipados como fluxo VIF (`FLUXOS_VIF` do `elftipos.py`), sobram
     17.673 pixels (desvio até 7), todos de 26 primitivas com os quatro bytes da cor invertidos: os `u8 rgba[4]` dos
     efeitos da luta (`formatos/gpu.md` seção 6, F5). Por isso a luta fica fora do critério (`IMG=luta` a inclui).
+  - **Uma explicação de memória que diz "como o GS lê" tem de ser vista na imagem.** A etapa 5 aceitou as palavras
+    `igual-sem-inverter` dos pacotes da GPU como "cores RGBA byte a byte, o 3c3c3cNN do fade, como o GS as lê". A
+    imagem da luta mostrou que eram justamente as cores invertidas dos efeitos (o dump dá `rgba 3c3c3c16` na x86 e
+    `163c3c3c` na PPC): erro de conversão da F5, não cor certa. A aceitação ficou só no fim da luta (`SO_NA_LUTA` do
+    `roteiros.py`); numa tela de menu, uma palavra dessas é diferença.
+  - **Duas imagens no mesmo quadro do roteiro** (a `marca carregado` e o `ok som 1` das Opções saem na mesma leitura do
+    controle): a primeira versão do `imagens.c` guardava uma só e a outra faltava nas duas builds; agora cada imagem
+    tem a sua marca de pendente.
   - **Para achar a causa de uma imagem diferente, compare as primitivas, não os pixels:** `BT3_GS_DUMP` com o quadro
     do GS da imagem (o "gs G" da linha `imagem:`) mais o `BT3_GS_FROM`, nas duas builds, e o `diff` das linhas
     `prim`/`tex` (no WSL; só as contagens voltam). Cuidado: a "clut" que o dump imprime para textura de 32 bits é a

@@ -356,16 +356,23 @@ CLASSES_CONHECIDAS = [
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
     ("heap:0x100000", {"igual-sem-inverter": 256},
-     "os buffers de pacotes da GPU (Dma_InitBuffers): cores RGBA gravadas byte a byte nos pacotes (r, g, b, a: o "
-     "3c3c3cNN do fade), como o GS as lê; o rasterizador da etapa 6 confere a imagem (visto: 108 no máximo)"),
+     "os buffers de pacotes da GPU (Dma_InitBuffers): as cores dos efeitos da luta gravadas byte a byte (os u8 "
+     "rgba[4] dos vértices, o 3c3c3cNN; formatos/gpu.md seção 6). ERRO DE CONVERSÃO CONHECIDO, da F5: a etapa 6 viu "
+     "na imagem da luta 26 primitivas com os quatro bytes da cor invertidos na PPC. Só fora das telas de menu "
+     "(SO_NA_LUTA; visto: 108 no máximo, todas no fim da luta)"),
     ("heap:0x83040", {"igual-sem-inverter": 160},
-     "a tabela de ordenação (Ot_Init, gfx_ot.c:62: o pacote e as entradas num bloco só): as mesmas cores RGBA byte a "
-     "byte nos primitivos (visto: 78)"),
+     "a tabela de ordenação (Ot_Init, gfx_ot.c:62: o pacote e as entradas num bloco só): as mesmas cores dos efeitos "
+     "da luta byte a byte nos primitivos, o mesmo erro da F5 (visto: 78, no fim da luta; SO_NA_LUTA)"),
     ("heap:0x1a0800", {"igual-sem-inverter": 320, "2xu16": 660, "misto": 80, "u64": 930, "float-proximo": 16},
      "a arena do BtlPool (BtlPool_Init, btl_pool.c:29): as estruturas da cena da luta num alocador próprio, sem tipo "
      "por estrutura (u8, u16 e u64 de campo); float-proximo: as tabelas do EftGlow_BuildTables (cosf e sinf da libm "
      "do host). Só teto (visto: 244, 522, 59, 742 e 8): tipar a arena por sub-bloco fica pendente (plano, etapa 5)"),
 ]
+
+# As regiões de CLASSES_CONHECIDAS que só valem no fim da luta, nunca numa tela de menu (memoria --tela): as cores dos
+# efeitos da luta byte a byte (F5). Nos menus a etapa 6 comparou as imagens (idênticas) e a memória das telas não tem
+# nenhuma dessas palavras: uma que aparecesse seria cor de menu na ordem errada.
+SO_NA_LUTA = {"heap:0x100000", "heap:0x83040"}
 
 # Os dois buffers de pacotes da GPU (Dma_InitBuffers, 0x100000 bytes cada): o pacote de sprite pronto
 # (GfxPostSpritePkt, src/sys/gfxm_a.c, 0x60 bytes, alinhado a 16) é um local copiado inteiro para o pacote
@@ -528,10 +535,13 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
                 if not n or (chave_r == PACOTE_GPU and c in PROIBIDAS_EM_PACOTE):
                     continue  # (nos pacotes da GPU as proibidas já são diferença, acima)
                 teto = next((t[c] for r, t, _ in CLASSES_CONHECIDAS if r == chave_r and c in t), None)
+                if tela is not None and chave_r in SO_NA_LUTA:
+                    teto = None  # (numa tela de menu, nenhuma: SO_NA_LUTA)
                 if teto is None or n > teto:
                     print(f"{pre}DIFERENÇA: memória: {regiao} ({chave_r}) com {n} palavras {c}" +
-                          (f", acima do teto {teto}" if teto is not None else ", classe não explicada ali "
-                           "(CLASSES_CONHECIDAS)"))
+                          (f", acima do teto {teto}" if teto is not None else
+                           ", numa tela de menu (só no fim da luta: SO_NA_LUTA)" if tela is not None and
+                           chave_r in SO_NA_LUTA else ", classe não explicada ali (CLASSES_CONHECIDAS)"))
                     ok = False
                 else:
                     suspeitas[c] += n

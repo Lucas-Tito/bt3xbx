@@ -49,14 +49,14 @@ static struct {
     int vez, vistas; /* a K-ésima linha com a âncora; quantas já vieram */
     int n;
     long alvo;       /* o quadro do roteiro da imagem, -1 antes da âncora */
-    int feita;
+    int feita, pendente; /* gravada; a gravar depois da lista seguinte */
 } sImg[MAX_IMAGENS];
 static int sN = -1;
 static char sPasta[300];
 static int sJanela = 8;
 static unsigned sDesloc;     /* BT3_GS_FROM: somado ao gGsFrame enquanto a janela desenha */
 static int sDesenha;         /* a lista seguinte é desenhada */
-static int sCaptura = -1;    /* e, depois dela, grava esta imagem */
+static int sCaptura;         /* e, depois dela, grava as imagens pendentes (mais de uma no mesmo quadro) */
 static unsigned sQuadroAgora;
 
 static void iniciar(void) {
@@ -139,7 +139,8 @@ void Imagens_Quadro(unsigned q) {
         if (sImg[i].alvo >= 0 && !sImg[i].feita && (long)q <= sImg[i].alvo && (long)q + sJanela >= sImg[i].alvo) {
             sDesenha = 1;
             if ((long)q == sImg[i].alvo) {
-                sCaptura = i;
+                sImg[i].pendente = 1;
+                sCaptura = 1;
             }
         }
     }
@@ -196,9 +197,15 @@ void __wrap_Port_GsVif1Chain(uint32_t tadr, int tte) {
     if (desenha) {
         gGsFrame -= sDesloc;
     }
-    if (sCaptura >= 0) {
-        grava(sCaptura);
-        sCaptura = -1;
+    if (sCaptura) {
+        int i;
+        for (i = 0; i < sN; i++) {
+            if (sImg[i].pendente) {
+                sImg[i].pendente = 0;
+                grava(i);
+            }
+        }
+        sCaptura = 0;
     }
 }
 
