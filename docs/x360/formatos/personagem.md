@@ -349,7 +349,7 @@ da entrada.
 
 | Entrada | Uso | Relocação | Na demo |
 |---|---|---|---|
-| 1 | `BObjMdl.unk38` (objeto + 0x50): 2 texturas | `BtlObj_BindTables` (bobj_a.c:2352) | presente; só a relocação lê; quem usa o objeto + 0x50 não foi identificado |
+| 1 | `BObjMdl.unk38` (objeto + 0x50): 2 texturas; é a folha do rosto que a HUD desenha (`BtlObj.faceRes`, `HudGauge_DrawFace`) com a vista `HudCTex`: +0x28 é o s32 `mark` gravado a cada quadro e +0x2C o s32 `unk2C`, convertidos como nas folhas da HUD (`comuns.md` 6.3; achado na F4, etapa 5b) | `BtlObj_BindTables` (bobj_a.c:2352) | presente |
 | 12 | texturas do modelo: `ObjMdl.texFile` (objeto + 0x1C) e `tex` (objeto + 0x48) | `BtlObjMdl_BindFiles` (gfxm_e_b.c:188 e :192) | 23 texturas (01473), 17 (01793) |
 | 13 | olhos: `BObjMdl.eyes` (objeto + 0x4C), uma textura por quadro de piscar | `BtlObjMdl_CopyTexAlpha` (bobj_a.c:1565) | 2 (01473), 1 (01793) |
 | 14..17 | formas 5..8 da boca: `mouthB[4..7]` (objeto + 0x8C..0x98) | `BtlObjMdl_CopyTexAlpha` via `BObjFace_InitMouth` (bobj_a.c:1927) | vazias |

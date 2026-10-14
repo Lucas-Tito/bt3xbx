@@ -459,9 +459,20 @@ static void texturas(ConvCtx *c, conv_ofs a, conv_ofs b) {
     Conv_TexFile(c, a, b, 0);
 }
 
+/* §4.4, entrada 1: a folha do rosto do lutador, que a HUD desenha (HudGauge_DrawFace, src/battle/hud_b.c, pelo
+   BtlObj.faceRes) com a vista HudCTex (include/battle/hud_c.h): TexEntry +0x28 é o s32 mark, que a HUD grava a cada
+   quadro (HudRes_UploadTex), e +0x2C o s32 unk2C; a mesma regra das folhas da HUD (comuns.md 6.3). Achado na memória
+   do fim da luta (F4, etapa 5b): o mark gravado pelo jogo caía em bytes */
+static void texturas_rosto(ConvCtx *c, conv_ofs a, conv_ofs b) {
+    Conv_TexFile(c, a, b, 1);
+}
+
 /* §3.1: o formato de cada entrada do file[0] */
 static ConvFn formato_f0(conv_u32 n) {
-    if (n == 1 || n == 12 || n == 13 || (n >= 14 && n <= 17)) {
+    if (n == 1) {
+        return texturas_rosto;
+    }
+    if (n == 12 || n == 13 || (n >= 14 && n <= 17)) {
         return texturas;
     }
     if (n == 2) {

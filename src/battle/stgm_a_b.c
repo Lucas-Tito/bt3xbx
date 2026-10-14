@@ -262,7 +262,12 @@ s32 McCard_CreateSave(s32 port, McCardFile *file) {
         memset(&gMcCardIconSys, 0, sizeof(McCardIconSys));
         strcpy(gMcCardIconSys.head, "PS2D");
         strcpy(gMcCardIconSys.title, file->title);
+#ifdef PORT_BIG_ENDIAN /* the caller's McFlowReq holds titleBreak as an s32 (include/sys/mcflow_a.h) and McCardFile
+                          reads it as a u16: on a big-endian host the PS2's u16 is the low half, at the end */
+        gMcCardIconSys.titleBreak = PS2_LOW(u16, *(s32 *)&file->titleBreak);
+#else
         gMcCardIconSys.titleBreak = file->titleBreak;
+#endif
         gMcCardIconSys.transRate = 0x60;
         memcpy(gMcCardIconSys.bgColor, bgColor, sizeof(bgColor));
         memcpy(gMcCardIconSys.lightDir, lightDir, sizeof(lightDir));
