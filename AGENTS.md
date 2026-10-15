@@ -1,7 +1,8 @@
 # bt3xbx: instruções para agentes que trabalham no WSL
 
-Port do Dragon Ball Z Budokai Tenkaichi 3 (PS2) para o Xbox 360. Você roda no WSL do Windows, no clone
-`~/bt3xbx`. O mesmo repositório tem um `CLAUDE.md` com o contexto do projeto: **leia-o**, ele vale para você também,
+Port do Dragon Ball Z Budokai Tenkaichi 3 (PS2) para o Xbox 360. Você roda no WSL do Windows, como o usuário
+`codex` (sem sudo), no clone `/home/codex/bt3xbx`. Os dados do jogo (`gamedata`, `disc`, `asm`, `assets`) são links
+para `/srv/bt3/dados`, só leitura: não tente escrever neles. As referências dos roteiros ficam em `~/referencias`. O mesmo repositório tem um `CLAUDE.md` com o contexto do projeto: **leia-o**, ele vale para você também,
 menos o que fala de `wsl.sh` (isso é do lado Linux: aqui você roda os comandos direto) e da build do 360 (que não
 existe no WSL; ela é feita e conferida no Linux, na revisão).
 
@@ -36,9 +37,15 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 
 ## Como entregar
 
-- Trabalhe num branch local com o nome que a tarefa der (por exemplo `codex/9c-evo`), criado a partir de `origin/main`.
+- O remoto é `troca` (`/srv/bt3/bt3xbx.git`, um repositório local; não há acesso ao GitHub). Comece com
+  `git fetch troca` e trabalhe no branch que a tarefa der (por exemplo `codex/9c-evo`), a partir de `troca/main` ou do
+  branch existente com esse nome.
 - Commits atômicos, mensagem em português explicando o porquê, como os do histórico.
-- **Não faça push** (a chave deste clone é só de leitura). A revisão busca o branch daqui e envia ao GitHub.
+- Ao terminar, `git push troca <branch>`. **Nunca** empurre para `main`: a revisão traz o branch, confere e envia ao
+  GitHub.
+- **A conferência oficial é sua:** rode os comandos do critério da tarefa (`roteiros.sh` com `SEMMAPA=1`, `save_mc.sh`
+  e os outros), com as builds do commit final, até saírem "tudo certo". Não entregue como pronto o que não passou;
+  se não passar, diga o que falta.
 - Ao terminar, escreva o relatório em `~/entrega-<tarefa>.md`: os commits, o que ficou provado e como (a tabela da
   rodada final), o que não ficou provado, as perguntas com a opção conservadora aplicada, os verificadores vistos
   falhando e o sha1 da `.text` da x86. Deixe o git limpo e nenhum processo rodando.
