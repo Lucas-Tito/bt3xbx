@@ -57,6 +57,12 @@ void TourMenu_Init(s32 section) {
     memset(gTourMenu, 0, sizeof(TourMenu));
     gTourMenu->pack = (u32 *)MPACK_AT(gMenuArc4, section);
     gTourMenu->res = Sprite_Unpack(gTourMenu->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gTourMenu->res, ((s32 *)gTourMenu->pack)[0], "menu_tourmenu");
+    }
+#endif
     if (!(gSaveData->unkA08 & TOUR_SAVE_STARTED)) {
         gSaveData->unkA0C = 7;
     }
@@ -115,6 +121,12 @@ void TourMenu_Init(s32 section) {
     if (gTourMenu->flags & TOURMENU_INVITE) {
         File_LoadSync(gTourMenu->invite + 0x3C4, gTourMenu->imageFile, 0xF000);
         Sprite_Unpack(gTourMenu->imageFile, gTourMenu->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gTourMenu->imageRes, ((s32 *)gTourMenu->imageFile)[0], "menu_texfile");
+        }
+#endif
         res = gTourMenu->imageRes;
         Res_RelocateOffsets(&res, res, res);
         gTourMenu->texB[4] = MTEX(res, 0);

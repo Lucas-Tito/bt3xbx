@@ -29,6 +29,12 @@ void Bracket_Load(LBracket *b) {
         b->pack = File_LoadSync(gProgress->baseFile + LTOUR_PROG->tour + 6, NULL, 0);
     }
     b->res = Sprite_Unpack(b->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(b->res, ((s32 *)b->pack)[0], "menu_bracket");
+    }
+#endif
 
     /* title plate and banners */
     BK_RES(32);
@@ -803,7 +809,19 @@ void Bracket_UpdateImages(LBracket *b) {
         break;
     case LBRK_LOAD_UNPACK:
         Sprite_Unpack(b->imageFile[0], b->imageRes[0], NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(b->imageRes[0], ((s32 *)b->imageFile[0])[0], "menu_texfile");
+        }
+#endif
         Sprite_Unpack(b->imageFile[1], b->imageRes[1], NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(b->imageRes[1], ((s32 *)b->imageFile[1])[0], "menu_texfile");
+        }
+#endif
         res = b->imageRes[0];
         Res_RelocateOffsets(&res, res, res);
         b->texVs[6] = MTEX(res, 0);
@@ -828,7 +846,19 @@ void Bracket_LoadImages(LBracket *b) {
     File_LoadSync(chara[0] + 0x2F9, b->imageFile[0], 0x16800);
     File_LoadSync(chara[1] + 0x2F9, b->imageFile[1], 0x16800);
     Sprite_Unpack(b->imageFile[0], b->imageRes[0], NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(b->imageRes[0], ((s32 *)b->imageFile[0])[0], "menu_texfile");
+    }
+#endif
     Sprite_Unpack(b->imageFile[1], b->imageRes[1], NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(b->imageRes[1], ((s32 *)b->imageFile[1])[0], "menu_texfile");
+    }
+#endif
     res = b->imageRes[0];
     Res_RelocateOffsets(&res, res, res);
     b->texVs[6] = MTEX(res, 0);

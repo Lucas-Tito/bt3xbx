@@ -1,5 +1,5 @@
 # World Tournament (etapa 9): TourMenu (modo 33), o torneio de treino (o segundo item: o de prêmio só abre o torneio
-# do dia), EntrySel (34) com o cursor andando, a chave (Bracket, 35), até a primeira luta começar.
+# do dia), EntrySel (34) com o cursor andando, a chave (Bracket, 35), a primeira luta e a chave atualizada.
 inclui boot.txt
 quadros 90
 aperta BAIXO 2                    # Torneio
@@ -24,4 +24,11 @@ repete ate luta max 6000          # a chave (Bracket_UpdateImages) e a primeira 
     quadros 150
 volta
 quadros 60
+termina luta vence max 6000
+repete ate tela 35 max 6000       # a volta chama Bracket_LoadImages para os dois retratos
+    aperta X
+    quadros 150
+volta
+quadros 300
+marca chave atualizada
 fim

@@ -96,6 +96,12 @@ void EntrySel_UpdateImage(void) {
         break;
     case ESEL_LOAD_UNPACK:
         Sprite_Unpack(gEntrySel->imageFile, gEntrySel->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(gEntrySel->imageRes, ((s32 *)gEntrySel->imageFile)[0], "menu_texfile");
+        }
+#endif
         res = gEntrySel->imageRes;
         Res_RelocateOffsets(&res, res, res);
         gEntrySel->texA[5] = MTEX(res, 0);
@@ -164,6 +170,12 @@ void EntrySel_Init(s32 section) {
     memset(gEntrySel, 0, 0x1C48);
     gEntrySel->pack = (u32 *)MPACK_AT(gMenuArc4, section);
     gEntrySel->res = Sprite_Unpack(gEntrySel->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gEntrySel->res, ((s32 *)gEntrySel->pack)[0], "menu_entrysel");
+    }
+#endif
     gEntrySel->file = File_LoadSync(TOUR_PROG->t.tour + 0x3C9, NULL, 0);
     TourBg_Init(gEntrySel->file, TOUR_PROG->t.tour, NULL);
     ES_RES(1);
@@ -332,6 +344,12 @@ void EntrySel_Init(s32 section) {
     }
     File_LoadSync(gEntrySel->sel->image + 0x2F9, gEntrySel->imageFile, 0x16800);
     Sprite_Unpack(gEntrySel->imageFile, gEntrySel->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gEntrySel->imageRes, ((s32 *)gEntrySel->imageFile)[0], "menu_texfile");
+    }
+#endif
     res = gEntrySel->imageRes;
     Res_RelocateOffsets(&res, res, res);
     gEntrySel->texA[5] = MTEX(res, 0);

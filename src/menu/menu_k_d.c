@@ -22,6 +22,12 @@ void TourBg_Init(void *file, u32 kind, u8 **tex) {
     gTourBg = Heap_Alloc(sizeof(TourBg), 0x20, 0, 2);
     memset(gTourBg, 0, sizeof(TourBg));
     gTourBg->res = Sprite_Unpack(file, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gTourBg->res, ((s32 *)file)[0], "menu_tourbg");
+    }
+#endif
     TB_RES(1);
     gTourBg->bg = res;
     TB_RES(2);

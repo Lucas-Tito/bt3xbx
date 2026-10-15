@@ -78,10 +78,10 @@ CONTEUDO = {
     "menu_h_b.c:49": "463 s1", "menu_h_b.c:119": "retrato", "menu_h_b.c:849": "retrato",
     "menu_h_d.c:650": "461 s1", "menu_h_d.c:1221": "pagina_treino",
     "menu_i_b.c:24": "473 s2", "menu_i_c.c:173": "473 s3",
-    "menu_i_d.c:98": "retrato", "menu_i_d.c:166": "450 s2", "menu_i_d.c:334": "retrato",
-    "menu_j_b.c:59": "450 s1", "menu_j_b.c:117": "convite", "menu_k_d.c:24": "fundo_torneio",
-    "menu_k_f.c:31": "chave", "menu_k_f.c:805": "retrato", "menu_k_f.c:806": "retrato",
-    "menu_k_f.c:830": "retrato", "menu_k_f.c:831": "retrato",
+    "menu_i_d.c:98": "retrato", "menu_i_d.c:172": "450 s2", "menu_i_d.c:346": "retrato",
+    "menu_j_b.c:59": "450 s1", "menu_j_b.c:123": "convite", "menu_k_d.c:24": "fundo_torneio",
+    "menu_k_f.c:31": "chave", "menu_k_f.c:811": "retrato", "menu_k_f.c:818": "retrato",
+    "menu_k_f.c:848": "retrato", "menu_k_f.c:855": "retrato",
     "menu_l_b.c:83": "retrato", "menu_l_b.c:154": "451 s4", "menu_l_b.c:266": "retrato",
     "menu_m_b.c:184": "retrato", "menu_m_b.c:272": "451 s4", "menu_m_b.c:433": "retrato",
     "menu_n_b.c:98": "ub_cursos", "menu_n_c.c:140": "ub_ranking", "menu_n_c.c:720": "retrato",
@@ -542,6 +542,9 @@ TELAS_MEM = {
     40: ["448 s2", "retrato", "estagio"],           # TeamSel
     44: ["461 s1", "pagina_treino"],                # Train (menu_treino, menu_texfile)
     45: ["461 s2", "retrato", "estagio"],           # CharSel do treino
+    33: ["450 s1", "convite"],                   # TourMenu com o convite inicial
+    34: ["450 s2", "fundo_torneio", "retrato"],   # EntrySel com o cursor atualizado
+    35: ["chave", "fundo_torneio", "retrato"],    # Bracket, inclusive na volta da luta
     48: ["452 s1"],                                 # EvoTop, incluindo o diálogo do DcSave
     49: ["452 s3", "retrato", "estagio"],           # EvoZ, retrato e fundo 959
     50: ["452 s2"],                                 # Shop
@@ -915,7 +918,7 @@ def semmapa(a):
 # antes da luta; a luta (LUTA quadros depois de começar, só com IMG=luta); e cada "marca" do
 # roteiro (os retratos 923 e 921 vivos, as páginas do Treino, salvo e carregado), cada "ok som" (a opção mudada) e
 # cada pergunta do cartão ("ok mcflow 12" e "ok mcflow 2", PERGUNTA quadros depois, com o diálogo aberto).
-TELAS_IMG = {4, 38, 39, 40, 44, 45, 48, 49, 50, 53, 54, 55, 56, 62, 6, 7, 8, 9, 10} | set(range(13, 31))  # (o essencial, a História da 9a e o
+TELAS_IMG = {4, 33, 34, 35, 38, 39, 40, 44, 45, 48, 49, 50, 53, 54, 55, 56, 62, 6, 7, 8, 9, 10} | set(range(13, 31))  # (o essencial, a História da 9a e o
 # Ultimate Battle da 9b)
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
 
