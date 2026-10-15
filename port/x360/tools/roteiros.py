@@ -574,6 +574,17 @@ SO_NAS_TELAS = {"heap:0x1c000": {7},
                 # episódios, e o resto do buffer é o mesmo; visto na tela 29 depois de uma luta, 157 palavras. Etapa 9b)
                 "heap:0x20800": {7, 15, 18, 21, 22, 25, 26, 29, 39, 40, 45}}
 
+# Os buffers de imagem alocados e ainda vazios (F4, passo 0 da 9c, pergunta 7 da 9b): o tabuleiro do Sim Dragon aloca
+# os buffers de retrato do anúncio da luta ao abrir (o arquivo, faceFile, em 0x16800; o conteúdo, faceRes, em 0x20800),
+# e até o anúncio ninguém grava neles nem os lê: o que há dentro são bytes de antes (Heap_Alloc não limpa), outros em
+# cada build, e as palavras saem em qualquer classe de troca (visto no fim do roteiro ultimate: 18.917 iguais sem
+# inverter num 0x20800, 156 2xu16 num 0x16800). Num bloco em uso desses tamanhos SEM NENHUM conteúdo vivo achado pelas
+# marcas (nenhuma linha "marcas ... heap#N" do memdiff; o conteúdo vivo é achado pelo conteúdo da x86, que não depende
+# da PPC, e um bloco com ele é conferido como sempre, por CLASSES_CONHECIDAS), as classes SUSPEITAS valem até o bloco
+# inteiro (o tamanho pedido / 4 palavras, somadas), em qualquer tela. A palavra "diferente" continua sendo trecho a
+# explicar, e um bloco de outro tamanho não entra. A memória diz quantos bytes cada bloco teve aceitos por esta classe.
+BUFFER_IMAGEM_VAZIO = {"heap:0x16800", "heap:0x20800"}
+
 # Os dois buffers de pacotes da GPU (Dma_InitBuffers, 0x100000 bytes cada): o pacote de sprite pronto
 # (GfxPostSpritePkt, src/sys/gfxm_a.c, 0x60 bytes, alinhado a 16) é um local copiado inteiro para o pacote
 # (StgPanBlur_DrawView), com uv0.pad (+0x3C), uv1.pad (+0x4C) e nop (+0x58, 8 bytes) nunca iniciados: lixo da pilha,
@@ -733,6 +744,10 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
                 print(f"{pre}DIFERENÇA: memória: tela {tela} sem o conteúdo {c} vivo e conforme (sem bloco não prova "
                       "a conversão)")
                 ok = False
+    # os blocos com algum conteúdo vivo achado pelas marcas (qualquer linha de marcas que nomeie o bloco: conferido,
+    # pelo tamanho, iguais ou ambíguo), que BUFFER_IMAGEM_VAZIO nunca cobre
+    com_marcas = {b for l in linhas if l.startswith("marcas") for b in re.findall(r"\bheap#\d+\b", l)}
+    vazios = []  # (região, chave, {classe: palavras}) aceitas por BUFFER_IMAGEM_VAZIO
     # região a região: as classes suspeitas contra CLASSES_CONHECIDAS, e os trechos um a um contra a lista
     regiao, chave_r, esperados, vistos = None, None, 0, 0
     explicados, suspeitas, somadas = collections.Counter(), collections.Counter(), collections.Counter()
@@ -766,6 +781,17 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
                           f"{cl.get('diferente', 0)} palavras diferentes (tetos {TETO_TRECHOS_GPU} e "
                           f"{TETO_DIFERENTES_GPU})")
                     ok = False
+            if chave_r in BUFFER_IMAGEM_VAZIO and regiao not in com_marcas:
+                # (um buffer de imagem alocado e sem conteúdo vivo: as classes suspeitas até o bloco inteiro)
+                aceitas = {c: cl[c] for c in SUSPEITAS if cl.get(c)}
+                teto = int(chave_r[5:], 16) // 4
+                if sum(aceitas.values()) > teto:
+                    print(f"{pre}DIFERENÇA: memória: {regiao} ({chave_r}, buffer de imagem sem conteúdo vivo) com "
+                          f"{sum(aceitas.values())} palavras de classes suspeitas, acima do bloco inteiro ({teto})")
+                    ok = False
+                elif aceitas:
+                    vazios.append((regiao, chave_r, aceitas))
+                continue
             for c in SUSPEITAS:
                 n = cl.get(c, 0)
                 if not n or (chave_r == PACOTE_GPU and c in PROIBIDAS_EM_PACOTE):
@@ -829,6 +855,10 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
     if suspeitas:
         print(f"{pre}  classes suspeitas explicadas (CLASSES_CONHECIDAS): " +
               ", ".join(f"{c} {n}" for c, n in sorted(suspeitas.items())))
+    for r, ch, aceitas in vazios:
+        n = sum(aceitas.values())
+        print(f"{pre}  buffer de imagem sem conteúdo vivo (BUFFER_IMAGEM_VAZIO): {r} ({ch}), {n * 4} bytes aceitos de "
+              f"{int(ch[5:], 16)} (" + ", ".join(f"{c} {v}" for c, v in sorted(aceitas.items())) + ")")
     return ok
 
 
