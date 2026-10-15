@@ -55,6 +55,15 @@ própria só para isso). Para cá só volta texto.
   - `puxar`: volta o clone para a `main` atualizada.
 - **Processo longo:** rode-o com a sessão SSH aberta (o `Bash` em segundo plano daqui) e com
   `tee` para um log. `nohup ... &` dentro do WSL morre quando a sessão fecha.
+  Nem um serviço do systemd (`systemd-run`) escapa: o WSL desliga a distribuição inteira uns segundos depois de fechar
+  a última sessão aberta pelo Windows (o journal mostra "The system will power off now!"). Na 9c-1, o Codex disparado
+  num serviço morreu em 26 s, quando o `!` que o disparou terminou. Para um processo que não fica preso a uma sessão,
+  deixe uma sessão aberta só para segurar o WSL (`ssh bt3win "wsl -d Ubuntu-24.04 -u lucas -- sleep 43200"` em segundo
+  plano daqui) e confira pelo `uptime -s` que o boot não mudou.
+- **Agente no WSL (Codex):** roda como o usuário `codex` (sem sudo, dados só leitura em `/srv/bt3/dados`, sem ver
+  `/home/lucas` nem `/mnt/c`, que o `wsl.conf` monta com `umask=077`), sem o isolamento dele, que bloqueia a x86 de
+  32 bits (SIGSYS), o `ptrace` do gdb e os sockets. A troca de código é pelo repositório local `/srv/bt3/bt3xbx.git`
+  (remoto `troca`); o GitHub só recebe o que passou pela revisão. Regras dele no `AGENTS.md`.
 
 ### 1.3 Console
 
