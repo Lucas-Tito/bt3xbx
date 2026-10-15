@@ -235,6 +235,11 @@ void Conv_MenuDcLista(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuDcSenha(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuReplay(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
+void Conv_MenuTourMenu(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuEntrySel(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuTourBg(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuBracket(ConvCtx *c, conv_ofs base, conv_ofs tam);
+
 static const Formato sFormatos[] = {
     {"personagem", Conv_Personagem},           /* file[0] do slot: modelo, texturas, parâmetros, lábio */
     {"personagem_anim", Conv_PersonagemAnim},  /* file[1]: animações em BPE (só a tabela e os cabeçalhos) */
@@ -292,6 +297,10 @@ static const Formato sFormatos[] = {
     {"menu_dc_topo", Conv_MenuDcTopo},         /* Data Center e Replay (menus-dc.md): DcMenu_Init, modo 53 */
     {"menu_dc_lista", Conv_MenuDcLista},       /* DcList_Init, modo 55 */
     {"menu_dc_senha", Conv_MenuDcSenha},       /* DcPass_Init, modo 54 */
+    {"menu_tourmenu", Conv_MenuTourMenu},       /* menus-torneio.md, modo 33 */
+    {"menu_entrysel", Conv_MenuEntrySel},       /* modo 34, os cinco guias */
+    {"menu_tourbg", Conv_MenuTourBg},           /* fundos dos modos 34 e 35 */
+    {"menu_bracket", Conv_MenuBracket},         /* modo 35, os cinco torneios */
     {"menu_replay", Conv_MenuReplay},          /* ReplayMenu_Init, modo 56 */
     {"menu_ub_cursos", Conv_MenuUbCursos},     /* E: os cinco cursos (UbzSel_Init, modo 28) */
 };
@@ -410,6 +419,16 @@ static const ConvFaixa sFaixas[] = {
     {0x1C5 - 1, 0x1C5 - 1, 1, "menu_evo_topo"},
     {0x1C5 - 1, 0x1C5 - 1, 2, "menu_loja"},
     {0x1C5 - 1, 0x1C5 - 1, 3, "menu_evoz"},
+    /* Torneio (menus-torneio.md): gMenuArc4, as cinco chaves, convites e fundos. */
+    {0x1C3 - 1, 0x1C3 - 1, CONV_ARQ, "menu_pacote"},
+    {0x1C3 - 1, 0x1C3 - 1, 1, "menu_tourmenu"},
+    {0x1C3 - 1, 0x1C3 - 1, 2, "menu_entrysel"},
+    {0x1C7 - 1, 0x1CB - 1, CONV_ARQ, "menu_bpe"},
+    {0x1C7 - 1, 0x1CB - 1, 0, "menu_bracket"},
+    {0x3C4 - 1, 0x3C8 - 1, CONV_ARQ, "menu_bpe"},
+    {0x3C4 - 1, 0x3C8 - 1, 0, "menu_texfile"},
+    {0x3C9 - 1, 0x3CD - 1, CONV_ARQ, "menu_bpe"},
+    {0x3C9 - 1, 0x3CD - 1, 0, "menu_tourbg"},
     /* Data Center, baseFile + 0xB (gMenuArc8): topo, lista, senha e replay, menus-dc.md. */
     {0x1CC - 1, 0x1CC - 1, CONV_ARQ, "menu_pacote"},
     {0x1CC - 1, 0x1CC - 1, 1, "menu_dc_topo"},
