@@ -11,6 +11,10 @@ aperta X ate tela 20 max 600      # Sim Dragon (a primeira placa)
 quadros 300
 aperta X ate tela 21 max 600      # a primeira placa do topo: começar
 quadros 300
+aperta DIREITA                    # o cursor ao lado e de volta: o retrato do personagem ao lado (SoloSel_UpdateImage)
+quadros 60
+aperta ESQUERDA                   # e o do primeiro de novo; a escolha não muda
+quadros 60
 repete ate tela 22 max 3000       # X no personagem, na placa e na cor
     aperta X
     quadros 100
