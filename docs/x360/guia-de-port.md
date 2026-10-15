@@ -207,6 +207,12 @@ dentro dele), e o `roteiro.c` chama a original pelo nome (`#ifdef PORT_X360`), c
 `Progress_Main`. O upstream não muda, e a `.text` da x86 também não (o `roteiro.c` da x86 sai igual depois do
 pré-processador). Sem o passo, o embrulho só compara o pedido (`sDerruba`) e volta.
 
+**Comportamento só do console no código do jogo: `PORT_X360`, não `PORT_BIG_ENDIAN`** (F4, 9c, Disc Fusion). O
+`PORT_BIG_ENDIAN` vale também na PPC sem janela dos roteiros, que se compara com a x86: um comportamento novo nele faz
+as duas divergirem. O que é do aparelho (a bandeja que o 360 não tem, no `DiscFusion_Input`) vai em `PORT_X360`, que só
+o `c89.py` define: a x86 e a PPC seguem o caminho original, a `.text` da x86 não muda, e a prova do caminho novo fica
+para o console.
+
 **As ações do roteiro de evento da luta no rastro** (F4, etapa 9b): nas builds sem janela, cada ação do GSCF que
 começa vai ao rastro, "`roteiro: gsc acao 10001 vblank V quadro Q`" (`gsc principal -1` na ação principal, `gsc roda
 1000` na da carga), por `--wrap` no `Gsc_StartAction`, no `Gsc_StartMain` e no `Gsc_RunAction` (`headless.py`,
