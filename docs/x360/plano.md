@@ -38,7 +38,7 @@ Resumo (texto completo em [plano/base.md](plano/base.md)):
 | F1 | concluída | idem |
 | F2 | concluída | idem |
 | F3 | concluída | [plano/F3.md](plano/F3.md) |
-| F4 | em andamento, até a tarefa 9c-2 feita | [plano/F4/00-escopo.md](plano/F4/00-escopo.md) |
+| F4 | em andamento, até a tarefa 9c-3 feita | [plano/F4/00-escopo.md](plano/F4/00-escopo.md) |
 | F5 a F9 | por fazer | só a entrega da tabela acima (riscos já anotados para a F5 em [plano/F3.md](plano/F3.md)) |
 
 ### F4, etapas (13/10/2026)
@@ -56,7 +56,7 @@ etapa tem o seu arquivo; um agente que trabalha numa etapa lê este índice e o 
 | 6 | WSL | Rasterizador x86 e PPC nas telas essenciais | PPM idênticos | concluída | [06](plano/F4/06.md) |
 | 7 | console | Caminho essencial no console, pelos roteiros (`BT3_ROTEIRO`) | mesmas telas da x86; capturas no patamar da F3; nenhuma queda | concluída | [07](plano/F4/07.md) |
 | 8 | WSL e console | Save entre builds (PPC e 360) | os dois sentidos carregam; save de PC cai no fluxo de "dados danificados" do jogo, sem queda | concluída | [08](plano/F4/08.md) |
-| 9 | WSL | Os outros modos pela mesma linha de produção (9a História e 9b Ultimate Battle, feitas; 9c o resto) | `unpacks.py` sem pendência; `--disco` 100% em todas as faixas de menu | em andamento (9a, 9b, 9c-1 e 9c-2 feitas; resto da 9c por fazer) | [09a](plano/F4/09a.md), [09b](plano/F4/09b.md), [09c](plano/F4/09c.md) |
+| 9 | WSL | Os outros modos pela mesma linha de produção (9a História e 9b Ultimate Battle, feitas; 9c o resto) | `unpacks.py` sem pendência; `--disco` 100% em todas as faixas de menu | em andamento (9a, 9b, 9c-1, 9c-2 e 9c-3 feitas; resto da 9c por fazer) | [09a](plano/F4/09a.md), [09b](plano/F4/09b.md), [09c](plano/F4/09c.md) |
 | 10 | console | Sessão de 30 min com o Lucas pelos modos | o critério da F4 sem queda | por fazer | sem arquivo ainda (critério em [00-escopo](plano/F4/00-escopo.md)) |
 
 ## 6. Riscos principais

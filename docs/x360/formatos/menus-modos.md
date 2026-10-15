@@ -139,7 +139,7 @@ ler): o gancho vai mesmo assim, para a regra de um gancho por chamada e para a g
 | `menu_saga` | `ModeMenu_Init` menu_a_d.c:128, `HistOutro_Init` menu_b_c.c:107, `HistResult_Init` menu_c_c.c:182 | 464..471 inteiro | modos 7..9 (`TexFile`, textos, LipPack, `ModeMenuDescr`, Flash) |
 | `menu_charref` | `CharRef_Init` menu_h_b.c:49 | 463 s1 | modo 60 (N = 28, com tabelas s32 de 161 entradas) |
 | `menu_tourmenu` | `TourMenu_Init` menu_j_b.c:59 | 450 s1 | modo 33 (com `TourInfo` s32) |
-| `menu_entrysel` | `EntrySel_Init` menu_i_d.c:166 | 450 s2 | modo 34 (Células, SubpacoteTex, ItemPanel, ItemHelp; as seções dos cinco torneios) |
+| `menu_entrysel` | `EntrySel_Init` menu_i_d.c:172 | 450 s2 | modo 34 (Células, SubpacoteTex, ItemPanel, ItemHelp; as seções dos cinco torneios) |
 | `menu_tourbg` | `TourBg_Init` menu_k_d.c:24 | 968..972 inteiro | modos 34 e 35 (2 `TexFile`, 1 Flash) |
 | `menu_bracket` | `Bracket_Load` menu_k_f.c:31 | 454..458 inteiro | modo 35 (GetWin, `LTourCpu`, `LTourPrize`, diálogo) |
 | `menu_ub_menu` | `UbMenu_Init` menu_p_c.c:70 | 451 s1 | modo 13 |
@@ -177,7 +177,8 @@ UB resultado 10, MisSel 2/9/12..14, TourMenu 24, EntrySel 27/37/38, Bracket 33/3
 Pendentes: 77 (16 essenciais, 61 não); desde a etapa 5a, 76 (15 essenciais), com o `menu_principal`; desde a etapa
 5b, 61 (nenhuma essencial), com o resto do essencial (`menus-telas.md`); desde a etapa 9a, 51, com as 10 da História
 (`menus-historia.md`); desde a etapa 9b, 29, com as 22 do Ultimate Battle (`menus-ub.md`); desde a tarefa 9c-1, 23,
-com as seis do Evolution Z e da loja (`menus-evo.md`). A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
+com as seis do Evolution Z e da loja (`menus-evo.md`); desde a 9c-2, 16, com as sete do Data Center e Replay
+(`menus-dc.md`); desde a 9c-3, cinco, com as onze do Torneio (`menus-torneio.md`). Restam Referência e Shenlong. A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
 que o `unpacks.py` acha. Formatos novos: 33 (`menu_texfile` e 32 pacotes de tela); 6 deles no essencial
 (`menu_texfile`, `menu_principal`, `menu_duelo`, `menu_selecao`, `menu_treino`, `menu_opcoes`).
 
