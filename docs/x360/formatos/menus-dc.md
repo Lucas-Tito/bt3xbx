@@ -205,3 +205,32 @@ Cada conversor sobre cópias intactas (saída 0) e estragadas (saída 1, com a s
 | replay | seção 3 com 13 texturas | o leitor usa 14 |
 | replay | fichas com 164 subseções | fim da tabela diferente |
 | replay | diálogo da seção 5 com N = 5 | fim da tabela diferente |
+
+## 9. O roteiro e o replay nas builds sem janela
+
+O roteiro `port/x360/roteiros/datacenter.txt` alcança as sete chamadas: a senha válida mostra o retrato
+(`DcPass_UpdateFace`) e grava o registro 0, a lista o abre (`DcList_UpdateFace`), o replay se abre e se fecha,
+e a saída do Data Center salva pelo DcSave (estados 12, 13, 15 e 0 do `McFlow`), com o registro conferido no save
+em memória antes e depois (`gSaveData->rec[0].chara`, 0x2D58: -1, depois 0).
+
+A senha é a do personagem 0 sem itens, `zVQKG3lBMyP-V7PvylNYtq*$Jcj9)92j4+`, gerada pelo próprio jogo
+(`ChrPass_Encode` e `ChrPass_GetText` chamados no gdb da x86, com o `DcPass_Decode` dela conferido igual a 1).
+Não é dado do disco: é a saída do codificador do jogo para uma entrada escolhida. Os apertos do teclado
+(`gDcPassKeys`, `DcPass_Input`) saem de uma busca em largura que só passa pelas teclas de um caractere
+(linhas 0..3, colunas 0..11, e 12..13 na linha 0), sem as teclas largas e sem o anel das bordas, partindo do A;
+o `CIRCULO` troca a página (maiúsculas e minúsculas). Com a senha cheia, o cursor vai sozinho para o OK.
+
+O replay caía nas builds sem janela (SIGFPE no `ReplayMenu_Draw`, menu_za_d.c:409). A causa, provada:
+
+- x86, no gdb, na volta do `pow(10.0, 1)`: a libm devolve 10 no `st0` (convenção de float em hardware), e o código
+  do jogo, de float em software, empilha `edx:eax` (0x00000000:0x00003800, um subnormal) para o `__fixdfsi`, que
+  dá 0; o `idiv` seguinte divide por zero;
+- PowerPC, no objdump: o jogo passa 10.0 em r3:r4 e `i` em r5:r6 e lê r3:r4 depois, e o `__ieee754_pow` da libm
+  lê f1 e f2 (`stfd f1`, `stfd f2`) e devolve em f1. A `divw` por zero não cai, e os dígitos sairiam errados.
+
+O `port_libm.h` só desvia para as pontes os nomes de float (`powf` entre eles), e o `pow` de double é o único
+desse tipo no código do jogo (o som do GS também chama `pow`, mas é de float em hardware). O contorno é só do teste:
+o `headless.py` liga uma cópia do `menu_menu_za_d.o` com `pow` renomeado para `Port_PowDuplo`
+(`objcopy --redefine-sym`), uma ponte de inteiros em `port/x360/headless/ponte_pow.c`, compilada com float em
+hardware, como as do `plat_libm.c`. O objeto compilado do jogo não muda (a comparação dos objetos com a base vale
+para ele), o som do GS continua com o `pow` da libm, e o 360, de float em hardware, não usa nada disso.

@@ -923,6 +923,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   leitor declara), o mínimo é só a recusa de uma tabela curta, e só o que sobra depois do último registro inteiro tem
   de ser zero. E um estrago de teste precisa cair onde a regra vale: o primeiro "enchimento estragado" do teste caiu
   num registro e passou, com razão.
+- **Senha digitada pelo roteiro (9c-2).** Para alcançar um retrato que só aparece com um registro (a lista vazia
+  depois do `desbloqueia`), o roteiro digita uma senha válida no teclado da tela: o texto sai do próprio codificador
+  do jogo, chamado no gdb da x86 (`call ChrPass_Encode(p)` sobre um `malloc` zerado com o personagem, e
+  `ChrPass_GetText()`; confira com `DcPass_Decode` antes), e os apertos saem de uma busca em largura que simula o
+  `DcPass_Input` só pelas teclas de um caractere (sem teclas largas nem o anel das bordas, que leem fora da tabela
+  antes do `WrapPos`). Funcionou de primeira na x86: 34 caracteres, 243 apertos.
 - **O dono de uma timeline pode estar na pilha.** `EvoTop_Run` mantém `EvoTop m` local, e `FlashTl_Init` grava
   `&m.flash[0]` em `FlashTl.owner`: na raiz de 0x18 e no +0xCC de cada `FlashClip` de 0xE4 (18 no topo). Esses
   ponteiros nativos ficam fora da faixa imagem/heap reconhecida pelo memdiff. Não se troca um número do disco nem se

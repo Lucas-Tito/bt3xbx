@@ -1,9 +1,11 @@
-# Data Center (etapa 9): DcMenu (modo 53); a senha (DcPass, 54) com o cursor andando; a lista de personagens
-# (DcList, 55; o X num registro, que com o desbloqueio está vazio, é recusado); e de volta ao menu principal. Os
-# retratos da lista e da senha (DcList_UpdateFace, DcPass_UpdateFace) pedem um registro ou uma senha válida. O replay
-# (56, ReplayMenu_Init) fica de fora: nas builds sem janela o ReplayMenu_Draw cai (SIGFPE) no num / (s32)pow(10.0, i)
-# (menu_za_d.c:409, divisão por zero): o pow de double vem da libm, de float em hardware, num código compilado com
-# float em software (a causa provável; guia, seção 6). É do teste sem janela; o 360 compila tudo com float em hardware.
+# Data Center (etapa 4; F4, tarefa 9c-2): as sete chamadas do 459 e dos retratos, a senha, a lista, o Replay e o save
+# pelo DcSave. Com tudo desbloqueado a lista de registros está vazia (o Save_UnlockAll a esvazia): o roteiro digita uma
+# senha válida no teclado da tela (DcPass_UpdateFace mostra o retrato), grava o registro, abre-o na lista
+# (DcList_UpdateFace) e salva ao sair. A senha é a do personagem 0 sem itens, gerada pelo próprio jogo
+# (ChrPass_Encode na x86 sob o gdb; menus-dc.md, "O roteiro"), e os apertos do teclado andam só pelas teclas de um
+# caractere (linhas 0..3, colunas 0..11, e 12..13 na linha 0, sem as teclas largas), a partir da tecla A.
+# O replay (56) entra desde a 9c-2: nas builds sem janela o pow de double do ReplayMenu_Draw passa pela ponte
+# port/x360/headless/ponte_pow.c (antes caía com SIGFPE, menu_za_d.c:409).
 inclui boot.txt
 quadros 90
 aperta BAIXO 6                    # Data Center
@@ -11,12 +13,116 @@ aperta X ate tela 53
 quadros 200
 aperta X ate tela 54 max 600      # senha
 quadros 200
+confere save s32 0x2D58 -1        # gSaveData->rec[0].chara (include/sys/save.h, 0x2D40 + 0x18): vazio
+# zVQKG3lBMyP-V7PvylNYtq*$Jcj9)92j4+ : personagem 0, sem itens
+aperta DIREITA 11
+aperta BAIXO
+aperta CIRCULO
+aperta X                          # z
+aperta ESQUERDA 4
+aperta CIRCULO
+aperta X                          # V
+aperta ESQUERDA 5
+aperta X                          # Q
+aperta DIREITA 8
+aperta CIMA
+aperta X                          # K
+aperta ESQUERDA 4
+aperta X                          # G
+aperta ESQUERDA
+aperta BAIXO 3
+aperta X                          # 3
+aperta DIREITA 6
+aperta CIMA 3
+aperta CIRCULO
+aperta X                          # l
+aperta ESQUERDA 10
+aperta CIRCULO
+aperta X                          # B
+aperta DIREITA 11
+aperta X                          # M
+aperta ESQUERDA 2
+aperta BAIXO
+aperta CIRCULO
+aperta X                          # y
+aperta ESQUERDA 9
+aperta CIRCULO
+aperta X                          # P
+aperta DIREITA 6
+aperta BAIXO
+aperta X                          # -
+aperta CIMA
+aperta X                          # V
 aperta DIREITA 2
-quadros 30
 aperta BAIXO 2
+aperta X                          # 7
+aperta ESQUERDA 7
+aperta CIMA
+aperta ESQUERDA
+aperta CIMA
+aperta X                          # P
+aperta DIREITA 6
+aperta CIRCULO
+aperta X                          # v
+aperta DIREITA 3
+aperta X                          # y
+aperta DIREITA
+aperta CIMA
+aperta X                          # l
+aperta DIREITA 2
+aperta CIRCULO
+aperta X                          # N
+aperta ESQUERDA 3
+aperta BAIXO
+aperta X                          # Y
+aperta ESQUERDA 5
+aperta CIRCULO
+aperta X                          # t
+aperta ESQUERDA 3
+aperta X                          # q
+aperta DIREITA 7
+aperta BAIXO
+aperta X                          # *
+aperta ESQUERDA 8
+aperta X                          # $
+aperta DIREITA 8
+aperta CIMA 2
+aperta CIRCULO
+aperta X                          # J
+aperta ESQUERDA 7
+aperta CIRCULO
+aperta X                          # c
+aperta DIREITA 7
+aperta X                          # j
+aperta DIREITA 2
+aperta BAIXO 3
+aperta X                          # 9
+aperta CIMA
+aperta X                          # )
+aperta BAIXO
+aperta X                          # 9
+aperta ESQUERDA 7
+aperta X                          # 2
+aperta DIREITA 5
+aperta CIMA 3
+aperta X                          # j
+aperta ESQUERDA 3
+aperta BAIXO 3
+aperta X                          # 4
+aperta DIREITA 2
+aperta CIMA
+aperta X                          # +
+quadros 30
+aperta X                          # OK (o cursor já foi para ele com a senha cheia): DcPass_Decode aceita
+quadros 200
+marca senha datacenter
+aperta X                          # a lista de registros
+quadros 120
+aperta X                          # registro 0, vazio: DcPass_StoreRec
 quadros 60
+confere save s32 0x2D58 0         # o personagem 0 gravado no registro 0
 repete ate tela 53 max 1500
-    aperta TRIANGULO
+    aperta X
     quadros 60
 volta
 quadros 200
@@ -24,18 +130,36 @@ aperta BAIXO
 quadros 30
 aperta X ate tela 55 max 600      # lista
 quadros 200
-aperta BAIXO 2
-quadros 30
-aperta X
-quadros 200
+aperta X                          # o registro gravado: detalhes e o retrato dele
+quadros 120
+marca retrato datacenter
 repete ate tela 53 max 1500
     aperta TRIANGULO
     quadros 60
 volta
 quadros 200
-repete ate tela 4 max 3000
+aperta BAIXO
+quadros 30
+aperta X ate tela 56 max 600      # replay
+quadros 300
+marca replay datacenter
+repete ate tela 53 max 1500
     aperta TRIANGULO
     quadros 60
 volta
+quadros 200
+aperta TRIANGULO                  # o registro novo pede o DcSave
+espera mcflow 12 max 600
+quadros 60
+aperta ESQUERDA
+aperta X
+espera mcflow 13 max 600           # substituir o save criado pelo boot
+quadros 60
+aperta ESQUERDA
+aperta X
+espera mcflow 15 max 600           # gravando
+espera mcflow 0 max 600
+espera tela 4 max 600
+confere save s32 0x2D58 0
 quadros 60
 fim
