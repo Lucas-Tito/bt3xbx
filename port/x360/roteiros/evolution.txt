@@ -57,6 +57,10 @@ espera mcflow 12 max 600
 quadros 60
 aperta ESQUERDA
 aperta X
+espera mcflow 13 max 600           # substituir o save criado pelo boot
+quadros 60
+aperta ESQUERDA
+aperta X
 espera mcflow 15 max 600           # gravando, não apenas recusando a pergunta
 espera mcflow 0 max 600
 espera tela 4 max 600

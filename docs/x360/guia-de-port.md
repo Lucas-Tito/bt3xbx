@@ -892,7 +892,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   pelo gancho `menu_mcflow` existente: o que faltava era o pacote do chamador.
   Na troca de pontos, a casa ativa vem de `cur[estado]` (estado 5), que começa zerada; o `cur[2] = 3` do código
   de entrada não a inicializa. Três DIREITA giram da unidade à centena: CIMA paga 100, não 1. O roteiro confere
-  dinheiro e experiência, e no DcSave espera os estados 12 (pergunta), 15 (gravação) e 0, sem aceitar o caminho do
+  dinheiro e experiência, e no DcSave espera os estados 12 (salvar), 13 (substituir), 15 (gravação) e 0, sem aceitar o caminho do
   "não" como prova de save. Em ensaio manual, crie também a pasta pai de `BT3_SAVES`: faltar o pai leva ao estado
   17 de erro de gravação já no boot, não a um erro de conversão.
 - **`save_mc.sh` também precisa de um emulador por vez.** Os pares A/F e B1/B2 ainda eram lançados em paralelo
