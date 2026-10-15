@@ -244,7 +244,7 @@ comando com `Port_ConvertMenuPack(buffer, ((s32 *)origem)[0], "formato")`, `Port
 `rawSize` da origem; o formato presente em `sFormatos` (conv.c); e a tabela `CHAMADORES` da guarda igual às funções que
 chamam `Sprite_Unpack`. Na etapa 1: `82 chamadas de Sprite_Unpack em 62 funções: bpe-direto 1, com gancho 5, pendente 77; 0
 com erro` (sai com 1 enquanto houver pendente); depois da etapa 5b, `com gancho 21, pendente 61`, nenhuma do essencial; depois da etapa 9a, `com gancho 31, pendente
-51` (as 10 da História com gancho); depois da etapa 9b, `com gancho 53, pendente 29` (as 22 do Ultimate Battle). Os ganchos mudam as linhas das chamadas seguintes do mesmo arquivo: `ModeMenu_Init`
+51` (as 10 da História com gancho); depois da etapa 9b, `com gancho 53, pendente 29` (as 22 do Ultimate Battle); depois da 9c-1, `com gancho 59, pendente 23`; depois da 9c-2, `com gancho 66, pendente 16` (o Data Center e o Replay, `menus-dc.md`; `DcList_Init` :1008 e `DcPass_Init` :958 eram :1002 e :952). Os ganchos mudam as linhas das chamadas seguintes do mesmo arquivo: `ModeMenu_Init`
 :132 e :140 (eram :126 e :128), `HistOutro_Init` :113 (era :107), `HistResult_Init` :188 e :203 (eram :182 e :191).
 
 ### 7.2 A guarda em tempo de jogo
