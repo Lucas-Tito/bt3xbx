@@ -533,6 +533,12 @@ void DcPass_UpdateFace(DcPass *pass) {
         if (File_UpdateRequests()) {
             res = NULL;
             Sprite_Unpack(pass->faceFile, pass->faceRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+            {
+                extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+                Port_ConvertMenuPack(pass->faceRes, ((s32 *)pass->faceFile)[0], "menu_texfile");
+            }
+#endif
             res = pass->faceRes;
             Res_RelocateOffsets(&res, res, res);
             pass->view.tex1[7] = res->tex;
@@ -950,6 +956,12 @@ void DcPass_Init(DcPass *pass, s32 section) {
 
     pass->pack = MPACK_AT(gMenuArc8, section);
     pass->res = Sprite_Unpack(pass->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(pass->res, ((s32 *)pass->pack)[0], "menu_dc_senha");
+    }
+#endif
     DP_RES(10, DP_HOST "dc_select_bg_PS2_.dbt");
     pass->view.bg = res;
     DP_RES(15, DP_HOST "dc_compane_PS2_.dbt");

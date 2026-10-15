@@ -955,6 +955,12 @@ void DcList_UpdateFace(DcList *list) {
         if (File_UpdateRequests()) {
             res = NULL;
             Sprite_Unpack(list->faceFile, list->faceRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+            {
+                extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+                Port_ConvertMenuPack(list->faceRes, ((s32 *)list->faceFile)[0], "menu_texfile");
+            }
+#endif
             res = list->faceRes;
             Res_RelocateOffsets(&res, res, res);
             list->view.tex0[7] = res->tex;
@@ -1000,12 +1006,24 @@ void DcList_Init(DcList *list) {
 
     list->pack = MPACK_AT(gMenuArc8, list->section);
     list->res = Sprite_Unpack(list->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(list->res, ((s32 *)list->pack)[0], "menu_dc_lista");
+    }
+#endif
     list->faceFile = Heap_Alloc(DCLIST_FACE_SIZE, 0x40, 0, 2);
     list->faceRes = Heap_Alloc(0x20800, 0x20, 0, 2);
     DCLIST_RES(1, DCLIST_HOST "chara_list_bg_PS2_.dbt");
     list->view.bg = res;
     File_LoadSync(DcChars_GetCursor(&list->chars) + DCLIST_FACE_FILE, list->faceFile, DCLIST_FACE_SIZE);
     Sprite_Unpack(list->faceFile, list->faceRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(list->faceRes, ((s32 *)list->faceFile)[0], "menu_texfile");
+    }
+#endif
     DCLIST_RES(19, DCLIST_HOST "dc_compane_PS2_.dbt");
     list->view.tex0[0] = MTEX(res, 0);
     list->view.tex0[1] = MTEX(res, 1);

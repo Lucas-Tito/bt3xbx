@@ -252,6 +252,12 @@ void ReplayMenu_Init(s32 section) {
     memset(gReplayMenu, 0, sizeof(ReplayMenu));
     gReplayMenu->pack = MPACK_AT(gMenuArc8, section);
     gReplayMenu->res = Sprite_Unpack(gReplayMenu->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gReplayMenu->res, ((s32 *)gReplayMenu->pack)[0], "menu_replay");
+    }
+#endif
     RP_RES(6, REPLAY_HOST "dc_select_bg_PS2_.dbt");
     gReplayMenu->bg = res;
     RP_RES(7, REPLAY_HOST "dc_compane_PS2_.dbt");

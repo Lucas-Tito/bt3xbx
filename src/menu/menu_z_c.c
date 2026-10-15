@@ -209,6 +209,12 @@ void DcMenu_Init(DcMenu *menu, s32 section) {
 
     menu->pack = MPACK_AT(gMenuArc8, section);
     menu->res = Sprite_Unpack(menu->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(menu->res, ((s32 *)menu->pack)[0], "menu_dc_topo");
+    }
+#endif
     DCMENU_RES(6, DCMENU_HOST "dc_select_bg_PS2_.dbt");
     menu->view.bg = res;
     DCMENU_RES(11, DCMENU_HOST "dc_compane_PS2_.dbt");
