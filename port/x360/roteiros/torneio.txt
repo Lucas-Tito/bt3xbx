@@ -31,4 +31,5 @@ repete ate tela 35 max 6000       # a volta chama Bracket_LoadImages para os doi
 volta
 quadros 300
 marca chave atualizada
+quadros 2                        # deixa a captura da marca chegar ao GS antes de encerrar
 fim

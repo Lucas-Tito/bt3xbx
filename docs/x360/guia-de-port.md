@@ -791,6 +791,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     do programa, nas duas builds. Para uma imagem no meio de uma tela, uma `marca` no roteiro (instantânea: não muda
     quadro nenhum, só acrescenta a linha ao rastro, e a referência se regrava com `REF=1`); as páginas do Treino
     ganharam `marca pagina 1..6`.
+  - **Uma marca imediatamente antes de `fim` não chega à captura.** Na 9c-3, as nove imagens presentes do Torneio
+    eram idênticas, mas a décima (`marca chave atualizada`) faltava nas duas builds, e o `compara_imagens` recusou
+    a rodada. `Roteiro_Pad` chama `quadro()` antes de `Imagens_Quadro`; `P_MARCA` continua na mesma leitura até
+    `P_FIM`, que faz `exit(0)`. Não há quadro nem envio ao GS para gravar a imagem armada pela marca. Ponha uma
+    espera depois da última marca (o Torneio usa `quadros 2`), antes de `fim`, e regrave a referência com `REF=1`.
   - **A imagem da luta achou o microcódigo da VU1 cru.** Os pacotes da VU1 das tabelas do executável
     (`vu1_micro.data`) eram `u8[]` no C, e o mapa das tabelas os deixava como vieram: a VU1 da PPC rodava instruções
     inexistentes ("unimplemented lower instruction", programas sem fim), a rodada levava 20 minutos em vez de 7 e a
