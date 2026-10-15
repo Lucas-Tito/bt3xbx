@@ -234,3 +234,30 @@ o `headless.py` liga uma cópia do `menu_menu_za_d.o` com `pow` renomeado para `
 (`objcopy --redefine-sym`), uma ponte de inteiros em `port/x360/headless/ponte_pow.c`, compilada com float em
 hardware, como as do `plat_libm.c`. O objeto compilado do jogo não muda (a comparação dos objetos com a base vale
 para ele), o som do GS continua com o `pow` da libm, e o 360, de float em hardware, não usa nada disso.
+
+## 10. Memória das telas: o trabalho na pilha
+
+`DcMenu_Run`, `DcPass_Run` e `DcList_Run` declaram o trabalho da tela como variável local (`DcMenu menu`,
+`DcPass pass`, `DcList list`), como o `EvoTop_Run` da 9c-1. Dois campos do heap guardam endereços dele, que são da
+pilha do host, outros em cada build e fora da faixa de imagem e heap que o memdiff reconhece como ponteiro do port:
+
+- `FlashTl.owner`: `Flash_Create` grava `&trabalho.flash[i]` na raiz (bloco de 0x18) e no +0xCC de cada `FlashClip`
+  (0xE4 bytes); um filme no topo (20 clips, bloco de 0x11D0), dois na senha (155 e 75 clips, 0x8A0C e 0x42CC) e dois
+  na lista (84 e 62 clips, 0x4AD0 e 0x3738);
+- `FlashClip.overArg` (+0xC8): `TextBox_AttachLine` (src/battle/view_b.c:228) grava `&caixa->draw`, uma caixa de texto
+  do mesmo trabalho (nomes, formas), nos clips onde liga um texto; só na senha e na lista.
+
+Na primeira rodada da conferência oficial, a memória das telas 53, 54 e 55 parou nesses trechos (21, 232 e 148), todos
+de 4 bytes no +0xCC ou de 8 no +0xC8 (o overArg e o owner ao lado), e só neles. Nos dumps nativos dessa rodada, lidos
+cada um na sua ordem, o owner é um valor só por filme em cada build (topo: x86 0xFFB1A46C, PPC 0x40800354; senha:
+0xFFD9DAD8 e 0xFFD9DB04, PPC 0x407FFAC4 e 0x407FFAF0, os dois filmes a 0x2C um do outro nas duas, o `sizeof(Flash)`;
+lista: 0xFF9B5FA4 e 0xFF9B5FD0, PPC 0x407FF5B0 e 0x407FF5DC), e os overArg são endereços a passos de 0x8C (o tamanho
+da caixa) à mesma distância do owner nas duas builds (senha: owner + 0x208 + k * 0x8C): os mesmos campos do mesmo
+trabalho local. O replay (56) aloca o trabalho no heap (`gReplayMenu`) e passou sem nada disso.
+
+O `roteiros.py` (`OWNER_NA_PILHA`) explica só esses campos: por tela, a função Init, o arquivo, a função Run da cadeia
+de alocação do `--donos`, os tamanhos exatos dos blocos de clips, e o overArg só nas telas com caixas de texto. Nenhum
+conversor, gancho ou teto de classe muda por isso. Vista falhando (`limites.py` da tarefa, fora do git, em
+`~/9c2/limites.py` no WSL): com a regra nova, 7 casos aceitos e 13 recusados como esperado (outra tela, `slots`,
+owner com `slots` em 8 bytes, `drawOver`, o overArg no topo e no EvoTop, outro tamanho de bloco, outra cadeia, outro
+tipo, além do fim do bloco, cadeia sem a função Run); a regra da 9c-1 recusa os 5 casos reais novos.

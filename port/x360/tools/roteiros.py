@@ -603,18 +603,39 @@ def chave_regiao(nome, estado):
     return f"heap:{m.group(1)}" if nome.startswith("heap#") and m else nome
 
 
+# As telas cujo trabalho é uma variável local da função Run (na pilha do host): Flash_Create grava o endereço do filme
+# (&trabalho.flash[i]) em FlashTl.owner, na raiz (bloco de 0x18) e no +0xCC de cada FlashClip (0xE4 bytes cada); e
+# TextBox_AttachLine (src/battle/view_b.c:228) grava &caixa->draw, uma caixa de texto do mesmo trabalho, em
+# FlashClip.overArg (+0xC8). Endereços nativos da pilha, outros em cada build, fora da faixa de imagem e heap que o
+# memdiff reconhece como ponteiro do port. Por tela: a função Init, o arquivo, a função Run, os tamanhos exatos dos
+# blocos de clips e se a tela liga caixas de texto (o overArg). O EvoTop é da 9c-1 (menus-evo.md); DcMenu, DcPass e
+# DcList, da 9c-2 (menus-dc.md, com os valores dos dumps: um owner por filme e o overArg a passos de 0x8C, à mesma
+# distância do owner nas duas builds). O ReplayMenu aloca o trabalho no heap e não entra.
+OWNER_NA_PILHA = {
+    48: ("EvoTop_Init", "menu_w_c.c", "EvoTop_Run", {0x1008}, False),
+    53: ("DcMenu_Init", "menu_z_c.c", "DcMenu_Run", {0x11d0}, False),
+    54: ("DcPass_Init", "menu_z_d.c", "DcPass_Run", {0x8a0c, 0x42cc}, True),
+    55: ("DcList_Init", "menu_y_b.c", "DcList_Run", {0x4ad0, 0x3738}, True),
+}
+
+
 def conhecida(regiao, desl, tam, tela=None, estado=""):
-    # EvoTop_Run mantém o EvoTop m na pilha. FlashTl_Init grava &m.flash[0] em owner na raiz e nas 18
-    # timelines dos clips: endereços nativos diferentes, fora da faixa de imagem/heap que o memdiff reconhece.
-    # Só esse ponteiro de 4 bytes, na tela 48, com o tipo e a cadeia de alocação conferidos por --donos. Nem slots/frames,
-    # nem os números vizinhos, nem outro dono do mesmo tamanho recebem a explicação (menus-evo.md).
-    if tela == 48 and tam == 4:
-        raiz = (regiao == "heap:0x18" and desl == 0 and
-                re.search(r", FlashTl de Flash_Create@\S+ < EvoTop_Init@menu_w_c.c:\d+ < EvoTop_Run@", estado))
-        clip = (regiao == "heap:0x1008" and 0 <= desl < 0x1008 and desl % 0xe4 == 0xcc and
-                re.search(r", FlashClip de FlashClipList_Init@\S+ < Flash_Create@\S+ < EvoTop_Init@menu_w_c.c:\d+", estado))
-        if raiz or clip:
-            return "FlashTl.owner: &EvoTop_Run.m.flash[0], ponteiro para a pilha do host"
+    # Só esses ponteiros de 4 bytes (o owner; e o overArg com o owner ao lado, 8 bytes, nas telas com caixas de
+    # texto), na tela da tabela, com o tipo e a cadeia de alocação conferidos por --donos. Nem slots/frames, nem os
+    # números vizinhos, nem outro dono do mesmo tamanho recebem a explicação.
+    if tela in OWNER_NA_PILHA:
+        init, arq, run, clips, caixas = OWNER_NA_PILHA[tela]
+        raiz = (tam == 4 and regiao == "heap:0x18" and desl == 0 and
+                re.search(rf", FlashTl de Flash_Create@\S+ < {init}@{re.escape(arq)}:\d+ < {run}@", estado))
+        m = re.fullmatch(r"heap:0x([0-9a-f]+)", regiao)
+        no_clip = (m is not None and int(m.group(1), 16) in clips and 0 <= desl and desl + tam <= int(m.group(1), 16) and
+                   re.search(rf", FlashClip de FlashClipList_Init@\S+ < Flash_Create@\S+ < {init}@{re.escape(arq)}:\d+",
+                             estado))
+        campo = desl % 0xe4 if no_clip else None
+        if raiz or (no_clip and tam == 4 and campo == 0xcc):
+            return f"FlashTl.owner: &{run}.trabalho.flash[i], ponteiro para a pilha do host"
+        if no_clip and caixas and ((tam == 4 and campo == 0xc8) or (tam == 8 and campo == 0xc8)):
+            return f"FlashClip.overArg (e owner): caixa de texto e filme do trabalho local de {run}, pilha do host"
     for r, d, porque in DIFERENTES_CONHECIDAS:
         if r != regiao:
             continue

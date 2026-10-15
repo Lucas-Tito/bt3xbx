@@ -937,6 +937,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   três chamadores no TSV: só `Flash_Create` não distingue a raiz do EvoTop das raízes das janelas da mesma tela.
   No gdb, há visões diferentes chamadas `Flash`: busque o tipo no bloco de `Flash_Create`, em `gfxm_c.c`, antes de
   seguir `root` e `clips`. Compare cada `owner` com o endereço da variável local, não só com uma faixa de endereços.
+  Na 9c-2 o mesmo apareceu em três telas do Data Center (o trabalho local de `DcMenu_Run`, `DcPass_Run` e
+  `DcList_Run`), mais o `FlashClip.overArg` (+0xC8), que o `TextBox_AttachLine` aponta para uma caixa de texto do
+  trabalho: só a conferência oficial com a memória por tela achou (o fim do roteiro passava). Antes de escrever o
+  roteiro de uma tela nova, veja se o `Run` dela guarda o trabalho na pilha: se sim, a tela entra na tabela
+  `OWNER_NA_PILHA` com os tamanhos exatos dos blocos, provados pelos valores dos dumps.
 - **Dados gerados copiados de outro clone podem guardar caminhos absolutos.** O `.incbin` de
   `port/build/gen/data/vu1_micro.data.s` ainda apontava para o clone de outro usuário. Corrija apenas essa saída
   local para o caminho resolvido de `assets/`, sem escrever nos links de dados só leitura nem mudar o código.
