@@ -1,16 +1,35 @@
-# Evolution Z (etapa 9): EvoTop (modo 48), EvoZ (49) com o cursor andando no retrato, a loja (Shop, 50), e de volta
-# ao menu principal.
+# Evolution Z: as seis chamadas, senha, troca de pontos, loja e save pelo DcSave.
 inclui boot.txt
 quadros 90
 aperta BAIXO 4                    # Evolution Z
 aperta X ate tela 48
 quadros 200
-aperta X ate tela 49              # EvoZ
+aperta X ate tela 49
 quadros 200
-aperta BAIXO                      # EvoZ_UpdateFace
+aperta BAIXO                      # outro personagem: EvoZ_UpdateFace
 quadros 60
+marca retrato evolution
+aperta X                          # menu do personagem
+quadros 90
+aperta BAIXO                      # senha da customização
 aperta X
-quadros 120
+quadros 90
+marca senha evolution
+aperta TRIANGULO
+quadros 60
+aperta BAIXO                      # troca de Z points por experiência
+aperta X
+quadros 90
+aperta DIREITA 3                  # da unidade à casa das centenas, passando pelo giro
+aperta CIMA                       # cem pontos
+aperta X                          # diálogo de confirmação
+quadros 60
+aperta ESQUERDA                   # sim
+aperta X
+quadros 240
+confere save s32 0x3028 4849900    # SAVE_MONEY_UNLOCK_ALL menos cem pontos
+confere save s32 0x19C0 100        # experiência da célula 7, escolhida pelo BAIXO
+marca pontos evolution
 repete ate tela 48 max 2000
     aperta TRIANGULO
     quadros 60
@@ -18,18 +37,29 @@ volta
 quadros 200
 aperta BAIXO
 quadros 30
-aperta X ate tela 50 max 600      # loja
+aperta X ate tela 50 max 600       # loja
 quadros 200
+aperta BAIXO                      # coleção (o desbloqueio já deu todos os itens)
+aperta X
+quadros 90
 aperta BAIXO
 quadros 60
+aperta X                          # ItemHelp do item selecionado
+quadros 90
+marca loja evolution
 repete ate tela 48 max 2000
     aperta TRIANGULO
     quadros 60
 volta
 quadros 200
-repete ate tela 4 max 3000
-    aperta TRIANGULO
-    quadros 60
-volta
+aperta TRIANGULO                  # alteração do EvoZ pede o DcSave
+espera mcflow 12 max 600
+quadros 60
+aperta ESQUERDA
+aperta X
+espera mcflow 15 max 600           # gravando, não apenas recusando a pergunta
+espera mcflow 0 max 600
+espera tela 4 max 600
+confere save s32 0x3028 4849900
 quadros 60
 fim

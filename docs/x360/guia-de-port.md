@@ -890,6 +890,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   leitor, preservam-se como bytes (`Conv_RestoBytes`), como a seção 7 das Opções; não se inventa largura pela aparência
   de números. `DcSave_Init` recebe o diálogo da seção 11 do topo já convertido e chama `McFlow_Init(1)`, que passa
   pelo gancho `menu_mcflow` existente: o que faltava era o pacote do chamador.
+  Na troca de pontos, a casa ativa vem de `cur[estado]` (estado 5), que começa zerada; o `cur[2] = 3` do código
+  de entrada não a inicializa. Três DIREITA giram da unidade à centena: CIMA paga 100, não 1. O roteiro confere
+  dinheiro e experiência, e no DcSave espera os estados 12 (pergunta), 15 (gravação) e 0, sem aceitar o caminho do
+  "não" como prova de save. Em ensaio manual, crie também a pasta pai de `BT3_SAVES`: faltar o pai leva ao estado
+  17 de erro de gravação já no boot, não a um erro de conversão.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
