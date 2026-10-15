@@ -872,6 +872,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     vive: no `ModeMenu`, nas seleções e, depois de uma luta, com o heap já usado, com palavras de um conteúdo antigo. A
     primeira versão do aperto da 9a o aceitava só na tela 7 e nunca no fim, e os roteiros da História que terminam na
     lista de episódios (tela 7) caíram; a memória do fim agora usa a última tela do rastro.
+  - **Buffer alocado e ainda vazio guarda o que havia antes.** O roteiro `ultimate` da etapa 4 termina no tabuleiro do
+    Sim Dragon recém-aberto, com os buffers de retrato do anúncio já alocados e vazios: a memória do fim acusou 18.917
+    palavras iguais sem inverter num deles, nada que o jogo leia antes de preenchê-los. Antes de mudar um teto, veja se
+    o bloco tem algum conteúdo vivo (a linha "marcas heap#N" do memdiff); o roteiro de critério passa pelo anúncio.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
