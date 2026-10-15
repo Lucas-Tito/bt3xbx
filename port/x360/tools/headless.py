@@ -177,7 +177,7 @@ def construir(alvo):
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
-    extras = ["sem_janela", "roteiro", "imagens"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
+    extras = ["sem_janela", "roteiro", "imagens", "ponte_pow"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
@@ -203,6 +203,20 @@ def construir(alvo):
 
 
 def ligar(alvo, objs):
+    # O pow de double do replay (port/x360/headless/ponte_pow.c, F4 tarefa 9c-2): o ligador recebe uma cópia do objeto
+    # do menu_za_d.c com a chamada renomeada para a ponte de inteiros; o objeto compilado (o que se compara com a base)
+    # não muda, e os outros que chamam pow, de float em hardware (o som do GS), continuam com o da libm, por isso não um
+    # --wrap=pow, que desviaria todos.
+    za = alvo.obj / "menu_menu_za_d.o"
+    if za in objs:
+        copia = alvo.b / "ligar" / za.name  # (fora de obj/, que se compara com a base)
+        copia.parent.mkdir(exist_ok=True)
+        objcopy = "powerpc-linux-gnu-objcopy" if alvo.nome == "ppc" else "objcopy"
+        r = run([objcopy, "--redefine-sym", "pow=Port_PowDuplo", za, copia])
+        if r.returncode:
+            print("FALHOU objcopy do menu_za_d.o:", r.stderr.strip()[:200])
+            sys.exit(1)
+        objs = [copia if o == za else o for o in objs]
     # 0x20000000: longe das regiões do PS2 (0x100000.., 0x10000000, 0x12000000, 0x70000000), como a build de 64 bits.
     base = alvo.ld + ["-no-pie", "-w", "-o", alvo.exe] + objs
     resto = ["-lm", "-lpthread", "-Wl,-Ttext-segment=0x20000000", "-Wl,--defsym=D_3BE71C=0x3BE71C",
