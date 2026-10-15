@@ -87,7 +87,8 @@ resumo() {  # nome rodada-da-x86
     grep -a -m3 -i "abort\|Sprite_Unpack sem\|não implementado\|queda do port" $G/ppc_$n.txt | sed 's/^/   /'
 }
 mkdir -p $G/c_A $G/c_F
-ppc A 12301 & ppc F 12302 BT3_MC_FALHA=escrita:$DADOS & wait
+ppc A 12301
+ppc F 12302 BT3_MC_FALHA=escrita:$DADOS
 resumo A 1; resumo F
 D=card1/$DADOS
 [ -s $G/c_A/$D/$DADOS ] || { echo "A não criou o save"; exit 1; }
@@ -95,7 +96,8 @@ for n in B1 B2; do cp -r $G/c_A $G/c_$n; done
 head -c 100 $G/c_A/$D/$DADOS > $G/c_B1/$D/$DADOS.tmp
 mv $G/c_B2/$D/$DADOS $G/c_B2/$D/$DADOS.new
 head -c 100 $G/c_A/$D/$DADOS > $G/c_B2/$D/$DADOS.tmp
-ppc B1 12303 & ppc B2 12304 & wait
+ppc B1 12303
+ppc B2 12304
 resumo B1 2; resumo B2 2
 cmp -s $G/c_A/$D/$DADOS $G/c_B2/$D/$DADOS && echo "B2: o .new recuperado é o save de A, byte a byte"
 rm -f bt3_crash.txt

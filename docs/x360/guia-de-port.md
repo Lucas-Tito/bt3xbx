@@ -895,6 +895,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   dinheiro e experiência, e no DcSave espera os estados 12 (pergunta), 15 (gravação) e 0, sem aceitar o caminho do
   "não" como prova de save. Em ensaio manual, crie também a pasta pai de `BT3_SAVES`: faltar o pai leva ao estado
   17 de erro de gravação já no boot, não a um erro de conversão.
+- **`save_mc.sh` também precisa de um emulador por vez.** Os pares A/F e B1/B2 ainda eram lançados em paralelo
+  na versão anterior à 9c-1. Rodam em sequência agora, como os roteiros: o `wait` interno de cada caso só espera o
+  seu qemu. A simulação de falha e a recuperação do cartão não precisam de concorrência entre casos.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).
