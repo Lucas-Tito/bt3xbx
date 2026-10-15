@@ -144,6 +144,12 @@ void Shop_Init(s32 section) {
     memset(gShop, 0, sizeof(Shop));
     gShop->pack = MPACK_AT(gMenuArc7, section);
     gShop->res = Sprite_Unpack(gShop->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gShop->res, ((s32 *)gShop->pack)[0], "menu_loja");
+    }
+#endif
 
     SHOP_RES(1);
     gShop->bg = res;

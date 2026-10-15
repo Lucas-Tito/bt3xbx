@@ -757,6 +757,12 @@ void EvoZ_UpdateFace(EvoZ *ez) {
         break;
     case 3:
         Sprite_Unpack(ez->faceFile, ez->faceRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+        {
+            extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+            Port_ConvertMenuPack(ez->faceRes, ((s32 *)ez->faceFile)[0], "menu_texfile");
+        }
+#endif
         res = ez->faceRes;
         Res_RelocateOffsets(&res, res, res);
         ez->tex0[42] = MTEX(res, 0);

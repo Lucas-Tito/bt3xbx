@@ -540,8 +540,20 @@ void EvoZ_Load(UEvoZ *ez, s32 section) {
 
     ez->pack = (u32 *)MPACK_AT(gMenuArc7, section);
     ez->res = Sprite_Unpack(ez->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(ez->res, ((s32 *)ez->pack)[0], "menu_evoz");
+    }
+#endif
     ez->chipFile = File_LoadSync(0x3C0, NULL, 0);
     ez->chipRes = Sprite_Unpack(ez->chipFile, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(ez->chipRes, ((s32 *)ez->chipFile)[0], "menu_fundo");
+    }
+#endif
     res = ez->chipRes;
     Res_RelocateOffsets(&res, res, res);
     ez->bg = res;

@@ -131,6 +131,12 @@ void EvoTop_Init(EvoTop *menu, s32 section) {
 
     menu->pack = (u32 *)MPACK_AT(gMenuArc7, section);
     menu->res = Sprite_Unpack(menu->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(menu->res, ((s32 *)menu->pack)[0], "menu_evo_topo");
+    }
+#endif
 
     EVO_RES(4, EVO_HOST "EvoZ_TEX_PS2_.dbt");
     menu->tex[0] = MTEX(res, 0);

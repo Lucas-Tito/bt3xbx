@@ -58,6 +58,12 @@ void EvoZ_Init(s32 section) {
     }
     File_LoadSync(gEvoZ->side->chara + 0x2F9, gEvoZ->faceFile, 0x16800);
     Sprite_Unpack(gEvoZ->faceFile, gEvoZ->faceRes, 0);
+#ifdef PORT_BIG_ENDIAN /* Converte os números do conteúdo antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gEvoZ->faceRes, ((s32 *)gEvoZ->faceFile)[0], "menu_texfile");
+    }
+#endif
     res = gEvoZ->faceRes;
     Res_RelocateOffsets(&res, res, res);
     gEvoZ->tex0[42] = res->tex;

@@ -89,7 +89,7 @@ CONTEUDO = {
     "menu_p_b.c:67": "451 s3", "menu_p_c.c:70": "451 s1",
     "menu_q_b.c:899": "sim_dia", "menu_q_b.c:1976": "retrato", "menu_q_b.c:1983": "retrato",
     "menu_r_c.c:38": "451 s3", "menu_r_d.c:53": "451 s5", "menu_s_b.c:93": "451 s2", "menu_s_c.c:30": "451 s3",
-    "menu_u_g.c:60": "retrato", "menu_u_h.c:542": "452 s3", "menu_u_h.c:544": "estagio", "menu_v_b.c:759": "retrato",
+    "menu_u_g.c:60": "retrato", "menu_u_h.c:542": "452 s3", "menu_u_h.c:550": "estagio", "menu_v_b.c:759": "retrato",
     "menu_v_d.c:146": "452 s2", "menu_w_c.c:133": "452 s1", "menu_x_c.c:39": "453 s1",
     "menu_y_b.c:957": "retrato", "menu_y_b.c:1002": "459 s2", "menu_y_b.c:1008": "retrato",
     "menu_z_c.c:211": "459 s1", "menu_z_d.c:535": "retrato", "menu_z_d.c:952": "459 s3",
@@ -542,6 +542,9 @@ TELAS_MEM = {
     40: ["448 s2", "retrato", "estagio"],           # TeamSel
     44: ["461 s1", "pagina_treino"],                # Train (menu_treino, menu_texfile)
     45: ["461 s2", "retrato", "estagio"],           # CharSel do treino
+    48: ["452 s1"],                                 # EvoTop, incluindo o diálogo do DcSave
+    49: ["452 s3", "retrato", "estagio"],           # EvoZ, retrato e fundo 959
+    50: ["452 s2"],                                 # Shop
     62: ["453 s1"],                                 # Option (menu_opcoes)
     # o Ultimate Battle (etapa 9b, menus-ub.md): o pacote 00451 por seção, o tabuleiro, o ranking e os cursos inteiros;
     # nas seleções, o retrato do cursor (os retratos do tabuleiro e do ranking só existem no anúncio da luta)
@@ -874,7 +877,7 @@ def semmapa(a):
 # antes da luta; a luta (LUTA quadros depois de começar, só com IMG=luta); e cada "marca" do
 # roteiro (os retratos 923 e 921 vivos, as páginas do Treino, salvo e carregado), cada "ok som" (a opção mudada) e
 # cada pergunta do cartão ("ok mcflow 12" e "ok mcflow 2", PERGUNTA quadros depois, com o diálogo aberto).
-TELAS_IMG = {4, 38, 39, 40, 44, 45, 62, 6, 7, 8, 9, 10} | set(range(13, 31))  # (o essencial, a História da 9a e o
+TELAS_IMG = {4, 38, 39, 40, 44, 45, 48, 49, 50, 62, 6, 7, 8, 9, 10} | set(range(13, 31))  # (o essencial, a História da 9a e o
 # Ultimate Battle da 9b)
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
 
