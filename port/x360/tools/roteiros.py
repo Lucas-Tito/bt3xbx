@@ -172,6 +172,43 @@ LARGURA_CONHECIDA = {
     ("pzs3us1/01703.bin", 0x5BCCD, 4, 1): (
         "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
         {'op_lqc2'}),
+    # os lutadores do Disc Fusion (roteiro discfusion: o do jogador, o do ranking e os cinco do curso 0), o mesmo caso
+    ("pzs3us1/01423.bin", 0x760CD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular', 'Port_FastMtxApply', 'Vec3_Dot'}),
+    ("pzs3us1/02283.bin", 0x6440D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular'}),
+    ("pzs3us1/02283.bin", 0x6448D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
+    ("pzs3us1/02293.bin", 0x74F0D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
+    ("pzs3us1/02293.bin", 0x750CD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'op_lqc2'}),
+    ("pzs3us1/02293.bin", 0x7514D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular'}),
+    ("pzs3us1/02303.bin", 0x6338D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular'}),
+    ("pzs3us1/02303.bin", 0x6348D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
+    ("pzs3us1/02303.bin", 0x6354D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'op_lqc2'}),
+    ("pzs3us1/02313.bin", 0x6928D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
+    ("pzs3us1/02323.bin", 0x661CD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular'}),
+    ("pzs3us1/02323.bin", 0x6624D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
 }
 NOTAS_CONV = []  # (conv(): as posições de LARGURA_CONHECIDA achadas, para o confere dizer)
 
@@ -451,6 +488,12 @@ DIFERENTES_CONHECIDAS = [
     # iguais nas duas builds); a tarefa ou o arquivo usados gravam esses campos na ordem do host
     ("heap:0xfa0", campo(0x50, 0x08, 0x28), "GscTask livre do pool: unk8..abort nunca gravados desde a alocação"),
     ("heap:0x168", campo(0x24, 0x08, 0x1c), "GscFile livre do pool: unk8..data nunca gravados desde a alocação"),
+    # (etapa 9b) o UbResult (include/menu/menu_o.h) tipa o +0x2A0 do placar como "s32 unk2A0", mas ali moram dois s16,
+    # o PClock.timeLeft e o unkE da cópia do relógio da luta (score->clock = result->clock, UbScore_Fill,
+    # src/menu/menu_p_d.c:83; PClock em include/menu/menu_p.h), trocados certo como u16; nenhum código lê o unk2A0
+    # (grep em src/ e include/). O s32 escalar não é opaco no campos.py (só os vetores unk*)
+    ("heap:0x784", 0x770, "UbResult.score.unk2A0: os dois s16 do PClock (timeLeft, unkE) que a visão de menu_o.h "
+                          "tipa como um s32 que ninguém lê"),
     ("gColWalkBox", 0, "ponteiro para um local da pilha do host (ColMesh_WalkBox; gravado e nunca lido)"),
     ("gColWalkCtx", 0, "idem"),
     ("gPortDataStripped", 0, "as tabelas do executável: a PPC liga o esqueleto e copia do SLUS (decisão 13)"),
@@ -477,9 +520,13 @@ CLASSES_CONHECIDAS = [
     ("heap:0x6800", {"igual-sem-inverter": 0x6800 // 4},
      "gProgress->loadRes (view_a_e.c:49): o conteúdo descomprimido da folha (pixels, bytes) e o resto do buffer; os "
      "números dele as marcas conferem"),
-    ("heap:0x16800", {"igual-sem-inverter": 0x16800 // 4},
+    ("heap:0x16800", {"igual-sem-inverter": 0x16800 // 4, "2xu16": 64, "u64": 64},
      "faceFile[0] e [1] do CharSel e do TeamSel (menu_c_e.c:700, menu_e_b.c:699): o arquivo do retrato como veio do "
-     "disco, um contêiner BPE (fluxo de bytes); o conteúdo convertido mora no faceRes, que as marcas conferem"),
+     "disco, um contêiner BPE (fluxo de bytes); o conteúdo convertido mora no faceRes, que as marcas conferem. Etapa "
+     "9b: os do tabuleiro do Sim Dragon (SimDay) guardam o arquivo do retrato (as marcas conferem) num buffer maior que "
+     "ele (os arquivos de retrato têm de 10.304 a 90.304 bytes; o buffer, 0x16800), e o resto são bytes de antes "
+     "(Heap_Alloc não limpa): 10 palavras 2xu16 na tela 22 e 16 u64 na 29, números trocados de um conteúdo que morava "
+     "ali antes; o Bpe_Decode lê só o contêiner. Teto 64 de cada"),
     ("heap:0x1c000", {"igual-sem-inverter": (0x1c000 - 69760) // 4},
      "gModeMenu->imageFile (ModeMenu_Init, src/menu/menu_a_d.c:256): o arquivo da imagem do episódio como veio do disco, "
      "um contêiner BPE (fluxo de bytes), lido num buffer fixo maior que ele; as marcas conferem o arquivo, o resto do "
@@ -489,9 +536,10 @@ CLASSES_CONHECIDAS = [
      "gModeMenu->imageRes (menu_a_d.c:257): o episódio descomprimido (0x20560 bytes nos 48, conferido pelas marcas) num "
      "buffer de 0x20800; o resto, 0x2A0 bytes depois do conteúdo, são bytes de antes (Heap_Alloc não limpa e o "
      "Bpe_Decode só grava o conteúdo). O teto é esse resto. Etapa 9a. A classe se nomeia pelo tamanho pedido, e 0x20800 "
-     "é também o faceRes do CharSel (menu_c_e.c:702) e do TeamSel (menu_e_b.c:701) e outros buffers de retrato e imagem "
-     "dos outros modos (menu_m_b.c, menu_n_c.c, menu_y_b.c...): por isso só vale na tela 7, a do ModeMenu "
-     "(SO_NAS_TELAS; revisão da 9a, apertado na 9b), e em nenhuma outra tela nem no fim"),
+     "é também o faceRes dos retratos (CharSel menu_c_e.c:702, TeamSel menu_e_b.c:701, as seleções, o tabuleiro e o "
+     "ranking do Ultimate Battle), e os 164 retratos descomprimem aos mesmos 0x20560 bytes: o mesmo resto, o mesmo "
+     "teto. Só nas telas desses buffers (SO_NAS_TELAS), nunca no fim; os outros donos de 0x20800 (menu_y_b.c, "
+     "menu_z_d.c, menu_h_b.c..., da 9c) ficam de fora (revisão da 9a, apertado e estendido na 9b)"),
     ("heap:0x68", {"igual-sem-inverter": 8},
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
@@ -521,7 +569,10 @@ SO_NA_LUTA = {"heap:0x100000", "heap:0x83040"}
 # As regiões de CLASSES_CONHECIDAS que só valem na memória de certas telas (memoria --tela N), nunca no fim nem noutra
 # tela: a classe se nomeia pelo tamanho pedido ao alocador, e outro dono do mesmo tamanho noutra tela (o faceRes dos
 # retratos das seleções também pede 0x20800) ganharia a tolerância sem ter o porquê (revisão da 9a, item m6)
-SO_NAS_TELAS = {"heap:0x1c000": {7}, "heap:0x20800": {7}}
+SO_NAS_TELAS = {"heap:0x1c000": {7},
+                # (o 0x20800 também onde ele guarda um retrato: os 164 retratos descomprimem a 0x20560 bytes, como os
+                # episódios, e o resto do buffer é o mesmo; visto na tela 29 depois de uma luta, 157 palavras. Etapa 9b)
+                "heap:0x20800": {7, 15, 18, 21, 22, 25, 26, 29, 39, 40, 45}}
 
 # Os dois buffers de pacotes da GPU (Dma_InitBuffers, 0x100000 bytes cada): o pacote de sprite pronto
 # (GfxPostSpritePkt, src/sys/gfxm_a.c, 0x60 bytes, alinhado a 16) é um local copiado inteiro para o pacote
@@ -623,7 +674,7 @@ def classes_da_linha(texto):
     return {k: int(v) for k, v in re.findall(r"([a-z0-9-]+) (\d+)", texto)}
 
 
-def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False):
+def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_fim=None):
     p = pathlib.Path(caminho)
     if not p.exists():
         print(f"{pre}DIFERENÇA: memória: sem {caminho} (a PPC não chegou ao vblank do dump?)")
@@ -722,8 +773,10 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False):
                 teto = next((t[c] for r, t, _ in CLASSES_CONHECIDAS if r == chave_r and c in t), None)
                 if tela is not None and chave_r in SO_NA_LUTA and not apos_luta:
                     teto = None  # (numa tela de menu antes de qualquer luta, nenhuma: SO_NA_LUTA)
-                fora_da_tela = chave_r in SO_NAS_TELAS and not (tela is not None and str(tela).isdigit() and
-                                                                  int(tela) in SO_NAS_TELAS[chave_r])
+                # (no fim, a tela em que o roteiro termina: o historia_novo acaba na lista de episódios, tela 7)
+                t_cl = tela if tela is not None else tela_fim
+                fora_da_tela = chave_r in SO_NAS_TELAS and not (t_cl is not None and str(t_cl).isdigit() and
+                                                                  int(t_cl) in SO_NAS_TELAS[chave_r])
                 if fora_da_tela:
                     teto = None  # (só nas telas de SO_NAS_TELAS)
                 if teto is None or n > teto:
@@ -828,7 +881,8 @@ def semmapa(a):
             print("  FALTA: a memória no fim (--mem, a saída do memdiff.py): sem ela a rodada inteira não está provada")
             ok = False
         else:
-            ok &= memoria(a.mem, "  ")
+            fim_t = [l.split()[1] for l in tx if l.startswith("tela ")]
+            ok &= memoria(a.mem, "  ", tela_fim=fim_t[-1] if fim_t and fim_t[-1].isdigit() else None)
     elif bloqueio is not None:
         print(f"ppc sem mapa: próximo bloqueio {bloqueio[0]} (o conteúdo cru até o {bloqueio[1]}); "
               f"última {ultima}")
