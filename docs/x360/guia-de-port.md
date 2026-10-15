@@ -882,6 +882,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     pelos da PPC: um retrato mal convertido na PPC continua achado e conferido. O que ela não cobre, visto falhando
     numa cópia: um byte mudado num retrato vivo, um bloco com conteúdo vivo e resto acima do teto, o mesmo bloco vazio
     com outro tamanho pedido, uma palavra fora do bloco e uma palavra "diferente" dentro dele.
+- **Evolution Z (9c-1): as seções sem leitor não são necessariamente vazias.** A seção 1 do EvoZ e a 23 da loja
+  têm 14.016 bytes idênticos, sem a forma das peças conhecidas. Exigir vazio recusou os dois pacotes reais. Sem
+  leitor, preservam-se como bytes (`Conv_RestoBytes`), como a seção 7 das Opções; não se inventa largura pela aparência
+  de números. `DcSave_Init` recebe o diálogo da seção 11 do topo já convertido e chama `McFlow_Init(1)`, que passa
+  pelo gancho `menu_mcflow` existente: o que faltava era o pacote do chamador.
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).

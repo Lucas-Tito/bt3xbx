@@ -227,6 +227,10 @@ void Conv_MenuUbRanking(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuUbCursos(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 typedef struct Formato { const char *nome; ConvFn fn; } Formato;
+void Conv_MenuEvoTopo(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuLoja(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuEvoZ(ConvCtx *c, conv_ofs base, conv_ofs tam);
+
 static const Formato sFormatos[] = {
     {"personagem", Conv_Personagem},           /* file[0] do slot: modelo, texturas, parâmetros, lábio */
     {"personagem_anim", Conv_PersonagemAnim},  /* file[1]: animações em BPE (só a tabela e os cabeçalhos) */
@@ -278,6 +282,9 @@ static const Formato sFormatos[] = {
     {"menu_ubsel", Conv_MenuUbSel},            /* C: seleção de um lutador e de um time (SoloSel_Init, UbTeamSel_Init) */
     {"menu_sim_dia", Conv_MenuSimDia},         /* D: o tabuleiro do Sim Dragon (SimDay_Init, 0x1DB inteiro) */
     {"menu_ub_ranking", Conv_MenuUbRanking},   /* E: o ranking de 100 lugares (UbRank_Init, modo 26) */
+    {"menu_evo_topo", Conv_MenuEvoTopo},
+    {"menu_loja", Conv_MenuLoja},
+    {"menu_evoz", Conv_MenuEvoZ},
     {"menu_ub_cursos", Conv_MenuUbCursos},     /* E: os cinco cursos (UbzSel_Init, modo 28) */
 };
 
@@ -390,6 +397,11 @@ static const ConvFaixa sFaixas[] = {
     {0x1DC - 1, 0x1DC - 1, 0, "menu_ub_ranking"},
     {0x1DD - 1, 0x1DD - 1, CONV_ARQ, "menu_bpe"},
     {0x1DD - 1, 0x1DD - 1, 0, "menu_ub_cursos"},
+    /* Evolution Z, baseFile + 4 (gMenuArc7): topo, loja e customização, menus-evo.md. */
+    {0x1C5 - 1, 0x1C5 - 1, CONV_ARQ, "menu_pacote"},
+    {0x1C5 - 1, 0x1C5 - 1, 1, "menu_evo_topo"},
+    {0x1C5 - 1, 0x1C5 - 1, 2, "menu_loja"},
+    {0x1C5 - 1, 0x1C5 - 1, 3, "menu_evoz"},
 };
 
 const ConvFaixa *Conv_Faixas(int *n) {
