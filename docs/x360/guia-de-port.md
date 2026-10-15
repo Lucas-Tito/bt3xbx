@@ -912,6 +912,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   dinheiro e experiência, e no DcSave espera os estados 12 (salvar), 13 (substituir), 15 (gravação) e 0, sem aceitar o caminho do
   "não" como prova de save. Em ensaio manual, crie também a pasta pai de `BT3_SAVES`: faltar o pai leva ao estado
   17 de erro de gravação já no boot, não a um erro de conversão.
+- **Data Center (9c-2): uma tabela de números segue até o fim da seção, não até o mínimo do leitor.** O PassChk
+  indexa a primeira tabela só até 0xCA, mas ela tem 208 registros s32 e a seção acaba no último: exigir zero depois
+  do mínimo recusou o pacote real. A forma é a da tabela inteira (todos os registros que cabem, com a largura que o
+  leitor declara), o mínimo é só a recusa de uma tabela curta, e só o que sobra depois do último registro inteiro tem
+  de ser zero. E um estrago de teste precisa cair onde a regra vale: o primeiro "enchimento estragado" do teste caiu
+  num registro e passou, com razão.
 - **O dono de uma timeline pode estar na pilha.** `EvoTop_Run` mantém `EvoTop m` local, e `FlashTl_Init` grava
   `&m.flash[0]` em `FlashTl.owner`: na raiz de 0x18 e no +0xCC de cada `FlashClip` de 0xE4 (18 no topo). Esses
   ponteiros nativos ficam fora da faixa imagem/heap reconhecida pelo memdiff. Não se troca um número do disco nem se

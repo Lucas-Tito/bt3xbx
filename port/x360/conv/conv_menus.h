@@ -39,4 +39,10 @@ void Conv_LicoesTreino(ConvCtx *c, conv_ofs a, conv_ofs b);
 /* menus-historia.md 6: a janela de recompensa (GetWin_Init) */
 void Conv_GetWin(ConvCtx *c, conv_ofs a, conv_ofs b);
 
+/* menus-evo.md: textos com pelo menos `minimo` linhas, legendas de pelo menos `falas` falas (duas entradas cada) e a
+   janela de senha (PassWin_Init, N = 3), também usadas pelo Data Center (menus-dc.md) */
+void Conv_TextosMin(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo);
+void Conv_LegendasMin(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 falas);
+void Conv_JanelaSenha(ConvCtx *c, conv_ofs base, conv_ofs tam);
+
 #endif

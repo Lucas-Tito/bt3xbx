@@ -6,7 +6,7 @@
 #define SEC(n) (base + ent[n]), (base + ent[(n) + 1])
 
 /* As telas alcançam linhas 0..minimo-1 (TextBox_AttachLine e MsgWin_Draw). */
-static void evo_textos(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo) {
+void Conv_TextosMin(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo) {
     if (c->erro) {
         return;
     }
@@ -18,7 +18,7 @@ static void evo_textos(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 minimo) {
 }
 
 /* Duas entradas por fala, Voice_PlayWithSubtitle. */
-static void evo_legendas(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 falas) {
+void Conv_LegendasMin(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 falas) {
     if (c->erro) {
         return;
     }
@@ -30,7 +30,7 @@ static void evo_legendas(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 falas) {
 }
 
 /* PassWin_Init (menu_za_b.c): filme e duas listas de texturas, sem texto da senha no pacote. */
-static void evo_senha(ConvCtx *c, conv_ofs base, conv_ofs tam) {
+void Conv_JanelaSenha(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     conv_u32 ent[5];
     if (!Conv_Secoes(c, base, tam, ent, 3, "janela de senha")) {
         return;
@@ -51,10 +51,10 @@ void Conv_MenuEvoTopo(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     for (i = 1; i <= 11 && !c->erro; i++) {
         switch (i) {
         case 6: Conv_Flash(c, SEC(i)); break;
-        case 7: evo_textos(c, SEC(i), 18); break;
+        case 7: Conv_TextosMin(c, SEC(i), 18); break;
         case 8: Conv_JanelaMsg(c, SEC(i)); break;
         case 9: Conv_JanelaIcone(c, SEC(i)); break;
-        case 10: evo_legendas(c, SEC(i), 18); break;
+        case 10: Conv_LegendasMin(c, SEC(i), 18); break;
         case 11: Conv_Dialogo(c, SEC(i)); break;
         default: Conv_TexFileMin(c, SEC(i), minimo[i]); break;
         }
@@ -79,9 +79,9 @@ void Conv_MenuLoja(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         case 22: Conv_JanelaIcone(c, SEC(i)); break;
         case 23: Conv_RestoBytes(c, SEC(i)); break; /* sem leitor e sem forma conhecida */
         case 25: Conv_ItemHelp(c, SEC(i)); break;
-        case 26: evo_legendas(c, SEC(i), 30); break;
-        case 30: evo_textos(c, SEC(i), 351); break;
-        case 32: evo_textos(c, SEC(i), 30); break;
+        case 26: Conv_LegendasMin(c, SEC(i), 30); break;
+        case 30: Conv_TextosMin(c, SEC(i), 351); break;
+        case 32: Conv_TextosMin(c, SEC(i), 30); break;
         default: Conv_TexFileMin(c, SEC(i), minimo[i]); break;
         }
         Conv_Onde(c, "seção %lu da loja", (unsigned long)i);
@@ -105,11 +105,11 @@ void Conv_MenuEvoZ(ConvCtx *c, conv_ofs base, conv_ofs tam) {
         case 13: case 23: case 31: Conv_Flash(c, SEC(i)); break;
         case 32: Conv_Dialogo(c, SEC(i)); break;
         case 33: Conv_Celulas(c, SEC(i)); break;
-        case 34: case 35: evo_textos(c, SEC(i), 161); break;
+        case 34: case 35: Conv_TextosMin(c, SEC(i), 161); break;
         case 36: Conv_FichasPersonagem(c, SEC(i)); break;
-        case 37: evo_textos(c, SEC(i), 351); break;
-        case 38: evo_senha(c, base + ent[i], ent[i + 1] - ent[i]); break;
-        case 39: evo_textos(c, SEC(i), 2); break;
+        case 37: Conv_TextosMin(c, SEC(i), 351); break;
+        case 38: Conv_JanelaSenha(c, base + ent[i], ent[i + 1] - ent[i]); break;
+        case 39: Conv_TextosMin(c, SEC(i), 2); break;
         default: Conv_TexFileMin(c, SEC(i), minimo[i]); break;
         }
         Conv_Onde(c, "seção %lu do Evolution Z", (unsigned long)i);

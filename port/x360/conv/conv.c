@@ -230,6 +230,10 @@ typedef struct Formato { const char *nome; ConvFn fn; } Formato;
 void Conv_MenuEvoTopo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuLoja(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuEvoZ(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuDcTopo(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuDcLista(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuDcSenha(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuReplay(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
 static const Formato sFormatos[] = {
     {"personagem", Conv_Personagem},           /* file[0] do slot: modelo, texturas, parâmetros, lábio */
@@ -285,6 +289,10 @@ static const Formato sFormatos[] = {
     {"menu_evo_topo", Conv_MenuEvoTopo},
     {"menu_loja", Conv_MenuLoja},
     {"menu_evoz", Conv_MenuEvoZ},
+    {"menu_dc_topo", Conv_MenuDcTopo},         /* Data Center e Replay (menus-dc.md): DcMenu_Init, modo 53 */
+    {"menu_dc_lista", Conv_MenuDcLista},       /* DcList_Init, modo 55 */
+    {"menu_dc_senha", Conv_MenuDcSenha},       /* DcPass_Init, modo 54 */
+    {"menu_replay", Conv_MenuReplay},          /* ReplayMenu_Init, modo 56 */
     {"menu_ub_cursos", Conv_MenuUbCursos},     /* E: os cinco cursos (UbzSel_Init, modo 28) */
 };
 
@@ -402,6 +410,12 @@ static const ConvFaixa sFaixas[] = {
     {0x1C5 - 1, 0x1C5 - 1, 1, "menu_evo_topo"},
     {0x1C5 - 1, 0x1C5 - 1, 2, "menu_loja"},
     {0x1C5 - 1, 0x1C5 - 1, 3, "menu_evoz"},
+    /* Data Center, baseFile + 0xB (gMenuArc8): topo, lista, senha e replay, menus-dc.md. */
+    {0x1CC - 1, 0x1CC - 1, CONV_ARQ, "menu_pacote"},
+    {0x1CC - 1, 0x1CC - 1, 1, "menu_dc_topo"},
+    {0x1CC - 1, 0x1CC - 1, 2, "menu_dc_lista"},
+    {0x1CC - 1, 0x1CC - 1, 3, "menu_dc_senha"},
+    {0x1CC - 1, 0x1CC - 1, 4, "menu_replay"},
 };
 
 const ConvFaixa *Conv_Faixas(int *n) {
