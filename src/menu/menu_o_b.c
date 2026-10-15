@@ -540,6 +540,13 @@ void DiscFusion_Input(s32 *result) {
             gDiscFusion->idle = 0;
             gDiscFusion->talkStep = gDiscFusion->cursor[gDiscFusion->level] + 3;
         } else if (ok) {
+#ifdef PORT_X360
+            /* The 360 has no disc to swap in (the tray never opens, the swap dialog would hold the screen): the
+               plate fuses both discs, as the game does on finding the other disc (DISCFUSION_DLG_FOUND), and is
+               then chosen like a recognised one. */
+            UO_PROG->discFlags |= UB_DISC_0 | UB_DISC_1;
+            DiscFusion_UpdateHave();
+#endif
             if (gDiscFusion->have[gDiscFusion->cursor[0]]) {
                 gDiscFusion->flags |= UBRES_DONE;
                 gDiscFusion->flags |= UBRES_LEAVING;
