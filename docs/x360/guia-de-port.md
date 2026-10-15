@@ -832,6 +832,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     o porquê e as funções que a leem, e falha se o rastreio da rodada (os pcs do `rastreio.tsv`, pelo programa da x86r)
     mostrar outra função, ou a lista de pcs cheia. A primeira versão dava o porquê errado (dizia `SetStatus`; eram
     operandos do `SetMember`), e nada o conferia: o revisor achou pela análise do GSDT.
+- **Extração de `.text` com o executável em uso (9c-1):** `objcopy --dump-section` sem arquivo de saída distinto
+  também reescreve a entrada. Use uma cópia ou dê um arquivo de saída separado. Na primeira rodada de imagens da
+  9c-1 houve SIGBUS interno do qemu depois dessa extração sobre o executável em uso; a repetição com a extração
+  corrigida passou inteira. A prova dos objetos usa sempre arquivos de saída separados no `--strip-debug`.
+- **Execução restrita não é diagnóstico do port (9c-1):** neste ambiente, compilar e ler o DWARF estático funcionou,
+  mas a x86 nativa terminou com SIGSYS, o gdb recusou `ptrace` e o servidor do qemu recusou socket. A x86 emulada
+  permitiu conferir rastro, rastreio, save e imagens contra a PPC. A memória completa pelo fluxo padrão ficou
+  pendente, registrada assim no relatório, sem trocar falha por aprovação nem ampliar tolerâncias.
 - **A etapa 9b da F4 (o Ultimate Battle e os pendentes da História), o que custou rodadas:**
   - **Os eventos de meio de luta da História pedem o R3.** Com o controle parado, a luta do primeiro episódio andou 45
     segundos e só a ação do KO rodou: o gatilho de tempo (evento 2, 20 s) põe a ação 10001 como pendente, mas ela só
@@ -864,7 +872,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     `lwc1` dariam exceção, o `lq` ignora os bits baixos), e o arquivo é carregado alinhado: quem leu foi uma cópia para
     onde o rastreio levou a origem do byte. Desde a 9c-1 (resposta 5 da 9b), o `conv_tool` as conta à parte como
     "leituras de 4 bytes em deslocamento ímpar sobre byte (rastreio)": só largura 4, deslocamento ímpar e marca
-    `CONV_BYTE`. Saíram as vinte entradas desse tipo de `LARGURA_CONHECIDA`; as duas metades baixas do GSDT continuam
+    `CONV_BYTE`. Saíram as 22 entradas desse tipo de `LARGURA_CONHECIDA`; as duas metades baixas do GSDT continuam
     com a conferência de leitores. Visto falhando sobre cópias do mapa: deslocamentos pares (0 e 2 mod 4), larguras
     2 e 8, u16 convertido e continuação de número não entram na regra. 1 e 3 mod 4 sobre byte entram, com contagem.
   - **Campo opaco que começa no meio de uma palavra** (o `s16 unk29E[3]` do `SScore`, que outra visão do mesmo bloco lê

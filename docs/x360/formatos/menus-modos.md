@@ -176,7 +176,8 @@ UB resultado 10, MisSel 2/9/12..14, TourMenu 24, EntrySel 27/37/38, Bracket 33/3
 
 Pendentes: 77 (16 essenciais, 61 não); desde a etapa 5a, 76 (15 essenciais), com o `menu_principal`; desde a etapa
 5b, 61 (nenhuma essencial), com o resto do essencial (`menus-telas.md`); desde a etapa 9a, 51, com as 10 da História
-(`menus-historia.md`); desde a etapa 9b, 29, com as 22 do Ultimate Battle (`menus-ub.md`). A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
+(`menus-historia.md`); desde a etapa 9b, 29, com as 22 do Ultimate Battle (`menus-ub.md`); desde a tarefa 9c-1, 23,
+com as seis do Evolution Z e da loja (`menus-evo.md`). A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
 que o `unpacks.py` acha. Formatos novos: 33 (`menu_texfile` e 32 pacotes de tela); 6 deles no essencial
 (`menu_texfile`, `menu_principal`, `menu_duelo`, `menu_selecao`, `menu_treino`, `menu_opcoes`).
 

@@ -142,3 +142,41 @@ o procedimento e as saídas em `~/9c-evo/prova_conversores.py` e
 | EvoZ | janela de senha, N = 2 | fim da tabela diferente |
 | EvoZ | grade, 9.999 células | grade cabe em 165 |
 | EvoZ | seção 39, 1 linha | leitor usa 2 |
+
+Contra o disco anterior, 3.983 linhas de arquivo/conteúdo ficaram idênticas.
+Só entraram o 452 e suas três seções: 3.299 para 3.300 arquivos e 684 para 687
+conteúdos. No censo dos menus (448..477), 19 para 20 arquivos convertidos e
+31 para 34 conteúdos BPE com conversor, dos 49. Retratos e estágios continuam
+inteiros cobertos.
+
+O mapa já guardado do roteiro `evolution` foi julgado com a ferramenta nova:
+saída 0, sem largura divergente nos três pacotes. Isso é conferência sobre um
+rastreio anterior, não uma rodada final do roteiro ampliado.
+
+## Roteiro ampliado: evidências por emulação
+
+No código `f127d03`, x86 em `qemu-i386` e PPC sem mapa em `qemu-ppc` chegam ao
+fim no vblank 6.403, quadro 6.397, com 69 linhas de rastro idênticas. Nas duas,
+o dinheiro passa a 4.849.900 e a experiência da célula 7 a 100. O DcSave percorre
+12, 13 e 15, termina em 0, e os arquivos persistidos têm esses mesmos valores.
+`roteiros.py save` confere os dois cartões campo a campo: iguais. A coleção e o
+ItemHelp da loja são visitados; o desbloqueio padrão já deu todos os itens, por
+isso não se afirma provar compra.
+
+As 17 imagens geradas por `roteiros.py imagens`, com janela de 8 quadros, são
+idênticas byte a byte, com os quadros e vblanks conferidos. Incluem as telas
+48/49/50, o retrato atualizado, a senha, os pontos e a pergunta do cartão. Os
+rastros das rodadas com imagens também têm as mesmas 69 linhas. Uma cópia da
+imagem da senha com um canal de um pixel alterado é recusada (saída 1).
+
+A x86r emulada também chegou ao fim com o mesmo rastro: 5.910.419 posições em
+97 arquivos. O mapa novo, em três partes, passa no `conv_tool --mapa` com saída
+0: topo 10.357 posições iguais; loja 14.061; EvoZ 14.545 iguais e uma cadeia de
+texto lida por inteiro (14.546 posições). Nenhuma divergência de largura.
+
+São evidências adicionais, separadas da certificação integral pedida pela tarefa:
+a execução nativa da x86 termina com SIGSYS no ambiente restrito, `ptrace` é
+recusado e o depurador do qemu não abre socket. O fluxo padrão `roteiros.sh`
+não fica aprovado aqui, e a memória completa por tela não foi provada. Não se
+ampliaram tolerâncias para fazê-la passar. A tarefa permanece com a certificação
+pendente de um ambiente que permita essa coleta.
