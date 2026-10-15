@@ -230,7 +230,7 @@ cópias ia para a pilha. O namefont agora compila sem a instrumentação na x86r
 ### 8.3 A PPC sem mapa contra a x86 (o critério da etapa 5)
 
 Os quatro roteiros chegam ao passo `fim` na PPC sem mapa, só com os conversores, com o rastro, as leituras de arquivo
-e a luta iguais aos da x86 (plano, etapa 5b). A luta: os 122 vblanks de luta do Duelo e do Time e os 120 do Treino com
+e a luta iguais aos da x86 (`plano/F4/05.md`, etapa 5b). A luta: os 122 vblanks de luta do Duelo e do Time e os 120 do Treino com
 vida, posição, relógio e gerador iguais (as duas builds sem janela usam o float do PS2 por software, então a igualdade
 é exata; no console a luta se separa no primeiro quadro pelo float do 360, decisão 17).
 

@@ -651,7 +651,7 @@ Nos quatro roteiros do essencial a PPC sem mapa, só com os conversores, passa d
 leituras de arquivo iguais aos da x86 e para na guarda da tela seguinte (`DuelMenu_Init`, `Train_Init`,
 `Option_Init`). No último vblank da primeira visita ao menu, a memória das duas builds: 133 blocos do heap no lugar, e
 o arquivo 00449 (1.544.708 números e bytes) e o pacote do menu (2.653.772) conformes, nenhum fora do formato
-(`roteiros.sh` com `SEMMAPA=1`; plano, etapa 5a).
+(`roteiros.sh` com `SEMMAPA=1`; `plano/F4/05.md`, etapa 5a).
 
 ## 8. Hipóteses e o que fica aberto
 

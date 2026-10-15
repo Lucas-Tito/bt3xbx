@@ -757,7 +757,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     menos significativo da palavra (`PKT_LOW8`), e a PPC caía para texto simples sem aviso. O teste é o próprio
     `BT3_NAMEFONT_TEST`: sem a correção a PPC não diz nada; com ela corta as 36 e as 24 legendas como a x86. As
     imagens de teste ainda diferem em uns 3% dos bytes (causa não achada; só vale para estágio ou música de fora do
-    disco, que o 360 não tem: plano, etapa 5).
+    disco, que o 360 não tem: `plano/F4/05.md`).
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**
   - **O rasterizador pintando todo quadro leva umas três horas por roteiro na PPC** (no qemu, uns 30 quadros por
     minuto nos menus; a x86, 7 minutos). O que custa é pintar: com o GS ligado e nada pintado (`BT3_GS_FROM` alto) a

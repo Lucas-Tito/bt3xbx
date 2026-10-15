@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F4, etapa 8: o save entre o WSL (a PPC do qemu), esta máquina e o console. Roda aqui, na máquina de trabalho; os
-# saves (dado do usuário) ficam em build/saves (fora do git). Os passos do console estão no plano (etapa 8).
+# saves (dado do usuário) ficam em build/saves (fora do git). Os passos do console estão no plano (docs/x360/plano/F4/08.md).
 #   save_console.sh traz-wsl NOME [DIR]    o cartão NOME do save_entre.sh no WSL (c_ppc, c_x86, k_CASO/cartao...) para
 #                                          DIR (build/saves/NOME): os três arquivos, por base64 (o wsl.sh tira os bytes 0)
 #   save_console.sh leva-wsl DIR           os três arquivos de DIR para o WSL, num cartão em port/build/save_entre/console,

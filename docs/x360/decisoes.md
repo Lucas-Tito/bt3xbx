@@ -418,7 +418,7 @@ convertida na hora em que o jogo a abre; as outras (fluxos de som e filmes) pass
   muda. Arquivo em `mods/` continua valendo, como no PC, no formato do PS2: o que tem conversor se converte ao
   abrir, como a entrada da ISO (e também os dados soltos, sem ISO).
 - **Versão:** o hash das tabelas copiadas do SLUS e do DBZP.BIN (`Port_LoadGameData`) já recusa outra versão.
-- **Substitui** o instalador do plano (seção 3, passo 2) e a conversão "no instalador" da decisão 12. A
+- **Substitui** o instalador do plano (seção 3, passo 2, em `plano/base.md`) e a conversão "no instalador" da decisão 12. A
   `conv_tool` de PC fica como teste dos conversores.
 
 Medido no console (12/10/2026): a luta lida da ISO sai idêntica à da F2 quadro a quadro. A carga dos 20 arquivos
@@ -545,7 +545,7 @@ filtra. Os menus ficaram em 16,2 ms por quadro sem as capturas (a lentidão era 
 começo, mas esgota a memória: 128 MB de texturas, 24 alvos e 3 MB livres; alvos e texturas recusados, a thread do
 jogo parada de 8 a 80 s e, sem memória livre, a Guide sem abrir até o console travar. Escolha do Lucas: fechar a
 etapa aqui, parar os testes antes da luta (`BT3_ATE=4400`) e começar a F5 por um teto de memória no backend
-(plano, seção 5).
+(`plano/F3.md`, riscos anotados para a F5).
 
 
 ## 21. Controles do 360: o jogador 1 é o primeiro controle ligado (13/10/2026)
@@ -585,7 +585,7 @@ Detalhes que a revisão crítica trouxe:
 
 ## 22. F4: todos os menus, o essencial antes; save nativo em `game:\saves` (13/10/2026)
 
-Escolhas do Lucas para a F4 (plano, "F4 em etapas"):
+Escolhas do Lucas para a F4 (`plano/F4/00-escopo.md`):
 
 - **Escopo: todos os pacotes de menu, o caminho essencial antes.** O essencial é o menu principal, o submenu dos
   modos, o Duelo, o Treino até a luta começar, as Opções e o save. Os outros modos vêm na etapa 9, pela mesma linha

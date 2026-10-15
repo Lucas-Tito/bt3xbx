@@ -106,7 +106,7 @@ PACOTES = {448, 449, 450, 451, 452, 453, 459, 460, 461, 462, 463, 472, 473}
 
 # Arquivos fora das faixas de menu que o rastreio vê ler como número e que ainda não têm conversor, já conhecidos: o
 # "confere" acusa todo outro "sem conversor" fora de disc/ (um caso novo não pode sumir por não ser de menu). Cada um
-# é pendência da etapa 9 (plano.md, F4).
+# é pendência da etapa 9 (docs/x360/plano/F4/09a.md e 09c.md).
 CONHECIDOS = {
     # atores da cena do Shenlong (ShenScene_*, src/battle/view_b_d.c:366, ids 0xD3D e 0xD46): roteiro shenlong
     "pzs3us1/03388.bin": "Shenlong, ator da cena (id 0xD3D)",
@@ -555,7 +555,7 @@ CLASSES_CONHECIDAS = [
     ("heap:0x1a0800", {"igual-sem-inverter": 320, "2xu16": 660, "misto": 80, "u64": 930, "float-proximo": 16},
      "a arena do BtlPool (BtlPool_Init, btl_pool.c:29): as estruturas da cena da luta num alocador próprio, sem tipo "
      "por estrutura (u8, u16 e u64 de campo); float-proximo: as tabelas do EftGlow_BuildTables (cosf e sinf da libm "
-     "do host). Só teto (visto: 244, 522, 59, 742 e 8): tipar a arena por sub-bloco fica pendente (plano, etapa 5)"),
+     "do host). Só teto (visto: 244, 522, 59, 742 e 8): tipar a arena por sub-bloco fica pendente (plano/F4/05.md)"),
 ]
 
 # As regiões de CLASSES_CONHECIDAS que só valem depois de uma luta, nunca numa tela de menu antes dela (memoria --tela
@@ -875,7 +875,7 @@ def semmapa(a):
                 ok &= r.returncode == 0
             else:
                 print("  luta (BT3_HASH): o roteiro não chega à luta")
-        # o quarto item do critério (plano, F4 etapa 5): a memória no último vblank antes do fim, campo a campo pelas
+        # o quarto item do critério (plano/F4/05.md): a memória no último vblank antes do fim, campo a campo pelas
         # marcas de cada arquivo e conteúdo vivo
         if not a.mem:
             print("  FALTA: a memória no fim (--mem, a saída do memdiff.py): sem ela a rodada inteira não está provada")
@@ -944,7 +944,7 @@ def lista_imagens(caminho, luta=False):
     """[(nome, n, âncora)] do rastro de referência (um arquivo de "telas"): a âncora é o texto da linha antes do
     " vblank " (com "#K" a K-ésima vez), n os quadros do roteiro depois dela. A luta só com luta=True (IMG=luta): os
     efeitos dela gravam a cor dos vértices byte a byte (u8 rgba[4], formatos/gpu.md seção 6), a corrigir na F5, e a
-    imagem sai diferente até lá (plano, etapa 6)"""
+    imagem sai diferente até lá (plano/F4/06.md)"""
     out, vezes = [], collections.Counter()
     eventos = eventos_rastro(caminho)  # (quadro, texto da âncora sem o #K)
     telas_vistas = [(q, t) for q, t in eventos if t.startswith("tela ")]

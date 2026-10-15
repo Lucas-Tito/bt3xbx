@@ -22,7 +22,7 @@
  * referência). Por que a janela não muda a imagem: cada quadro do jogo começa limpando o buffer que vai desenhar
  * (sceGsSwapDBuff, gs_sony.c), e as texturas chegam por carga, que o GS processa sempre; o que um quadro desenha
  * para outro ler (um alvo fora da tela) cabe na janela. Conferido na x86 contra a rodada pintando todo quadro
- * (plano, etapa 6).
+ * (plano/F4/06.md).
  *
  * Entra por --wrap no Port_GsVif1Chain (a lista de cada quadro, plat_gs.c) e no Port_GsGifChannel (as cargas e a
  * limpeza fora da lista, plat_gs.c e gs_sony.c), headless.py. Sem as variáveis nada muda: os dois só chamam o
