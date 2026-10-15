@@ -153,6 +153,44 @@ O mapa já guardado do roteiro `evolution` foi julgado com a ferramenta nova:
 saída 0, sem largura divergente nos três pacotes. Isso é conferência sobre um
 rastreio anterior, não uma rodada final do roteiro ampliado.
 
+## Memória do topo: o dono das timelines
+
+`EvoTop_Run` declara `EvoTop m` na pilha e passa `&m.flash[0]` a `Flash_Create`.
+`FlashTl_Init` grava esse endereço diretamente em `tl->owner` (`gfxm_c.c`),
+tanto na raiz quanto nas timelines dos clips. Não é um número vindo do disco.
+Os layouts de `gfxm_c.h` explicam exatamente os 19 trechos da tela 48:
+
+| Alocação | Tipo e campo | Deslocamento nos dados | Trechos |
+|---|---|---|---:|
+| 0x18 | `FlashTl.owner` | 0 | 1 |
+| 0x1008 = 18 * 0xE4 | `FlashClip[i].tl.owner` | 0xCC + i * 0xE4, i de 0 a 17 | 18 |
+
+As pilhas nativas têm endereços diferentes nas duas arquiteturas e ficam fora
+da faixa de imagem/heap que o memdiff reconhece como ponteiro do port.
+`roteiros.py memoria` explica somente os 4 bytes desses campos na tela 48,
+com tamanho pedido, tipo e cadeia de alocação até `EvoTop_Init` conferidos.
+`campos.py --donos` preserva os três chamadores no TSV, pois outras raízes de
+0x18 bytes da mesma tela também vêm de `Flash_Create`. Sem esse contexto,
+a diferença permanece falha. Nenhum conversor, gancho ou teto muda por isso.
+
+Na cópia dos dumps do vblank 3.242, o verificador de `4aa0099` reproduziu as
+19 falhas informadas pela revisão; o novo passou a mesma entrada intacta.
+Os testes em `~/9c-evo-provas/memoria.py` refazem o memdiff sobre cada cópia
+binária estragada antes de julgá-la. Recusas observadas:
+
+| Cópia estragada | Resultado |
+|---|---|
+| Cadeia sem `EvoTop_Init`, outro tipo, outro alocador ou outro tamanho pedido | os owners continuam não explicados |
+| `FlashTl.prev` da raiz ou `FlashClip[0].tl.frame` alterados | número diferente não explicado |
+| `owner` da raiz do IconWin alterado, também 0x18 e `Flash_Create` na tela 48 | ponteiro diferente não explicado |
+| `owner` e `slots` juntos, trecho de 8 bytes | trecho inteiro recusado |
+| u32 da contagem do pacote 452 s1 vivo sem troca de bytes | marcas com um número fora do formato e memória recusada |
+
+`limites.py` também recusa 14 variantes fora do escopo, incluindo outra tela,
+o fim, falta do contexto, campo vizinho e índice após o último clip.
+`conversores.py` repetiu as treze recusas da tabela anterior, com as três
+entradas intactas passando. Dados, scripts e logs ficam em `~/9c-evo-provas/`.
+
 ## Roteiro ampliado: evidências por emulação
 
 No código `f127d03`, x86 em `qemu-i386` e PPC sem mapa em `qemu-ppc` chegam ao

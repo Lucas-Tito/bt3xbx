@@ -599,7 +599,18 @@ def chave_regiao(nome, estado):
     return f"heap:{m.group(1)}" if nome.startswith("heap#") and m else nome
 
 
-def conhecida(regiao, desl, tam):
+def conhecida(regiao, desl, tam, tela=None, estado=""):
+    # EvoTop_Run mantém o EvoTop m na pilha. FlashTl_Init grava &m.flash[0] em owner na raiz e nas 18
+    # timelines dos clips: endereços nativos diferentes, fora da faixa de imagem/heap que o memdiff reconhece.
+    # Só esse ponteiro de 4 bytes, na tela 48, com o tipo e a cadeia de alocação conferidos por --donos. Nem slots/frames,
+    # nem os números vizinhos, nem outro dono do mesmo tamanho recebem a explicação (menus-evo.md).
+    if tela == 48 and tam == 4:
+        raiz = (regiao == "heap:0x18" and desl == 0 and
+                re.search(r", FlashTl de Flash_Create@\S+ < EvoTop_Init@menu_w_c.c:\d+ < EvoTop_Run@", estado))
+        clip = (regiao == "heap:0x1008" and 0 <= desl < 0x1008 and desl % 0xe4 == 0xcc and
+                re.search(r", FlashClip de FlashClipList_Init@\S+ < Flash_Create@\S+ < EvoTop_Init@menu_w_c.c:\d+", estado))
+        if raiz or clip:
+            return "FlashTl.owner: &EvoTop_Run.m.flash[0], ponteiro para a pilha do host"
     for r, d, porque in DIFERENTES_CONHECIDAS:
         if r != regiao:
             continue
@@ -681,6 +692,7 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
     vazios = []  # (região, chave, {classe: palavras}) aceitas por BUFFER_IMAGEM_VAZIO
     # região a região: as classes suspeitas contra CLASSES_CONHECIDAS, e os trechos um a um contra a lista
     regiao, chave_r, esperados, vistos = None, None, 0, 0
+    estado = ""
     explicados, suspeitas, somadas = collections.Counter(), collections.Counter(), collections.Counter()
 
     def fecha():
@@ -693,6 +705,7 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
         if m:
             fecha()
             regiao, esperados, vistos = m.group(1), int(m.group(4)), 0
+            estado = m.group(2) or ""
             chave_r = chave_regiao(regiao, m.group(2))
             # (num bloco do heap, o deslocamento dos trechos conta do começo dos dados, HeapBlock.data: o enchimento de
             # alinhamento entre o cabeçalho e os dados muda de um bloco para outro)
@@ -759,7 +772,7 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
                           "nos pacotes da GPU fora da forma de uv0.pad, uv1.pad e nop")
                     ok = False
                 continue
-            porque = conhecida(chave_r, d - dados0, tam)
+            porque = conhecida(chave_r, d - dados0, tam, tela, estado)
             if porque is None:
                 print(f"{pre}DIFERENÇA: memória: {regiao}+0x{d:x} ({chave_r}" +
                       (f", dados+0x{d - dados0:x}" if dados0 else "") + f", +0x{tam:x} bytes) diferente e não explicado")
@@ -781,7 +794,7 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
                   "listadas (palavra suspeita fora de uma linha de região)")
             ok = False
     if explicados:
-        print(f"{pre}  trechos diferentes explicados (DIFERENTES_CONHECIDAS e pacotes da GPU): " +
+        print(f"{pre}  trechos diferentes explicados (campos conhecidos e pacotes da GPU): " +
               ", ".join(f"{r} {n}" for r, n in sorted(explicados.items())))
     if suspeitas:
         print(f"{pre}  classes suspeitas explicadas (CLASSES_CONHECIDAS): " +

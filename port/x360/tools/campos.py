@@ -254,7 +254,8 @@ def tipar():
         if t is None or t[1].sizeof == 0:
             continue
         m = marcas(t[1])
-        tsv.write("%08x\t%s\t%x\t%x\t%s\n" % (a, t[0], len(m), pos, vivos[a].split(": ", 1)[1].split(" < ")[0]))
+        # O contexto distingue objetos do mesmo tipo alocados pelo mesmo helper (as raízes do Flash, por exemplo).
+        tsv.write("%08x\t%s\t%x\t%x\t%s\n" % (a, t[0], len(m), pos, vivos[a].split(": ", 1)[1]))
         binf.write(m)
         pos += len(m)
     tsv.close(); binf.close()

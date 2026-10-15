@@ -903,6 +903,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   dinheiro e experiência, e no DcSave espera os estados 12 (salvar), 13 (substituir), 15 (gravação) e 0, sem aceitar o caminho do
   "não" como prova de save. Em ensaio manual, crie também a pasta pai de `BT3_SAVES`: faltar o pai leva ao estado
   17 de erro de gravação já no boot, não a um erro de conversão.
+- **O dono de uma timeline pode estar na pilha.** `EvoTop_Run` mantém `EvoTop m` local, e `FlashTl_Init` grava
+  `&m.flash[0]` em `FlashTl.owner`: na raiz de 0x18 e no +0xCC de cada `FlashClip` de 0xE4 (18 no topo). Esses
+  ponteiros nativos ficam fora da faixa imagem/heap reconhecida pelo memdiff. Não se troca um número do disco nem se
+  muda o jogo para igualar endereços das pilhas. A explicação no `roteiros.py` exige tela 48, trecho de exatamente
+  4 bytes no campo, tamanho pedido, tipo e a cadeia de alocação até `EvoTop_Init`. `campos.py --donos` preserva os
+  três chamadores no TSV: só `Flash_Create` não distingue a raiz do EvoTop das raízes das janelas da mesma tela.
+  No gdb, há visões diferentes chamadas `Flash`: busque o tipo no bloco de `Flash_Create`, em `gfxm_c.c`, antes de
+  seguir `root` e `clips`. Compare cada `owner` com o endereço da variável local, não só com uma faixa de endereços.
+- **Dados gerados copiados de outro clone podem guardar caminhos absolutos.** O `.incbin` de
+  `port/build/gen/data/vu1_micro.data.s` ainda apontava para o clone de outro usuário. Corrija apenas essa saída
+  local para o caminho resolvido de `assets/`, sem escrever nos links de dados só leitura nem mudar o código.
+  Refaça a build e confira a `.text` antes de usar os resultados.
 - **`save_mc.sh` também precisa de um emulador por vez.** Os pares A/F e B1/B2 ainda eram lançados em paralelo
   na versão anterior à 9c-1. Rodam em sequência agora, como os roteiros: o `wait` interno de cada caso só espera o
   seu qemu. A simulação de falha e a recuperação do cartão não precisam de concorrência entre casos.
