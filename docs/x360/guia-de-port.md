@@ -852,6 +852,20 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     (uns 14.000 vblanks de luta na x86, longo demais para o qemu), então o roteiro derruba três e depois o jogador
     (`perde apos 3`), e o jogo grava os três vencidos, porque a Sobrevivência grava também na derrota. Cada modo prova o
     fim pelo que o jogo gravou (`confere save`), não só pela tela seguinte.
+  - **O resto da luta fica nos buffers de pacotes da GPU.** As cores dos efeitos gravadas byte a byte (o erro da F5,
+    `SO_NA_LUTA`) eram aceitas só no fim; a Missão 100 (quatro adversários, 1.566 quadros de luta) deixou 1.050 e 1.061
+    palavras nos dois buffers, e as mesmas no resultado e na seleção depois dele, que não as regravam: resto, não cor
+    de menu. A memória das telas visitadas depois da primeira luta do rastro passa a aceitá-las com o teto
+    (`--apos-luta`); antes da luta, nenhuma. Contagem igual em telas diferentes é o sinal de resto parado.
+  - **Leitura de 4 bytes num deslocamento ímpar de um arquivo é o rastreio, não o jogo.** Os lutadores da Missão 100
+    deram dez posições "não trocadas" no `--mapa` (bytes do file[0] que o rastreio diz lidos com 4 bytes, pelos
+    leitores de vetor da luta), todas em 1 mod 4. No PS2 uma leitura de 4 bytes num endereço ímpar não existe (`lw` e
+    `lwc1` dariam exceção, o `lq` ignora os bits baixos), e o arquivo é carregado alinhado: quem leu foi uma cópia para
+    onde o rastreio levou a origem do byte. Passam uma a uma em `LARGURA_CONHECIDA` (com os leitores, conferidos no
+    rastreio de cada rodada), como as de outra largura.
+  - **Campo opaco que começa no meio de uma palavra** (o `s16 unk29E[3]` do `SScore`, que outra visão do mesmo bloco lê
+    como `PClock.ms`) era comparado byte a byte pelo `memdiff.py`, e um u16 trocado certo saía "fora do formato". Agora
+    meia palavra opaca aceita o u16 invertido ou os dois bytes iguais (visto falhando com um byte estragado).
 - **`pkill -f padrão`** pelo `wsl.sh` mata o próprio shell, cuja linha de comando contém o padrão.
 - **Rastreio limitado por tempo:** `timeout` manda SIGTERM, que não passa pelo `atexit`; o `rastreio.c`
   trata o sinal e grava (os menus rodam em ciclo, sem fim próprio).

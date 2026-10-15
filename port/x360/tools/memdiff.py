@@ -262,6 +262,12 @@ def pelo_tipo(dx, dp, m, fx, fp, n, base=0):
             # aceito qualquer leitura de uma largura (u32 invertido, bytes iguais, dois u16, u8+u8+u16, o u64 com o par
             # pelo endereço, o ponteiro do port), contado à parte ("opaco"); só "diferente" é fora do formato
             w = 4 if k % 4 == 0 and k + 4 <= fim and all(x in (0, 0xFE) for x in m[k:k + 4]) else 1
+            if w == 1 and k % 2 == 0 and k + 2 <= fim and all(x in (0, 0xFE) for x in m[k:k + 2]):
+                # (um campo opaco que começa no meio de uma palavra, como o s16 unk29E[3] do SScore,
+                # include/menu/menu_s.h, que outra visão do mesmo bloco lê como o PClock.ms: por meia palavra, a leitura
+                # de uma largura só é o u16 invertido ou os dois bytes iguais; byte a byte, um u16 certo saía fora do
+                # formato. Etapa 9b, a memória do SurvResult)
+                w = 2
             a, b = dx[k:k + w], dp[k:k + w]
             ok = a == b or a == b[::-1]
             if not ok and w == 4:

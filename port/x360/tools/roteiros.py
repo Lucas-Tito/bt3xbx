@@ -136,6 +136,42 @@ LARGURA_CONHECIDA = {
     ("pzs3us1/00510.bin", 0x236C, 2, 4): (
         "id de item s32 do GSDT (comando 12, item 2) lido pela metade baixa",
         {"BattleSetup_SetMemberByItemIds", "BtlFacade_SetMemberItems"}),
+    # (etapa 9b) bytes dos arquivos de lutador (o file[0], personagem.md) que o rastreio dá como lidos com 4 bytes: todos
+    # num deslocamento ímpar (1 mod 4), e uma leitura de 4 bytes num endereço ímpar não existe no PS2 (lw e lwc1 dariam
+    # exceção, o lq ignora os bits baixos) com o arquivo carregado alinhado; o endereço lido não é o do arquivo, é uma
+    # cópia para onde o rastreio levou a origem do byte (os leitores são os de vetor da luta, nos locais da pilha e nas
+    # tabelas que o EftGfx_LightClutSpecular monta; a tabela de normais dele foi procurada nos cinco arquivos e não está
+    # lá). O conversor os trata como bytes, certo. Os lutadores da missão 0 da Missão 100 (roteiro missao)
+    ("pzs3us1/01424.bin", 0x760CD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular', 'Port_FastMtxApply', 'Vec3_Dot'}),
+    ("pzs3us1/01673.bin", 0x645CD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
+    ("pzs3us1/01673.bin", 0x648CD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'op_lqc2'}),
+    ("pzs3us1/01683.bin", 0x5D28D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
+    ("pzs3us1/01683.bin", 0x5D2CD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular'}),
+    ("pzs3us1/01693.bin", 0x6750D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular'}),
+    ("pzs3us1/01693.bin", 0x6758D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
+    ("pzs3us1/01703.bin", 0x5BA4D, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'EftGfx_LightClutSpecular'}),
+    ("pzs3us1/01703.bin", 0x5BBCD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'Vec3_Dot'}),
+    ("pzs3us1/01703.bin", 0x5BCCD, 4, 1): (
+        "byte do lutador com a origem levada pelo rastreio a uma leitura de 4 bytes (deslocamento ímpar)",
+        {'op_lqc2'}),
 }
 NOTAS_CONV = []  # (conv(): as posições de LARGURA_CONHECIDA achadas, para o confere dizer)
 
@@ -287,7 +323,8 @@ def conv(caminho):
     ultimo = None
     largura = []  # as posições "com outra largura" do arquivo atual (as linhas de detalhe antes do "contra o mapa")
     for l in pathlib.Path(caminho).read_text(errors="replace").splitlines():
-        m = re.match(r"    0x([0-9A-Fa-f]+): rastreio leu (\d+), conversor marca (\d+) \(trocou com outra largura\)$", l)
+        m = re.match(r"    0x([0-9A-Fa-f]+): rastreio leu (\d+), conversor marca (\d+) \((trocou com outra largura|tratou "
+                     r"como byte)\)$", l)
         if m:
             largura.append((int(m.group(1), 16), int(m.group(2)), int(m.group(3))))
             continue
@@ -297,8 +334,8 @@ def conv(caminho):
             conhecidas = [(ultimo, *x) for x in largura if (ultimo, *x) in LARGURA_CONHECIDA]
             if ultimo is None:
                 out["?"] = f"ERRO: linha \"contra o mapa\" sem arquivo antes: {l.strip()}"
-            elif outra and not nao and len(largura) == outra and len(conhecidas) == outra:
-                NOTAS_CONV.extend(conhecidas)  # (todas as de outra largura estão em LARGURA_CONHECIDA: certo)
+            elif (outra or nao) and len(largura) == outra + nao and len(conhecidas) == outra + nao:
+                NOTAS_CONV.extend(conhecidas)  # (todas as divergentes estão em LARGURA_CONHECIDA: certo)
             elif (outra or nao) and not out[ultimo].startswith("ERRO"):
                 out[ultimo] = f"ERRO: {l.strip()}"
             largura = []
@@ -458,11 +495,12 @@ CLASSES_CONHECIDAS = [
     ("heap:0x68", {"igual-sem-inverter": 8},
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
-    ("heap:0x100000", {"igual-sem-inverter": 256},
+    ("heap:0x100000", {"igual-sem-inverter": 2048},
      "os buffers de pacotes da GPU (Dma_InitBuffers): as cores dos efeitos da luta gravadas byte a byte (os u8 "
      "rgba[4] dos vértices, o 3c3c3cNN; formatos/gpu.md seção 6). ERRO DE CONVERSÃO CONHECIDO, da F5: a etapa 6 viu "
-     "na imagem da luta 26 primitivas com os quatro bytes da cor invertidos na PPC. Só fora das telas de menu "
-     "(SO_NA_LUTA; visto: 108 no máximo, todas no fim da luta)"),
+     "na imagem da luta 26 primitivas com os quatro bytes da cor invertidos na PPC. Só depois de uma luta "
+     "(SO_NA_LUTA; visto: 108 no máximo no essencial; 1.061 depois da luta da Missão 100, quatro adversários e 1.566 "
+     "quadros, etapa 9b: o teto foi a 2.048)"),
     ("heap:0x83040", {"igual-sem-inverter": 160},
      "a tabela de ordenação (Ot_Init, gfx_ot.c:62: o pacote e as entradas num bloco só): as mesmas cores dos efeitos "
      "da luta byte a byte nos primitivos, o mesmo erro da F5 (visto: 78, no fim da luta; SO_NA_LUTA)"),
@@ -472,9 +510,12 @@ CLASSES_CONHECIDAS = [
      "do host). Só teto (visto: 244, 522, 59, 742 e 8): tipar a arena por sub-bloco fica pendente (plano, etapa 5)"),
 ]
 
-# As regiões de CLASSES_CONHECIDAS que só valem no fim da luta, nunca numa tela de menu (memoria --tela): as cores dos
-# efeitos da luta byte a byte (F5). Nos menus a etapa 6 comparou as imagens (idênticas) e a memória das telas não tem
-# nenhuma dessas palavras: uma que aparecesse seria cor de menu na ordem errada.
+# As regiões de CLASSES_CONHECIDAS que só valem depois de uma luta, nunca numa tela de menu antes dela (memoria --tela
+# sem --apos-luta): as cores dos efeitos da luta byte a byte (F5). Nos menus a etapa 6 comparou as imagens (idênticas)
+# e a memória das telas não tem nenhuma dessas palavras: uma que aparecesse seria cor de menu na ordem errada. Depois de
+# uma luta elas ficam nos buffers de pacotes como resto (etapa 9b: a Missão 100 deixou 1.050 e 1.061, as mesmas no
+# resultado e na seleção depois dele, que não as regravam), e as telas de menu dali em diante as aceitam com o teto
+# (o roteiros.sh passa --apos-luta à memória de uma tela visitada depois da primeira luta do rastro).
 SO_NA_LUTA = {"heap:0x100000", "heap:0x83040"}
 
 # As regiões de CLASSES_CONHECIDAS que só valem na memória de certas telas (memoria --tela N), nunca no fim nem noutra
@@ -582,7 +623,7 @@ def classes_da_linha(texto):
     return {k: int(v) for k, v in re.findall(r"([a-z0-9-]+) (\d+)", texto)}
 
 
-def memoria(caminho, pre="", tela=None, dados="gamedata"):
+def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False):
     p = pathlib.Path(caminho)
     if not p.exists():
         print(f"{pre}DIFERENÇA: memória: sem {caminho} (a PPC não chegou ao vblank do dump?)")
@@ -679,8 +720,8 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
                 if not n or (chave_r == PACOTE_GPU and c in PROIBIDAS_EM_PACOTE):
                     continue  # (nos pacotes da GPU as proibidas já são diferença, acima)
                 teto = next((t[c] for r, t, _ in CLASSES_CONHECIDAS if r == chave_r and c in t), None)
-                if tela is not None and chave_r in SO_NA_LUTA:
-                    teto = None  # (numa tela de menu, nenhuma: SO_NA_LUTA)
+                if tela is not None and chave_r in SO_NA_LUTA and not apos_luta:
+                    teto = None  # (numa tela de menu antes de qualquer luta, nenhuma: SO_NA_LUTA)
                 fora_da_tela = chave_r in SO_NAS_TELAS and not (tela is not None and str(tela).isdigit() and
                                                                   int(tela) in SO_NAS_TELAS[chave_r])
                 if fora_da_tela:
@@ -688,8 +729,8 @@ def memoria(caminho, pre="", tela=None, dados="gamedata"):
                 if teto is None or n > teto:
                     print(f"{pre}DIFERENÇA: memória: {regiao} ({chave_r}) com {n} palavras {c}" +
                           (f", acima do teto {teto}" if teto is not None else
-                           ", numa tela de menu (só no fim da luta: SO_NA_LUTA)" if tela is not None and
-                           chave_r in SO_NA_LUTA else
+                           ", numa tela de menu antes da luta (só depois dela: SO_NA_LUTA)" if tela is not None and
+                           chave_r in SO_NA_LUTA and not apos_luta else
                            f", fora das telas {sorted(SO_NAS_TELAS[chave_r])} (SO_NAS_TELAS)" if fora_da_tela else
                            ", classe não explicada ali (CLASSES_CONHECIDAS)"))
                     ok = False
@@ -1019,6 +1060,7 @@ def main():
     ap.add_argument("--saidas", nargs=2)
     ap.add_argument("--luta", action="store_true")
     ap.add_argument("--telas")
+    ap.add_argument("--apos-luta", action="store_true")
     a = ap.parse_args()
 
     if a.acao == "imagens":
@@ -1047,7 +1089,7 @@ def main():
         print("conv_tool: só larguras conhecidas" if ok else "conv_tool: erro fora de LARGURA_CONHECIDA")
         return 0 if ok else 1
     if a.acao == "memoria":
-        ok = memoria(a.arqs[0], tela=a.tela, dados=a.dados)
+        ok = memoria(a.arqs[0], tela=a.tela, dados=a.dados, apos_luta=a.apos_luta)
         print("memória igual" if ok else "memória DIFERENTE")
         return 0 if ok else 1
     if a.acao == "vblank_fim":

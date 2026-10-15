@@ -246,6 +246,7 @@ for n in "${NOMES[@]}"; do
             # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
             # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
             # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela
+            LUTA_V=$(grep -m1 '^tela luta vblank ' $D/telas_a.txt | cut -d' ' -f4)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
             while read -r t VT; do
@@ -270,7 +271,10 @@ for n in "${NOMES[@]}"; do
                         > $M/memdiff.txt
                     echo "memdiff saiu com ${PIPESTATUS[0]}" >> $M/memdiff.txt
                 fi
-                python3 port/x360/tools/roteiros.py memoria $M/memdiff.txt --tela $t > $M/memoria.txt
+                # (uma tela visitada depois da primeira luta do rastro aceita o resto da luta nos buffers de pacotes,
+                # SO_NA_LUTA, com o teto; antes dela, nenhum)
+                APOS=(); [ -n "$LUTA_V" ] && [ "$VT" -gt "$LUTA_V" ] && APOS=(--apos-luta)
+                python3 port/x360/tools/roteiros.py memoria $M/memdiff.txt --tela $t "${APOS[@]}" > $M/memoria.txt
                 r=$?
                 echo "   memória na tela $t (vblank $VT):"; sed 's/^/     /' $M/memoria.txt
                 [ $r = 0 ] || falhou "memória na tela $t diferente (memdiff)"
