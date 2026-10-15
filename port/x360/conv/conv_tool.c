@@ -251,7 +251,7 @@ static int cadeia_lida(const conv_u8 *buf, const conv_u8 *feito, unsigned long t
 static int contra_mapa(const char *rel, const conv_u8 *buf, const conv_u8 *feito, unsigned long tam, unsigned long ini,
                        unsigned long fim) {
     unsigned n, t;
-    unsigned long certo = 0, outra = 0, sem = 0, vistos = 0, fora = 0, cadeias = 0;
+    unsigned long certo = 0, outra = 0, sem = 0, vistos = 0, fora = 0, cadeias = 0, impares = 0;
     int mostrados = 0;
     Trecho *tr = ler_mapa(mapa, rel, &n);
     for (t = 0; t < n; t++) {
@@ -269,6 +269,13 @@ static int contra_mapa(const char *rel, const conv_u8 *buf, const conv_u8 *feito
             }
             if (feito[a] == tr[t].w) {
                 certo++;
+                continue;
+            }
+            /* O rastreio leva a origem de um byte a cópias lidas como vetor. No PS2, com o arquivo alinhado,
+               uma leitura de 4 bytes em deslocamento ímpar não existe (9b, resposta 5). Só sobre byte conhecido:
+               não se aplica a número trocado, meio de número, posição livre ou outra largura. */
+            if (tr[t].w == 4 && (a & 1) && feito[a] == CONV_BYTE) {
+                impares++;
                 continue;
             }
             if (cadeia_lida(buf, feito, tam, a, tr[t].w)) {
@@ -292,6 +299,9 @@ static int contra_mapa(const char *rel, const conv_u8 *buf, const conv_u8 *feito
            sem, fora ? " (e algumas fora do arquivo)" : "");
     if (cadeias) {
         printf("; %lu em cadeia de texto lida por inteiro", cadeias);
+    }
+    if (impares) {
+        printf("; %lu leituras de 4 bytes em deslocamento ímpar sobre byte (rastreio)", impares);
     }
     printf("\n");
     free(tr);

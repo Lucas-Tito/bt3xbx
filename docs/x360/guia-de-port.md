@@ -862,8 +862,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     deram dez posições "não trocadas" no `--mapa` (bytes do file[0] que o rastreio diz lidos com 4 bytes, pelos
     leitores de vetor da luta), todas em 1 mod 4. No PS2 uma leitura de 4 bytes num endereço ímpar não existe (`lw` e
     `lwc1` dariam exceção, o `lq` ignora os bits baixos), e o arquivo é carregado alinhado: quem leu foi uma cópia para
-    onde o rastreio levou a origem do byte. Passam uma a uma em `LARGURA_CONHECIDA` (com os leitores, conferidos no
-    rastreio de cada rodada), como as de outra largura.
+    onde o rastreio levou a origem do byte. Desde a 9c-1 (resposta 5 da 9b), o `conv_tool` as conta à parte como
+    "leituras de 4 bytes em deslocamento ímpar sobre byte (rastreio)": só largura 4, deslocamento ímpar e marca
+    `CONV_BYTE`. Saíram as vinte entradas desse tipo de `LARGURA_CONHECIDA`; as duas metades baixas do GSDT continuam
+    com a conferência de leitores. Visto falhando sobre cópias do mapa: deslocamentos pares (0 e 2 mod 4), larguras
+    2 e 8, u16 convertido e continuação de número não entram na regra. 1 e 3 mod 4 sobre byte entram, com contagem.
   - **Campo opaco que começa no meio de uma palavra** (o `s16 unk29E[3]` do `SScore`, que outra visão do mesmo bloco lê
     como `PClock.ms`) era comparado byte a byte pelo `memdiff.py`, e um u16 trocado certo saía "fora do formato". Agora
     meia palavra opaca aceita o u16 invertido ou os dois bytes iguais (visto falhando com um byte estragado).
