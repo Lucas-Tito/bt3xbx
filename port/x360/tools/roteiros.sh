@@ -37,7 +37,7 @@
 #      momento do roteiro (ancorado numa linha do rastro: roteiros.py imagens), idênticas byte a byte (roteiros.py
 #      compara_imagens; a diferença diz a tela, o quadro e quantos pixels). As imagens ficam em $O/NOME/img (no WSL,
 #      nunca no repositório). JANELA=8: quadros pintados antes de cada imagem (port/x360/headless/imagens.c).
-#      IMG=luta: também a luta, que sai diferente até a F5 (a cor dos vértices dos efeitos, formatos/gpu.md seção 6)
+#      IMG=luta: também a luta (idêntica desde a F5, etapa 4: as cores dos efeitos, plano/F5/04.md)
 #   TP=3600     segundos da PPC no qemu
 #   MEM=menu    a memória no menu principal em vez do fim (SEMMAPA=1)
 #   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
@@ -248,7 +248,6 @@ for n in "${NOMES[@]}"; do
             # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
             # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
             # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela
-            LUTA_V=$(grep -m1 '^tela luta vblank ' $D/telas_a.txt | cut -d' ' -f4)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
             while read -r t VT; do
@@ -273,10 +272,7 @@ for n in "${NOMES[@]}"; do
                         > $M/memdiff.txt
                     echo "memdiff saiu com ${PIPESTATUS[0]}" >> $M/memdiff.txt
                 fi
-                # (uma tela visitada depois da primeira luta do rastro aceita o resto da luta nos buffers de pacotes,
-                # SO_NA_LUTA, com o teto; antes dela, nenhum)
-                APOS=(); [ -n "$LUTA_V" ] && [ "$VT" -gt "$LUTA_V" ] && APOS=(--apos-luta)
-                python3 port/x360/tools/roteiros.py memoria $M/memdiff.txt --tela $t "${APOS[@]}" > $M/memoria.txt
+                python3 port/x360/tools/roteiros.py memoria $M/memdiff.txt --tela $t > $M/memoria.txt
                 r=$?
                 echo "   memória na tela $t (vblank $VT):"; sed 's/^/     /' $M/memoria.txt
                 [ $r = 0 ] || falhou "memória na tela $t diferente (memdiff)"

@@ -477,28 +477,16 @@ CLASSES_CONHECIDAS = [
     ("heap:0x68", {"igual-sem-inverter": 8},
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
-    ("heap:0x100000", {"igual-sem-inverter": 2048},
-     "os buffers de pacotes da GPU (Dma_InitBuffers): as cores dos efeitos da luta gravadas byte a byte (os u8 "
-     "rgba[4] dos vértices, o 3c3c3cNN; formatos/gpu.md seção 6). ERRO DE CONVERSÃO CONHECIDO, da F5: a etapa 6 viu "
-     "na imagem da luta 26 primitivas com os quatro bytes da cor invertidos na PPC. Só depois de uma luta "
-     "(SO_NA_LUTA; visto: 108 no máximo no essencial; 1.061 depois da luta da Missão 100, quatro adversários e 1.566 "
-     "quadros, etapa 9b: o teto foi a 2.048)"),
-    ("heap:0x83040", {"igual-sem-inverter": 160},
-     "a tabela de ordenação (Ot_Init, gfx_ot.c:62: o pacote e as entradas num bloco só): as mesmas cores dos efeitos "
-     "da luta byte a byte nos primitivos, o mesmo erro da F5 (visto: 78, no fim da luta; SO_NA_LUTA)"),
     ("heap:0x1a0800", {"igual-sem-inverter": 320, "2xu16": 660, "misto": 80, "u64": 930, "float-proximo": 16},
      "a arena do BtlPool (BtlPool_Init, btl_pool.c:29): as estruturas da cena da luta num alocador próprio, sem tipo "
      "por estrutura (u8, u16 e u64 de campo); float-proximo: as tabelas do EftGlow_BuildTables (cosf e sinf da libm "
      "do host). Só teto (visto: 244, 522, 59, 742 e 8): tipar a arena por sub-bloco fica pendente (plano/F4/05.md)"),
 ]
 
-# As regiões de CLASSES_CONHECIDAS que só valem depois de uma luta, nunca numa tela de menu antes dela (memoria --tela
-# sem --apos-luta): as cores dos efeitos da luta byte a byte (F5). Nos menus a etapa 6 comparou as imagens (idênticas)
-# e a memória das telas não tem nenhuma dessas palavras: uma que aparecesse seria cor de menu na ordem errada. Depois de
-# uma luta elas ficam nos buffers de pacotes como resto (etapa 9b: a Missão 100 deixou 1.050 e 1.061, as mesmas no
-# resultado e na seleção depois dele, que não as regravam), e as telas de menu dali em diante as aceitam com o teto
-# (o roteiros.sh passa --apos-luta à memória de uma tela visitada depois da primeira luta do rastro).
-SO_NA_LUTA = {"heap:0x100000", "heap:0x83040"}
+# (Até a F5, etapa 4, as cores dos efeitos da luta gravadas byte a byte deixavam palavras igual-sem-inverter nos
+# buffers de pacotes e na tabela de ordenação, aceitas com teto só depois de uma luta, SO_NA_LUTA, e 48 na tela 70 do
+# Shenlong. Corrigidas as gravações (plano/F5/04.md, conferidas pelo cores.py), essas palavras são diferença em
+# qualquer tela: nos pacotes, PROIBIDAS_EM_PACOTE; na tabela de ordenação, classe não explicada.)
 
 # As regiões de CLASSES_CONHECIDAS que só valem na memória de certas telas (memoria --tela N), nunca no fim nem noutra
 # tela: a classe se nomeia pelo tamanho pedido ao alocador, e outro dono do mesmo tamanho noutra tela (o faceRes dos
@@ -528,7 +516,7 @@ BUFFER_IMAGEM_VAZIO = {"heap:0x16800", "heap:0x20800"}
 # ordem de um pacote (decisão 19).
 PACOTE_GPU = "heap:0x100000"
 FORMAS_GPU = {12: (4, 0x14, 0x24), 8: (4, 8)}
-PROIBIDAS_EM_PACOTE = ("u64", "u64-com-zero", "2xu16", "misto", "float-proximo")
+PROIBIDAS_EM_PACOTE = ("u64", "u64-com-zero", "2xu16", "misto", "float-proximo", "igual-sem-inverter")
 TETO_TRECHOS_GPU = 64   # trechos por buffer (o maior visto: 22)
 TETO_DIFERENTES_GPU = 160  # palavras "diferente" por buffer (o maior visto: 88)
 
@@ -664,7 +652,7 @@ def classes_da_linha(texto):
     return {k: int(v) for k, v in re.findall(r"([a-z0-9-]+) (\d+)", texto)}
 
 
-def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_fim=None):
+def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None):
     p = pathlib.Path(caminho)
     if not p.exists():
         print(f"{pre}DIFERENÇA: memória: sem {caminho} (a PPC não chegou ao vblank do dump?)")
@@ -778,10 +766,6 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
                 if not n or (chave_r == PACOTE_GPU and c in PROIBIDAS_EM_PACOTE):
                     continue  # (nos pacotes da GPU as proibidas já são diferença, acima)
                 teto = next((t[c] for r, t, _ in CLASSES_CONHECIDAS if r == chave_r and c in t), None)
-                if tela is not None and chave_r in SO_NA_LUTA and not apos_luta:
-                    # ShenScene usa o motor 3D antes de qualquer luta. Só as 48 palavras observadas dos pacotes,
-                    # na tela 70; não libera a tabela de ordenação nem o teto de 2048 da luta (menus-ref.md 9).
-                    teto = 48 if str(tela) == "70" and chave_r == PACOTE_GPU and c == "igual-sem-inverter" else None
                 # (no fim, a tela em que o roteiro termina: o historia_novo acaba na lista de episódios, tela 7)
                 t_cl = tela if tela is not None else tela_fim
                 fora_da_tela = chave_r in SO_NAS_TELAS and not (t_cl is not None and str(t_cl).isdigit() and
@@ -791,8 +775,6 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
                 if teto is None or n > teto:
                     print(f"{pre}DIFERENÇA: memória: {regiao} ({chave_r}) com {n} palavras {c}" +
                           (f", acima do teto {teto}" if teto is not None else
-                           ", numa tela de menu antes da luta (só depois dela: SO_NA_LUTA)" if tela is not None and
-                           chave_r in SO_NA_LUTA and not apos_luta else
                            f", fora das telas {sorted(SO_NAS_TELAS[chave_r])} (SO_NAS_TELAS)" if fora_da_tela else
                            ", classe não explicada ali (CLASSES_CONHECIDAS)"))
                     ok = False
@@ -955,9 +937,8 @@ def quadro_esperado(eventos, n, anc):
 
 def lista_imagens(caminho, luta=False):
     """[(nome, n, âncora)] do rastro de referência (um arquivo de "telas"): a âncora é o texto da linha antes do
-    " vblank " (com "#K" a K-ésima vez), n os quadros do roteiro depois dela. A luta só com luta=True (IMG=luta): os
-    efeitos dela gravam a cor dos vértices byte a byte (u8 rgba[4], formatos/gpu.md seção 6), a corrigir na F5, e a
-    imagem sai diferente até lá (plano/F4/06.md)"""
+    " vblank " (com "#K" a K-ésima vez), n os quadros do roteiro depois dela. A luta só com luta=True (IMG=luta): diferente até
+    a F5, etapa 4 (a cor dos vértices dos efeitos byte a byte, plano/F4/06.md), idêntica desde então (plano/F5/04.md)"""
     out, vezes = [], collections.Counter()
     eventos = eventos_rastro(caminho)  # (quadro, texto da âncora sem o #K)
     telas_vistas = [(q, t) for q, t in eventos if t.startswith("tela ")]
@@ -1127,7 +1108,6 @@ def main():
     ap.add_argument("--saidas", nargs=2)
     ap.add_argument("--luta", action="store_true")
     ap.add_argument("--telas")
-    ap.add_argument("--apos-luta", action="store_true")
     a = ap.parse_args()
 
     if a.acao == "imagens":
@@ -1156,7 +1136,7 @@ def main():
         print("conv_tool: só larguras conhecidas" if ok else "conv_tool: erro fora de LARGURA_CONHECIDA")
         return 0 if ok else 1
     if a.acao == "memoria":
-        ok = memoria(a.arqs[0], tela=a.tela, dados=a.dados, apos_luta=a.apos_luta)
+        ok = memoria(a.arqs[0], tela=a.tela, dados=a.dados)
         print("memória igual" if ok else "memória DIFERENTE")
         return 0 if ok else 1
     if a.acao == "vblank_fim":
