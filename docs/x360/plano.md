@@ -39,7 +39,8 @@ Resumo (texto completo em [plano/base.md](plano/base.md)):
 | F2 | concluída | idem |
 | F3 | concluída | [plano/F3.md](plano/F3.md) |
 | F4 | em andamento, etapa 9 concluída no WSL; sessão no console e rodada completa ainda pendentes | [plano/F4/00-escopo.md](plano/F4/00-escopo.md) |
-| F5 a F9 | por fazer | só a entrega da tabela acima (riscos já anotados para a F5 em [plano/F3.md](plano/F3.md)) |
+| F5 | plano proposto; implementação por fazer | [plano/F5/00-escopo.md](plano/F5/00-escopo.md) |
+| F6 a F9 | por fazer | só a entrega da tabela acima |
 
 ### F4, etapas (13/10/2026)
 
