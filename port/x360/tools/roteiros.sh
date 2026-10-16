@@ -39,6 +39,11 @@
 #      nunca no repositório). JANELA=8: quadros pintados antes de cada imagem (port/x360/headless/imagens.c).
 #      A luta entra também, desde a F5, etapa 4 (idêntica desde a correção das cores dos efeitos, plano/F5/04.md;
 #      decisão do Lucas, 16/10/2026); IMG=menus deixa a luta de fora, como até a F4 (IMG=luta continua aceito)
+#   7. (F5, etapa 3) nos roteiros f5_*: roteiros.py f5 (o que a F5 exige: a luta montada, cada ação confirmada no
+#      estado do jogo e na matriz, o resultado e a volta ao menu, a janela contínua, os pontos) e passos.py (a medida de
+#      tempo por passo) no log da x86 e no da PPC sem mapa, os dois do commit de agora
+#   MEMLUTA=1   (F5, com SEMMAPA=1) a memória também em cada "marca ponto" da luta, com o critério geral: uma rodada a
+#               mais da PPC por ponto, e no meio da luta ela ainda não passa (a etapa 5 da F5, plano/F5/03.md seção 4)
 #   TP=3600     segundos da PPC no qemu
 #   MEM=menu    a memória no menu principal em vez do fim (SEMMAPA=1)
 #   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
@@ -127,6 +132,18 @@ for n in "${NOMES[@]}"; do
             falhou "rastro diferente da referência $REFS/$n.telas"
     fi
     grep '^tela ' $D/telas_a.txt | cut -d' ' -f2,4 | tr '\n' ' ' | sed 's/^/   telas (vblank): /'; echo
+    # (F5, etapa 3) os roteiros da F5: o que cada um tem de alcançar (roteiros.py f5: a luta montada, cada ação
+    # confirmada no estado do jogo e na matriz, o resultado e a volta ao menu, a janela contínua, os pontos) e a medida
+    # de tempo por passo (passos.py: cada janela com as três linhas), no log da x86 deste commit (a linha "passos:
+    # origem" igual ao commit de agora sem diferença: um log de outra build é recusado)
+    if [[ $n == f5_* ]]; then
+        python3 port/x360/tools/roteiros.py f5 $n $D/x86_a.txt --carimbo "$AGORA diff:da39a3ee5e" > $D/f5.txt
+        r=$?; sed 's/^/   /' $D/f5.txt
+        [ $r = 0 ] || falhou "f5: o roteiro não alcançou o que a F5 exige (roteiros.py f5)"
+        python3 port/x360/tools/passos.py $D/x86_a.txt --carimbo "$AGORA diff:da39a3ee5e" > $D/passos.txt
+        r=$?; sed 's/^/   /' $D/passos.txt
+        [ $r = 0 ] || falhou "passos: a medida de tempo por passo incompleta (passos.py)"
+    fi
     roda_x86 && BT3_ROTEIRO=$R BT3_SAVES=$D/sg BT3_HASH=$D/hg.txt timeout 900 gdb -batch -nx -x $O/unpack.gdb \
         --args $B/x86/bt3_x86 > $D/gdb.txt 2>&1
     grep -aq '^roteiro: .* fim ' $D/gdb.txt || falhou "x86 sob o gdb sem chegar ao fim do roteiro"
@@ -230,6 +247,16 @@ for n in "${NOMES[@]}"; do
         r=$?
         sed 's/^/   /' $D/semmapa.txt
         [ $r = 0 ] || falhou "PPC sem mapa diferente da x86 (ou parou sem nome)"
+        # (F5, etapa 3) o mesmo que a F5 exige, no log da PPC sem mapa (o rastro igual ao da x86 já está no semmapa;
+        # aqui, a origem dela e a medida de tempo)
+        if [[ $n == f5_* ]]; then
+            python3 port/x360/tools/roteiros.py f5 $n $D/ppcsm.txt --carimbo "$AGORA diff:da39a3ee5e" > $D/f5_ppc.txt
+            r=$?; echo "   PPC sem mapa: $(tail -1 $D/f5_ppc.txt)"
+            [ $r = 0 ] || { sed 's/^/     /' $D/f5_ppc.txt; falhou "f5: a PPC sem mapa sem o que a F5 exige"; }
+            python3 port/x360/tools/passos.py $D/ppcsm.txt --carimbo "$AGORA diff:da39a3ee5e" > $D/passos_ppc.txt
+            r=$?; echo "   PPC sem mapa: $(tail -1 $D/passos_ppc.txt)"
+            [ $r = 0 ] || { sed 's/^/     /' $D/passos_ppc.txt; falhou "passos: a medida de tempo da PPC incompleta"; }
+        fi
         # (F4, etapa 9a) o save que a rodada deixou no cartão, a x86 contra a PPC sem mapa campo a campo, e as sagas
         # que o roteiro conferiu em memória ("confere saga N") também no arquivo: o save da História gravado
         if grep -aq '^roteiro: .* fim vblank' $D/ppcsm.txt; then
@@ -249,7 +276,8 @@ for n in "${NOMES[@]}"; do
             # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
             # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
             # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela
-            python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt > $D/mem_telas.txt ||
+            PONTOS=(); [ -z "${MEMLUTA:-}" ] || PONTOS=(--pontos)
+            python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
             while read -r t VT; do
                 M=$D/mem_$t

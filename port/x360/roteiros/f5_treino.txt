@@ -1,0 +1,90 @@
+# F5, etapa 3 (plano/F5/03.md): a janela de 90 s do Treino. A mesma luta do f5_duelo (Goku (Early) contra Kuririn,
+# traje 0, estágio 5) no treino livre (modo 6: sem limite de tempo, o adversário do treino no nível -1), com pelo menos
+# 2.700 passos de combate contínuo (cerca de 90 s a 30 passos por segundo) a partir do estado de combate controlável
+# (BtlSeqFight, estado 3; não da primeira linha "tela luta"), sem pausa, exercitando os mesmos tipos de ação do Duelo,
+# cada um confirmado no estado do jogo. A janela é a da medida de tempo (port/x360/headless/passos.c): "repete ate
+# janela N" anda até ela ter N passos, e a pausa a fecha (no rastro: "roteiro: janela 1 passos N ... fecha pausa").
+# Diagnóstico ao lado do Duelo: o Duelo tem pausa, e a janela dele se divide.
+inclui boot.txt
+rastreia luta
+quadros 90
+aperta BAIXO 5                    # História, Ultimate Battle, Torneio, Duelo, Evolution Z, Treino
+aperta X ate tela 44              # Train
+quadros 150
+aperta X ate tela 45 max 600      # treino livre (o primeiro item): o CharSel do treino
+quadros 150
+# jogador e adversário como no f5_duelo: X no Goku (Early), nos itens e na cor; três à direita, o Kuririn, e os mesmos X
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta DIREITA 3
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta BAIXO 4                    # estágio 5
+quadros 30
+aperta X
+espera luta max 3000
+marca ponto carga
+espera seq 3 max 1200
+confere luta 0 0 25 0 5 6 0 -1
+# a janela começa aqui: movimento, carga, defesa, golpes até acertar, projétil e técnica, como no Duelo
+ritmo 20 4
+aperta DIREITA ate acao 0 0x0D-0x35 max 300
+ritmo 40 4
+aperta L2 ate acao 0 0x37 max 300
+aperta CIRCULO ate acao 0 0x38 max 300
+ritmo 4 8
+aperta QUADRADO ate acao 0 0x44-0x94 max 300
+repete ate dano 1 max 1800
+    aperta DIREITA+QUADRADO 3
+    aperta QUADRADO 4
+volta
+marca ponto combate
+aperta TRIANGULO ate acao 0 0xAE-0xB3 max 300
+ritmo 200 2
+aperta L2 ate ki 0 100000 max 3000
+ritmo 6 6
+aperta L2+TRIANGULO ate acao 0 0x105-0x12F max 600
+quadros 20
+marca ponto tecnica
+# o resto da janela: os mesmos tipos de ação em ciclo, sem pausa, até 2.800 passos contínuos (folga sobre os 2.700)
+ritmo 4 8
+repete ate janela 2800 max 6000
+    ritmo 20 4
+    aperta DIREITA 2
+    ritmo 4 8
+    aperta DIREITA+QUADRADO 6
+    aperta QUADRADO 6
+    aperta TRIANGULO 3
+    segura CIRCULO 20
+    quadros 2
+    segura L2 40
+    quadros 2
+    aperta L2+TRIANGULO
+    quadros 20
+volta
+# depois da janela, a volta ao menu pelo menu de pausa (que fecha a janela): a sexta opção do Treino é o menu
+# principal (a quarta refaz a luta, a quinta volta ao CharSel do treino), "sim" com CIMA. A memória no fim é a do menu,
+# fora do meio da luta (a etapa 5)
+ritmo 4 8
+aperta START ate pausa 1 max 120
+quadros 60
+aperta BAIXO 5
+quadros 20
+aperta X
+quadros 60
+aperta CIMA
+quadros 20
+aperta X
+espera tela 4 max 3000
+quadros 120
+marca ponto retorno
+quadros 30
+fim

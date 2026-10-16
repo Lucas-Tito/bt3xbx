@@ -46,6 +46,11 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
                                             largura" está na lista e cada uma foi lida no rastreio da x86r (RASTREIO,
                                             pelo programa X86R) só pelas funções da entrada (o roteiros.sh aceita então
                                             a saída 1 do conv_tool)
+    roteiros.py f5 NOME LOG [--carimbo C]   (F5, etapa 3) um roteiro da F5 (f5_duelo, f5_treino) numa rodada (a saída da
+                                            x86 ou da PPC, ou o bt3xbx.log do 360): o log da build C, o fim alcançado,
+                                            a luta montada, cada ação exigida confirmada no estado do jogo e na matriz,
+                                            o golpe que acertou, a pausa, o resultado e a volta ao menu, a janela
+                                            contínua mínima e os pontos; as exigências são as de F5, não as do roteiro
     roteiros.py partes RASTREIO PASTA [N]   o rastreio em partes de até N posições (4 milhões), cada arquivo inteiro numa
                                             parte só: o rastreio.py decide cada posição só com as do mesmo arquivo, então
                                             os mapas das partes, juntos e ordenados, são o mapa do rastreio inteiro, com
@@ -474,6 +479,13 @@ CLASSES_CONHECIDAS = [
      "ranking do Ultimate Battle), e os 164 retratos descomprimem aos mesmos 0x20560 bytes: o mesmo resto, o mesmo "
      "teto. Só nas telas desses buffers (SO_NAS_TELAS), nunca no fim; os outros donos de 0x20800 (menu_y_b.c, "
      "menu_z_d.c, menu_h_b.c..., da 9c) ficam de fora (revisão da 9a, apertado e estendido na 9b)"),
+    ("heap:0x3b800", {"igual-sem-inverter": (0x3B800 - 178928) // 4},
+     "stageFile do CharSel e do TeamSel (menu_c_e.c:704, menu_e_b.c:703): a imagem do estágio como veio do disco, um "
+     "contêiner BPE (fluxo de bytes), lida num buffer fixo de 0x3B800 bytes maior que ela (File_Request com o teto do "
+     "buffer, menu_c_e.c:291); o conteúdo descomprimido mora no stageRes, que as marcas conferem, e o resto do buffer "
+     "são bytes de uma imagem anterior maior (Heap_Alloc não limpa e a leitura só grava o arquivo). F5, etapa 3: o "
+     "f5_duelo passa pelo estágio 20 (00944, 223.680 bytes) antes do 5 (00929, 192.208): 8.004 palavras na tela 39. O "
+     "teto é o buffer menos a menor imagem de estágio (00932, 178.928 bytes), e só nas telas desse buffer (SO_NAS_TELAS)"),
     ("heap:0x68", {"igual-sem-inverter": 8},
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
@@ -494,7 +506,9 @@ CLASSES_CONHECIDAS = [
 SO_NAS_TELAS = {"heap:0x1c000": {7},
                 # (o 0x20800 também onde ele guarda um retrato: os 164 retratos descomprimem a 0x20560 bytes, como os
                 # episódios, e o resto do buffer é o mesmo; visto na tela 29 depois de uma luta, 157 palavras. Etapa 9b)
-                "heap:0x20800": {7, 15, 18, 21, 22, 25, 26, 29, 39, 40, 45}}
+                "heap:0x20800": {7, 15, 18, 21, 22, 25, 26, 29, 39, 40, 45},
+                # (o stageFile das seleções com estágio: CharSel, TeamSel, CharSel do treino e o EvoZ. F5, etapa 3)
+                "heap:0x3b800": {39, 40, 45, 49}}
 
 # Os buffers de imagem alocados e ainda vazios (F4, passo 0 da 9c, pergunta 7 da 9b): o tabuleiro do Sim Dragon aloca
 # os buffers de retrato do anúncio da luta ao abrir (o arquivo, faceFile, em 0x16800; o conteúdo, faceRes, em 0x20800),
@@ -689,7 +703,10 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None):
     for l in fora:
         print(f"{pre}DIFERENÇA: memória: {l}")
         ok = False
-    if tela is not None and not str(tela).isdigit():
+    if tela is not None and str(tela).startswith("ponto_"):
+        # (F5, etapa 3) um ponto da luta ("marca ponto NOME"): só o critério geral, sem conteúdo exigido
+        print(f"{pre}  {tela}: o critério geral (os conteúdos da luta campo a campo ficam para a etapa 5 da F5)")
+    elif tela is not None and not str(tela).isdigit():
         # um passo "marca memoria CONTEÚDO" (vblanks_mem): aquele conteúdo vivo e conforme
         rel = str(tela).replace("_", "/", 1)
         if any(re.match(r"marcas heap#\d+ " + re.escape(str(tela)) + r"\.marcas: conforme [1-9]\d*, fora-do-formato 0$", l)
@@ -1060,6 +1077,175 @@ def compara_imagens(lista, dx, dp, sx=None, sp=None, telas=None):
     return 1 if erros or not lista else 0
 
 
+# (F5, etapa 3) O que os roteiros da F5 (f5_duelo, f5_treino) têm de alcançar, fixo aqui e não lido do roteiro: um
+# roteiro cortado (um passo a menos, uma faixa de ação alargada) não diminui a exigência. Cada família de ação tem de
+# ter uma confirmação no rastro ("ok acao 0 ... (0xATUAL)", com a ação que o jogo deu dentro da faixa daqui) e entrada
+# na matriz do lado 0; as famílias e as faixas são as do roteiro.c (kFamilias, os handlers de gBtlActHandlers).
+ACOES_F5 = [("movimento", 0x0D, 0x35), ("carga", 0x37, 0x37), ("defesa", 0x38, 0x43), ("fisico", 0x44, 0xAD),
+            ("projetil", 0xAE, 0xB3), ("tecnica", 0x105, 0x12F)]
+# a luta (confere luta: personagem e traje dos dois lados, estágio, modo, tempo, nível do COM), a pausa, o resultado,
+# a tela de volta, a janela contínua mínima e os pontos de memória e imagem
+F5 = {
+    "f5_duelo": dict(luta=(0, 0, 25, 0, 5, 0, 4, 13), pausa=True, resultado=True, volta=4, janela=None,
+                     pontos=("carga", "combate", "tecnica", "pausa", "retorno")),
+    "f5_treino": dict(luta=(0, 0, 25, 0, 5, 6, 0, -1), pausa=False, resultado=False, volta=4, janela=2700,
+                      pontos=("carga", "combate", "tecnica", "retorno")),
+}
+BTL_RESULT_ABORT, BTL_REASON_KO, BTL_REASON_TIME_UP = 0x08, 0x1, 0x2
+
+
+def confere_f5(nome, caminho, carimbo=None):
+    """Um log de uma rodada de um roteiro da F5 (a saída da x86 ou da PPC sem janela, ou o bt3xbx.log do 360): de que
+    commit ele saiu (a linha "passos: origem", do passos.c), se chegou ao fim, a luta montada, cada ação exigida
+    confirmada no estado do jogo, o golpe que acertou, a pausa e a retomada, o resultado (KO ou tempo, sem abandono)
+    e a volta ao menu, a janela contínua mínima e os pontos; e cada janela do rastro com a medida de tempo dela."""
+    req = F5.get(nome)
+    if req is None:
+        print(f"f5: {nome} não é roteiro da F5 ({', '.join(F5)})")
+        return 1
+    p = pathlib.Path(caminho)
+    if not p.exists():
+        print(f"f5: sem o log {caminho}")
+        return 1
+    linhas = p.read_text(errors="replace").splitlines()
+    erros = []
+    origem = [m.group(1) for m in (re.search(r"passos: origem (.*) \(tempo por passo", l) for l in linhas) if m]
+    if not origem:
+        erros.append("o log não diz de que build saiu (sem a linha \"passos: origem\")")
+    elif carimbo is not None and origem[0].strip() != carimbo.strip():
+        erros.append(f"log de outra build: origem \"{origem[0]}\", esperado \"{carimbo.strip()}\"")
+    rot = [l[l.index("roteiro: "):] if "roteiro: " in l else l for l in linhas]
+    if any(l.startswith("roteiro: FALHA") for l in rot):
+        erros.append("o roteiro falhou: " + next(l for l in rot if l.startswith("roteiro: FALHA"))[:200])
+
+    def vb(l):
+        m = re.search(r" vblank (\d+)", l)
+        return int(m.group(1)) if m else -1
+
+    fim = next((vb(l) for l in rot if re.match(r"roteiro: \S+ fim vblank \d+", l)), None)
+    if fim is None:
+        erros.append("o log não chega ao \"fim\" do roteiro (cortado)")
+    if not any(re.match(r"roteiro: \S+ rastreia luta vblank", l) for l in rot):
+        erros.append("sem \"rastreia luta\": a luta não está no rastro")
+    # a luta montada
+    luta = next((l for l in rot if re.match(r"roteiro: \S+ luta: lado 0 ", l)), None)
+    if luta is None:
+        erros.append("sem a conferência da luta (confere luta)")
+    else:
+        m = re.search(r"lado 0 (-?\d+) traje (-?\d+), lado 1 (-?\d+) traje (-?\d+), estágio (-?\d+) \(atual (-?\d+)\), "
+                      r"modo (-?\d+), tempo (-?\d+), nível (-?\d+), membros 1 e 1, variantes 0 e 0", luta)
+        v = m and tuple(int(m.group(k)) for k in (1, 2, 3, 4, 5, 7, 8, 9))
+        if not v or v != req["luta"] or m.group(5) != m.group(6):
+            erros.append(f"a luta montada não é a da F5: {luta[:220]} (esperado {req['luta']})")
+        else:
+            print(f"   luta: lado 0 {v[0]} traje {v[1]}, lado 1 {v[2]} traje {v[3]}, estágio {v[4]}, modo {v[5]}, "
+                  f"tempo {v[6]}, nível {v[7]}")
+    seq3 = next((vb(l) for l in rot if l.startswith("roteiro: seq 3 vblank")), None)
+    if seq3 is None:
+        erros.append("o combate não começou (sem \"seq 3\")")
+    # as janelas da medida de tempo: a do rastro e a do passos.c, a mesma contagem
+    janelas = []
+    for l in rot:
+        m = re.match(r"roteiro: janela (\d+) passos (\d+) vblanks (\d+) de 2 vblanks (\d+) outros (\d+) fecha (\S+) "
+                     r"vblank (\d+)", l)
+        if m:
+            k, n, v, d, o, motivo, e = m.groups()
+            janelas.append(dict(k=int(k), n=int(n), vb=int(v), outros=int(o), fim=motivo, ini=int(e) - int(v),
+                                ate=int(e)))
+    medidas = {int(m.group(1)): (int(m.group(2)), m.group(3)) for m in
+               (re.search(r"passos: janela (\d+) \(vblank \d+ a \d+, fim (?:\S+)\): (\d+) passos, parede ([\d.]+) ms",
+                          l) for l in linhas) if m}
+    medidas = {k: v for k, v in medidas.items()}
+    for j in janelas:
+        med = medidas.get(j["k"])
+        if med is None or med[0] != j["n"]:
+            erros.append(f"janela {j['k']} sem a medida de tempo dela (passos: janela {j['k']}) ou com outra contagem")
+        if not any(re.search(rf"passos: janela {j['k']} apresentação: ", l) for l in linhas) or \
+                not any(re.search(rf"passos: janela {j['k']} descartes: ", l) for l in linhas):
+            erros.append(f"janela {j['k']} sem as linhas de apresentação e de descartes")
+        if j["outros"]:
+            erros.append(f"janela {j['k']}: {j['outros']} passos sem 2 vblanks (a luta é a 30 passos por segundo)")
+    if not janelas:
+        erros.append("nenhuma janela de combate medida (roteiro: janela ...)")
+    # cada ação exigida: a confirmação com a ação que o jogo deu e a entrada na matriz do lado 0
+    oks = [(vb(l), int(m.group(1), 16), l) for l in rot for m in [re.search(r" ok acao 0 0x[0-9a-f]+-0x[0-9a-f]+ \(0x([0-9a-f]+)\)", l)] if m]
+    matriz = {}
+    for l in rot:
+        m = re.match(r"roteiro: matriz lado 0 (.*) vblank \d+ quadro \d+$", l)
+        if m:
+            pares = m.group(1).split()
+            for nomef, n in zip(pares[::2], pares[1::2]):
+                matriz[nomef] = matriz.get(nomef, 0) + int(n)
+    janela_exigida = None
+    if req["janela"]:
+        cont = [j for j in janelas if j["n"] >= req["janela"] and j["ini"] == seq3]
+        if not cont:
+            erros.append(f"nenhuma janela contínua de pelo menos {req['janela']} passos desde o começo do combate "
+                         f"(vblank {seq3}): {[(j['n'], j['ini'], j['fim']) for j in janelas]}")
+        else:
+            janela_exigida = cont[0]
+            print(f"   janela contínua: {janela_exigida['n']} passos, vblanks {janela_exigida['ini']} a "
+                  f"{janela_exigida['ate']}, do começo do combate até fechar ({janela_exigida['fim']})")
+    for fam, de, ate in ACOES_F5:
+        achou = [(v, a) for v, a, _ in oks if de <= a <= ate and (seq3 is None or v >= seq3)]
+        if janela_exigida is not None:
+            achou = [(v, a) for v, a in achou if janela_exigida["ini"] <= v <= janela_exigida["ate"]]
+        if not achou:
+            erros.append(f"ação não alcançada: {fam} (0x{de:X}..0x{ate:X}) sem confirmação no rastro"
+                         + (" dentro da janela" if janela_exigida else ""))
+        elif matriz.get(fam, 0) < 1:
+            erros.append(f"ação não alcançada: {fam} confirmada, mas fora da matriz do lado 0")
+        else:
+            print(f"   {fam}: ação 0x{achou[0][1]:X} no vblank {achou[0][0]}, {matriz[fam]} entradas na matriz")
+    dano = [l for l in rot if re.search(r" ok dano 1 \(vida (\d+) de (\d+)\)", l)]
+    if not dano or not all(int(a) < int(b) for a, b in re.findall(r"ok dano 1 \(vida (\d+) de (\d+)\)", dano[0])):
+        erros.append("nenhum golpe confirmado acertando o adversário (ok dano 1)")
+    p1 = [vb(l) for l in rot if re.search(r" ok pausa 1 vblank", l)]
+    p0 = [vb(l) for l in rot if re.search(r" ok pausa 0 vblank", l)]
+    if req["pausa"]:
+        if not p1 or not any(v > p1[0] for v in p0):
+            erros.append("pausa e retomada não confirmadas (ok pausa 1, depois ok pausa 0)")
+        elif not any(j["fim"] == "pausa" for j in janelas):
+            erros.append("a pausa não fechou a janela da medida de tempo")
+        else:
+            print(f"   pausa no vblank {p1[0]}, retomada no {min(v for v in p0 if v > p1[0])}")
+    elif p1 and (janela_exigida is None or p1[0] < janela_exigida["ate"]):
+        erros.append("pausa antes do fim da janela contínua: a janela se divide")
+    if req["resultado"]:
+        res = next((l for l in rot if l.startswith("roteiro: resultado ")), None)
+        m = res and re.search(r"estado (\d+) vencedor 0x([0-9a-f]+) razao 0x([0-9a-f]+) vida (-?\d+) (-?\d+)", res)
+        if not m:
+            erros.append("resultado ausente (sem \"roteiro: resultado\")")
+        else:
+            w, r = int(m.group(2), 16), int(m.group(3), 16)
+            if m.group(1) != "4" or w & BTL_RESULT_ABORT or w & 7 == 0 or not r & (BTL_REASON_KO | BTL_REASON_TIME_UP):
+                erros.append(f"resultado sem KO nem tempo, ou abandonado: {res[:160]}")
+            else:
+                vres = vb(res)
+                volta = [vb(l) for l in rot if l.startswith(f"tela {req['volta']} ") and vb(l) > vres]
+                if not volta or fim is None or fim < volta[0]:
+                    erros.append(f"sem a volta ao menu (tela {req['volta']}) depois do resultado")
+                else:
+                    print(f"   resultado: vencedor 0x{w:x} por {'KO' if r & BTL_REASON_KO else 'tempo'} no vblank "
+                          f"{vres} (vida {m.group(4)} e {m.group(5)}); de volta à tela {req['volta']} no vblank "
+                          f"{volta[0]}")
+    elif req["volta"] is not None:
+        # (o Treino não tem resultado: a volta ao menu pelo menu de pausa, depois da janela contínua)
+        depois = janela_exigida["ate"] if janela_exigida else (seq3 or 0)
+        volta = [vb(l) for l in rot if l.startswith(f"tela {req['volta']} ") and vb(l) > depois]
+        if not volta or fim is None or fim < volta[0]:
+            erros.append(f"sem a volta ao menu (tela {req['volta']}) depois da janela")
+        else:
+            print(f"   de volta à tela {req['volta']} no vblank {volta[0]}")
+    pontos = [m.group(1) for m in (re.match(r"roteiro: \S+ marca ponto (\S+) vblank", l) for l in rot) if m]
+    if tuple(pontos) != req["pontos"]:
+        erros.append(f"pontos de memória e imagem {pontos}, esperados {list(req['pontos'])}")
+    for e in erros:
+        print(f"   FALHA f5: {e}")
+    print(f"f5 {nome}: " + ("tudo alcançado" if not erros else f"{len(erros)} falha(s)"))
+    return 1 if erros else 0
+
+
 def confere_saves(x86, ppc, telas_ref):
     """o save que cada build deixou no cartão: os mesmos valores (save_entre.campos) e, em cada um, as sagas que o
     roteiro conferiu em memória com o fim visto (SaveSlot.flags bit 2, MSLOT_OUTRO_SEEN; slot N em 0x10 + N * 0x10)"""
@@ -1097,7 +1283,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("acao", choices=["telas", "compara", "chamadas", "confere", "soma", "partes", "semmapa",
                                      "vblank_menu", "vblank_fim", "vblanks_mem", "memoria", "imagens", "compara_imagens",
-                                     "save", "larguras"])
+                                     "save", "larguras", "f5"])
     ap.add_argument("arqs", nargs="*")
     ap.add_argument("--prog")
     ap.add_argument("--conv")
@@ -1108,7 +1294,12 @@ def main():
     ap.add_argument("--saidas", nargs=2)
     ap.add_argument("--luta", action="store_true")
     ap.add_argument("--telas")
+    ap.add_argument("--carimbo")
+    ap.add_argument("--pontos", action="store_true")
     a = ap.parse_args()
+
+    if a.acao == "f5":
+        return confere_f5(a.arqs[0], a.arqs[1], a.carimbo)
 
     if a.acao == "imagens":
         for nome, n, anc in lista_imagens(a.arqs[0], luta=a.luta):
@@ -1160,6 +1351,14 @@ def main():
             m = re.match(r"roteiro: \S+ marca memoria (\d{5}) vblank (\d+) ", l)
             if m:
                 print(f"pzs3us1_{m.group(1)}.bin@0x0#bpe", m.group(2))
+            # (F5, etapa 3) com --pontos (o MEMLUTA=1 do roteiros.sh), os pontos da luta dos roteiros da F5 ("marca
+            # ponto NOME": carga concluída, combate, técnica, pausa, retorno): a memória das duas builds naquele vblank,
+            # com o critério geral (o heap no lugar, os blocos com arquivo ou conteúdo vivos e conformes, as classes
+            # explicadas). Fora do padrão: no meio da luta a arena do BtlPool, os efeitos e o resto ainda não estão
+            # explicados (o ponto da técnica, plano/F5/03.md seção 4), e isso é a etapa 5
+            m = re.match(r"roteiro: \S+ marca ponto (\w+) vblank (\d+) ", l)
+            if m and a.pontos:
+                print(f"ponto_{m.group(1)}", m.group(2))
         return 0
     if a.acao == "vblank_menu":
         linhas = [l for l in pathlib.Path(a.arqs[0]).read_text().splitlines() if l.startswith("tela ")]

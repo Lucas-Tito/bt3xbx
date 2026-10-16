@@ -200,6 +200,9 @@ controle do jogador 1 (não um vblank: o Shenlong, a 30 quadros por segundo, lê
 | `funde discos` | (F4, etapa 9b) o Disc Fusion sem a troca de disco: grava em `gProgress->discFlags` (+0x684, da sessão, não do save) os dois discos como lidos, o que o jogo faz ao achar o disco do BT1 ou do BT2 na bandeja (no port a unidade nunca abre, e o diálogo fica preso); antes de entrar no modo 24. Com as proteções do `desbloqueia` |
 | `marca TEXTO` | uma linha no rastro; `marca memoria NNNNN` pede ao `roteiros.sh` (`SEMMAPA=1`) a memória das duas builds naquele vblank, com o conteúdo do arquivo NNNNN da partição 1 (um contêiner BPE inteiro: retrato, estágio, página) vivo e conforme |
 | `inclui ARQUIVO` | outro roteiro, relativo à pasta deste |
+| (F5, etapa 3) condições da luta, em `espera`, `aperta ... ate` e `repete ate` | `acao L A[-B]`: a ação atual do lutador do lado L (0 o jogador; `+0x948` do lutador, o número de `gBtlActHandlers`) é A ou está entre A e B, e o "ok" diz a ação que o jogo deu; `seq N`: o estado da sequência da luta (`btl_seq.h`: 3 o combate, 4 o anúncio do fim, 6 o menu do resultado); `pausa 1\|0`: o menu de pausa aberto ou fechado (`BATTLE_FLAG_PAUSE_MENU`); `dano L`: o lado L perdeu vida desde o começo do passo (o golpe acertou); `ki L N`: o ki do lado L chegou a N (100000 a barra); `janela N`: a janela contínua de combate da medida de tempo (`passos.c`) tem N passos. Lidas pelos deslocamentos do lutador (`gBtlChars`), sem chamar código do jogo |
+| `confere luta C0 T0 C1 T1 ESTAGIO MODO TEMPO NIVEL` | (F5, etapa 3) a luta que o jogo montou (`BattleSetup`), com ela andando: personagem e traje do membro 0 de cada lado, estágio (o atual igual ao de início), modo, tempo (índice de `gBattleTimeLimitTbl`) e nível do COM; um membro por lado, variante 0. Diferente: falha com os valores |
+| `rastreia luta` | (F5, etapa 3) a luta no rastro dali em diante: cada estado da sequência (`roteiro: seq N`), a matriz de ações dos dois lados ao sair do combate (`roteiro: matriz lado L movimento N carga N ...`, as famílias do `roteiro.c`, `kFamilias`), o resultado gravado (`roteiro: resultado estado 4 vencedor 0xW razao 0xR vida A B`) e as janelas da medida de tempo (`roteiro: janela K passos N vblanks V ... fecha MOTIVO`). Só nos roteiros que o pedem: o rastro dos outros, e as referências deles, não mudam |
 | `fim` | sem janela, encerra o programa (saída 0); no 360, solta o controle |
 
 Botões: `X`, `CIRCULO`, `QUADRADO`, `TRIANGULO`, `START`, `SELECT`, `CIMA`, `BAIXO`, `ESQUERDA`, `DIREITA`, `L1`,
@@ -253,6 +256,48 @@ chamadas de dentro do `gsc.c` (uma ação que chama outra) não passam pelo `--w
 o jogo aceita toca um efeito: 1 0 mover, 1 1 confirmar, 1 2 voltar, 1 7 recusado) e um `break *Sprite_Unpack` com
 `info symbol *(int*)$esp`; para o estado interno de uma tela, imprima os campos dela no mesmo comando (`gCharSel->side[0]->state`).
 Uma rodada da x86 até a luta leva uns 10 s.
+
+**Roteiros de luta (F5, etapa 3: `f5_duelo.txt`, `f5_treino.txt`, plano/F5/03.md).** O que custou rodadas:
+
+- **A ação no estado, não o botão.** Cada ação exigida espera a ação do lutador (`aperta L2 ate acao 0 0x37`), e o "ok"
+  do rastro traz a ação que o jogo deu; o `roteiros.py f5` exige a família pela faixa dele, não pela do roteiro (uma
+  faixa alargada no roteiro não passa). Os botões do controle padrão (`Save_ResetOptions`, `BtlInput_GetKeyMask`):
+  QUADRADO golpe, TRIANGULO esfera, CIRCULO defesa, X dash, L2 carga, L1 trava, R1 e R2 subir e descer; a técnica
+  (Blast 2) é L2 + TRIANGULO com ki. As famílias de ação estão em `roteiro.c` (`kFamilias`), dos nomes dos handlers em
+  `port/data/cod_1C3400.data.s` (a tabela começa no id 1: o `.space 4` é o 0).
+- **O cursor do COM começa na segunda célula** do CharSel (a do jogador na primeira): `DIREITA 3` dá a quinta, o
+  Kuririn. Confira com `confere luta`, que diz o que o jogo montou; a imagem do estágio não diz quem é o adversário.
+- **O fim do Duelo é um menu dentro da luta** (estado 6, `BtlSeqEnd_Update`: o `PauseMenu` de resultado): a primeira
+  opção refaz a luta, a segunda volta ao CharSel, a terceira ao DuelMenu, a quarta ao menu principal, e cada uma pede
+  "sim" na confirmação, que começa no "não" e muda com CIMA (não ESQUERDA). Sem isso a luta fica parada no estado 6.
+  No Treino, o menu de pausa: a quarta opção refaz a luta, a quinta volta ao CharSel do treino, a sexta ao menu
+  principal, com a mesma confirmação.
+- **A memória no meio da luta ainda não passa** pelo critério geral (a arena do `BtlPool` e os efeitos no meio de uma
+  técnica, plano/F5/03.md seção 4): um roteiro que termina com a luta andando falha a memória do fim. Os roteiros da
+  F5 terminam num menu, e a memória nos pontos da luta só com `MEMLUTA=1` (até a etapa 5).
+- **Uma linha nova do rastro não pode ter " fim "**: o `roteiros.sh` acha o fim do roteiro por `^roteiro: .* fim `, e a
+  primeira versão da janela ("... fim pausa") passava por fim do roteiro. As janelas dizem `fecha MOTIVO`.
+- **Linhas novas no rastro só com um passo que as pede** (`rastreia luta`): o rastro se compara com as referências de
+  cada roteiro, e uma linha nova em toda luta mudaria a referência de todos os roteiros com luta.
+- **Uma marca logo antes do `fim` não tem imagem**: a imagem de uma âncora é a do quadro seguinte, e o `fim` encerra
+  a x86 no mesmo quadro (a do `marca ponto retorno` faltou nas duas builds). Deixe quadros depois da última marca.
+- **Um caminho novo na grade de estágios muda o resto do `stageFile`**: o buffer da imagem compactada (0x3B800 bytes)
+  guarda o arquivo atual e, depois dele, bytes de uma imagem anterior maior (o `f5_duelo` passa pelo estágio 20 antes
+  do 5: 8.004 palavras "igual-sem-inverter" na tela 39). É resto de buffer, como o do `faceFile`; ficou em
+  `CLASSES_CONHECIDAS` com teto e só nas telas das seleções.
+- **Uma luta mais longa lê dados que as curtas não liam**: o `f5_duelo` (técnica, HUD dela, 3.000 passos) achou no
+  `conv_tool --mapa` três posições que o conversor não troca do jeito que o jogo lê (plano/F5/03.md, seção 4).
+- **Lua e troca de cenário estão nos dados do estágio**: o arquivo `0x171 + estágio` (`pzs3us1/(0x170 + estágio)`), o
+  bloco na palavra 2 do cabeçalho; `+0x74` aponta as bandeiras (`STG_FLAG_MOON = 0x10`), `+0x14` o `StgInfo`, cujo
+  `changeKind` 1 ou 2 troca o cenário no meio da luta (`BtlStage_GetChangeTarget`). A leitura está em plano/F5/03.md.
+
+**A medida de tempo por passo** (`port/x360/headless/passos.c`, F5 etapa 3): a fronteira é a leitura do controle do
+jogador 1 (o `Port_PadRead` da porta 0, nas três builds); a janela é o combate (estado 3) sem pausa; o trabalho é o
+intervalo menos a espera de vblank (`gPortSleptNs`); o Present e as imagens vêm do `gs_d3d.cpp`; os descartes, de
+`Passos_Descartes`. Nada se escreve durante a janela (nem os resumos de 60 quadros do `gs_d3d.cpp` e de 600 vblanks do
+`estado360.c`); ao fechar, "passos: janela K ..." e, com `rastreia luta`, a linha determinística no rastro. A primeira
+linha de todo log é "passos: origem COMMIT diff:HASH", o carimbo da build (`headless.py` e `build_f2.sh`):
+`roteiros.py f5` e `passos.py` recusam o log de outra build. O aceite do console é `passos.py LOG... --console`.
 
 ### Achar o que depende da ordem dos bytes
 

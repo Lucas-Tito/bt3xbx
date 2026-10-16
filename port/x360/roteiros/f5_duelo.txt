@@ -1,0 +1,99 @@
+# F5, etapa 3 (plano/F5/03.md): o Duelo fixo da F5. 1P contra COM, luta simples: Goku (Early, id 0) contra Kuririn
+# (id 25), os dois no traje 0, no estágio 5 (o mirante do Kami: sem lua e sem troca de cenário nos dados), com a
+# dificuldade e as opções padrão do New Game (240 s, COM no nível 13). Do boot ao resultado por KO ou tempo e de volta
+# ao menu principal, sem "termina luta" nem dano injetado: o jogo decide a luta. Cada ação exigida é confirmada no
+# estado do jogo (a ação do lutador, "acao L A-B"; a vida do COM, "dano 1"; o menu de pausa, "pausa N"), não só pelo
+# botão apertado; "rastreia luta" põe no rastro a sequência da luta, a matriz de ações, o resultado e as janelas da
+# medida de tempo (port/x360/headless/roteiro.c e passos.c). Os "marca ponto" são os pontos de memória e de imagem
+# da luta (carga concluída, combate, técnica, pausa e retorno). O roteiros.py f5 confere o resultado, a matriz e cada
+# confirmação (FAIXAS_F5).
+inclui boot.txt
+rastreia luta
+quadros 90                        # o menu principal aceita entrada depois do fade e da animação
+aperta BAIXO 3                    # História, Ultimate Battle, Torneio, Duelo (com tudo desbloqueado)
+aperta X ate tela 38              # DuelMenu
+quadros 120
+aperta X                          # 1P contra COM
+quadros 40
+aperta X                          # luta simples
+espera tela 39 max 600            # CharSel
+quadros 150
+# jogador 1: o cursor começa no Goku (Early), a primeira célula da grade (id 0, sem formas): X no personagem, X na
+# lista de itens (nenhum) e X na cor (o traje 0)
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+# o COM (o mesmo controle escolhe): o cursor dele começa na segunda célula; três à direita, o Kuririn (a quinta, id 25)
+aperta DIREITA 3
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+# estágio: quatro para baixo na primeira coluna da grade de estágios (seis colunas), o estágio 5
+aperta BAIXO 4
+quadros 30
+aperta X
+espera luta max 3000              # a tela de carregamento vem antes
+marca ponto carga                 # a carga concluída: a primeira leitura com a luta andando (a apresentação)
+espera seq 3 max 1200             # o combate controlável (BtlSeqFight)
+confere luta 0 0 25 0 5 0 4 13
+# movimento: andar para a direita (as ações 0x0D..0x35: andar, dash, subir, passos)
+ritmo 20 4
+aperta DIREITA ate acao 0 0x0D-0x35 max 300
+# carga de ki (BtlAct_ChargeHandler, 0x37) e defesa (BtlAct_GuardHandler, 0x38)
+ritmo 40 4
+aperta L2 ate acao 0 0x37 max 300
+aperta CIRCULO ate acao 0 0x38 max 300
+# golpes físicos (rush, smash e a tabela de golpes, 0x44..0x94), até um acertar o COM (a vida dele cai)
+ritmo 4 8
+aperta QUADRADO ate acao 0 0x44-0x94 max 300
+repete ate dano 1 max 1800
+    aperta DIREITA+QUADRADO 3
+    aperta QUADRADO 4
+volta
+marca ponto combate
+# projétil: a esfera de ki (0xAE..0xB3)
+aperta TRIANGULO ate acao 0 0xAE-0xB3 max 300
+# técnica com câmera e efeitos: a barra de ki cheia e o Blast 2 (L2 + triângulo: as ações 0x105..0x12F)
+ritmo 200 2
+aperta L2 ate ki 0 100000 max 3000
+ritmo 6 6
+aperta L2+TRIANGULO ate acao 0 0x105-0x12F max 600
+quadros 20
+marca ponto tecnica
+# pausa e retomada: START abre o menu de pausa e START o fecha
+ritmo 4 8
+aperta START ate pausa 1 max 120
+quadros 60
+marca ponto pausa
+aperta START ate pausa 0 max 120
+# o resto do combate até o fim por KO ou tempo (o anúncio do fim, estado 4): golpes, esferas e técnicas
+repete ate seq 4 max 9000
+    aperta DIREITA+QUADRADO 6
+    aperta QUADRADO 6
+    aperta TRIANGULO 3
+    segura L2 40
+    quadros 2
+    aperta L2+TRIANGULO
+    quadros 20
+volta
+# o menu do resultado (estado 6): a quarta opção é o menu principal, e a confirmação pede "sim" (para cima)
+espera seq 6 max 1200
+quadros 60
+aperta BAIXO 3
+quadros 20
+aperta X
+quadros 60
+aperta CIMA
+quadros 20
+aperta X
+espera tela 4 max 3000            # de volta ao menu principal
+quadros 120
+marca ponto retorno
+quadros 30                        # (a imagem da marca é a do quadro seguinte: o "fim" no mesmo quadro a perdia)
+fim
