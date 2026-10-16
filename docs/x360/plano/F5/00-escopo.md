@@ -334,9 +334,11 @@ por rede, com duração, contagem de quadros, p50/p95/p99/máximo, intervalos de
 descarte pendente, capturas, memória comparada e falhas provocadas. Se uma etapa exceder o dobro do tempo previsto,
 parar com estado e hipóteses documentados e apenas o trabalho provado em commit, conforme o processo do projeto.
 
-## Respostas do Lucas
+## Respostas do Lucas (decisão 24)
 
 1. **A luta (16/10/2026):** Goku (Early) contra um personagem sem transformação. O Vegeta (Scouter) fica de fora,
    porque vira Ozaru. Candidato: Raditz (o par da saga); se ele tiver transformação no jogo, o Nappa. A etapa 3 confirma
    pelos dados, não pelo nome: os ids de personagem e traje, e que nenhum dos dois tem transformação nem fusão
    disponível na luta (`src/battle/btl_act_j.c`). Trajes, estágio e ações obrigatórias ficam com a etapa 3.
+2. a 9. **Com as recomendações (16/10/2026):** 2b, 3a com a região provada e 3c, 4b, 5a com pausa, 6a medida cedo,
+   7a, 8b e 9a. Texto em [decisoes.md](../../decisoes.md), decisão 24.

@@ -645,3 +645,25 @@ caminho do port, num passo futuro (F5, logo depois do teto de memória).
 - **Substitui**, quando for feito, a conversão na carga da decisão 18; o resto dela (ISO única, sem instalador no
   console) continua.
 
+
+## 24. F5: a luta de teste e as escolhas de arquitetura (16/10/2026)
+
+As nove perguntas do plano da F5 ([plano/F5/00-escopo.md](plano/F5/00-escopo.md), seção 5), respondidas pelo Lucas
+com as recomendações do estudo:
+
+1. **A luta:** um Duelo fixo jogável, mais uma janela de 90 s no Treino; escala 1 e 4:3 atuais. Goku (Early) contra
+   um personagem sem transformação (Raditz; o Nappa se o Raditz transformar), confirmado pelos dados na etapa 3.
+2. **Memória:** contabilidade total e descarte por uso, com o mínimo de mudança no frontend em `PORT_X360`;
+   redimensionar buffers e alvos só depois dos máximos medidos.
+3. **ISO convertida (decisão 23):** a marca embutida na ISO, só depois de provar que a região é livre; os `mods/`
+   recusados com diagnóstico no primeiro caminho do 360.
+4. **VU1:** as três famílias de shaders do PC portadas para HLSL; o interpretador fica como referência e fallback
+   medido.
+5. **Guide e cargas:** a thread do jogo continua dona do D3D, com as cargas divididas e apresentação entre os blocos;
+   a Guide pausa a luta. A thread de desenho separada só se isso não bastar, reestimada antes.
+6. **Profundidade e alfa na EDRAM:** medir cedo a persistência por alvo com passagens extras; reorganizar a EDRAM só
+   se não couber.
+7. **Se não couber em 33,37 ms:** otimizar mantendo imagem e lógica; reduzir efeitos só com aprovação dele.
+8. **Rigor:** os percentis, máximos, três janelas, 32 MiB livres e as tolerâncias de imagem da seção 3 do plano,
+   fixados antes da rodada.
+9. **Pendências 3D dos menus:** o mínimo, uma abertura real do `ChrView` e o dragão 1 com lista e recompensa.
