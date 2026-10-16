@@ -93,6 +93,10 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
   4c:0b:be), envia com nome temporário, renomeia e confere o md5 baixando de volta.
 - Pasta: `/Hdd1/HOMEBREW/bt3xbx`. O `.xex` se abre à mão (sem xbdm não há como lançar remoto).
 - O relógio do console é zerado: não use datas de arquivo para nada.
+- **O `.xex` nunca sobe sozinho:** o `default.dat` e o `default.swap` saem do `.map` da mesma build e dizem onde ficam
+  as tabelas do disco. Na sessão da F4 subi só o `.xex` pelo `subir.py`, os dois do console eram de outra build, e o
+  jogo travou no preto em "preparando a memória e as tabelas do disco" (o mesmo tamanho de arquivo, outro conteúdo).
+  Suba sempre pelo `subir_f2.sh`, que leva os três juntos.
 
 ---
 

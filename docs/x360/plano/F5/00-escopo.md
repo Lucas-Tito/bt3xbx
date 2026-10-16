@@ -344,3 +344,11 @@ parar com estado e hipóteses documentados e apenas o trabalho provado em commit
    7a, 8b e 9a. Texto em [decisoes.md](../../decisoes.md), decisão 24.
 
 Preparo das etapas 3 e 4: [inventário das cores, ids e trajes da luta](inventario.md).
+
+## Casos do console vindos da sessão da F4 (16/10/2026)
+
+- **Etapa 1:** entrar na tela de versus do Torneio (o começo da carga da luta) e voltar aos menus: hoje saem
+  quadrados brancos nela e, depois, o Duelo e o Treino quase todos brancos. Com o teto e o descarte, os menus seguintes
+  têm de sair normais sem reiniciar (plano/F4/10.md, achado 1).
+- **Depois da luta, no console:** a tela de resultado da História não avançou para a tela 9 no roteiro sem desenho
+  (achado 3 do 10.md); medir com desenho e ver se é espera em tempo real antes de culpar o port.
