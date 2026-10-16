@@ -108,7 +108,7 @@ as duas capturas compostas do modo 70 (lista e recompensa sobre a cena) ficam fo
 
 ## 5. Recusas dos conversores
 
-Sobre cópias fora do git (`~/9c-ref/estragos.py`): 68 casos, seis controles intactos aceitos e 62 estragos
+Na primeira série sobre cópias fora do git (`~/9c-ref/estragos.py`): 68 casos, seis controles intactos aceitos e 62 estragos
 recusados com saída 1. Incluem N, mínimos de todas as texturas da Referência, textos e legendas, as três
 tabelas de 161 entradas curtas e com cauda não zero, poses curtas e com cauda, intervalos negativos e soma
 que estoura; desejos curtos, cauda não zero, tipo inválido e ids fora da faixa de cada tipo; confirmação
@@ -224,3 +224,12 @@ execução, a comparação de memória da tela 70 e todo o caminho até o save. 
 da lista e da recompensa ficam para a F5; não se afirma igualdade de pixels da UI sobreposta a ela.
 Não há máscara de pixels nem imagem tolerada como igual. As cinco imagens do roteiro final são menus:
 menu principal antes/depois e três capturas do modo 71 (entrada, saída e pergunta do cartão).
+
+## 11. Conferência integral
+
+O critério inteiro passou no `5a0e084`, com as três builds refeitas, árvore limpa, sem `REUSA` ou
+`DESENVOLVIMENTO`, `SEMMAPA=1` e um emulador por vez. A tabela e as opções conservadoras estão na
+[nota da tarefa 9c-4](../plano/F4/09c.md). Os 78 casos dos conversores, as proteções do passo de teste,
+os contextos das duas telas, o conteúdo vivo obrigatório, as larguras dos desejos, os pixels e os saves
+foram conferidos também com cópias estragadas. A entrega repete todo o critério no commit documental
+final, com as três builds novamente refeitas; logs `~/9c-ref-final-*.log` e relatório `~/entrega-9c-ref.md`.

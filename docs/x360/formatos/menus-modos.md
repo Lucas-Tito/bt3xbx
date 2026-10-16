@@ -5,6 +5,13 @@ quem lê o conteúdo descomprimido, o formato proposto para o conversor, a tela 
 decisão 22. É o mapa da etapa 5 (especificações e conversores) e da etapa 9 (os outros modos). Nenhum conversor novo
 foi escrito aqui.
 
+Estado após a tarefa 9c-4 (16/10/2026): 82 chamadas com gancho, nenhuma pendente e zero erros no `unpacks.py`.
+O `--disco` converte 3.325 arquivos sem erro, com todas as faixas de menu a 100%: 30/30 arquivos de menu e
+49/49 conteúdos BPE, além das faixas de imagens. Referência e Shenlong estão especificados em
+[menus-ref.md](menus-ref.md), incluindo a prova do leitor assembly dos desejos. Os conteúdos sem chamada
+472 s1 e 473 s1 são bytes de extensão conhecida; o 462 é um pacote de três seções vazias. Não se afirma
+execução deles. As tabelas e contagens iniciais abaixo preservam o histórico do levantamento.
+
 Fontes: o código da decomp (as linhas são as de hoje), lido por quatro agentes em paralelo, um lote de arquivos cada,
 com conferência por amostra (`ModeMenu_Run` só no modo 7, `Option_Init` com `McFlow_Init` direto, `LipSync_Start`,
 `Train_UpdateImage`); o censo do disco (`conv_tool --disco`, seção 6) no WSL, de onde só voltaram contagens; e o
@@ -158,7 +165,7 @@ ler): o gancho vai mesmo assim, para a regra de um gancho por chamada e para a g
 | `menu_dc_lista` | `DcList_Init` menu_y_b.c:1002 | 459 s2 | modo 55 (`ZItemEntry`) |
 | `menu_dc_senha` | `DcPass_Init` menu_z_d.c:952 | 459 s3 | modo 54 (PassChk, grade) |
 | `menu_replay` | `ReplayMenu_Init` menu_za_d.c:254 | 459 s4 | modo 56 |
-| `menu_shenlong` | `Shen_Init` src/sys/late_a.c:555, `ShenSave_Init` src/sys/late_a_c.c:52 | 472 s2 | modos 70 e 71 (o leitor da seção 2 é assembly, `Shen_BuildList`: o layout é hipótese) |
+| `menu_shenlong` | `Shen_Init` src/sys/late_a.c:555, `ShenSave_Init` src/sys/late_a_c.c:52 | 472 s2 | modos 70 e 71; N = 13 e desejos em 4 + 7 + 4 registros de dois u32, provados pelo assembly e pelos dados na 9c-4 (`menus-ref.md`) |
 
 Seções sem leitor achado (o conversor da etapa 5 decide pela forma, como em `menus.md` 5.2): Opções 7, EvoZ 1, Loja 23,
 Shenlong 12, Replay 9 (só atribuída), Duelo 20, seleção 40/41/52, Treino 18..21/23/25, CharRef 6, UB seleção 6 e 16,
@@ -178,7 +185,8 @@ Pendentes: 77 (16 essenciais, 61 não); desde a etapa 5a, 76 (15 essenciais), co
 5b, 61 (nenhuma essencial), com o resto do essencial (`menus-telas.md`); desde a etapa 9a, 51, com as 10 da História
 (`menus-historia.md`); desde a etapa 9b, 29, com as 22 do Ultimate Battle (`menus-ub.md`); desde a tarefa 9c-1, 23,
 com as seis do Evolution Z e da loja (`menus-evo.md`); desde a 9c-2, 16, com as sete do Data Center e Replay
-(`menus-dc.md`); desde a 9c-3, cinco, com as onze do Torneio (`menus-torneio.md`). Restam Referência e Shenlong. A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
+(`menus-dc.md`); desde a 9c-3, cinco, com as onze do Torneio (`menus-torneio.md`); desde a 9c-4, nenhuma,
+com as cinco da Referência e do Shenlong (`menus-ref.md`). A seção 11 de `menus.md` dizia 76, mas a lista dela tem 77 linhas, as mesmas
 que o `unpacks.py` acha. Formatos novos: 33 (`menu_texfile` e 32 pacotes de tela); 6 deles no essencial
 (`menu_texfile`, `menu_principal`, `menu_duelo`, `menu_selecao`, `menu_treino`, `menu_opcoes`).
 
@@ -247,6 +255,7 @@ chamam `Sprite_Unpack`. Na etapa 1: `82 chamadas de Sprite_Unpack em 62 funçõe
 com erro` (sai com 1 enquanto houver pendente); depois da etapa 5b, `com gancho 21, pendente 61`, nenhuma do essencial; depois da etapa 9a, `com gancho 31, pendente
 51` (as 10 da História com gancho); depois da etapa 9b, `com gancho 53, pendente 29` (as 22 do Ultimate Battle); depois da 9c-1, `com gancho 59, pendente 23`; depois da 9c-2, `com gancho 66, pendente 16` (o Data Center e o Replay, `menus-dc.md`; `DcList_Init` :1008 e `DcPass_Init` :958 eram :1002 e :952). Os ganchos mudam as linhas das chamadas seguintes do mesmo arquivo: `ModeMenu_Init`
 :132 e :140 (eram :126 e :128), `HistOutro_Init` :113 (era :107), `HistResult_Init` :188 e :203 (eram :182 e :191).
+Na 9c-3 foram 77 ganchos e cinco pendências; na 9c-4 são 82 ganchos e nenhuma pendência, zero erros.
 
 ### 7.2 A guarda em tempo de jogo
 
@@ -258,11 +267,13 @@ uma queda com anotação pendente põe o nome no log (`AoMorrer`, main360.cpp). 
 
 ## 8. Hipóteses e o que não foi levantado
 
-- N de cada pacote quando o código não lê a última seção (EvoZ 39, saga, Shenlong); o conversor da etapa 5 confere
+- N de cada pacote quando o código não lê a última seção (EvoZ 39 e saga, no levantamento inicial); o conversor confere
   pela tabela do disco. Decididos na 5b: Duelo 27, Opções 38, seleção 56 (`menus-telas.md`).
 - O conteúdo das seções sem leitor (seção 3.4) e das palavras não lidas das ListaIds (+4..+0xF).
 - Que 461 seção 2 tenha o layout de 448 seção 2 (confirmado na 5b: o mesmo conversor converte as duas inteiras).
 - O teto das faixas: decidido na 5b (`menus-telas.md` 6): os retratos 760..923 inteiros, as páginas 1025..1422 pelas
   aulas; os estágios 0x24 e 0x25 nunca se carregam pela grade (o cursor só para em estágio desbloqueado).
-- O interior do PassChk, de `ZItemEntry`, de `DcGridCell` e da seção 2 do Shenlong (leitor em assembly).
+- O interior do PassChk, de `ZItemEntry` e de `DcGridCell` foi especificado na 9c-2 (`menus-dc.md`). A seção 2
+  do Shenlong foi provada na 9c-4 (`menus-ref.md`, seção 2): quinze registros de oito bytes, dois números de
+  32 bits cada, em grupos de 4, 7 e 4. O pacote do Shenlong tem N = 13 e o da Referência N = 28.
 - Os campos não nomeados dos registros de larguras misturadas (`TrainLesson`, `LTourCpu`, `ZItemEntry`).
