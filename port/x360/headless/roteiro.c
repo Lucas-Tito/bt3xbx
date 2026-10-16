@@ -20,6 +20,10 @@
  * PPC) o log é a saída padrão e o passo "fim" encerra o programa; no 360 o log é o bt3xbx.log e o "fim" só solta o
  * controle. Falha (espera esgotada, arquivo ruim): mensagem e saída com 2 sem janela, tela vermelha no 360.
  *
+ * (F5, etapa 3) A luta também: as condições "acao", "seq", "pausa", "dano", "ki" e "janela", o passo "confere luta" e,
+ * com "rastreia luta", a sequência, a matriz de ações, o resultado e as janelas da medida de tempo (passos.c) no rastro
+ * (o guia, "Roteiros de luta"; os roteiros f5_duelo.txt e f5_treino.txt).
+ *
  * Entra pelo Port_PadRead: sem_janela.c (x86 e PPC) e pad360.c (360). O BT3_PAD_PLAY, se também estiver ligado,
  * tem a precedência (plat_stub.c nem chama o Port_PadRead).
  */
@@ -29,13 +33,17 @@
 
 #include <stddef.h>
 
-#include "sys/save.h" /* gSaveData (SaveData), Save_UnlockAll */
+#include "sys/save.h"      /* gSaveData (SaveData), Save_UnlockAll */
+#include "battle/battle.h" /* BattleWork (Battle_GetWork): a regra, os lados, o resultado e as bandeiras da luta */
 
 /* O campo do "confere som" onde o jogo o tem (save.h: 0x16A4). Este arquivo compila com os tipos do jogo
    (port_compat.h, forçado como nos fontes do jogo: s64 de 64 bits); sem eles o SaveData sai menor e o campo cai em
    0x1694, lendo outra opção. A build para aqui se isso voltar a acontecer. */
 typedef char RoteiroSaveConfere[offsetof(SaveData, soundMode) == 0x16A4 ? 1 : -1];
 typedef char RoteiroSagaConfere[offsetof(SaveData, slot) == 0x10 && sizeof(SaveSlot) == 0x10 ? 1 : -1];
+/* (F5, etapa 3) o bloco da luta como os passos "confere luta" e o rastro do resultado o leem */
+typedef char RoteiroLutaConfere[offsetof(BattleWork, flags) == 0x19F0 && offsetof(BattleWork, result) == 0x1938 &&
+                                offsetof(BattleSetup, sides) == 0xC0 && sizeof(BattleSide) == 0x270 ? 1 : -1];
 
 /* O estado do jogo que identifica a tela. Os tipos completos são do jogo; aqui só os campos lidos, nos mesmos
    deslocamentos (as três builds têm ponteiros de 32 bits). */
@@ -60,6 +68,21 @@ static char sDerrubaOnde[80];    /* o passo que pediu, para o rastro */
 extern int gPortMenuMode;                                      /* port/src/headless.c: 1 enquanto os menus rodam */
 extern unsigned gPortVBlanks;                                  /* port/src/plat_stub.c */
 
+/* (F5, etapa 3) Os lutadores, só lidos: o roster (gBtlChars, include/battle/btl_char_get.h: a contagem e o vetor de
+   0x1600 bytes por lutador) e, em cada lutador, o lado (+0x08), a ação atual (+0x948, BtlActState.current,
+   include/battle/btl_char_action.h), o membro ativo (+0x994) e as barras dele (membros em +0x9A4, 0xA4 bytes cada;
+   BtlMemberGauge em +0x40: vida +0, ki +0xC; include/battle/btl_char_member.h). Lidos aqui pelos deslocamentos, sem
+   chamar código do jogo: o rastreio (x86r) não vê estas leituras, e nada do jogo muda. */
+extern struct { int count; unsigned char *chars; } *gBtlChars;
+#define LUT_TAM 0x1600
+#define LUT_LADO 0x8
+#define LUT_ACAO 0x948
+#define LUT_ATIVO 0x994
+#define LUT_MEMBROS 0x9A4
+#define LUT_MEMBRO_TAM 0xA4
+#define LUT_VIDA 0x40
+#define LUT_KI 0x4C
+
 #ifdef PORT_X360
 void Diario_Escrever(const char *formato, ...);
 void Port_Abortar(void); /* main360.cpp: log e tela vermelha */
@@ -81,6 +104,20 @@ static void diz(const char *linha) {
     fflush(stdout);
     Imagens_Evento(linha, sQuadro);
 #endif
+}
+
+/* (F5, etapa 3) a medida do tempo por passo (passos.c): a janela aberta fecha no "fim" do roteiro; e o que ela tem de
+   determinístico (passos e vblanks de cada janela) vem para o rastro por aqui, só com o roteiro ligado e o passo
+   "rastreia luta" (sRastroLuta: a sequência, a matriz, o resultado e as janelas no rastro; sem ele, o rastro dos
+   roteiros que já existiam continua o mesmo, e as referências deles valem) */
+void Passos_Fim(const char *motivo);
+unsigned Passos_NaJanela(void);
+int Roteiro_Ativo(void);
+static int sRastroLuta;
+void Roteiro_Rastro(const char *linha) {
+    if (Roteiro_Ativo() && sRastroLuta) {
+        diz(linha);
+    }
 }
 
 static void falha(const char *linha) {
@@ -129,11 +166,163 @@ static void nome_tela(int t, char *s) {
     }
 }
 
+/* ------------------------------------------------------------------ a luta (F5, etapa 3) */
+
+/* o lutador do lado (0 o jogador, 1 o adversário), só com a luta andando; NULL fora dela */
+static const unsigned char *lutador(int lado) {
+    int i;
+    if (tela_atual() != TELA_LUTA || gBtlChars == NULL || gBtlChars->chars == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < gBtlChars->count && i < 2; i++) {
+        const unsigned char *c = gBtlChars->chars + i * LUT_TAM;
+        if (*(const int *)(c + LUT_LADO) == lado) {
+            return c;
+        }
+    }
+    return NULL;
+}
+
+static int acao_de(int lado) {
+    const unsigned char *c = lutador(lado);
+    return c != NULL ? *(const int *)(c + LUT_ACAO) : -1;
+}
+
+/* uma barra do membro ativo (LUT_VIDA ou LUT_KI); -1 fora da luta */
+static int barra_de(int lado, int qual) {
+    const unsigned char *c = lutador(lado);
+    int ativo;
+    if (c == NULL) {
+        return -1;
+    }
+    ativo = *(const int *)(c + LUT_ATIVO);
+    if (ativo < 0 || ativo >= 5) {
+        return -1;
+    }
+    return *(const int *)(c + LUT_MEMBROS + ativo * LUT_MEMBRO_TAM + qual);
+}
+
+/* o estado da sequência da luta (btl_seq.h: 3 o combate, 4 o anúncio do fim...); -1 fora da luta */
+static int seq_atual(void) {
+    return tela_atual() == TELA_LUTA ? gBtlSeq->state : -1;
+}
+
+/* o menu de pausa aberto (BATTLE_FLAG_PAUSE_MENU, sempre com BATTLE_FLAG_PAUSE); -1 fora da luta */
+static int pausa_atual(void) {
+    if (tela_atual() != TELA_LUTA) {
+        return -1;
+    }
+    return (Battle_GetWork()->flags & BATTLE_FLAG_PAUSE_MENU) != 0;
+}
+
+/* A matriz de ações: as famílias de ações do lutador (o número da ação, gBtlActHandlers; os nomes dos handlers em
+   port/data/cod_1C3400.data.s, a tabela em docs/systems/combat.md), contadas por entrada numa ação da família durante
+   o combate (o estado 3 da sequência). O rastro a escreve ao sair do estado 3, por lado. */
+static const struct { const char *nome; int de, ate; } kFamilias[] = {
+    {"movimento", 0x0D, 0x35},     /* andar, dash, subir e descer, passos, sumiços, aproximações */
+    {"carga", 0x37, 0x37},         /* BtlAct_ChargeHandler: a carga de ki */
+    {"defesa", 0x38, 0x43},        /* BtlAct_GuardHandler e as do bloqueio */
+    {"fisico", 0x44, 0x94},        /* rush, smash e os golpes da tabela (BtlAct_AttackHandler, 0x70..0xAD) */
+    {"projetil", 0x95, 0x95},      /* BtlAct_KiVolley95, a rajada */
+    {"fisico", 0x96, 0xAD},
+    {"projetil", 0xAE, 0xB3},      /* as esferas de ki (BtlAct_KiBlastHandler...) */
+    {"agarrao", 0xB4, 0xBC},
+    {"reacao", 0xBD, 0xEB},        /* golpe recebido, queda, levantar */
+    {"transformacao", 0xEC, 0xF0},
+    {"fusao", 0xF1, 0xF2},
+    {"troca", 0xF3, 0xF9},
+    {"choque", 0xFA, 0xFC},
+    {"habilidade", 0xFD, 0x103},   /* Blast 1 */
+    {"choque", 0x104, 0x104},
+    {"tecnica", 0x105, 0x12F},     /* Blast 2 e Ultimate do atacante (BtlAct_Super*), com câmera e efeitos */
+    {"choque", 0x130, 0x132},
+    {"tecnica_alvo", 0x133, 0x13B}, /* o lado que recebe a técnica */
+};
+static const char *const kNomesFamilia[] = {"movimento", "carga", "defesa", "fisico", "projetil", "tecnica",
+                                            "habilidade", "agarrao", "choque", "reacao", "tecnica_alvo",
+                                            "transformacao", "fusao", "troca", "outras"};
+#define N_FAMILIAS ((int)(sizeof(kNomesFamilia) / sizeof(kNomesFamilia[0])))
+static unsigned sMatriz[2][N_FAMILIAS];
+/* (sRastroLuta: o passo "rastreia luta", acima) */
+static int sAcaoVista[2] = {-1, -1};
+static int sSeqVista = -1;
+
+static int familia(int acao) {
+    unsigned k;
+    int f;
+    for (k = 0; k < sizeof(kFamilias) / sizeof(kFamilias[0]); k++) {
+        if (acao >= kFamilias[k].de && acao <= kFamilias[k].ate) {
+            for (f = 0; f < N_FAMILIAS; f++) {
+                if (strcmp(kNomesFamilia[f], kFamilias[k].nome) == 0) {
+                    return f;
+                }
+            }
+        }
+    }
+    return N_FAMILIAS - 1; /* outras: neutro, espera, busca, as de roteiro */
+}
+
+static void diz(const char *linha);
+
+/* a matriz do combate que terminou (ou que o "fim" do roteiro cortou) no rastro */
+static void diz_matriz(void) {
+    char s[400];
+    int lado, f;
+    for (lado = 0; lado < 2; lado++) {
+        int n = sprintf(s, "roteiro: matriz lado %d", lado);
+        for (f = 0; f < N_FAMILIAS; f++) {
+            n += sprintf(s + n, " %s %u", kNomesFamilia[f], sMatriz[lado][f]);
+        }
+        sprintf(s + n, " vblank %u quadro %u", gPortVBlanks, sQuadro);
+        diz(s);
+    }
+}
+
+/* A cada leitura do controle: com o combate andando (estado 3), as entradas em ações (a matriz, zerada ao entrar no
+   estado 3); ao sair do estado 3, a matriz e o resultado que o jogo gravou (BattleResult: o vencedor BTL_RESULT_*,
+   a razão BTL_REASON_*, include/battle/battle.h) no rastro. A pausa não sai do estado 3. */
+static void luta_quadro(void) {
+    char s[300];
+    int lado, seq = seq_atual();
+    if (seq == BTL_SEQ_LUTANDO && sSeqVista != BTL_SEQ_LUTANDO) {
+        memset(sMatriz, 0, sizeof(sMatriz));
+        sAcaoVista[0] = sAcaoVista[1] = -1;
+    }
+    if (seq == BTL_SEQ_LUTANDO) {
+        for (lado = 0; lado < 2; lado++) {
+            int a = acao_de(lado);
+            if (a >= 0 && a != sAcaoVista[lado]) {
+                sMatriz[lado][familia(a)]++;
+            }
+            sAcaoVista[lado] = a;
+        }
+    }
+    if (!sRastroLuta) {
+        sSeqVista = seq;
+        return;
+    }
+    if (seq != sSeqVista && seq >= 0) {
+        sprintf(s, "roteiro: seq %d vblank %u quadro %u", seq, gPortVBlanks, sQuadro);
+        diz(s);
+    }
+    if (sSeqVista == BTL_SEQ_LUTANDO && seq != BTL_SEQ_LUTANDO) {
+        diz_matriz();
+        if (seq >= 0) {
+            const BattleResult *r = &Battle_GetWork()->result;
+            sprintf(s, "roteiro: resultado estado %d vencedor 0x%x razao 0x%x vida %d %d vblank %u quadro %u", seq,
+                    (unsigned)r->winner, (unsigned)r->reason, barra_de(0, LUT_VIDA), barra_de(1, LUT_VIDA),
+                    gPortVBlanks, sQuadro);
+            diz(s);
+        }
+    }
+    sSeqVista = seq;
+}
+
 /* ------------------------------------------------------------------ o roteiro */
 
 enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA,
-       P_FUNDE, P_DESEJO };
-enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA };
+       P_FUNDE, P_DESEJO, P_RASTREIA };
+enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA, C_ACAO, C_SEQ, C_PAUSA, C_DANO, C_KI, C_JANELA };
 
 typedef struct Passo {
     int tipo;
@@ -141,8 +330,11 @@ typedef struct Passo {
     int n;              /* P_QUADROS, P_SEGURA: quadros; P_APERTA: vezes (sem "ate") */
     int segura, solta;  /* P_APERTA: o ritmo de cada vez */
     int cond, valor;    /* P_ESPERA e P_APERTA com "ate": a condição e o valor; P_CONFERE: cond 0 som, 1 saga, 2 um
-                           u8 e 3 um s32 do save (n: o deslocamento), e o valor esperado ou a saga; P_TERMINA: valor 1
-                           vence, 0 perde */
+                           u8 e 3 um s32 do save (n: o deslocamento), 4 a luta (luta[]), e o valor esperado ou a saga;
+                           P_TERMINA: valor 1 vence, 0 perde */
+    int lado, ate;      /* (F5, etapa 3) C_ACAO: o lado e a faixa valor..ate; C_DANO e C_KI: o lado */
+    int ref;            /* C_DANO: a vida do lado no começo do passo (-1: ainda sem luta) */
+    int luta[8];        /* P_CONFERE da luta: personagem e traje dos lados 0 e 1, estágio, modo, tempo, nível do COM */
     int max;            /* quadros até a falha */
     int par;            /* P_REPETE: o índice do P_VOLTA; P_VOLTA: o do P_REPETE; P_TERMINA "perde apos N": N */
     char onde[80];      /* arquivo:linha, para o log */
@@ -238,8 +430,57 @@ static int condicao(Passo *p, char **pal, int n, int i) {
     } else if (i < n && igual(pal[i], "luta")) {
         p->cond = C_LUTA;
         i += 1;
+    } else if (i < n && igual(pal[i], "acao")) {
+        /* (F5, etapa 3) acao L A[-B]: a ação atual do lutador do lado L (0 o jogador) é A, ou está entre A e B */
+        char *traco;
+        p->cond = C_ACAO;
+        p->lado = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
+        if (i + 2 >= n) {
+            erro_linha(p->onde, "acao L A[-B]", NULL);
+        }
+        traco = strchr(pal[i + 2], '-');
+        if (traco != NULL) {
+            *traco = '\0';
+            p->ate = numero(p->onde, traco + 1);
+        }
+        p->valor = numero(p->onde, pal[i + 2]);
+        if (traco == NULL) {
+            p->ate = p->valor;
+        }
+        if (p->lado < 0 || p->lado > 1 || p->valor < 0 || p->ate < p->valor || p->ate >= 0x13C) {
+            erro_linha(p->onde, "acao L A[-B]: lado 0 ou 1, ações de 0 a 0x13B", NULL);
+        }
+        i += 3;
+    } else if (i < n && igual(pal[i], "seq")) { /* seq N: o estado da sequência da luta (btl_seq.h) */
+        p->cond = C_SEQ;
+        p->valor = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
+        i += 2;
+    } else if (i < n && igual(pal[i], "pausa")) { /* pausa 1|0: o menu de pausa da luta aberto ou fechado */
+        p->cond = C_PAUSA;
+        p->valor = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL) != 0;
+        i += 2;
+    } else if (i < n && igual(pal[i], "dano")) { /* dano L: o lado L perdeu vida desde o começo do passo */
+        p->cond = C_DANO;
+        p->lado = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
+        p->ref = -1;
+        i += 2;
+    } else if (i < n && igual(pal[i], "janela")) {
+        /* janela N: a janela contínua de combate da medida de tempo (passos.c: o estado 3 sem pausa) tem N passos */
+        p->cond = C_JANELA;
+        p->valor = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
+        i += 2;
+    } else if (i < n && igual(pal[i], "ki")) { /* ki L N: o ki do lado L chegou a N (100000 a barra cheia) */
+        p->cond = C_KI;
+        p->lado = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
+        p->valor = numero(p->onde, i + 2 < n ? pal[i + 2] : NULL);
+        i += 3;
     } else {
-        erro_linha(p->onde, "condição esperada (tela N, mcflow N ou luta)", i < n ? pal[i] : NULL);
+        erro_linha(p->onde, "condição esperada (tela N, mcflow N, luta, acao L A[-B], seq N, pausa N, dano L, ki L N ou "
+                   "janela N)",
+                   i < n ? pal[i] : NULL);
+    }
+    if ((p->cond == C_DANO || p->cond == C_KI) && (p->lado < 0 || p->lado > 1)) {
+        erro_linha(p->onde, "lado 0 ou 1", NULL);
     }
     p->max = sMax;
     if (i < n && igual(pal[i], "max")) {
@@ -333,6 +574,12 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         }
         p = novo(onde, P_DESEJO);
         i = 2;
+    } else if (igual(pal[0], "rastreia")) { /* (F5, etapa 3) rastreia luta: a luta no rastro (sRastroLuta) */
+        if (n != 2 || !igual(pal[1], "luta")) {
+            erro_linha(onde, "rastreia luta", NULL);
+        }
+        p = novo(onde, P_RASTREIA);
+        i = 2;
     } else if (igual(pal[0], "desbloqueia")) {
         p = novo(onde, P_DESBLOQUEIA);
         i = 1;
@@ -350,6 +597,22 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         }
         p->valor = numero(onde, pal[4]);
         i = 5;
+    } else if (igual(pal[0], "confere") && n > 1 && igual(pal[1], "luta")) {
+        /* (F5, etapa 3) confere luta C0 T0 C1 T1 ESTAGIO MODO TEMPO NIVEL: a luta que o jogo montou (BattleSetup,
+           include/battle/battle.h), com ela andando: personagem e traje do membro 0 de cada lado (variante 0), o
+           estágio de início e o atual, o modo (BattleRule.mode), o tempo (índice de gBattleTimeLimitTbl) e o nível do
+           COM no lado 1 (BattleMember.cpuLevel). Com as opções e a dificuldade padrão o duelo dá tempo 4 e nível 13
+           (Save_ResetRules: rule[0] = 3, rule[1] = 2; CharSel_Run) */
+        int k;
+        p = novo(onde, P_CONFERE);
+        p->cond = 4;
+        if (n != 10) {
+            erro_linha(onde, "confere luta C0 T0 C1 T1 ESTAGIO MODO TEMPO NIVEL", NULL);
+        }
+        for (k = 0; k < 8; k++) {
+            p->luta[k] = numero(onde, pal[2 + k]);
+        }
+        i = 10;
     } else if (igual(pal[0], "confere")) { /* confere som N | confere saga N: o save em memória (gSaveData) */
         if (n < 2 || !(igual(pal[1], "som") || igual(pal[1], "saga"))) {
             erro_linha(onde, "confere som N | confere saga N", n > 1 ? pal[1] : NULL);
@@ -509,7 +772,8 @@ int Roteiro_Ativo(void) {
     return sAtivo;
 }
 
-static int cumprida(const Passo *p) {
+static int cumprida(Passo *p) {
+    int a;
     switch (p->cond) {
     case C_TELA:
         return tela_atual() == p->valor;
@@ -517,8 +781,35 @@ static int cumprida(const Passo *p) {
         return mcflow_atual() == p->valor;
     case C_LUTA:
         return tela_atual() == TELA_LUTA;
+    case C_ACAO:
+        a = acao_de(p->lado);
+        return a >= p->valor && a <= p->ate;
+    case C_SEQ:
+        return seq_atual() == p->valor;
+    case C_PAUSA:
+        return pausa_atual() == p->valor;
+    case C_DANO:
+        /* a vida no começo do passo (ou no primeiro quadro dele com a luta andando) */
+        a = barra_de(p->lado, LUT_VIDA);
+        if (p->ref < 0) {
+            p->ref = a;
+            return 0;
+        }
+        return a >= 0 && a < p->ref;
+    case C_KI:
+        a = barra_de(p->lado, LUT_KI);
+        return a >= p->valor;
+    case C_JANELA:
+        return Passos_NaJanela() >= (unsigned)p->valor;
     }
     return 0;
+}
+
+/* o começo de um passo com condição (uma espera, um "aperta ate", um "repete ate"): a referência do "dano" */
+static void prepara(Passo *p) {
+    if (p->cond == C_DANO) {
+        p->ref = barra_de(p->lado, LUT_VIDA);
+    }
 }
 
 static void cond_texto(const Passo *p, char *s) {
@@ -526,6 +817,19 @@ static void cond_texto(const Passo *p, char *s) {
         sprintf(s, "tela %d", p->valor);
     } else if (p->cond == C_MCFLOW) {
         sprintf(s, "mcflow %d", p->valor);
+    } else if (p->cond == C_ACAO) {
+        /* (a ação alcançada vai no rastro: a faixa pedida e a que o jogo deu) */
+        sprintf(s, "acao %d 0x%x-0x%x (0x%x)", p->lado, (unsigned)p->valor, (unsigned)p->ate, (unsigned)acao_de(p->lado));
+    } else if (p->cond == C_SEQ) {
+        sprintf(s, "seq %d", p->valor);
+    } else if (p->cond == C_PAUSA) {
+        sprintf(s, "pausa %d", p->valor);
+    } else if (p->cond == C_DANO) {
+        sprintf(s, "dano %d (vida %d de %d)", p->lado, barra_de(p->lado, LUT_VIDA), p->ref);
+    } else if (p->cond == C_KI) {
+        sprintf(s, "ki %d %d (%d)", p->lado, p->valor, barra_de(p->lado, LUT_KI));
+    } else if (p->cond == C_JANELA) {
+        sprintf(s, "janela %d", p->valor);
     } else {
         strcpy(s, "luta");
     }
@@ -546,14 +850,14 @@ static unsigned consome(unsigned b) {
 }
 
 static void ok(const Passo *p) {
-    char s[200], c[40];
+    char s[200], c[80];
     cond_texto(p, c);
     sprintf(s, "roteiro: %s ok %s vblank %u quadro %u", p->onde, c, gPortVBlanks, sQuadro);
     diz(s);
 }
 
 static void esgotou(const Passo *p) {
-    char s[300], c[40], t[16];
+    char s[300], c[80], t[16];
     cond_texto(p, c);
     nome_tela(tela_atual(), t);
     sprintf(s, "%s: %d quadros sem %s (tela %s, mcflow %d, vblank %u)", p->onde, p->max, c, t, mcflow_atual(),
@@ -605,6 +909,7 @@ static unsigned quadro(void) {
         p = &sPassos[sPasso];
         switch (p->tipo) {
         case P_REPETE:
+            prepara(p);
             if (cumprida(p)) { /* já cumprida: o bloco nem roda */
                 ok(p);
                 sPasso = p->par + 1;
@@ -629,6 +934,9 @@ static unsigned quadro(void) {
         case P_ESPERA:
         case P_APERTA:
             if (p->cond != C_NADA) {
+                if (sT == 0) {
+                    prepara(p);
+                }
                 if (cumprida(p)) {
                     ok(p);
                     proximo();
@@ -670,6 +978,47 @@ static unsigned quadro(void) {
             proximo();
             continue;
         case P_CONFERE:
+            if (p->cond == 4) {
+                /* confere luta: o que o jogo montou, lido do BattleSetup com a luta andando */
+                const BattleSetup *b;
+                int v[8], k, certo = 1;
+                if (tela_atual() != TELA_LUTA) {
+                    sprintf(s, "%s: confere luta fora da luta", p->onde);
+                    falha(s);
+                }
+                b = &Battle_GetWork()->setup;
+                v[0] = b->sides[0].members[0].chara;
+                v[1] = b->sides[0].members[0].costume;
+                v[2] = b->sides[1].members[0].chara;
+                v[3] = b->sides[1].members[0].costume;
+                v[4] = b->rule.stage;
+                v[5] = b->rule.mode;
+                v[6] = b->rule.timeLimit;
+                v[7] = b->sides[1].members[0].cpuLevel;
+                for (k = 0; k < 8; k++) {
+                    certo &= v[k] == p->luta[k];
+                }
+                certo &= b->rule.curStage == b->rule.stage && b->sides[0].memberCount == 1 &&
+                         b->sides[1].memberCount == 1 && b->sides[0].members[0].variant == 0 &&
+                         b->sides[1].members[0].variant == 0;
+                sprintf(s, "%s luta: lado 0 %d traje %d, lado 1 %d traje %d, estágio %d (atual %d), modo %d, tempo %d, "
+                        "nível %d, membros %d e %d, variantes %d e %d", p->onde, v[0], v[1], v[2], v[3], v[4],
+                        b->rule.curStage, v[5], v[6], v[7], b->sides[0].memberCount, b->sides[1].memberCount,
+                        b->sides[0].members[0].variant, b->sides[1].members[0].variant);
+                if (!certo) {
+                    char e[400];
+                    sprintf(e, "%s; esperado %d %d %d %d %d %d %d %d, um membro por lado, variante 0", s, p->luta[0],
+                            p->luta[1], p->luta[2], p->luta[3], p->luta[4], p->luta[5], p->luta[6], p->luta[7]);
+                    falha(e);
+                }
+                {
+                    char t[400];
+                    sprintf(t, "roteiro: %s vblank %u quadro %u", s, gPortVBlanks, sQuadro);
+                    diz(t);
+                }
+                proximo();
+                continue;
+            }
             if (gSaveData == NULL) {
                 sprintf(s, "%s: confere sem save na memória", p->onde);
                 falha(s);
@@ -802,12 +1151,23 @@ static unsigned quadro(void) {
             diz(s);
             proximo();
             continue;
+        case P_RASTREIA:
+            sRastroLuta = 1;
+            sprintf(s, "roteiro: %s rastreia luta vblank %u quadro %u", p->onde, gPortVBlanks, sQuadro);
+            diz(s);
+            proximo();
+            continue;
         case P_MARCA:
             sprintf(s, "roteiro: %s marca %s vblank %u quadro %u", p->onde, p->texto, gPortVBlanks, sQuadro);
             diz(s);
             proximo();
             continue;
         case P_FIM:
+            /* (F5, etapa 3) um combate cortado pelo fim (o Treino): a matriz dele e a janela da medida de tempo */
+            if (sRastroLuta && sSeqVista == BTL_SEQ_LUTANDO) {
+                diz_matriz();
+            }
+            Passos_Fim("roteiro");
             sprintf(s, "roteiro: %s fim vblank %u quadro %u", p->onde, gPortVBlanks, sQuadro);
             diz(s);
             sPasso = sN;
@@ -843,6 +1203,7 @@ int Roteiro_Pad(int socket, unsigned char *data) {
         sprintf(s, "mcflow %d vblank %u quadro %u", m, gPortVBlanks, sQuadro);
         diz(s);
     }
+    luta_quadro();
     b = quadro();
 #ifndef PORT_X360
     Imagens_Quadro(sQuadro);

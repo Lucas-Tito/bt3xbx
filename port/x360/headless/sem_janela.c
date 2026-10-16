@@ -26,6 +26,10 @@ int gGpuNewPipes, gGpuNewTex, gGpuNewTexPixels;
 /* gs_draw.c: o letreiro de fases e músicas de fora do disco, desenhado pela janela */
 volatile int gUiNameX, gUiNameY, gUiNameW, gUiNameH, gUiNameIdx, gUiNameReady;
 volatile int gUiSongX, gUiSongY, gUiSongW, gUiSongH, gUiSongIdx, gUiSongLit, gUiSongReady;
+
+/* (F5, etapa 3) os descartes da janela medida (passos.c): sem backend de vídeo, nenhum contador (0); no 360 vêm do
+   gs_d3d.cpp */
+int Passos_Descartes(unsigned *v, int n) { (void)v; (void)n; return 0; }
 #endif
 
 /* gs_input.c: sem janela, Port_PadRead devolve 0 (nenhum controle), a não ser com um roteiro de controle
@@ -34,7 +38,13 @@ volatile int gUiSongX, gUiSongY, gUiSongW, gUiSongH, gUiSongIdx, gUiSongLit, gUi
 extern int Port_Setting(const char *name, int def);
 #ifndef PORT_X360
 extern int Roteiro_Pad(int socket, unsigned char *data);
-int Port_PadRead(int socket, unsigned char *data) { return Roteiro_Pad(socket, data); }
+extern void Passos_Leitura(void); /* (F5, etapa 3) a fronteira de passo da medida de tempo: passos.c */
+int Port_PadRead(int socket, unsigned char *data) {
+    if (socket == 0) {
+        Passos_Leitura();
+    }
+    return Roteiro_Pad(socket, data);
+}
 #endif
 void Port_ClashLog(int player, const char *what, int fromInput, int total, int frame) {
     (void)player; (void)what; (void)fromInput; (void)total; (void)frame;

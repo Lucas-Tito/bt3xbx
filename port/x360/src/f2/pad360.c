@@ -85,10 +85,15 @@ int Port_PadConnected(int socket) {
 
 /* 18 bytes no formato do scePad2Read (botões ativos em 0, analógicos direito e esquerdo, pressões zeradas como na
    build de PC); 0 sem controle naquela porta (plat_stub.c preenche o controle parado) */
+extern void Passos_Leitura(void); /* (F5, etapa 3) a fronteira de passo da medida de tempo: port/x360/headless/passos.c */
+
 int Port_PadRead(int socket, unsigned char *data) {
     const XINPUT_STATE *e;
     unsigned btn = 0, i;
 
+    if (socket == 0) {
+        Passos_Leitura();
+    }
     if (Roteiro_Ativo()) {
         return Roteiro_Pad(socket, data);
     }

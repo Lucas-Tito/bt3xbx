@@ -26,7 +26,11 @@ TITLE_NAME=$(grep '^TITLE_NAME=' port/x360/package/titulo.env | cut -d= -f2-)
 
 echo "== 1. preparação (c89.py)"
 rm -f $OUT/c89/*.c
-docker run --rm --user "$(id -u):$(id -g)" -v "$RAIZ":/app -w /app bt3xbx-ferramentas python3 port/x360/tools/c89.py $OUT/c89 | tail -2
+# (F5, etapa 3) o carimbo do commit no log do console (port/x360/headless/passos.c: "passos: origem ..."), no formato
+# do headless.py: o commit e o sha1 da diferença para ele, com os arquivos novos (da39a3ee5e: sem diferença)
+CARIMBO="$(git rev-parse --short HEAD) diff:$( { git diff HEAD; git ls-files -o --exclude-standard -z | xargs -0 -r cat; } | sha1sum | cut -c1-10)"
+echo "   carimbo: $CARIMBO"
+docker run --rm --user "$(id -u):$(id -g)" -e BT3_CARIMBO="$CARIMBO" -v "$RAIZ":/app -w /app bt3xbx-ferramentas python3 port/x360/tools/c89.py $OUT/c89 | tail -2
 
 echo "== 2. compilação (cl.exe)"
 CLFLAGS="-c -Ox -Oi -fp:precise -fp:except- -GS- -Gy -GF -MT -W3 -Zi"

@@ -55,6 +55,7 @@ void Estado_Resumo(void) {
 
 void Port_Sair(int codigo);
 void Port_X360FecharSaida(void); /* posix360.c */
+int Passos_Medindo(void);        /* port/x360/headless/passos.c */
 extern int *gProgress; /* include/menu/menu_a.h, MenuProgress: o modo da tela está em +0x18 */
 
 void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
@@ -104,7 +105,9 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
         if (sVblanksTrecho == 600) {
             char quando[32];
             sprintf(quando, "até o vblank %u", vblank);
-            resumo(quando, sTotalTrecho, sVblanksTrecho, sPiorParTrecho);
+            if (!Passos_Medindo()) { /* (F5, etapa 3: nada de log durante a janela medida, port/x360/headless/passos.c) */
+                resumo(quando, sTotalTrecho, sVblanksTrecho, sPiorParTrecho);
+            }
             sTotalTrecho = sPiorParTrecho = 0;
             sVblanksTrecho = 0;
         }

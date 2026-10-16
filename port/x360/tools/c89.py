@@ -82,6 +82,10 @@ def grupos():
     out.append(("hl_", ROOT / "port/x360/headless/roteiro.c",
                 ["-std=gnu99", I("include"), I("port/include"), "-include", "port_compat.h", I("port/x360/headless")],
                 False))
+    # (F5, etapa 3) o tempo por passo da luta e os descartes da janela medida, com o carimbo do commit no log
+    # (BT3_CARIMBO, que o build_f2.sh passa: o mesmo formato do headless.py)
+    carimbo = os.environ.get("BT3_CARIMBO", "sem carimbo").strip().replace('"', "")
+    out.append(("hl_", ROOT / "port/x360/headless/passos.c", ["-std=gnu99", f'-DBT3_CARIMBO="{carimbo}"'], False))
     return out
 
 

@@ -177,12 +177,15 @@ def construir(alvo):
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
-    extras = ["sem_janela", "roteiro", "imagens", "ponte_pow"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
+    extras = ["sem_janela", "roteiro", "imagens", "ponte_pow", "passos"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
         # (o roteiro lê o save do jogo pela estrutura dele, include/sys/save.h, com os tipos do jogo: port_compat.h)
         tipos_jogo = ["-Iinclude", "-Iport/include", "-include", "port_compat.h"] if nome == "roteiro" else []
+        # (F5, etapa 3: a medida de tempo diz no log de que commit a build saiu, o mesmo CARIMBO desta pasta)
+        if nome == "passos":
+            tipos_jogo = [f'-DBT3_CARIMBO="{carimbo().strip()}"']
         junta(nome, o, run(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-w"] + alvo.hard + tipos_jogo +
                            [f"port/x360/headless/{nome}.c", "-o", o]))
     # big-endian: a conversão por formato (port/x360/conv), que o jogo chama em tempo de jogo (Port_ConvertAnim)

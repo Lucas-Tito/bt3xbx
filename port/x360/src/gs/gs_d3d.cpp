@@ -99,6 +99,30 @@ static struct {
 static LARGE_INTEGER sFreq, sUltimoFim;
 static unsigned sAvisado; /* bits: o que já foi dito uma vez no log */
 
+/* (F5, etapa 3) o tempo por passo e os descartes da janela medida (port/x360/headless/passos.c): cada Present vai para
+   lá com o quadro do GS mostrado e o tempo dentro dele, e os descartes acumulados desde o começo saem de
+   Passos_Descartes (VU1, os nativos 1 a 4, direto no quadro, texturas recusadas, primitivas só do PS2). Com uma janela
+   aberta, o resumo de 60 quadros (log_quadros) não se escreve: a medida não paga a escrita do log */
+extern "C" void Passos_Apresentou(unsigned quadroGs, unsigned presentUs);
+extern "C" int Passos_Medindo(void);
+static unsigned sDescAntes[8]; /* o que os sConta já zerados tinham */
+static unsigned sPs2Total;     /* gsSkipped somado de cada quadro */
+extern "C" int Passos_Descartes(unsigned *v, int n) {
+    unsigned agora[8];
+    int i;
+    agora[0] = sConta.semVu;
+    for (i = 1; i <= 4; i++) {
+        agora[i] = sConta.semNativo[i];
+    }
+    agora[5] = sConta.semFb;
+    agora[6] = sConta.semTextura;
+    agora[7] = sPs2Total + gsSkipped;
+    for (i = 0; i < n && i < 8; i++) {
+        v[i] = sDescAntes[i] + agora[i];
+    }
+    return 8;
+}
+
 static double ms_desde(const LARGE_INTEGER *a) {
     LARGE_INTEGER b;
     QueryPerformanceCounter(&b);
@@ -687,6 +711,18 @@ static void desenha(const GsDraw *d) {
 static void log_quadros(void) {
     /* os tempos sem os quadros que tiveram captura (cada uma pesa centenas de ms e encobria o resto) */
     unsigned q = sConta.quadros, t = sConta.quadros + sConta.capturas;
+    int i;
+    /* (os descartes acumulados, antes de zerar os do trecho) */
+    sDescAntes[0] += sConta.semVu;
+    for (i = 1; i <= 4; i++) {
+        sDescAntes[i] += sConta.semNativo[i];
+    }
+    sDescAntes[5] += sConta.semFb;
+    sDescAntes[6] += sConta.semTextura;
+    if (Passos_Medindo()) {
+        memset(&sConta, 0, sizeof(sConta));
+        return;
+    }
     if (q == 0) {
         q = 1;
     }
@@ -816,6 +852,7 @@ static void frame_end(void) {
     gGsD3dEtapa = "fim do quadro: Present";
     sDev->Present(NULL, NULL, NULL, NULL);
     msPresent = ms_desde(&tp);
+    Passos_Apresentou(gGsFrame, (unsigned)(msPresent * 1000.0));
     gGsD3dEtapa = "fim do quadro: texturas soltas";
     /* nada do quadro fica preso no dispositivo: as texturas soltas podem ir quando a GPU terminar com elas */
     sDev->SetTexture(0, NULL);
@@ -857,6 +894,7 @@ static void frame_end(void) {
     gsVuUniCount = 0;
     gsDrawCount = 0;
     gsAnchor = 0;
+    sPs2Total += gsSkipped;
     gsSkipped = 0;
     gsNative = 0;
 }
