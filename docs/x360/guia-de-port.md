@@ -65,6 +65,27 @@ própria só para isso). Para cá só volta texto.
   32 bits (SIGSYS), o `ptrace` do gdb e os sockets. A troca de código é pelo repositório local `/srv/bt3/bt3xbx.git`
   (remoto `troca`); o GitHub só recebe o que passou pela revisão. Regras dele no `AGENTS.md`.
 
+### 1.2b Steam Deck: a segunda fila de emulador (16/10/2026)
+
+Dois emuladores juntos travam o WSL, então uma segunda máquina é a única forma de rodar dois roteiros ao mesmo tempo.
+O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/config` daqui (chave própria):
+
+- **Contêiner, não o sistema:** o SteamOS tem a raiz só leitura e as atualizações apagam o que se instala nela. O
+  `distrobox` (já vem no SteamOS) cria `bt3`, um Ubuntu 24.04, e o mesmo `preparar-wsl.sh` o prepara (sem a linha do
+  `wsl.conf`, com `USUARIO=deck`), mais `gdb` e `gdb-multiarch`. Saíram as mesmas versões do WSL (gcc 13.3.0, o
+  snapshot 22.1.8 do clang, qemu 8.2.2, gdb 15.1). Tudo roda por `distrobox enter bt3 -- bash -lc "..."`.
+- **Código:** um repositório nu `~/bt3xbx.git` no Deck (remoto `deck` daqui) e o clone `~/bt3xbx`; os dados em
+  `~/bt3dados`, ligados ao clone como no WSL, e as referências dos roteiros em `~/referencias`, copiadas do WSL.
+- **Dados copiados direto do WSL** por `tar` entre dois `ssh` (WSL → aqui → Deck), conferidos por um manifesto de
+  sha1 dos dois lados (68.611 arquivos do `gamedata` iguais; o manifesto estragado foi recusado).
+- **O `port/build/gen` não se copia:** os `.s` gerados pelo `port/tools/gen_data.py` guardam o caminho absoluto dos
+  dados (`.incbin "/home/lucas/..."`), e a build x86 do Deck caiu no `vu1_micro.data.s`. Gere de novo lá
+  (`gen_data.py --asm ~/bt3xbx/asm`); os 72 arquivos saíram iguais aos do WSL, fora o caminho.
+- **A prova antes de valer:** no commit da rodada da F4, a `.text` da x86 do Deck saiu igual à do WSL
+  (`e0af7e67…`), e o `SEMMAPA=1 IMG=1 roteiros.sh duelo` deu "tudo certo", com as 16 imagens idênticas byte a byte às
+  do WSL. Uma máquina nova só entra depois dessas duas provas.
+- Um emulador por vez também no Deck. Deixe-o na tomada, na rede e sem suspensão.
+
 ### 1.3 Console
 
 - FTP da FreeStyle (`xbox`/`xbox`), só com o console parado na FreeStyle, uma conexão por vez,
