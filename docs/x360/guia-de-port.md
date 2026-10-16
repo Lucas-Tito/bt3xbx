@@ -85,6 +85,10 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
   (`e0af7e67…`), e o `SEMMAPA=1 IMG=1 roteiros.sh duelo` deu "tudo certo", com as 16 imagens idênticas byte a byte às
   do WSL. Uma máquina nova só entra depois dessas duas provas.
 - Um emulador por vez também no Deck. Deixe-o na tomada, na rede e sem suspensão.
+- **Processo longo no Deck:** `nohup ... &` dentro do `distrobox enter ... bash -lc "..."` morre quando o `ssh` fecha
+  (log vazio e nenhum processo, sem erro). O que fica: um script no Deck e, do lado de fora do contêiner,
+  `setsid nohup distrobox enter bt3 -- bash -lc ~/script.sh > ~/log 2>&1 < /dev/null & disown`; consulte o log
+  com espaço (F5, etapa 4).
 
 ### 1.3 Console
 
