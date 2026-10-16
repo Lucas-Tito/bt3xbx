@@ -1033,3 +1033,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Como no DcSave, o McFlow abre as duas perguntas em Não: espere 12 e 13 e aperte ESQUERDA antes do X em cada
   uma. Só X recusa salvar, vai ao estado 18 e nunca chega ao 13. As esferas são os bits de um s32 em +8 do save:
   confira `s32 8 0`, não um byte desse número, que muda de posição na PPC.
+
+- **Simbolização local dos roteiros (9c-4).** O host exportava `DEBUGINFOD_URLS=https://debuginfod.ubuntu.com`,
+  e o `llvm-symbolizer` ficou parado na rede ao gerar o mapa da Referência, embora a build tivesse DWARF.
+  O pai e o filho estavam em espera, sem gastar CPU, e o simbolizador tinha um socket aberto. O `roteiros.sh`
+  agora exporta `DEBUGINFOD_URLS=` para os filhos: usa apenas o executável e o DWARF locais. Uma rodada
+  interrompida por essa espera não conta como aprovação e precisa ser refeita.

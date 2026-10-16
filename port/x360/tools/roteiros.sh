@@ -46,6 +46,8 @@
 #               de mudar só conversores, ganchos (em PORT_BIG_ENDIAN) ou o port/x360, com a .text da x86 conferida igual
 #   O=pasta     onde ficam as saídas (port/build/roteiros); REFS=pasta, as referências (~/referencias)
 set -uo pipefail
+# Toda simbolização usa o DWARF da build local, sem consultar servidores de depuração do host.
+export DEBUGINFOD_URLS=
 B=port/build; O=${O:-$B/roteiros}; REFS=${REFS:-~/referencias}
 FALHAS=()
 falhou() { FALHAS+=("$n: $*"); echo "   >> FALHA: $*"; }

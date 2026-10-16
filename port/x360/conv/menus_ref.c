@@ -10,7 +10,7 @@ static void ref_tabela(ConvCtx *c, conv_ofs a, conv_ofs b, conv_u32 n) {
     if (c->erro) {
         return;
     }
-    if (b - a < (conv_ofs)n * 4) {
+    if (n > (b - a) / 4) {
         Conv_Erro(c, "tabela: %lu bytes, o leitor usa %lu s32", (unsigned long)(b - a), (unsigned long)n);
         return;
     }
