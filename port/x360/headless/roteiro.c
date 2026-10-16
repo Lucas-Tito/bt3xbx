@@ -10,7 +10,7 @@
  *                           jogo, o mesmo da aba de truques da janela do PC) e "termina luta" (o adversário derrubado
  *                           pelo dano do próprio jogo, BtlMember_Damage; o jogo decide a luta) e "funde discos" (o
  *                           Disc Fusion sem a troca de disco: gProgress->discFlags); sem ela o passo para o roteiro
- *                           com erro.
+ *                           com erro. O "libera desejo" zera o saldo antes do Shenlong, sob as mesmas proteções.
  *                           Nunca no jogo normal. E só com o cartão vazio no começo da rodada (sem o arquivo de dados
  *                           do save na pasta de saves, BT3_SAVES): o desbloqueio e a vitória dada iriam para o save de
  *                           verdade na próxima gravação
@@ -132,7 +132,7 @@ static void nome_tela(int t, char *s) {
 /* ------------------------------------------------------------------ o roteiro */
 
 enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA,
-       P_FUNDE };
+       P_FUNDE, P_DESEJO };
 enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA };
 
 typedef struct Passo {
@@ -327,6 +327,12 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         p->botoes = botoes(onde, n > 1 ? pal[1] : NULL);
         p->n = numero(onde, n > 2 ? pal[2] : NULL);
         i = 3;
+    } else if (igual(pal[0], "libera")) {
+        if (n != 2 || !igual(pal[1], "desejo")) {
+            erro_linha(onde, "libera desejo", NULL);
+        }
+        p = novo(onde, P_DESEJO);
+        i = 2;
     } else if (igual(pal[0], "desbloqueia")) {
         p = novo(onde, P_DESBLOQUEIA);
         i = 1;
@@ -763,6 +769,21 @@ static unsigned quadro(void) {
             }
             sT++;
             return consome(0);
+        case P_DESEJO:
+            /* Todos os dragões têm dinheiro como primeiro desejo. ShenCfm_IsOwned devolve zero para ele,
+               mesmo com tudo desbloqueado. Zerar só o saldo deixa espaço para os três prêmios sem saturar;
+               a lista, o sorteio, a confirmação e a concessão continuam sendo os do jogo. */
+            so_teste(p, "libera desejo");
+            if (gSaveData == NULL || gProgress == NULL || gProgress->mode != 4) {
+                sprintf(s, "%s: libera desejo exige save na memória e menu principal", p->onde);
+                falha(s);
+            }
+            gSaveData->money = 0;
+            sprintf(s, "roteiro: %s desejo de dinheiro livre (saldo 0) vblank %u quadro %u", p->onde,
+                    gPortVBlanks, sQuadro);
+            diz(s);
+            proximo();
+            continue;
         case P_FUNDE:
             /* O Disc Fusion pede o disco do BT1 ou do BT2 na bandeja (DiscFusion_UpdateDisc, src/menu/menu_o_b.c): o
                jogo lê o executável do outro disco e só então grava UB_DISC_0 ou UB_DISC_1 em gProgress->discFlags

@@ -1024,3 +1024,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
    onde o jogo lê arquivos (`--wrap` da função de leitura e da descompressão).
 6. Antes de cada etapa grande, um agente revisor (seção 4).
 7. Cada aprendizado novo entra neste guia no mesmo commit da correção.
+
+- **Shenlong (9c-4): dinheiro continua livre com tudo desbloqueado.** `Shen_IsOwned` e
+  `ShenCfm_IsOwned` devolvem zero para `SHEN_WISH_MONEY`; todos os três dragões têm esse desejo na primeira
+  posição. Não é necessário alterar o sorteio nem os desbloqueios. O passo de teste `libera desejo` só zera
+  `SaveData.money` no menu principal, com `so_teste` (permissão de desbloqueio e cartão vazio no início),
+  deixando espaço para os prêmios. O dragão 1 do roteiro concede três vezes 5.000 e chega a `ShenSave_Init`.
+  Como no DcSave, o McFlow abre as duas perguntas em Não: espere 12 e 13 e aperte ESQUERDA antes do X em cada
+  uma. Só X recusa salvar, vai ao estado 18 e nunca chega ao 13. As esferas são os bits de um s32 em +8 do save:
+  confira `s32 8 0`, não um byte desse número, que muda de posição na PPC.

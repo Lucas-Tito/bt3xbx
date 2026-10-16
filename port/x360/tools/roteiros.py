@@ -75,7 +75,7 @@ CONTEUDO = {
     "menu_e_b.c:290": "retrato", "menu_e_b.c:367": "estagio", "menu_e_b.c:469": "448 s2",
     "menu_e_b.c:771": "retrato", "menu_e_b.c:784": "estagio",
     "menu_g_c.c:195": "448 s1",
-    "menu_h_b.c:49": "463 s1", "menu_h_b.c:119": "retrato", "menu_h_b.c:849": "retrato",
+    "menu_h_b.c:49": "463 s1", "menu_h_b.c:125": "retrato", "menu_h_b.c:861": "retrato",
     "menu_h_d.c:650": "461 s1", "menu_h_d.c:1221": "pagina_treino",
     "menu_i_b.c:24": "473 s2", "menu_i_c.c:173": "473 s3",
     "menu_i_d.c:98": "retrato", "menu_i_d.c:172": "450 s2", "menu_i_d.c:346": "retrato",
@@ -552,6 +552,9 @@ TELAS_MEM = {
     54: ["459 s3", "retrato"],                      # DcPass, com o retrato da senha aceita
     55: ["459 s2", "retrato"],                      # DcList, com o retrato do registro
     56: ["459 s4"],                                 # ReplayMenu
+    60: ["463 s1", "retrato"],                      # Referência, lista e detalhes
+    70: ["472 s2"],                                 # Shenlong, lista de desejos
+    71: ["472 s2", "mcflow"],                       # ShenSave, diálogo e cartão
     62: ["453 s1"],                                 # Option (menu_opcoes)
     # o Ultimate Battle (etapa 9b, menus-ub.md): o pacote 00451 por seção, o tabuleiro, o ranking e os cursos inteiros;
     # nas seleções, o retrato do cursor (os retratos do tabuleiro e do ranking só existem no anúncio da luta)
@@ -918,7 +921,7 @@ def semmapa(a):
 # antes da luta; a luta (LUTA quadros depois de começar, só com IMG=luta); e cada "marca" do
 # roteiro (os retratos 923 e 921 vivos, as páginas do Treino, salvo e carregado), cada "ok som" (a opção mudada) e
 # cada pergunta do cartão ("ok mcflow 12" e "ok mcflow 2", PERGUNTA quadros depois, com o diálogo aberto).
-TELAS_IMG = {4, 33, 34, 35, 38, 39, 40, 44, 45, 48, 49, 50, 53, 54, 55, 56, 62, 6, 7, 8, 9, 10} | set(range(13, 31))  # (o essencial, a História da 9a e o
+TELAS_IMG = {4, 33, 34, 35, 38, 39, 40, 44, 45, 48, 49, 50, 53, 54, 55, 56, 60, 71, 62, 6, 7, 8, 9, 10} | set(range(13, 31))  # (o essencial, a História da 9a e o
 # Ultimate Battle da 9b)
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
 

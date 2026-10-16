@@ -1,9 +1,49 @@
-# Shenlong (modo 70, Shen_Init), alcançável no menu principal com as sete esferas (o desbloqueio as dá): chega à
-# lista de desejos e para. O save do Shenlong (ShenSave_Init) só vem depois de um desejo concedido, e com tudo
-# desbloqueado os desejos já são do jogador e o jogo os recusa. Etapa 9.
+# Shenlong: três desejos de dinheiro do dragão 1 sorteado pelo jogo, depois ShenSave (71).
+# O preparo só zera o saldo, com as proteções do desbloqueia; nenhuma troca do sorteio ou da cena.
 inclui boot.txt
+libera desejo
+confere save s32 0x3028 0
 quadros 90
-aperta CIMA                       # Shenlong (o último item do anel)
+aperta CIMA
 aperta X ate tela 70
-quadros 900                       # a cena do dragão até a lista de desejos (a 30 quadros por segundo)
+quadros 900
+marca lista de desejos
+quadros 2
+# A confirmação abre em Não (cursor 1); CIMA escolhe Sim (0).
+aperta X
+quadros 60
+aperta CIMA
+aperta X
+quadros 120
+marca primeiro desejo concedido
+aperta X
+quadros 120
+aperta X
+quadros 60
+aperta CIMA
+aperta X
+quadros 120
+aperta X
+quadros 120
+aperta X
+quadros 60
+aperta CIMA
+aperta X
+quadros 120
+aperta X
+aperta X ate tela 71 max 2400
+espera mcflow 12
+quadros 60
+aperta ESQUERDA
+aperta X
+espera mcflow 13
+quadros 60
+aperta ESQUERDA
+aperta X
+espera mcflow 15
+espera mcflow 0
+espera tela 4
+confere save s32 0x3028 15000
+confere save s32 8 0
+quadros 60
 fim
