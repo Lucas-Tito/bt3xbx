@@ -1068,3 +1068,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Só esses valores nativos correspondentes recebem normalização. A cena também produz 48 palavras de
   cor `3C 3C 3C 80` por buffer da GPU, o erro conhecido da F5, antes de qualquer luta. A exceção é só
   na tela 70 e com teto 48, sem liberar o teto da luta nas outras telas. `menus-ref.md`, seção 9.
+
+- **Imagens compostas do Shenlong (9c-4).** A lista e a recompensa são desenhadas sobre a cena 3D do
+  dragão. Nas duas capturas dos mesmos quadros as builds diferiram em 40.950 e 27.650 pixels; a cena usa
+  o motor da luta, com o erro de cores da F5 visto também na memória dos pacotes. Pela exceção da tarefa,
+  essas duas imagens ficam para a F5. O roteiro confere saldo 0 e 5.000 no lugar das marcas, conservando
+  os quadros, a cena executada e sua memória. O modo 71 continua nas imagens. Não use uma tolerância de
+  pixels nem apresente a imagem composta como prova da UI sobreposta: ela também fica sem essa prova.

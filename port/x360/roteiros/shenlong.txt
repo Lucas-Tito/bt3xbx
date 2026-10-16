@@ -7,7 +7,7 @@ quadros 90
 aperta CIMA
 aperta X ate tela 70
 quadros 900
-marca lista de desejos
+confere save s32 0x3028 0         # cena 3D fora das imagens até a F5
 quadros 2
 # A confirmação abre em Não (cursor 1); CIMA escolhe Sim (0).
 aperta X
@@ -15,7 +15,7 @@ quadros 60
 aperta CIMA
 aperta X
 quadros 120
-marca primeiro desejo concedido
+confere save s32 0x3028 5000      # primeiro prêmio, concedido pelo jogo
 aperta X
 quadros 120
 aperta X

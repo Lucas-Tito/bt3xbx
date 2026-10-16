@@ -104,7 +104,7 @@ recusados com tudo desbloqueado não vale para dinheiro: ambos os `IsOwned` devo
 Não é necessário mudar o sorteio. O dragão 1 concede três vezes 5.000, abre o modo 71 e grava por
 McFlow 12, 13, 15 e 0. O saldo 15.000 e os bits das esferas zerados são conferidos no save em memória
 e também nos arquivos das duas builds na rodada. A cena do dragão continua fora das imagens até a F5;
-as capturas do modo 70 só começam nas marcas da lista e da recompensa. O modo 71 entra no critério.
+as duas capturas compostas do modo 70 (lista e recompensa sobre a cena) ficam fora. O modo 71 entra no critério.
 
 ## 5. Recusas dos conversores
 
@@ -210,3 +210,17 @@ A tela 71 passou sem essa exceção. Os 11 controles negativos foram recusados: 
 overArg, os dois elos da cabeça, número e id de nó, slots do clip, outro dono, outro tipo e a 49a palavra.
 O controle intacto passou. Os dumps estragados foram rejulgados desde o `memdiff`, não só na saída textual;
 somente o caso do teto estraga a saída textual com a soma correspondente atualizada.
+
+## 10. Imagens e o limite da F5
+
+A Referência teve quatro imagens idênticas, sem abrir `ChrView`. No Shenlong, a imagem do menu principal
+foi idêntica, mas as duas capturas compostas da cena 3D com a lista e a recompensa diferiram nos mesmos
+quadros/vblanks: 40.950 pixels na lista (vblank 4.738, maior desvio 22) e 27.650 na recompensa (5.174,
+maior desvio 16), retângulo (0,0)..(511,343). Não são imagens aprovadas. A cena depende do motor de luta
+com o erro de cores já conhecido da F5, e a tarefa autoriza deixá-la fora das imagens.
+
+O roteiro troca as duas marcas por verificações de saldo 0 e 5.000, nos mesmos quadros, conservando a
+execução, a comparação de memória da tela 70 e todo o caminho até o save. A cena e as imagens compostas
+da lista e da recompensa ficam para a F5; não se afirma igualdade de pixels da UI sobreposta a ela.
+Não há máscara de pixels nem imagem tolerada como igual. As cinco imagens do roteiro final são menus:
+menu principal antes/depois e três capturas do modo 71 (entrada, saída e pergunta do cartão).
