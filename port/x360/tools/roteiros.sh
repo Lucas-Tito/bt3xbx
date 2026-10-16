@@ -37,7 +37,8 @@
 #      momento do roteiro (ancorado numa linha do rastro: roteiros.py imagens), idênticas byte a byte (roteiros.py
 #      compara_imagens; a diferença diz a tela, o quadro e quantos pixels). As imagens ficam em $O/NOME/img (no WSL,
 #      nunca no repositório). JANELA=8: quadros pintados antes de cada imagem (port/x360/headless/imagens.c).
-#      IMG=luta: também a luta (idêntica desde a F5, etapa 4: as cores dos efeitos, plano/F5/04.md)
+#      A luta entra também, desde a F5, etapa 4 (idêntica desde a correção das cores dos efeitos, plano/F5/04.md;
+#      decisão do Lucas, 16/10/2026); IMG=menus deixa a luta de fora, como até a F4 (IMG=luta continua aceito)
 #   TP=3600     segundos da PPC no qemu
 #   MEM=menu    a memória no menu principal em vez do fim (SEMMAPA=1)
 #   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
@@ -282,14 +283,14 @@ for n in "${NOMES[@]}"; do
     if [ -n "${IMG:-}" ]; then
         # as imagens das telas (F4, etapa 6): o rasterizador de software na x86 e na PPC sem mapa (os mesmos arquivos
         # convertidos do passo 5), no mesmo momento de cada tela, ancorado no rastro (roteiros.py imagens: a entrada e
-        # a saída de cada tela de menu do essencial, a carga, cada marca, cada "ok som", cada pergunta do cartão; a
-        # luta só com IMG=luta),
+        # a saída de cada tela de menu do essencial, a carga, cada marca, cada "ok som", cada pergunta do cartão; e
+        # a luta, salvo com IMG=menus),
         # gravado em PPM por port/x360/headless/imagens.c. Só as janelas antes de cada imagem se pintam
         # (BT3_IMAGENS_JANELA, BT3_GS_FROM): pintando tudo, a PPC levaria umas três horas por roteiro. O rastro de cada
         # rodada tem de ser o da x86 (o mesmo momento), e as imagens idênticas byte a byte (roteiros.py
         # compara_imagens: a tela, o quadro e quantos pixels diferem)
         I=$D/img
-        LUTAARG=(); [ "$IMG" != luta ] || LUTAARG=(--luta)
+        LUTAARG=(--luta); [ "$IMG" != menus ] || LUTAARG=()
         python3 port/x360/tools/roteiros.py imagens $D/telas_a.txt "${LUTAARG[@]}" > $D/imagens.txt
         [ -s $D/imagens.txt ] || falhou "imagens: lista vazia (o rastro da x86?)"
         IMGENV=(BT3_GS=1 BT3_GS_FROM=1000000000 BT3_IMAGENS_JANELA=${JANELA:-8})
