@@ -50,6 +50,12 @@ void ShenSave_Init(s32 section) {
     memset(gShenSave, 0, sizeof(ShenSave));
     gShenSave->pack = PACK_AT(gMenuArc12, section);
     gShenSave->res = Sprite_Unpack(gShenSave->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gShenSave->res, ((s32 *)gShenSave->pack)[0], "menu_shenlong");
+    }
+#endif
     Dialog_Init(PACK_AT(gShenSave->res, 10), NULL, 0);
     McFlow_Init(1);
     McFlow_SetDoneCb(0, ShenSave_OnFlowDone, 0);

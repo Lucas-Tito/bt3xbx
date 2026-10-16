@@ -240,7 +240,14 @@ void Conv_MenuEntrySel(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuTourBg(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuBracket(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
+void Conv_MenuInativo(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuCharRef(ConvCtx *c, conv_ofs base, conv_ofs tam);
+void Conv_MenuShenlong(ConvCtx *c, conv_ofs base, conv_ofs tam);
+
 static const Formato sFormatos[] = {
+    {"menu_inativo", Conv_MenuInativo},         /* sem leitor: só bytes, menus-ref.md */
+    {"menu_charref", Conv_MenuCharRef},         /* menus-ref.md, modo 60 */
+    {"menu_shenlong", Conv_MenuShenlong},       /* modos 70 e 71 */
     {"personagem", Conv_Personagem},           /* file[0] do slot: modelo, texturas, parâmetros, lábio */
     {"personagem_anim", Conv_PersonagemAnim},  /* file[1]: animações em BPE (só a tabela e os cabeçalhos) */
     {"personagem_efeitos", Conv_PersonagemEfeitos}, /* file[2]: pacote de efeitos */
@@ -314,6 +321,14 @@ static const Formato sFormatos[] = {
    Sprite_Unpack (menus.md 4); a conv_tool usa estas linhas no --mapa e no --disco. As faixas da mesma seção não se
    sobrepõem (a conv_tool confere a cada execução: faixas_conferidas). */
 static const ConvFaixa sFaixas[] = {
+    /* Referência e Shenlong (menus-ref.md); a seção 1 do 472 não tem Sprite_Unpack no jogo. */
+    {462, 462, CONV_ARQ, "menu_pacote"}, /* tabela de três seções vazias */
+    {472, 472, 1, "menu_inativo"},
+    {473, 473, 1, "menu_inativo"},
+    {463, 463, CONV_ARQ, "menu_pacote"},
+    {463, 463, 1, "menu_charref"},
+    {472, 472, CONV_ARQ, "menu_pacote"},
+    {472, 472, 2, "menu_shenlong"},
     /* arquivos comuns (comuns.md): ids 2..5 lidos na partida, 6 e 7 o HUD de cada idioma */
     {1, 1, CONV_ARQ, "comum1"},
     {2, 2, CONV_ARQ, "comum2"},

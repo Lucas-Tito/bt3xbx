@@ -553,6 +553,12 @@ void Shen_Init(ShenWork *work, s32 section) {
 
     work->pack = PACK_AT(gMenuArc12, section);
     work->res = Sprite_Unpack(work->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(work->res, ((s32 *)work->pack)[0], "menu_shenlong");
+    }
+#endif
 
     Shen_DebugFile("host:data/test/shenron/sr_select_top_tex_PS2_.dbt");
     res = PACK_AT(work->res, 4);

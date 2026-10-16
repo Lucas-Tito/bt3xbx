@@ -47,6 +47,12 @@ void CharRef_Init(s32 section) {
     memset(gCharRef, 0, 0x1638);
     gCharRef->pack = (u32 *)MPACK_AT(gMenuArc9, section);
     gCharRef->res = Sprite_Unpack(gCharRef->pack, NULL, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gCharRef->res, ((s32 *)gCharRef->pack)[0], "menu_charref");
+    }
+#endif
     CR_RES(15);
     gCharRef->bg = res;
     CR_RES(13);
@@ -117,6 +123,12 @@ void CharRef_Init(s32 section) {
     gCharRef->imageRes = Heap_Alloc(0x20800, 0x20, 0, 2);
     File_LoadSync(CHARREF_IMAGE_FILE, gCharRef->imageFile, CHARREF_IMAGE_SIZE);
     Sprite_Unpack(gCharRef->imageFile, gCharRef->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gCharRef->imageRes, ((s32 *)gCharRef->imageFile)[0], "menu_texfile");
+    }
+#endif
     res = gCharRef->imageRes;
     Res_RelocateOffsets(&res, res, res);
     gCharRef->tex[2] = MTEX(res, 0);
@@ -847,6 +859,12 @@ void CharRef_UpdateImage(void) {
     case CHARREF_LOAD_UNPACK:
         res = NULL;
         Sprite_Unpack(gCharRef->imageFile, gCharRef->imageRes, NULL);
+#ifdef PORT_BIG_ENDIAN /* Converte os números antes do primeiro leitor. */
+    {
+        extern void Port_ConvertMenuPack(void *buf, s32 size, const char *format);
+        Port_ConvertMenuPack(gCharRef->imageRes, ((s32 *)gCharRef->imageFile)[0], "menu_texfile");
+    }
+#endif
         res = gCharRef->imageRes;
         Res_RelocateOffsets(&res, res, res);
         gCharRef->tex[2] = MTEX(res, 0);
