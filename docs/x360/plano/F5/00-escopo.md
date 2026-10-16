@@ -159,7 +159,7 @@ planejamento pela leitura do código, não medições de execução. WSL signifi
 revisão do 360 são no Linux. Nenhuma dessas execuções foi feita no estudo.
 
 | # | Onde | O que faz | Critério de saída | Tamanho estimado | Estado |
-|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|
 | 1 | WSL e console | Teto total de memória do backend e descarte seguro por uso; contagem de recursos pendentes, alvos e buffers; tratamento de pressão e falha | Travessia curta menu/carga/luta volta sem esgotar memória ou travar a Guide; bytes reais dentro do orçamento, sem usar textura branca para esconder falta de memória; descarte validado com referências ainda vivas | 2 a 4 dias | por fazer; perguntas 2 e 5 |
 | 2 | WSL e console | Instalador de PC da decisão 23, gerando ISO convertida do mesmo tamanho; marca/versionamento e recusa clara da original; retirar conversão de arquivo na carga do 360 | Saída reaberta equivalente aos conversores por arquivo, offsets/tamanhos ISO e AFS preservados; original intacta; instalador recusa reconversão; jogo aceita a convertida válida e recusa original, truncada, incompleta ou incompatível; boot e luta pela nova mídia | 2 a 4 dias | por fazer; pergunta 3 |
 | 3 | WSL, confirmação no console | Fechar `f5_duelo`/`f5_treino`, matriz de ações, pontos de memória e captura; instrumentar tempo por passo e contadores de descarte | Duas x86 repetíveis; ações confirmadas, ids e estado inicial fixos; verificadores recusam resultado ausente, roteiro cortado, ação não alcançada e log de outro commit | 1 a 2 dias | por fazer; perguntas 1 e 8 |
