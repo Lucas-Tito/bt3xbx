@@ -7,7 +7,9 @@ quadros 90
 aperta CIMA
 aperta X ate tela 70
 quadros 900
-confere save s32 0x3028 0         # cena 3D fora das imagens até a F5
+# A lista e a recompensa compostas sobre a cena 3D: imagens desde a F5, etapa 4 (plano/F5/04.md).
+confere save s32 0x3028 0
+marca lista sobre a cena
 quadros 2
 # A confirmação abre em Não (cursor 1); CIMA escolhe Sim (0).
 aperta X
@@ -16,6 +18,7 @@ aperta CIMA
 aperta X
 quadros 120
 confere save s32 0x3028 5000      # primeiro prêmio, concedido pelo jogo
+marca recompensa sobre a cena
 aperta X
 quadros 120
 aperta X
