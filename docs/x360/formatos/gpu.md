@@ -89,7 +89,9 @@ de 16 bits a metade little-endian, os índices de 8 e 4 bits o byte e o nibble q
 - Vetores `u8 rgba[4]` em structs de vértice e de pacote dos efeitos da luta (`EftGsVtx`, `EftStripPkt`,
   `EftLinePkt`, `EftSteamPkt`, `EftWaterGsVtx`, `EftWaterSpritePkt`, `EftTGsVtx`, `EftAeGsVtx`, `EftPGsVtx`,
   `EftSGsVtx`, `EftUGsVtx`): o índice do byte não se permuta na declaração; cada gravação `rgba[i]` precisa de um
-  índice trocado (cerca de 150 em `src/battle`). Fase da luta (F5).
+  índice trocado (cerca de 150 em `src/battle`). Fase da luta (F5). **Feito na F5, etapa 4** (`plano/F5/04.md`):
+  os 148 índices trocados no ramo `PORT_BIG_ENDIAN` e mais 11 quartetos com nome (`EftBRgbaq`...) permutados no
+  layout; `tools/cores.py` confere o inventário em cada build da PPC.
 - Os pacotes da VU1 nas tabelas do executável (`vu1_micro.data`, `D_002BF6B0`..., `include/sys/vu1_packet.h`: códigos
   VIF, microcódigo e constantes) são declarados `u8[]`, e o mapa das tabelas os deixa como vieram do disco (15.568
   bytes de largura 1); o VIF e a VU1 os leem como `u32`. Têm de ser tipados como palavras antes da F5. **Feito na F4,
