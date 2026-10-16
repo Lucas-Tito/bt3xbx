@@ -323,6 +323,17 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 - **O relatório do agente não é verdade:** confira cada achado antes de corrigir (a maioria
   procede, mas não todos).
 - **Fazer o programa dizer onde morreu antes de adivinhar** (vale para o console e para a F1).
+- **Separar rodar de analisar (16/10/2026).** O emulador não custa token; custa o agente vivo esperando por ele. A
+  cada passo o agente reenvia o contexto inteiro, e uma espera de mais de 5 min expira o cache e o regrava inteiro.
+  Na tarefa 9c-2 foram 36,7 milhões de tokens de leitura de cache e 2,7 milhões de escrita, contra poucos milhares de
+  saída (o código). Por isso, numa rodada longa (a conferência oficial, os roteiros de uma tarefa, a rodada completa):
+  1. o agente prepara o commit e dispara a rodada num serviço (`systemd-run` no WSL; `setsid` com log no Deck) e
+     termina, entregando o que falta conferir;
+  2. um vigia de shell em segundo plano (que não gasta token) espera o fim do serviço;
+  3. só então um agente novo, com contexto pequeno, lê o resultado da rodada e age: "tudo certo" fecha a tarefa; uma
+     falha vira uma tarefa nova com a linha da falha e o caminho do log.
+
+  Rodadas curtas de desenvolvimento (uma build, um roteiro durante a investigação) continuam dentro do agente.
 
 ---
 
