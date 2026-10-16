@@ -342,3 +342,5 @@ parar com estado e hipóteses documentados e apenas o trabalho provado em commit
    disponível na luta (`src/battle/btl_act_j.c`). Trajes, estágio e ações obrigatórias ficam com a etapa 3.
 2. a 9. **Com as recomendações (16/10/2026):** 2b, 3a com a região provada e 3c, 4b, 5a com pausa, 6a medida cedo,
    7a, 8b e 9a. Texto em [decisoes.md](../../decisoes.md), decisão 24.
+
+Preparo das etapas 3 e 4: [inventário das cores, ids e trajes da luta](inventario.md).
