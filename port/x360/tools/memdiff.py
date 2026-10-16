@@ -72,7 +72,7 @@ quem alocou.
 
 Para cada região com marcação, uma linha "marcas REGIAO ARQ: conforme N, fora-do-formato M" (também com --resumo).
 """
-import bisect, os, struct, subprocess, sys
+import bisect, os, re, struct, subprocess, sys
 from collections import Counter
 
 BASE = 0x20000000  # -Ttext-segment de headless.py
@@ -300,7 +300,8 @@ def pelo_tipo(dx, dp, m, fx, fp, n, base=0):
                 prox = float_proximo(struct.unpack("<I", a)[0], struct.unpack(">I", b)[0])
         elif c == 0x84 and w == 4:
             va, vb = struct.unpack("<I", a)[0], struct.unpack(">I", b)[0]
-            ok = a == b[::-1] or (fx[0] <= va < fx[1] and fp[0] <= vb < fp[1])
+            ok = (a == b[::-1] or (fx[0] <= va < fx[1] and fp[0] <= vb < fp[1]) or
+                  PONTEIROS_PILHA.get(base + k) == (va, vb))
         else:  # byte, enchimento, continuação solta
             ok = a == b
         classes["conforme" if ok else "float-proximo" if prox else "fora-do-formato"] += 1
@@ -312,6 +313,140 @@ def pelo_tipo(dx, dp, m, fx, fp, n, base=0):
                 trechos.append([k, k + w])
         k += w
     return classes, [tuple(t) for t in trechos]
+
+
+# Sobreposições de símbolos da bss: gCharRefState tem só 16 bytes no esqueleto, mas CharRef_Init grava nove
+# handlers. Os cinco seguintes coincidem com globais de outros modos. Só os nove endereços EXATOS das funções,
+# em ambas as builds e nas posições esperadas, autorizam a visão de ponteiros. menus-ref.md, seção 6.
+REF_HANDLERS = ["CharRef_StateIntro", "CharRef_StateList", "CharRef_StateDetails", "CharRef_StateProfile",
+                "CharRef_StateVoice", "CharRef_StateComment", "CharRef_StateCostume", "CharRef_StateView",
+                "CharRef_StateViewWait"]
+REF_ALIASES = ["gUbMenuPlate3Open", "gSimTrainOutcome0", "gSimTrainOutcome1", "gSimTrainOutcome2", "gSimCardShown"]
+
+
+def contexto_charref(x, p, lx, lp, pares, donos):
+    """Visões provadas pelos valores nativos, símbolos, estado e dono; nenhuma faixa genérica de ponteiros."""
+    def simbolos(linhas):
+        return {q[-1]: int(q[0], 16) for l in linhas if len(q := l.split()) >= 3}
+    sx, sp = simbolos(lx), simbolos(lp)
+    def palavra(regioes, addr, ordem):
+        b = ler_endereco(regioes, addr, 4)
+        return struct.unpack(ordem + "I", b)[0] if b is not None and len(b) == 4 else None
+    aliases, vazios = set(), {}
+    lados = ((x, sx, "<"), (p, sp, ">"))
+    if all(all(f in s for f in REF_HANDLERS + REF_ALIASES + ["gCharRefState"]) and
+               all(palavra(r, s["gCharRefState"] + i * 4, o) == s[f] for i, f in enumerate(REF_HANDLERS)) and
+               all(s[f] == s["gCharRefState"] + (i + 4) * 4 for i, f in enumerate(REF_ALIASES))
+           for r, s, o in lados):
+        aliases.update(REF_ALIASES)
+    # Dois buffers do ChrView alocados, ainda sem arquivo: só a primeira palavra foi escrita. O restante nunca
+    # foi inicializado. Exige tela 60 nas duas, o trabalho vivo e tipado com o dono exato, e os campos dos slots.
+    trabalhos = []
+    for r, s, o in lados:
+        if "gChrView" not in s or "gProgress" not in s:
+            return aliases, vazios
+        prog = palavra(r, s["gProgress"], o)
+        work = palavra(r, s["gChrView"], o)
+        if prog is None or work is None or palavra(r, prog + 0x18, o) != 60:
+            return aliases, vazios
+        if any(palavra(r, work + d, o) != 0 for d in (0x24, 0x30, 0x34, 0x3c)):
+            return aliases, vazios
+        trabalhos.append(work)
+    dono = donos.get(trabalhos[0])
+    if not dono or dono[0] != "ChrView" or len(dono[1]) != 0xbc or \
+            not dono[2].startswith("ChrView_Init@view_a_d.c:") or " < CharRef_Init@menu_h_b.c:" not in dono[2]:
+        return aliases, vazios
+    works = [nome for (nome, a, b), (_, c, d) in pares
+             if nome.startswith("heap#") and min(len(b), len(d)) >= 0x20
+             and struct.unpack_from("<I", b, 0)[0] == MAGIC and struct.unpack_from(">I", d, 0)[0] == MAGIC
+             and struct.unpack_from("<I", b, 0x14)[0] == trabalhos[0]
+             and struct.unpack_from(">I", d, 0x14)[0] == trabalhos[1]
+             and struct.unpack_from("<I", b, 0x18)[0] == 0xbc and struct.unpack_from(">I", d, 0x18)[0] == 0xbc
+             and struct.unpack_from("<i", b, 4)[0] != 0 and struct.unpack_from(">i", d, 4)[0] != 0]
+    if len(works) != 1:
+        return aliases, vazios
+    for i in range(2):
+        buffers = []
+        for (r, s, o), work in zip(lados, trabalhos):
+            ofs = work + 0x40 + i * 0x38 + 8
+            if palavra(r, ofs + 4, o) != 0 or palavra(r, ofs + 8, o) != 0xffffffff:
+                break
+            buf = palavra(r, ofs, o)
+            if buf is None or palavra(r, buf, o) != 0:
+                break
+            buffers.append(buf)
+        if len(buffers) != 2:
+            continue
+        for (nome, ax, dx), (_, ap, dp) in pares:
+            if not nome.startswith("heap#") or len(dx) < 0x20 or len(dp) < 0x20:
+                continue
+            if (struct.unpack_from("<I", dx, 0x14)[0], struct.unpack_from(">I", dp, 0x14)[0]) != tuple(buffers):
+                continue
+            if struct.unpack_from("<i", dx, 4)[0] == 0 or struct.unpack_from(">i", dp, 4)[0] == 0 or \
+                    struct.unpack_from("<I", dx, 0x18)[0] != 0xce000 or struct.unpack_from(">I", dp, 0x18)[0] != 0xce000:
+                continue
+            d0 = buffers[0] - ax
+            if buffers[1] - ap != d0 or d0 + 0xce000 > min(len(dx), len(dp)):
+                continue
+            vazios[nome] = (d0 + 4, d0 + 0xce000, i)
+    return aliases, vazios
+
+
+# Os dois extremos da lista do Shenlong apontam para o nó cabeça, que mora no trabalho local de Shen_Run.
+# O endereço da cabeça é FlashTl.owner - offsetof(ShenWork, flash) + offsetof(ShenWork, list), isto é, owner+0x370.
+PONTEIROS_PILHA = {}
+
+
+def contexto_shen(pares, donos):
+    raizes, clips, nos = [], [], []
+    for (nome, ax, dx), (_, ap, dp) in pares:
+        if not nome.startswith("heap#") or min(len(dx), len(dp)) < 0x20:
+            continue
+        d0 = struct.unpack_from("<I", dx, 0x14)[0] - ax
+        p0 = struct.unpack_from(">I", dp, 0x14)[0] - ap
+        pedido = struct.unpack_from("<I", dx, 0x18)[0]
+        if struct.unpack_from("<i", dx, 4)[0] == 0 or struct.unpack_from(">i", dp, 4)[0] == 0 or \
+                struct.unpack_from(">I", dp, 0x18)[0] != pedido or d0 != p0 or d0 + pedido > min(len(dx), len(dp)):
+            continue
+        dono = donos.get(ax + d0)
+        if not dono:
+            continue
+        tipo, marcas, quem = dono
+        if tipo == "FlashTl" and pedido == 0x18 and len(marcas) == 0x18 and \
+                re.match(r"Flash_Create@gfxm_c.c:\d+ < Shen_Init@late_a.c:\d+ < Shen_Run@", quem):
+            raizes.append((ax + d0, struct.unpack_from("<I", dx, d0)[0], struct.unpack_from(">I", dp, p0)[0]))
+        if tipo == "FlashClip" and pedido == 0x10ec and len(marcas) == 0xe4 and \
+                re.match(r"FlashClipList_Init@gfxm_c.c:\d+ < Flash_Create@gfxm_c.c:\d+ < Shen_Init@", quem):
+            clips.append((ax + d0, dx[d0:d0 + pedido], dp[p0:p0 + pedido]))
+        if tipo == "ShenNode" and pedido == 0x14 and len(marcas) == 0x14 and \
+                re.match(r"ShenList_Build@late_a.c:\d+ < Shen_BuildList@late_a.c:\d+ < Shen_Init@", quem):
+            no = struct.unpack_from("<I", dx, d0)[0]
+            if no == struct.unpack_from(">I", dp, p0)[0]:
+                nos.append((no, ax + d0, dx[d0:d0 + pedido], dp[p0:p0 + pedido]))
+    if len(raizes) != 1 or len(clips) != 1 or sorted(n[0] for n in nos) != list(range(1, 7)):
+        return {}
+    raiz, ox, op = raizes[0]
+    ca, cx, cp = clips[0]
+    owners = (ox, op)
+    if any((struct.unpack_from("<I", cx, i * 0xe4 + 0xcc)[0],
+            struct.unpack_from(">I", cp, i * 0xe4 + 0xcc)[0]) != owners for i in range(19)):
+        return {}
+    cabecas = (ox + 0x370, op + 0x370)
+    certos = {raiz: owners}
+    caixas = 0
+    for i in range(19):
+        certos[ca + i * 0xe4 + 0xcc] = owners
+        over = (struct.unpack_from("<I", cx, i * 0xe4 + 0xc8)[0], struct.unpack_from(">I", cp, i * 0xe4 + 0xc8)[0])
+        if over in [(ox + 0xe4 + k * 0x8c, op + 0xe4 + k * 0x8c) for k in range(5)]:
+            certos[ca + i * 0xe4 + 0xc8] = over
+            caixas += 1
+    print(f"ponteiros Shen: raiz e 19 owners iguais ao filme local, {caixas} overArg nas caixas provadas")
+    for no, addr, dx, dp in nos:
+        campo = 0xc if no == 1 else 0x10 if no == 6 else None
+        if campo is not None and (struct.unpack_from("<I", dx, campo)[0], struct.unpack_from(">I", dp, campo)[0]) == cabecas:
+            certos[addr + campo] = cabecas
+            print(f"ponteiros Shen: nó {no} +{campo:#x}, cabeça do trabalho local conferida nas duas builds")
+    return certos
 
 
 def main():
@@ -451,6 +586,11 @@ def main():
         print(f"--marcas-vivas: {len(vivas)} arquivos e conteúdos, {len(vivos)} vivos em "
               f"{sum(len(a) == 1 for a in reclamados.values())} blocos, {sem_bloco} sem bloco, {ambiguas} ambíguos")
     listar = {"diferente"} | ({"2xu16", "u64", "u64-com-zero", "igual-sem-inverter"} if estrito else set())
+    PONTEIROS_PILHA.clear()
+    PONTEIROS_PILHA.update(contexto_shen(pares, donos))
+    ref_aliases, ref_vazios = contexto_charref(x, p, lx, lp, pares, donos)
+    for nome in sorted(ref_aliases):
+        print(f"aliases CharRef: {nome}, handler exato conferido nas duas builds")
     livres = Counter()
     tipadas, tipados_heap = [0], [0]
     for (nx, ax, dx), (np_, ap, dp) in pares:
@@ -473,12 +613,21 @@ def main():
             # (e o HeapBlock.unk1C, +0x1C do cabeçalho, que o alocador nunca grava: src/sys/heap.c)
             pula = [(0x1C, 0x20), (0x20, dados_ini), (dados_ini + pedido, n - 4)]
             livres["enchimento"] += sum(max(0, b_ - a_) for a_, b_ in pula)
+        if nx in ref_vazios:
+            a_, b_, slot = ref_vazios[nx]
+            # Não cobre conteúdo identificado pelas marcas; tampouco a primeira palavra inicializada ou o cabeçalho.
+            if nx not in marcas:
+                pula.append((a_, b_))
+                print(f"não inicializado: {nx}, ChrView.slot[{slot}].file[0], {b_ - a_} bytes após a primeira palavra")
         trechos, ini, fim = [], None, None
         fmt_ini = fmt_fim = 0
         dono = None
         if estado.startswith(" (em uso") and nx not in marcas and donos:
             dono = donos.get(struct.unpack_from("<I", dx, 0x14)[0])
-        if nx in tipos and not nx.startswith(("heap", "scratch")):
+        if nx in ref_aliases and n == 4:
+            classes["conforme"] += 1
+            fmt_ini, fmt_fim = 0, 4
+        elif nx in tipos and not nx.startswith(("heap", "scratch")):
             # uma global com o tipo do DWARF: campo a campo, e fora disso (o espaço até o símbolo seguinte) por palavra
             ct, tt = pelo_tipo(dx, dp, tipos[nx], fx, fp, n, ax)
             classes.update(ct)

@@ -1039,3 +1039,32 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   O pai e o filho estavam em espera, sem gastar CPU, e o simbolizador tinha um socket aberto. O `roteiros.sh`
   agora exporta `DEBUGINFOD_URLS=` para os filhos: usa apenas o executável e o DWARF locais. Uma rodada
   interrompida por essa espera não conta como aprovação e precisa ser refeita.
+
+- **Referência (9c-4): a memória exige duas provas além dos conversores.** O esqueleto reserva só quatro
+  ponteiros para `gCharRefState`, mas `CharRef_Init` grava nove: os cinco seguintes ocupam nomes de globais
+  do Ultimate Battle. Confirme os nove endereços de handlers e a posição dos símbolos nas duas builds antes
+  de usar a visão sobreposta, sem liberar toda a faixa de ponteiros. `ChrView_Init` também aloca dois buffers
+  de 0xCE000 e só zera a primeira palavra: sem `ChrView_Show`, o restante não foi inicializado. Só fica fora
+  da comparação com trabalho vivo e dono provado, tela 60, estado inativo, slot size 0/id -1, buffer vivo
+  apontado pelo slot e primeira palavra zero nas duas. `menus-ref.md`, seção 6, registra valores e limites.
+  Não trate esses restos como conteúdo convertido nem aumente uma tolerância genérica pelo tamanho.
+- **Consulta de processos ao iniciar roteiros.** Grave o script de conferência e o execute em outra chamada.
+  Se o mesmo `bash -c` contém o texto `roteiros.sh` ao criar um script e depois o executa, `pgrep -af` encontra
+  o próprio shell pai e a proteção recusa começar. Isso não indica outro emulador; mantenha a proteção e separe
+  a gravação do script da chamada que o executa.
+- **ShenWish copiado inteiro (9c-4).** A x86r instrumenta `*destino = *origem` de uma struct de oito bytes
+  com `__asan_loadN_noabort(N=8)`, mesmo que gere dois `mov` de 32 bits. `ShenList_Fill` copia id e kind
+  assim; a PPC tem dois `lwz` e dois `stw`, sem trocar as metades. Não mude o conversor para u64 por causa
+  do mapa. Prove a cópia nas duas arquiteturas e limite a explicação às posições e ao leitor alcançados,
+  com testes que recusem outro leitor e uma lista de PCs cheia. Prova e limites em `menus-ref.md`, seção 7.
+- **Shenlong não avança da carga sem os modelos dos atores (9c-4).** Os ids 0xD3C/0xD3D/0xD45 e
+  0xD46/0xD47 são slots file[0] de `BtlRes_Request` usados por `BtlObj_Create`, no mesmo formato de 252
+  entradas dos personagens. Eram exceções antigas do rastreio, sem conversor, e a PPC ficava no vblank 3.000.
+  O conversor `personagem` já cobre os cinco inteiros. Associá-los à tabela de faixas resolve a carga sem
+  trocar o sorteio, simular a cena ou mudar o jogo. Prova dos leitores e cobertura em `menus-ref.md`, seção 8.
+- **Shenlong: a lista também aponta para a pilha.** Além de owner e overArg do filme, o `prev` do primeiro
+  nó e o `next` do último apontam para a cabeça em `Shen_Run.work.list`. O comparador prova os seis nós,
+  a raiz e os 19 owners, calcula a cabeça como owner + 0x370 e as caixas como owner + 0xE4 + k*0x8C.
+  Só esses valores nativos correspondentes recebem normalização. A cena também produz 48 palavras de
+  cor `3C 3C 3C 80` por buffer da GPU, o erro conhecido da F5, antes de qualquer luta. A exceção é só
+  na tela 70 e com teto 48, sem liberar o teto da luta nas outras telas. `menus-ref.md`, seção 9.

@@ -108,9 +108,7 @@ PACOTES = {448, 449, 450, 451, 452, 453, 459, 460, 461, 462, 463, 472, 473}
 # "confere" acusa todo outro "sem conversor" fora de disc/ (um caso novo não pode sumir por não ser de menu). Cada um
 # é pendência da etapa 9 (docs/x360/plano/F4/09a.md e 09c.md).
 CONHECIDOS = {
-    # atores da cena do Shenlong (ShenScene_*, src/battle/view_b_d.c:366, ids 0xD3D e 0xD46): roteiro shenlong
-    "pzs3us1/03388.bin": "Shenlong, ator da cena (id 0xD3D)",
-    "pzs3us1/03397.bin": "Shenlong, ator da cena (id 0xD46)",
+    # Os atores da cena do Shenlong passaram a usar personagem na 9c-4 (menus-ref.md, seção 8).
     # (os três da luta do primeiro episódio da História, 00510, 00560 e 00710, saíram na etapa 9a: o roteiro de evento,
     # os textos e as bocas da luta, formatos/historia-luta.md)
 }
@@ -138,6 +136,14 @@ LARGURA_CONHECIDA = {
         {"BattleSetup_SetMemberByItemIds", "BtlFacade_SetMemberItems"}),
 
 }
+# A instrumentação lê a cópia inteira de ShenWish como oito bytes (__asan_loadN_noabort); a atribuição da struct
+# em ShenList_Fill copia dois s32 independentes. x86r: dois mov de 32 bits; PPC: dois lwz e dois stw, sem trocar
+# as metades. Só as sete posições do grupo do dragão 1, lidas por essa função, foram alcançadas e provadas.
+for _i in range(7):
+    LARGURA_CONHECIDA[("pzs3us1/00472.bin@0x1DE80#bpe", 0x6a0 + _i * 8, 8, 4)] = (
+        "cópia de ShenWish (id s32 e kind u32), dois números de 32 bits preservados na atribuição da struct",
+        {"ShenList_Fill"})
+
 NOTAS_CONV = []  # (conv(): as posições de LARGURA_CONHECIDA achadas, para o confere dizer)
 
 # O caminho essencial da decisão 22 (menus-modos.md 4: 16 pendentes, 5 com gancho)
@@ -268,7 +274,7 @@ def confere_leitores(rastreio, prog):
             erros.append("o rastreio não tem a posição (leitores não conferidos)")
         if fs - previstos:
             erros.append(f"lida também por {', '.join(sorted(fs - previstos))} (a entrada de LARGURA_CONHECIDA só "
-                         f"aceita {', '.join(sorted(previstos))}): confira se o novo leitor lê a metade certa no "
+                         f"aceita {', '.join(sorted(previstos))}): confira se o novo leitor usa a largura e a posição certas no "
                          "big-endian")
         if cheia:
             erros.append("a lista de leitores do rastreio encheu (4 pcs): pode haver um leitor não anotado")
@@ -677,7 +683,7 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
         print(f"{pre}memória: {heap[6:]}")
     for l in linhas:
         if l.startswith(("marcas ambíguas", "marcas iguais", "--marcas-vivas", "--marcas-tam", "livres:", "--tipos:",
-                         "--donos:")):
+                         "--donos:", "aliases CharRef:", "não inicializado:", "ponteiros Shen:")):
             print(f"{pre}  {l}")
     if not any(l.startswith("--tipos: ") for l in linhas):
         print(f"{pre}DIFERENÇA: memória: o memdiff sem --tipos (as globais sem o tipo)")
@@ -773,7 +779,9 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", apos_luta=False, tela_
                     continue  # (nos pacotes da GPU as proibidas já são diferença, acima)
                 teto = next((t[c] for r, t, _ in CLASSES_CONHECIDAS if r == chave_r and c in t), None)
                 if tela is not None and chave_r in SO_NA_LUTA and not apos_luta:
-                    teto = None  # (numa tela de menu antes de qualquer luta, nenhuma: SO_NA_LUTA)
+                    # ShenScene usa o motor 3D antes de qualquer luta. Só as 48 palavras observadas dos pacotes,
+                    # na tela 70; não libera a tabela de ordenação nem o teto de 2048 da luta (menus-ref.md 9).
+                    teto = 48 if str(tela) == "70" and chave_r == PACOTE_GPU and c == "igual-sem-inverter" else None
                 # (no fim, a tela em que o roteiro termina: o historia_novo acaba na lista de episódios, tela 7)
                 t_cl = tela if tela is not None else tela_fim
                 fora_da_tela = chave_r in SO_NAS_TELAS and not (t_cl is not None and str(t_cl).isdigit() and
