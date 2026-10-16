@@ -270,6 +270,12 @@ def ligar(alvo, objs):
     (alvo.b / "CARIMBO").write_text(carimbo())
     # big-endian: as structs do jogo têm de ter o mesmo layout da referência x86 (bitfields.py, #ifdef do jogo)
     if alvo.be:
+        # as cores byte a byte dos pacotes da GPU contra o inventário (F5, etapa 4: plano/F5/inventario.md seção 1)
+        r = run([sys.executable, ROOT / "port/x360/tools/cores.py"])
+        print(r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr.strip()[-300:])
+        if r.returncode:
+            print("\n".join(r.stdout.strip().splitlines()[:-1][:60]))
+            sys.exit(1)
         ref = ROOT / "port/build/x86/bt3_x86"
         if not ref.exists():
             print("AVISO: sem port/build/x86/bt3_x86: layout das structs não conferido")
