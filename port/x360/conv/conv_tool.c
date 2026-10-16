@@ -25,6 +25,7 @@
  *   conv_tool --pecas DADOS [--mapa MAPA.tsv]   as peças comuns dos menus (menus-pecas.md), cada uma só na seção dela
  *                                  dentro do conteúdo descomprimido de cada pacote que a usa (a tabela sUsos), antes
  *                                  de o pacote inteiro ganhar conversor; com --mapa, só as posições dessas seções
+ *   conv_tool --lista-conversores   os nomes com formato, pela mesma escolha do --disco (sem testar existência)
  * Sai com 1 se algum arquivo deu erro ou discordou do mapa.
  */
 #include <stdio.h>
@@ -751,6 +752,21 @@ int main(int argc, char **argv) {
     int i, falhas = 0, disco = 0, so_pecas = 0;
     if (!faixas_conferidas()) {
         return 1;
+    }
+    /* O instalador de PC consulta a mesma escolha de formatos do --disco, sem duplicar faixas em Python.
+       A existência de cada entrada se decide pelo inventário da ISO, como no --disco pelos arquivos extraídos. */
+    if (argc == 2 && strcmp(argv[1], "--lista-conversores") == 0) {
+        int p, n;
+        for (p = 0; p < 3; p++) {
+            for (n = 0; n < 100000; n++) {
+                char rel[64];
+                sprintf(rel, "pzs3us%d/%05d.bin", p, n);
+                if (Conv_FormatoDe(rel) != NULL) {
+                    puts(rel);
+                }
+            }
+        }
+        return ferror(stdout) ? 1 : 0;
     }
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--formato") == 0 && i + 1 < argc) {

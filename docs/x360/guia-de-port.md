@@ -259,6 +259,7 @@ Uma rodada da x86 até a luta leva uns 10 s.
 | detector de visões (`BT3_VISOES` no `rastreio.c`, `visoes.py`) | acusa memória gravada com uma largura e lida com outra (u8 de um s32, u64 sobre dois u32). A lista de pares já tratados fica em `visoes_resolvidas.tsv` |
 | `tipos.py` | liga cada leitura do rastreio a struct e campo do código (coluna do DWARF + AST JSON do clang) |
 | `port/x360/conv/` (`conv_tool`) | conversores por formato em C89, para o instalador do 360 e para o PC: troca in-place com limite conferido e cada byte marcado; `conv_tool --mapa` confere contra o rastreio e mede a cobertura (decisão 12); `--disco` termina com o censo dos arquivos de menu por faixa de id (quantos arquivos e contêineres BPE ainda sem conversor); `--pecas` valida cada peça comum dos menus (`formatos/menus-pecas.md`) só na seção dela, em todo pacote do disco que a usa (a tabela `sUsos`), antes de o pacote inteiro ganhar conversor, e com `--mapa` confere só as posições dessa seção. No `--mapa`, uma leitura de 2, 4 ou 8 bytes sobre texto que o conversor deixou em bytes (o laço do fim do rótulo do Flash vira `strlen` na x86r) conta à parte, "em cadeia de texto lida por inteiro". Arquivo e seção para formato numa tabela só (`sFaixas`, conv.c). A `conv_tool` se compila sem `conv_jogo.c`, a ponte do jogo, que cita funções dele. Cada conteúdo descomprimido (`ARQ@0xN#bpe`) se converte também pelo caminho do jogo (`Conv_FormatoBits`, o mapa de bits de `conv_jogo.c`): bytes, resultado e cobertura têm de ser os mesmos, e o conteúdo tem de caber em `CONV_JOGO_MAX` |
+| `iso_convertida.py` e `teste_iso_convertida.py` | instalação no PC da decisão 23: usa `conv_tool --lista-conversores` e `--saida`, publica uma ISO do mesmo tamanho só depois da reabertura integral; `--conferir --dados DIR` confere outra vez contra os dados extraídos. O teste completo provoca recusas e estragos e roda `--disco`. Contrato e comandos em `formatos/iso-convertida.md`; ainda não muda a carga do 360 |
 | `elfdados.py` | retipa as tabelas de dados do executável (o splat põe `.long` em tudo) pela largura lida |
 | `bitfields.py` | reescreve os campos de bits do C pré-processado para o GCC big-endian ter a ordem do PS2 (no 360 é `#pragma bitfield_order(lsb_to_msb)`) |
 | `headless/chamadas.c`, `chamadas.py` | sequência de funções chamadas nas duas builds, para achar onde a execução se separa |
@@ -477,6 +478,13 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 
 ### 5.5 Conversores por formato
 
+- **A ISO do BT3 também tem UDF (F5, etapa 2).** Não tomar a lacuna entre diretórios e arquivos, nem a cauda da
+  imagem, por espaço livre só pelo ISO 9660: há metadados UDF nesses setores. A marca da ISO convertida ocupa
+  512 bytes de folga interna do cabeçalho AFS0, com limites e ausência de leitores provados em
+  `formatos/iso-convertida.md`. Conferir toda a imagem fora das conversões e da marca preserva também UDF.
+- **Publicar sem substituir exige uma operação atômica.** Testar a existência e depois usar `rename` no Linux
+  ainda pode apagar uma saída criada durante a conversão. Usar `renameat2(RENAME_NOREPLACE)` e provocar essa
+  corrida com um destino preexistente; ambos os arquivos precisam permanecer intactos.
 - Especificação antes do código (`docs/x360/formatos/`), escrita do código da decomp por um agente e
   conferida contra o rastreio por entrada. O conversor segue a especificação seção a seção.
 - Contêiner com tabela de deslocamentos: valide a tabela (contagem, ordem, fim igual ao tamanho do arquivo)
