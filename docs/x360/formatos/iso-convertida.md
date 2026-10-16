@@ -79,7 +79,7 @@ Inteiros em little-endian, hashes em bytes binários. A marca inteira tem 512 by
 
 | Posição relativa | Tamanho | Conteúdo |
 |---|---|---|
-| `0` | 16 | ASCII `BT3X360-ISO`, seguido por seis zeros |
+| `0` | 16 | ASCII `BT3X360-ISO`, seguido por cinco zeros |
 | `16` | 4 | Versão do contrato: 1 |
 | `20` | 4 | Tamanho da marca: 512 |
 | `24` | 8 | Tamanho da origem: 3.020.816.384 |
