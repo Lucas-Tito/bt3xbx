@@ -901,20 +901,41 @@ static inline void EftSprAnim_QueueTri(EftAeScr *v0, EftAeScr *v1, EftAeScr *v2,
     p->h.next = 0;
     p->pad = PS2_PKT64(0);
     p->clampEnd = PS2_PKT64(0);
+#ifdef PORT_BIG_ENDIAN
+    p->v[0].rgba[3] = c0->x;
+    p->v[0].rgba[2] = c0->y;
+    p->v[0].rgba[1] = c0->z;
+    p->v[0].rgba[0] = c0->w;
+#else
     p->v[0].rgba[0] = c0->x;
     p->v[0].rgba[1] = c0->y;
     p->v[0].rgba[2] = c0->z;
     p->v[0].rgba[3] = c0->w;
+#endif
     p->v[0].q = uv0->z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[1].rgba[3] = c1->x;
+    p->v[1].rgba[2] = c1->y;
+    p->v[1].rgba[1] = c1->z;
+    p->v[1].rgba[0] = c1->w;
+#else
     p->v[1].rgba[0] = c1->x;
     p->v[1].rgba[1] = c1->y;
     p->v[1].rgba[2] = c1->z;
     p->v[1].rgba[3] = c1->w;
+#endif
     p->v[1].q = uv1->z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[2].rgba[3] = c2->x;
+    p->v[2].rgba[2] = c2->y;
+    p->v[2].rgba[1] = c2->z;
+    p->v[2].rgba[0] = c2->w;
+#else
     p->v[2].rgba[0] = c2->x;
     p->v[2].rgba[1] = c2->y;
     p->v[2].rgba[2] = c2->z;
     p->v[2].rgba[3] = c2->w;
+#endif
     p->v[2].q = uv2->z;
     p->tex0 = PS2_PKT64(tex0);
     p->v[0].s = uv0->x;

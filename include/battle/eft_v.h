@@ -90,7 +90,11 @@ typedef struct EftVXyzf {
 } EftVXyzf;
 
 typedef struct EftVRgbaq {
+#ifdef PORT_BIG_ENDIAN /* a GS packet is 32-bit words of the host (decision 19): R is the low byte of the word */
+    u8 a, b, g, r;
+#else
     u8 r, g, b, a;
+#endif
     f32 q;
 } EftVRgbaq;
 

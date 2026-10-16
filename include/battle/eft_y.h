@@ -388,10 +388,14 @@ typedef struct EftYCol {
 } EftYCol;
 
 typedef struct EftYRgbaq {
+#ifdef PORT_BIG_ENDIAN /* a GS packet is 32-bit words of the host (decision 19): R is the low byte of the word */
+    u8 a, b, g, r;
+#else
     /* 0x0 */ u8 r;
     /* 0x1 */ u8 g;
     /* 0x2 */ u8 b;
     /* 0x3 */ u8 a;
+#endif
     /* 0x4 */ f32 q;
 } EftYRgbaq;
 

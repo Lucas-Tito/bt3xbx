@@ -638,25 +638,53 @@ void EftStreak_DrawScreen(Vec4 *corner, EftTVec color, s32 blend, s32 segs, s32 
         q->gif0 = PS2_PKT64(0xE400000000008001);
         q->gif1 = PS2_PKT64(0x42142142142160);
         q->next = 0;
+#ifdef PORT_BIG_ENDIAN
+        q->v[0].rgba[3] = col.x;
+        q->v[0].rgba[2] = col.y;
+        q->v[0].rgba[1] = col.z;
+        q->v[0].rgba[0] = col.w;
+#else
         q->v[0].rgba[0] = col.x;
         q->v[0].rgba[1] = col.y;
         q->v[0].rgba[2] = col.z;
         q->v[0].rgba[3] = col.w;
+#endif
         q->v[0].q = 1.0f;
+#ifdef PORT_BIG_ENDIAN
+        q->v[1].rgba[3] = col.x;
+        q->v[1].rgba[2] = col.y;
+        q->v[1].rgba[1] = col.z;
+        q->v[1].rgba[0] = col.w;
+#else
         q->v[1].rgba[0] = col.x;
         q->v[1].rgba[1] = col.y;
         q->v[1].rgba[2] = col.z;
         q->v[1].rgba[3] = col.w;
+#endif
         q->v[1].q = 1.0f;
+#ifdef PORT_BIG_ENDIAN
+        q->v[2].rgba[3] = col.x;
+        q->v[2].rgba[2] = col.y;
+        q->v[2].rgba[1] = col.z;
+        q->v[2].rgba[0] = col.w;
+#else
         q->v[2].rgba[0] = col.x;
         q->v[2].rgba[1] = col.y;
         q->v[2].rgba[2] = col.z;
         q->v[2].rgba[3] = col.w;
+#endif
         q->v[2].q = 1.0f;
+#ifdef PORT_BIG_ENDIAN
+        q->v[3].rgba[3] = col.x;
+        q->v[3].rgba[2] = col.y;
+        q->v[3].rgba[1] = col.z;
+        q->v[3].rgba[0] = col.w;
+#else
         q->v[3].rgba[0] = col.x;
         q->v[3].rgba[1] = col.y;
         q->v[3].rgba[2] = col.z;
         q->v[3].rgba[3] = col.w;
+#endif
         q->v[3].q = 1.0f;
         q->v[0].s = uv[0].x;
         q->v[0].t = t.x;

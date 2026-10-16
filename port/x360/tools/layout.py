@@ -29,6 +29,13 @@ PERMUTADAS = {
     "EftSprPkt": "src/battle/eft_ad_c.c: R, G, B, A do RGBAQ na palavra do pacote da GPU",
     "EftTriVtx": "src/battle/eft_d.c: R, G, B, A do RGBAQ na palavra do pacote da GPU; XYZF2",
     "EftNVtx": "src/battle/eft_n.c: R, G, B, A do RGBAQ na palavra do pacote da GPU; XYZF2",
+    # F5, etapa 4 (plano/F5/inventario.md 1.3, proposta B): o quarteto com nome de cada RGBAQ de pacote dos efeitos
+    **{n: f"{a}: R, G, B, A do RGBAQ na palavra do pacote da GPU (F5)" for n, a in (
+        ("EftGfxRgbaq", "src/battle/eft_a.c"), ("EftBRgbaq", "src/battle/eft_b.c"), ("EftSurfRgbaq", "src/battle/eft_c.c"),
+        ("EftAdRgbaq", "src/battle/eft_ad_b.c"), ("EftQRgbaq", "include/battle/eft_q.h"),
+        ("EftVRgbaq", "include/battle/eft_v.h"), ("EftWRgbaq", "src/battle/eft_w.c"), ("EftXRgbaq", "src/battle/eft_x.c"),
+        ("EftYRgbaq", "include/battle/eft_y.h"), ("EftAaRgbaq", "include/battle/eft_aa.h"),
+        ("EftAcRgbaq", "include/battle/eft_ac.h"))},
     **{n: "XYZF2 num pacote da GPU (PS2_PKT64_FIELDS)" for n in (
         "EftSteamXyzf", "EftWaterXyzf", "EftUXyzf", "EftAdCXyzf", "EftXyzf", "EftWXyzf", "EftGfxXyzf", "EftGsXyzf",
         "EftXXyzf", "EftAdXyzf", "EftAeXyzf", "EftBXyzf", "EftSXyzf", "EftPXyzf", "EftSurfXyzf", "EftYXyzf",

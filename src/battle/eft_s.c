@@ -900,25 +900,53 @@ void EftChain_DrawStrand(EftArc *w, EftArc *w2, EftArcChain *ch) {
                         scr[j].z = 0xFFFFFF;
                     }
                 }
+#ifdef PORT_BIG_ENDIAN
+                pkt->v[0].rgba[3] = colA[0];
+                pkt->v[0].rgba[2] = colA[1];
+                pkt->v[0].rgba[1] = colA[2];
+                pkt->v[0].rgba[0] = colA[3];
+#else
                 pkt->v[0].rgba[0] = colA[0];
                 pkt->v[0].rgba[1] = colA[1];
                 pkt->v[0].rgba[2] = colA[2];
                 pkt->v[0].rgba[3] = colA[3];
+#endif
                 pkt->v[0].q = st[0].z;
+#ifdef PORT_BIG_ENDIAN
+                pkt->v[1].rgba[3] = colA[0];
+                pkt->v[1].rgba[2] = colA[1];
+                pkt->v[1].rgba[1] = colA[2];
+                pkt->v[1].rgba[0] = colA[3];
+#else
                 pkt->v[1].rgba[0] = colA[0];
                 pkt->v[1].rgba[1] = colA[1];
                 pkt->v[1].rgba[2] = colA[2];
                 pkt->v[1].rgba[3] = colA[3];
+#endif
                 pkt->v[1].q = st[1].z;
+#ifdef PORT_BIG_ENDIAN
+                pkt->v[2].rgba[3] = colB[0];
+                pkt->v[2].rgba[2] = colB[1];
+                pkt->v[2].rgba[1] = colB[2];
+                pkt->v[2].rgba[0] = colB[3];
+#else
                 pkt->v[2].rgba[0] = colB[0];
                 pkt->v[2].rgba[1] = colB[1];
                 pkt->v[2].rgba[2] = colB[2];
                 pkt->v[2].rgba[3] = colB[3];
+#endif
                 pkt->v[2].q = st[2].z;
+#ifdef PORT_BIG_ENDIAN
+                pkt->v[3].rgba[3] = colB[0];
+                pkt->v[3].rgba[2] = colB[1];
+                pkt->v[3].rgba[1] = colB[2];
+                pkt->v[3].rgba[0] = colB[3];
+#else
                 pkt->v[3].rgba[0] = colB[0];
                 pkt->v[3].rgba[1] = colB[1];
                 pkt->v[3].rgba[2] = colB[2];
                 pkt->v[3].rgba[3] = colB[3];
+#endif
                 pkt->v[3].q = st[3].z;
                 pkt->v[0].s = st[0].x;
                 pkt->v[0].t = st[0].y;
@@ -2448,25 +2476,53 @@ void EftRay_DrawQuad2D(Vec4 *corner, s32 z, u8 r0, u8 g0, u8 b0, u8 a0, u8 r1, u
         q->gif0 = PS2_PKT64(0xE400000000008001);
         q->gif1 = PS2_PKT64(0x42142142142160);
         q->next = 0;
+#ifdef PORT_BIG_ENDIAN
+        q->v[0].rgba[3] = r0;
+        q->v[0].rgba[2] = g0;
+        q->v[0].rgba[1] = b0;
+        q->v[0].rgba[0] = aCur;
+#else
         q->v[0].rgba[0] = r0;
         q->v[0].rgba[1] = g0;
         q->v[0].rgba[2] = b0;
         q->v[0].rgba[3] = aCur;
+#endif
         q->v[0].q = 1.0f;
+#ifdef PORT_BIG_ENDIAN
+        q->v[1].rgba[3] = r0;
+        q->v[1].rgba[2] = g0;
+        q->v[1].rgba[1] = b0;
+        q->v[1].rgba[0] = aCur;
+#else
         q->v[1].rgba[0] = r0;
         q->v[1].rgba[1] = g0;
         q->v[1].rgba[2] = b0;
         q->v[1].rgba[3] = aCur;
+#endif
         q->v[1].q = 1.0f;
+#ifdef PORT_BIG_ENDIAN
+        q->v[2].rgba[3] = r1;
+        q->v[2].rgba[2] = g1;
+        q->v[2].rgba[1] = b1;
+        q->v[2].rgba[0] = aNext;
+#else
         q->v[2].rgba[0] = r1;
         q->v[2].rgba[1] = g1;
         q->v[2].rgba[2] = b1;
         q->v[2].rgba[3] = aNext;
+#endif
         q->v[2].q = 1.0f;
+#ifdef PORT_BIG_ENDIAN
+        q->v[3].rgba[3] = r1;
+        q->v[3].rgba[2] = g1;
+        q->v[3].rgba[1] = b1;
+        q->v[3].rgba[0] = aNext;
+#else
         q->v[3].rgba[0] = r1;
         q->v[3].rgba[1] = g1;
         q->v[3].rgba[2] = b1;
         q->v[3].rgba[3] = aNext;
+#endif
         q->v[3].q = 1.0f;
         q->v[0].s = uv[0].x;
         q->v[0].t = tv[0].y;

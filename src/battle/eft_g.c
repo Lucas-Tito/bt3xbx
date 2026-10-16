@@ -412,20 +412,41 @@ void EftUtil_DrawTri(EftScrXyz *xyz0, EftScrXyz *xyz1, EftScrXyz *xyz2, f32 *col
     p->gif1 = PS2_PKT64(gif1);
     p->next = 0;
     p->pad = PS2_PKT64(0);
+#ifdef PORT_BIG_ENDIAN
+    p->v[0].rgba[3] = (u32)col0[0];
+    p->v[0].rgba[2] = (u32)col0[1];
+    p->v[0].rgba[1] = (u32)col0[2];
+    p->v[0].rgba[0] = (u32)col0[3];
+#else
     p->v[0].rgba[0] = (u32)col0[0];
     p->v[0].rgba[1] = (u32)col0[1];
     p->v[0].rgba[2] = (u32)col0[2];
     p->v[0].rgba[3] = (u32)col0[3];
+#endif
     p->v[0].q = st0[2];
+#ifdef PORT_BIG_ENDIAN
+    p->v[1].rgba[3] = (u32)col1[0];
+    p->v[1].rgba[2] = (u32)col1[1];
+    p->v[1].rgba[1] = (u32)col1[2];
+    p->v[1].rgba[0] = (u32)col1[3];
+#else
     p->v[1].rgba[0] = (u32)col1[0];
     p->v[1].rgba[1] = (u32)col1[1];
     p->v[1].rgba[2] = (u32)col1[2];
     p->v[1].rgba[3] = (u32)col1[3];
+#endif
     p->v[1].q = st1[2];
+#ifdef PORT_BIG_ENDIAN
+    p->v[2].rgba[3] = (u32)col2[0];
+    p->v[2].rgba[2] = (u32)col2[1];
+    p->v[2].rgba[1] = (u32)col2[2];
+    p->v[2].rgba[0] = (u32)col2[3];
+#else
     p->v[2].rgba[0] = (u32)col2[0];
     p->v[2].rgba[1] = (u32)col2[1];
     p->v[2].rgba[2] = (u32)col2[2];
     p->v[2].rgba[3] = (u32)col2[3];
+#endif
     p->v[2].q = st2[2];
     p->tex0 = PS2_PKT64(tex0);
     p->v[0].s = st0[0];
@@ -513,6 +534,50 @@ taught: constants as variables assigned in front of each use (not loop invariant
 converted to float through a spilled variable, and pointer variables assigned twice (unknown alias base). */
 /* Fills and queues one lightning sprite: a triangle strip between two projected corners, white scaled by the
    layer brightness, alpha 128 * life / lifeMax, in the second chain of the depth slot of its z. */
+#ifdef PORT_BIG_ENDIAN /* the four colour writes of the GS packet word in host order (decision 19) */
+#define EFT_STORM_SPRITE(bolt, a, b, texv, col, tagv, vifv) \
+    do { \
+        p = EftOt_Alloc(sizeof(EftStripPkt)); \
+        p->gif1 = PS2_PKT64(0xF42424242160); \
+        p->vif0 = 0x10000000; \
+        p->tag = (tagv); \
+        p->next = 0; \
+        p->gif0 = PS2_PKT64(0xC400000000008001); \
+        p->vif1 = (vifv); \
+        p->prim = PS2_PKT64(0x54); \
+        p->rgba[3] = (u32)(col); \
+        p->rgba[2] = (u32)(col); \
+        p->rgba[1] = (u32)(col); \
+        p->rgba[0] = (bolt->life << 7) / bolt->lifeMax; \
+        p->q = 1.0f; \
+        p->v[0].xyz.x =  (a)->x; \
+        p->v[0].xyz.y =  (a)->y; \
+        p->v[0].xyz.z =  (a)->z; \
+        p->v[0].xyz.f = 0xFF; \
+        p->v[1].xyz.x = (b)->x; \
+        p->v[1].xyz.y =  (a)->y; \
+        p->v[1].xyz.z =  (a)->z; \
+        p->v[1].xyz.f = 0xFF; \
+        p->v[2].xyz.x =  (a)->x; \
+        p->v[2].xyz.y = (b)->y; \
+        p->v[2].xyz.z =  (a)->z; \
+        p->v[2].xyz.f = 0xFF; \
+        p->v[3].xyz.x = (b)->x; \
+        p->v[3].xyz.y = (b)->y; \
+        p->v[3].xyz.z =  (a)->z; \
+        p->v[3].xyz.f = 0xFF; \
+        p->v[0].s = 0.0f; \
+        p->v[0].t = 0.0f; \
+        p->v[1].s = 1.0f; \
+        p->v[1].t = 0.0f; \
+        p->v[2].s = 0.0f; \
+        p->v[2].t = 1.0f; \
+        p->v[3].s = 1.0f; \
+        p->v[3].t = 1.0f; \
+        p->tex0 = PS2_PKT64((texv)); \
+        EftOt_Add((OtPrim *)p,  (a)->z >> 8, 1); \
+    } while (0)
+#else
 #define EFT_STORM_SPRITE(bolt, a, b, texv, col, tagv, vifv) \
     do { \
         p = EftOt_Alloc(sizeof(EftStripPkt)); \
@@ -555,6 +620,7 @@ converted to float through a spilled variable, and pointer variables assigned tw
         p->tex0 = PS2_PKT64((texv)); \
         EftOt_Add((OtPrim *)p,  (a)->z >> 8, 1); \
     } while (0)
+#endif
 
 void EftStorm_DrawBolts(EftStormBolt *bolt) {
     Mtx44 cam;
@@ -736,12 +802,22 @@ void EftStorm_DrawRainLines(EftStormDrop *drop, s32 count, Vec4 *streak) {
         p->vif1 = 0x50000003;
         p->gif0 = PS2_PKT64(0x4400000000008001);
         p->gif1 = PS2_PKT64(0x4410);
+#ifdef PORT_BIG_ENDIAN
+        p->rgba[0] = 0x20;
+#else
         p->rgba[3] = 0x20;
+#endif
         p->q = 1.0f;
         p->next = 0;
+#ifdef PORT_BIG_ENDIAN
+        p->rgba[3] = 0x60;
+        p->rgba[2] = 0x60;
+        p->rgba[1] = 0x60;
+#else
         p->rgba[0] = 0x60;
         p->rgba[1] = 0x60;
         p->rgba[2] = 0x60;
+#endif
         p->xyz[0].x = xyz[0].x;
         p->xyz[0].y = xyz[0].y;
         p->xyz[0].z = xyz[0].z;

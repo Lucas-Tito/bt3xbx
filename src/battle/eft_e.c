@@ -544,10 +544,17 @@ void EftSteam_DrawQuad(EftEVec *color, EftEVec *pos, f32 w, f32 h, f32 u0, f32 v
     p->gif0 = PS2_PKT64(0xC400000000008001);
     p->gif1 = PS2_PKT64(0xF42424242160);
     p->next = 0;
+#ifdef PORT_BIG_ENDIAN
+    p->rgba[3] = (u32)(color->x * tint);
+    p->rgba[2] = (u32)(color->y * tint);
+    p->rgba[1] = (u32)(color->z * tint);
+    p->rgba[0] = (u32)color->w;
+#else
     p->rgba[0] = (u32)(color->x * tint);
     p->rgba[1] = (u32)(color->y * tint);
     p->rgba[2] = (u32)(color->z * tint);
     p->rgba[3] = (u32)color->w;
+#endif
     p->q = 1.0f;
     p->v[0].s = u0;
     p->v[0].t = v0;
@@ -2642,10 +2649,17 @@ void EftWater_DrawBillboard(EftWaterVec *pos, EftWaterMtx *world2screen, f32 siz
     p->h.gif1 = PS2_PKT64(0xF42424242160);
     p->h.next = 0;
     p->h.vif0 = 0x10000000;
+#ifdef PORT_BIG_ENDIAN
+    p->rgba[3] = r;
+    p->rgba[2] = g;
+    p->rgba[1] = b;
+    p->rgba[0] = a;
+#else
     p->rgba[0] = r;
     p->rgba[1] = g;
     p->rgba[2] = b;
     p->rgba[3] = a;
+#endif
     p->q = 1.0f;
     p->v[0].s = 0.0f;
     p->v[0].t = 0.0f;
@@ -2808,25 +2822,53 @@ void EftWater_DrawSprayQuad(EftWaterVec *pos, EftWaterMtx *orient, EftWaterMtx *
     p->h.gif1 = PS2_PKT64(0x42142142142160);
     p->h.next = 0;
     p->h.vif1 = 0x50000008;
+#ifdef PORT_BIG_ENDIAN
+    p->v[0].rgba[3] = r;
+    p->v[0].rgba[2] = g;
+    p->v[0].rgba[1] = b;
+    p->v[0].rgba[0] = a;
+#else
     p->v[0].rgba[0] = r;
     p->v[0].rgba[1] = g;
     p->v[0].rgba[2] = b;
     p->v[0].rgba[3] = a;
+#endif
     p->v[0].q = stq[0].z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[1].rgba[3] = r;
+    p->v[1].rgba[2] = g;
+    p->v[1].rgba[1] = b;
+    p->v[1].rgba[0] = a;
+#else
     p->v[1].rgba[0] = r;
     p->v[1].rgba[1] = g;
     p->v[1].rgba[2] = b;
     p->v[1].rgba[3] = a;
+#endif
     p->v[1].q = stq[1].z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[2].rgba[3] = r;
+    p->v[2].rgba[2] = g;
+    p->v[2].rgba[1] = b;
+    p->v[2].rgba[0] = a;
+#else
     p->v[2].rgba[0] = r;
     p->v[2].rgba[1] = g;
     p->v[2].rgba[2] = b;
     p->v[2].rgba[3] = a;
+#endif
     p->v[2].q = stq[2].z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[3].rgba[3] = r;
+    p->v[3].rgba[2] = g;
+    p->v[3].rgba[1] = b;
+    p->v[3].rgba[0] = a;
+#else
     p->v[3].rgba[0] = r;
     p->v[3].rgba[1] = g;
     p->v[3].rgba[2] = b;
     p->v[3].rgba[3] = a;
+#endif
     p->v[3].q = stq[3].z;
     p->v[0].s = stq[0].x;
     p->v[0].t = stq[0].y;
@@ -2925,20 +2967,41 @@ static inline void EftWater_QueueTri(EftWaterScr4 *p0, EftWaterScr4 *p1, EftWate
     p->h.gif1 = PS2_PKT64(0xF42142142160);
     p->h.next = 0;
     p->pad = PS2_PKT64(0);
+#ifdef PORT_BIG_ENDIAN
+    p->v[0].rgba[3] = (u32)c0->x;
+    p->v[0].rgba[2] = (u32)c0->y;
+    p->v[0].rgba[1] = (u32)c0->z;
+    p->v[0].rgba[0] = (u32)c0->w;
+#else
     p->v[0].rgba[0] = (u32)c0->x;
     p->v[0].rgba[1] = (u32)c0->y;
     p->v[0].rgba[2] = (u32)c0->z;
     p->v[0].rgba[3] = (u32)c0->w;
+#endif
     p->v[0].q = t0->z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[1].rgba[3] = (u32)c1->x;
+    p->v[1].rgba[2] = (u32)c1->y;
+    p->v[1].rgba[1] = (u32)c1->z;
+    p->v[1].rgba[0] = (u32)c1->w;
+#else
     p->v[1].rgba[0] = (u32)c1->x;
     p->v[1].rgba[1] = (u32)c1->y;
     p->v[1].rgba[2] = (u32)c1->z;
     p->v[1].rgba[3] = (u32)c1->w;
+#endif
     p->v[1].q = t1->z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[2].rgba[3] = (u32)c2->x;
+    p->v[2].rgba[2] = (u32)c2->y;
+    p->v[2].rgba[1] = (u32)c2->z;
+    p->v[2].rgba[0] = (u32)c2->w;
+#else
     p->v[2].rgba[0] = (u32)c2->x;
     p->v[2].rgba[1] = (u32)c2->y;
     p->v[2].rgba[2] = (u32)c2->z;
     p->v[2].rgba[3] = (u32)c2->w;
+#endif
     p->v[2].q = t2->z;
     p->tex0 = PS2_PKT64(tex0);
     p->v[0].s = t0->x;

@@ -1068,25 +1068,53 @@ void EftGlow_DrawParts(EftPGlow *e, s32 objId, f32 alpha) {
         pkt->gif0 = PS2_PKT64(0xE400000000008001);
         pkt->gif1 = PS2_PKT64(0x42142142142160);
         pkt->next = 0;
+#ifdef PORT_BIG_ENDIAN
+        pkt->v[0].rgba[3] = col[0];
+        pkt->v[0].rgba[2] = col[1];
+        pkt->v[0].rgba[1] = col[2];
+        pkt->v[0].rgba[0] = a;
+#else
         pkt->v[0].rgba[0] = col[0];
         pkt->v[0].rgba[1] = col[1];
         pkt->v[0].rgba[2] = col[2];
         pkt->v[0].rgba[3] = a;
+#endif
         pkt->v[0].q = uv[0].z;
+#ifdef PORT_BIG_ENDIAN
+        pkt->v[1].rgba[3] = col[0];
+        pkt->v[1].rgba[2] = col[1];
+        pkt->v[1].rgba[1] = col[2];
+        pkt->v[1].rgba[0] = a;
+#else
         pkt->v[1].rgba[0] = col[0];
         pkt->v[1].rgba[1] = col[1];
         pkt->v[1].rgba[2] = col[2];
         pkt->v[1].rgba[3] = a;
+#endif
         pkt->v[1].q = uv[1].z;
+#ifdef PORT_BIG_ENDIAN
+        pkt->v[2].rgba[3] = col[0];
+        pkt->v[2].rgba[2] = col[1];
+        pkt->v[2].rgba[1] = col[2];
+        pkt->v[2].rgba[0] = a;
+#else
         pkt->v[2].rgba[0] = col[0];
         pkt->v[2].rgba[1] = col[1];
         pkt->v[2].rgba[2] = col[2];
         pkt->v[2].rgba[3] = a;
+#endif
         pkt->v[2].q = uv[2].z;
+#ifdef PORT_BIG_ENDIAN
+        pkt->v[3].rgba[3] = col[0];
+        pkt->v[3].rgba[2] = col[1];
+        pkt->v[3].rgba[1] = col[2];
+        pkt->v[3].rgba[0] = a;
+#else
         pkt->v[3].rgba[0] = col[0];
         pkt->v[3].rgba[1] = col[1];
         pkt->v[3].rgba[2] = col[2];
         pkt->v[3].rgba[3] = a;
+#endif
         pkt->v[3].q = uv[3].z;
         pkt->v[0].s = uv[0].x;
         pkt->v[0].t = uv[0].y;

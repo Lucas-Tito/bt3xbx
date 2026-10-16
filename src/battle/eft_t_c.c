@@ -568,25 +568,53 @@ void EftShotFx_DrawQuad(Vec4 *quad, EftUMtx mtx, u8 r, u8 g, u8 b, u8 a, u64 *te
     p->gif0 = PS2_PKT64(0xE400000000008001);
     p->gif1 = PS2_PKT64(0x42142142142160);
     p->next = 0;
+#ifdef PORT_BIG_ENDIAN
+    p->v[0].rgba[3] = r;
+    p->v[0].rgba[2] = g;
+    p->v[0].rgba[1] = b;
+    p->v[0].rgba[0] = a;
+#else
     p->v[0].rgba[0] = r;
     p->v[0].rgba[1] = g;
     p->v[0].rgba[2] = b;
     p->v[0].rgba[3] = a;
+#endif
     p->v[0].q = stq[0].z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[1].rgba[3] = r;
+    p->v[1].rgba[2] = g;
+    p->v[1].rgba[1] = b;
+    p->v[1].rgba[0] = a;
+#else
     p->v[1].rgba[0] = r;
     p->v[1].rgba[1] = g;
     p->v[1].rgba[2] = b;
     p->v[1].rgba[3] = a;
+#endif
     p->v[1].q = stq[1].z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[2].rgba[3] = r;
+    p->v[2].rgba[2] = g;
+    p->v[2].rgba[1] = b;
+    p->v[2].rgba[0] = a;
+#else
     p->v[2].rgba[0] = r;
     p->v[2].rgba[1] = g;
     p->v[2].rgba[2] = b;
     p->v[2].rgba[3] = a;
+#endif
     p->v[2].q = stq[2].z;
+#ifdef PORT_BIG_ENDIAN
+    p->v[3].rgba[3] = r;
+    p->v[3].rgba[2] = g;
+    p->v[3].rgba[1] = b;
+    p->v[3].rgba[0] = a;
+#else
     p->v[3].rgba[0] = r;
     p->v[3].rgba[1] = g;
     p->v[3].rgba[2] = b;
     p->v[3].rgba[3] = a;
+#endif
     p->v[3].q = stq[3].z;
     p->v[0].s = stq[0].x;
     p->v[0].t = stq[0].y;
