@@ -6,9 +6,9 @@ little-endian (PS2, PS1, GameCube não, que já é big-endian) levada ao 360.
 
 Como usar num chat novo: peça para ler este arquivo, o `CLAUDE.md` deste repositório (modelo de
 regras) e `docs/x360/decisoes.md` (o porquê de cada escolha). As pesquisas em
-`docs/x360/pesquisa/01..03` têm o detalhe: 01 é o setup do 360 e as lições do CollectionUI e do
+`docs/x360/pesquisa/01..04` têm o detalhe: 01 é o setup do 360 e as lições do CollectionUI e do
 hiddriver, 02 são os ports de referência (SM64, MK64, Virtua Fighter), 03 é o estado da decomp do
-BT3.
+BT3, 04 é onde ficam os ícones dos botões e o custo de trocá-los.
 
 Mantido vivo: cada aprendizado que custou uma rodada entra aqui (seção 6) no mesmo commit da
 correção.
@@ -1154,6 +1154,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   saturação medidas na área 3D (fora da caixa da pausa) dão ordem de grandeza; o viés do rasterizador de software
   (textura lida no ponto) é de uns 15% no gradiente, então 2 a 8 vezes é defeito. Quando a causa é uma passada de
   tela, `BT3_FX_OFF=8|16|24` no `ambiente.txt` (pelo código valem no 360, sem build nova; ainda não testados lá) a separa em uma rodada.
+
+- **Varredura sobre o `gamedata` inteiro: em fluxo, com `ulimit -v` e decodificador de BPE com limites.** Na
+  investigação dos ícones (`pesquisa/04`) o primeiro script desceu em todo pacote e BPE, testou candidatos que não
+  eram BPE e cresceu pilha e saída sem limite até 7,6 GB; o sistema o matou e o WSL (uns 7 GB) quase caiu. O que
+  funcionou: `ulimit -v 1500000`, um arquivo por vez, o decodificador recusando `size <= 0`, exigindo a cauda
+  depois do `packSize` de no máximo 128 bytes, com pilha de 254 e saída limitada ao `size`, e testes `in` de bytes
+  antes de qualquer regex (20 regex por folha deixaram a varredura lenta demais; com os filtros, cerca de 5 minutos). Para achar o que o
+  jogo "reserva" (um ícone, um texto), procure primeiro o consumidor no código (`FontTag_Handle` era a marca
+  `<PAD=nome>`, não um código de caractere) antes de varrer os dados. E decodifique imagem do GS com as tabelas de
+  `port/src/gs/gs_core.c` (T4 com a inversão `x^4` nas colunas ímpares), não de memória: a decodificação errada
+  custou rodadas de folhas de contato. A volta (recodificar e comparar byte a byte) vale como verificador de
+  que se pode trocar a imagem no lugar; viu-se falhar com um pixel mudado.
 
 ---
 
