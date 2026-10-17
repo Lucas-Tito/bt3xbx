@@ -17,7 +17,7 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 ## Regras obrigatórias
 
 - Tudo em português. **Nunca use travessão** (o caractere U+2014) em texto, comentário ou mensagem de commit.
-- **Nenhuma atribuição** em commit: nada de `Co-authored-by`, nada que cite Codex, ChatGPT, OpenAI, Claude ou
+- **Nenhuma atribuição** em commit: nada de `Co-authored-by`, nada que cite Codex, ChatGPT, OpenAI, Cursor, Claude ou
   qualquer ferramenta. A identidade do commit é a do repositório (Lucas Tito Sampaio).
 - **Nenhum byte do jogo no repositório** (ISO, ELF, AFS, dados extraídos, imagens capturadas). Os dados ficam fora
   do git (`gamedata/`, `disc/`, `port/build/`, `~/`).

@@ -64,6 +64,10 @@ própria só para isso). Para cá só volta texto.
   `/home/lucas` nem `/mnt/c`, que o `wsl.conf` monta com `umask=077`), sem o isolamento dele, que bloqueia a x86 de
   32 bits (SIGSYS), o `ptrace` do gdb e os sockets. A troca de código é pelo repositório local `/srv/bt3/bt3xbx.git`
   (remoto `troca`); o GitHub só recebe o que passou pela revisão. Regras dele no `AGENTS.md`.
+- **Cursor CLI no mesmo usuário** (`cursor-agent`, desde 17/10/2026, substituto do Codex quando a cota semanal dele
+  acaba): sem interação com `-p --force --trust --sandbox disabled --model ...`. Ele põe sozinho um
+  `Co-authored-by: Cursor` em cada commit, apesar do `AGENTS.md`: desligue no `~/.cursor/cli-config.json` do usuário
+  (`"attribution": {"attributeCommitsToAgent": false, "attributePRsToAgent": false}`) e confira as mensagens na revisão.
 
 ### 1.2b Steam Deck: a segunda fila de emulador (16/10/2026)
 
