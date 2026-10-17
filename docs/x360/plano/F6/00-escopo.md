@@ -393,7 +393,11 @@ estado e hipóteses documentados e apenas o trabalho provado em commit, conforme
 1a, 2a, 3b, 4b (c só com a medida; d não), 5a (outra opção só se aparecer problema), 6a, 7a, 8a, 9b (sem o ajuste
 fino contra o PCSX2). Texto em [decisoes.md](../../decisoes.md), decisão 25.
 
-**Correção da seção 1.1:** a build do 360 (F2 em diante) não usa o `port/x360/src/ambiente.c`; o `getenv` é o de
-`port/x360/src/f2/posix360.c`, que lê os padrões e o `game:\ambiente.txt`. A conclusão vale (o `BT3_SOUND_TICKS` não
-está definido no console), mas a prova não pede build: basta `BT3_SOUND_TICKS=1` no `ambiente.txt`, testado na rodada
-da VU1 da F5; confirmado, ele entra nos padrões do `posix360.c`.
+**Correção da seção 1.1 (17/10/2026): a hipótese caiu.** A build do 360 (F2 em diante) não usa o
+`port/x360/src/ambiente.c`; o `getenv` é o de `port/x360/src/f2/posix360.c`, e ele já define `BT3_SOUND_TICKS=1` entre
+os padrões desde a F2 (`5ffcc40`, linha 54; o `.map` confirma o `getenv` do `posix360.obj`). O estado do som já é
+contado em vblanks no console, como no WSL, e a boca de quem fala sempre mexeu. Portanto nem a boca fora de fase da
+etapa 7 da F4 nem a tela de resultado da História que não avançou no roteiro sem desenho (F4/10.md, achado 3) se
+explicam pela falta do estado. A etapa 1 da F6 passa a investigar a causa dessas duas, com o log do estado de cada
+player na tela que parar; a rodada da VU1 da F5 que usou `BT3_SOUND_TICKS=1` no `ambiente.txt` não provou nada sobre
+isso (a linha era redundante).
