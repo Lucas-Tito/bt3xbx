@@ -288,7 +288,8 @@ static void comum4(ConvCtx *c, conv_ofs base, conv_ofs tam) {
     for (i = 3; i <= 7; i++) {
         vazia(c, ent, i);
     }
-    Conv_TexFile(c, ENT(8), 0);
+    /* A HUD usa também a folha de ícones como HudCRes: HudRes_UploadTex grava mark (+0x28) como s32. */
+    Conv_TexFile(c, ENT(8), 1);
     for (i = 9; i <= 11 && !c->erro; i++) {
         Conv_Texto(c, ENT(i));
     }

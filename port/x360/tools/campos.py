@@ -183,6 +183,152 @@ for l in open(SAIDA + ".decl"):
 tsv.close(); binf.close()
 '''
 
+POOL_PY = r'''
+import json
+pool_vivos = {}
+pool_tipos = {}
+# A linha do chamador e o tipo do destino são evidência, nunca o tamanho sozinho.
+def pool_tipo(fr):
+    fr.select()
+    sal = fr.find_sal()
+    if not sal.symtab:
+        return None
+    texto = open(sal.symtab.fullname(), errors="replace").read().splitlines()
+    linha = " ".join(texto[sal.line - 1:sal.line + 1])
+    m = re.search(r"sizeof\s*\(\s*((?:struct\s+)?\w+)\s*\)", linha)
+    if m:
+        try: return gdb.lookup_type(m.group(1))
+        except gdb.error: pass
+    # Tipos provados pelo leitor das alocações em bytes, identificados pelo dono e pelo destino.
+    conhecidos = {
+        ("EftEmit_LoadSet", "set->array[0]"): "EftAeTexSet32",
+        ("EftEmit_LoadSet", "set->array[1]"): "EftAeTexSet16",
+        ("EftEmit_LoadSet", "set->array[2]"): "EftAeTexSet8",
+        ("EftEmit_LoadSet", "set->array[3]"): "EftAeTexSet4",
+        ("EftBoltMgr_Init", "gEftBoltPool->pool"): "EftBoltSeg",
+        ("EftChainMgr_Init", "gEftChain->buf"): "EftArcNode",
+        ("EftBlastObjMgr_Init", "mgr"): "s32",
+    }
+    for (dono, destino), nome in conhecidos.items():
+        if fr.name() == dono and destino + " = BtlPool_Alloc" in linha:
+            return gdb.lookup_type(nome)
+    if fr.name() == "EftAuraMgr_Init" and "gPool->tasks = BtlPool_Alloc" in linha:
+        return gdb.lookup_type("EftNTask").pointer()
+    m = re.search(r"([\w>.*()\[\]-]+)\s*=\s*BtlPool_Alloc", linha)
+    if m:
+        try:
+            t = gdb.parse_and_eval(m.group(1)).type.strip_typedefs().target().strip_typedefs()
+            if t.code != gdb.TYPE_CODE_VOID and t.sizeof > 1: return t
+        except (gdb.error, RuntimeError, KeyError): pass
+    if m:
+        raiz = m.group(1).split("->")[0]
+        for nome, nptr, ndim in DECL.get(raiz, []):
+            try:
+                t = gdb.lookup_type(nome)
+                for _ in range(nptr): t = t.pointer()
+                partes = m.group(1).split("->")
+                for parte in partes[1:]: t = t.strip_typedefs().target()[parte].type
+                t = t.strip_typedefs().target().strip_typedefs()
+                if t.code != gdb.TYPE_CODE_VOID: return t
+            except (gdb.error, RuntimeError, KeyError): pass
+    return None
+class PoolFim(gdb.FinishBreakpoint):
+    def __init__(self, fr, info):
+        super().__init__(fr, internal=True); self.info = info
+    def stop(self):
+        if self.return_value is not None:
+            pool_vivos[int(self.return_value) & 0xffffffff] = self.info
+        return False
+class PoolAloc(gdb.Breakpoint):
+    def stop(self):
+        fr = gdb.newest_frame()
+        slot, size = int(gdb.parse_and_eval("slot")), int(gdb.parse_and_eval("size"))
+        caller = fr.older()
+        if caller.name() == "__wrap_BtlPool_Alloc": caller = caller.older()
+        t = pool_tipo(caller)
+        if caller.name() == "EftShotFxMgr_Init":
+            sal0 = caller.find_sal()
+            linha0 = open(sal0.symtab.fullname()).read().splitlines()[sal0.line-1]
+            if "gEftShotFx->tex =" in linha0: t = gdb.lookup_type("EftAeTexSet4")
+            if "gEftShotFx->lines =" in linha0: t = gdb.lookup_type("EftShotFxLine")
+            if "sizeof(EftTShotFxMgr)" in linha0: t = gdb.lookup_type("EftShotFxWork")
+        sal = caller.find_sal()
+        if t:
+            mt = bytearray(marcas(t))
+            if caller.name() == "EftDiscMgr_Init" and size == 0x660:
+                # As duas vistas se completam: recursos em eft_o.h, fila de discos em eft_p.h.
+                fila = marcas(gdb.lookup_type("EftDiscMgr"))
+                mt += b"\x00" * (size-len(mt))
+                mt[0x554:len(fila)] = fila[0x554:]
+                mesh = marcas(gdb.lookup_type("EftMesh"))
+                mt[0x420:0x4b0] = mesh
+                mt[0x4b0:0x540] = mesh
+            pool_tipos[str(t)] = mt.hex()
+        info = (slot, size, caller.name(), sal.line, str(t) if t else None)
+        fr.select()
+        PoolFim(fr, info)
+        return False
+class PoolReset(gdb.Breakpoint):
+    def stop(self):
+        slot = int(gdb.parse_and_eval("slot"))
+        mgr = int(gdb.parse_and_eval("*(unsigned*)&gBtlPool"))
+        if not mgr or not (int(gdb.parse_and_eval("*(unsigned*)%d" % (mgr+0x98))) & (2 << slot)):
+            return False
+        for a in list(pool_vivos):
+            if pool_vivos[a][0] == slot: del pool_vivos[a]
+        return False
+class PoolLivre(gdb.Breakpoint):
+    def stop(self):
+        slot = int(gdb.parse_and_eval("slot"))
+        mgr = int(gdb.parse_and_eval("*(unsigned*)&gBtlPool"))
+        if not mgr or not (int(gdb.parse_and_eval("*(unsigned*)%d" % (mgr+0x98))) & (2 << slot)):
+            pool_vivos.pop(int(gdb.parse_and_eval("(unsigned)ptr")),None)
+        return False
+class PoolLimpa(gdb.Breakpoint):
+    def stop(self):
+        pool_vivos.clear(); return False
+
+def pool_gravar():
+    tipos = dict(pool_tipos)
+    def tipo(nome):
+        if nome and nome not in tipos:
+            try:
+                t = gdb.lookup_type(nome)
+                tipos[nome] = marcas(t).hex()
+            except gdb.error: pass
+    for info in pool_vivos.values(): tipo(info[-1])
+    for nome in ("BtlScriptWork", "BtlScriptLine", "BtlScriptStart", "BtlCam", "DemoCam", "GscTask", "GscFile", "EftHitSphere", "EftHitBox", "BtlScriptCmdWork", "EftSet", "EftAeTexSet32", "EftPGlowMgr", "EftAbTexEntry", "StgRigidPool", "BtlObjWork", "BtlScriptCmdWindow"):
+        tipo(nome)
+    # Tipos de trabalho dos callbacks da árvore: o próprio C entrega task->work a um T*.
+    import pathlib
+    trabalhos, gsc_trabalhos = {}, {}
+    for arq in pathlib.Path("src/battle").glob("*.c"):
+        texto = arq.read_text()
+        for fun in re.finditer(r"^\w[\w *]*?\b(\w+)\([^;{}]*\)\s*\{", texto, re.M):
+            inicio = fim = fun.end()
+            nivel = 1
+            while fim < len(texto) and nivel:
+                nivel += (texto[fim] == "{") - (texto[fim] == "}")
+                fim += 1
+            corpo = texto[inicio:fim-1]
+            if fun.group(1).startswith("BtlScriptCmd_"):
+                mw = re.search(r"\b(\w+)\s*\*\s*work\s*=\s*taskWork\s*;", corpo)
+                if mw:
+                    nome = mw.group(1)
+                    tipo(nome)
+                    if nome in tipos: gsc_trabalhos[fun.group(1)] = nome
+                elif "taskWork" not in corpo:
+                    gsc_trabalhos[fun.group(1)] = None
+            m = re.search(r"\b(\w+)\s*\*\s*\w+\s*=\s*(?:\([^;]+?\))?\s*task->(?:work|data)\s*;", corpo)
+            if m:
+                nome = m.group(1)
+                tipo(nome)
+                if nome in tipos: trabalhos[fun.group(1)] = nome
+    json.dump({"vblank": vb[0], "alocacoes": pool_vivos, "tipos": tipos, "trabalhos": trabalhos, "gsc_trabalhos": gsc_trabalhos},
+              open(SAIDA + ".pool.json", "w"), sort_keys=True)
+PoolAloc("BtlPool_Alloc"); PoolReset("BtlPool_Reset"); PoolLivre("BtlPool_Free"); PoolLimpa("BtlPool_Init"); PoolLimpa("BtlPool_Term")
+'''
+
 DONOS = MARCAS_PY + r'''
 import re
 ATE = int(os.environ["CAMPOS_ATE"])
@@ -280,10 +426,12 @@ class Vb(gdb.Breakpoint):
                 print("DONO %08x %s" % (a, vivos[a]))
             if SAIDA:
                 tipar()
+                pool_gravar()
             gdb.execute("kill"); gdb.execute("quit")
         return False
 gdb.execute("set pagination off"); gdb.execute("set confirm off")
 Aloc("Heap_Alloc"); Livre("Heap_Free"); Vb("Port_StateLog")
+exec(POOL_PY)
 gdb.execute("run")
 '''
 
@@ -293,7 +441,8 @@ def gdb_py(prog, codigo, pre=(), args=()):
         f.write(codigo)
     try:
         cmd = ["gdb", "-batch", "-nx"] + [x for p in pre for x in ("-ex", p)] + ["-x", f.name, "--args", prog] + list(args)
-        return subprocess.run(cmd, capture_output=True, text=True).stdout
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        return r.stdout + r.stderr
     finally:
         os.unlink(f.name)
 
@@ -473,9 +622,14 @@ def main():
             escrever_decl(os.environ["CAMPOS_SAIDA"] + ".decl")
             os.environ["CAMPOS_DECL"] = os.environ["CAMPOS_SAIDA"] + ".decl"
         os.environ["CAMPOS_ATE"] = a[2]
-        for l in gdb_py(a[1], DONOS).splitlines():
+        codigo = DONOS.replace("exec(POOL_PY)", POOL_PY)
+        for l in gdb_py(a[1], codigo).splitlines():
             if l.startswith("DONO "):
                 print(l[5:])
+            elif "Exception" in l or "Error" in l or "Traceback" in l:
+                sys.exit(l)
+        if "CAMPOS_SAIDA" in os.environ and not pathlib.Path(os.environ["CAMPOS_SAIDA"] + ".pool.json").exists():
+            sys.exit("sem contexto de memória do vblank pedido")
         return
     if a[:1] == ["--globais"] and len(a) >= 3:
         # as variáveis de dado do programa (nm), com o endereço: o gdb escolhe entre estáticas do mesmo nome por ele
@@ -496,4 +650,5 @@ def main():
     comparar(a[0], a[1], a[2], a[3], a[4], int(a[5]) if len(a) > 5 else 1)
 
 
-main()
+if __name__ == "__main__":
+    main()

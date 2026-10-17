@@ -306,7 +306,23 @@ s32 BtlMenu_GetWidth(BtlMenu *menu) {
         w = Font_GetGlyphHeight() * 22;
     } else {
         for (i = 0; i < menu->count; i++) {
+#ifdef PORT_BIG_ENDIAN
+            /* Índices negativos são sprites. O cálculo original mede a palavra count do TexFile como
+               dois caracteres de 16 bits: reproduzir as metades numéricas, sem trocar o cabeçalho como texto. */
+            s32 n;
+            if (menu->items[i].text[pad] < 0) {
+                u32 count = *(u32 *)BtlMenu_GetItemText(menu->items[i].text[pad]);
+                u16 texto[3];
+                texto[0] = (u16)count;
+                texto[1] = (u16)(count >> 16);
+                texto[2] = 0;
+                n = Font_GetWidth(texto);
+            } else {
+                n = Font_GetWidth(BtlMenu_GetItemText(menu->items[i].text[pad]));
+            }
+#else
             s32 n = Font_GetWidth(BtlMenu_GetItemText(menu->items[i].text[pad]));
+#endif
 
             if (w < n) {
                 w = n;

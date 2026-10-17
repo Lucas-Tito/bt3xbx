@@ -285,18 +285,18 @@ def pelo_tipo(dx, dp, m, fx, fp, n, base=0):
                     trechos.append([k, k + w])
             k += w
             continue
-        w = c if c in (2, 4, 8) else (c & 0xF if c in (0x44, 0x48, 0x84) else 1)
+        w = c if c in (2, 4, 8) else (c & 0xF if c in (0x44, 0x48, 0x54, 0x84) else 1)
         if k + w > fim:
             w = fim - k
         a, b = dx[k:k + w], dp[k:k + w]
         prox = False
-        if c in (2, 4, 8, 0x44, 0x48):
+        if c in (2, 4, 8, 0x44, 0x48, 0x54):
             ok = a == b[::-1]
             if not ok and c == 8 and w == 8:
                 # um u64 de pacote da GPU fica como dois u32, a baixa primeiro (decisão 19, PS2_PKT64): o tipo do C não
                 # separa o pacote de um u64 de verdade
                 ok = a[:4] == b[3::-1] and a[4:] == b[:3:-1]
-            if not ok and c == 0x44 and w == 4:
+            if not ok and c in (0x44,0x54) and w == 4:
                 prox = float_proximo(struct.unpack("<I", a)[0], struct.unpack(">I", b)[0])
         elif c == 0x84 and w == 4:
             va, vb = struct.unpack("<I", a)[0], struct.unpack(">I", b)[0]
@@ -304,6 +304,9 @@ def pelo_tipo(dx, dp, m, fx, fp, n, base=0):
                   PONTEIROS_PILHA.get(base + k) == (va, vb))
         else:  # byte, enchimento, continuação solta
             ok = a == b
+        if c == 0x54 and prox:
+            classes["libm-host"] += 1
+            ok = True
         classes["conforme" if ok else "float-proximo" if prox else "fora-do-formato"] += 1
         if not ok:
             # (só junta o que é contíguo: o roteiros.py confere cada trecho contra os campos explicados)
@@ -457,7 +460,8 @@ def main():
             tipos = ler_tipos(next(it))
             opc[a] = True
         elif a == "--donos":
-            donos = ler_donos(next(it))
+            opc["donos_base"] = next(it)
+            donos = ler_donos(opc["donos_base"])
             opc[a] = True
         elif a == "--marcas":
             r, arq = next(it).split("=", 1)
@@ -591,6 +595,17 @@ def main():
     ref_aliases, ref_vazios = contexto_charref(x, p, lx, lp, pares, donos)
     for nome in sorted(ref_aliases):
         print(f"aliases CharRef: {nome}, handler exato conferido nas duas builds")
+    import memoria_luta
+    contexto = None
+    if donos and "--tipos" in opc:
+        try:
+            contexto = memoria_luta.Contexto(x, p, lx, lp, args[0], args[1], opc["donos_base"], (args[2], args[3]))
+        except (ValueError, OSError, KeyError) as erro:
+            print(f"contexto vivo inválido: {erro}")
+            sys.exit(2)
+        for rotulo in contexto.rotulos:
+            print(rotulo)
+        print("contexto vivo: ok")
     livres = Counter()
     tipadas, tipados_heap = [0], [0]
     for (nx, ax, dx), (np_, ap, dp) in pares:
@@ -624,7 +639,22 @@ def main():
         dono = None
         if estado.startswith(" (em uso") and nx not in marcas and donos:
             dono = donos.get(struct.unpack_from("<I", dx, 0x14)[0])
-        if nx in ref_aliases and n == 4:
+        dinamico = None
+        if contexto:
+            dinamico = contexto.mapas.get(ax)
+            if estado.startswith(" (em uso"):
+                d0 = struct.unpack_from("<I", dx, 0x14)[0] - ax
+                dinamico = contexto.mapas.get(ax + d0)
+            else:
+                d0 = 0
+        if dinamico is not None:
+            ct, tt = pelo_tipo(dx[d0:], dp[d0:], dinamico, fx, fp, len(dinamico), ax + d0)
+            classes.update(ct)
+            trechos += [(a_ + d0, b_ + d0) for a_, b_ in tt]
+            fmt_ini, fmt_fim = d0, d0 + len(dinamico)
+            print(f"contexto {nx}: conforme {ct['conforme']}, fora-do-formato {ct['fora-do-formato']}, "
+                  f"opaco {ct['opaco']}, inativo {ct['morto-no-port']}")
+        elif nx in ref_aliases and n == 4:
             classes["conforme"] += 1
             fmt_ini, fmt_fim = 0, 4
         elif nx in tipos and not nx.startswith(("heap", "scratch")):
@@ -717,4 +747,5 @@ def main():
         sys.exit(2)
 
 
-main()
+if __name__ == "__main__":
+    main()

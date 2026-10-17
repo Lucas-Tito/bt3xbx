@@ -130,6 +130,15 @@ CONHECIDOS = {
 # pode haver um leitor que ele não anotou). O "confere" aceita a linha "contra o mapa" de um arquivo só se cada
 # posição com outra largura dele estiver aqui (o conv_tool lista as 10 primeiras: --detalhe); qualquer outra é erro.
 LARGURA_CONHECIDA = {
+    # O menu mede o count do sprite como duas metades de 16 bits; o ramo big-endian de
+    # BtlMenu_GetWidth reconstitui a cadeia temporária pelas metades do u32 nativo.
+    ("pzs3us1/00005.bin", 0x7AC42, 2, 128): (
+        "metade alta do count do sprite, recomposta por BtlMenu_GetWidth", {"Font_ReadChar"}),
+    ("pzs3us1/00005.bin", 0x8CF02, 2, 128): (
+        "metade alta do count do sprite, recomposta por BtlMenu_GetWidth", {"Font_ReadChar"}),
+    # EftOColor tem quatro u8; a atribuição da struct copia quatro bytes, sem inverter.
+    ("pzs3us1/01432.bin", 0x18954, 4, 1): (
+        "cópia de EftOColor (quatro bytes) em EftRays_SetKey", {"EftRays_SetKey"}),
     # o roteiro de evento da luta do primeiro episódio da História (formatos/historia-luta.md 2.6): no GSDT, 301 e 125
     # são só operandos do comando 12 (SetMember, BtlScriptCmd_SetMember), os itens id[1] e id[2] de um membro (os
     # operandos 8 e 9), lidos pela metade baixa pelo PS2_LOW do BattleSetup_SetMemberByItemIds (battle_load.c:1579, a
@@ -258,7 +267,10 @@ def leitores(rastreio, prog, chaves):
         c = l.split("\t")
         k = (c[0], int(c[1])) if len(c) > 5 and c[1].isdigit() else None
         if k in chaves:
-            pcs_de[k] = pcs_de.get(k, []) + [[int(p, 16) for p in c[5].split(",") if int(p, 16)]]
+            col = 5
+            if k == ("pzs3us1/01432.bin", 0x18954) and int(c[2]) == 0 and len(c) > 10 and int(c[6]) == 4:
+                col = 10  # atribuição de struct, comprovada pela PC da cópia desta rodada
+            pcs_de[k] = pcs_de.get(k, []) + [[int(p, 16) for p in c[col].split(",") if int(p, 16)]]
     todos = sorted({pc for ls in pcs_de.values() for pcs in ls for pc in pcs})
     # (o nome pelo addr2line, como em chamadas(); o rastreio.py não se importa: ele roda o main() ao carregar)
     a2l = subprocess.run(["addr2line", "-f", "-e", prog] + [hex(pc) for pc in todos], capture_output=True, text=True,
@@ -424,11 +436,6 @@ DIFERENTES_CONHECIDAS = [
                            "com a mesma soma unk0/unk4"),
     ("heap:0x39f90", 0x4038, "McFlow.repSave.hdr.sum e hdrSum (McFlowHeader): as somas do arquivo de replay, pela mesma "
                              "McCard_Checksum"),
-    # os pools do motor de scripts (Gsc_Init, src/sys/gsc.c:55-70): Heap_Alloc sem memset, e cada elemento só é posto na
-    # lista livre (o link). O resto de um elemento que nunca foi usado guarda o que ocupava a memória antes (bytes
-    # iguais nas duas builds); a tarefa ou o arquivo usados gravam esses campos na ordem do host
-    ("heap:0xfa0", campo(0x50, 0x08, 0x28), "GscTask livre do pool: unk8..abort nunca gravados desde a alocação"),
-    ("heap:0x168", campo(0x24, 0x08, 0x1c), "GscFile livre do pool: unk8..data nunca gravados desde a alocação"),
     # (etapa 9b) o UbResult (include/menu/menu_o.h) tipa o +0x2A0 do placar como "s32 unk2A0", mas ali moram dois s16,
     # o PClock.timeLeft e o unkE da cópia do relógio da luta (score->clock = result->clock, UbScore_Fill,
     # src/menu/menu_p_d.c:83; PClock em include/menu/menu_p.h), trocados certo como u16; nenhum código lê o unk2A0
@@ -491,10 +498,7 @@ CLASSES_CONHECIDAS = [
     ("heap:0x68", {"igual-sem-inverter": 8},
      "gBtlChars->unk8 e unkC (BtlChar_AllocAll, btl_char_mgr.c:1287): BtlFlagSoundSet, cujo BtlFlagSound.kind é u8 "
      "(btl_char_flag.h:48; o resto da palavra é enchimento), quatro por conjunto, dois conjuntos"),
-    ("heap:0x1a0800", {"igual-sem-inverter": 320, "2xu16": 660, "misto": 80, "u64": 930, "float-proximo": 16},
-     "a arena do BtlPool (BtlPool_Init, btl_pool.c:29): as estruturas da cena da luta num alocador próprio, sem tipo "
-     "por estrutura (u8, u16 e u64 de campo); float-proximo: as tabelas do EftGlow_BuildTables (cosf e sinf da libm "
-     "do host). Só teto (visto: 244, 522, 59, 742 e 8): tipar a arena por sub-bloco fica pendente (plano/F4/05.md)"),
+
 ]
 
 # (Até a F5, etapa 4, as cores dos efeitos da luta gravadas byte a byte deixavam palavras igual-sem-inverter nos
@@ -682,6 +686,9 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None, roteiro
         return False
     linhas = p.read_text(errors="replace").splitlines()
     ok = True
+    if "contexto vivo: ok" not in linhas:
+        print(f"{pre}DIFERENÇA: memória sem contexto vivo validado")
+        ok = False
     saida = next((l for l in linhas if l.startswith("memdiff saiu com ")), None)
     if saida != "memdiff saiu com 0":
         print(f"{pre}DIFERENÇA: memória: {saida or 'o memdiff não terminou'}")

@@ -280,9 +280,10 @@ Uma rodada da x86 até a luta leva uns 10 s.
   "sim" na confirmação, que começa no "não" e muda com CIMA (não ESQUERDA). Sem isso a luta fica parada no estado 6.
   No Treino, o menu de pausa: a quarta opção refaz a luta, a quinta volta ao CharSel do treino, a sexta ao menu
   principal, com a mesma confirmação.
-- **A memória no meio da luta ainda não passa** pelo critério geral (a arena do `BtlPool` e os efeitos no meio de uma
-  técnica, plano/F5/03.md seção 4): um roteiro que termina com a luta andando falha a memória do fim. Os roteiros da
-  F5 terminam num menu, e a memória nos pontos da luta só com `MEMLUTA=1` (até a etapa 5).
+- **A memória dos pontos da F5 é obrigatória** (`marca ponto`, etapa 5): os `f5_*` incluem carga, combate,
+  técnica, pausa e retorno, conforme o roteiro. A opção `MEMLUTA` saiu. Cada dump tem o testemunho `.pool`
+  produzido pela própria arquitetura (`headless/memoria.c`) e o esquema `.pool.json` do gdb (`campos.py --donos`).
+  Falta de testemunho, dono, geração ou tipo vivo é erro, não uma classe genérica da arena.
 - **Uma linha nova do rastro não pode ter " fim "**: o `roteiros.sh` acha o fim do roteiro por `^roteiro: .* fim `, e a
   primeira versão da janela ("... fim pausa") passava por fim do roteiro. As janelas dizem `fecha MOTIVO`.
 - **Linhas novas no rastro só com um passo que as pede** (`rastreia luta`): o rastro se compara com as referências de
@@ -1197,3 +1198,36 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   pixels nem apresente a imagem composta como prova da UI sobreposta: ela também fica sem essa prova.
   **F5, etapa 4:** com as cores dos efeitos corrigidas, as duas saíram idênticas e as marcas voltaram ao roteiro
   (`plano/F5/04.md`): a diferença era a cor invertida dos efeitos, não outra causa da VU1.
+
+
+### Memória da luta na F5, etapa 5
+
+- **Um tamanho de alocação não identifica seus elementos.** `BtlPool` reserva uma arena, mas também entrega
+  blocos pelo heap no slot 8. O testemunho de cada build registra slot, geração (reinício), ordem, endereço,
+  tamanho e PC do dono. Compare os testemunhos e confira cursores/capacidades no dump antes de aplicar tipos.
+  Resolva a PC por `addr2line`, incluindo a função interna: o clang incorpora `EftHitArena_Init` em
+  `EftHit_Init`, enquanto o GCC mantém a chamada. O nome pelo símbolo externo sozinho acusa um dono falso.
+- **A vista do header pode ser parcial, mesmo com sizeof conhecido.** Os trabalhos de 0x2000 dos slots dos
+  lutadores usam a classe ativa; `EftEmit_LoadSet` completa as vistas parciais pelo `EftSet`. Os recursos do
+  disco juntam `EftODiscRes` e a fila do `EftDiscMgr`. `EftRibbon_SetTexPair` grava dois u64 por entrada,
+  embora outra vista os declare como `Vec4`. O tipo do leitor completa a vista, sem afrouxar a comparação.
+- **Lista livre não é conteúdo vivo.** Corpos rígidos liberados, tarefas, partículas e formas de colisão
+  conservam dados antigos. Confira nas duas memórias os links, índices, contagens e dono antes de excluir
+  seus conteúdos. Um `w` sem inicialização só sai quando o consumidor usa xyz e remonta w: a aura faz
+  `Vec3_Copy` no offset e força `pos.w=1`; as correntes usam só `BObj.push.xyz`. Argumentos copiados
+  carregam enchimento de pilha: os pad3C de partícula/billboard e o fim do argumento de `EftAnimPart`
+  não têm leitor. As coordenadas, cores e números ao lado continuam comparados.
+- **Não confunda ordem de bytes com a libm já conhecida.** A concessão da F4 de até 64 ULP para as direções
+  de `EftGlow_BuildTables` fica nos campos y/z produzidos por cosf/sinf, com código de tipo próprio e
+  contagem `libm-host`. Sai o teto genérico da arena; nenhum outro float ganha essa concessão.
+- **A fonte do menu mede também o cabeçalho de sprites.** Itens negativos chamam `Font_GetWidth` sobre
+  o count u32 da folha. O ramo big-endian de `BtlMenu_GetWidth` reconstitui as duas metades como u16
+  temporários; converter o cabeçalho como texto estragaria a relocação. As posições do `--mapa` têm
+  leitores conferidos. Uma atribuição de `EftOColor` é cópia de quatro bytes: a nova coluna pcc do
+  rastreio guarda a PC da cópia, inclusive quando nenhum byte teve uso numérico posterior.
+- **Arquivo convertido pode receber números depois da carga.** A seção 8 do `00004.bin`, folha dos ícones,
+  é usada pela HUD como `HudCRes`: `HudRes_UploadTex` grava mark como s32. A marcação desse trecho usa
+  a variante HUD de `Conv_TexFile`; o antigo mapa de bytes falha quando mark fica 1.
+- **Dump de memória não precisa repetir o fim da luta.** `BT3_MEMORIA_SAIR=1` no teste termina logo após
+  gravar o dump e o testemunho no vblank pedido. Só as rodadas próprias de memória das telas/pontos usam
+  essa saída; a rodada que compara rastro, arquivos e luta completa continua até o fim do roteiro.

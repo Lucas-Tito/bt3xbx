@@ -42,8 +42,7 @@
 #   7. (F5, etapa 3) nos roteiros f5_*: roteiros.py f5 (o que a F5 exige: a luta montada, cada ação confirmada no
 #      estado do jogo e na matriz, o resultado e a volta ao menu, a janela contínua, os pontos) e passos.py (a medida de
 #      tempo por passo) no log da x86 e no da PPC sem mapa, os dois do commit de agora
-#   MEMLUTA=1   (F5, com SEMMAPA=1) a memória também em cada "marca ponto" da luta, com o critério geral: uma rodada a
-#               mais da PPC por ponto, e no meio da luta ela ainda não passa (a etapa 5 da F5, plano/F5/03.md seção 4)
+#   Nos f5_*, a memória de cada "marca ponto" é obrigatória (F5, etapa 5).
 #   TP=3600     segundos da PPC no qemu
 #   MEM=menu    a memória no menu principal em vez do fim (SEMMAPA=1)
 #   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
@@ -276,7 +275,7 @@ for n in "${NOMES[@]}"; do
             # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
             # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
             # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela
-            PONTOS=(); [ -z "${MEMLUTA:-}" ] || PONTOS=(--pontos)
+            PONTOS=(); [[ $n != f5_* ]] || PONTOS=(--pontos)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
             while read -r t VT; do
@@ -284,9 +283,9 @@ for n in "${NOMES[@]}"; do
                 if roda_ppc; then
                     rm -rf $M; mkdir -p $M
                     BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_ROTEIRO=$R BT3_SAVES=$M/sq \
-                        BT3_HASH=$M/hq.txt BT3_HASH_AT=$VT timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $M/ppc.txt 2>&1 \
+                        BT3_HASH=$M/hq.txt BT3_HASH_AT=$VT BT3_MEMORIA_SAIR=1 timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $M/ppc.txt 2>&1 \
                         < /dev/null
-                    BT3_ROTEIRO=$R BT3_SAVES=$M/sm BT3_HASH=$M/hm.txt BT3_HASH_AT=$VT timeout 900 $B/x86/bt3_x86 \
+                    BT3_ROTEIRO=$R BT3_SAVES=$M/sm BT3_HASH=$M/hm.txt BT3_HASH_AT=$VT BT3_MEMORIA_SAIR=1 timeout 900 $B/x86/bt3_x86 \
                         > /dev/null 2>&1 < /dev/null
                 fi
                 if roda_ppc || [ ! -s $M/donos.tsv ]; then

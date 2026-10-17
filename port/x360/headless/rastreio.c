@@ -91,6 +91,7 @@ typedef struct Uso {
     uint64_t chave; /* origem do primeiro byte lido */
     uint32_t usos, escritas;
     uint32_t pcs[4];  /* até 4 funções diferentes que leram (o catálogo precisa de todas, não só da primeira) */
+    uint32_t pcc[4]; /* leitores que fizeram uma cópia sem uso numérico posterior */
     uint32_t pcb[4];  /* até 4 que leram como byte (rastreio.py vê se são campos de structs já corrigidas) */
     uint8_t tamanhos; /* máscara das larguras 1, 2, 4, 8, 16 lidas aqui */
     uint8_t copias;   /* larguras com que a posição foi copiada (vai para o relatório, não decide largura) */
@@ -438,6 +439,7 @@ NAO_RASTREAR static void resolver(void) {
             Uso *u = origem(sAnel[i].addr) != 0 ? uso(origem(sAnel[i].addr)) : NULL;
             if (u != NULL) {
                 u->copias |= (uint8_t)sPend.size;
+                anotar_em(u->pcc, sAnel[i].pc);
             }
             for (b = 0; b < sPend.size; b++) {
                 marcar(sPend.dst + b, origem(sAnel[i].addr + b));
@@ -650,9 +652,9 @@ NAO_RASTREAR static void despejar(void) {
     for (i = 0; i < TAB; i++) {
         Uso *u = &sTab[i];
         if (u->chave != 0) {
-            fprintf(fp, "%s\t%llu\t%u\t%u\t%u\t%08x,%08x,%08x,%08x\t%u\t%u\t%u\t%08x,%08x,%08x,%08x\n", sNome[u->chave >> 40],
+            fprintf(fp, "%s\t%llu\t%u\t%u\t%u\t%08x,%08x,%08x,%08x\t%u\t%u\t%u\t%08x,%08x,%08x,%08x\t%08x,%08x,%08x,%08x\n", sNome[u->chave >> 40],
                     (unsigned long long)(u->chave & 0xFFFFFFFFFFull), u->tamanhos, u->usos, u->escritas, u->pcs[0], u->pcs[1],
-                    u->pcs[2], u->pcs[3], u->copias, u->impar, u->desal, u->pcb[0], u->pcb[1], u->pcb[2], u->pcb[3]);
+                    u->pcs[2], u->pcs[3], u->copias, u->impar, u->desal, u->pcb[0], u->pcb[1], u->pcb[2], u->pcb[3], u->pcc[0], u->pcc[1], u->pcc[2], u->pcc[3]);
         }
     }
     fclose(fp);
