@@ -285,6 +285,12 @@ Uma rodada da x86 até a luta leva uns 10 s.
   guarda o arquivo atual e, depois dele, bytes de uma imagem anterior maior (o `f5_duelo` passa pelo estágio 20 antes
   do 5: 8.004 palavras "igual-sem-inverter" na tela 39). É resto de buffer, como o do `faceFile`; ficou em
   `CLASSES_CONHECIDAS` com teto e só nas telas das seleções.
+- **Um roteiro que passa por uma tela de `TELAS_MEM` sem carregar um dos conteúdos dela falha a memória da tela**: o
+  `f5_treino` entra no Train (tela 44) e vai ao treino livre sem abrir aula, e a tela exige a `pagina_treino` viva. A
+  linha "tela N sem o conteúdo X vivo e conforme" com "memdiff saiu com 0" é a expectativa do verificador, não memória
+  diferente: leia a linha da DIFERENÇA antes de suspeitar de resto de buffer (a conferência final da etapa 3 da F5
+  suspeitou do `stageFile`). A dispensa é por roteiro e tela (`roteiros.py`, `TELAS_MEM_SEM`) e só vale sem nenhum
+  arquivo do conteúdo no `lidos.txt` da rodada.
 - **Uma luta mais longa lê dados que as curtas não liam**: o `f5_duelo` (técnica, HUD dela, 3.000 passos) achou no
   `conv_tool --mapa` três posições que o conversor não troca do jeito que o jogo lê (plano/F5/03.md, seção 4).
 - **Lua e troca de cenário estão nos dados do estágio**: o arquivo `0x171 + estágio` (`pzs3us1/(0x170 + estágio)`), o
