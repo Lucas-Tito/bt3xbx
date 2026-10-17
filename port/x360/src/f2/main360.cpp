@@ -157,13 +157,14 @@ static DWORD WINAPI Preparar(LPVOID arg) {
     return 0;
 }
 
-/* A ISO original (sem a marca da convertida) foi recusada: a caixa de mensagem do sistema por cima da tela vermelha.
+/* A ISO original (sem a marca da convertida) foi recusada: a caixa de mensagem do sistema por cima da tela preta.
    A caixa só aparece com a tela sendo apresentada, então a main apresenta enquanto ela está aberta (sem bloquear:
    a Guide congela o console se ninguém apresentar). O texto, os botões, o resultado e o XOVERLAPPED ficam fora da
    pilha: o sistema os usa depois da chamada voltar. Se outra tela do sistema estiver aberta (ERROR_ACCESS_DENIED),
-   tenta de novo por 10 s; se mesmo assim não abrir, fica só a tela vermelha, e o log diz por quê. Depois de fechada,
-   a main segue para a cor do fim (vermelha) e o dashboard no botão, como nas outras falhas. */
-static void MostrarRecusa(D3DDevice *dev, int motivo) {
+   tenta de novo por 10 s; se mesmo assim não abrir, fica só a tela preta, e o log diz por quê. Devolve true se a caixa
+   abriu e fechou: o OK leva direto ao dashboard (o jogo nunca começou). Se não abriu, a tela parada e um botão voltam
+   ao dashboard. */
+static bool MostrarRecusa(D3DDevice *dev, int motivo) {
     static const WCHAR kTituloOriginal[] = L"ISO original";
     static const WCHAR kTituloAusente[] = L"ISO n\x00E3o encontrada";
     static const WCHAR kTextoOriginal[] =
@@ -199,9 +200,9 @@ static void MostrarRecusa(D3DDevice *dev, int motivo) {
         }
     }
     if (r != ERROR_IO_PENDING && r != ERROR_SUCCESS) {
-        Diario_Escrever("recusa: a caixa do sistema não abriu (XShowMessageBoxUI devolveu %u): fica a tela vermelha",
+        Diario_Escrever("recusa: a caixa do sistema não abriu (XShowMessageBoxUI devolveu %u): fica a tela preta",
                         (unsigned)r);
-        return;
+        return false;
     }
     Diario_Escrever("recusa: caixa do sistema aberta, \"%s\"", motivo == 2 ? "ISO não encontrada" : "ISO original");
     while (!XHasOverlappedIoCompleted(&sOv)) {
@@ -209,8 +210,8 @@ static void MostrarRecusa(D3DDevice *dev, int motivo) {
         dev->Present(NULL, NULL, NULL, NULL);
     }
     r = XGetOverlappedResult(&sOv, &fim, FALSE);
-    Diario_Escrever("recusa: caixa fechada (resultado %u, botão %d); o jogo não começa, qualquer botão volta ao "
-                    "dashboard", (unsigned)r, (int)sResultado.dwButtonPressed);
+    Diario_Escrever("recusa: caixa fechada (resultado %u, botão %d); o jogo não começa, volta ao dashboard", (unsigned)r, (int)sResultado.dwButtonPressed);
+    return true;
 }
 
 /* XLaunchNewImage não volta: de uma thread nova, com a main parada esperando (pesquisa/01, CLAUDE.md) */
@@ -227,7 +228,7 @@ void __cdecl main() {
     HANDLE t;
     int local;
     int motivo;
-    bool gpu, recusada, solto = false;
+    bool gpu, recusada, saidaDireta = false, solto = false;
 
     Diario_Abrir("game:\\bt3xbx.log");
     SetUnhandledExceptionFilter(AoMorrer);
@@ -265,9 +266,9 @@ void __cdecl main() {
     gpu = !recusada && getenv("BT3_GS") != NULL && strcmp(getenv("BT3_GS"), "gpu") == 0;
     gX360Dev = dev;
     if (recusada) {
-        gCor = 0xFFC02020; /* vermelho: a cor de falha */
+        gCor = 0xFF010101; /* preto (o exato não limpa no console, guia 1.3) */
         InterlockedExchange(&gTerminou, 1);
-        MostrarRecusa(dev, motivo);
+        saidaDireta = MostrarRecusa(dev, motivo);
     }
     if (gpu) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF000000, 1.0f, 0);
@@ -284,6 +285,9 @@ void __cdecl main() {
     }
 
     for (;;) {
+        if (saidaDireta) { /* a caixa da recusa fechou: direto ao dashboard */
+            break;
+        }
         if (gpu) {
             if (!gTerminou) {
                 Sleep(50);
@@ -313,7 +317,7 @@ void __cdecl main() {
                     apertou = true;
                 }
             }
-            if (apertou && solto) { /* um botão apertado de novo: o A que fechou a caixa da recusa não conta */
+            if (apertou && solto) { /* um botão apertado de novo: o A que fechou a caixa não conta (caixa que não abriu) */
                 break;
             }
             solto = solto || !apertou;
