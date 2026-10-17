@@ -152,6 +152,51 @@ ZSaida ps_zprof(float2 uv : TEXCOORD0) {
     return s;
 }
 
+// ---- F5, etapa 7 (segunda parte): as passadas nativas (gs_d3d.cpp, nat_*), traduções do dclut.frag e do
+// outline.frag do PC. O vs_copia leva o retângulo; as leituras são pelo pixel (VPOS), no ponto e presas na borda.
+// Os ids vêm da cópia do alfa do alvo (sIds): o alvo guarda min(A / 0x80, 1), exato de 0 a 0x80 na volta; o que passa
+// de 0x7F vira 255, o "nada" (docs/x360/formatos/gs-nativos.md, seção 4).
+float4 nat : register(c4);    // tabela: x a fonte (0 a névoa pela profundidade, 1 os ids), y o máximo do z; contorno: z o escuro
+float4 natEsc : register(c5); // xy: 1 / tamanho da cópia dos ids; zw: 1 / tamanho da textura de profundidade
+sampler2D natZ : register(s2);    // a profundidade do alvo (D24S8, a da primeira parte), lida no .x
+sampler2D natIds : register(s3);  // a cópia dos ids
+sampler2D natClut : register(s4); // a tabela do jogo, 256 x 1, o alfa como gravado (0x80 opaco)
+
+float nat_id(float2 uv) {
+    float a8 = tex2Dlod(natIds, float4(uv, 0.0f, 0.0f)).a * 255.0f;
+    return a8 >= 254.5f ? 255.0f : floor(a8 * 128.0f / 255.0f + 0.5f);
+}
+
+// A tabela do contorno (ObjOutline_BuildClut): 255 é o "nada" (0); senão (id << 3) & 0xFF, com 0 virando 0x80.
+float nat_contorno_tab(float2 uv) {
+    float id = nat_id(uv);
+    float c = id * 8.0f - 256.0f * floor(id * 8.0f / 256.0f); // (sem operadores de bits no ps_3_0)
+    return id >= 255.0f ? 0.0f : c == 0.0f ? 128.0f : c;
+}
+
+// O contorno (native 1): a aresta onde o valor da tabela daqui passa o de um vizinho; a mistura (REVSUBTRACT, ONE,
+// ONE, só RGB) tira o escuro da cor.
+float4 ps_contorno(float2 vpos : VPOS) : COLOR0 {
+    float2 uv = (floor(vpos) + 0.5f) * natEsc.xy;
+    float q = nat_contorno_tab(uv);
+    bool aresta = q > nat_contorno_tab(uv + float2(natEsc.x, 0.0f)) || q > nat_contorno_tab(uv + float2(0.0f, natEsc.y)) ||
+                  q > nat_contorno_tab(uv - float2(natEsc.x, 0.0f)) || q > nat_contorno_tab(uv - float2(0.0f, natEsc.y));
+    return float4(aresta ? nat.zzz : 0.0f, 0.0f);
+}
+
+// A passada de tabela (native 3): o byte (a névoa pela profundidade ou o id) pela tabela do jogo; a mistura e a
+// máscara de escrita vêm da chave do pipeline. A conta da névoa é a do PC (lida do código do jogo, nunca conferida
+// no console): 0 para z >= 0xFFA8, senão 255 - z / 256.
+float4 ps_tabela(float2 vpos : VPOS) : COLOR0 {
+    float2 f = floor(vpos) + 0.5f;
+    float z = tex2Dlod(natZ, float4(f * natEsc.zw, 0.0f, 0.0f)).x * nat.y;
+    float id = nat_id(f * natEsc.xy);
+    float iz = z >= 65448.0f ? 0.0f : clamp(255.0f - floor(z / 256.0f), 0.0f, 255.0f);
+    float idx = nat.x < 0.5f ? iz : id;
+    float4 c = tex2Dlod(natClut, float4((idx + 0.5f) / 256.0f, 0.5f, 0.0f, 0.0f));
+    return float4(c.rgb, saturate(c.a * 255.0f / 128.0f));
+}
+
 // ---- programas de vértice da VU1, família vu0 (F5, etapa 6): tradução de port/src/gs/shaders/vu0.vert
 // Usada pelos programas 0, 1, 2a/2b, 7 e 8 (camadas 0 a 5 em misc.w). O pixel shader é o ps_gsz acima (ps_gs com
 // BT3_CORTE=0).

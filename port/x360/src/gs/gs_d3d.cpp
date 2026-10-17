@@ -14,9 +14,10 @@
  *   - Ler a cor de um alvo como textura (o jogo faz isso nos efeitos) é ler a textura do alvo, sempre em dia: um
  *     alvo nunca é lido enquanto é o desenhado (gs_draw.c recusa), então ele já saiu da EDRAM.
  *   - Sem o segundo alvo com o byte de alfa (outAux do gs.frag): o teste de alfa do destino (DATE) lê o alfa da
- *     própria cor, que guarda min(A / 0x80, 1) e chega a 1 exatamente com o bit 7 ligado. Os efeitos nativos que
- *     precisam do byte (contorno, tabela de profundidade, cópia de ids) ficam para a F5, e as imagens copiadas direto
- *     para a memória de vídeo (filmes) para a F6: são contados e não desenhados.
+ *     própria cor, que guarda min(A / 0x80, 1) e chega a 1 exatamente com o bit 7 ligado. Os efeitos nativos (F5,
+ *     etapa 7, segunda parte; nat_* abaixo e docs/x360/formatos/gs-nativos.md) leem os ids do mesmo alfa, exatos de 0
+ *     a 0x80: a cópia dos ids é um Resolve da cor, a passada de tabela lê os ids ou a profundidade do alvo, o contorno
+ *     lê os ids. As imagens copiadas direto para a memória de vídeo (filmes) ficam para a F6: contadas, não desenhadas.
  *   - Os programas de vértice (VU1, F5, etapa 6): as três famílias, vu0 (os lutadores), vu4 (o estágio) e vu6 (a
  *     sombra no chão) (vs_vu0, vs_vu4 e vs_vu6 em gs_d3d.hlsl), são desenhadas com os vértices e os índices do quadro
  *     copiados para um par de buffers da GPU (dois pares, alternados por quadro). BT3_VU_VERTS=65536 vértices por par
@@ -71,7 +72,9 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "copia_ps.h"
 #include "zcor_ps.h"
 #include "zprof_ps.h"
-#include "gsz_ps.h"     /* (F5, etapa 7, segunda parte) ps_gsz: a VU1 recortada pelo w */
+#include "gsz_ps.h"     /* (F5, etapa 7, segunda parte) ps_gsz, ps_tabela, ps_contorno */
+#include "tabela_ps.h"
+#include "contorno_ps.h"
 #include "vu0_vs.h"
 #include "vu4_vs.h"
 #include "vu6_vs.h"
@@ -114,10 +117,24 @@ static D3DSurface *sEdramProfCor; /* (F5, etapa 7) a profundidade da EDRAM vista
 static D3DPixelShader *sPsZCor, *sPsZProf;
 static D3DTexture *sBranco, *sDate;
 static D3DTexture *sDateFonte; /* o que os desenhos com DATE leem: sDate, ou a textura de um alvo fora da EDRAM */
-/* (F5, etapa 7, segunda parte) BT3_CORTE=1: os programas da VU1 recortados pelo w, com a profundidade por pixel
-   (vu_pos e ps_gsz em gs_d3d.hlsl); 0: o z preso em 0..w por vértice, o de antes */
-static D3DPixelShader *sPsGsZ;
-static unsigned sCorte = 1;
+
+/* F5, etapa 7, segunda parte: as passadas nativas (nat_*, docs/x360/formatos/gs-nativos.md), o FBA e o recorte da
+   VU1 pelo w. Ajustes no ambiente.txt, cada um desligável para comparar:
+     BT3_NATIVOS=7  bits: 1 o contorno (native 1), 2 as passadas de tabela pelos ids (a chave, o brilho de objeto),
+                    4 as de tabela pela profundidade (a tinta, o brilho do céu, a névoa); a cópia dos ids (native 4)
+                    acontece se 1 ou 2 estiver ligado. Desligado: contado e pulado, como antes.
+     BT3_FBA=1      0: o FBA de antes (o alfa da mistura vira 1); 1: duas passadas nos desenhos com FBA que misturam
+                    pelo alfa da fonte (a cor com o alfa calculado, depois só o alfa com o bit 7).
+     BT3_CORTE=1    0: o z da VU1 preso em 0..w por vértice (o de antes); 1: o recorte pelo w com a profundidade por
+                    pixel (vu_pos e ps_gsz em gs_d3d.hlsl).
+   O BT3_FX_OFF do gs_draw.c continua valendo (1 o contorno, 2 a chave, 4 as tabelas que colorem pela névoa, 8 o brilho
+   aditivo, 16 o borrão pelo alfa do destino): o que ele pula nem chega à lista. */
+#define IDS_W 640 /* a cópia dos ids: a imagem do jogo (FBW 10, 448 linhas); fora dali a leitura fica presa na borda */
+#define IDS_H 448
+static D3DPixelShader *sPsGsZ, *sPsTabela, *sPsContorno;
+static D3DTexture *sIds;       /* a cópia do alfa do alvo (os ids), tiled A8R8G8B8, IDS_W x IDS_H */
+static unsigned sIdsQuadro;    /* o quadro da última cópia (+1; 0: nenhuma) */
+static unsigned sNativos = 7, sFba = 1, sCorte = 1;
 
 typedef struct Ret { int x0, y0, x1, y1; } Ret; /* vazio quando x1 <= x0 */
 typedef struct Alvo {
@@ -243,7 +260,18 @@ static struct {
        das chamadas da profundidade (o da GPU sai do autoteste) */
     unsigned zRes, zRest, zVisitas, zMantida, zSemTex;
     double corResPx, corRestPx, zResPx, zRestPx, msZ, msZPior, msZQuadro;
+    /* F5, etapa 7, segunda parte: as nativas feitas (contorno, tabela, cópia dos ids), as de tabela puladas por motivo
+       (0 desligada no BT3_NATIVOS, 1 sem tabela, 2 sem profundidade, 3 alvo não limpo, 4 sem a cópia dos ids), as
+       sincronizações da profundidade; o DATE (marcadores, resolves, lidas da textura do alvo, desenhos), o FBA
+       (desenhos, os de duas passadas), o alfa alto (desenhos que escrevem alfa com alfa de vértice acima de 0x80, no
+       quadro de amostra do trecho) e os pixels das passadas de tela */
+    unsigned natCont, natTab, natIds, natTabSem[5], natContSem, natIdsSem, natZSinc, natIdsVelhos;
+    unsigned dateMarc, dateRes, dateTex, dateDes, fbaDes, fbaDuas, fbaSemA, alfaAlto, alfaAltoDes;
+    double natPx;
 } sConta;
+/* as passadas de tabela por tipo (fonte, mistura e máscara da chave do pipeline), no trecho */
+static struct { uint32_t chave; int src; unsigned n; } sTabTipo[8];
+static int sTabTipoN;
 static LARGE_INTEGER sFreq, sUltimoFim;
 static unsigned sAvisado; /* bits: o que já foi dito uma vez no log */
 
@@ -720,8 +748,9 @@ static void aplica_pipe(int pipe) {
                                                      ((p->wmask & GS_CC_G) ? D3DCOLORWRITEENABLE_GREEN : 0) |
                                                      ((p->wmask & GS_CC_B) ? D3DCOLORWRITEENABLE_BLUE : 0) |
                                                      ((p->wmask & GS_CC_A) ? D3DCOLORWRITEENABLE_ALPHA : 0));
-    sDev->SetRenderState(D3DRS_ZENABLE, TRUE);
-    sDev->SetRenderState(D3DRS_ZWRITEENABLE, p->zwrite ? TRUE : FALSE);
+    /* (a chave de uma passada de tabela, bit 22, tem o teste NEVER: ela não usa a profundidade) */
+    sDev->SetRenderState(D3DRS_ZENABLE, p->fx ? FALSE : TRUE);
+    sDev->SetRenderState(D3DRS_ZWRITEENABLE, p->zwrite && !p->fx ? TRUE : FALSE);
     sDev->SetRenderState(D3DRS_ZFUNC, p->ztst == 0 ? D3DCMP_NEVER : p->ztst == 1 ? D3DCMP_ALWAYS :
                                       p->ztst == 2 ? D3DCMP_GREATEREQUAL : D3DCMP_GREATER);
 }
@@ -930,6 +959,19 @@ static void prof_entrega(void) {
     }
     sZDono = -1;
     sSujoZ.x0 = sSujoZ.x1 = 0;
+}
+
+/* (F5, etapa 7, segunda parte) A profundidade do dono, que está na EDRAM, em dia na textura dele sem entregar a posse:
+   o corpo de prof_entrega sem o sZDono = -1. Antes de uma passada de tabela pela névoa, que lê a textura. */
+static void prof_sincroniza(void) {
+    int dono = sZDono;
+    Ret r = sSujoZ;
+    if (dono < 0 || r.x1 <= r.x0) {
+        return;
+    }
+    prof_entrega();
+    sZDono = dono;
+    sConta.natZSinc++;
 }
 
 /* O alvo da EDRAM volta para a textura dele (só o que foi desenhado desde que entrou). A profundidade não: ela fica
@@ -1273,6 +1315,8 @@ static void vu_init(void) {
                     VU_PARES * (sVuCapV * 48u + sVuCapI * 4u) >> 10);
 }
 
+static void nat_init(void);
+
 static int d3d_init(void) {
     static const D3DVERTEXELEMENT9 elemGs[] = {
         {0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
@@ -1313,6 +1357,8 @@ static int d3d_init(void) {
         FAILED(sDev->CreatePixelShader((const DWORD *)kZCorPs, &sPsZCor)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kZProfPs, &sPsZProf)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kGsZPs, &sPsGsZ)) ||
+        FAILED(sDev->CreatePixelShader((const DWORD *)kTabelaPs, &sPsTabela)) ||
+        FAILED(sDev->CreatePixelShader((const DWORD *)kContornoPs, &sPsContorno)) ||
         FAILED(sDev->CreateVertexDeclaration(elemCopia, &sDeclCopia)) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kVu0Vs, &sVsVu[0])) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kVu4Vs, &sVsVu[1])) ||
@@ -1370,9 +1416,7 @@ static int d3d_init(void) {
                         tam_alvo() >> 10);
     }
     prof_autoteste();
-    sCorte = env_num("BT3_CORTE", 1) != 0;
-    Diario_Escrever("gs_d3d: BT3_CORTE=%u (%s)", sCorte,
-                    sCorte ? "a VU1 recortada pelo w, profundidade por pixel" : "z da VU1 preso em 0..w por vértice");
+    nat_init(); /* (F5, etapa 7, segunda parte) */
     Diario_Escrever("gs_d3d: pronto; alvo %dx%d, EDRAM: cor %u + profundidade %u de %u tiles; %u MB livres", TAM, TAM,
                     tilesCor, tilesProf, (unsigned)EDRAM_TILES, mb_livres());
     if (tilesCor + tilesProf > EDRAM_TILES) {
@@ -1556,28 +1600,34 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     return 1;
 }
 
+static int fba_duas(const GsDraw *d);
+static void chamadas(const GsDraw *d, uint32_t ini);
+static void desenha_fba(const GsDraw *d, uint32_t ini);
+
+/* um desenho preparado: as chamadas (duas passadas no FBA com mistura pelo alfa da fonte) e o que ele sujou */
+static void desenha_comum(const GsDraw *d, uint32_t ini, const Ret *a) {
+    if (fba_duas(d)) {
+        desenha_fba(d, ini);
+    } else {
+        chamadas(d, ini);
+    }
+    ret_une(&sSujo, a->x0, a->y0, a->x1, a->y1);
+    if (sPipes[d->pipeline].zwrite && sPipes[d->pipeline].ztst != 0) {
+        ret_une(&sSujoZ, a->x0, a->y0, a->x1, a->y1);
+    }
+    sConta.desenhos++;
+    sConta.vertices += d->count;
+    sConta.dateDes += d->misc[1] != 0.0f;
+    sConta.fbaDes += d->misc[2] != 0.0f;
+}
+
 static void desenha(const GsDraw *d) {
-    const Pipe *p = &sPipes[d->pipeline];
-    D3DPRIMITIVETYPE tipo = p->topo == 0 ? D3DPT_TRIANGLELIST : p->topo == 1 ? D3DPT_LINELIST : D3DPT_POINTLIST;
-    int porPrim = p->topo == 0 ? 3 : p->topo == 1 ? 2 : 1;
-    uint32_t feitos = 0;
     Ret a;
 
     if (!prepara(d, 1, &a)) {
         return;
     }
-    while (feitos + porPrim <= d->count) {
-        uint32_t n = d->count - feitos > MAX_UP ? MAX_UP : d->count - feitos;
-        n -= n % porPrim;
-        sDev->DrawPrimitiveUP(tipo, n / porPrim, &gsVerts[d->first + feitos], sizeof(Vtx));
-        feitos += n;
-    }
-    ret_une(&sSujo, a.x0, a.y0, a.x1, a.y1);
-    if (p->zwrite && p->ztst != 0) {
-        ret_une(&sSujoZ, a.x0, a.y0, a.x1, a.y1);
-    }
-    sConta.desenhos++;
-    sConta.vertices += d->count;
+    desenha_comum(d, ~0u, &a);
     if (d->count > sConta.maiorDesenho) sConta.maiorDesenho = d->count;
 }
 
@@ -1593,13 +1643,7 @@ static void desenha_vu(const GsDraw *d, uint32_t ini) {
         sDev->SetVertexShaderConstantF(VU_C0, (const float *)&gsVuUni[d->uniform], sizeof(Vu0Uniform) / 16);
         sCurUni = d->uniform;
     }
-    sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count);
-    ret_une(&sSujo, a.x0, a.y0, a.x1, a.y1);
-    if (sPipes[d->pipeline].zwrite && sPipes[d->pipeline].ztst != 0) {
-        ret_une(&sSujoZ, a.x0, a.y0, a.x1, a.y1);
-    }
-    sConta.desenhos++;
-    sConta.vertices += d->count;
+    desenha_comum(d, ini, &a);
     sConta.vuFeitos[d->vu - 1]++;
     sConta.vuTri[d->vu - 1] += d->count / 3;
 }
@@ -1776,6 +1820,53 @@ static void log_prof(unsigned t) {
                     sConta.msZ / t, sConta.msZPior, gz, gc, sMem.nVivos[CL_PROF], sMem.vivos[CL_PROF] >> 10);
 }
 
+/* F5, etapa 7, segunda parte: as nativas feitas e puladas por motivo, as tabelas por tipo, o DATE, o FBA, o alfa alto
+   e a extensão do que cada alvo tem desenhado (a sonda da seção 5 da especificação) */
+static void log_nativas(unsigned t) {
+    char tipos[256], ext[512];
+    int i, n = 0, m = 0;
+    tipos[0] = ext[0] = '\0';
+    for (i = 0; i < sTabTipoN; i++) {
+        int k = _snprintf(tipos + n, sizeof(tipos) - n - 1, "%s%s mistura 0x%03X máscara %X: %u", i ? "; " : "",
+                          sTabTipo[i].src ? "ids" : "névoa", sTabTipo[i].chave & 0x1FF, (sTabTipo[i].chave >> 16) & 15,
+                          sTabTipo[i].n);
+        if (k < 0) {
+            tipos[sizeof(tipos) - 1] = '\0';
+            break;
+        }
+        n += k;
+    }
+    for (i = 0; i < gsTargetCount; i++) {
+        const Ret *c = &sAlvos[i].conteudo;
+        int k;
+        if (c->x1 <= c->x0) {
+            continue;
+        }
+        k = _snprintf(ext + m, sizeof(ext) - m - 1, "%s%d: %dx%d+%d+%d", m ? ", " : "", i, c->x1 - c->x0, c->y1 - c->y0,
+                      c->x0, c->y0);
+        if (k < 0) {
+            ext[sizeof(ext) - 1] = '\0';
+            break;
+        }
+        m += k;
+    }
+    Diario_Escrever("gs_d3d:   nativas feitas: contorno %u, tabela %u, cópia dos ids %u (%.0f mil pixels de passada por quadro); "
+                    "puladas: contorno %u, tabela %u (desligada %u, sem tabela %u, sem profundidade %u, alvo não limpo %u, sem "
+                    "a cópia dos ids %u), cópia %u; tabelas com a cópia de outro quadro %u; sincronizações da profundidade %u; "
+                    "BT3_NATIVOS=%u, BT3_FX_OFF=%u",
+                    sConta.natCont, sConta.natTab, sConta.natIds, sConta.natPx / t / 1000.0, sConta.natContSem,
+                    sConta.semNativo[3], sConta.natTabSem[0], sConta.natTabSem[1], sConta.natTabSem[2], sConta.natTabSem[3],
+                    sConta.natTabSem[4], sConta.natIdsSem + sConta.semNativo[4], sConta.natIdsVelhos, sConta.natZSinc, sNativos,
+                    gsFxOff);
+    Diario_Escrever("gs_d3d:   tabelas por tipo: %s", tipos[0] ? tipos : "nenhuma");
+    Diario_Escrever("gs_d3d:   DATE: %u marcadores (%u resolvidos, %u lidos da textura do alvo), %u desenhos; FBA: %u desenhos, %u "
+                    "em duas passadas (%u sem escrita de alfa); alfa de vértice acima de 0x80 em %u de %u desenhos que "
+                    "escrevem alfa (um quadro)", sConta.dateMarc, sConta.dateRes, sConta.dateTex, sConta.dateDes, sConta.fbaDes,
+                    sConta.fbaDuas, sConta.fbaSemA, sConta.alfaAlto, sConta.alfaAltoDes);
+    Diario_Escrever("gs_d3d:   extensão desenhada por alvo (largura x altura + x + y): %s", ext[0] ? ext : "nenhum");
+    sTabTipoN = 0;
+}
+
 static void log_quadros(void) {
     /* os tempos sem os quadros que tiveram captura (cada uma pesa centenas de ms e encobria o resto) */
     unsigned q = sConta.quadros, t = sConta.quadros + sConta.capturas;
@@ -1791,6 +1882,7 @@ static void log_quadros(void) {
         memset(&sConta, 0, sizeof(sConta));
         log_memoria_zera();
         log_vu1_zera();
+        sTabTipoN = 0;
         return;
     }
     if (q == 0) {
@@ -1812,6 +1904,7 @@ static void log_quadros(void) {
     log_vu1(t);
     log_vu1_zera();
     log_prof(t);
+    log_nativas(t);
     log_memoria();
     memset(&sConta, 0, sizeof(sConta));
 }
@@ -1835,6 +1928,489 @@ static int usa_z(uint32_t n, int t) {
         }
     }
     return 0;
+}
+
+/* ---- as passadas nativas (F5, etapa 7, segunda parte; docs/x360/formatos/gs-nativos.md) ------------------------ */
+
+/* a máscara de escrita do D3D a partir da do GS (GS_CC_*) */
+static DWORD mascara(uint32_t wmask) {
+    return ((wmask & GS_CC_R) ? D3DCOLORWRITEENABLE_RED : 0) | ((wmask & GS_CC_G) ? D3DCOLORWRITEENABLE_GREEN : 0) |
+           ((wmask & GS_CC_B) ? D3DCOLORWRITEENABLE_BLUE : 0) | ((wmask & GS_CC_A) ? D3DCOLORWRITEENABLE_ALPHA : 0);
+}
+
+/* a tesoura de uma nativa, dentro do alvo; 0: vazia */
+static int nat_ret(const GsDraw *d, Ret *r) {
+    r->x0 = d->scissor[0] < 0 ? 0 : d->scissor[0];
+    r->y0 = d->scissor[1] < 0 ? 0 : d->scissor[1];
+    r->x1 = d->scissor[0] + d->scissor[2] > TAM ? TAM : d->scissor[0] + d->scissor[2];
+    r->y1 = d->scissor[1] + d->scissor[3] > TAM ? TAM : d->scissor[1] + d->scissor[3];
+    return r->x1 > r->x0 && r->y1 > r->y0;
+}
+
+static void nat_textura(DWORD estagio, D3DTexture *t) {
+    sDev->SetTexture(estagio, t);
+    aplica_sampler(estagio, 2 | 4); /* no ponto, presa na borda */
+}
+
+/* Um retângulo do alvo na EDRAM pelo pixel shader ps (vs_copia; o shader lê pelo VPOS). A mistura e a escrita são do
+   chamador; sem profundidade nem tesoura. Os estágios 2 a 4 saem presos a nada depois (as texturas deles são destino
+   de Resolve). */
+static void passada(D3DPixelShader *ps, const Ret *r) {
+    struct { float x, y, u, v; } q[4];
+    float cx0 = (float)r->x0 / TAM * 2.0f - 1.0f, cx1 = (float)r->x1 / TAM * 2.0f - 1.0f;
+    float cy0 = 1.0f - (float)r->y0 / TAM * 2.0f, cy1 = 1.0f - (float)r->y1 / TAM * 2.0f;
+    DWORD k;
+    q[0].x = cx0; q[0].y = cy0; q[1].x = cx1; q[1].y = cy0; q[2].x = cx0; q[2].y = cy1; q[3].x = cx1; q[3].y = cy1;
+    for (k = 0; k < 4; k++) {
+        q[k].u = q[k].v = 0.0f;
+    }
+    sDev->SetVertexDeclaration(sDeclCopia);
+    sDev->SetVertexShader(sVsCopia);
+    sDev->SetPixelShader(ps);
+    sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    sDev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, q, sizeof(q[0]));
+    for (k = 2; k <= 4; k++) {
+        sDev->SetTexture(k, NULL);
+    }
+    ret_une(&sSujo, r->x0, r->y0, r->x1, r->y1);
+    sConta.natPx += (double)(r->x1 - r->x0) * (r->y1 - r->y0);
+    esquece_estado();
+}
+
+/* a passada de tabela em si: estágio 2 a profundidade (src 0), 3 a cópia dos ids, 4 a tabela */
+static void nat_tabela_passa(int src, float zmax, D3DTexture *z, D3DTexture *clut, const Ret *r) {
+    float c[8] = {(float)src, zmax, 0.0f, 0.0f, 1.0f / IDS_W, 1.0f / IDS_H, 1.0f / TAM, 1.0f / TAM};
+    nat_textura(2, z != NULL ? z : sBranco);
+    nat_textura(3, sIds);
+    nat_textura(4, clut);
+    sDev->SetPixelShaderConstantF(4, c, 2);
+    passada(sPsTabela, r);
+}
+
+/* o contorno em si: tira 0x64 da cor (REVSUBTRACT, ONE, ONE) nas arestas dos ids, o alfa intocado */
+static void nat_contorno_passa(const Ret *r) {
+    float c[8] = {0.0f, 0.0f, 100.0f / 255.0f, 0.0f, 1.0f / IDS_W, 1.0f / IDS_H, 1.0f / TAM, 1.0f / TAM};
+    sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+    sDev->SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
+    sDev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_ONE);
+    sDev->SetRenderState(D3DRS_BLENDOP, D3DBLENDOP_REVSUBTRACT);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
+    nat_textura(3, sIds);
+    sDev->SetPixelShaderConstantF(4, c, 2);
+    passada(sPsContorno, r);
+}
+
+/* o alvo de uma nativa na EDRAM (com a profundidade se os desenhos seguintes da visita a usam) */
+static void nat_entra(int t, uint32_t n, int *cur) {
+    if (*cur != t || sResidente != t) {
+        entra_na_edram(t, usa_z(n, t));
+        *cur = t;
+    }
+}
+
+/* native 4 (GfxPost_CopyAlphaToDepth): o alfa do alvo agora, para o contorno e as tabelas pelos ids. A imagem do jogo
+   inteira (fora do que já foi desenhado, a EDRAM está limpa: zero, como no PC) */
+static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
+    D3DRECT fonte = {0, 0, IDS_W, IDS_H};
+    D3DPOINT destino = {0, 0};
+    if (!(sNativos & 3) || sIds == NULL) {
+        sConta.semNativo[4]++;
+        return;
+    }
+    if (!gsTargets[d->target].cleared) {
+        sConta.natIdsSem++; /* (o PC pula igual) */
+        return;
+    }
+    nat_entra(d->target, n, cur);
+    sDev->SetTexture(3, NULL);
+    sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+    sIdsQuadro = gGsFrame + 1;
+    sConta.natIds++;
+}
+
+/* native 3: o byte (névoa pela profundidade, ou os ids) pela tabela do jogo, com a mistura e a máscara da chave */
+static void nat_tabela(const GsDraw *d, uint32_t n, int *cur) {
+    int t = d->target, motivo, i;
+    Ret r;
+    uint32_t chave = sPipes[d->pipeline].key & (0x1FFu | (15u << 16));
+    motivo = !(sNativos & (d->src ? 2 : 4)) ? 0 : d->tex == 0 ? 1 : d->src == 0 && (sModoZ == 0 || sProf[t].tex == NULL) ? 2 :
+             !gsTargets[t].cleared ? 3 : d->src != 0 && sIdsQuadro == 0 ? 4 : -1;
+    if (motivo >= 0) {
+        sConta.semNativo[3]++;
+        sConta.natTabSem[motivo]++;
+        return;
+    }
+    if (!nat_ret(d, &r)) {
+        return;
+    }
+    sConta.natIdsVelhos += d->src != 0 && sIdsQuadro != gGsFrame + 1;
+    nat_entra(t, n, cur);
+    if (d->src == 0 && sZDono == t) {
+        prof_sincroniza(); /* (a textura de profundidade em dia, a posse fica) */
+    }
+    aplica_pipe(d->pipeline); /* a mistura e a máscara do jogo; a chave de tabela desliga a profundidade */
+    {
+        int b = (int)(d->blendc * 255.0f + 0.5f);
+        b = b < 0 ? 0 : b > 255 ? 255 : b;
+        sDev->SetRenderState(D3DRS_BLENDFACTOR, D3DCOLOR_ARGB(b, b, b, b));
+    }
+    nat_tabela_passa(d->src, d->misc[0], d->src == 0 ? sProf[t].tex : NULL, (D3DTexture *)d->tex, &r);
+    sConta.natTab++;
+    for (i = 0; i < sTabTipoN && (sTabTipo[i].chave != chave || sTabTipo[i].src != d->src); i++) {
+    }
+    if (i < sTabTipoN) {
+        sTabTipo[i].n++;
+    } else if (sTabTipoN < 8) {
+        sTabTipo[sTabTipoN].chave = chave;
+        sTabTipo[sTabTipoN].src = d->src;
+        sTabTipo[sTabTipoN].n = 1;
+        sTabTipoN++;
+    }
+}
+
+/* native 1 (ObjOutline_Draw): o contorno, lendo a cópia dos ids */
+static void nat_contorno(const GsDraw *d, uint32_t n, int *cur) {
+    Ret r;
+    if (!(sNativos & 1) || !gsTargets[d->target].cleared || sIdsQuadro == 0) {
+        sConta.semNativo[1]++;
+        sConta.natContSem++;
+        return;
+    }
+    if (!nat_ret(d, &r)) {
+        return;
+    }
+    nat_entra(d->target, n, cur);
+    nat_contorno_passa(&r);
+    sConta.natCont++;
+}
+
+/* (F5, etapa 7, segunda parte) FBA num desenho que mistura pelo alfa da fonte. No PC o FBA liga o bit 7 só no byte à
+   parte e o fator da mistura é o alfa calculado; aqui o alfa gravado é o mesmo da mistura, e o FBA a deixava opaca
+   (os grupos transparentes do estágio). 1: duas passadas (desenha_fba). */
+static int fba_duas(const GsDraw *d) {
+    const Pipe *p = &sPipes[d->pipeline];
+    int k0 = (int)((p->bkey >> 1) & 7), k1 = (int)((p->bkey >> 4) & 7);
+    return sFba && d->misc[2] != 0.0f && (p->bkey & 1) && ((p->bkey >> 7) & 3) == 0 &&
+           ((k0 >= 2 && k0 <= 4) || (k1 >= 2 && k1 <= 4));
+}
+
+/* as chamadas de um desenho já preparado: da VU1 (ini, no par do quadro) ou primitivas do GS (ini ~0) */
+static void chamadas(const GsDraw *d, uint32_t ini) {
+    const Pipe *p = &sPipes[d->pipeline];
+    D3DPRIMITIVETYPE tipo = p->topo == 0 ? D3DPT_TRIANGLELIST : p->topo == 1 ? D3DPT_LINELIST : D3DPT_POINTLIST;
+    uint32_t porPrim = p->topo == 0 ? 3 : p->topo == 1 ? 2 : 1, feitos = 0;
+    if (d->vu) {
+        sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count);
+        return;
+    }
+    while (feitos + porPrim <= d->count) {
+        uint32_t n = d->count - feitos > MAX_UP ? MAX_UP : d->count - feitos;
+        n -= n % porPrim;
+        sDev->DrawPrimitiveUP(tipo, n / porPrim, &gsVerts[d->first + feitos], sizeof(Vtx));
+        feitos += n;
+    }
+}
+
+/* As duas passadas do FBA com mistura pelo alfa da fonte: a cor (só RGB) com o FBA desligado no shader e a mistura do
+   jogo; depois só o alfa, sem mistura, com o FBA (alfa 1, o bit 7) e os mesmos testes de alfa, de DATE e de
+   profundidade (sem escrever z; GREATER com escrita de z vira GEQUAL, para a segunda achar o z que a primeira gravou). */
+static void desenha_fba(const GsDraw *d, uint32_t ini) {
+    const Pipe *p = &sPipes[d->pipeline];
+    float m[4];
+    memcpy(m, d->misc, sizeof(m));
+    m[2] = 0.0f;
+    sDev->SetPixelShaderConstantF(1, m, 1);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, mascara(p->wmask & ~GS_CC_A));
+    chamadas(d, ini);
+    if (p->wmask & GS_CC_A) {
+        m[2] = 1.0f;
+        sDev->SetPixelShaderConstantF(1, m, 1);
+        sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALPHA);
+        sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+        sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+        if (p->ztst == 3 && p->zwrite) {
+            sDev->SetRenderState(D3DRS_ZFUNC, D3DCMP_GREATEREQUAL);
+        }
+        chamadas(d, ini);
+    } else {
+        sConta.fbaSemA++;
+    }
+    sCurPipe = -1; /* (o estado do pipeline e as constantes voltam no próximo prepara) */
+    sTemC = 0;
+    sConta.fbaDuas++;
+}
+
+/* Num quadro por trecho: os desenhos que escrevem alfa e quantos deles têm alfa de vértice acima de 0x80 (o que o alfa
+   saturado da cor perde; o tamanho do byte exato, seção 4 da especificação). Primitivas do GS: o alfa de cada
+   vértice; VU1: o color0 do bloco, ou o alfa de cada vértice nas camadas 3 e 4 (programas 8 e 7). */
+static void alfa_alto(void) {
+    uint32_t n, k;
+    for (n = 0; n < gsDrawCount; n++) {
+        const GsDraw *d = &gsDraws[n];
+        int alto = 0;
+        if (d->native != 0 || d->count == 0 || !(sPipes[d->pipeline].wmask & GS_CC_A)) {
+            continue;
+        }
+        if (d->vu) {
+            const Vu0Uniform *u = &gsVuUni[d->uniform];
+            alto = u->color0[3] > 128.0f;
+            if (u->misc[3] == 3.0f) {
+                for (k = 0; k < d->count && !alto; k++) {
+                    uint32_t v = gsVuIdx[d->first + k];
+                    alto = v < gsVuVertCount && gsVuVerts[v * 12 + 7] > 128.0f;
+                }
+            }
+        } else {
+            for (k = 0; k < d->count && !alto; k++) {
+                alto = gsVerts[d->first + k].a > 0x80;
+            }
+        }
+        sConta.alfaAltoDes++;
+        sConta.alfaAlto += alto;
+    }
+}
+
+/* ---- as nativas: o autoteste do boot e os ajustes (F5, etapa 7, segunda parte) ------------------------------- */
+
+/* as contas do lado da CPU, iguais às do gs_d3d.hlsl (nat_id, nat_contorno_tab) e às do PC (outline.frag, dclut.frag) */
+static unsigned at_id(unsigned a8) { return a8 == 255 ? 255 : (a8 * 256 + 255) / 510; }
+static unsigned at_cont(unsigned id) {
+    unsigned c = (id << 3) & 0xFF;
+    return id == 255 ? 0 : c == 0 ? 0x80 : c;
+}
+static unsigned at_alfa(unsigned a) { return a >= 128 ? 255 : (a * 510 + 128) / 256; } /* round(min(A / 128, 1) * 255) */
+static int at_perto(unsigned a, unsigned b) { return a == b || a + 1 == b || b + 1 == a; }
+
+/* textura linear com os texels dados (u32 R | G<<8 | B<<16 | A<<24, como as do jogo) */
+static D3DTexture *at_lin(UINT w, UINT h, const unsigned *px) {
+    D3DTexture *t = NULL;
+    D3DLOCKED_RECT r;
+    UINT y;
+    if (FAILED(sDev->CreateTexture(w, h, 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
+        return NULL;
+    }
+    if (SUCCEEDED(t->LockRect(0, &r, NULL, 0))) {
+        for (y = 0; y < h; y++) {
+            memcpy((BYTE *)r.pBits + y * r.Pitch, px + y * w, w * 4);
+        }
+        t->UnlockRect(0);
+    }
+    return t;
+}
+
+/* os 256 x 256 do canto de uma textura tiled de lado `lado` (32 bits por texel), em ordem linear */
+static int at_le(D3DTexture *t, UINT lado, unsigned *lin) {
+    D3DLOCKED_RECT r;
+    RECT ret = {0, 0, 256, 256};
+    sDev->BlockUntilIdle();
+    if (FAILED(t->LockRect(0, &r, NULL, D3DLOCK_READONLY))) {
+        return 0;
+    }
+    XGUntileSurface(lin, 256 * 4, NULL, r.pBits, lado, lado, &ret, 4);
+    t->UnlockRect(0);
+    return 1;
+}
+
+/* o retângulo 256 x 256 do canto da EDRAM para a textura t */
+static void at_resolve(D3DTexture *t) {
+    D3DRECT fonte = {0, 0, 256, 256};
+    D3DPOINT destino = {0, 0};
+    sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, t, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+}
+
+/* Antes do primeiro quadro, como o da profundidade: um padrão de ids conhecido (blocos de 8 x 8 com todos os 256
+   valores de alfa) entra na EDRAM e vai para a cópia dos ids pelo mesmo Resolve do native 4; as passadas rodam sobre
+   ele e o resultado é comparado pixel a pixel com as contas da CPU. Cada uma tem um controle que TEM de dar diferente:
+   a tabela trocada (cada índice com a cor do seguinte), o contorno sem a passada (só os pixels sem aresta batem), e
+   para a profundidade quatro leituras da palavra da D24S8 (só a de cima, depth nos 24 bits altos, é a certa). Uma
+   passada que não bate (menos de 99%) é desligada com ERRO, a não ser que o BT3_NATIVOS a force. */
+static void nat_autoteste(int forcado) {
+    static unsigned pad[256 * 256], c1[256], c2[256], lin[256 * 256], zl[256 * 256];
+    D3DVIEWPORT9 vp = {0, 0, TAM, TAM, 0.0f, 1.0f}, vpz = {0, 0, TAMZ, TAM, 0.0f, 1.0f};
+    D3DTexture *tp, *t1, *t2, *res = NULL, *zt = NULL;
+    Ret r = {0, 0, 256, 256};
+    unsigned x = 54321u, i, k, h, tab[2][2], cont[3] = {0, 0, 0}, zc[4][2], total = 256 * 256, inter = 254 * 254;
+    int okTab, okCont, okZ = -1;
+
+    memset(tab, 0, sizeof(tab));
+    memset(zc, 0, sizeof(zc));
+    for (i = 0; i < 256; i++) {
+        c1[i] = i | (((i * 7 + 3) & 255) << 8) | ((255 - i) << 16) | (((i * 5 + 1) & 255) << 24);
+    }
+    for (i = 0; i < 256; i++) {
+        c2[i] = c1[(i + 1) & 255];
+    }
+    for (i = 0; i < total; i++) {
+        unsigned b = (i / 256 / 8) * 32 + (i % 256) / 8;
+        x = x * 1664525u + 1013904223u;
+        pad[i] = ((x >> 8) & 0x00FFFFFFu) | (((b * 37) & 255) << 24);
+    }
+    tp = at_lin(256, 256, pad);
+    t1 = at_lin(256, 1, c1);
+    t2 = at_lin(256, 1, c2);
+    if (tp == NULL || t1 == NULL || t2 == NULL ||
+        FAILED(sDev->CreateTexture(256, 256, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &res, NULL)) || res == NULL) {
+        Diario_Escrever("gs_d3d: ERRO: nativas: as texturas do autoteste não foram criadas; as nativas ficam desligadas");
+        sNativos = 0;
+        if (tp) tp->Release();
+        if (t1) t1->Release();
+        if (t2) t2->Release();
+        return;
+    }
+    gGsD3dEtapa = "autoteste das nativas";
+    sDev->SetRenderTarget(0, sEdramCor);
+    sDev->SetDepthStencilSurface(sEdramProf);
+    sDev->SetViewport(&vp);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    sDev->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0, 0.0f, 0);
+    copia(tp, TAM, TAM, 0.0f, 0.0f, 256.0f, 256.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+    sDev->SetTexture(0, NULL);
+    {
+        D3DRECT fonte = {0, 0, IDS_W, IDS_H};
+        D3DPOINT destino = {0, 0};
+        sDev->SetTexture(3, NULL);
+        sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+    }
+    /* a tabela pelos ids, e o controle com a tabela trocada */
+    for (k = 0; k < 2; k++) {
+        sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+        sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0, 0.0f, 0);
+        sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+        nat_tabela_passa(1, 0.0f, NULL, k ? t2 : t1, &r);
+        at_resolve(res);
+        if (!at_le(res, 256, lin)) {
+            continue;
+        }
+        for (i = 0; i < total; i++) {
+            unsigned c = c1[at_id(pad[i] >> 24)], g = lin[i], ea = at_alfa(c >> 24);
+            int rgb = ((g >> 16) & 255) == (c & 255) && ((g >> 8) & 255) == ((c >> 8) & 255) && (g & 255) == ((c >> 16) & 255);
+            tab[k][0] += rgb && (g >> 24) == ea;
+            tab[k][1] += rgb && at_perto(g >> 24, ea);
+        }
+    }
+    /* o contorno sobre um cinza 0x80; o controle é a imagem sem a passada (bate só onde não há aresta) */
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF808080, 0.0f, 0);
+    nat_contorno_passa(&r);
+    at_resolve(res);
+    if (at_le(res, 256, lin)) {
+        unsigned y, xx;
+        for (y = 1; y < 255; y++) {
+            for (xx = 1; xx < 255; xx++) {
+                unsigned q = at_cont(at_id(pad[y * 256 + xx] >> 24)), e, g = lin[y * 256 + xx];
+                int aresta = q > at_cont(at_id(pad[y * 256 + xx + 1] >> 24)) || q > at_cont(at_id(pad[y * 256 + xx - 1] >> 24)) ||
+                             q > at_cont(at_id(pad[(y + 1) * 256 + xx] >> 24)) || q > at_cont(at_id(pad[(y - 1) * 256 + xx] >> 24));
+                e = aresta ? 0x1C : 0x80; /* 0x80 - 0x64 */
+                cont[0] += (g >> 24) == 0xFF && at_perto((g >> 16) & 255, e) && at_perto((g >> 8) & 255, e) && at_perto(g & 255, e);
+                cont[1] += aresta;
+                cont[2] += !aresta; /* sem a passada, o cinza bateria só aqui */
+            }
+        }
+    }
+    /* a tabela pela profundidade: o padrão como cor na profundidade da EDRAM, resolvido numa D24S8, lido pela passada
+       com o máximo de 16 bits (65535) e uma tabela com o índice no vermelho */
+    if (sModoZ != 0 && sEdramProfCor != NULL &&
+        SUCCEEDED(sDev->CreateTexture(TAM, TAM, 1, 0, D3DFMT_D24S8, D3DPOOL_DEFAULT, &zt, NULL)) && zt != NULL) {
+        D3DRECT fonte = {0, 0, TAM, TAM};
+        D3DPOINT destino = {0, 0};
+        sDev->SetDepthStencilSurface(NULL);
+        sDev->SetRenderTarget(0, sEdramProfCor);
+        sDev->SetViewport(&vpz);
+        copia(tp, TAMZ, TAM, 0.0f, 0.0f, (float)TAMZ, (float)TAM, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+        sDev->SetTexture(0, NULL);
+        sDev->SetRenderTarget(0, sEdramCor);
+        sDev->SetDepthStencilSurface(sEdramProf);
+        sDev->SetViewport(&vp);
+        sDev->Resolve(D3DRESOLVE_DEPTHSTENCIL, &fonte, zt, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+        sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+        sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0, 0.0f, 0);
+        sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+        nat_tabela_passa(0, 65535.0f, zt, t1, &r);
+        at_resolve(res);
+        if (at_le(res, 256, lin) && at_le(zt, TAM, zl)) {
+            for (i = 0; i < total; i++) {
+                for (h = 0; h < 4; h++) {
+                    unsigned w = zl[i], d24;
+                    double z;
+                    unsigned idx;
+                    if (h >= 2) {
+                        w = (w >> 24) | ((w >> 8) & 0xFF00u) | ((w << 8) & 0xFF0000u) | (w << 24);
+                    }
+                    d24 = (h & 1) ? w & 0xFFFFFFu : w >> 8;
+                    z = (double)d24 / 16777215.0 * 65535.0;
+                    idx = z >= 65448.0 ? 0 : (unsigned)(255.0 - (double)(unsigned)(z / 256.0));
+                    zc[h][0] += ((lin[i] >> 16) & 255) == idx;
+                    zc[h][1] += at_perto((lin[i] >> 16) & 255, idx);
+                }
+            }
+        }
+        /* (a palavra como a CPU a vê: depth nos 24 bits de cima, o que o modo 2 do autoteste da profundidade mostrou;
+           com os bytes trocados também vale, se a memória da D24S8 estiver na ordem da GPU) */
+        okZ = zc[0][1] >= total * 99u / 100u || zc[2][1] >= total * 99u / 100u;
+    }
+    okTab = tab[0][1] >= total * 99u / 100u && tab[1][1] < total / 10u;
+    okCont = cont[0] >= inter * 99u / 100u && cont[1] > 0 && cont[2] > 0;
+    Diario_Escrever("gs_d3d: nativas: autoteste: tabela pelos ids %u de %u iguais (%u com o alfa exato), controle com a tabela "
+                    "trocada %u (tem de ser perto de 0); contorno %u de %u iguais, %u arestas (sem a passada bateriam %u)",
+                    tab[0][1], total, tab[0][0], tab[1][1], cont[0], inter, cont[1], cont[2]);
+    if (okZ >= 0) {
+        Diario_Escrever("gs_d3d: nativas: autoteste: tabela pela profundidade (máximo 65535), a palavra da D24S8 lida como "
+                        "depth nos 24 bits altos %u de %u iguais (%u a 1 de distância); controles: nos 24 baixos %u (%u), "
+                        "com os bytes trocados %u (%u) e %u (%u)", zc[0][0], total, zc[0][1], zc[1][0], zc[1][1], zc[2][0],
+                        zc[2][1], zc[3][0], zc[3][1]);
+    }
+    if (!okTab || !okCont || okZ == 0) {
+        unsigned tira = (okCont ? 0 : 1) | (okTab ? 0 : 2) | (okZ == 0 ? 4 : 0);
+        Diario_Escrever("gs_d3d: ERRO: nativas: o autoteste não bateu em%s%s%s; %s", okCont ? "" : " contorno",
+                        okTab ? "" : " tabela pelos ids", okZ == 0 ? " tabela pela profundidade" : "",
+                        forcado ? "mantidas (BT3_NATIVOS forçado)" : "essas ficam desligadas (contadas e puladas)");
+        if (!forcado) {
+            sNativos &= ~tira;
+        }
+    }
+    sDev->BlockUntilIdle();
+    tp->Release();
+    t1->Release();
+    t2->Release();
+    res->Release();
+    if (zt != NULL) {
+        zt->Release();
+    }
+    sDev->SetRenderTarget(0, sTela);
+    sDev->SetDepthStencilSurface(NULL);
+    esquece_estado();
+    sIdsQuadro = 0;
+    gGsD3dEtapa = "antes do primeiro quadro";
+}
+
+/* os ajustes (BT3_NATIVOS, BT3_FBA, BT3_CORTE), a cópia dos ids e o autoteste */
+static void nat_init(void) {
+    const char *e = getenv("BT3_NATIVOS");
+    int forcado = e != NULL && *e != '\0';
+    unsigned bytes = tam_real(IDS_W, IDS_H, D3DFMT_A8R8G8B8);
+    sNativos = env_num("BT3_NATIVOS", 7) & 7;
+    sFba = env_num("BT3_FBA", 1) != 0;
+    sCorte = env_num("BT3_CORTE", 1) != 0;
+    if (sNativos != 0) {
+        if (mem_livres(bytes) < sMem.pisoMb * MB + bytes ||
+            FAILED(sDev->CreateTexture(IDS_W, IDS_H, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &sIds, NULL)) || sIds == NULL) {
+            Diario_Escrever("gs_d3d: ERRO: nativas: a cópia dos ids não foi criada (%u MB livres); as nativas ficam desligadas", mb_livres());
+            sIds = NULL;
+            sNativos = 0;
+        } else {
+            mem_cria(CL_ALVO, bytes);
+            nat_autoteste(forcado);
+        }
+    }
+    Diario_Escrever("gs_d3d: nativas: BT3_NATIVOS=%u (contorno %s, tabelas pelos ids %s, tabelas pela profundidade %s%s); "
+                    "cópia dos ids %ux%u (%u KB, contada com os alvos); BT3_FBA=%u (%s); BT3_CORTE=%u (%s)",
+                    sNativos, (sNativos & 1) ? "sim" : "não", (sNativos & 2) ? "sim" : "não", (sNativos & 4) ? "sim" : "não",
+                    (sNativos & 4) && sModoZ == 0 ? ", mas sem a profundidade persistente: puladas" : "", IDS_W, IDS_H,
+                    sIds != NULL ? bytes >> 10 : 0, sFba, sFba ? "duas passadas com mistura pelo alfa da fonte" : "o alfa da mistura vira 1",
+                    sCorte, sCorte ? "a VU1 recortada pelo w, profundidade por pixel" : "z da VU1 preso em 0..w por vértice");
 }
 
 static void frame_end(void) {
@@ -1863,6 +2439,9 @@ static void frame_end(void) {
     prof_garante();
     gGsD3dEtapa = "fim do quadro: refazendo a lista";
     sConta.msZQuadro = 0.0;
+    if (sConta.quadros == 30 && sConta.alfaAltoDes == 0) {
+        alfa_alto(); /* (um quadro por trecho) */
+    }
     {
         /* F5, etapa 6: o tempo da VU1 na gravação do quadro (gs_vu1.c) e a cópia das três famílias para a GPU */
         double g = gGsVu1Ms;
@@ -1883,6 +2462,7 @@ static void frame_end(void) {
         }
         if (d->native == 5) {
             /* o começo de uma sequência de desenhos com DATE: a cópia da cor do alvo agora */
+            sConta.dateMarc++;
             if (!gsTargets[d->target].cleared) {
                 continue;
             }
@@ -1900,9 +2480,31 @@ static void frame_end(void) {
                     sDev->SetTexture(1, NULL); /* (o destino do Resolve não pode estar em uso) */
                     sCurDate = NULL;
                     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sDate, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+                    sConta.dateRes++;
                 }
                 sDateFonte = sDate;
+            } else {
+                sConta.dateTex++;
             }
+            continue;
+        }
+        /* (F5, etapa 7, segunda parte) as nativas: a cópia dos ids, as passadas de tabela e o contorno */
+        if (d->native == 4) {
+            gGsD3dEtapa = "fim do quadro: nativa, cópia dos ids";
+            nat_ids(d, n, &cur);
+            gGsD3dEtapa = "fim do quadro: refazendo a lista";
+            continue;
+        }
+        if (d->native == 3) {
+            gGsD3dEtapa = "fim do quadro: nativa, passada de tabela";
+            nat_tabela(d, n, &cur);
+            gGsD3dEtapa = "fim do quadro: refazendo a lista";
+            continue;
+        }
+        if (d->native == 1) {
+            gGsD3dEtapa = "fim do quadro: nativa, contorno";
+            nat_contorno(d, n, &cur);
+            gGsD3dEtapa = "fim do quadro: refazendo a lista";
             continue;
         }
         if (d->native != 0) {
