@@ -669,3 +669,22 @@ com as recomendações do estudo:
 8. **Rigor:** os percentis, máximos, três janelas, 32 MiB livres e as tolerâncias de imagem da seção 3 do plano,
    fixados antes da rodada.
 9. **Pendências 3D dos menus:** o mínimo, uma abertura real do `ChrView` e o dragão 1 com lista e recompensa.
+
+## 25. F6: as escolhas de áudio e filmes (17/10/2026)
+
+As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md), seção 5), respondidas pelo Lucas:
+
+1. **O estado do som que o jogo vê:** contado em vblanks pela duração do arquivo (a), como nos roteiros, com a
+   deriva entre o fim contado e o fim ouvido medida no console; o estado lido do mixer real, mais fiel ao PS2, ficou
+   de fora porque tira o som da prova automática no WSL.
+2. **Formato:** ADX decodificado por software e PCM no XAudio2 (a); sem XMA (o codificador é do XDK, que não se
+   distribui, e seria perda sobre perda).
+3. **Quem mistura:** um mixer do port numa voz só de 48 kHz estéreo (b), para a mistura ser provada no WSL.
+4. **Fluxos:** lidos em blocos de 64 KiB numa thread de carga, fora da thread do jogo (b); as vozes carregadas antes
+   da luta (c) só se a medição pedir; sem tabela de durações na ISO (d).
+5. **Filmes:** decodificados na thread do jogo (a); outra opção só se aparecer problema.
+6. **A imagem do filme:** pela cadeia do jogo, medida (a).
+7. **Sincronismo do filme:** livre como no PS2 (a), com a deriva medida.
+8. **Guide:** pausa os efeitos e as vozes, a música segue (a).
+9. **A prova do som:** as redes automáticas do WSL e a sessão de escuta (b); sem o ajuste fino de volume contra o
+   PCSX2.

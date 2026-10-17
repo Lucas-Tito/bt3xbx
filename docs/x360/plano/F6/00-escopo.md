@@ -387,3 +387,13 @@ Na entrega de cada etapa, registrar o que passou e o que não foi exercitado. Na
 por rede: contagem de eventos, falta de dado, latências (p50, p95, p99, máximo), custo na thread do jogo, memória, ritmo
 e deriva dos filmes, imagens comparadas, falhas provocadas. Se uma etapa exceder o dobro do tempo previsto, parar com
 estado e hipóteses documentados e apenas o trabalho provado em commit, conforme o processo do projeto.
+
+## Respostas do Lucas (17/10/2026, decisão 25)
+
+1a, 2a, 3b, 4b (c só com a medida; d não), 5a (outra opção só se aparecer problema), 6a, 7a, 8a, 9b (sem o ajuste
+fino contra o PCSX2). Texto em [decisoes.md](../../decisoes.md), decisão 25.
+
+**Correção da seção 1.1:** a build do 360 (F2 em diante) não usa o `port/x360/src/ambiente.c`; o `getenv` é o de
+`port/x360/src/f2/posix360.c`, que lê os padrões e o `game:\ambiente.txt`. A conclusão vale (o `BT3_SOUND_TICKS` não
+está definido no console), mas a prova não pede build: basta `BT3_SOUND_TICKS=1` no `ambiente.txt`, testado na rodada
+da VU1 da F5; confirmado, ele entra nos padrões do `posix360.c`.
