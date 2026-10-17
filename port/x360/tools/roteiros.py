@@ -34,6 +34,8 @@ das chamadas de Sprite_Unpack (docs/x360/formatos/menus-modos.md).
     roteiros.py memoria MEMDIFF [--tela N]  com --tela, também exige vivos e conformes os conteúdos da tela
                                             (TELAS_MEM): "sem bloco" não serve; com --tela CONTEÚDO (de um passo
                                             "marca memoria CONTEÚDO" do roteiro, '/' trocada por '_'), aquele
+                                            conteúdo; com --roteiro NOME --lidos LIDOS, o que TELAS_MEM_SEM
+                                            dispensa naquela tela, se a rodada não o leu
     roteiros.py save X86 PPC TELAS          (F4, etapa 9a) o save que a rodada deixou no cartão (BT3_SAVES) da x86 e
                                             o da PPC sem mapa, campo a campo (save_entre.py campos: os mesmos valores,
                                             cada um na ordem da sua build); e cada saga que o roteiro conferiu na
@@ -586,6 +588,13 @@ TELAS_MEM = {
     30: ["451 s3"],                                 # UbResult dos cursos
 }
 
+# (F5, etapa 3) um conteúdo de TELAS_MEM que um roteiro dispensa numa tela por nunca o carregar. O f5_treino entra no
+# Train (tela 44) e vai direto ao treino livre, sem abrir aula: nenhuma página (pagina_treino, 01025 a 01422) é lida na
+# rodada inteira, e quem prova as páginas na tela 44 é o roteiro treino (plano/F5/03.md, conferência final). Só vale com
+# --roteiro e --lidos (o lidos.txt da rodada) e sem nenhum arquivo do conteúdo lido nela: lido, a regra volta a ser a
+# de TELAS_MEM.
+TELAS_MEM_SEM = {("f5_treino", 44): {"pagina_treino"}}
+
 
 def vivos_conformes(linhas, dados):
     """{classe: [nomes]} dos conteúdos descomprimidos (#bpe) com bloco vivo e conforme nas linhas "marcas heap#N
@@ -666,7 +675,7 @@ def classes_da_linha(texto):
     return {k: int(v) for k, v in re.findall(r"([a-z0-9-]+) (\d+)", texto)}
 
 
-def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None):
+def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None, roteiro=None, lidos=None):
     p = pathlib.Path(caminho)
     if not p.exists():
         print(f"{pre}DIFERENÇA: memória: sem {caminho} (a PPC não chegou ao vblank do dump?)")
@@ -721,8 +730,14 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None):
             print(f"{pre}DIFERENÇA: memória: tela {tela} fora de TELAS_MEM")
             return False
         vivos = vivos_conformes(linhas, dados)
+        sem = TELAS_MEM_SEM.get((roteiro, tela), set())
+        lidas = set()
+        if sem and lidos is not None:
+            lidas = {classe(n, dados) for n in pathlib.Path(lidos).read_text().split()}
         for c in TELAS_MEM[tela]:
-            if c in vivos:
+            if c in sem and lidos is not None and c not in lidas:
+                print(f"{pre}  tela {tela}: {c} nunca lido no {roteiro} (TELAS_MEM_SEM)")
+            elif c in vivos:
                 print(f"{pre}  tela {tela}: {c} vivo e conforme ({', '.join(sorted(vivos[c]))})")
             else:
                 print(f"{pre}DIFERENÇA: memória: tela {tela} sem o conteúdo {c} vivo e conforme (sem bloco não prova "
@@ -1291,6 +1306,8 @@ def main():
     ap.add_argument("--hash", nargs=2)
     ap.add_argument("--mem")
     ap.add_argument("--tela")
+    ap.add_argument("--roteiro")
+    ap.add_argument("--lidos")
     ap.add_argument("--saidas", nargs=2)
     ap.add_argument("--luta", action="store_true")
     ap.add_argument("--telas")
@@ -1327,7 +1344,7 @@ def main():
         print("conv_tool: só larguras conhecidas" if ok else "conv_tool: erro fora de LARGURA_CONHECIDA")
         return 0 if ok else 1
     if a.acao == "memoria":
-        ok = memoria(a.arqs[0], tela=a.tela, dados=a.dados)
+        ok = memoria(a.arqs[0], tela=a.tela, dados=a.dados, roteiro=a.roteiro, lidos=a.lidos)
         print("memória igual" if ok else "memória DIFERENTE")
         return 0 if ok else 1
     if a.acao == "vblank_fim":

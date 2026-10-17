@@ -301,7 +301,8 @@ for n in "${NOMES[@]}"; do
                         > $M/memdiff.txt
                     echo "memdiff saiu com ${PIPESTATUS[0]}" >> $M/memdiff.txt
                 fi
-                python3 port/x360/tools/roteiros.py memoria $M/memdiff.txt --tela $t > $M/memoria.txt
+                python3 port/x360/tools/roteiros.py memoria $M/memdiff.txt --tela $t --roteiro $n --lidos $D/lidos.txt \
+                    > $M/memoria.txt
                 r=$?
                 echo "   memória na tela $t (vblank $VT):"; sed 's/^/     /' $M/memoria.txt
                 [ $r = 0 ] || falhou "memória na tela $t diferente (memdiff)"
