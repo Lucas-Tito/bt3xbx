@@ -207,6 +207,7 @@ controle do jogador 1 (não um vblank: o Shenlong, a 30 quadros por segundo, lê
 | `aperta B ate COND` [`max Q`] | aperta e solta até a condição (para no quadro em que ela se cumpre) |
 | `segura B N` | apertado N quadros, sem soltar no fim |
 | `quadros N` | controle parado N quadros |
+| `gira LX LY N` | (F5, etapa 9) o direcional esquerdo inclinado (LX e LY de -128 a 127, 0 o centro) por N quadros, com os botões soltos, e solto no quadro seguinte. É o que gira o modelo do visualizador (`OrbitCam_Update` lê `gPad[0].gameLeft`; zona morta de 50, então use 64 ou mais) |
 | `ritmo SEGURA SOLTA` | o ritmo dos `aperta` seguintes |
 | `repete ate COND` [`max Q`] ... `volta` | repete o bloco até a condição, que se confere a cada quadro, em qualquer ponto do bloco; aninhados, a de cada um (a de fora encerra também os de dentro) |
 | `desbloqueia` | `Save_UnlockAll` do próprio jogo (o da aba de truques da janela do PC): todo personagem, estágio, música, item e as sete esferas. Só com `BT3_DESBLOQUEIO=1` e com o cartão vazio no começo da rodada (sem o arquivo de dados do save em `BT3_SAVES`, que no 360 é `game:\saves`): fora disso o roteiro para com erro, para o desbloqueio nunca ir para um save de verdade |

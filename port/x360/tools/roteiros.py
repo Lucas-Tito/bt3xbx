@@ -568,6 +568,7 @@ TELAS_MEM = {
     55: ["459 s2", "retrato"],                      # DcList, com o retrato do registro
     56: ["459 s4"],                                 # ReplayMenu
     60: ["463 s1", "retrato"],                      # Referência, lista e detalhes
+    600: ["463 s1", "retrato"],                     # Referência com o modelo 3D (ChrView) aberto; o modelo: TELAS_MEM_ARQUIVOS
     70: ["472 s2"],                                 # Shenlong, lista de desejos
     71: ["472 s2", "mcflow"],                       # ShenSave, diálogo e cartão
     62: ["453 s1"],                                 # Option (menu_opcoes)
@@ -592,6 +593,12 @@ TELAS_MEM = {
     29: ["451 s4", "retrato"],                      # SoloSel dos cursos
     30: ["451 s3"],                                 # UbResult dos cursos
 }
+
+# (F5, etapa 9) os arquivos inteiros (não BPE) que uma tela tem de ter vivos e conformes na memória, além dos
+# conteúdos de TELAS_MEM: na tela 600 o modelo que o visualizador abriu, o Goku (Early) no traje 0 (ChrView_GetModelFile:
+# 0x590 + chara * 10 + traje, índice na partição 1 menos um: 01423). Um bloco do heap com o conteúdo do arquivo, achado
+# pela x86, e cada número dele conforme na PPC (as marcas do conv_tool): sem bloco não prova o modelo carregado.
+TELAS_MEM_ARQUIVOS = {600: ["pzs3us1_01423.bin"]}
 
 # (F5, etapa 3) um conteúdo de TELAS_MEM que um roteiro dispensa numa tela por nunca o carregar. O f5_treino entra no
 # Train (tela 44) e vai direto ao treino livre, sem abrir aula: nenhuma página (pagina_treino, 01025 a 01422) é lida na
@@ -750,6 +757,16 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None, roteiro
             else:
                 print(f"{pre}DIFERENÇA: memória: tela {tela} sem o conteúdo {c} vivo e conforme (sem bloco não prova "
                       "a conversão)")
+                ok = False
+    if tela is not None and str(tela).isdigit():
+        # (F5, etapa 9) os arquivos inteiros da tela: o bloco vivo com o conteúdo, conforme e sem nada fora do formato
+        for nome in TELAS_MEM_ARQUIVOS.get(int(tela), []):
+            if any(re.match(r"marcas heap#\d+ " + re.escape(nome) + r"\.marcas: conforme [1-9]\d*, fora-do-formato 0$", l)
+                   for l in linhas):
+                print(f"{pre}  tela {tela}: {nome} vivo e conforme")
+            else:
+                print(f"{pre}DIFERENÇA: memória: tela {tela} sem o arquivo {nome} vivo e conforme (o modelo não "
+                      "está carregado, ou a conversão diverge)")
                 ok = False
     # os blocos com algum conteúdo vivo achado pelas marcas (qualquer linha de marcas que nomeie o bloco: conferido,
     # pelo tamanho, iguais ou ambíguo), que BUFFER_IMAGEM_VAZIO nunca cobre
@@ -953,6 +970,9 @@ def semmapa(a):
 # cada pergunta do cartão ("ok mcflow 12" e "ok mcflow 2", PERGUNTA quadros depois, com o diálogo aberto).
 TELAS_IMG = {4, 33, 34, 35, 38, 39, 40, 44, 45, 48, 49, 50, 53, 54, 55, 56, 60, 71, 62, 6, 7, 8, 9, 10} | set(range(13, 31))  # (o essencial, a História da 9a e o
 # Ultimate Battle da 9b)
+# (F5, etapa 9) e a tela 600, a Referência com o modelo 3D aberto (ChrView; o rastro do roteiro.c, o modelo na carga e na
+# tela). Não é um modo do jogo: o roteiro.c a dá no lugar do 60 enquanto CharRef.state é a carga do modelo ou o modelo.
+TELAS_IMG.add(600)
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
 
 
@@ -1096,8 +1116,20 @@ def compara_imagens(lista, dx, dp, sx=None, sp=None, telas=None):
         print(f"  DIFERENÇA: {onde}: {dif} de {640 * 448} pixels diferentes, em ({x0},{y0})-({x1},{y1}), "
               f"maior desvio {pior}" + ("" if dif else " (o cabeçalho)"))
         erros += 1
+    # (F5, etapa 9) pares que têm de ser DIFERENTES: o modelo girado não pode sair igual ao modelo aberto (o passo "gira"
+    # que não girou, ou o modelo que não desenhou, dariam duas imagens idênticas e as duas builds iguais entre si)
+    nomes = {nome for nome, _, _ in lista}
+    for antes, depois in IMAGENS_DISTINTAS:
+        if antes in nomes and depois in nomes:
+            a, b = pathlib.Path(dx) / f"{antes}.ppm", pathlib.Path(dx) / f"{depois}.ppm"
+            if a.exists() and b.exists() and a.read_bytes() == b.read_bytes():
+                print(f"  DIFERENÇA: {antes} e {depois} são idênticas na x86 (a cena não mudou entre as duas marcas)")
+                erros += 1
     print(f"{iguais} de {len(lista)} imagens idênticas" + ("" if not erros else f"; {erros} diferenças"))
     return 1 if erros or not lista else 0
+
+
+IMAGENS_DISTINTAS = [("marca_modelo_aberto", "marca_modelo_girado")]
 
 
 # (F5, etapa 3) O que os roteiros da F5 (f5_duelo, f5_treino) têm de alcançar, fixo aqui e não lido do roteiro: um

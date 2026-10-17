@@ -1,5 +1,5 @@
 # Referência de personagens (etapa 9): CharRef (modo 60), a lista, os detalhes de um personagem (o retrato:
-# CharRef_UpdateImage), e de volta ao menu principal. O modelo 3D (ChrView) só aparece por inteiro depois da F5.
+# CharRef_UpdateImage), o modelo 3D (ChrView, F5 etapa 9) e de volta ao menu principal.
 inclui boot.txt
 quadros 90
 aperta CIMA 3                     # Referência
@@ -10,6 +10,31 @@ quadros 60
 aperta X                          # detalhes
 quadros 120
 aperta TRIANGULO
+quadros 60
+# (F5, etapa 9) o visualizador 3D (ChrView): o Goku (Early), o primeiro da lista (id 0), no traje 0. Os detalhes têm
+# quatro itens (perfil, voz, comentário e modelo): BAIXO 3 chega ao do modelo, X abre a escolha do traje e X a
+# confirma; ChrView_Show lê o modelo (id 0x590 + 0 * 10 + 0, o 01423.bin) e o fundo (0x197, o 00406.bin) e a tela
+# passa a 600 (roteiro.c: a carga e o modelo na tela). O analógico esquerdo gira a câmera (OrbitCam_Update): para a
+# direita o ângulo, para cima a elevação (limitada pelo jogo). TRIANGULO fecha o modelo (ChrView_Hide).
+aperta CIMA 3                     # de volta ao primeiro da lista
+quadros 60
+aperta X                          # detalhes do Goku (Early)
+quadros 120
+aperta BAIXO 3                    # o item do modelo
+quadros 40
+aperta X                          # a escolha do traje (o traje 0)
+quadros 60
+aperta X ate tela 600 max 600     # o modelo
+quadros 120
+marca modelo aberto
+quadros 2
+gira 64 0 60                      # cerca de 64 graus ao redor do personagem
+quadros 30
+gira 0 64 30                      # e a câmera sobe
+quadros 30
+marca modelo girado
+quadros 130
+aperta TRIANGULO ate tela 60 max 600 # fecha o modelo, de volta à escolha do traje
 quadros 60
 repete ate tela 4 max 2000
     aperta TRIANGULO

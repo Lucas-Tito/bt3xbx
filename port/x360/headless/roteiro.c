@@ -24,6 +24,9 @@
  * com "rastreia luta", a sequência, a matriz de ações, o resultado e as janelas da medida de tempo (passos.c) no rastro
  * (o guia, "Roteiros de luta"; os roteiros f5_duelo.txt e f5_treino.txt).
  *
+ * (F5, etapa 9) O analógico esquerdo, para o visualizador 3D da Referência (o OrbitCam gira com ele): o passo "gira" e
+ * a tela 600, a Referência (modo 60) com o modelo aberto (CHARREF_ST_VIEW_WAIT e _VIEW), para o rastro, a memória e as imagens.
+ *
  * Entra pelo Port_PadRead: sem_janela.c (x86 e PPC) e pad360.c (360). O BT3_PAD_PLAY, se também estiver ligado,
  * tem a precedência (plat_stub.c nem chama o Port_PadRead).
  */
@@ -50,6 +53,11 @@ typedef char RoteiroLutaConfere[offsetof(BattleWork, flags) == 0x19F0 && offseto
 extern struct { int unk0[5]; int flags; int mode; } *gProgress; /* include/menu/menu_a.h: flags 0x14, mode 0x18 */
 extern struct { int unk0[9]; int state; } *gMcFlow;             /* include/sys/mcflow_a.h: state 0x24; NULL fora */
 extern struct { int state; } *gBtlSeq;                         /* include/battle/btl_seq.h: >= 2 com a luta andando */
+/* (F5, etapa 9) a Referência de personagens (include/menu/menu_h.h: state em 0x1628, CHARREF_ST_VIEW 7, o modelo 3D
+   aberto); NULL fora da tela, o jogo o zera ao sair (menu_h_b.c). A mesma struct de 0x1638 bytes nas três builds. */
+extern struct { char unk0[0x1628]; int state; } *gCharRef;
+#define CHARREF_VIEW 7       /* CHARREF_ST_VIEW: o modelo na tela */
+#define CHARREF_VIEW_WAIT 8  /* CHARREF_ST_VIEW_WAIT: a carga do modelo, depois da escolha do traje */
 /* o golpe que derruba (passo "termina luta"): o lutador ativo de um lado (BtlChar_Get, src/battle/btl_char_get.c; cada
    arquivo do jogo o declara com a sua visão da struct), se ainda tem vida (BtlCtrl_IsActiveDead, btl_capi_b.c), e o
    dano do próprio jogo (BtlMember_Damage, src/battle/btl_char_member.c) */
@@ -138,11 +146,21 @@ static void falha(const char *linha) {
 #define TELA_INICIO (-1)
 #define TELA_LUTA (-2)
 #define TELA_CARGA (-3)
+#define TELA_REF 60      /* o modo da Referência (CharRef_Run) */
+#define TELA_MODELO 600  /* (F5, etapa 9) a Referência com o visualizador 3D aberto (ChrView: a carga do modelo e o
+                            modelo na tela), não um modo do jogo */
 #define MPROG_FIRST_RUN 0x40
 
 static int tela_atual(void) {
     if (gPortMenuMode && gProgress != NULL) {
-        return (gProgress->flags & MPROG_FIRST_RUN) ? TELA_INICIO : gProgress->mode;
+        if (gProgress->flags & MPROG_FIRST_RUN) {
+            return TELA_INICIO;
+        }
+        if (gProgress->mode == TELA_REF && gCharRef != NULL &&
+            (gCharRef->state == CHARREF_VIEW || gCharRef->state == CHARREF_VIEW_WAIT)) {
+            return TELA_MODELO;
+        }
+        return gProgress->mode;
     }
     if (gBtlSeq != NULL && gBtlSeq->state >= 2) {
         return TELA_LUTA;
@@ -321,7 +339,7 @@ static void luta_quadro(void) {
 /* ------------------------------------------------------------------ o roteiro */
 
 enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA,
-       P_FUNDE, P_DESEJO, P_RASTREIA };
+       P_FUNDE, P_DESEJO, P_RASTREIA, P_GIRA };
 enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA, C_ACAO, C_SEQ, C_PAUSA, C_DANO, C_KI, C_JANELA };
 
 typedef struct Passo {
@@ -334,6 +352,7 @@ typedef struct Passo {
                            P_TERMINA: valor 1 vence, 0 perde */
     int lado, ate;      /* (F5, etapa 3) C_ACAO: o lado e a faixa valor..ate; C_DANO e C_KI: o lado */
     int ref;            /* C_DANO: a vida do lado no começo do passo (-1: ainda sem luta) */
+    int lx, ly;         /* (F5, etapa 9) P_GIRA: o analógico esquerdo, de -128 a 127 (0 no centro) */
     int luta[8];        /* P_CONFERE da luta: personagem e traje dos lados 0 e 1, estágio, modo, tempo, nível do COM */
     int max;            /* quadros até a falha */
     int par;            /* P_REPETE: o índice do P_VOLTA; P_VOLTA: o do P_REPETE; P_TERMINA "perde apos N": N */
@@ -352,6 +371,7 @@ static int sAbertos[8], sNAbertos; /* os "repete" ainda sem "volta", na leitura 
 static struct { int passo, t, inicio; } sLaco[8]; /* os "repete" em andamento: o passo, quadros nele, quadro da volta */
 static int sNLaco;
 static int sCartaoVazio = 1;    /* sem o arquivo de dados do save no começo da rodada (P_DESBLOQUEIA) */
+static unsigned char sLx = 0x80, sLy = 0x80; /* (F5, etapa 9) o analógico esquerdo deste quadro (0x80 no centro) */
 
 static const struct { const char *nome; unsigned bit; } kBotoes[] = {
     {"SELECT", 0x0001}, {"L3", 0x0002}, {"R3", 0x0004}, {"START", 0x0008}, {"CIMA", 0x0010}, {"DIREITA", 0x0020},
@@ -568,6 +588,18 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         p->botoes = botoes(onde, n > 1 ? pal[1] : NULL);
         p->n = numero(onde, n > 2 ? pal[2] : NULL);
         i = 3;
+    } else if (igual(pal[0], "gira")) { /* (F5, etapa 9) gira LX LY N: o analógico esquerdo em (LX, LY), N quadros */
+        p = novo(onde, P_GIRA);
+        if (n != 4) {
+            erro_linha(onde, "gira LX LY N", NULL);
+        }
+        p->lx = numero(onde, pal[1]);
+        p->ly = numero(onde, pal[2]);
+        p->n = numero(onde, pal[3]);
+        if (p->lx < -128 || p->lx > 127 || p->ly < -128 || p->ly > 127 || p->n < 1) {
+            erro_linha(onde, "gira LX LY N: LX e LY de -128 a 127, N pelo menos 1", NULL);
+        }
+        i = 4;
     } else if (igual(pal[0], "libera")) {
         if (n != 2 || !igual(pal[1], "desejo")) {
             erro_linha(onde, "libera desejo", NULL);
@@ -883,6 +915,7 @@ static void so_teste(const Passo *p, const char *nome) {
 /* os botões do jogador 1 neste quadro, andando o roteiro */
 static unsigned quadro(void) {
     char s[300];
+    sLx = sLy = 0x80; /* (o analógico volta ao centro a cada quadro; só o "gira" o move) */
     for (;;) {
         Passo *p;
         int k, saiu = 0;
@@ -966,6 +999,15 @@ static unsigned quadro(void) {
             }
             sT++;
             return consome(p->tipo == P_SEGURA ? p->botoes : 0);
+        case P_GIRA:
+            if (sT >= p->n) {
+                proximo();
+                continue;
+            }
+            sT++;
+            sLx = (unsigned char)(0x80 + p->lx);
+            sLy = (unsigned char)(0x80 + p->ly);
+            return consome(0);
         case P_DESBLOQUEIA:
             so_teste(p, "desbloqueia");
             if (gSaveData == NULL) {
@@ -1212,7 +1254,9 @@ int Roteiro_Pad(int socket, unsigned char *data) {
     memset(data, 0, 18);
     data[0] = (unsigned char)(~b & 0xFF);
     data[1] = (unsigned char)(~(b >> 8) & 0xFF);
-    data[2] = data[3] = data[4] = data[5] = 0x80;
+    data[2] = data[3] = 0x80;
+    data[4] = sLx; /* PAD_DATA_LX e PAD_DATA_LY (include/sys/pad.h) */
+    data[5] = sLy;
     return 18;
 }
 
