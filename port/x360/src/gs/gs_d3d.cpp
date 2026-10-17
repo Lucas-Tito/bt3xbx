@@ -71,6 +71,7 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "copia_ps.h"
 #include "zcor_ps.h"
 #include "zprof_ps.h"
+#include "gsz_ps.h"     /* (F5, etapa 7, segunda parte) ps_gsz: a VU1 recortada pelo w */
 #include "vu0_vs.h"
 #include "vu4_vs.h"
 #include "vu6_vs.h"
@@ -113,6 +114,10 @@ static D3DSurface *sEdramProfCor; /* (F5, etapa 7) a profundidade da EDRAM vista
 static D3DPixelShader *sPsZCor, *sPsZProf;
 static D3DTexture *sBranco, *sDate;
 static D3DTexture *sDateFonte; /* o que os desenhos com DATE leem: sDate, ou a textura de um alvo fora da EDRAM */
+/* (F5, etapa 7, segunda parte) BT3_CORTE=1: os programas da VU1 recortados pelo w, com a profundidade por pixel
+   (vu_pos e ps_gsz em gs_d3d.hlsl); 0: o z preso em 0..w por vértice, o de antes */
+static D3DPixelShader *sPsGsZ;
+static unsigned sCorte = 1;
 
 typedef struct Ret { int x0, y0, x1, y1; } Ret; /* vazio quando x1 <= x0 */
 typedef struct Alvo {
@@ -1307,6 +1312,7 @@ static int d3d_init(void) {
         FAILED(sDev->CreatePixelShader((const DWORD *)kCopiaPs, &sPsCopia)) || FAILED(sDev->CreateVertexDeclaration(elemGs, &sDeclGs)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kZCorPs, &sPsZCor)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kZProfPs, &sPsZProf)) ||
+        FAILED(sDev->CreatePixelShader((const DWORD *)kGsZPs, &sPsGsZ)) ||
         FAILED(sDev->CreateVertexDeclaration(elemCopia, &sDeclCopia)) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kVu0Vs, &sVsVu[0])) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kVu4Vs, &sVsVu[1])) ||
@@ -1364,6 +1370,9 @@ static int d3d_init(void) {
                         tam_alvo() >> 10);
     }
     prof_autoteste();
+    sCorte = env_num("BT3_CORTE", 1) != 0;
+    Diario_Escrever("gs_d3d: BT3_CORTE=%u (%s)", sCorte,
+                    sCorte ? "a VU1 recortada pelo w, profundidade por pixel" : "z da VU1 preso em 0..w por vértice");
     Diario_Escrever("gs_d3d: pronto; alvo %dx%d, EDRAM: cor %u + profundidade %u de %u tiles; %u MB livres", TAM, TAM,
                     tilesCor, tilesProf, (unsigned)EDRAM_TILES, mb_livres());
     if (tilesCor + tilesProf > EDRAM_TILES) {
@@ -1483,7 +1492,12 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     if (sEstadoGs != estado) {
         sDev->SetVertexDeclaration(estado >= 2 ? sDeclVu : sDeclGs);
         sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : sVsGs);
-        sDev->SetPixelShader(sPsGs);
+        /* (F5, etapa 7, segunda parte) a VU1 com o recorte pelo w: a profundidade por pixel (ps_gsz, vu_pos) */
+        sDev->SetPixelShader(estado >= 2 && sCorte ? sPsGsZ : sPsGs);
+        if (estado >= 2) {
+            float c15[4] = {sCorte ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+            sDev->SetVertexShaderConstantF(15, c15, 1);
+        }
         sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
         if (estado >= 2) {
             /* (o DrawPrimitiveUP desfaz o fluxo 0: posto de novo a cada volta para cá) */

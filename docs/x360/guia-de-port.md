@@ -1170,7 +1170,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   contadores do log, medidas das capturas (`ppm_stats.py`) contra a referência, e só então o shader. Nitidez e
   saturação medidas na área 3D (fora da caixa da pausa) dão ordem de grandeza; o viés do rasterizador de software
   (textura lida no ponto) é de uns 15% no gradiente, então 2 a 8 vezes é defeito. Quando a causa é uma passada de
-  tela, `BT3_FX_OFF=8|16|24` no `ambiente.txt` (pelo código valem no 360, sem build nova; ainda não testados lá) a separa em uma rodada.
+  tela, `BT3_FX_OFF=8|16|24` no `ambiente.txt` (valem no 360 sem build nova; o 24 provou a triagem na rodada da
+  etapa 7) a separa em uma rodada.
+- **Profundidade presa por vértice não é o depth clamp: o chão perto da câmera some.** Na F5 (etapas 6 e 7) os
+  programas da VU1 prendiam o z de recorte em 0..w por vértice, para imitar o depth clamp do PC (o D3D9 do Xenos não
+  desliga o corte por profundidade). Com a câmera baixa, um triângulo do chão com um vértice atrás da câmera (w < 0, z
+  preso em w) e outro na frente com z < w é cortado onde o z interpolado zera, muito antes de w = 0: um buraco escuro
+  de borda em degraus seguindo os ladrilhos, que custou uma rodada (a abertura 2 da etapa 7 o mostrou; a persistência
+  da profundidade não tinha nada com ele). A correção que reproduz o PC: o z de recorte vira `w - ε` (o único corte em
+  z passa a ser o plano w = ε, o recorte pelo w) e a profundidade de verdade, z / w com z e w interpolados em
+  perspectiva, sai pelo `DEPTH` do pixel shader, presa em 0..1 (`vu_pos` e `ps_gsz` em `gs_d3d.hlsl`). Custa o z
+  antecipado nesses desenhos (o Hi-Z já estava desligado). Regra: prender o z por vértice só vale para primitivas
+  inteiras na frente da câmera (o 2D do `vs_gs`, com w = 1).
 
 - **Varredura sobre o `gamedata` inteiro: em fluxo, com `ulimit -v` e decodificador de BPE com limites.** Na
   investigação dos ícones (`pesquisa/04`) o primeiro script desceu em todo pacote e BPE, testou candidatos que não

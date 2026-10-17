@@ -30,10 +30,11 @@ sampler2D dateTex : register(s1); // cópia da cor do alvo, para o teste de alfa
 
 struct GsPixel { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 vpos : VPOS; };
 
-float4 ps_gs(GsPixel e) : COLOR0 {
+// O corpo do pixel shader das primitivas do GS e dos programas da VU1 (ps_gs e ps_gsz abaixo).
+float4 gs_pixel(float4 cor, float3 stq, float2 vpos) {
     float k = 255.0f / 128.0f;
     // o centro do pixel em qualquer convenção do VPOS (inteiro ou com o meio pixel): o gl_FragCoord do GL
-    float2 f = floor(e.vpos) + 0.5f;
+    float2 f = floor(vpos) + 0.5f;
     if (misc.y != 0.0f) {
         // TEST.DATE: o bit 7 do alfa já gravado. Sem o byte à parte, vale o alfa da cor: ela guarda min(A / 0x80, 1),
         // e o bit 7 está ligado exatamente quando ela chega a 1.
@@ -41,10 +42,10 @@ float4 ps_gs(GsPixel e) : COLOR0 {
         bool ligado = tex2D(dateTex, f * alvo.xy).a >= 254.5f / 255.0f;
         clip(ligado != (misc.y > 1.5f) ? -1.0f : 1.0f);
     }
-    float3 rgb = e.cor.rgb;
-    float a = e.cor.a * k;
+    float3 rgb = cor.rgb;
+    float a = cor.a * k;
     // o gradiente fora de qualquer desvio (o fxc recusa tex2D com gradiente dentro de desvio dinâmico)
-    float2 uv0 = e.stq.xy / e.stq.z;
+    float2 uv0 = stq.xy / stq.z;
     float2 dx = ddx(uv0), dy = ddy(uv0);
     float2 uv = uv0;
     if (misc.w != 0.0f) {
@@ -70,13 +71,13 @@ float4 ps_gs(GsPixel e) : COLOR0 {
             t.a *= k; // textura da memória do GS: o alfa do GS (0x80 opaco, até 0xFF)
         }
         if (modo.y == 0.0f) {
-            rgb = t.rgb * e.cor.rgb * k;
+            rgb = t.rgb * cor.rgb * k;
             if (modo.z != 0.0f) a = t.a * a;
         } else if (modo.y == 1.0f) {
             rgb = t.rgb;
             if (modo.z != 0.0f) a = t.a;
         } else {
-            rgb = t.rgb * e.cor.rgb * k + e.cor.aaa;
+            rgb = t.rgb * cor.rgb * k + cor.aaa;
             if (modo.z != 0.0f) a = (modo.y == 2.0f) ? t.a + a : t.a;
         }
     }
@@ -93,6 +94,22 @@ float4 ps_gs(GsPixel e) : COLOR0 {
         a = 1.0f;
     }
     return float4(saturate(rgb), saturate(a));
+}
+
+float4 ps_gs(GsPixel e) : COLOR0 {
+    return gs_pixel(e.cor, e.stq, e.vpos);
+}
+
+// F5, etapa 7 (segunda parte): o pixel shader dos programas da VU1 com o recorte pelo w (ver vu_pos abaixo). A
+// profundidade sai por pixel, z / w com o z e o w interpolados em perspectiva, presa em 0..1: o depth clamp do PC
+// (GL_DEPTH_CLAMP, ou o corte desligado na SDL GPU), que prende por fragmento.
+struct GsPixelZ { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 zw : TEXCOORD1; float2 vpos : VPOS; };
+struct GsSaidaZ { float4 cor : COLOR0; float z : DEPTH; };
+GsSaidaZ ps_gsz(GsPixelZ e) {
+    GsSaidaZ s;
+    s.cor = gs_pixel(e.cor, e.stq, e.vpos);
+    s.z = saturate(e.zw.x / e.zw.y);
+    return s;
 }
 
 // ---- cópia de uma textura para a tela: a volta de um alvo para a EDRAM e o present
@@ -136,7 +153,8 @@ ZSaida ps_zprof(float2 uv : TEXCOORD0) {
 }
 
 // ---- programas de vértice da VU1, família vu0 (F5, etapa 6): tradução de port/src/gs/shaders/vu0.vert
-// Usada pelos programas 0, 1, 2a/2b, 7 e 8 (camadas 0 a 5 em misc.w). O pixel shader é o ps_gs acima.
+// Usada pelos programas 0, 1, 2a/2b, 7 e 8 (camadas 0 a 5 em misc.w). O pixel shader é o ps_gsz acima (ps_gs com
+// BT3_CORTE=0).
 
 // pos: xyz e o peso em w; nrm: a normal (ou a cor por vértice nas camadas 3 e 4); st: s, t, 1. Três FLOAT4, passo de 48
 struct Vu0Entrada { float4 pos : POSITION; float4 nrm : NORMAL; float4 st : TEXCOORD0; };
@@ -155,8 +173,27 @@ float4 vu0c[19] : register(c16);
 // mat3(M) * n = M0.xyz*n.x + M1.xyz*n.y + M2.xyz*n.z
 #define VU0_M3(b, n) (vu0c[(b) + 0].xyz * (n).x + vu0c[(b) + 1].xyz * (n).y + vu0c[(b) + 2].xyz * (n).z)
 
-GsSaida vs_vu0(Vu0Entrada e) {
-    GsSaida s;
+// A posição de recorte das três famílias: x, y e w idênticos ao GLSL (+Y para cima, o HALFPIXELOFFSET do dispositivo
+// já faz o papel do meio pixel). A profundidade (F5, etapa 7, segunda parte): o PC desliga o corte por profundidade
+// (depth clamp) e prende o z em 0..1 por fragmento; o 360 não tem como desligar o corte. Antes, o z era preso em 0..w
+// por vértice: um triângulo com um vértice atrás da câmera (w < 0, z preso em w) e outro na frente com z < w era
+// cortado onde o z interpolado zera, bem antes de w = 0, e o chão perto da câmera baixa sumia em degraus seguindo os
+// ladrilhos (a rodada da primeira parte da etapa 7). Agora (corte.x = 1, o padrão; BT3_CORTE=0 volta ao de antes) o z
+// de recorte é w - CORTE_W: dentro de 0..w para todo w >= CORTE_W, então o único corte em z é o plano w = CORTE_W,
+// o recorte pelo w que o PC faz (o x e o y continuam cortados pelo -w..w). A profundidade de verdade, z / w, vai em
+// zw e o ps_gsz a escreve por pixel, presa em 0..1: o mesmo resultado do depth clamp.
+struct VuSaida { float4 pos : POSITION; float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 zw : TEXCOORD1; };
+float4 corte : register(c15); // x: 1 o recorte pelo w com a profundidade por pixel (ps_gsz); 0 o z preso por vértice (ps_gs)
+#define CORTE_W (1.0f / 1024.0f)
+void vu_pos(inout VuSaida s, float4 sc, float4 misc) {
+    float zr = sc.z / misc.z;
+    s.pos = float4((sc.x - misc.x * sc.w) / 512.0f - sc.w, sc.w - (sc.y - misc.y * sc.w) / 512.0f,
+                   corte.x != 0.0f ? sc.w - CORTE_W : clamp(zr, 0.0f, sc.w), sc.w);
+    s.zw = float2(zr, sc.w);
+}
+
+VuSaida vs_vu0(Vu0Entrada e) {
+    VuSaida s;
     float4 pivotA = vu0c[8], pivotB = vu0c[9];
     float4 light = vu0c[14], color0 = vu0c[15], color1 = vu0c[16], misc = vu0c[17], light2 = vu0c[18];
     float w = misc.w == 4.0f ? 1.0f : e.pos.w; // camada 4 (destroços, rígido): a 4ª palavra é um sinalizador, não um peso
@@ -166,11 +203,7 @@ GsSaida vs_vu0(Vu0Entrada e) {
     // Programas 2a/2b: a matriz da câmera da sombra é ortográfica com w constante NEGATIVO (medido: -862). O PS2 só
     // divide por ele; a GPU cortaria tudo como "atrás do olho". O mesmo ponto com w > 0:
     if (misc.w == 2.0f && sc.w < 0.0f) sc = -sc;
-    // x, y e w idênticos ao GLSL (+Y para cima, o HALFPIXELOFFSET do dispositivo já faz o papel do meio pixel).
-    // A profundidade fica presa em 0..w em TODAS as camadas: o PC desliga o corte por profundidade (depth clamp) e o
-    // 360 não tem isso, então um z fora da faixa cortaria o triângulo inteiro. O vs_gs faz o mesmo com saturate.
-    s.pos = float4((sc.x - misc.x * sc.w) / 512.0f - sc.w, sc.w - (sc.y - misc.y * sc.w) / 512.0f,
-                   clamp(sc.z / misc.z, 0.0f, sc.w), sc.w);
+    vu_pos(s, sc, misc);
     if (misc.w == 5.0f) {
         // programa 1, camada 1: a segunda textura do modelo lida pela direção da normal num quadro alinhado à câmera
         // (uma matriz só, sem mistura entre os ossos): (u, v) = 0.5 + 0.5 * (M * (n, 1)).xy
@@ -194,17 +227,16 @@ GsSaida vs_vu0(Vu0Entrada e) {
 
 // ---- programas de vértice da VU1, famílias vu4 (o estágio, programa 4) e vu6 (a sombra no chão, programa 6) (F5,
 // etapa 6, segunda parte): tradução de port/src/gs/shaders/vu4.vert e vu6.vert, com as mesmas entradas, constantes e
-// convenções do vs_vu0 (a profundidade presa em 0..w). O pixel shader é o ps_gs.
+// convenções do vs_vu0 (o recorte pelo w de vu_pos). O pixel shader é o ps_gsz.
 
 
 // Tradução de port/src/gs/shaders/vu4.vert (o estágio, programa 4): só usa screen em [10..13] e misc em [17]. A cor
 // vem em e.nrm (segunda quadword, floats 0..255) e o st segue com q = 1. O recorte de tiras da VU fica com a GPU.
-GsSaida vs_vu4(Vu0Entrada e) {
-    GsSaida s;
+VuSaida vs_vu4(Vu0Entrada e) {
+    VuSaida s;
     float4 misc = vu0c[17];
     float4 sc = VU0_M4(VU0_SCREEN, e.pos);
-    s.pos = float4((sc.x - misc.x * sc.w) / 512.0f - sc.w, sc.w - (sc.y - misc.y * sc.w) / 512.0f,
-                   clamp(sc.z / misc.z, 0.0f, sc.w), sc.w);
+    vu_pos(s, sc, misc);
     s.cor = clamp(floor(e.nrm), 0.0f, 255.0f) / 255.0f;
     s.stq = float3(e.st.xy, 1.0f);
     return s;
@@ -214,15 +246,14 @@ GsSaida vs_vu4(Vu0Entrada e) {
 
 // Tradução de port/src/gs/shaders/vu6.vert (a sombra no chão, programa 6): shadowCam em [0..3], scale.x em [8],
 // texScale.xy em [9], screen em [10..13], misc em [17]. A cor vem em e.nrm; a terceira quadword não é usada.
-GsSaida vs_vu6(Vu0Entrada e) {
-    GsSaida s;
+VuSaida vs_vu6(Vu0Entrada e) {
+    VuSaida s;
     float4 scale = vu0c[8], texScale = vu0c[9];
     float4 misc = vu0c[17];
     float4 p = float4(e.pos.xyz, 1.0f);
     float4 sc = VU0_M4(VU0_SCREEN, p);
     float2 st = (VU0_M4(VU6_SHADOWCAM, p).xy * scale.x + 1.0f) * 0.5f;
-    s.pos = float4((sc.x - misc.x * sc.w) / 512.0f - sc.w, sc.w - (sc.y - misc.y * sc.w) / 512.0f,
-                   clamp(sc.z / misc.z, 0.0f, sc.w), sc.w);
+    vu_pos(s, sc, misc);
     s.cor = clamp(floor(e.nrm), 0.0f, 255.0f) / 255.0f;
     s.stq = float3(st * texScale.xy, 1.0f);
     return s;
