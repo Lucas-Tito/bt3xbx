@@ -8,8 +8,9 @@
  *     (o tamanho de um alvo do GS com SCALE = 1): cor em A8R8G8B8 na base 0 e profundidade D24S8 logo depois, cerca
  *     de 8 MB. Cada alvo do GS tem uma textura (tiled, A8R8G8B8) com o conteúdo dele. Desenhar num alvo: o que está
  *     na EDRAM volta para a textura do dono (Resolve, só o retângulo sujo), a EDRAM é limpa e recebe a textura do
- *     novo alvo (um retângulo desenhado). A profundidade não volta: um alvo que sai da EDRAM perde a dele (basta
- *     para o 2D dos menus; a luta, F5, vai precisar resolver a profundidade também).
+ *     novo alvo (um retângulo desenhado). A profundidade (F5, etapa 7) faz o mesmo caminho: o que os desenhos com
+ *     escrita de z tocaram volta para uma textura D24S8 do alvo, e a volta para a EDRAM a restaura (como cor na mesma
+ *     base, ou pelo oDepth; o autoteste do boot escolhe). Ver prof_* abaixo e docs/x360/plano/F5/07.md.
  *   - Ler a cor de um alvo como textura (o jogo faz isso nos efeitos) é ler a textura do alvo, sempre em dia: um
  *     alvo nunca é lido enquanto é o desenhado (gs_draw.c recusa), então ele já saiu da EDRAM.
  *   - Sem o segundo alvo com o byte de alfa (outAux do gs.frag): o teste de alfa do destino (DATE) lê o alfa da
@@ -68,11 +69,17 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "gs_ps.h"
 #include "copia_vs.h"
 #include "copia_ps.h"
+#include "zcor_ps.h"
+#include "zprof_ps.h"
 #include "vu0_vs.h"
 #include "vu4_vs.h"
 #include "vu6_vs.h"
 
 #define TAM GS_W            /* lado de um alvo, em pixels (SCALE = 1) */
+/* (F5, etapa 7) a largura da profundidade vista como cor: os 13 tiles de 80 pixels que o alvo de 1024 ocupa na EDRAM.
+   O restauro como cor troca as metades de 40 colunas de cada tile, então a profundidade das colunas 984 a 999 mora
+   nas colunas 1024 a 1039 da cor, que uma superfície de 1024 não alcança. */
+#define TAMZ ((TAM + 79) / 80 * 80)
 #define TELA_W 1280
 #define TELA_H 720
 #define EDRAM_TILES 2048    /* 10 MB em tiles de 5.120 bytes */
@@ -102,6 +109,8 @@ static int sVuPar;
 static uint32_t sVuIni[MAX_DRAWS]; /* o primeiro índice de cada desenho da VU1 no buffer do quadro (~0: fora) */
 static int sCurUni = -1;            /* o Vu0Uniform posto nas constantes dos vs_vu* */
 static D3DSurface *sEdramCor, *sEdramProf, *sTela;
+static D3DSurface *sEdramProfCor; /* (F5, etapa 7) a profundidade da EDRAM vista como cor: mesma base, mesmos tiles */
+static D3DPixelShader *sPsZCor, *sPsZProf;
 static D3DTexture *sBranco, *sDate;
 static D3DTexture *sDateFonte; /* o que os desenhos com DATE leem: sDate, ou a textura de um alvo fora da EDRAM */
 
@@ -113,6 +122,21 @@ typedef struct Alvo {
 static Alvo sAlvos[MAX_TARGETS];
 static int sResidente = -1; /* o alvo que está na EDRAM */
 static Ret sSujo;           /* o que foi desenhado nele desde que entrou */
+
+/* F5, etapa 7: a profundidade de cada alvo fora da EDRAM. A textura só existe para os alvos em que algum desenho
+   escreve z (criada no começo do fim do quadro, antes de refazer a lista); `conteudo` tem x em múltiplos de 80 (a
+   largura de um tile da EDRAM, por causa da troca de metades do restauro como cor). */
+typedef struct Prof {
+    D3DTexture *tex; /* D24S8 tiled, o destino do Resolve da profundidade (NULL: sem) */
+    D3DTexture cor;  /* cabeçalho: a mesma memória lida como A8B8G8R8 (o restauro como cor) */
+    Ret conteudo;    /* onde ela vale (fora dali, zero, o valor da limpeza) */
+    unsigned falhou; /* o quadro em que a criação falhou (tenta de novo 60 quadros depois) */
+} Prof;
+static Prof sProf[MAX_TARGETS];
+static int sModoZ;       /* 0 a profundidade volta zerada (o de antes), 1 restauro como cor, 2 pelo oDepth */
+static int sZDono = -1;  /* o alvo cuja profundidade está na EDRAM (-1: nenhum; ver prof_entrega) */
+static Ret sSujoZ;       /* o que os desenhos com escrita de z do sZDono tocaram desde que ela entrou na EDRAM */
+static double sMsZRes, sMsZRest, sMsCorRes, sMsCorRest; /* autoteste: GPU por alvo inteiro (1024 x 1024), ms */
 
 typedef struct Pipe { uint32_t key, bkey, wmask; int ztst, zwrite, topo, vu, fx; } Pipe;
 static Pipe sPipes[1024];
@@ -131,7 +155,7 @@ static D3DTexture *sCurDate;
 
 /* ---- memória (F5, etapa 1) ----------------------------------------------------------------------------------- */
 
-enum { CL_TEX, CL_ALVO, CL_N };
+enum { CL_TEX, CL_ALVO, CL_PROF, CL_N }; /* CL_PROF: as profundidades dos alvos (F5, etapa 7) */
 enum { MODO_TEX, MODO_ALVO, MODO_FALHOU }; /* o pedido: textura nova, alvo novo, textura depois de o D3D recusar */
 enum { BR_ESPACO = 1, BR_CACHE, BR_D3D, BR_FORMATO, BR_ALVO, BR_N }; /* por que uma textura saiu branca */
 static const char *const kBranca[BR_N] = {"", "sem espaço e nada a descartar", "cache de 8.192 cheio no quadro",
@@ -209,6 +233,11 @@ static struct {
     double msFim, msFimPior, msQuadro, msQuadroPior, msPresent, msPresentPior;
     unsigned acima16, acima33, capturas, maiorDesenho;
     double msCaptura;
+    /* F5, etapa 7: profundidade: resolves e restauros (e os pixels de cada), visitas que usaram z, visitas que
+       precisavam e não tinham textura; restauros e resolves de cor (pixels), para a estimativa da GPU; o tempo de CPU
+       das chamadas da profundidade (o da GPU sai do autoteste) */
+    unsigned zRes, zRest, zVisitas, zMantida, zSemTex;
+    double corResPx, corRestPx, zResPx, zRestPx, msZ, msZPior, msZQuadro;
 } sConta;
 static LARGE_INTEGER sFreq, sUltimoFim;
 static unsigned sAvisado; /* bits: o que já foi dito uma vez no log */
@@ -399,10 +428,10 @@ extern "C" int GsD3d_Descartou(uint32_t w, uint32_t h, int modo, unsigned n, uin
         sMem.falasPressao++;
         Diario_Escrever("gs_d3d: pressão %u, quadro %u: pedido %u KB (%s %ux%u); descartadas %u texturas (%u KB), a mais "
                         "recente sem uso há %u quadros, %u protegidas; %u esperas pela GPU; agora texturas %u KB + %u KB "
-                        "pendentes, alvos %u KB, livres %u MB (piso %u): %s",
+                        "pendentes, alvos e profundidades %u KB, livres %u MB (piso %u): %s",
                         sMem.pressoesTot, gGsFrame, pedido >> 10, modo == MODO_ALVO ? "alvo" : "textura", w, h, n, bytes >> 10,
                         idade, emUso, sMem.esperas - esperas, sMem.vivos[CL_TEX] >> 10, sMem.pend[CL_TEX] >> 10,
-                        (sMem.vivos[CL_ALVO] + sMem.pend[CL_ALVO]) >> 10, livres >> 20, sMem.pisoMb,
+                        (sMem.vivos[CL_ALVO] + sMem.pend[CL_ALVO] + sMem.vivos[CL_PROF] + sMem.pend[CL_PROF]) >> 10, livres >> 20, sMem.pisoMb,
                         cabe ? "cabe" : "NÃO CABE");
     }
     return cabe;
@@ -538,9 +567,15 @@ static D3DTexture *alvo_com_espaco(void) {
 
 static int sAlvoSemTex[MAX_TARGETS]; /* 1: a vaga está sem textura (o fim do quadro tenta de novo) */
 
+static void prof_solta(int i);
 static void target_ensure(int i) {
     sAlvos[i].tex = alvo_com_espaco();
     sAlvos[i].conteudo.x0 = sAlvos[i].conteudo.x1 = 0;
+    sProf[i].conteudo.x0 = sProf[i].conteudo.x1 = 0; /* (a textura de profundidade, se houver, fica para o novo dono) */
+    if (sZDono == i) {
+        sZDono = -1;
+        sSujoZ.x0 = sSujoZ.x1 = 0;
+    }
     if (sResidente == i) {
         sResidente = -1; /* (a vaga mudou de dono: o que estava na EDRAM era do antigo) */
     }
@@ -585,6 +620,7 @@ static void target_drop(int i) {
     }
     sAlvos[i].tex = NULL;
     sAlvoSemTex[i] = 0;
+    prof_solta(i);
 }
 
 static GsTex target_color(int i) {
@@ -694,9 +730,10 @@ static void aplica_sampler(DWORD estagio, int s) {
     sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSV, (s & 4) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
 }
 
-/* Uma textura copiada para um retângulo do alvo atual (W x H): sem mistura, sem profundidade, sem tesoura. */
-static void copia(D3DTexture *t, int W, int H, float x0, float y0, float x1, float y1, float u0, float v0, float u1,
-                  float v1, int linear) {
+/* Um retângulo do alvo atual (W x H) com a textura t pelo pixel shader ps (vs_copia); os estados de mistura,
+   profundidade e escrita são do chamador. */
+static void quad(D3DTexture *t, D3DPixelShader *ps, int W, int H, float x0, float y0, float x1, float y1, float u0,
+                 float v0, float u1, float v1, int linear) {
     struct { float x, y, u, v; } q[4];
     float cx0 = x0 / W * 2.0f - 1.0f, cx1 = x1 / W * 2.0f - 1.0f, cy0 = 1.0f - y0 / H * 2.0f, cy1 = 1.0f - y1 / H * 2.0f;
     q[0].x = cx0; q[0].y = cy0; q[0].u = u0; q[0].v = v0;
@@ -705,16 +742,22 @@ static void copia(D3DTexture *t, int W, int H, float x0, float y0, float x1, flo
     q[3].x = cx1; q[3].y = cy1; q[3].u = u1; q[3].v = v1;
     sDev->SetVertexDeclaration(sDeclCopia);
     sDev->SetVertexShader(sVsCopia);
-    sDev->SetPixelShader(sPsCopia);
+    sDev->SetPixelShader(ps);
     sDev->SetTexture(0, t);
     aplica_sampler(0, (linear ? 1 : 0) | 2 | 4);
     sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
-    sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
-    sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, q, sizeof(q[0]));
     esquece_estado();
+}
+
+/* Uma textura copiada para um retângulo do alvo atual (W x H): sem mistura, sem profundidade, sem tesoura. */
+static void copia(D3DTexture *t, int W, int H, float x0, float y0, float x1, float y1, float u0, float v0, float u1,
+                  float v1, int linear) {
+    sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    quad(t, sPsCopia, W, H, x0, y0, x1, y1, u0, v0, u1, v1, linear);
 }
 
 /* o retângulo em múltiplos de 8 (exigência do Resolve), dentro do alvo */
@@ -727,7 +770,165 @@ static void alinha8(Ret *r) {
     if (r->y1 > TAM) r->y1 = TAM;
 }
 
-/* O alvo da EDRAM volta para a textura dele (só o que foi desenhado desde que entrou). */
+/* (profundidade) x em múltiplos de 80, a largura de um tile da EDRAM com 32 bits por pixel: o restauro como cor lê o
+   pixel x + 40 ou x - 40 do mesmo tile, que assim fica sempre dentro do que foi resolvido */
+static void alinha80(Ret *r) {
+    alinha8(r);
+    r->x0 -= r->x0 % 80;
+    r->x1 = (r->x1 + 79) / 80 * 80;
+    if (r->x1 > TAM) r->x1 = TAM;
+}
+
+/* ---- profundidade por alvo (F5, etapa 7) --------------------------------------------------------------------- */
+
+/* A profundidade de r (alinhado) da textura z volta para a EDRAM, que já tem o alvo posto (sEdramCor e sEdramProf).
+   Modo 1: escrita como cor na superfície que tem a mesma base da profundidade (o exemplo FastDepthRestore do XDK).
+   Modo 2: pelo oDepth, com a cor desligada. */
+static void prof_poe(Prof *z, const Ret *r, int modo) {
+    D3DVIEWPORT9 vp = {0, 0, TAM, TAM, 0.0f, 1.0f}, vpz = {0, 0, TAMZ, TAM, 0.0f, 1.0f};
+    float x0 = (float)r->x0, y0 = (float)r->y0, x1 = (float)r->x1, y1 = (float)r->y1;
+    if (modo == 1) {
+        if (r->x1 == TAM) {
+            x1 = (float)TAMZ; /* (o último tile inteiro: ver TAMZ) */
+        }
+        sDev->SetDepthStencilSurface(NULL);
+        sDev->SetRenderTarget(0, sEdramProfCor);
+        sDev->SetViewport(&vpz);
+        sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
+        sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+        sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+        quad(&z->cor, sPsZCor, TAMZ, TAM, x0, y0, x1, y1, x0 / TAM, y0 / TAM, x1 / TAM, y1 / TAM, 0);
+        sDev->SetRenderTarget(0, sEdramCor);
+        sDev->SetDepthStencilSurface(sEdramProf);
+        sDev->SetViewport(&vp);
+    } else {
+        sDev->SetRenderState(D3DRS_ZENABLE, TRUE);
+        sDev->SetRenderState(D3DRS_ZFUNC, D3DCMP_ALWAYS);
+        sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
+        sDev->SetRenderState(D3DRS_COLORWRITEENABLE, 0);
+        quad(z->tex, sPsZProf, TAM, TAM, x0, y0, x1, y1, x0 / TAM, y0 / TAM, x1 / TAM, y1 / TAM, 0);
+    }
+    /* (a textura não fica presa no estágio: ela é destino do próximo Resolve deste alvo) */
+    sDev->SetTexture(0, NULL);
+    sCurTex = (GsTex)-1;
+}
+
+/* A profundidade de r da EDRAM para a textura z (o depth-stencil posto é o sEdramProf). */
+static void prof_tira(Prof *z, const Ret *r) {
+    D3DRECT fonte;
+    D3DPOINT destino;
+    fonte.x1 = r->x0; fonte.y1 = r->y0; fonte.x2 = r->x1; fonte.y2 = r->y1;
+    destino.x = r->x0; destino.y = r->y0;
+    sDev->Resolve(D3DRESOLVE_DEPTHSTENCIL, &fonte, z->tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+}
+
+/* a textura de profundidade de um alvo e o cabeçalho que a lê como cor; 0: não coube */
+static int prof_cria(int i, int abre) {
+    Prof *z = &sProf[i];
+    D3DTexture *t = NULL;
+    XGTEXTURE_DESC desc;
+    UINT base = 0;
+    if (abre) {
+        const char *antes = (const char *)gGsD3dEtapa;
+        gGsD3dEtapa = "criando a textura de profundidade de um alvo";
+        GsDraw_X360Abre(TAM, TAM, MODO_ALVO); /* (mesmo tamanho de um alvo: 4 MB) */
+        gGsD3dEtapa = antes;
+    }
+    if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() ||
+        FAILED(sDev->CreateTexture(TAM, TAM, 1, 0, D3DFMT_D24S8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
+        return 0;
+    }
+    mem_cria(CL_PROF, tam_alvo());
+    XGGetTextureDesc(t, 0, &desc);
+    XGGetTextureLayout(t, &base, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0);
+    XGSetTextureHeader(TAM, TAM, 1, 0, D3DFMT_A8B8G8R8, (D3DPOOL)0, base, 0, desc.RowPitch, &z->cor, NULL, NULL);
+    z->tex = t;
+    z->conteudo.x0 = z->conteudo.x1 = 0;
+    return 1;
+}
+
+static void prof_solta(int i) {
+    Prof *z = &sProf[i];
+    if (sZDono == i) {
+        sZDono = -1;
+        sSujoZ.x0 = sSujoZ.x1 = 0;
+    }
+    if (z->tex != NULL) {
+        /* o cabeçalho que lê como cor tem a cerca dele: a GPU pode ainda estar lendo a memória por ele */
+        if (z->cor.IsBusy()) {
+            z->cor.BlockUntilNotBusy();
+        }
+        cova(z->tex, CL_PROF, tam_alvo());
+    }
+    z->tex = NULL;
+    z->conteudo.x0 = z->conteudo.x1 = 0;
+    z->falhou = 0;
+}
+
+/* No começo do fim do quadro, antes de refazer a lista (nada dela está na GPU ainda e as texturas do quadro estão
+   protegidas do descarte): a textura de profundidade de cada alvo em que algum desenho escreve z. */
+static void prof_garante(void) {
+    static unsigned char quer[MAX_TARGETS];
+    static unsigned falas;
+    uint32_t n;
+    int i;
+    if (sModoZ == 0) {
+        return;
+    }
+    memset(quer, 0, sizeof(quer));
+    for (n = 0; n < gsDrawCount; n++) {
+        const GsDraw *d = &gsDraws[n];
+        if (d->native == 0 && d->count != 0 && d->target >= 0 && d->target < gsTargetCount &&
+            sPipes[d->pipeline].zwrite && sPipes[d->pipeline].ztst != 0) {
+            quer[d->target] = 1;
+        }
+    }
+    for (i = 0; i < gsTargetCount; i++) {
+        if (!quer[i] || sProf[i].tex != NULL || (sProf[i].falhou != 0 && gGsFrame < sProf[i].falhou + 60)) {
+            continue;
+        }
+        if (prof_cria(i, 1)) {
+            sProf[i].falhou = 0;
+            Diario_Escrever("gs_d3d: profundidade: o alvo %d ganhou a textura de profundidade no quadro %u (%u ao todo, %u KB)",
+                            i, gGsFrame, sMem.nVivos[CL_PROF], sMem.vivos[CL_PROF] >> 10);
+        } else {
+            sProf[i].falhou = gGsFrame | 1;
+            if (falas++ < 20) {
+                Diario_Escrever("gs_d3d: ERRO: profundidade: o alvo %d ficou sem textura de profundidade no quadro %u: livres %u MB "
+                                "(piso %u); a profundidade dele volta zerada, tenta de novo em 60 quadros", i, gGsFrame,
+                                mb_livres(), sMem.pisoMb);
+            }
+        }
+    }
+}
+
+/* A profundidade que está na EDRAM (a do alvo sZDono) volta para a textura dele: só o que os desenhos com escrita de z
+   tocaram desde que ela entrou. Chamada quando outro alvo que usa z vai entrar, no fim do quadro e quando o dono
+   some. Entre uma coisa e outra, as visitas de alvos que não usam z não limpam a profundidade da EDRAM: quando o
+   dono volta, ela ainda está lá, sem resolve nem restauro (o caso das passadas de tela no meio do cenário). */
+static void prof_entrega(void) {
+    if (sZDono >= 0 && sSujoZ.x1 > sSujoZ.x0 && sProf[sZDono].tex != NULL) {
+        Prof *z = &sProf[sZDono];
+        LARGE_INTEGER t;
+        Ret rz = sSujoZ;
+        QueryPerformanceCounter(&t);
+        sDev->SetTexture(0, NULL);
+        sDev->SetTexture(1, NULL);
+        sCurTex = (GsTex)-1;
+        sCurDate = NULL;
+        alinha80(&rz);
+        prof_tira(z, &rz);
+        ret_une(&z->conteudo, rz.x0, rz.y0, rz.x1, rz.y1);
+        sConta.zRes++;
+        sConta.zResPx += (double)(rz.x1 - rz.x0) * (rz.y1 - rz.y0);
+        sConta.msZQuadro += ms_desde(&t);
+    }
+    sZDono = -1;
+    sSujoZ.x0 = sSujoZ.x1 = 0;
+}
+
+/* O alvo da EDRAM volta para a textura dele (só o que foi desenhado desde que entrou). A profundidade não: ela fica
+   na EDRAM até outro alvo que usa z entrar (prof_entrega). */
 static void sai_da_edram(void) {
     Ret r = sSujo;
     D3DRECT fonte;
@@ -746,36 +947,248 @@ static void sai_da_edram(void) {
         destino.x = r.x0; destino.y = r.y0;
         sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sAlvos[sResidente].tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
         ret_une(&sAlvos[sResidente].conteudo, r.x0, r.y0, r.x1, r.y1);
+        sConta.corResPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
     }
     sResidente = -1;
     sSujo.x0 = sSujo.x1 = 0;
 }
 
-/* Põe o alvo i na EDRAM: limpa (cor 0, profundidade 0, como o gs_gl.c limpa um alvo novo) e, se ele já tinha
-   conteúdo, desenha a textura dele de volta por cima. */
-static void entra_na_edram(int i) {
+/* Põe o alvo i na EDRAM: limpa a cor (0) e, se ele já tinha conteúdo, desenha a textura dele de volta por cima.
+   A profundidade (usaZ: algum desenho desta visita testa ou escreve z): se a da EDRAM já é a dele, fica; senão a do
+   dono anterior volta para a textura dele, a EDRAM é limpa (0, como o gs_gl.c limpa um alvo novo) e a dele volta da
+   textura. Uma visita sem z não toca na profundidade. Com BT3_Z=0 (sModoZ 0), o de antes: tudo limpo a cada entrada. */
+static void entra_na_edram(int i, int usaZ) {
     Alvo *a = &sAlvos[i];
     D3DVIEWPORT9 vp = {0, 0, TAM, TAM, 0.0f, 1.0f};
+    DWORD limpa = D3DCLEAR_TARGET;
+    int poeZ = 0;
     sai_da_edram();
+    if (!gsTargets[i].cleared && sZDono == i) {
+        sZDono = -1; /* (novo para o jogo: o que a EDRAM tem dele não vale) */
+        sSujoZ.x0 = sSujoZ.x1 = 0;
+    }
+    if (sModoZ == 0) {
+        limpa |= D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL;
+    } else if (usaZ) {
+        sConta.zVisitas++;
+        sConta.zSemTex += sProf[i].tex == NULL;
+        if (sZDono == i) {
+            sConta.zMantida++;
+        } else {
+            prof_entrega();
+            limpa |= D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL;
+            poeZ = 1;
+        }
+    }
     sDev->SetRenderTarget(0, sEdramCor);
     sDev->SetDepthStencilSurface(sEdramProf);
     sDev->SetViewport(&vp);
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
-    sDev->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0x00000000, 0.0f, 0);
+    sDev->Clear(0, NULL, limpa, 0x00000000, 0.0f, 0);
     if (!gsTargets[i].cleared) {
         a->conteudo.x0 = a->conteudo.x1 = 0; /* novo para o jogo: começa limpo */
-    } else if (a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
-        Ret r = a->conteudo;
-        copia(a->tex, TAM, TAM, (float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1, (float)r.x0 / TAM, (float)r.y0 / TAM,
-              (float)r.x1 / TAM, (float)r.y1 / TAM, 0);
-        sConta.restauros++;
+        sProf[i].conteudo.x0 = sProf[i].conteudo.x1 = 0;
+    } else {
+        if (a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
+            Ret r = a->conteudo;
+            copia(a->tex, TAM, TAM, (float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1, (float)r.x0 / TAM, (float)r.y0 / TAM,
+                  (float)r.x1 / TAM, (float)r.y1 / TAM, 0);
+            sConta.restauros++;
+            sConta.corRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+        }
+        if (poeZ && sProf[i].tex != NULL && sProf[i].conteudo.x1 > sProf[i].conteudo.x0) {
+            LARGE_INTEGER t;
+            Ret r = sProf[i].conteudo;
+            QueryPerformanceCounter(&t);
+            prof_poe(&sProf[i], &r, sModoZ);
+            sConta.zRest++;
+            sConta.zRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+            sConta.msZQuadro += ms_desde(&t);
+        }
+    }
+    if (poeZ) {
+        sZDono = i;
     }
     esquece_estado();
     sResidente = i;
     sSujo.x0 = sSujo.x1 = 0;
     sConta.trocas++;
+}
+
+/* ---- profundidade: o autoteste do boot (F5, etapa 7) -------------------------------------------------------- */
+
+/* Quantas palavras de a e b são iguais: inteiras, sem o byte baixo e sem o alto (qual dos dois é o stencil na memória
+   não importa aqui: o modo 2 não restaura o stencil); nz: quantas de a não são zero (o padrão foi mesmo escrito). */
+static void prof_compara(D3DTexture *a, D3DTexture *b, unsigned c[5]) {
+    D3DLOCKED_RECT ra, rb;
+    unsigned n, k;
+    c[0] = c[1] = c[2] = c[3] = c[4] = 0;
+    if (FAILED(a->LockRect(0, &ra, NULL, D3DLOCK_READONLY))) {
+        return;
+    }
+    if (FAILED(b->LockRect(0, &rb, NULL, D3DLOCK_READONLY))) {
+        a->UnlockRect(0);
+        return;
+    }
+    n = (unsigned)ra.Pitch / 4 * TAM;
+    c[4] = n;
+    for (k = 0; k < n; k++) {
+        unsigned x = ((const unsigned *)ra.pBits)[k], y = ((const unsigned *)rb.pBits)[k];
+        c[0] += x == y;
+        c[1] += (x & 0xFFFFFF00u) == (y & 0xFFFFFF00u);
+        c[2] += (x & 0x00FFFFFFu) == (y & 0x00FFFFFFu);
+        c[3] += x != 0;
+    }
+    b->UnlockRect(0);
+    a->UnlockRect(0);
+}
+
+/* o tempo da GPU de `vezes` chamadas de f (com a GPU parada antes e depois), em ms por chamada */
+static double prof_cronometra(void (*f)(void *), void *ctx, int vezes) {
+    LARGE_INTEGER t;
+    int k;
+    sDev->BlockUntilIdle();
+    QueryPerformanceCounter(&t);
+    for (k = 0; k < vezes; k++) {
+        f(ctx);
+    }
+    sDev->BlockUntilIdle();
+    return ms_desde(&t) / vezes;
+}
+static const Ret kInteiro = {0, 0, TAM, TAM};
+static void cr_zres(void *z) { prof_tira((Prof *)z, &kInteiro); }
+static void cr_zcor(void *z) { prof_poe((Prof *)z, &kInteiro, 1); }
+static void cr_zprof(void *z) { prof_poe((Prof *)z, &kInteiro, 2); }
+static void cr_corres(void *t) {
+    D3DRECT fonte = {0, 0, TAM, TAM};
+    D3DPOINT destino = {0, 0};
+    sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, (D3DTexture *)t, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+}
+static void cr_correst(void *t) { copia((D3DTexture *)t, TAM, TAM, 0.0f, 0.0f, (float)TAM, (float)TAM, 0.0f, 0.0f, 1.0f, 1.0f, 0); }
+
+/* Antes do primeiro quadro: um padrão de bits qualquer (pseudoaleatório, sem período de 40 nem de 80 colunas) é
+   escrito como cor na profundidade da EDRAM e resolvido (A); a EDRAM é limpa, A volta por um modo e é resolvida de
+   novo (B); A e B têm de ser iguais. O controle (B sem restauro, tudo zero) tem de dar diferente: prova que a
+   comparação acusa. Mede também a GPU do restauro e do resolve de um alvo inteiro, de cor e de profundidade. Escolhe
+   o modo: BT3_Z=0 desliga (a profundidade volta zerada, como antes), 1 ou 2 força; sem ele, o 1 se for exato em todos
+   os bits, senão o 2 se for exato na profundidade, senão desligado com ERRO. */
+static void prof_autoteste(void) {
+    D3DVIEWPORT9 vp = {0, 0, TAM, TAM, 0.0f, 1.0f}, vpz = {0, 0, TAMZ, TAM, 0.0f, 1.0f};
+    const char *pedido = getenv("BT3_Z");
+    int forcado = pedido != NULL && *pedido != '\0' ? atoi(pedido) : -1, modo, exato[3] = {0, 0, 0};
+    unsigned c[3][5], ctl[5], total, x = 12345u, k;
+    D3DTexture *pad = NULL;
+    D3DLOCKED_RECT r;
+    Prof za, zb;
+    double ms[3] = {0, 0, 0};
+
+    memset(&za, 0, sizeof(za));
+    memset(&zb, 0, sizeof(zb));
+    memset(c, 0, sizeof(c));
+    sModoZ = 0;
+    if (forcado == 0) {
+        Diario_Escrever("gs_d3d: profundidade: desligada (BT3_Z=0): cada alvo volta para a EDRAM com a profundidade zerada");
+        return;
+    }
+    if (TAM != 1024 || sEdramProfCor == NULL || sPsZCor == NULL || sPsZProf == NULL) {
+        Diario_Escrever("gs_d3d: ERRO: profundidade: sem a superfície ou os shaders do restauro; desligada");
+        return;
+    }
+    gGsD3dEtapa = "autoteste da profundidade";
+    Diario_Escrever("gs_d3d: profundidade: autoteste (2 texturas D24S8 de %u KB e o padrão de 256 KB, soltas no fim)",
+                    tam_alvo() >> 10);
+    if (FAILED(sDev->CreateTexture(256, 256, 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &pad, NULL)) || pad == NULL ||
+        !prof_cria(MAX_TARGETS - 1, 0)) {
+        Diario_Escrever("gs_d3d: ERRO: profundidade: as texturas do autoteste não foram criadas; desligada");
+        if (pad != NULL) pad->Release();
+        return;
+    }
+    za = sProf[MAX_TARGETS - 1];
+    sProf[MAX_TARGETS - 1].tex = NULL;
+    if (!prof_cria(MAX_TARGETS - 1, 0)) {
+        Diario_Escrever("gs_d3d: ERRO: profundidade: as texturas do autoteste não foram criadas; desligada");
+        pad->Release();
+        za.tex->Release();
+        sMem.vivos[CL_PROF] -= tam_alvo();
+        sMem.nVivos[CL_PROF]--;
+        return;
+    }
+    zb = sProf[MAX_TARGETS - 1];
+    memset(&sProf[MAX_TARGETS - 1], 0, sizeof(Prof));
+    if (SUCCEEDED(pad->LockRect(0, &r, NULL, 0))) {
+        for (k = 0; k < 256u * (unsigned)r.Pitch / 4; k++) {
+            x = x * 1664525u + 1013904223u;
+            ((unsigned *)r.pBits)[k] = x ^ (x >> 16);
+        }
+        pad->UnlockRect(0);
+    }
+    for (modo = 0; modo <= 2; modo++) { /* (o 0 é o controle: sem restauro) */
+        /* o padrão como cor na profundidade da EDRAM (uns 4 x 4 pixels por texel, os 13 tiles) e resolvido em A */
+        sDev->SetDepthStencilSurface(NULL);
+        sDev->SetRenderTarget(0, sEdramProfCor);
+        sDev->SetViewport(&vpz);
+        copia(pad, TAMZ, TAM, 0.0f, 0.0f, (float)TAMZ, (float)TAM, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+        sDev->SetTexture(0, NULL);
+        sDev->SetRenderTarget(0, sEdramCor);
+        sDev->SetDepthStencilSurface(sEdramProf);
+        sDev->SetViewport(&vp);
+        prof_tira(&za, &kInteiro);
+        sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
+        sDev->Clear(0, NULL, D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0, 0.0f, 0);
+        if (modo != 0) {
+            prof_poe(&za, &kInteiro, modo);
+        }
+        prof_tira(&zb, &kInteiro);
+        sDev->BlockUntilIdle();
+        prof_compara(za.tex, zb.tex, modo == 0 ? ctl : c[modo]);
+    }
+    total = TAM * TAM;
+    exato[1] = c[1][0] == total && c[1][4] == total;
+    exato[2] = c[2][1] == total || c[2][2] == total;
+    Diario_Escrever("gs_d3d: profundidade: autoteste com %u pixels, %u do padrão não nulos; controle sem restauro: %u iguais "
+                    "(tem de ser perto de 0); modo 1 (como cor): %u iguais, %u sem o byte baixo, %u sem o alto; modo 2 "
+                    "(oDepth): %u iguais, %u sem o byte baixo, %u sem o alto",
+                    total, ctl[3], ctl[0], c[1][0], c[1][1], c[1][2], c[2][0], c[2][1], c[2][2]);
+    /* o tempo da GPU, um alvo inteiro (1024 x 1024) por chamada, 8 vezes */
+    sMsZRes = prof_cronometra(cr_zres, &za, 8);
+    ms[1] = prof_cronometra(cr_zcor, &za, 8);
+    ms[2] = prof_cronometra(cr_zprof, &za, 8);
+    /* a cor, com a EDRAM e o sDate zerados (o sDate continua zerado, como foi criado) */
+    sDev->SetTexture(0, NULL);
+    sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    sDev->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0, 0.0f, 0);
+    sMsCorRes = prof_cronometra(cr_corres, sDate, 8);
+    sMsCorRest = prof_cronometra(cr_correst, sDate, 8);
+    sDev->SetTexture(0, NULL);
+    sDev->BlockUntilIdle();
+    if (forcado == 1 || forcado == 2) {
+        modo = forcado;
+    } else {
+        modo = exato[1] && ctl[0] < total / 2 ? 1 : exato[2] && ctl[0] < total / 2 ? 2 : 0;
+    }
+    sModoZ = modo;
+    sMsZRest = modo != 0 ? ms[modo] : 0.0;
+    Diario_Escrever("gs_d3d: profundidade: GPU por alvo inteiro (1024 x 1024): resolve %.3f ms, restauro como cor %.3f ms, "
+                    "pelo oDepth %.3f ms; a cor: resolve %.3f ms, restauro %.3f ms", sMsZRes, ms[1], ms[2], sMsCorRes, sMsCorRest);
+    Diario_Escrever("gs_d3d: profundidade: %s modo %d (%s)%s; EDRAM sem tile a mais (a cor vista na base da profundidade); "
+                    "RAM: %u KB por alvo que escreve z, criada só para esses", forcado > 0 ? "forçado o" : "escolhido o", modo,
+                    modo == 1 ? "restauro como cor" : modo == 2 ? "restauro pelo oDepth" : "desligada",
+                    modo == 0 && forcado != 0 ? ": ERRO: nenhum modo exato, a profundidade volta zerada como antes" : "",
+                    tam_alvo() >> 10);
+    za.cor.BlockUntilNotBusy();
+    zb.cor.BlockUntilNotBusy();
+    za.tex->Release();
+    zb.tex->Release();
+    pad->Release();
+    sMem.vivos[CL_PROF] -= 2 * tam_alvo();
+    sMem.nVivos[CL_PROF] -= 2;
+    sDev->SetRenderTarget(0, sTela);
+    sDev->SetDepthStencilSurface(NULL);
+    esquece_estado();
+    gGsD3dEtapa = "antes do primeiro quadro";
 }
 
 /* ---- init ---------------------------------------------------------------------------------------------------- */
@@ -892,6 +1305,8 @@ static int d3d_init(void) {
     if (FAILED(sDev->CreateVertexShader((const DWORD *)kGsVs, &sVsGs)) || FAILED(sDev->CreatePixelShader((const DWORD *)kGsPs, &sPsGs)) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kCopiaVs, &sVsCopia)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kCopiaPs, &sPsCopia)) || FAILED(sDev->CreateVertexDeclaration(elemGs, &sDeclGs)) ||
+        FAILED(sDev->CreatePixelShader((const DWORD *)kZCorPs, &sPsZCor)) ||
+        FAILED(sDev->CreatePixelShader((const DWORD *)kZProfPs, &sPsZProf)) ||
         FAILED(sDev->CreateVertexDeclaration(elemCopia, &sDeclCopia)) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kVu0Vs, &sVsVu[0])) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kVu4Vs, &sVsVu[1])) ||
@@ -916,6 +1331,13 @@ static int d3d_init(void) {
         Diario_Escrever("gs_d3d: ERRO na profundidade da EDRAM");
         return 0;
     }
+    /* (F5, etapa 7) a mesma EDRAM da profundidade vista como cor, para o restauro como cor (exemplo FastDepthRestore) */
+    if (XGSurfaceSize(TAMZ, TAM, D3DFMT_A8B8G8R8, D3DMULTISAMPLE_NONE) != tilesProf ||
+        FAILED(sDev->CreateRenderTarget(TAMZ, TAM, D3DFMT_A8B8G8R8, D3DMULTISAMPLE_NONE, 0, FALSE, &sEdramProfCor, &sp))) {
+        Diario_Escrever("gs_d3d: ERRO na profundidade da EDRAM vista como cor (%ux%u, %u tiles contra %u)", TAMZ, TAM,
+                        XGSurfaceSize(TAMZ, TAM, D3DFMT_A8B8G8R8, D3DMULTISAMPLE_NONE), tilesProf);
+        sEdramProfCor = NULL;
+    }
     if (FAILED(sDev->CreateTexture(1, 1, 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &sBranco, NULL)) ||
         FAILED(sBranco->LockRect(0, &r, NULL, 0))) {
         Diario_Escrever("gs_d3d: ERRO na textura branca");
@@ -937,6 +1359,11 @@ static int d3d_init(void) {
     sDev->SetRenderState(D3DRS_HIZWRITEENABLE, D3DHIZ_DISABLE);
     aplica_sampler(1, 2 | 4);
     esquece_estado();
+    if (tam_real(TAM, TAM, D3DFMT_D24S8) != tam_alvo()) {
+        Diario_Escrever("gs_d3d: ERRO: a textura D24S8 tem %u KB e a contagem usa %u KB", tam_real(TAM, TAM, D3DFMT_D24S8) >> 10,
+                        tam_alvo() >> 10);
+    }
+    prof_autoteste();
     Diario_Escrever("gs_d3d: pronto; alvo %dx%d, EDRAM: cor %u + profundidade %u de %u tiles; %u MB livres", TAM, TAM,
                     tilesCor, tilesProf, (unsigned)EDRAM_TILES, mb_livres());
     if (tilesCor + tilesProf > EDRAM_TILES) {
@@ -1132,6 +1559,9 @@ static void desenha(const GsDraw *d) {
         feitos += n;
     }
     ret_une(&sSujo, a.x0, a.y0, a.x1, a.y1);
+    if (p->zwrite && p->ztst != 0) {
+        ret_une(&sSujoZ, a.x0, a.y0, a.x1, a.y1);
+    }
     sConta.desenhos++;
     sConta.vertices += d->count;
     if (d->count > sConta.maiorDesenho) sConta.maiorDesenho = d->count;
@@ -1151,6 +1581,9 @@ static void desenha_vu(const GsDraw *d, uint32_t ini) {
     }
     sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count);
     ret_une(&sSujo, a.x0, a.y0, a.x1, a.y1);
+    if (sPipes[d->pipeline].zwrite && sPipes[d->pipeline].ztst != 0) {
+        ret_une(&sSujoZ, a.x0, a.y0, a.x1, a.y1);
+    }
     sConta.desenhos++;
     sConta.vertices += d->count;
     sConta.vuFeitos[d->vu - 1]++;
@@ -1242,18 +1675,21 @@ static void log_memoria_zera(void) {
 /* A memória no trecho de 60 quadros: bytes vivos e pendentes por classe, o resto do sistema, o mínimo livre visto,
    os descartes, as esperas pela GPU, as brancas por motivo e o máximo de cada buffer (CHEIO quando chegou ao fim). */
 static void log_memoria(void) {
-    unsigned nosso = sMem.vivos[CL_TEX] + sMem.vivos[CL_ALVO] + sMem.pend[CL_TEX] + sMem.pend[CL_ALVO] + sMem.buffers;
+    unsigned nosso = sMem.vivos[CL_TEX] + sMem.vivos[CL_ALVO] + sMem.pend[CL_TEX] + sMem.pend[CL_ALVO] + sMem.buffers +
+                     sMem.vivos[CL_PROF] + sMem.pend[CL_PROF];
     unsigned usado = sMem.total > sMem.livres ? sMem.total - sMem.livres : 0;
     unsigned brancas = 0;
     int i;
     for (i = 1; i < BR_N; i++) {
         brancas += sMem.branca[i];
     }
-    Diario_Escrever("gs_d3d:   memória: texturas %u (%u KB, teto %u MB), alvos %u (%u KB), pendentes %u + %u (%u KB + %u KB), "
-                    "buffers %u KB; resto do jogo e do sistema %d MB; livres %u MB, mínimo visto %u MB (piso %u)",
+    Diario_Escrever("gs_d3d:   memória: texturas %u (%u KB, teto %u MB), alvos %u (%u KB), profundidades %u (%u KB), pendentes "
+                    "%u + %u + %u (%u KB + %u KB + %u KB), buffers %u KB; resto do jogo e do sistema %d MB; livres %u MB, mínimo "
+                    "visto %u MB (piso %u)",
                     sMem.nVivos[CL_TEX], sMem.vivos[CL_TEX] >> 10, sMem.texTetoMb, sMem.nVivos[CL_ALVO],
-                    sMem.vivos[CL_ALVO] >> 10, sMem.nPend[CL_TEX], sMem.nPend[CL_ALVO], sMem.pend[CL_TEX] >> 10,
-                    sMem.pend[CL_ALVO] >> 10, sMem.buffers >> 10, ((int)usado - (int)nosso) / (int)MB, sMem.livres >> 20,
+                    sMem.vivos[CL_ALVO] >> 10, sMem.nVivos[CL_PROF], sMem.vivos[CL_PROF] >> 10, sMem.nPend[CL_TEX],
+                    sMem.nPend[CL_ALVO], sMem.nPend[CL_PROF], sMem.pend[CL_TEX] >> 10, sMem.pend[CL_ALVO] >> 10,
+                    sMem.pend[CL_PROF] >> 10, sMem.buffers >> 10, ((int)usado - (int)nosso) / (int)MB, sMem.livres >> 20,
                     sMem.livresMin >> 20, sMem.pisoMb);
     Diario_Escrever("gs_d3d:   descarte: %u pressões, %u texturas (%u KB), %u esperas pela GPU, %u acima do teto no trecho; desde o "
                     "começo %u pressões, %u texturas (%.0f MB), %u esperas; brancas no trecho %u (sem espaço %u, cache cheio %u, criação "
@@ -1309,6 +1745,23 @@ static void log_vu1_zera(void) {
     gGsVu1InstrDesc = 0;
 }
 
+/* F5, etapa 7: a profundidade no trecho, por quadro: resolves e restauros com os pixels, as visitas que usaram z,
+   a CPU das chamadas e a GPU estimada pelo autoteste (ms por pixel de um alvo inteiro), com a da cor ao lado */
+static void log_prof(unsigned t) {
+    double px = (double)TAM * TAM, gz = (sConta.zResPx * sMsZRes + sConta.zRestPx * sMsZRest) / px / t,
+           gc = (sConta.corResPx * sMsCorRes + sConta.corRestPx * sMsCorRest) / px / t;
+    if (sModoZ == 0) {
+        return;
+    }
+    Diario_Escrever("gs_d3d:   profundidade (modo %d), por quadro: %.1f resolves (%.0f mil pixels), %.1f restauros (%.0f mil "
+                    "pixels), %.1f visitas com z de %.1f trocas (%.1f com a profundidade ainda na EDRAM), %u sem textura no trecho; CPU %.3f ms (pior %.3f); GPU "
+                    "estimada %.2f ms (a cor: %.2f ms); %u alvos com profundidade (%u KB)",
+                    sModoZ, (double)sConta.zRes / t, sConta.zResPx / t / 1000.0, (double)sConta.zRest / t,
+                    sConta.zRestPx / t / 1000.0, (double)sConta.zVisitas / t, (double)sConta.trocas / t, (double)sConta.zMantida / t,
+                    sConta.zSemTex,
+                    sConta.msZ / t, sConta.msZPior, gz, gc, sMem.nVivos[CL_PROF], sMem.vivos[CL_PROF] >> 10);
+}
+
 static void log_quadros(void) {
     /* os tempos sem os quadros que tiveram captura (cada uma pesa centenas de ms e encobria o resto) */
     unsigned q = sConta.quadros, t = sConta.quadros + sConta.capturas;
@@ -1344,8 +1797,30 @@ static void log_quadros(void) {
                     sConta.semTextura, mb_livres());
     log_vu1(t);
     log_vu1_zera();
+    log_prof(t);
     log_memoria();
     memset(&sConta, 0, sizeof(sConta));
+}
+
+/* (profundidade) se algum desenho da visita que começa em n, no alvo t, testa ou escreve z: só então a profundidade
+   do alvo volta para a EDRAM (as trocas de alvo das passadas de tela, que não usam z, não pagam o restauro) */
+static int usa_z(uint32_t n, int t) {
+    if (sModoZ == 0) {
+        return 0;
+    }
+    for (; n < gsDrawCount; n++) {
+        const GsDraw *d = &gsDraws[n];
+        if (d->native != 0 || (d->vu && sVuIni[n] == ~0u)) {
+            continue; /* (os pulados não mudam de alvo) */
+        }
+        if (d->target != t) {
+            return 0;
+        }
+        if (sPipes[d->pipeline].zwrite || sPipes[d->pipeline].ztst >= 2) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static void frame_end(void) {
@@ -1370,6 +1845,10 @@ static void frame_end(void) {
                         gsDrawCount, gsVertCount, gsVuVertCount, gsTargetCount, gsTexCount);
     }
     sDateFonte = NULL;
+    gGsD3dEtapa = "fim do quadro: texturas de profundidade";
+    prof_garante();
+    gGsD3dEtapa = "fim do quadro: refazendo a lista";
+    sConta.msZQuadro = 0.0;
     {
         /* F5, etapa 6: o tempo da VU1 na gravação do quadro (gs_vu1.c) e a cópia das três famílias para a GPU */
         double g = gGsVu1Ms;
@@ -1427,7 +1906,7 @@ static void frame_end(void) {
             }
         }
         if (cur != d->target || sResidente != d->target) {
-            entra_na_edram(d->target);
+            entra_na_edram(d->target, usa_z(n, d->target));
             gsTargets[d->target].cleared = 1;
             cur = d->target;
         }
@@ -1443,6 +1922,9 @@ static void frame_end(void) {
     if (msVu > sConta.msVuDesPior) sConta.msVuDesPior = msVu;
     gGsD3dEtapa = "fim do quadro: o último alvo volta para a textura";
     sai_da_edram();
+    prof_entrega(); /* (nada fica na EDRAM entre quadros: a Guide e o present podem usá-la) */
+    sConta.msZ += sConta.msZQuadro;
+    if (sConta.msZQuadro > sConta.msZPior) sConta.msZPior = sConta.msZQuadro;
     if (sPassoAPasso > 0) {
         Diario_Escrever("gs_d3d: quadro %u (luta): lista refeita (maior desenho até aqui %u vértices)", gGsFrame,
                         sConta.maiorDesenho);

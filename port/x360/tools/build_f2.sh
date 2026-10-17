@@ -43,7 +43,7 @@ docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app 
   ok=0
   # os shaders: compilados aqui, nunca no boot
   H=port/x360/src/gs/gs_d3d.hlsl
-  for e in vs_gs:vs_3_0:kGsVs:gs_vs ps_gs:ps_3_0:kGsPs:gs_ps vs_copia:vs_3_0:kCopiaVs:copia_vs ps_copia:ps_3_0:kCopiaPs:copia_ps vs_vu0:vs_3_0:kVu0Vs:vu0_vs vs_vu4:vs_3_0:kVu4Vs:vu4_vs vs_vu6:vs_3_0:kVu6Vs:vu6_vs; do
+  for e in vs_gs:vs_3_0:kGsVs:gs_vs ps_gs:ps_3_0:kGsPs:gs_ps vs_copia:vs_3_0:kCopiaVs:copia_vs ps_copia:ps_3_0:kCopiaPs:copia_ps ps_zcor:ps_3_0:kZCorPs:zcor_ps ps_zprof:ps_3_0:kZProfPs:zprof_ps vs_vu0:vs_3_0:kVu0Vs:vu0_vs vs_vu4:vs_3_0:kVu4Vs:vu4_vs vs_vu6:vs_3_0:kVu6Vs:vu6_vs; do
     IFS=: read n t v a <<< "$e"
     wine /xdk/bin/win32/fxc.exe /nologo /T $t /E $n /Fh '"$OUT"'/shaders/$a.h /Vn $v $H > '"$OUT"'/shaders/$a.txt 2>&1 || { cat '"$OUT"'/shaders/$a.txt; ok=1; }
   done

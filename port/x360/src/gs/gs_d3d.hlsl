@@ -111,6 +111,30 @@ float4 ps_copia(float2 uv : TEXCOORD0) : COLOR0 {
     return tex2D(tex, uv);
 }
 
+// ---- F5, etapa 7: a profundidade de um alvo de volta para a EDRAM (os dois restauros do exemplo FastDepthRestore
+// do XDK). O vs_copia leva o retângulo; uv é o pixel sobre 1024 (o lado do alvo, TAM), no centro do pixel.
+
+// Como cor (modo 1, exato em todos os bits): a superfície de cor posta na mesma base da profundidade da EDRAM recebe os
+// bits da textura D24S8 lida como A8B8G8R8. Dentro de cada tile de 80 pixels, as metades de 40 colunas da
+// profundidade e da cor estão trocadas: o pixel x da cor é o x + 40 da profundidade na metade esquerda e o x - 40 na
+// direita. A amostragem é no ponto, presa na borda.
+float4 ps_zcor(float2 uv : TEXCOORD0) : COLOR0 {
+    float x = uv.x * 1024.0f;
+    x += frac(x / 80.0f) < 0.5f ? 40.0f : -40.0f;
+    return tex2D(tex, float2(x / 1024.0f, uv.y));
+}
+
+// Pelo oDepth (modo 2): a textura D24S8 lida como profundidade (no .x) e escrita como profundidade; o stencil não
+// volta (o jogo não usa). Exato se a conversão de 24 bits para float e de volta não arredondar diferente: o
+// autoteste do boot mede.
+struct ZSaida { float4 cor : COLOR0; float z : DEPTH; };
+ZSaida ps_zprof(float2 uv : TEXCOORD0) {
+    ZSaida s;
+    s.cor = 0.0f;
+    s.z = tex2D(tex, uv).x;
+    return s;
+}
+
 // ---- programas de vértice da VU1, família vu0 (F5, etapa 6): tradução de port/src/gs/shaders/vu0.vert
 // Usada pelos programas 0, 1, 2a/2b, 7 e 8 (camadas 0 a 5 em misc.w). O pixel shader é o ps_gs acima.
 
