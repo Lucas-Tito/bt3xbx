@@ -493,3 +493,21 @@ No `log_quadros` (trecho de 60 quadros), em `port/x360/` apenas, sem tocar o `gs
 - As estimativas de GPU (0,1 a 0,6 ms por passada, 3 a 5 ms por quadro) são ordem de grandeza da taxa de preenchimento e
   de Resolve do Xenos, as mesmas premissas do 07.md da primeira parte; só o console mede.
 - O `ChrView` e o Shenlong não foram olhados: se emitem nativos, a lista da seção 1 cresce.
+
+## 9. O que a implementação conferiu (segunda parte da etapa 7)
+
+Implementada na ordem da seção 6 menos o passo 5 ([plano/F5/07.md](../plano/F5/07.md), segunda parte). O que a leitura
+não sabia ou acertou só em parte:
+
+- **A leitura da D24S8 no pixel shader.** A rodada da primeira parte mostrou o modo 2 do autoteste inexato (2.208 de
+  1.048.576 iguais, 525.612 sem o byte baixo): o `tex2D(...).x` da D24S8 vem com erro nos bits baixos. A seção 3.3
+  sugeria então remontar os 24 bits pelo `Prof.cor`; a implementação lê o `.x` mesmo (a névoa usa os bits 8 a 15
+  numa escala de 16 bits) e o autoteste das nativas mede com tolerância de 1 no índice, desligando as de névoa se não
+  bater.
+- **A cópia dos ids fora da EDRAM (3.4).** Não há cópia de textura para textura sem passar pela EDRAM: o alvo de origem
+  entra nela como numa visita comum e a cópia é o mesmo Resolve.
+- **O FBA em duas passadas (3.6).** Não precisou de um modo novo do `ps_gs`: a constante do FBA já é a segunda passada;
+  a primeira só a zera.
+- **A chave (3.2) confirmada no código do jogo:** `GfxAlphaKey_BuildClut` dá cor 0 e alfa 0 no índice 0xFF, com a
+  mistura 0x44, então sem o byte exato ela não desenha nada (não tinge a tela).
+- O `BT3_FX_OFF` é lido pelo `gs_draw.c` depois do `init` do backend: o valor sai nas linhas de trecho, não no boot.
