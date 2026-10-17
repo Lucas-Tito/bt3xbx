@@ -133,6 +133,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `dat360.py` | `default.dat` e `default.swap` ao lado do `.xex`, pelo `.map` da Microsoft (o `esqueleto()` do `headless.py` para o 360) |
 | `subir.py --baixar-pasta shots --para DIR` | baixa uma pasta inteira do console (as capturas do `BT3_SHOT`); só no WSL, porque são imagens do jogo |
 | `compara_quadros.py` | capturas do console (`gpu_NNNNN.ppm`) contra as do rasterizador de software (`frame_NNNNN.ppm`), por fase e pelos piores quadros: pixels iguais, até 2 e até 8 de diferença, erro médio, PSNR, imagens pretas. Roda no WSL; só números voltam |
+| `ppm_stats.py` | triagem de capturas sem PIL nem numpy (o WSL só tem a biblioteca padrão): `png` (converte, recorta e amplia, para ver a imagem), `patch` (luminância de um retângulo), `stats` (luminância média, % saturado, % escuro, gradiente horizontal = nitidez da área 3D). Recusa arquivo truncado ou que não seja P6 |
 | `subir_f2.sh` | envia o `.xex` sempre junto com o `.dat` e o `.swap` da mesma build: os dois dependem dos endereços do `.map`, e um par de outra build copia as tabelas para o lugar errado sem erro nenhum |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
@@ -1139,6 +1140,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   do frontend (`gs_draw.c`) só varre por idade com 8.192 entradas, então nada saía. Num console com memória fixa, o
   teto tem de vir com o descarte de quem é dono do cache (o frontend), contando também o que espera a GPU, e cada
   textura branca tem de dizer no log por que saiu branca (F5, etapa 1, plano/F5/01.md).
+- **Triagem de defeito de imagem: leia o que o 360 NÃO faz antes de reler o shader traduzido.** Na segunda parte da
+  etapa 6 da F5 os seis defeitos do cenário (lavado, borrado, preto, lutador por cima, sombra por cima e preta, HUD
+  esquisito) pareciam da tradução dos shaders; a leitura lado a lado do HLSL com o `.vert` e o `gs.frag` não achou
+  diferença (mesma escala de cor, sem névoa, sem mipmap dos dois lados) e todos os candidatos estavam no que o 360
+  deixa de fazer em relação ao PC: profundidade zerada a cada entrada na EDRAM (42 trocas de alvo por quadro), as
+  passadas nativas contadas e puladas (`nativos .../360/...` no log) e o alfa saturado. A ordem que poupou tempo:
+  contadores do log, medidas das capturas (`ppm_stats.py`) contra a referência, e só então o shader. Nitidez e
+  saturação medidas na área 3D (fora da caixa da pausa) dão ordem de grandeza; o viés do rasterizador de software
+  (textura lida no ponto) é de uns 15% no gradiente, então 2 a 8 vezes é defeito. Quando a causa é uma passada de
+  tela, `BT3_FX_OFF=8|16|24` no `ambiente.txt` (pelo código valem no 360, sem build nova; ainda não testados lá) a separa em uma rodada.
 
 ---
 
