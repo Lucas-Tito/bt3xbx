@@ -720,8 +720,8 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None, roteiro
         print(f"{pre}DIFERENÇA: memória: {l}")
         ok = False
     if tela is not None and str(tela).startswith("ponto_"):
-        # (F5, etapa 3) um ponto da luta ("marca ponto NOME"): só o critério geral, sem conteúdo exigido
-        print(f"{pre}  {tela}: o critério geral (os conteúdos da luta campo a campo ficam para a etapa 5 da F5)")
+        # (F5, etapa 5) o contexto vivo já conferiu tipos, donos e vida útil do ponto da luta.
+        print(f"{pre}  {tela}: memória comparada por tipo, dono e vida útil no contexto vivo")
     elif tela is not None and not str(tela).isdigit():
         # um passo "marca memoria CONTEÚDO" (vblanks_mem): aquele conteúdo vivo e conforme
         rel = str(tela).replace("_", "/", 1)

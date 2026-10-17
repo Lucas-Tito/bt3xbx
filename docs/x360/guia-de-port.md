@@ -1237,3 +1237,22 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   precisa guardar esse detalhe antes de consultar `LARGURA_CONHECIDA`; só reconhecer "outra largura"
   e "tratou como byte" rejeitava as duas posições do HUD mesmo com o leitor correto registrado.
   A forma nova continua exigindo posição, largura e leitores da entrada específica, sem aceitar o resto.
+
+- **Marca de carga não garante arena criada.** Em `f5_treino`, o ponto 4166 ainda tem zero subalocações
+  de `BtlPool`, embora os pools GSC já existam. Combate 4560 e técnica 4722 têm 350. Preserve os pontos
+  acordados e registre a vida útil observada, sem declarar uma arena viva só pelo nome da marca.
+- **Existir o arquivo não significa terminar o veredito.** O redirecionamento cria `memoria.txt` antes
+  de o julgador escrever. Um acompanhamento em paralelo deve aguardar a linha final `memória igual`
+  ou `memória diferente`; ler o arquivo recém-criado causou uma recusa de relatório vazio, com o
+  resultado oficial correto logo depois. A prova faltante foi rodada sobre o relatório fechado.
+- **Hash precoce exige conferir o rastro anterior.** Repetir `historia_novo` sobre um cartão já criado
+  muda o boot; um `BT3_MEMORIA_SAIR` anterior ao prazo do roteiro pode sair com 0 no fluxo errado.
+  Apague apenas os cartões gerados da própria sonda e seus produtos antigos, confirme o início GSC
+  e o evento esperado antes de aceitar o dump e exija os estados vivos que a prova pretende alcançar.
+- **Teste reinício com reutilização do endereço.** O contrato de `x360_memoria.o`, ligado ao objeto
+  real da build, conferiu geração 1 após reset e reutilização, remoção no free do slot 8, fim vazio e
+  nova inicialização em geração 0 nas duas arquiteturas. Tamanho inválido aciona a falha do testemunho.
+- **O pgrep pode encontrar o próprio comando inline.** Ao criar e executar no mesmo `bash -c` um
+  controlador cujo texto contém `qemu` ou `roteiros`, a busca encontra esse bash. Confira os PIDs e
+  os comandos completos; execute o controlador por arquivo em outra chamada, mantendo a regra de
+  um emulador por vez. Não trate uma linha do shell como um segundo emulador real.

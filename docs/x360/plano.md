@@ -39,8 +39,8 @@ Resumo (texto completo em [plano/base.md](plano/base.md)):
 | F2 | concluída | idem |
 | F3 | concluída | [plano/F3.md](plano/F3.md) |
 | F4 | concluída (16/10/2026): rodada completa no WSL e sessão no console com o Lucas | [plano/F4/00-escopo.md](plano/F4/00-escopo.md) |
-| F5 | em andamento: etapas 2 (lado do PC), 3 e 4 feitas no WSL e no Deck; 5 com o Codex; 1 espera o console | [plano/F5/00-escopo.md](plano/F5/00-escopo.md) |
-| F6 | plano proposto (17/10/2026), por implementar; a etapa 1 (estado do som no 360) pode entrar na F5 | [plano/F6/00-escopo.md](plano/F6/00-escopo.md) |
+| F5 | em andamento: etapas 1 a 5 concluídas ([5](plano/F5/05.md) no WSL); a 6 com os lutadores no console e o cenário por testar; 7 e 8 por fazer | [plano/F5/00-escopo.md](plano/F5/00-escopo.md) |
+| F6 | plano decidido (decisão 25), por implementar | [plano/F6/00-escopo.md](plano/F6/00-escopo.md) |
 | F7 a F9 | por fazer | só a entrega da tabela acima |
 
 ### F4, etapas (13/10/2026)
