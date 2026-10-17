@@ -102,6 +102,10 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
   as tabelas do disco. Na sessão da F4 subi só o `.xex` pelo `subir.py`, os dois do console eram de outra build, e o
   jogo travou no preto em "preparando a memória e as tabelas do disco" (o mesmo tamanho de arquivo, outro conteúdo).
   Suba sempre pelo `subir_f2.sh`, que leva os três juntos.
+- **`Clear` com o preto exato não limpa** o back buffer no caminho de desenho do backend (F5, etapa 1): pedindo
+  `0xFF000000` as barras do 4:3 ficavam com o azul da tela de fase anterior, pedindo `0xFF00FF00` saíam verdes e
+  pedindo `0xFF010101`, pretas. A causa no D3D do 360 não foi achada; limpe com `0xFF010101`. Ponha a cor de um teste
+  visual no `ambiente.txt`: três aberturas de 30 s acharam isso sem recompilar.
 
 ---
 

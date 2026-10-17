@@ -38,7 +38,9 @@
  *                        descartar, recusa com diagnóstico);
  *   BT3_MEM_TEX_MB=128   teto das texturas decodificadas, vivas e pendentes (acima dele, descarte; sem o que
  *                        descartar, passa do teto em vez de sair branca, enquanto o piso deixar);
- *   BT3_COR_FUNDO=0xFF000000  a cor da limpeza da tela fora da imagem 4:3 (as barras laterais).
+ *   BT3_COR_FUNDO=0xFF010101  a cor da limpeza da tela fora da imagem 4:3 (as barras laterais). Quase preto de
+ *                        propósito: com o preto exato (0xFF000000) a limpeza não acontece no console e as barras
+ *                        ficam com o azul da fase da main360 (rodada da F5, etapa 1; 01.md).
  */
 #include <xtl.h>
 #include <xgraphics.h>
@@ -718,7 +720,7 @@ static void entra_na_edram(int i) {
 
 /* ---- init ---------------------------------------------------------------------------------------------------- */
 
-static DWORD sCorFundo = 0xFF000000; /* BT3_COR_FUNDO: a limpeza da tela fora da imagem (as barras do 4:3) */
+static DWORD sCorFundo = 0xFF010101; /* BT3_COR_FUNDO: a limpeza da tela fora da imagem (as barras do 4:3) */
 
 static unsigned env_num(const char *nome, unsigned padrao) {
     const char *v = getenv(nome);
@@ -738,7 +740,7 @@ static void mem_init(void) {
     sMem.seguro = (getenv("BT3_INTERP") == NULL || atoi(getenv("BT3_INTERP")) == 0) && getenv("BT3_GS_THREAD") == NULL;
     sMem.buffers = MAX_VERTS * (unsigned)sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u +
                    MAX_VU_UNIFORMS * (unsigned)sizeof(Vu0Uniform) + MAX_DRAWS * (unsigned)sizeof(GsDraw);
-    sCorFundo = (DWORD)env_num("BT3_COR_FUNDO", 0xFF000000u);
+    sCorFundo = (DWORD)env_num("BT3_COR_FUNDO", 0xFF010101u);
     mem_mede();
     Diario_Escrever("gs_d3d: memória: piso %u MB livres (BT3_MEM_PISO_MB), teto das texturas %u MB (BT3_MEM_TEX_MB), "
                     "folga do descarte %u MB, descarte %s; buffers do gs_draw.c %u KB; alvo %u KB; %u MB livres de %u; "
