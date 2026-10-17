@@ -33,6 +33,7 @@ void Ambiente_Carregar(const char *caminho); /* posix360.c */
 void Estado_Resumo(void);                  /* estado360.c */
 void Port_X360FecharSaida(void);           /* posix360.c */
 void Iso_Iniciar(void);                    /* iso360.c */
+const char *Iso_Pedida(void);              /* iso360.c: o caminho do BT3_ISO que não abriu */
 int Iso_Recusada(void);                    /* iso360.c: a ISO aberta não tem a marca da convertida */
 extern const char *volatile gPortStage;    /* plat_mem.c: até onde o arranque chegou */
 void GsD3d_Soltar(void);                   /* port/x360/src/gs/gs_d3d.cpp */
@@ -162,16 +163,32 @@ static DWORD WINAPI Preparar(LPVOID arg) {
    pilha: o sistema os usa depois da chamada voltar. Se outra tela do sistema estiver aberta (ERROR_ACCESS_DENIED),
    tenta de novo por 10 s; se mesmo assim não abrir, fica só a tela vermelha, e o log diz por quê. Depois de fechada,
    a main segue para a cor do fim (vermelha) e o dashboard no botão, como nas outras falhas. */
-static void MostrarRecusa(D3DDevice *dev) {
-    static const WCHAR kTitulo[] = L"ISO original";
-    static const WCHAR kTexto[] =
+static void MostrarRecusa(D3DDevice *dev, int motivo) {
+    static const WCHAR kTituloOriginal[] = L"ISO original";
+    static const WCHAR kTituloAusente[] = L"ISO n\x00E3o encontrada";
+    static const WCHAR kTextoOriginal[] =
         L"Esta \x00E9 a ISO original do jogo. O port l\x00EA a ISO convertida no PC: converta-a com "
         L"port/x360/tools/iso_convertida.py, copie a convertida para a pasta do jogo e aponte o BT3_ISO do "
         L"ambiente.txt para ela.";
+    static const WCHAR kPrefixoAusente[] =
+        L"O arquivo do BT3_ISO n\x00E3o existe ou n\x00E3o \x00E9 uma ISO. Caminho pedido no ambiente.txt: ";
+    static WCHAR sTextoAusente[600]; /* estático: o sistema o usa depois da chamada voltar */
+    const WCHAR *kTitulo = motivo == 2 ? kTituloAusente : kTituloOriginal;
+    const WCHAR *kTexto = kTextoOriginal;
     static LPCWSTR kBotoes[1] = {L"OK"};
     static MESSAGEBOX_RESULT sResultado;
     static XOVERLAPPED sOv;
     DWORD r, inicio = GetTickCount(), fim = 0;
+    if (motivo == 2) {
+        const char *c = Iso_Pedida();
+        size_t n = wcslen(kPrefixoAusente), i;
+        wcscpy(sTextoAusente, kPrefixoAusente);
+        for (i = 0; c[i] != '\0' && n < 598; i++) {
+            sTextoAusente[n++] = (WCHAR)(unsigned char)c[i];
+        }
+        sTextoAusente[n] = 0;
+        kTexto = sTextoAusente;
+    }
     for (;;) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
@@ -186,7 +203,7 @@ static void MostrarRecusa(D3DDevice *dev) {
                         (unsigned)r);
         return;
     }
-    Diario_Escrever("recusa: caixa do sistema aberta, \"ISO original\"");
+    Diario_Escrever("recusa: caixa do sistema aberta, \"%s\"", motivo == 2 ? "ISO não encontrada" : "ISO original");
     while (!XHasOverlappedIoCompleted(&sOv)) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
@@ -209,6 +226,7 @@ void __cdecl main() {
     D3DDevice *dev = NULL;
     HANDLE t;
     int local;
+    int motivo;
     bool gpu, recusada, solto = false;
 
     Diario_Abrir("game:\\bt3xbx.log");
@@ -217,7 +235,8 @@ void __cdecl main() {
                     (unsigned)(DWORD)&local);
     Ambiente_Carregar("game:\\ambiente.txt");
     Iso_Iniciar(); /* antes de qualquer thread: a ISO e a trava dela */
-    recusada = Iso_Recusada() != 0;
+    motivo = Iso_Recusada();
+    recusada = motivo != 0;
 
     if (!recusada) { /* recusada a ISO, nem as tabelas do disco: o jogo não começa */
         t = CreateThread(NULL, 256 * 1024, Preparar, NULL, CREATE_SUSPENDED, &gThreadJogo);
@@ -248,7 +267,7 @@ void __cdecl main() {
     if (recusada) {
         gCor = 0xFFC02020; /* vermelho: a cor de falha */
         InterlockedExchange(&gTerminou, 1);
-        MostrarRecusa(dev);
+        MostrarRecusa(dev, motivo);
     }
     if (gpu) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF000000, 1.0f, 0);

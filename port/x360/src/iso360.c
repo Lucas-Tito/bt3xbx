@@ -121,6 +121,7 @@ void Iso_Iniciar(void) {
     unsigned char pvd[SETOR];
     char caminho[512];
     const char *escolhido = getenv("BT3_ISO");
+    int pedida = escolhido != NULL && escolhido[0] != '\0';
 
     if (sIniciado) {
         return;
@@ -142,12 +143,22 @@ void Iso_Iniciar(void) {
     sIso = CreateFile(caminho, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (sIso == INVALID_HANDLE_VALUE) {
         Diario_Escrever("iso: não abriu %s (erro %u)", caminho, (unsigned)GetLastError());
+        if (pedida) {
+            Diario_Escrever("iso: o BT3_ISO foi dado e o arquivo não existe: recusada (caso ISO não encontrada)");
+            strncpy(sNomeIso, caminho, sizeof(sNomeIso) - 1);
+            sRecusada = 2;
+        }
         return;
     }
     if (!ler(16 * SETOR, pvd, SETOR) || pvd[0] != 1 || memcmp(pvd + 1, "CD001", 5) != 0) {
         Diario_Escrever("iso: %s não é uma imagem ISO 9660", caminho);
         CloseHandle(sIso);
         sIso = INVALID_HANDLE_VALUE;
+        if (pedida) {
+            Diario_Escrever("iso: o BT3_ISO foi dado e o arquivo não é uma ISO: recusada (caso ISO não encontrada)");
+            strncpy(sNomeIso, caminho, sizeof(sNomeIso) - 1);
+            sRecusada = 2;
+        }
         return;
     }
     sRaizLba = le32(pvd + 156 + 2);
@@ -157,15 +168,21 @@ void Iso_Iniciar(void) {
     if (!tem_marca(caminho)) {
         CloseHandle(sIso);
         sIso = INVALID_HANDLE_VALUE;
-        sRecusada = 1;
+        sRecusada = 1; /* caso ISO original */
         return;
     }
     Diario_Escrever("iso: os arquivos com conversor já vêm convertidos: a carga só lê (sem Conv_Arquivo)");
 }
 
-/* 1 se a ISO aberta não é a convertida (a main mostra a recusa e não começa o jogo). */
+/* Diferente de 0 se a ISO foi recusada (a main mostra a recusa e não começa o jogo): 1 = a ISO aberta não é a
+   convertida (a original); 2 = o BT3_ISO foi dado e o arquivo não existe ou não é uma ISO (Iso_Pedida diz o caminho). */
 int Iso_Recusada(void) {
     return sRecusada;
+}
+
+/* O caminho do BT3_ISO que falhou (só vale com Iso_Recusada() == 2). */
+const char *Iso_Pedida(void) {
+    return sNomeIso;
 }
 
 /* Compara um nome do caminho com o do registro (sem caixa, sem o ";1" da versão nem o "." de quem não tem
