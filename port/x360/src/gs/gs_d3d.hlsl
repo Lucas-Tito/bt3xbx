@@ -167,3 +167,39 @@ GsSaida vs_vu0(Vu0Entrada e) {
     }
     return s;
 }
+
+// ---- programas de vértice da VU1, famílias vu4 (o estágio, programa 4) e vu6 (a sombra no chão, programa 6) (F5,
+// etapa 6, segunda parte): tradução de port/src/gs/shaders/vu4.vert e vu6.vert, com as mesmas entradas, constantes e
+// convenções do vs_vu0 (a profundidade presa em 0..w). O pixel shader é o ps_gs.
+
+
+// Tradução de port/src/gs/shaders/vu4.vert (o estágio, programa 4): só usa screen em [10..13] e misc em [17]. A cor
+// vem em e.nrm (segunda quadword, floats 0..255) e o st segue com q = 1. O recorte de tiras da VU fica com a GPU.
+GsSaida vs_vu4(Vu0Entrada e) {
+    GsSaida s;
+    float4 misc = vu0c[17];
+    float4 sc = VU0_M4(VU0_SCREEN, e.pos);
+    s.pos = float4((sc.x - misc.x * sc.w) / 512.0f - sc.w, sc.w - (sc.y - misc.y * sc.w) / 512.0f,
+                   clamp(sc.z / misc.z, 0.0f, sc.w), sc.w);
+    s.cor = clamp(floor(e.nrm), 0.0f, 255.0f) / 255.0f;
+    s.stq = float3(e.st.xy, 1.0f);
+    return s;
+}
+
+#define VU6_SHADOWCAM 0
+
+// Tradução de port/src/gs/shaders/vu6.vert (a sombra no chão, programa 6): shadowCam em [0..3], scale.x em [8],
+// texScale.xy em [9], screen em [10..13], misc em [17]. A cor vem em e.nrm; a terceira quadword não é usada.
+GsSaida vs_vu6(Vu0Entrada e) {
+    GsSaida s;
+    float4 scale = vu0c[8], texScale = vu0c[9];
+    float4 misc = vu0c[17];
+    float4 p = float4(e.pos.xyz, 1.0f);
+    float4 sc = VU0_M4(VU0_SCREEN, p);
+    float2 st = (VU0_M4(VU6_SHADOWCAM, p).xy * scale.x + 1.0f) * 0.5f;
+    s.pos = float4((sc.x - misc.x * sc.w) / 512.0f - sc.w, sc.w - (sc.y - misc.y * sc.w) / 512.0f,
+                   clamp(sc.z / misc.z, 0.0f, sc.w), sc.w);
+    s.cor = clamp(floor(e.nrm), 0.0f, 255.0f) / 255.0f;
+    s.stq = float3(st * texScale.xy, 1.0f);
+    return s;
+}
