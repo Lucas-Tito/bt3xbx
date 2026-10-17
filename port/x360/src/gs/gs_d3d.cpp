@@ -462,6 +462,25 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
         free((void *)px);
         return 0;
     }
+    /* Triagem da etapa 6 (docs/x360/plano/F5/06.md): uma textura com todos os texels de RGB zero é contada e as 32
+       primeiras vão para o log, com o tamanho (256 x 1 é paleta) e o quadro. Só diagnóstico: o cenário saía com texturas
+       pretas e nada diz se o jogo as mandou assim ou se a decodificação (paleta, formato) falhou. Para na primeira cor
+       não preta, então quase não custa. */
+    {
+        static unsigned sPretas;
+        const uint32_t *p32 = (const uint32_t *)px;
+        uint32_t n = w * h, i = 0;
+        while (i < n && (p32[i] & 0x00FFFFFFu) == 0) {
+            i++;
+        }
+        if (n > 1 && i == n) {
+            sPretas++;
+            if (sPretas <= 32) {
+                Diario_Escrever("gs_d3d: textura preta (RGB zero em todos os texels) %ux%u no quadro %u, a %u.a", (unsigned)w,
+                                (unsigned)h, gGsFrame, sPretas);
+            }
+        }
+    }
     for (y = 0; y < h; y++) {
         memcpy((BYTE *)r.pBits + y * r.Pitch, (const uint32_t *)px + y * w, w * 4);
     }
