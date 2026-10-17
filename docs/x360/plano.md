@@ -39,7 +39,7 @@ Resumo (texto completo em [plano/base.md](plano/base.md)):
 | F2 | concluída | idem |
 | F3 | concluída | [plano/F3.md](plano/F3.md) |
 | F4 | concluída (16/10/2026): rodada completa no WSL e sessão no console com o Lucas | [plano/F4/00-escopo.md](plano/F4/00-escopo.md) |
-| F5 | plano proposto; implementação por fazer | [plano/F5/00-escopo.md](plano/F5/00-escopo.md) |
+| F5 | em andamento: etapas 2 (lado do PC), 3 e 4 feitas no WSL e no Deck; 5 com o Codex; 1 espera o console | [plano/F5/00-escopo.md](plano/F5/00-escopo.md) |
 | F6 a F9 | por fazer | só a entrega da tabela acima |
 
 ### F4, etapas (13/10/2026)
