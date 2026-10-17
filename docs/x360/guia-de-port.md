@@ -1112,6 +1112,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   98,6%): a diferença era toda o filtro. O Lucas decidiu não ligar esse modo nas comparações; a regra é aceitar a tela
   com textura reduzida por volta de 82% e medir a nitidez separada antes de procurar erro. A arte dos personagens vem
   sem o meio texel e pela fórmula estrita do GS sairia um pouco macia (anotado, sem decisão).
+- **Teto de memória sem descarte vira textura branca para sempre.** Na sessão da F4, depois da tela de versus do
+  Torneio, os menus seguintes ficaram brancos até reiniciar: o backend recusava textura acima de 128 MiB e o cache
+  do frontend (`gs_draw.c`) só varre por idade com 8.192 entradas, então nada saía. Num console com memória fixa, o
+  teto tem de vir com o descarte de quem é dono do cache (o frontend), contando também o que espera a GPU, e cada
+  textura branca tem de dizer no log por que saiu branca (F5, etapa 1, plano/F5/01.md).
 
 ---
 

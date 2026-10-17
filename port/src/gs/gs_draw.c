@@ -131,6 +131,69 @@ static uint32_t clut_hash(uint32_t cbp, uint32_t cpsm, uint32_t count) {
     return h;
 }
 
+#ifdef PORT_X360
+/* (F5, etapa 1) O descarte por uso do 360. O backend (port/x360/src/gs/gs_d3d.cpp) conta os bytes reais e diz quanto
+   falta para um pedido caber (piso de memória livre, teto das texturas); este cache é o dono das texturas, então é ele
+   que descarta: as entradas usadas há mais tempo, nunca as dos dois últimos quadros (a lista em gravação só aponta
+   para texturas com last == gGsFrame, e gGsFrame só avança depois do frameEnd). O recurso solto espera a GPU na cova
+   do backend. Contrato de posse: docs/x360/plano/F5/01.md. */
+uint32_t GsD3d_Falta(uint32_t w, uint32_t h, int modo);
+uint32_t GsD3d_TexBytes(GsTex tex);
+int GsD3d_Descartou(uint32_t w, uint32_t h, int modo, unsigned n, uint32_t bytes, unsigned idade, unsigned emUso);
+void GsD3d_Branca(int motivo, uint32_t w, uint32_t h);
+static uint16_t sX360Ordem[MAX_TEX];
+static unsigned char sX360Sai[MAX_TEX];
+
+static int x360_mais_antiga(const void *a, const void *b) {
+    unsigned la = sTex[*(const uint16_t *)a].last, lb = sTex[*(const uint16_t *)b].last;
+    return la < lb ? -1 : la > lb ? 1 : 0;
+}
+
+/* modo 0: textura w x h; 1: alvo; 2: textura que o D3D recusou com o piso cumprido. 1: o pedido cabe. */
+int GsDraw_X360Abre(uint32_t w, uint32_t h, int modo) {
+    uint32_t falta = GsD3d_Falta(w, h, modo), soma = 0, i, n = 0, k;
+    unsigned idade = 0;
+    int m;
+
+    if (falta == 0) {
+        return 1;
+    }
+    for (i = 0; i < (uint32_t)gsTexCount; i++) {
+        sX360Sai[i] = 0;
+        if (sTex[i].last + 2 <= gGsFrame) {
+            sX360Ordem[n++] = (uint16_t)i;
+        }
+    }
+    qsort(sX360Ordem, n, sizeof(sX360Ordem[0]), x360_mais_antiga);
+    for (k = 0; k < n && soma < falta; k++) {
+        soma += GsD3d_TexBytes(sTex[sX360Ordem[k]].tex);
+        sX360Sai[sX360Ordem[k]] = 1;
+    }
+    if (k > 0) {
+        idade = gGsFrame - sTex[sX360Ordem[k - 1]].last;
+        /* fora do cache e do balde antes de soltar: nada fica apontando para o recurso */
+        for (m = 0, i = 0; i < (uint32_t)gsTexCount; i++) {
+            if (sX360Sai[i]) {
+                sBackend->texDestroy(sTex[i].tex);
+            } else {
+                sTex[m++] = sTex[i];
+            }
+        }
+        gsTexCount = m;
+        sLast = NULL;
+        memset(sTexBucket, 0, sizeof(sTexBucket));
+        for (i = 0; i < (uint32_t)gsTexCount; i++) {
+            uint32_t h2 = tex_bucket(sTex[i].tex0, sTex[i].texa, sTex[i].gen);
+            while (sTexBucket[h2] != 0) {
+                h2 = (h2 + 1) & (TEX_BUCKETS - 1);
+            }
+            sTexBucket[h2] = (uint16_t)(i + 1);
+        }
+    }
+    return GsD3d_Descartou(w, h, modo, k, soma, idade, (unsigned)gsTexCount - (n - k));
+}
+#endif
+
 /* GS memory -> an RGBA texture for the current TEX0 (alpha as stored: 0x80 is opaque). The back end makes
    the texture and takes the decoded pixels (freed after it has uploaded them). */
 static GsTex texture_get(int ctx) {
@@ -173,9 +236,16 @@ static GsTex texture_get(int ctx) {
             h = (h + 1) & (TEX_BUCKETS - 1);
         }
     }
+#ifdef PORT_X360
+    if (!GsDraw_X360Abre(tw, th, 0)) {
+        GsD3d_Branca(1, tw, th);
+        return gsWhite;
+    }
+#else
     if (sBackend->texSlotsLeft() <= 0) {
         return gsWhite;
     }
+#endif
     if (gsTexCount == MAX_TEX) {
         /* full: drop everything not used for two seconds (or, failing that, not used this frame) in one sweep */
         unsigned keep = gGsFrame > 120 ? gGsFrame - 120 : 0;
@@ -200,6 +270,9 @@ static GsTex texture_get(int ctx) {
             sTexBucket[h] = (uint16_t)(i + 1);
         }
         if (gsTexCount == MAX_TEX) {
+#ifdef PORT_X360
+            GsD3d_Branca(2, tw, th);
+#endif
             return gsWhite; /* this one frame uses more textures than the cache holds */
         }
     }
@@ -237,8 +310,24 @@ static GsTex texture_get(int ctx) {
         }
     }
     gGpuTexNs += gpu_now() - tex_t0;
+#ifdef PORT_X360
+    {
+        /* o D3D recusou com o piso cumprido: descarta mais e tenta uma vez de novo (o descarte muda sTex: só depois
+           pega a vaga) */
+        GsTex nova = replaced ? sBackend->texCreate(rw, rh, packFormat, pack.levels) : sBackend->texCreate(tw, th, GS_TEXFMT_RGBA8, 1);
+        if (nova == 0 && !replaced && GsDraw_X360Abre(tw, th, 2)) {
+            nova = sBackend->texCreate(tw, th, GS_TEXFMT_RGBA8, 1);
+        }
+        if (nova == 0) {
+            GsD3d_Branca(3, tw, th);
+        }
+        t = &sTex[gsTexCount];
+        t->tex = nova;
+    }
+#else
     t = &sTex[gsTexCount];
     t->tex = replaced ? sBackend->texCreate(rw, rh, packFormat, pack.levels) : sBackend->texCreate(tw, th, GS_TEXFMT_RGBA8, 1);
+#endif
     if (t->tex == 0) {
         free(px);
         if (replaced) {

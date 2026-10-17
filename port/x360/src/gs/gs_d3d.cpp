@@ -27,7 +27,18 @@
  *                     número do quadro do GS dele; BT3_SHOT_FROM / BT3_SHOT_TO limitam a faixa;
  *   BT3_SHOT_LISTA=G,G...  só esses quadros do GS (até 32), com ou sem o BT3_SHOT: os das imagens da etapa 6 da F4
  *                     (a linha "imagem: ... gs G" da build sem janela), para medir os menus contra elas;
- *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado.
+ *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado, e a
+ *                     memória por classe (F5, etapa 1).
+ *
+ * Memória (F5, etapa 1; o contrato de posse está em docs/x360/plano/F5/01.md): os bytes reais de cada classe
+ * (texturas decodificadas, alvos, buffers fixos, o que espera a GPU na cova), um piso de memória física livre e um
+ * teto para as texturas. Quando uma textura ou um alvo novo não cabe, o backend diz quanto falta e o frontend
+ * (gs_draw.c, GsDraw_X360Abre) descarta as texturas do cache usadas há mais tempo. Ajustes no ambiente.txt:
+ *   BT3_MEM_PISO_MB=32   memória física que fica sempre livre (o piso; abaixo dele, descarte e, sem o que
+ *                        descartar, recusa com diagnóstico);
+ *   BT3_MEM_TEX_MB=128   teto das texturas decodificadas, vivas e pendentes (acima dele, descarte; sem o que
+ *                        descartar, passa do teto em vez de sair branca, enquanto o piso deixar);
+ *   BT3_COR_FUNDO=0xFF000000  a cor da limpeza da tela fora da imagem 4:3 (as barras laterais).
  */
 #include <xtl.h>
 #include <xgraphics.h>
@@ -40,6 +51,7 @@ extern "C" {
 #include "gs_draw.h"
 #include "gs_texpack.h"
 extern D3DDevice *gX360Dev; /* main360.cpp */
+int GsDraw_X360Abre(uint32_t w, uint32_t h, int modo); /* gs_draw.c: descarta texturas do cache até caber */
 extern volatile unsigned gX360Luta; /* estado360.c: o vblank em que a luta começou (0: fora da luta) */
 /* Para o vigia da main (main360.cpp): onde o fim do quadro está e quantos quadros já foram apresentados. */
 volatile const char *gGsD3dEtapa = "antes do primeiro quadro";
@@ -61,7 +73,7 @@ int Port_AspectMilli(void);  /* plat_stub.c */
    congelou no começo da luta. 16.380 vértices são 448 KB, múltiplo de 2, 3 e 6. */
 #define MAX_UP 16380
 #define MAX_COVA 4096
-#define MEM_TEXTURAS (128u << 20) /* bytes de textura decodificada antes de recusar novas (o gs_draw.c usa a branca) */
+#define MB (1u << 20)
 
 static D3DDevice *sDev;
 static D3DVertexShader *sVsGs, *sVsCopia;
@@ -86,8 +98,82 @@ static int sPipeCount;
 
 /* recursos soltos que a GPU ainda pode estar lendo: Release só quando IsBusy diz que não (senão bloqueia) */
 static D3DResource *sCova[MAX_COVA];
+static unsigned sCovaBytes[MAX_COVA];
+static unsigned char sCovaClasse[MAX_COVA];
 static int sCovaN;
-static unsigned sMemTex;
+
+static void esquece_estado(void);
+static int sCurPipe = -1, sCurSamp = -1, sEstadoGs;
+static GsTex sCurTex = (GsTex)-1;
+static D3DTexture *sCurDate;
+
+/* ---- memória (F5, etapa 1) ----------------------------------------------------------------------------------- */
+
+enum { CL_TEX, CL_ALVO, CL_N };
+enum { MODO_TEX, MODO_ALVO, MODO_FALHOU }; /* o pedido: textura nova, alvo novo, textura depois de o D3D recusar */
+enum { BR_ESPACO = 1, BR_CACHE, BR_D3D, BR_FORMATO, BR_ALVO, BR_N }; /* por que uma textura saiu branca */
+static const char *const kBranca[BR_N] = {"", "sem espaço e nada a descartar", "cache de 8.192 cheio no quadro",
+                                          "a criação falhou mesmo depois do descarte", "formato", "alvo sem textura"};
+static struct {
+    unsigned pisoMb, texTetoMb, folga; /* os ajustes (um só lugar: mem_init) */
+    unsigned vivos[CL_N], nVivos[CL_N], pend[CL_N], nPend[CL_N]; /* bytes reais (alinhados) e quantos */
+    unsigned buffers;                  /* os vetores fixos do gs_draw.c */
+    unsigned livres, livresMin, criadoDesde, total; /* dwAvailPhys medido, o menor visto, criado desde a medida */
+    unsigned pressoes, descN, descBytes, esperas, branca[BR_N];          /* no trecho de 60 quadros */
+    unsigned acimaTeto;                /* no trecho: texturas criadas acima do teto (nada descartável) */
+    unsigned pressoesTot, descNTot, esperasTot, brancaTot[BR_N], falasBranca[BR_N], falasPressao;
+    double descBytesTot;
+    unsigned maxVerts, maxVu, maxIdx, maxUni, maxDraws;                  /* buffers: o máximo de um quadro no trecho */
+    unsigned emUso;                    /* entradas protegidas na última pressão (usadas nos dois últimos quadros) */
+    int seguro;                        /* 0: BT3_INTERP ou BT3_GS_THREAD ligados, sem descarte */
+    unsigned semAlvo;                  /* alvos sem textura agora */
+} sMem;
+
+/* bytes reais de uma textura de 1 nível: o que o XG calcula com o alinhamento do formato, em páginas de 4 KB */
+static unsigned tam_real(UINT w, UINT h, D3DFORMAT f) {
+    D3DTexture cab;
+    UINT t = XGSetTextureHeader(w, h, 1, 0, f, (D3DPOOL)0, 0, 0, 0, &cab, NULL, NULL);
+    return (t + 4095u) & ~4095u;
+}
+static unsigned tam_tex(UINT w, UINT h) { return tam_real(w, h, D3DFMT_LIN_A8B8G8R8); }
+static unsigned tam_alvo(void) {
+    static unsigned t;
+    if (t == 0) {
+        t = tam_real(TAM, TAM, D3DFMT_A8R8G8B8);
+    }
+    return t;
+}
+
+/* a memória física livre agora, em bytes (e o menor valor visto) */
+static unsigned mem_mede(void) {
+    MEMORYSTATUS m;
+    GlobalMemoryStatus(&m);
+    sMem.livres = (unsigned)m.dwAvailPhys;
+    sMem.total = (unsigned)m.dwTotalPhys;
+    sMem.criadoDesde = 0;
+    if (sMem.livresMin == 0 || sMem.livres < sMem.livresMin) {
+        sMem.livresMin = sMem.livres;
+    }
+    return sMem.livres;
+}
+
+/* memória física livre, em MB */
+static unsigned mb_livres(void) { return mem_mede() >> 20; }
+
+/* a estimativa sem chamar o sistema (o que foi criado desde a última medida sai dela); perto do piso, medida */
+static unsigned mem_livres(unsigned pedido) {
+    unsigned est = sMem.livres > sMem.criadoDesde ? sMem.livres - sMem.criadoDesde : 0;
+    if (est < sMem.pisoMb * MB + pedido + 32u * MB) {
+        est = mem_mede();
+    }
+    return est;
+}
+
+static void mem_cria(int cl, unsigned bytes) {
+    sMem.vivos[cl] += bytes;
+    sMem.nVivos[cl]++;
+    sMem.criadoDesde += bytes;
+}
 
 /* o que o quadro teve e o que ficou de fora, para o log */
 static struct {
@@ -129,14 +215,6 @@ static double ms_desde(const LARGE_INTEGER *a) {
     return (double)(b.QuadPart - a->QuadPart) * 1000.0 / (double)sFreq.QuadPart;
 }
 
-/* memória física livre, em MB: os buffers do gs_draw.c são os do PC (cerca de 145 MB com os das imagens
-   intermediárias, alocados mesmo desligadas) */
-static unsigned mb_livres(void) {
-    MEMORYSTATUS m;
-    GlobalMemoryStatus(&m);
-    return (unsigned)(m.dwAvailPhys >> 20);
-}
-
 static void ret_une(Ret *r, int x0, int y0, int x1, int y1) {
     if (x1 <= x0 || y1 <= y0) {
         return;
@@ -151,48 +229,183 @@ static void ret_une(Ret *r, int x0, int y0, int x1, int y1) {
     if (y1 > r->y1) r->y1 = y1;
 }
 
-static void cova(D3DResource *r) {
+static void cova_solta(int i) {
+    sCova[i]->Release();
+    sMem.pend[sCovaClasse[i]] -= sCovaBytes[i];
+    sMem.nPend[sCovaClasse[i]]--;
+}
+
+/* a mais antiga da cova, esperando a GPU (nada do quadro fica preso no dispositivo fora do frame_end; mesmo assim os
+   estágios são soltos antes, porque uma textura presa fica ocupada para sempre) */
+static void cova_espera_primeira(void) {
+    const char *antes = (const char *)gGsD3dEtapa;
+    gGsD3dEtapa = "esperando a GPU soltar um recurso descartado";
+    sDev->SetTexture(0, NULL);
+    sDev->SetTexture(1, NULL);
+    esquece_estado();
+    sCova[0]->BlockUntilNotBusy();
+    cova_solta(0);
+    memmove(sCova, sCova + 1, (sCovaN - 1) * sizeof(sCova[0]));
+    memmove(sCovaBytes, sCovaBytes + 1, (sCovaN - 1) * sizeof(sCovaBytes[0]));
+    memmove(sCovaClasse, sCovaClasse + 1, (sCovaN - 1) * sizeof(sCovaClasse[0]));
+    sCovaN--;
+    sMem.esperas++;
+    gGsD3dEtapa = antes;
+}
+
+/* um recurso solto, com os bytes dele, que saem dos vivos e passam a pendentes */
+static void cova(D3DResource *r, int cl, unsigned bytes) {
     if (r == NULL) {
         return;
     }
+    sMem.vivos[cl] -= sMem.vivos[cl] >= bytes ? bytes : sMem.vivos[cl];
+    sMem.nVivos[cl]--;
     if (sCovaN == MAX_COVA) {
-        sCova[0]->BlockUntilNotBusy();
-        sCova[0]->Release();
-        memmove(sCova, sCova + 1, (MAX_COVA - 1) * sizeof(sCova[0]));
-        sCovaN--;
+        cova_espera_primeira();
     }
-    sCova[sCovaN++] = r;
+    sCova[sCovaN] = r;
+    sCovaBytes[sCovaN] = bytes;
+    sCovaClasse[sCovaN] = (unsigned char)cl;
+    sCovaN++;
+    sMem.pend[cl] += bytes;
+    sMem.nPend[cl]++;
 }
 
-/* no fim do quadro, depois de soltar as texturas do dispositivo e do InsertFence */
+/* o que a GPU já soltou sai (no fim do quadro, depois de soltar as texturas do dispositivo e do InsertFence, e a cada
+   pressão de memória) */
 static void cova_varre(void) {
     int i, n = 0;
     for (i = 0; i < sCovaN; i++) {
         if (sCova[i]->IsBusy()) {
-            sCova[n++] = sCova[i];
+            sCova[n] = sCova[i];
+            sCovaBytes[n] = sCovaBytes[i];
+            sCovaClasse[n] = sCovaClasse[i];
+            n++;
         } else {
-            sCova[i]->Release();
+            cova_solta(i);
         }
     }
     sCovaN = n;
 }
 
+/* ---- a pressão de memória, pedida pelo frontend (gs_draw.c, GsDraw_X360Abre) ---------------------------------- */
+
+static unsigned pedido_bytes(uint32_t w, uint32_t h, int modo) {
+    return modo == MODO_ALVO ? tam_alvo() : tam_tex(w, h);
+}
+
+/* Quantos bytes o frontend deve descartar antes de criar o pedido (0: cabe). Textura: o piso de memória livre e o
+   teto da classe (vivas + pendentes); alvo: só o piso; depois de o D3D recusar: pelo menos o dobro do pedido. Com
+   falta, pede também a folga, para a próxima pressão não vir na textura seguinte. */
+extern "C" uint32_t GsD3d_Falta(uint32_t w, uint32_t h, int modo) {
+    unsigned pedido = pedido_bytes(w, h, modo), livres, falta = 0, piso = sMem.pisoMb * MB;
+    if (!sMem.seguro) {
+        return 0;
+    }
+    cova_varre();
+    livres = mem_livres(pedido);
+    if (livres < piso + pedido) {
+        falta = piso + pedido - livres;
+    }
+    if (modo != MODO_ALVO) {
+        unsigned tex = sMem.vivos[CL_TEX] + sMem.pend[CL_TEX] + pedido, teto = sMem.texTetoMb * MB;
+        if (tex > teto && tex - teto > falta) {
+            falta = tex - teto;
+        }
+    }
+    if (modo == MODO_FALHOU && falta < 2 * pedido) {
+        falta = 2 * pedido;
+    }
+    return falta == 0 ? 0 : falta + sMem.folga;
+}
+
+/* os bytes reais de uma textura do cache */
+extern "C" uint32_t GsD3d_TexBytes(GsTex tex) {
+    D3DSURFACE_DESC d;
+    if (tex == 0 || FAILED(((D3DTexture *)tex)->GetLevelDesc(0, &d))) {
+        return 0;
+    }
+    return tam_tex(d.Width, d.Height);
+}
+
+/* O frontend descartou `n` texturas (`bytes`, a mais recente sem uso há `idade` quadros; `emUso` protegidas). O que a
+   GPU já soltou sai da cova; se o piso ainda não deixa, espera a GPU soltar o mais antigo da cova, um por vez. 1: o
+   pedido cabe no piso (o teto das texturas é macio: passar dele é melhor que a branca). */
+extern "C" int GsD3d_Descartou(uint32_t w, uint32_t h, int modo, unsigned n, uint32_t bytes, unsigned idade, unsigned emUso) {
+    unsigned pedido = pedido_bytes(w, h, modo), piso = sMem.pisoMb * MB, livres, esperas = sMem.esperas;
+    int cabe;
+    sMem.pressoes++;
+    sMem.pressoesTot++;
+    sMem.descN += n;
+    sMem.descNTot += n;
+    sMem.descBytes += bytes;
+    sMem.descBytesTot += bytes;
+    sMem.emUso = emUso;
+    cova_varre();
+    livres = mem_mede();
+    while (livres < piso + pedido && sCovaN > 0) {
+        cova_espera_primeira();
+        livres = mem_mede();
+    }
+    sMem.esperasTot += sMem.esperas - esperas;
+    cabe = livres >= piso + pedido;
+    if (n == 0 && cabe) {
+        sMem.acimaTeto++; /* (só o teto das texturas, sem nada a descartar: passa dele, sem linha) */
+        return 1;
+    }
+    if (sMem.falasPressao < 300 || sMem.pressoesTot % 50 == 0 || !cabe) {
+        sMem.falasPressao++;
+        Diario_Escrever("gs_d3d: pressão %u, quadro %u: pedido %u KB (%s %ux%u); descartadas %u texturas (%u KB), a mais "
+                        "recente sem uso há %u quadros, %u protegidas; %u esperas pela GPU; agora texturas %u KB + %u KB "
+                        "pendentes, alvos %u KB, livres %u MB (piso %u): %s",
+                        sMem.pressoesTot, gGsFrame, pedido >> 10, modo == MODO_ALVO ? "alvo" : "textura", w, h, n, bytes >> 10,
+                        idade, emUso, sMem.esperas - esperas, sMem.vivos[CL_TEX] >> 10, sMem.pend[CL_TEX] >> 10,
+                        (sMem.vivos[CL_ALVO] + sMem.pend[CL_ALVO]) >> 10, livres >> 20, sMem.pisoMb,
+                        cabe ? "cabe" : "NÃO CABE");
+    }
+    return cabe;
+}
+
+/* uma textura que saiu branca, e por quê (as primeiras de cada motivo com o retrato da memória) */
+static void branca(int motivo, uint32_t w, uint32_t h) {
+    sMem.branca[motivo]++;
+    sMem.brancaTot[motivo]++;
+    if (sMem.falasBranca[motivo] < 20) {
+        sMem.falasBranca[motivo]++;
+        Diario_Escrever("gs_d3d: BRANCA (%s): %ux%u no quadro %u; livres %u MB (piso %u), texturas %u KB + %u KB "
+                        "pendentes (teto %u MB), alvos %u, %d no cache, %u protegidas na última pressão",
+                        kBranca[motivo], w, h, gGsFrame, mb_livres(), sMem.pisoMb, sMem.vivos[CL_TEX] >> 10,
+                        sMem.pend[CL_TEX] >> 10, sMem.texTetoMb, sMem.nVivos[CL_ALVO], gsTexCount, sMem.emUso);
+    }
+}
+extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
+    branca(motivo > 0 && motivo < BR_N ? motivo : BR_ESPACO, w, h);
+}
+
 /* ---- texturas -------------------------------------------------------------------------------------------- */
 
 /* As texturas decodificadas: D3DFMT_LIN_A8B8G8R8, que recebe o u32 nativo R | G<<8 | B<<16 | A<<24 do gs_draw.c
-   sem troca (medido na etapa 6). Só RGBA8: o 360 não tem pacote de texturas. */
+   sem troca (medido na etapa 6). Só RGBA8: o 360 não tem pacote de texturas.
+   O espaço já foi aberto pelo frontend (GsDraw_X360Abre); aqui só o piso é conferido de novo (as paletas vêm sem
+   passar por lá, 1 KB cada). */
 static GsTex tex_create(uint32_t w, uint32_t h, int format, int levels) {
     D3DTexture *t = NULL;
+    unsigned bytes = tam_tex(w, h);
     (void)levels;
-    if (format != GS_TEXFMT_RGBA8 || sMemTex + w * h * 4 > MEM_TEXTURAS) {
+    if (format != GS_TEXFMT_RGBA8) {
         sConta.semTextura++;
+        branca(BR_FORMATO, w, h);
         return 0;
+    }
+    if (mem_livres(bytes) < sMem.pisoMb * MB + bytes) {
+        sConta.semTextura++;
+        return 0; /* (quem chamou conta o motivo) */
     }
     if (FAILED(sDev->CreateTexture(w, h, 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
         sConta.semTextura++;
         return 0;
     }
-    sMemTex += w * h * 4;
+    mem_cria(CL_TEX, bytes);
     sConta.texNovas++;
     return (GsTex)t;
 }
@@ -221,23 +434,22 @@ static void tex_destroy(GsTex tex) {
     if (t == NULL) {
         return;
     }
-    if (SUCCEEDED(t->GetLevelDesc(0, &d))) {
-        sMemTex -= sMemTex >= d.Width * d.Height * 4 ? d.Width * d.Height * 4 : sMemTex;
-    }
-    cova(t);
+    cova(t, CL_TEX, SUCCEEDED(t->GetLevelDesc(0, &d)) ? tam_tex(d.Width, d.Height) : 0);
 }
 
-static int tex_slots_left(void) { return sMemTex < MEM_TEXTURAS ? 1 << 20 : 0; }
+/* só as paletas (clut_texture) perguntam: o texture_get do 360 abre espaço por GsDraw_X360Abre */
+static int tex_slots_left(void) { return mem_livres(4096) >= sMem.pisoMb * MB + 4096 ? 1 << 20 : 0; }
 static GsTex white_tex(void) { return (GsTex)sBranco; }
 
 /* textura tiled (destino de Resolve), zerada: o conteúdo de um alvo novo é o da limpeza */
 static D3DTexture *textura_alvo(void) {
     D3DTexture *t = NULL;
     D3DLOCKED_RECT r;
-    if (FAILED(sDev->CreateTexture(TAM, TAM, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
-        Diario_Escrever("gs_d3d: ERRO criando a textura de um alvo (%d em uso)", gsTargetCount);
+    if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() ||
+        FAILED(sDev->CreateTexture(TAM, TAM, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
         return NULL;
     }
+    mem_cria(CL_ALVO, tam_alvo());
     if (SUCCEEDED(t->LockRect(0, &r, NULL, 0))) {
         memset(r.pBits, 0, (size_t)r.Pitch * TAM);
         t->UnlockRect(0);
@@ -247,14 +459,56 @@ static D3DTexture *textura_alvo(void) {
 
 /* ---- alvos --------------------------------------------------------------------------------------------------- */
 
-static void target_ensure(int i) {
+/* A textura de um alvo, abrindo espaço no cache de texturas se o piso não deixa; se o D3D recusa, descarta mais e
+   tenta de novo. Sem textura, o alvo ainda desenha na EDRAM, mas perde o conteúdo ao sair e quem o lê recebe a
+   branca: o log diz, e o fim do quadro tenta de novo. */
+static D3DTexture *alvo_com_espaco(void) {
+    D3DTexture *t;
     const char *antes = (const char *)gGsD3dEtapa;
     gGsD3dEtapa = "criando a textura de um alvo";
-    sAlvos[i].tex = textura_alvo();
+    GsDraw_X360Abre(TAM, TAM, MODO_ALVO);
+    t = textura_alvo();
+    if (t == NULL && GsDraw_X360Abre(TAM, TAM, MODO_FALHOU)) {
+        t = textura_alvo();
+    }
     gGsD3dEtapa = antes;
+    return t;
+}
+
+static int sAlvoSemTex[MAX_TARGETS]; /* 1: a vaga está sem textura (o fim do quadro tenta de novo) */
+
+static void target_ensure(int i) {
+    sAlvos[i].tex = alvo_com_espaco();
     sAlvos[i].conteudo.x0 = sAlvos[i].conteudo.x1 = 0;
     if (sResidente == i) {
         sResidente = -1; /* (a vaga mudou de dono: o que estava na EDRAM era do antigo) */
+    }
+    sAlvoSemTex[i] = sAlvos[i].tex == NULL;
+    if (sAlvos[i].tex == NULL) {
+        Diario_Escrever("gs_d3d: ERRO: o alvo %d (de %d) ficou sem textura no quadro %u: livres %u MB (piso %u), texturas "
+                        "%u KB + %u KB pendentes; o fim do quadro tenta de novo", i, gsTargetCount, gGsFrame, mb_livres(),
+                        sMem.pisoMb, sMem.vivos[CL_TEX] >> 10, sMem.pend[CL_TEX] >> 10);
+    }
+}
+
+/* no fim do quadro, com os estágios soltos: as vagas que ficaram sem textura tentam de novo (o conteúdo delas já se
+   perdeu; volta a valer a partir do próximo desenho) */
+static void alvos_sem_textura(void) {
+    int i;
+    sMem.semAlvo = 0;
+    for (i = 0; i < gsTargetCount; i++) {
+        if (sAlvos[i].tex != NULL || !sAlvoSemTex[i]) {
+            continue;
+        }
+        sAlvos[i].tex = alvo_com_espaco();
+        sAlvos[i].conteudo.x0 = sAlvos[i].conteudo.x1 = 0;
+        if (sAlvos[i].tex != NULL) {
+            sAlvoSemTex[i] = 0;
+            gsTargets[i].cleared = 0;
+            Diario_Escrever("gs_d3d: o alvo %d ganhou a textura no quadro %u", i, gGsFrame);
+        } else {
+            sMem.semAlvo++;
+        }
     }
 }
 
@@ -265,11 +519,19 @@ static void target_drop(int i) {
     if (sDateFonte == sAlvos[i].tex) {
         sDateFonte = NULL;
     }
-    cova(sAlvos[i].tex);
+    if (sAlvos[i].tex != NULL) {
+        cova(sAlvos[i].tex, CL_ALVO, tam_alvo());
+    }
     sAlvos[i].tex = NULL;
+    sAlvoSemTex[i] = 0;
 }
 
-static GsTex target_color(int i) { return (GsTex)sAlvos[i].tex; }
+static GsTex target_color(int i) {
+    if (sAlvos[i].tex == NULL) {
+        branca(BR_ALVO, TAM, TAM);
+    }
+    return (GsTex)sAlvos[i].tex;
+}
 static GsTex target_none(int i) { (void)i; return 0; }
 
 static void scale_changed(void) {
@@ -301,10 +563,8 @@ static int pipe_get(uint32_t key) {
     return sPipeCount++;
 }
 
-/* o estado do dispositivo que já foi posto, para não repetir */
-static int sCurPipe = -1, sCurSamp = -1, sEstadoGs;
-static GsTex sCurTex = (GsTex)-1;
-static D3DTexture *sCurDate;
+/* o estado do dispositivo que já foi posto, para não repetir (sCurPipe, sCurSamp, sEstadoGs, sCurTex e sCurDate estão
+   antes da memória) */
 static float sCurC[16];
 static int sTemC, sTemScissor, sScissor[4];
 static float sCurBlendc = -1.0f;
@@ -458,6 +718,54 @@ static void entra_na_edram(int i) {
 
 /* ---- init ---------------------------------------------------------------------------------------------------- */
 
+static DWORD sCorFundo = 0xFF000000; /* BT3_COR_FUNDO: a limpeza da tela fora da imagem (as barras do 4:3) */
+
+static unsigned env_num(const char *nome, unsigned padrao) {
+    const char *v = getenv(nome);
+    return v != NULL && *v != '\0' ? (unsigned)strtoul(v, NULL, 0) : padrao;
+}
+
+/* Os ajustes da memória (o único lugar com os valores), os buffers fixos do gs_draw.c e uma calibração: o que o
+   dwAvailPhys mede ao criar texturas pequenas e médias contra o que tam_tex conta (o alinhamento real do D3D). */
+static void mem_init(void) {
+    static const UINT lado[2] = {8, 256};
+    static const int quantas[2] = {64, 16};
+    static D3DTexture *teste[64];
+    int k, i;
+    sMem.pisoMb = env_num("BT3_MEM_PISO_MB", 32);
+    sMem.texTetoMb = env_num("BT3_MEM_TEX_MB", 128);
+    sMem.folga = sMem.pisoMb * MB / 2;
+    sMem.seguro = (getenv("BT3_INTERP") == NULL || atoi(getenv("BT3_INTERP")) == 0) && getenv("BT3_GS_THREAD") == NULL;
+    sMem.buffers = MAX_VERTS * (unsigned)sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u +
+                   MAX_VU_UNIFORMS * (unsigned)sizeof(Vu0Uniform) + MAX_DRAWS * (unsigned)sizeof(GsDraw);
+    sCorFundo = (DWORD)env_num("BT3_COR_FUNDO", 0xFF000000u);
+    mem_mede();
+    Diario_Escrever("gs_d3d: memória: piso %u MB livres (BT3_MEM_PISO_MB), teto das texturas %u MB (BT3_MEM_TEX_MB), "
+                    "folga do descarte %u MB, descarte %s; buffers do gs_draw.c %u KB; alvo %u KB; %u MB livres de %u; "
+                    "cor de fundo 0x%08X (BT3_COR_FUNDO)", sMem.pisoMb, sMem.texTetoMb, sMem.folga >> 20,
+                    sMem.seguro ? "ligado" : "DESLIGADO (BT3_INTERP ou BT3_GS_THREAD)", sMem.buffers >> 10,
+                    tam_alvo() >> 10, sMem.livres >> 20, sMem.total >> 20, (unsigned)sCorFundo);
+    for (k = 0; k < 2; k++) {
+        unsigned antes = mem_mede(), depois, feitas = 0;
+        for (i = 0; i < quantas[k]; i++) {
+            teste[i] = NULL;
+            if (SUCCEEDED(sDev->CreateTexture(lado[k], lado[k], 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &teste[i], NULL))) {
+                feitas++;
+            }
+        }
+        depois = mem_mede();
+        for (i = 0; i < quantas[k]; i++) {
+            if (teste[i] != NULL) {
+                teste[i]->Release(); /* (nunca usadas pela GPU) */
+            }
+        }
+        Diario_Escrever("gs_d3d: calibração: %u texturas de %ux%u: contadas %u KB, medidas %d KB pelo dwAvailPhys",
+                        feitas, lado[k], lado[k], feitas * (tam_tex(lado[k], lado[k]) >> 10), ((int)antes - (int)depois) / 1024);
+    }
+    sMem.livresMin = 0;
+    mem_mede();
+}
+
 static int d3d_init(void) {
     static const D3DVERTEXELEMENT9 elemGs[] = {
         {0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
@@ -518,7 +826,12 @@ static int d3d_init(void) {
     }
     *(DWORD *)r.pBits = 0xFFFFFFFFu;
     sBranco->UnlockRect(0);
+    mem_init();
     sDate = textura_alvo();
+    if (sDate == NULL) {
+        Diario_Escrever("gs_d3d: ERRO na textura do DATE (%u MB livres)", mb_livres());
+        return 0;
+    }
     /* fixos para todos os desenhos */
     sDev->SetRenderState(D3DRS_HALFPIXELOFFSET, TRUE); /* centros em .5, como GL e Vulkan (etapa 6) */
     sDev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
@@ -708,6 +1021,53 @@ static void desenha(const GsDraw *d) {
     if (d->count > sConta.maiorDesenho) sConta.maiorDesenho = d->count;
 }
 
+/* o máximo de um quadro em cada buffer fixo do gs_draw.c (no começo do frame_end, com a lista completa) */
+static void mem_buffers(void) {
+    if (gsVertCount > sMem.maxVerts) sMem.maxVerts = gsVertCount;
+    if (gsVuVertCount > sMem.maxVu) sMem.maxVu = gsVuVertCount;
+    if (gsVuIdxCount > sMem.maxIdx) sMem.maxIdx = gsVuIdxCount;
+    if (gsVuUniCount > sMem.maxUni) sMem.maxUni = gsVuUniCount;
+    if (gsDrawCount > sMem.maxDraws) sMem.maxDraws = gsDrawCount;
+}
+
+static void log_memoria_zera(void) {
+    sMem.pressoes = sMem.descN = sMem.descBytes = sMem.esperas = sMem.acimaTeto = 0;
+    memset(sMem.branca, 0, sizeof(sMem.branca));
+    sMem.maxVerts = sMem.maxVu = sMem.maxIdx = sMem.maxUni = sMem.maxDraws = 0;
+}
+
+/* A memória no trecho de 60 quadros: bytes vivos e pendentes por classe, o resto do sistema, o mínimo livre visto,
+   os descartes, as esperas pela GPU, as brancas por motivo e o máximo de cada buffer (CHEIO quando chegou ao fim). */
+static void log_memoria(void) {
+    unsigned nosso = sMem.vivos[CL_TEX] + sMem.vivos[CL_ALVO] + sMem.pend[CL_TEX] + sMem.pend[CL_ALVO] + sMem.buffers;
+    unsigned usado = sMem.total > sMem.livres ? sMem.total - sMem.livres : 0;
+    unsigned brancas = 0;
+    int i;
+    for (i = 1; i < BR_N; i++) {
+        brancas += sMem.branca[i];
+    }
+    Diario_Escrever("gs_d3d:   memória: texturas %u (%u KB, teto %u MB), alvos %u (%u KB), pendentes %u + %u (%u KB + %u KB), "
+                    "buffers %u KB; resto do jogo e do sistema %d MB; livres %u MB, mínimo visto %u MB (piso %u)",
+                    sMem.nVivos[CL_TEX], sMem.vivos[CL_TEX] >> 10, sMem.texTetoMb, sMem.nVivos[CL_ALVO],
+                    sMem.vivos[CL_ALVO] >> 10, sMem.nPend[CL_TEX], sMem.nPend[CL_ALVO], sMem.pend[CL_TEX] >> 10,
+                    sMem.pend[CL_ALVO] >> 10, sMem.buffers >> 10, ((int)usado - (int)nosso) / (int)MB, sMem.livres >> 20,
+                    sMem.livresMin >> 20, sMem.pisoMb);
+    Diario_Escrever("gs_d3d:   descarte: %u pressões, %u texturas (%u KB), %u esperas pela GPU, %u acima do teto no trecho; desde o "
+                    "começo %u pressões, %u texturas (%.0f MB), %u esperas; brancas no trecho %u (sem espaço %u, cache cheio %u, criação "
+                    "%u, formato %u, alvo sem textura %u), alvos sem textura agora %u",
+                    sMem.pressoes, sMem.descN, sMem.descBytes >> 10, sMem.esperas, sMem.acimaTeto, sMem.pressoesTot, sMem.descNTot,
+                    sMem.descBytesTot / MB, sMem.esperasTot, brancas, sMem.branca[BR_ESPACO], sMem.branca[BR_CACHE],
+                    sMem.branca[BR_D3D], sMem.branca[BR_FORMATO], sMem.branca[BR_ALVO], sMem.semAlvo);
+    Diario_Escrever("gs_d3d:   buffers, o maior quadro do trecho: vértices %u de %u%s, VU %u de %u%s, índices %u de %u%s, "
+                    "constantes %u de %u%s, desenhos %u de %u%s",
+                    sMem.maxVerts, (unsigned)MAX_VERTS, sMem.maxVerts >= MAX_VERTS ? " CHEIO" : "", sMem.maxVu,
+                    (unsigned)MAX_VU_VERTS, sMem.maxVu >= MAX_VU_VERTS ? " CHEIO" : "", sMem.maxIdx, (unsigned)MAX_VU_IDX,
+                    sMem.maxIdx >= MAX_VU_IDX ? " CHEIO" : "", sMem.maxUni, (unsigned)MAX_VU_UNIFORMS,
+                    sMem.maxUni >= MAX_VU_UNIFORMS ? " CHEIO" : "", sMem.maxDraws, (unsigned)MAX_DRAWS,
+                    sMem.maxDraws >= MAX_DRAWS ? " CHEIO" : "");
+    log_memoria_zera();
+}
+
 static void log_quadros(void) {
     /* os tempos sem os quadros que tiveram captura (cada uma pesa centenas de ms e encobria o resto) */
     unsigned q = sConta.quadros, t = sConta.quadros + sConta.capturas;
@@ -721,6 +1081,7 @@ static void log_quadros(void) {
     sDescAntes[6] += sConta.semTextura;
     if (Passos_Medindo()) {
         memset(&sConta, 0, sizeof(sConta));
+        log_memoria_zera();
         return;
     }
     if (q == 0) {
@@ -736,9 +1097,10 @@ static void log_quadros(void) {
                     (double)sConta.desenhos / t, (double)sConta.vertices / t, (double)sConta.trocas / t, sConta.maiorDesenho);
     Diario_Escrever("gs_d3d:   %u texturas novas (%u KB de textura viva, %d no cache), %d alvos, %d pipelines; fora: %u VU1, "
                     "nativos %u/%u/%u/%u (contorno, chave, tabela, ids), %u imagens direto no quadro, %u texturas recusadas; "
-                    "%u MB livres", sConta.texNovas, sMemTex >> 10, gsTexCount, gsTargetCount, sPipeCount, sConta.semVu,
+                    "%u MB livres", sConta.texNovas, sMem.vivos[CL_TEX] >> 10, gsTexCount, gsTargetCount, sPipeCount, sConta.semVu,
                     sConta.semNativo[1], sConta.semNativo[2], sConta.semNativo[3], sConta.semNativo[4], sConta.semFb,
                     sConta.semTextura, mb_livres());
+    log_memoria();
     memset(&sConta, 0, sizeof(sConta));
 }
 
@@ -752,6 +1114,7 @@ static void frame_end(void) {
     static int every = -1;
 
     QueryPerformanceCounter(&t0);
+    mem_buffers();
     gGsD3dEtapa = "fim do quadro: refazendo a lista";
     if (gX360Luta != sLutaVista) { /* os primeiros quadros da luta, passo a passo (a primeira rodada travou ali) */
         sLutaVista = gX360Luta;
@@ -838,7 +1201,7 @@ static void frame_end(void) {
         sDev->SetViewport(&vp);
         sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
         sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
-        sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF000000, 1.0f, 0);
+        sDev->Clear(0, NULL, D3DCLEAR_TARGET, sCorFundo, 1.0f, 0);
         if (mostrado >= 0 && gsTargets[mostrado].cleared && sAlvos[mostrado].tex != NULL) {
             /* 512 x 448 do GS na forma da imagem (4:3: 960 x 720 no meio da tela de 1280 x 720) */
             int w = (int)((float)TELA_H * (float)Port_AspectMilli() / 1000.0f + 0.5f), x;
@@ -860,6 +1223,9 @@ static void frame_end(void) {
     esquece_estado();
     sDev->InsertFence();
     cova_varre();
+    gGsD3dEtapa = "fim do quadro: memória";
+    mem_mede(); /* (uma medida por quadro: o mínimo livre visto e a base da estimativa) */
+    alvos_sem_textura();
 
     msFim = ms_desde(&t0);
     ms = ms_desde(&sUltimoFim);
