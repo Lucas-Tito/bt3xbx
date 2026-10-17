@@ -14,8 +14,12 @@
  *     alvo nunca é lido enquanto é o desenhado (gs_draw.c recusa), então ele já saiu da EDRAM.
  *   - Sem o segundo alvo com o byte de alfa (outAux do gs.frag): o teste de alfa do destino (DATE) lê o alfa da
  *     própria cor, que guarda min(A / 0x80, 1) e chega a 1 exatamente com o bit 7 ligado. Os efeitos nativos que
- *     precisam do byte (contorno, tabela de profundidade, cópia de ids) e os programas de vértice (VU1) ficam para
- *     a F5, e as imagens copiadas direto para a memória de vídeo (filmes) para a F6: são contados e não desenhados.
+ *     precisam do byte (contorno, tabela de profundidade, cópia de ids) ficam para a F5, e as imagens copiadas direto
+ *     para a memória de vídeo (filmes) para a F6: são contados e não desenhados.
+ *   - Os programas de vértice (VU1, F5, etapa 6): a família vu0 (os lutadores; vs_vu0 em gs_d3d.hlsl) é desenhada com
+ *     os vértices e os índices do quadro copiados para um par de buffers da GPU (dois pares, alternados por quadro);
+ *     as famílias vu4 (estágio) e vu6 (sombra no chão) ainda são contadas e não desenhadas (a segunda parte da etapa).
+ *     BT3_VU_VERTS=65536 vértices por par (os índices são o triplo); o que não couber é contado no log, nunca some.
  *   - Sem janela, painel de configurações nem pacote de texturas.
  *
  * O dispositivo é criado pela main (port/x360/src/f2/main360.cpp) e passa a ser desta thread (a do jogo) no init;
@@ -64,6 +68,7 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "gs_ps.h"
 #include "copia_vs.h"
 #include "copia_ps.h"
+#include "vu0_vs.h"
 
 #define TAM GS_W            /* lado de um alvo, em pixels (SCALE = 1) */
 #define TELA_W 1280
@@ -81,6 +86,18 @@ static D3DDevice *sDev;
 static D3DVertexShader *sVsGs, *sVsCopia;
 static D3DPixelShader *sPsGs, *sPsCopia;
 static D3DVertexDeclaration *sDeclGs, *sDeclCopia;
+/* F5, etapa 6: a família vu0 da VU1 (os lutadores): o shader, a declaração (três FLOAT4, 48 bytes) e os pares de
+   buffers da GPU com os vértices e os índices de um quadro, alternados (o do quadro anterior ainda pode estar em uso) */
+#define VU_PARES 2
+#define VU_C0 16 /* o primeiro registrador das constantes do vs_vu0 (Vu0Uniform, 19 float4) */
+static D3DVertexShader *sVsVu0;
+static D3DVertexDeclaration *sDeclVu;
+static D3DVertexBuffer *sVuVb[VU_PARES];
+static D3DIndexBuffer *sVuIb[VU_PARES];
+static unsigned sVuCapV, sVuCapI; /* vértices e índices de cada par */
+static int sVuPar;
+static uint32_t sVuIni[MAX_DRAWS]; /* o primeiro índice de cada desenho da família vu0 no buffer do quadro (~0: fora) */
+static int sCurUni = -1;            /* o Vu0Uniform posto nas constantes do vs_vu0 */
 static D3DSurface *sEdramCor, *sEdramProf, *sTela;
 static D3DTexture *sBranco, *sDate;
 static D3DTexture *sDateFonte; /* o que os desenhos com DATE leem: sDate, ou a textura de um alvo fora da EDRAM */
@@ -180,6 +197,11 @@ static void mem_cria(int cl, unsigned bytes) {
 /* o que o quadro teve e o que ficou de fora, para o log */
 static struct {
     unsigned quadros, desenhos, vertices, texNovas, trocas, restauros, semVu, semNativo[8], semFb, semTextura;
+    /* F5, etapa 6, por família da VU1 (0 vu0, 1 vu4, 2 vu6): desenhos da lista feitos pela GPU e pulados, triângulos
+       feitos; da vu0, os pulados por falta de espaço nos buffers, o maior quadro em vértices e índices e as esperas
+       pelo par; o tempo da VU1 na gravação (gs_vu1.c) e o do desenho dela aqui (cópia e chamadas), por quadro */
+    unsigned vuFeitos[3], vuPulados[3], vuTri, vuSemEspaco, vuMaxV, vuMaxI, vuEsperas;
+    double msVuGrav, msVuGravPior, msVuDes, msVuDesPior;
     double msFim, msFimPior, msQuadro, msQuadroPior, msPresent, msPresentPior;
     unsigned acima16, acima33, capturas, maiorDesenho;
     double msCaptura;
@@ -209,6 +231,20 @@ extern "C" int Passos_Descartes(unsigned *v, int n) {
         v[i] = sDescAntes[i] + agora[i];
     }
     return 8;
+}
+
+/* o relógio para o gs_vu1.c (C, sem o xtl.h): o tempo da VU1 na gravação do quadro */
+extern "C" uint64_t GsD3d_Tique(void) {
+    LARGE_INTEGER t;
+    QueryPerformanceCounter(&t);
+    return (uint64_t)t.QuadPart;
+}
+extern "C" double GsD3d_Ms(uint64_t tiques) {
+    return (double)tiques * 1000.0 / (double)sFreq.QuadPart;
+}
+extern "C" {
+extern unsigned gGsVu1Lotes[4][3], gGsVu1Desconhecido[8][2], gGsVu1InstrDesc; /* gs_vu1.c */
+extern double gGsVu1Ms;
 }
 
 static double ms_desde(const LARGE_INTEGER *a) {
@@ -582,6 +618,7 @@ static void esquece_estado(void) {
     sTemScissor = 0;
     sCurBlendc = -1.0f;
     sEstadoGs = 0;
+    sCurUni = -1;
 }
 
 /* ((A - B) * C >> 7) + D: k 0 nada, 1 um, 2 C, 3 -C, 4 1 - C, 5 1 + C (o 1 + C sai como um, como no gs_gl.c) */
@@ -768,6 +805,33 @@ static void mem_init(void) {
     mem_mede();
 }
 
+/* F5, etapa 6: os pares de buffers da família vu0. Sem eles, os desenhos dela são contados como sem espaço. */
+static void vu_init(void) {
+    unsigned v = (unsigned)env_num("BT3_VU_VERTS", 65536);
+    int i, ok = 1;
+    v = v < 1024 ? 1024 : v > (1u << 20) ? (1u << 20) : v;
+    for (i = 0; i < VU_PARES && ok; i++) {
+        ok = SUCCEEDED(sDev->CreateVertexBuffer(v * 48, 0, 0, D3DPOOL_DEFAULT, &sVuVb[i], NULL)) &&
+             SUCCEEDED(sDev->CreateIndexBuffer(v * 3 * 4, 0, D3DFMT_INDEX32, D3DPOOL_DEFAULT, &sVuIb[i], NULL));
+    }
+    if (!ok) {
+        for (i = 0; i < VU_PARES; i++) {
+            if (sVuVb[i] != NULL) sVuVb[i]->Release();
+            if (sVuIb[i] != NULL) sVuIb[i]->Release();
+            sVuVb[i] = NULL;
+            sVuIb[i] = NULL;
+        }
+        Diario_Escrever("gs_d3d: ERRO: os buffers da VU1 (%u vértices) não foram criados; a família vu0 fica de fora", v);
+        return;
+    }
+    sVuCapV = v;
+    sVuCapI = v * 3;
+    sMem.buffers += VU_PARES * (sVuCapV * 48u + sVuCapI * 4u);
+    Diario_Escrever("gs_d3d: VU1: %d pares de buffers da família vu0, %u vértices e %u índices cada (%u KB ao todo; "
+                    "BT3_VU_VERTS); vu4 e vu6 contadas e não desenhadas", VU_PARES, sVuCapV, sVuCapI,
+                    VU_PARES * (sVuCapV * 48u + sVuCapI * 4u) >> 10);
+}
+
 static int d3d_init(void) {
     static const D3DVERTEXELEMENT9 elemGs[] = {
         {0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
@@ -777,6 +841,11 @@ static int d3d_init(void) {
     static const D3DVERTEXELEMENT9 elemCopia[] = {
         {0, 0, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
         {0, 8, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},
+        D3DDECL_END()};
+    static const D3DVERTEXELEMENT9 elemVu[] = { /* os 48 bytes de um vértice dos programas (gsVuVerts) */
+        {0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+        {0, 16, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0},
+        {0, 32, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},
         D3DDECL_END()};
     D3DSURFACE_PARAMETERS sp;
     UINT tilesCor, tilesProf;
@@ -800,7 +869,8 @@ static int d3d_init(void) {
     if (FAILED(sDev->CreateVertexShader((const DWORD *)kGsVs, &sVsGs)) || FAILED(sDev->CreatePixelShader((const DWORD *)kGsPs, &sPsGs)) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kCopiaVs, &sVsCopia)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kCopiaPs, &sPsCopia)) || FAILED(sDev->CreateVertexDeclaration(elemGs, &sDeclGs)) ||
-        FAILED(sDev->CreateVertexDeclaration(elemCopia, &sDeclCopia))) {
+        FAILED(sDev->CreateVertexDeclaration(elemCopia, &sDeclCopia)) ||
+        FAILED(sDev->CreateVertexShader((const DWORD *)kVu0Vs, &sVsVu0)) || FAILED(sDev->CreateVertexDeclaration(elemVu, &sDeclVu))) {
         Diario_Escrever("gs_d3d: ERRO nos shaders ou nas declarações");
         return 0;
     }
@@ -829,6 +899,7 @@ static int d3d_init(void) {
     *(DWORD *)r.pBits = 0xFFFFFFFFu;
     sBranco->UnlockRect(0);
     mem_init();
+    vu_init();
     sDate = textura_alvo();
     if (sDate == NULL) {
         Diario_Escrever("gs_d3d: ERRO na textura do DATE (%u MB livres)", mb_livres());
@@ -943,12 +1014,11 @@ static void captura(int alvo) {
 
 /* ---- o quadro ------------------------------------------------------------------------------------------------ */
 
-static void desenha(const GsDraw *d) {
-    const Pipe *p = &sPipes[d->pipeline];
+/* O estado comum a um desenho de primitivas do GS (estado 1: vs_gs, vértices pelo DrawPrimitiveUP) e a um da família
+   vu0 da VU1 (estado 2: vs_vu0, o par de buffers do quadro): shaders, pipeline, textura, amostragem, constantes do
+   pixel shader, cor da mistura e tesoura. 0: nada a desenhar (tesoura vazia). */
+static int prepara(const GsDraw *d, int estado, Ret *area) {
     float c[16];
-    D3DPRIMITIVETYPE tipo = p->topo == 0 ? D3DPT_TRIANGLELIST : p->topo == 1 ? D3DPT_LINELIST : D3DPT_POINTLIST;
-    int porPrim = p->topo == 0 ? 3 : p->topo == 1 ? 2 : 1;
-    uint32_t feitos = 0;
     int x0 = d->scissor[0], y0 = d->scissor[1], x1 = d->scissor[0] + d->scissor[2], y1 = d->scissor[1] + d->scissor[3];
 
     if (x0 < 0) x0 = 0;
@@ -956,14 +1026,19 @@ static void desenha(const GsDraw *d) {
     if (x1 > TAM) x1 = TAM;
     if (y1 > TAM) y1 = TAM;
     if (x1 <= x0 || y1 <= y0 || d->count == 0) {
-        return;
+        return 0;
     }
-    if (!sEstadoGs) {
-        sDev->SetVertexDeclaration(sDeclGs);
-        sDev->SetVertexShader(sVsGs);
+    if (sEstadoGs != estado) {
+        sDev->SetVertexDeclaration(estado == 2 ? sDeclVu : sDeclGs);
+        sDev->SetVertexShader(estado == 2 ? sVsVu0 : sVsGs);
         sDev->SetPixelShader(sPsGs);
         sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
-        sEstadoGs = 1;
+        if (estado == 2) {
+            /* (o DrawPrimitiveUP desfaz o fluxo 0: posto de novo a cada volta para cá) */
+            sDev->SetStreamSource(0, sVuVb[sVuPar], 0, 48);
+            sDev->SetIndices(sVuIb[sVuPar]);
+        }
+        sEstadoGs = estado;
     }
     aplica_pipe(d->pipeline);
     if (d->tex != sCurTex) {
@@ -1011,16 +1086,112 @@ static void desenha(const GsDraw *d) {
         sScissor[0] = x0; sScissor[1] = y0; sScissor[2] = x1; sScissor[3] = y1;
         sTemScissor = 1;
     }
+    area->x0 = x0; area->y0 = y0; area->x1 = x1; area->y1 = y1;
+    return 1;
+}
+
+static void desenha(const GsDraw *d) {
+    const Pipe *p = &sPipes[d->pipeline];
+    D3DPRIMITIVETYPE tipo = p->topo == 0 ? D3DPT_TRIANGLELIST : p->topo == 1 ? D3DPT_LINELIST : D3DPT_POINTLIST;
+    int porPrim = p->topo == 0 ? 3 : p->topo == 1 ? 2 : 1;
+    uint32_t feitos = 0;
+    Ret a;
+
+    if (!prepara(d, 1, &a)) {
+        return;
+    }
     while (feitos + porPrim <= d->count) {
         uint32_t n = d->count - feitos > MAX_UP ? MAX_UP : d->count - feitos;
         n -= n % porPrim;
         sDev->DrawPrimitiveUP(tipo, n / porPrim, &gsVerts[d->first + feitos], sizeof(Vtx));
         feitos += n;
     }
-    ret_une(&sSujo, x0, y0, x1, y1);
+    ret_une(&sSujo, a.x0, a.y0, a.x1, a.y1);
     sConta.desenhos++;
     sConta.vertices += d->count;
     if (d->count > sConta.maiorDesenho) sConta.maiorDesenho = d->count;
+}
+
+/* F5, etapa 6: um desenho da família vu0 (d->first e d->count são índices de gsVuIdx), já copiado para o par de
+   buffers do quadro a partir do índice ini (vu_copia) */
+static void desenha_vu(const GsDraw *d, uint32_t ini) {
+    Ret a;
+
+    if (!prepara(d, 2, &a)) {
+        return;
+    }
+    if (d->uniform != sCurUni) {
+        sDev->SetVertexShaderConstantF(VU_C0, (const float *)&gsVuUni[d->uniform], sizeof(Vu0Uniform) / 16);
+        sCurUni = d->uniform;
+    }
+    sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count);
+    ret_une(&sSujo, a.x0, a.y0, a.x1, a.y1);
+    sConta.desenhos++;
+    sConta.vertices += d->count;
+    sConta.vuFeitos[0]++;
+    sConta.vuTri += d->count / 3;
+}
+
+/* F5, etapa 6: os vértices e os índices dos desenhos da família vu0 do quadro vão para um par de buffers da GPU, o
+   que não foi usado no quadro anterior. Cada desenho leva só a faixa de vértices que os índices dele tocam, e os
+   índices saem já com a posição nova (o desenho começa no índice sVuIni[n]); o que não cabe fica com ~0 e é contado.
+   A espera pelo par (a GPU ainda lendo o quadro de dois atrás) é contada; não deve acontecer com o Present no meio. */
+static void vu_copia(void) {
+    uint32_t n, k, nv = 0, ni = 0, tem = 0, pedV = 0, pedI = 0;
+    float *vb = NULL;
+    uint32_t *ib = NULL;
+
+    for (n = 0; n < gsDrawCount; n++) {
+        sVuIni[n] = ~0u;
+        tem += gsDraws[n].vu == 1 && gsDraws[n].native == 0;
+    }
+    if (tem == 0 || sVuCapV == 0) {
+        return;
+    }
+    sVuPar = (sVuPar + 1) % VU_PARES;
+    if (sVuVb[sVuPar]->IsBusy() || sVuIb[sVuPar]->IsBusy()) {
+        const char *antes = (const char *)gGsD3dEtapa;
+        gGsD3dEtapa = "esperando a GPU soltar o par de buffers da VU1";
+        sVuVb[sVuPar]->BlockUntilNotBusy();
+        sVuIb[sVuPar]->BlockUntilNotBusy();
+        gGsD3dEtapa = antes;
+        sConta.vuEsperas++;
+    }
+    if (FAILED(sVuVb[sVuPar]->Lock(0, 0, (void **)&vb, 0))) {
+        return;
+    }
+    if (FAILED(sVuIb[sVuPar]->Lock(0, 0, (void **)&ib, 0))) {
+        sVuVb[sVuPar]->Unlock();
+        return;
+    }
+    for (n = 0; n < gsDrawCount; n++) {
+        const GsDraw *d = &gsDraws[n];
+        uint32_t lo = 0xFFFFFFFFu, hi = 0;
+        if (d->vu != 1 || d->native != 0 || d->count == 0) {
+            continue;
+        }
+        for (k = 0; k < d->count; k++) {
+            uint32_t i = gsVuIdx[d->first + k];
+            if (i < lo) lo = i;
+            if (i > hi) hi = i;
+        }
+        pedV += hi >= lo ? hi - lo + 1 : 0;
+        pedI += d->count;
+        if (hi >= gsVuVertCount || hi - lo + 1 > sVuCapV - nv || d->count > sVuCapI - ni) {
+            continue; /* sem espaço (ou índice fora do quadro): pulado e contado no frame_end */
+        }
+        memcpy(vb + nv * 12, gsVuVerts + lo * 12, (hi - lo + 1) * 48);
+        for (k = 0; k < d->count; k++) {
+            ib[ni + k] = gsVuIdx[d->first + k] - lo + nv;
+        }
+        sVuIni[n] = ni;
+        nv += hi - lo + 1;
+        ni += d->count;
+    }
+    sVuIb[sVuPar]->Unlock();
+    sVuVb[sVuPar]->Unlock();
+    if (pedV > sConta.vuMaxV) sConta.vuMaxV = pedV; /* o pedido, mesmo o que não coube */
+    if (pedI > sConta.vuMaxI) sConta.vuMaxI = pedI;
 }
 
 /* o máximo de um quadro em cada buffer fixo do gs_draw.c (no começo do frame_end, com a lista completa) */
@@ -1070,6 +1241,41 @@ static void log_memoria(void) {
     log_memoria_zera();
 }
 
+/* F5, etapa 6: a VU1 no trecho de 60 quadros, por família de shader: desenhos da lista feitos pela GPU e pulados
+   (vu0 também os sem espaço), os lotes de cada uma pelo caminho que tomaram em gs_vu1.c (shader, interpretador, não
+   executados), os programas não reconhecidos com o tamanho, as instruções desconhecidas e os tempos por quadro. */
+static void log_vu1(unsigned t) {
+    char desc[160];
+    int k, n = 0;
+
+    desc[0] = '\0';
+    for (k = 0; k < 8 && gGsVu1Desconhecido[k][1] != 0; k++) {
+        n += _snprintf(desc + n, sizeof(desc) - n - 1, "%s%u instruções x%u", k ? ", " : "", gGsVu1Desconhecido[k][0],
+                       gGsVu1Desconhecido[k][1]);
+        if (n < 0 || n >= (int)sizeof(desc) - 1) {
+            desc[sizeof(desc) - 1] = '\0';
+            break;
+        }
+    }
+    Diario_Escrever("gs_d3d:   VU1, desenhos: vu0 (lutadores) %u pela GPU (%u triângulos), %u pulados (%u sem espaço); "
+                    "vu4 (estágio) %u pulados; vu6 (sombra no chão) %u pulados; vu0 no maior quadro %u de %u vértices e %u "
+                    "de %u índices, %u esperas pelo par", sConta.vuFeitos[0], sConta.vuTri, sConta.vuPulados[0],
+                    sConta.vuSemEspaco, sConta.vuPulados[1], sConta.vuPulados[2], sConta.vuMaxV, sVuCapV, sConta.vuMaxI,
+                    sVuCapI, sConta.vuEsperas);
+    Diario_Escrever("gs_d3d:   VU1, lotes (shader/interpretador/não executados): vu0 %u/%u/%u, vu4 %u/%u/%u, vu6 %u/%u/%u; "
+                    "não reconhecidos %u/%u (%s); instruções desconhecidas %u; tempo por quadro: gravação %.2f ms (pior "
+                    "%.2f), desenho %.2f ms (pior %.2f)", gGsVu1Lotes[0][0], gGsVu1Lotes[0][1], gGsVu1Lotes[0][2],
+                    gGsVu1Lotes[1][0], gGsVu1Lotes[1][1], gGsVu1Lotes[1][2], gGsVu1Lotes[2][0], gGsVu1Lotes[2][1],
+                    gGsVu1Lotes[2][2], gGsVu1Lotes[3][1], gGsVu1Lotes[3][2], desc[0] ? desc : "nenhum", gGsVu1InstrDesc,
+                    sConta.msVuGrav / t, sConta.msVuGravPior, sConta.msVuDes / t, sConta.msVuDesPior);
+}
+
+static void log_vu1_zera(void) {
+    memset(gGsVu1Lotes, 0, sizeof(gGsVu1Lotes));
+    memset(gGsVu1Desconhecido, 0, sizeof(gGsVu1Desconhecido));
+    gGsVu1InstrDesc = 0;
+}
+
 static void log_quadros(void) {
     /* os tempos sem os quadros que tiveram captura (cada uma pesa centenas de ms e encobria o resto) */
     unsigned q = sConta.quadros, t = sConta.quadros + sConta.capturas;
@@ -1084,6 +1290,7 @@ static void log_quadros(void) {
     if (Passos_Medindo()) {
         memset(&sConta, 0, sizeof(sConta));
         log_memoria_zera();
+        log_vu1_zera();
         return;
     }
     if (q == 0) {
@@ -1102,12 +1309,15 @@ static void log_quadros(void) {
                     "%u MB livres", sConta.texNovas, sMem.vivos[CL_TEX] >> 10, gsTexCount, gsTargetCount, sPipeCount, sConta.semVu,
                     sConta.semNativo[1], sConta.semNativo[2], sConta.semNativo[3], sConta.semNativo[4], sConta.semFb,
                     sConta.semTextura, mb_livres());
+    log_vu1(t);
+    log_vu1_zera();
     log_memoria();
     memset(&sConta, 0, sizeof(sConta));
 }
 
 static void frame_end(void) {
-    LARGE_INTEGER t0, tp;
+    LARGE_INTEGER t0, tp, tv;
+    double msVu;
     double msFim, msPresent;
     unsigned capturas = sConta.capturas;
     int cur = -1, mostrado, i;
@@ -1127,6 +1337,18 @@ static void frame_end(void) {
                         gsDrawCount, gsVertCount, gsVuVertCount, gsTargetCount, gsTexCount);
     }
     sDateFonte = NULL;
+    {
+        /* F5, etapa 6: o tempo da VU1 na gravação do quadro (gs_vu1.c) e a cópia da família vu0 para a GPU */
+        double g = gGsVu1Ms;
+        gGsVu1Ms = 0.0;
+        sConta.msVuGrav += g;
+        if (g > sConta.msVuGravPior) sConta.msVuGravPior = g;
+        QueryPerformanceCounter(&tv);
+        gGsD3dEtapa = "fim do quadro: cópia da VU1";
+        vu_copia();
+        msVu = ms_desde(&tv);
+        gGsD3dEtapa = "fim do quadro: refazendo a lista";
+    }
     for (n = 0; n < gsDrawCount; n++) {
         const GsDraw *d = &gsDraws[n];
         if (d->native >= 100) {
@@ -1162,16 +1384,29 @@ static void frame_end(void) {
             continue;
         }
         if (d->vu) {
-            sConta.semVu++;
-            continue;
+            /* F5, etapa 6: só a família vu0 (1) é desenhada; vu4 (2) e vu6 (3) ficam para a segunda parte */
+            if (d->vu != 1 || sVuIni[n] == ~0u) {
+                sConta.semVu++;
+                sConta.vuPulados[d->vu >= 1 && d->vu <= 3 ? d->vu - 1 : 0]++;
+                sConta.vuSemEspaco += d->vu == 1;
+                continue;
+            }
         }
         if (cur != d->target || sResidente != d->target) {
             entra_na_edram(d->target);
             gsTargets[d->target].cleared = 1;
             cur = d->target;
         }
-        desenha(d);
+        if (d->vu) {
+            QueryPerformanceCounter(&tv);
+            desenha_vu(d, sVuIni[n]);
+            msVu += ms_desde(&tv);
+        } else {
+            desenha(d);
+        }
     }
+    sConta.msVuDes += msVu;
+    if (msVu > sConta.msVuDesPior) sConta.msVuDesPior = msVu;
     gGsD3dEtapa = "fim do quadro: o último alvo volta para a textura";
     sai_da_edram();
     if (sPassoAPasso > 0) {
@@ -1222,6 +1457,9 @@ static void frame_end(void) {
     /* nada do quadro fica preso no dispositivo: as texturas soltas podem ir quando a GPU terminar com elas */
     sDev->SetTexture(0, NULL);
     sDev->SetTexture(1, NULL);
+    /* (F5, etapa 6) o par de buffers da VU1 também: preso no dispositivo, ficaria ocupado para sempre (IsBusy) */
+    sDev->SetStreamSource(0, NULL, 0, 0);
+    sDev->SetIndices(NULL);
     esquece_estado();
     sDev->InsertFence();
     cova_varre();

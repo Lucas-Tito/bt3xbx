@@ -110,3 +110,60 @@ CopiaSaida vs_copia(CopiaEntrada e) {
 float4 ps_copia(float2 uv : TEXCOORD0) : COLOR0 {
     return tex2D(tex, uv);
 }
+
+// ---- programas de vértice da VU1, família vu0 (F5, etapa 6): tradução de port/src/gs/shaders/vu0.vert
+// Usada pelos programas 0, 1, 2a/2b, 7 e 8 (camadas 0 a 5 em misc.w). O pixel shader é o ps_gs acima.
+
+// pos: xyz e o peso em w; nrm: a normal (ou a cor por vértice nas camadas 3 e 4); st: s, t, 1. Três FLOAT4, passo de 48
+struct Vu0Entrada { float4 pos : POSITION; float4 nrm : NORMAL; float4 st : TEXCOORD0; };
+
+// c0..c3 são do pixel shader: o vetor começa em c16. Layout da struct C Vu0Uniform (std140), sem tipo matriz do HLSL
+// (evita a ambiguidade de linha e coluna): cada matriz são 4 COLUNAS seguidas.
+//   [0..3] boneA, [4..7] boneB, [8] pivotA, [9] pivotB, [10..13] screen, [14] light, [15] color0, [16] color1,
+//   [17] misc (x, y: XYOFFSET; z: máximo da profundidade; w: camada), [18] light2
+float4 vu0c[19] : register(c16);
+
+#define VU0_BONEA 0
+#define VU0_BONEB 4
+#define VU0_SCREEN 10
+// mat4 M * vec4 v = M0*v.x + M1*v.y + M2*v.z + M3*v.w, com Mk a coluna k
+#define VU0_M4(b, v) (vu0c[(b) + 0] * (v).x + vu0c[(b) + 1] * (v).y + vu0c[(b) + 2] * (v).z + vu0c[(b) + 3] * (v).w)
+// mat3(M) * n = M0.xyz*n.x + M1.xyz*n.y + M2.xyz*n.z
+#define VU0_M3(b, n) (vu0c[(b) + 0].xyz * (n).x + vu0c[(b) + 1].xyz * (n).y + vu0c[(b) + 2].xyz * (n).z)
+
+GsSaida vs_vu0(Vu0Entrada e) {
+    GsSaida s;
+    float4 pivotA = vu0c[8], pivotB = vu0c[9];
+    float4 light = vu0c[14], color0 = vu0c[15], color1 = vu0c[16], misc = vu0c[17], light2 = vu0c[18];
+    float w = misc.w == 4.0f ? 1.0f : e.pos.w; // camada 4 (destroços, rígido): a 4ª palavra é um sinalizador, não um peso
+    float3 pa = VU0_M4(VU0_BONEA, float4(e.pos.xyz - pivotA.xyz, 1.0f)).xyz;
+    float3 pb = VU0_M4(VU0_BONEB, float4(e.pos.xyz - pivotB.xyz, 1.0f)).xyz;
+    float4 sc = VU0_M4(VU0_SCREEN, float4(lerp(pb, pa, w), 1.0f));
+    // Programas 2a/2b: a matriz da câmera da sombra é ortográfica com w constante NEGATIVO (medido: -862). O PS2 só
+    // divide por ele; a GPU cortaria tudo como "atrás do olho". O mesmo ponto com w > 0:
+    if (misc.w == 2.0f && sc.w < 0.0f) sc = -sc;
+    // x, y e w idênticos ao GLSL (+Y para cima, o HALFPIXELOFFSET do dispositivo já faz o papel do meio pixel).
+    // A profundidade fica presa em 0..w em TODAS as camadas: o PC desliga o corte por profundidade (depth clamp) e o
+    // 360 não tem isso, então um z fora da faixa cortaria o triângulo inteiro. O vs_gs faz o mesmo com saturate.
+    s.pos = float4((sc.x - misc.x * sc.w) / 512.0f - sc.w, sc.w - (sc.y - misc.y * sc.w) / 512.0f,
+                   clamp(sc.z / misc.z, 0.0f, sc.w), sc.w);
+    if (misc.w == 5.0f) {
+        // programa 1, camada 1: a segunda textura do modelo lida pela direção da normal num quadro alinhado à câmera
+        // (uma matriz só, sem mistura entre os ossos): (u, v) = 0.5 + 0.5 * (M * (n, 1)).xy
+        float4 n1 = float4(e.nrm.xyz, 1.0f);
+        s.cor = color1 / 255.0f;
+        s.stq = float3(dot(light, n1) * 0.5f + 0.5f, dot(light2, n1) * 0.5f + 0.5f, 1.0f);
+    } else if (misc.w >= 3.0f) {
+        // programas 8 e 7: a cor de cada vértice (floats 0..255 na segunda quadword); o 7 leva o alfa da malha
+        s.cor = clamp(floor(float4(e.nrm.rgb, misc.w == 4.0f ? color0.a : e.nrm.a)), 0.0f, 255.0f) / 255.0f;
+        s.stq = float3(e.st.xy, 1.0f);
+    } else if (misc.w != 1.0f) {
+        s.cor = color0 / 255.0f;
+        s.stq = float3(e.st.xy, 1.0f);
+    } else {
+        float na = dot(light.xyz, VU0_M3(VU0_BONEA, e.nrm.xyz)), nb = dot(light.xyz, VU0_M3(VU0_BONEB, e.nrm.xyz));
+        s.cor = color1 / 255.0f;
+        s.stq = float3((lerp(nb, na, w) + light.w) * 0.5f + 0.5f, 0.0f, 1.0f);
+    }
+    return s;
+}

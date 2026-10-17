@@ -61,6 +61,17 @@ static unsigned sHle; /* program calls served by shader versions this frame */
 /* The Xbox 360's main thread watches the game thread (port/x360/src/f2/main360.cpp) and reports, when a frame stalls,
    how far the vertex unit got: instructions interpreted so far and the program running (its size). */
 volatile unsigned gGsVu1Instr, gGsVu1Prog;
+/* F5, etapa 6: o que a VU1 fez desde a última leitura do backend (gs_d3d.cpp, o log de 60 quadros), por família de
+   shader: 0 vu0 (programas 0, 1, 2a, 2b, 7 e 8: lutadores, sombra deles, destroços e objetos do estágio), 1 vu4
+   (programa 4, o estágio), 2 vu6 (programa 6, a sombra no chão), 3 nenhuma (programa não reconhecido pelo tamanho:
+   sempre interpretado, e o tamanho vai para gGsVu1Desconhecido). Lotes: [0] servidos pelo caminho do shader (gravados
+   na lista do quadro), [1] rodados no interpretador, [2] não executados (BT3_VU1 desligado ou quadro só refeito). */
+unsigned gGsVu1Lotes[4][3];
+unsigned gGsVu1Desconhecido[8][2]; /* tamanho, chamadas (os 8 primeiros tamanhos; o resto soma em gGsVu1Lotes[3]) */
+unsigned gGsVu1InstrDesc;          /* instruções que o interpretador não conhece (também no saida.txt) */
+double gGsVu1Ms;                   /* tempo dentro de GsVu1_Call neste quadro, em ms (o backend lê e zera) */
+double GsD3d_Ms(uint64_t tiques);  /* gs_d3d.cpp */
+uint64_t GsD3d_Tique(void);
 #endif
 static struct { unsigned size, runs, instr, kicks; } sProg[16]; /* per loaded program, this frame */
 
@@ -704,7 +715,33 @@ static int hle_program6(void) {
 }
 
 /* MSCAL / MSCALF (addr = instruction address) or MSCNT (addr < 0: continue where the last run stopped). */
+#ifdef PORT_X360
+static void vu1_call(int addr);
+
+/* F5, etapa 6: cada chamada contada pela família do programa e pelo caminho que tomou, e o tempo dela */
 void GsVu1_Call(int addr) {
+    unsigned hle = sHle, runs = sStatRuns, tam = sProgSize;
+    uint64_t t0 = GsD3d_Tique();
+    int fam = tam == 127 || tam == 124 || tam == 99 || tam == 101 || tam == 94 || tam == 104 ? 0 : tam == 399 ? 1 : tam == 451 ? 2 : 3;
+    int k;
+
+    vu1_call(addr);
+    gGsVu1Lotes[fam][sHle != hle ? 0 : sStatRuns != runs ? 1 : 2]++;
+    if (fam == 3) {
+        for (k = 0; k < 8 && gGsVu1Desconhecido[k][1] != 0 && gGsVu1Desconhecido[k][0] != tam; k++) {
+        }
+        if (k < 8) {
+            gGsVu1Desconhecido[k][0] = tam;
+            gGsVu1Desconhecido[k][1]++;
+        }
+    }
+    gGsVu1Ms += GsD3d_Ms(GsD3d_Tique() - t0);
+}
+
+static void vu1_call(int addr) {
+#else
+void GsVu1_Call(int addr) {
+#endif
     vu.top = vu.tops;
     vu.itop = vu.itops;
     if (vu.dbf) {
@@ -724,10 +761,10 @@ void GsVu1_Call(int addr) {
 #ifdef PORT_X360
     gGsVu1Prog = sProgSize;
     {
-        /* Not run unless BT3_VU1=1, as above: the Xbox 360 back end does not draw their output yet, and on a big-endian
-           host the microcode from the executable's tables is still in the wrong byte order (docs/x360/formatos/gpu.md,
-           section 6): under qemu one program ran 4 million instructions without ending, which on the console looks like
-           a frozen game. */
+        /* Not run unless BT3_VU1=1. (F5, etapa 6) The microcode's byte order was fixed in F4, etapa 6
+           (docs/x360/formatos/gpu.md, section 6), and the Xbox 360 back end now draws the vu0 family (the fighters);
+           the vu4 and vu6 families are recorded, counted and not drawn yet (docs/x360/plano/F5/06.md). The switch stays
+           until the three families are drawn. The calls skipped here are counted too (gGsVu1Lotes[..][2]). */
         static int on = -1;
         if (on < 0) {
             on = getenv("BT3_VU1") != NULL && atoi(getenv("BT3_VU1")) != 0;
@@ -854,6 +891,9 @@ void GsVu1_FrameEnd(void) {
     for (k = 0; k < 2; k++) {
         for (i = 0; i < 128; i++) {
             if (sUnknown[k][i] != 0) {
+#ifdef PORT_X360
+                gGsVu1InstrDesc += sUnknown[k][i];
+#endif
                 fprintf(stderr, "vu1: unimplemented %s instruction %s%02x, %u times\n", k ? "lower" : "upper", i >= 64 ? "special " : "", i & 63, sUnknown[k][i]);
                 sUnknown[k][i] = 0;
             }
