@@ -51,6 +51,9 @@ void Ambiente_Carregar(const char *caminho) {
     char linha[256];
     definir("BT3_DEMO", "1");
     definir("BT3_GS", "none");
+    /* o estado dos players de som contado em vblanks (snd_adx.c, by_ticks): a boca de quem fala e as telas que esperam
+       o fim da voz andam sem dispositivo de som. Padrão desde a F2; a F6, etapa 1 (docs/x360/plano/F6/00-escopo.md,
+       seção 1.1 e a correção no fim) o supôs ausente, e a rodada da VU1 da F5 (F5/06.md) mostrou as bocas mexendo */
     definir("BT3_SOUND_TICKS", "1");
     definir("BT3_SETTINGS", "");
     definir("BT3_DATA", "game:\\gamedata");

@@ -110,6 +110,10 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
   `0xFF000000` as barras do 4:3 ficavam com o azul da tela de fase anterior, pedindo `0xFF00FF00` saíam verdes e
   pedindo `0xFF010101`, pretas. A causa no D3D do 360 não foi achada; limpe com `0xFF010101`. Ponha a cor de um teste
   visual no `ambiente.txt`: três aberturas de 30 s acharam isso sem recompilar.
+- **Antes de dizer que uma variável falta no console, leia os padrões do `Ambiente_Carregar`**
+  (`port/x360/src/f2/posix360.c`): o `getenv` do 360 é aquela tabela mais o `ambiente.txt`, não o da CRT nem o
+  `port/x360/src/ambiente.c` da F1. O estudo da F6 deu o `BT3_SOUND_TICKS` como ausente, a primeira rodada da VU1 da
+  F5 o pôs no `ambiente.txt` para provar, e ele já era padrão desde a F2: a rodada não separou nada.
 
 ---
 
