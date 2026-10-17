@@ -68,6 +68,10 @@ própria só para isso). Para cá só volta texto.
   acaba): sem interação com `-p --force --trust --sandbox disabled --model ...`. Ele põe sozinho um
   `Co-authored-by: Cursor` em cada commit, apesar do `AGENTS.md`: desligue no `~/.cursor/cli-config.json` do usuário
   (`"attribution": {"attributeCommitsToAgent": false, "attributePRsToAgent": false}`) e confira as mensagens na revisão.
+  O WSL tem uns 7 GB: na investigação dos ícones um script Python do Cursor chegou a 7,6 GB lendo os dados e o OOM
+  matou o serviço inteiro. Dispare com `--property=MemoryMax=5G` no `systemd-run` e peça processamento arquivo por
+  arquivo. A retomada é `cursor-agent --resume <uuid>`, com o UUID da pasta em `~/.cursor/chats/<hash>/` (o hash
+  sozinho é recusado).
 
 ### 1.2b Steam Deck: a segunda fila de emulador (16/10/2026)
 
