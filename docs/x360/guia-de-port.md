@@ -660,6 +660,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     `XGSurfaceSize`) serve a todos os alvos; cada um tem uma textura tiled com o conteúdo. Trocar de alvo é `Resolve`
     do anterior (retângulo em múltiplos de 8, `GPU_RESOLVE_ALIGNMENT`) e um retângulo desenhado com a textura do novo
     sobre a EDRAM limpa. O back buffer também mora na EDRAM (base 0): depois do present, nada do alvo sobrou lá.
+  - **A profundidade de cada alvo com uma EDRAM só** (F5, etapa 7, plano/F5/07.md; o desenho, ainda não medido no
+    console): `Resolve(D3DRESOLVE_DEPTHSTENCIL)` para uma textura D24S8 e a volta como **cor**, numa superfície de cor
+    com a mesma `Base` da profundidade e a textura relida como A8B8G8R8 por um cabeçalho do `XGSetTextureHeader`
+    (bit a bit, sem tile a mais). O exemplo do XDK que ensina é o `FastDepthRestore` (`Source/Samples/Graphics` e
+    `Media/Shaders`): procure nos exemplos antes de inventar. Duas pegadinhas: dentro de cada tile de 80 pixels as
+    metades de 40 colunas da profundidade e da cor estão trocadas, e por isso a superfície de cor precisa da largura
+    de tiles inteiros (1040 para um alvo de 1024) e as áreas, de x em múltiplos de 80. Prove o restauro no boot com
+    um padrão qualquer, resolvido antes e depois, e um controle que tem de dar diferente.
   - **Profundidade fora de 0..1 corta a primitiva inteira no D3D9 do 360.** O GS aceita z além do formato do buffer
     (os glifos do texto do cartão do BT3 vêm com `0x0FFFFFF0` num Z24: z / zmax perto de 16). O PC não via: o GL liga
     `GL_DEPTH_CLAMP` e a SDL GPU desliga o corte. No console a caixa aparecia e o texto não. Prenda o z no shader
