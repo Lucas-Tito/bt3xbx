@@ -1305,3 +1305,26 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   controlador cujo texto contém `qemu` ou `roteiros`, a busca encontra esse bash. Confira os PIDs e
   os comandos completos; execute o controlador por arquivo em outra chamada, mantendo a regra de
   um emulador por vez. Não trate uma linha do shell como um segundo emulador real.
+
+### Menus 3D na F5, etapa 9 (o `ChrView` e o Shenlong)
+
+- **A cena de menu não é a luta.** `BtlScene_Init(8)` (no `ChrView_Init` e no `ShenScene_Init`) monta o `BtlPool`, o
+  `EftHit` e a câmera de efeitos, mas não cria o gerente da aura (`EftAuraMgr_Init` é uma tarefa da luta) nem o `BtlCam`
+  (o `ChrView` não cria câmera nenhuma; o Shenlong cria só a `DemoCam`, pelo `DemoCam_Init`). O `memoria_luta.py` que
+  exigia dono para tudo recusava as duas telas com "gerente da aura sem dono" e "câmera demo sem gerente de câmeras":
+  a recusa certa de um dado que não existe é o ponteiro nulo **nas duas builds** mais a prova de que nenhuma
+  subalocação do gerente (`EftAura*`) está viva; a `DemoCam` sozinha é tipada como na luta. Visto falhando: um
+  ponteiro da aura só na x86, e o teste de subalocação trocado por um dono que existe (`EftHit`).
+- **O buffer de modelo do `ChrView` tem duas vidas.** `ChrView_Init` aloca dois buffers de 0xCE000 e grava só a primeira
+  palavra (o resto nunca foi escrito: o `memdiff.py` o excluía pelo `contexto_charref` com o `ChrView` parado). Com o
+  modelo aberto (`loading` 0, `stageOn` e `visible` 1, `cur` o slot que recebeu o arquivo, com tamanho e id de modelo
+  `0x590 + chara * 10 + traje`) o slot do modelo é conteúdo vivo, conferido pelas marcas do arquivo (`01423.bin`), e só
+  o **outro** slot segue como não inicializado. Qualquer outro estado do `ChrView` volta a comparar tudo.
+- **`ponteiro-port` no cenário.** Com o `ChrView` desenhando, 22 palavras dos blocos do cenário de fundo (`00406.bin`:
+  ponteiros para `gStgDepthTint`, `gGfxDepthFog`, `D_002BF6B0`...) valem endereços diferentes nas duas builds, ambos
+  dentro da imagem: é a classe `ponteiro-port` do `memdiff.py` (não é classe suspeita, não leva teto).
+- **Girar o modelo é um passo do roteiro.** `gira LX LY N` inclina o direcional esquerdo (o `OrbitCam_Update` lê
+  `gPad[0].gameLeft` com zona morta de 50). A tela do visualizador é a pseudo-tela 600 (`roteiro.c`: Referência com
+  `CharRef.state` na carga ou no modelo), entra em `TELAS_MEM` e `TELAS_IMG`, e o `TELAS_MEM_ARQUIVOS` exige o
+  arquivo do modelo vivo e conforme (`fora-do-formato 0`). O `IMAGENS_DISTINTAS` recusa o modelo girado igual ao
+  aberto (um `gira` que não girou daria duas imagens idênticas nas duas builds, e a comparação passaria).

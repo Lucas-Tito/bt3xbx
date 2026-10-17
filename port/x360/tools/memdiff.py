@@ -344,7 +344,10 @@ def contexto_charref(x, p, lx, lp, pares, donos):
         aliases.update(REF_ALIASES)
     # Dois buffers do ChrView alocados, ainda sem arquivo: só a primeira palavra foi escrita. O restante nunca
     # foi inicializado. Exige tela 60 nas duas, o trabalho vivo e tipado com o dono exato, e os campos dos slots.
-    trabalhos = []
+    # (F5, etapa 9) Com o modelo aberto (ChrView_StepLoad terminou: loading 0, stageOn e visible 1, cur o slot que
+    # recebeu o arquivo), o mesmo vale só para o OUTRO slot, que nunca recebeu arquivo; o do modelo (tamanho e id de
+    # um modelo, 0x590 + chara * 10 + traje) é conteúdo vivo e fica com as marcas.
+    trabalhos, em_uso = [], []
     for r, s, o in lados:
         if "gChrView" not in s or "gProgress" not in s:
             return aliases, vazios
@@ -352,9 +355,22 @@ def contexto_charref(x, p, lx, lp, pares, donos):
         work = palavra(r, s["gChrView"], o)
         if prog is None or work is None or palavra(r, prog + 0x18, o) != 60:
             return aliases, vazios
-        if any(palavra(r, work + d, o) != 0 for d in (0x24, 0x30, 0x34, 0x3c)):
+        loading, stage, visivel, cur = (palavra(r, work + d, o) for d in (0x24, 0x30, 0x34, 0x3c))
+        if (loading, stage, visivel, cur) == (0, 0, 0, 0):
+            em_uso.append(None)
+        elif (loading, stage, visivel) == (0, 1, 1) and cur is not None and cur != 0:
+            k, resto = divmod(cur - work - 0x40, 0x38)
+            ficha = (palavra(r, cur + 0xc, o), palavra(r, cur + 0x10, o)) if resto == 0 and k in (0, 1) else None
+            if ficha is None or ficha[0] in (None, 0) or ficha[1] is None or \
+                    not 0x590 <= ficha[1] < 0x590 + 0xa1 * 10 + 10:
+                return aliases, vazios
+            em_uso.append((k, ficha))
+        else:
             return aliases, vazios
         trabalhos.append(work)
+    if em_uso[0] != em_uso[1]:
+        return aliases, vazios
+    em_uso = em_uso[0]
     dono = donos.get(trabalhos[0])
     if not dono or dono[0] != "ChrView" or len(dono[1]) != 0xbc or \
             not dono[2].startswith("ChrView_Init@view_a_d.c:") or " < CharRef_Init@menu_h_b.c:" not in dono[2]:
@@ -369,6 +385,8 @@ def contexto_charref(x, p, lx, lp, pares, donos):
     if len(works) != 1:
         return aliases, vazios
     for i in range(2):
+        if em_uso is not None and em_uso[0] == i:
+            continue  # (o slot do modelo aberto: conteúdo vivo, das marcas)
         buffers = []
         for (r, s, o), work in zip(lados, trabalhos):
             ofs = work + 0x40 + i * 0x38 + 8

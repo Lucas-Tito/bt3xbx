@@ -216,6 +216,12 @@ class Contexto:
     def auras(self):
         if not self.aloc: return
         mgr = self.x.global_('gEftAuraPool')
+        if mgr == 0 and self.p.global_('gEftAuraPool') == 0:
+            # (F5, etapa 9) A cena dos menus (BtlScene_Init no ChrView e no Shenlong) não cria o gerente da aura
+            # (EftAuraMgr_Init é uma tarefa da luta): ponteiro nulo nas duas e nenhuma subalocação da aura no pool.
+            exigir(not any('EftAura' in a[3] for a in self.aloc.values()), 'aura nula com subalocação da aura viva')
+            self.rotulos.append('aura: gerente nulo nas duas, a cena não o cria e não há subalocação dela')
+            return
         exigir(mgr == self.p.global_('gEftAuraPool') and mgr in self.aloc, 'gerente da aura sem dono')
         for offbase, offlivre, offvivo, offusado, offmax, passo, link in (
                 (0xc,0x10,0x14,0x24,4,0xd0,0xc0), (0x18,0x1c,0x20,0x28,8,0xb0,0xa0)):
@@ -454,7 +460,11 @@ class Contexto:
         demo=self.x.global_('gDemoCam')
         exigir(cam==self.p.global_('gBtlCam') and demo==self.p.global_('gDemoCam'),'donos das câmeras diferentes')
         if not cam:
-            exigir(not demo,'câmera demo sem gerente de câmeras')
+            # (F5, etapa 9) A cena do Shenlong (ShenScene_Init) cria só a câmera demo, sem o BtlCam da luta
+            # (BtlCam_Init chama DemoCam_Init junto): a demo é tipada igual, o gerente de câmeras segue nulo.
+            if demo:
+                self.camera_demo(demo)
+                self.rotulos.append('câmeras: gerente da luta nulo, câmera demo da cena tipada')
             return
         cur=self.par(cam,cam,0xc40)
         exigir(cur in (cam+0x720,cam+0x9b0),'vista corrente fora das câmeras dos dois lados')
@@ -463,12 +473,15 @@ class Contexto:
         m=self.mapa('BtlCam',0xc50)
         self.mapas[cam]=m
         exigir(demo!=0,'gerente de câmeras sem câmera demo')
+        self.camera_demo(demo)
+        self.rotulos.append('câmeras: três layouts, duas vistas e câmera demo tipados, donos conferidos')
+
+    def camera_demo(self,demo):
         m=self.mapa('DemoCam',0x340)
         m[0x2b8:0x2bc]=b'\x04\x80\x80\x80'  # DemoCamPose.f.frame é s32 na união.
         flags=self.par(demo,demo,0x308)
         exigir(flags & ~15 == 0 and self.par(demo,demo,0x32c) in (0,1),'modo da câmera demo inválido')
         self.mapas[demo]=m
-        self.rotulos.append('câmeras: três layouts, duas vistas e câmera demo tipados, donos conferidos')
 
     def gsc(self):
         ativo = self.x.global_('gGscActive')
