@@ -352,3 +352,19 @@ Preparo das etapas 3 e 4: [inventário das cores, ids e trajes da luta](inventar
   têm de sair normais sem reiniciar (plano/F4/10.md, achado 1).
 - **Depois da luta, no console:** a tela de resultado da História não avançou para a tela 9 no roteiro sem desenho
   (achado 3 do 10.md); medir com desenho e ver se é espera em tempo real antes de culpar o port.
+
+## Quando dá para jogar uma luta no console (estimativa de 16/10/2026)
+
+Hoje, no console, a luta começa e esgota a memória do D3D9 (texturas brancas, o jogo parando, a Guide sem abrir), e
+os lutadores nem apareceriam: a VU1 vem desligada no 360 e o desenho pula os modelos (seção 4, "VU1 não começa do
+zero"). Três marcos, cada um dependendo das sessões do Lucas no console, que são o gargalo (as outras etapas andam
+com agentes, no ritmo das etapas 2 a 4: cerca de um dia de agente cada):
+
+| Marco | O que o Lucas vê | Depende de | Previsão |
+|---|---|---|---|
+| A luta não trava | a luta roda e volta aos menus sem travar nem branco, mas sem os lutadores na tela | etapa 1 (o teto de memória): código em meio dia de agente e 2 ou 3 rodadas curtas no console | 1 a 2 dias depois de começar |
+| **Primeira luta jogável** | Goku contra Kuririn com os lutadores, o cenário e o HUD, com controle; pode faltar sombra, contorno, névoa e brilho, e pode não estar a 30 fps | etapas 1 e 6 (a VU1 em shaders) e as correções de memória da etapa 5 | **4 a 7 dias** (por volta de 20 a 23/10), conforme as sessões no console |
+| A luta da F5 | a luta completa a 30 fps, com os efeitos | etapas 7 (profundidade e alfa na EDRAM, o maior risco) e 8 (o desempenho), 9 e 10 | 2 a 3 semanas |
+
+A previsão do marco do meio vale se a etapa 6 não esbarrar em programa da VU1 inesperado; a da última, se a medição
+cedo da EDRAM (pergunta 6) couber na opção a.
