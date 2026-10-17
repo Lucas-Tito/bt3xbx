@@ -7,7 +7,8 @@
  *   amarelo  um instante, entre o D3D e o jogo
  *   azul     a luta rodando
  *   verde    terminou bem; qualquer botão volta para o dashboard
- *   vermelho falhou (o log diz onde: game:\bt3xbx.log, game:\saida.txt)
+ *   vermelho falhou (o log diz onde: game:\bt3xbx.log, game:\saida.txt), ou a ISO não é a convertida no PC
+ *            (decisão 23): a caixa do sistema diz isso por cima da tela vermelha, e o jogo não começa
  * O jogo roda noutra thread, com pilha grande e a FPU em truncamento (o modelo do PS2 para soma e multiplicação).
  * Com BT3_GS=gpu (F3, etapa 7) o jogo desenha: o dispositivo passa para a thread do jogo, que apresenta um quadro por
  * quadro do GS (port/x360/src/gs/gs_d3d.cpp), e a main só espera; quando o jogo termina, ela pega o dispositivo de
@@ -32,6 +33,7 @@ void Ambiente_Carregar(const char *caminho); /* posix360.c */
 void Estado_Resumo(void);                  /* estado360.c */
 void Port_X360FecharSaida(void);           /* posix360.c */
 void Iso_Iniciar(void);                    /* iso360.c */
+int Iso_Recusada(void);                    /* iso360.c: a ISO aberta não tem a marca da convertida */
 extern const char *volatile gPortStage;    /* plat_mem.c: até onde o arranque chegou */
 void GsD3d_Soltar(void);                   /* port/x360/src/gs/gs_d3d.cpp */
 int Port_UnpackPendenteNaQueda(char *linha, int n); /* port/x360/conv/conv_jogo.c: a guarda do Sprite_Unpack */
@@ -154,6 +156,46 @@ static DWORD WINAPI Preparar(LPVOID arg) {
     return 0;
 }
 
+/* A ISO original (sem a marca da convertida) foi recusada: a caixa de mensagem do sistema por cima da tela vermelha.
+   A caixa só aparece com a tela sendo apresentada, então a main apresenta enquanto ela está aberta (sem bloquear:
+   a Guide congela o console se ninguém apresentar). O texto, os botões, o resultado e o XOVERLAPPED ficam fora da
+   pilha: o sistema os usa depois da chamada voltar. Se outra tela do sistema estiver aberta (ERROR_ACCESS_DENIED),
+   tenta de novo por 10 s; se mesmo assim não abrir, fica só a tela vermelha, e o log diz por quê. Depois de fechada,
+   a main segue para a cor do fim (vermelha) e o dashboard no botão, como nas outras falhas. */
+static void MostrarRecusa(D3DDevice *dev) {
+    static const WCHAR kTitulo[] = L"ISO original";
+    static const WCHAR kTexto[] =
+        L"Esta \x00E9 a ISO original do jogo. O port l\x00EA a ISO convertida no PC: converta-a com "
+        L"port/x360/tools/iso_convertida.py, copie a convertida para a pasta do jogo e aponte o BT3_ISO do "
+        L"ambiente.txt para ela.";
+    static LPCWSTR kBotoes[1] = {L"OK"};
+    static MESSAGEBOX_RESULT sResultado;
+    static XOVERLAPPED sOv;
+    DWORD r, inicio = GetTickCount(), fim = 0;
+    for (;;) {
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
+        dev->Present(NULL, NULL, NULL, NULL);
+        ZeroMemory(&sOv, sizeof(sOv));
+        r = XShowMessageBoxUI(XUSER_INDEX_ANY, kTitulo, kTexto, 1, kBotoes, 0, XMB_ERRORICON, &sResultado, &sOv);
+        if (r != ERROR_ACCESS_DENIED || GetTickCount() - inicio >= 10000) {
+            break;
+        }
+    }
+    if (r != ERROR_IO_PENDING && r != ERROR_SUCCESS) {
+        Diario_Escrever("recusa: a caixa do sistema não abriu (XShowMessageBoxUI devolveu %u): fica a tela vermelha",
+                        (unsigned)r);
+        return;
+    }
+    Diario_Escrever("recusa: caixa do sistema aberta, \"ISO original\"");
+    while (!XHasOverlappedIoCompleted(&sOv)) {
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
+        dev->Present(NULL, NULL, NULL, NULL);
+    }
+    r = XGetOverlappedResult(&sOv, &fim, FALSE);
+    Diario_Escrever("recusa: caixa fechada (resultado %u, botão %d); o jogo não começa, qualquer botão volta ao "
+                    "dashboard", (unsigned)r, (int)sResultado.dwButtonPressed);
+}
+
 /* XLaunchNewImage não volta: de uma thread nova, com a main parada esperando (pesquisa/01, CLAUDE.md) */
 static DWORD WINAPI VoltarAoDashboard(LPVOID arg) {
     (void)arg;
@@ -167,7 +209,7 @@ void __cdecl main() {
     D3DDevice *dev = NULL;
     HANDLE t;
     int local;
-    bool gpu;
+    bool gpu, recusada, solto = false;
 
     Diario_Abrir("game:\\bt3xbx.log");
     SetUnhandledExceptionFilter(AoMorrer);
@@ -175,11 +217,14 @@ void __cdecl main() {
                     (unsigned)(DWORD)&local);
     Ambiente_Carregar("game:\\ambiente.txt");
     Iso_Iniciar(); /* antes de qualquer thread: a ISO e a trava dela */
+    recusada = Iso_Recusada() != 0;
 
-    t = CreateThread(NULL, 256 * 1024, Preparar, NULL, CREATE_SUSPENDED, &gThreadJogo);
-    ResumeThread(t);
-    WaitForSingleObject(t, INFINITE);
-    CloseHandle(t);
+    if (!recusada) { /* recusada a ISO, nem as tabelas do disco: o jogo não começa */
+        t = CreateThread(NULL, 256 * 1024, Preparar, NULL, CREATE_SUSPENDED, &gThreadJogo);
+        ResumeThread(t);
+        WaitForSingleObject(t, INFINITE);
+        CloseHandle(t);
+    }
     t = NULL;
 
     d3d = Direct3DCreate9(D3D_SDK_VERSION);
@@ -198,8 +243,13 @@ void __cdecl main() {
 
     /* BT3_GS=gpu: quem desenha é o jogo (gs_d3d.cpp pega o dispositivo no começo do desenho) */
 #pragma warning(suppress : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt, não o da CRT) */
-    gpu = getenv("BT3_GS") != NULL && strcmp(getenv("BT3_GS"), "gpu") == 0;
+    gpu = !recusada && getenv("BT3_GS") != NULL && strcmp(getenv("BT3_GS"), "gpu") == 0;
     gX360Dev = dev;
+    if (recusada) {
+        gCor = 0xFFC02020; /* vermelho: a cor de falha */
+        InterlockedExchange(&gTerminou, 1);
+        MostrarRecusa(dev);
+    }
     if (gpu) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF000000, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
@@ -244,9 +294,10 @@ void __cdecl main() {
                     apertou = true;
                 }
             }
-            if (apertou) {
+            if (apertou && solto) { /* um botão apertado de novo: o A que fechou a caixa da recusa não conta */
                 break;
             }
+            solto = solto || !apertou;
         }
     }
 

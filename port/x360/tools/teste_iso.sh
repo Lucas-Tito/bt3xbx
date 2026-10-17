@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Teste do leitor de ISO do 360 (port/x360/src/iso360.c, decisão 18) no WSL, contra a ISO do usuário:
-#   port/x360/tools/teste_iso.sh CAMINHO.iso
+# Teste do leitor de ISO do 360 (port/x360/src/iso360.c, decisões 18 e 23) no WSL, contra a ISO do usuário
+# convertida no PC (port/x360/tools/iso_convertida.py; a original é recusada pela falta da marca e dá tudo FALTA):
+#   port/x360/tools/teste_iso.sh CAMINHO-convertida.iso
 # Compila iso360.c e os conversores (port/x360/conv) para o Linux, com uma camada mínima da API do Xbox, e confere
 # cada arquivo lido de dentro da ISO contra o que extract_disc.py e conv_tool já deixaram em disco:
 #   - disc/SLUS_216.78, disc/BIN/DBZP.BIN e disc/DATA/* contra gamedata/disc;

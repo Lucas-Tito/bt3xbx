@@ -8,9 +8,13 @@
  *   - mods/...    arquivo de verdade, como no PC;
  *   - disc/...    o arquivo da ISO (ISO 9660, sem extensões: nomes em maiúsculas com ";1");
  *   - pzsN/...    a entrada do AFS dentro da ISO.
- * Entrada com conversor (Conv_Arquivo, port/x360/conv) é lida inteira e convertida na abertura; o resto (fluxos
- * de som, filmes) é lido da ISO a cada fread. Os dados sob a raiz estão sempre no formato do PS2: um arquivo de
- * mods/ ou de uma pasta solta (sem ISO) com conversor também se converte ao abrir (Iso_DeArquivo). O arquivo
+ * A ISO tem de ser a convertida no PC (decisão 23, port/x360/tools/iso_convertida.py): Iso_Iniciar procura a marca
+ * dela (docs/x360/formatos/iso-convertida.md) e, sem a marca, recusa a imagem (Iso_Recusada; a main mostra a caixa
+ * do sistema e o jogo não começa). Da ISO convertida, a entrada com conversor (Conv_FormatoDe, port/x360/conv) já
+ * vem na ordem do 360: é lida inteira na abertura, sem Conv_Arquivo; o resto (fluxos de som, filmes) é lido da ISO
+ * a cada fread. Os conteúdos comprimidos (BPE) continuam convertidos depois de descomprimidos, pelos ganchos do
+ * jogo (port/x360/conv/conv_jogo.c). Um arquivo de mods/ ou de uma pasta solta (sem ISO) está no formato do PS2 e
+ * o que tem conversor se converte ao abrir (Iso_DeArquivo; os mods/ ficam assim até as últimas fases). O arquivo
  * aberto é um IsoArq do vetor sAbertos, e as funções de stdio do shim (Port_X360Fread...) reconhecem um IsoArq
  * pelo endereço e mandam o resto para a CRT. Caminho sob a raiz que não é do disco (fases e músicas de fora,
  * port/src/plat_stages.c, plat_songs.c) vai para o arquivo de verdade.
@@ -28,6 +32,8 @@ void Port_Abortar(void);
 
 #define SETOR 2048
 #define MAX_ABERTOS 64
+#define MARCA_POS 0x3DF400 /* a marca da ISO convertida: na folga do cabeçalho de DATA/PZS3US0.AFS, zerada na original */
+#define MARCA_TAM 512
 
 typedef struct IsoArq {
     int usado;
@@ -41,6 +47,7 @@ typedef struct Afs { int lido; __int64 ini; unsigned n; unsigned *tab; } Afs; /*
 static HANDLE sIso = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION sTrava;
 static int sIniciado;
+static int sRecusada; /* a ISO aberta não tem a marca da convertida: o jogo não começa */
 static unsigned sRaizLba, sRaizTam;
 static Afs sAfs[3];
 static IsoArq sAbertos[MAX_ABERTOS];
@@ -66,6 +73,44 @@ static int ler(__int64 pos, void *buf, unsigned long n) {
 
 static unsigned le32(const unsigned char *p) {
     return (unsigned)p[0] | (unsigned)p[1] << 8 | (unsigned)p[2] << 16 | (unsigned)p[3] << 24;
+}
+
+static void hexa(const unsigned char *p, unsigned n, char *s) {
+    static const char dig[] = "0123456789abcdef";
+    unsigned i;
+    for (i = 0; i < n; i++) {
+        s[i * 2] = dig[p[i] >> 4];
+        s[i * 2 + 1] = dig[p[i] & 15];
+    }
+    s[n * 2] = '\0';
+}
+
+/* A marca da ISO convertida no PC (decisão 23, docs/x360/formatos/iso-convertida.md): 512 bytes em 0x3DF400 que
+   começam por "BT3X360-ISO" e cinco zeros. Sem política de versão por enquanto (resposta do Lucas no
+   plano/F5/02.md): a convertida se reconhece pela assinatura, e o resto da marca só vai para o log. */
+static int tem_marca(const char *caminho) {
+    static unsigned char m[MARCA_TAM];
+    static char md5[33], fontes[65], exe[65];
+    unsigned i, zeros = 0;
+    if (!ler(MARCA_POS, m, MARCA_TAM)) {
+        Diario_Escrever("iso: %s: a leitura da marca em 0x%X falhou (imagem menor que o esperado?)", caminho, MARCA_POS);
+        return 0;
+    }
+    if (memcmp(m, "BT3X360-ISO\0\0\0\0\0", 16) != 0) {
+        for (i = 0; i < MARCA_TAM; i++) {
+            zeros += m[i] == 0;
+        }
+        Diario_Escrever("iso: %s sem a marca da ISO convertida em 0x%X (%s): recusada", caminho, MARCA_POS,
+                        zeros == MARCA_TAM ? "a região está zerada, como na ISO original" : "bytes desconhecidos");
+        return 0;
+    }
+    hexa(m + 32, 16, md5);
+    hexa(m + 80, 32, fontes);
+    hexa(m + 112, 32, exe);
+    Diario_Escrever("iso: marca da ISO convertida em 0x%X: versão %u, marca de %u bytes, origem de %.0f bytes com MD5 "
+                    "%s; fontes dos conversores %s; conv_tool %s", MARCA_POS, le32(m + 16), le32(m + 20),
+                    (double)le32(m + 24) + (double)le32(m + 28) * 4294967296.0, md5, fontes, exe);
+    return 1;
 }
 
 /* A primeira .iso da pasta do .xex (ou BT3_ISO). Nome no FATX: até 42 caracteres. Chamada pela main antes de criar
@@ -109,6 +154,18 @@ void Iso_Iniciar(void) {
     sRaizTam = le32(pvd + 156 + 10);
     strncpy(sNomeIso, caminho, sizeof(sNomeIso) - 1);
     Diario_Escrever("iso: %s", caminho);
+    if (!tem_marca(caminho)) {
+        CloseHandle(sIso);
+        sIso = INVALID_HANDLE_VALUE;
+        sRecusada = 1;
+        return;
+    }
+    Diario_Escrever("iso: os arquivos com conversor já vêm convertidos: a carga só lê (sem Conv_Arquivo)");
+}
+
+/* 1 se a ISO aberta não é a convertida (a main mostra a recusa e não começa o jogo). */
+int Iso_Recusada(void) {
+    return sRecusada;
 }
 
 /* Compara um nome do caminho com o do registro (sem caixa, sem o ";1" da versão nem o "." de quem não tem
@@ -230,7 +287,7 @@ static Afs *afs(int n) {
     return tab != NULL ? a : NULL;
 }
 
-/* Conv_Arquivo sobre o arquivo inteiro; falha é fatal (decisão 12: formato que não bate não segue). */
+/* Conv_Arquivo sobre um arquivo solto inteiro (mods/, ou dados sem ISO); falha é fatal (decisão 12: formato que não bate não segue). */
 static void converter(const char *rel, unsigned char *dados, long tam, double msLer) {
     char msg[240];
     LARGE_INTEGER t0;
@@ -284,6 +341,9 @@ void *Iso_Abrir(const char *rel) {
     if (!sIniciado) {
         Iso_Iniciar();
     }
+    if (sRecusada) {
+        return NULL; /* (o jogo nem começa; por garantia, nada da ISO recusada) */
+    }
     if (sIso == INVALID_HANDLE_VALUE || strncmp(rel, "mods/", 5) == 0) {
         return (void *)-1;
     }
@@ -306,7 +366,7 @@ void *Iso_Abrir(const char *rel) {
     if (r == NULL) {
         return NULL;
     }
-    if (Conv_FormatoDe(rel) != NULL) {
+    if (Conv_FormatoDe(rel) != NULL) { /* lido inteiro como antes, para a carga ler da memória; já convertido */
         LARGE_INTEGER t0;
         QueryPerformanceCounter(&t0);
         r->dados = (unsigned char *)malloc((size_t)tam + 1);
@@ -314,7 +374,8 @@ void *Iso_Abrir(const char *rel) {
             Diario_Escrever("iso: %s (%ld bytes): sem memória ou leitura falhou", rel, tam);
             Port_Abortar();
         }
-        converter(rel, r->dados, tam, ms_desde(t0));
+        Diario_Escrever("iso: %s, %ld bytes: leitura %.1f ms (da ISO convertida, sem conversão)", rel, tam,
+                        ms_desde(t0));
     }
     return r;
 }
