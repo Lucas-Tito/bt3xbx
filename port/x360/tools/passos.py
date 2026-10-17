@@ -3,7 +3,7 @@
 saída da x86 ou da PPC sem janela, ou o bt3xbx.log do 360. O que ler no console está em docs/x360/plano/F5/03.md.
 
     passos.py LOG... [--carimbo C]                  a estrutura: cada log diz de que build saiu ("passos: origem C",
-                                                    igual a C), e cada janela tem as três linhas (tempo, apresentação,
+                                                    igual a C; mesma_origem), e cada janela tem as três linhas (tempo, apresentação,
                                                     descartes) com números; os números sem janela são do emulador
     passos.py LOG... --console [--janelas N] [--minimo P] [--carimbo C]
                                                     o aceite proposto no escopo da F5 (seção 3, "Tempo, memória e uso
@@ -33,6 +33,14 @@ SEM_IMAGEM = re.compile(r"passos: janela (\d+) apresentação: nenhuma imagem")
 DESC = re.compile(r"passos: janela (\d+) descartes: VU1 (\d+), nativos (\d+) (\d+) (\d+) (\d+) \(contorno, chave, "
                   r"tabela, ids\), direto no quadro (\d+), texturas recusadas (\d+), primitivas só do PS2 (\d+)")
 SEM_DESC = re.compile(r"passos: janela (\d+) descartes: sem backend")
+
+
+def mesma_origem(origem, esperado):
+    """A origem de um log ("passos: origem") é a esperada ("COMMIT diff:HASH") pelo commit e pelo hash da diferença.
+    A build que veio pelo wsl.sh enviar carimba "COMMIT diff:HASH (N alterados, M apagados)": o sufixo só vale com N e
+    M zero (a conferência final da etapa 5 da F5 recusou os próprios logs por esse sufixo; plano/F5/05.md)."""
+    m = re.fullmatch(r"(\S+ diff:[0-9a-f]+)(?: \((\d+) alterados, (\d+) apagados\))?", origem.strip())
+    return bool(m) and m.group(1) == esperado.strip() and (m.group(2) is None or m.group(2) == m.group(3) == "0")
 
 
 def ler(caminho):
@@ -65,7 +73,7 @@ def main():
         origem, jan = ler(log)
         if origem is None:
             erros.append(f"{log}: sem a linha \"passos: origem\" (a build não tem a medida, ou o log está cortado)")
-        elif a.carimbo is not None and origem != a.carimbo.strip():
+        elif a.carimbo is not None and not mesma_origem(origem, a.carimbo):
             erros.append(f"{log}: log de outra build (origem \"{origem}\", esperado \"{a.carimbo.strip()}\")")
         if not jan:
             erros.append(f"{log}: nenhuma janela medida")
@@ -136,4 +144,5 @@ def main():
     return 1 if erros else 0
 
 
-sys.exit(main())
+if __name__ == "__main__":  # (o roteiros.py importa mesma_origem daqui)
+    sys.exit(main())

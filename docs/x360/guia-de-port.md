@@ -312,7 +312,8 @@ intervalo menos a espera de vblank (`gPortSleptNs`); o Present e as imagens vêm
 `Passos_Descartes`. Nada se escreve durante a janela (nem os resumos de 60 quadros do `gs_d3d.cpp` e de 600 vblanks do
 `estado360.c`); ao fechar, "passos: janela K ..." e, com `rastreia luta`, a linha determinística no rastro. A primeira
 linha de todo log é "passos: origem COMMIT diff:HASH", o carimbo da build (`headless.py` e `build_f2.sh`):
-`roteiros.py f5` e `passos.py` recusam o log de outra build. O aceite do console é `passos.py LOG... --console`.
+`roteiros.py f5` e `passos.py` recusam o log de outra build (pelo commit e pelo hash da diferença; o sufixo
+"(N alterados, M apagados)" do `wsl.sh enviar` só passa com zero e zero: `passos.py mesma_origem`). O aceite do console é `passos.py LOG... --console`.
 
 ### Achar o que depende da ordem dos bytes
 
@@ -880,6 +881,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     antes de rodar se x86, x86r e ppc não forem do commit de agora sem diferença (`diff:da39a3ee5e`) ou se a árvore
     tiver alteração; `DESENVOLVIMENTO=1` deixa rodar e o fim diz "NÃO VALE COMO CRITÉRIO". Regra que não se confere
     na ferramenta não vale.
+  - **O verificador de origem tem de ser testado com a origem que o ciclo real produz.** Na conferência final da
+    etapa 5 da F5 o `roteiros.py f5` e o `passos.py` recusaram os próprios logs do commit certo (8 falhas, uma rodada
+    de duas horas): a build veio pelo `wsl.sh enviar`, que carimba "COMMIT diff:HASH (0 alterados, 0 apagados)", e os
+    dois comparavam a linha inteira com "COMMIT diff:HASH". O `roteiros.sh` cortava o `CARIMBO` nos dois primeiros
+    campos e passava, e as rodadas que deram "tudo certo" antes saíram de builds carimbadas pelo git, sem o sufixo
+    (o clone do agente do WSL, sem `enviar`). Agora os dois comparam commit e hash e
+    aceitam o sufixo só com zero e zero, vistos recusando outro commit, outro hash, sufixo com alterações e sufixo
+    estragado, sobre cópias dos logs da rodada (`REUSA=1` refaz as conferências sem emulador).
   - **Byte de uma palavra de pacote não é o primeiro byte da memória no big-endian.** As letras dos nomes
     (`port/src/gs/namefont.c`) conferiam o endereço do registrador do GS em `pix[0x38]`; o pacote de imagem vem
     convertido em palavras u32 (o registrador de 64 bits como duas, a baixa primeiro), então no big-endian o byte é o

@@ -134,7 +134,8 @@ for n in "${NOMES[@]}"; do
     # (F5, etapa 3) os roteiros da F5: o que cada um tem de alcançar (roteiros.py f5: a luta montada, cada ação
     # confirmada no estado do jogo e na matriz, o resultado e a volta ao menu, a janela contínua, os pontos) e a medida
     # de tempo por passo (passos.py: cada janela com as três linhas), no log da x86 deste commit (a linha "passos:
-    # origem" igual ao commit de agora sem diferença: um log de outra build é recusado)
+    # origem" igual ao commit de agora sem diferença, com o sufixo do wsl.sh enviar só se for "(0 alterados, 0
+    # apagados)": um log de outra build é recusado; passos.py mesma_origem)
     if [[ $n == f5_* ]]; then
         python3 port/x360/tools/roteiros.py f5 $n $D/x86_a.txt --carimbo "$AGORA diff:da39a3ee5e" > $D/f5.txt
         r=$?; sed 's/^/   /' $D/f5.txt

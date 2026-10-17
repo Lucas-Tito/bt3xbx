@@ -68,6 +68,7 @@ import argparse, collections, pathlib, re, struct, subprocess, sys
 ROOT = pathlib.Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "port/x360/tools"))
 import unpacks  # noqa: E402
+from passos import mesma_origem  # noqa: E402
 
 # O conteúdo que cada chamada descomprime (menus-modos.md): "NNN sK" é a seção K do pacote de menu de índice NNN; um
 # nome é uma faixa de arquivos inteiros (FAIXAS).
@@ -1134,7 +1135,7 @@ def confere_f5(nome, caminho, carimbo=None):
     origem = [m.group(1) for m in (re.search(r"passos: origem (.*) \(tempo por passo", l) for l in linhas) if m]
     if not origem:
         erros.append("o log não diz de que build saiu (sem a linha \"passos: origem\")")
-    elif carimbo is not None and origem[0].strip() != carimbo.strip():
+    elif carimbo is not None and not mesma_origem(origem[0], carimbo):
         erros.append(f"log de outra build: origem \"{origem[0]}\", esperado \"{carimbo.strip()}\"")
     rot = [l[l.index("roteiro: "):] if "roteiro: " in l else l for l in linhas]
     if any(l.startswith("roteiro: FALHA") for l in rot):
