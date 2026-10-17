@@ -314,7 +314,7 @@ def conv(caminho):
     largura = []  # as posições "com outra largura" do arquivo atual (as linhas de detalhe antes do "contra o mapa")
     for l in pathlib.Path(caminho).read_text(errors="replace").splitlines():
         m = re.match(r"    0x([0-9A-Fa-f]+): rastreio leu (\d+), conversor marca (\d+) \((trocou com outra largura|tratou "
-                     r"como byte)\)$", l)
+                     r"como byte|no meio de outro número)\)$", l)
         if m:
             largura.append((int(m.group(1), 16), int(m.group(2)), int(m.group(3))))
             continue

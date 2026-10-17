@@ -1231,3 +1231,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Dump de memória não precisa repetir o fim da luta.** `BT3_MEMORIA_SAIR=1` no teste termina logo após
   gravar o dump e o testemunho no vblank pedido. Só as rodadas próprias de memória das telas/pontos usam
   essa saída; a rodada que compara rastro, arquivos e luta completa continua até o fim do roteiro.
+
+- **O detalhe de continuação do mapa tem uma terceira forma.** Uma metade dentro de um u32 marcado
+  aparece como marca 128 e "no meio de outro número", somada a "não trocadas". O `roteiros.py conv`
+  precisa guardar esse detalhe antes de consultar `LARGURA_CONHECIDA`; só reconhecer "outra largura"
+  e "tratou como byte" rejeitava as duas posições do HUD mesmo com o leitor correto registrado.
+  A forma nova continua exigindo posição, largura e leitores da entrada específica, sem aceitar o resto.
