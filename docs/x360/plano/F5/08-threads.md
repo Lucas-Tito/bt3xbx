@@ -428,3 +428,70 @@ conta o quanto uma corrida se propaga; o número que conta é o de quadros com `
 8.229 é o mesmo nas duas CPUs (o jogo lê memória que a carga já reaproveitou).
 
 O que o degrau 1 tem de vencer: **zero linhas `race:`, zero quadros diferentes e o fim do roteiro**, nas quatro combinações.
+
+### Parte 2: o corte do hash de página
+
+#### O que mudou
+
+`texture_get` (`gs_draw.c`) calculava o `gen` da textura (a chave do cache de texturas) com o hash das páginas
+`tbp / 32` a `tbp / 32 + pages`, `pages` sendo o tamanho linear da textura em páginas, e o laço ia até `i <= pages`. Duas
+imprecisões: sempre uma página a mais (uma textura alinhada que ocupa N páginas hasheava N + 1, e bastava a vizinha mudar
+para a textura ser decodificada de novo sem necessidade), e, nos formatos de 8 e 4 bits dentro de um pixel de 32
+(`PSM` 0x1B, 0x24, 0x2C), o `bits` da conta era o do formato e o endereço é o do pixel de 32 (uma página a menos do que a
+decodificação lê). A função nova `tex_pages` (em `#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)`, com o laço de
+antes no `#else`) dá o número de páginas que a decodificação **pode ler**: a página do canto de baixo e da direita (a página só
+cresce com x e com y), pelas mesmas expressões do `vram_rw` escritas em páginas (32 bits: 64 x 32 pixels por página, 16 bits:
+64 x 64, 8 bits: 128 x 64, 4 bits: 128 x 128, e a largura `bw >> 1` nos dois últimos), mais a página para a qual um bloco do
+fim da grade vaza quando `tbp` não começa numa página. É o que a decodificação lê, nem uma página a mais, nem a menos.
+
+**Por que não foi a forma mais agressiva.** O primeiro ensaio usou o tamanho linear exato em bytes (sem o `+ 1`): cortou mais
+(2.129 decodificações no `f5_duelo` contra as 2.437 de agora), mas é a conta que sub-conta os formatos de 8 e 4 bits dentro
+de 32 e o vazamento de bloco, e não foi adotada. A forma de agora segue a decodificação.
+
+#### O que ficou provado
+
+O hash do quadro de sempre **não pode** ser a prova aqui: com menos decodificações, o backend falso (que numera as texturas
+pela ordem de criação) dá outros números às mesmas texturas e todos os quadros depois da primeira diferença mudam. Por isso o
+backend falso ganhou o **hash normal** (`BT3_GPU_NORMAL=1`, `gpu_falso.c`): cada textura do desenho vale pelo hash do
+conteúdo que o backend recebeu (largura, altura, formato e todos os pixels), não pelo número, e a seção das texturas criadas
+fica de fora; o resto (contagens, alvos, pipelines, desenhos, vértices de CPU, vértices, índices e constantes da VU1) é o de
+sempre. **Igual no hash normal quer dizer: em todo quadro, cada desenho amostra uma textura com os mesmos pixels que
+amostrava.** `divergencias.py --normal` compara.
+
+| Prova | Resultado |
+|---|---|
+| `x86g` antes contra `x86gv` depois, hash normal, `f5_treino` (7.386 quadros) e `f5_duelo` (8.380) | iguais nos dois, nenhum quadro diferente |
+| `ppcg` antes (o `af356fe`, guardada) contra `ppcg` depois, hash normal, os mesmos dois | iguais nos dois, nenhum quadro diferente |
+| `x86gv` contra `ppcg`, depois, hash normal | `f5_treino`: iguais; `f5_duelo`: os mesmos 11 quadros (4.918 a 4.937) da seção dos vértices de CPU que já diferiam antes (1/16 de pixel num sprite), nenhum outro |
+| Seções da VU1 (vértices, índices, constantes), `x86gv` contra `ppcg`, depois | iguais nos 7.386 e nos 8.380 quadros |
+| Texturas decodificadas (o que o corte economiza) | `f5_treino` 1.607 para 1.252 (de 148 para 115 MB); `f5_duelo` 2.968 para 2.437 (de 197 para 154 MB) |
+| Recálculos de página (`Gs_PageHash`) | `f5_treino` 1.000.345 para 873.805 (menos 13%); `f5_duelo` 1.436.476 para 1.207.603 (menos 16%) |
+| `GsVu1_Call` em tiques na `x86gv`, o `f5_duelo`, três rodadas alternadas sem e com o corte | 14,76 / 14,63 / 14,70 G contra 13,73 / 13,63 / 13,65 G: **7% menos** |
+| Verificador visto falhando: `tex_pages` sem a última página (`return grid;`) | hash normal diferente em 3.282 de 7.386 quadros (`f5_treino`) e 4.578 de 8.380 (`f5_duelo`), na seção dos desenhos: `divergencias.py` sai com 1 |
+| A `.text` da x86 plana | `cc46fa0752f092fca305bc8bf2e2e54390763af0`, igual à referência (a mudança é toda em `PORT_BIG_ENDIAN` ou `BT3_TESTE_VU1`) |
+
+O hash de jogo de sempre (que **não** vale como prova) passa a ser `70b6b1d1bb3f1d85` (`f5_treino`, x86 e PPC iguais) e
+`29caae14a161459a` na x86, `b65001fe18962dda` na PPC (`f5_duelo`, a mesma diferença dos 11 quadros).
+
+#### A estimativa para o 360
+
+Sete por cento dos tiques do `GsVu1_Call` na x86 (as três rodadas, estáveis dentro de 1%): sobre os 26,3 ms da gravação da VU1
+da luta do console, **de 0,5 a 1,8 ms** se o Xenon seguir a proporção da x86 (1,8 é o limite de cima, 7% de 26,3; 0,5 é o piso
+se o tempo no Xenon for de espera de memória e as páginas a menos pesarem só pelo volume lido: 13 a 16% de 2,8 MB, uns 0,4
+MB por quadro). É pouco contra os 75,7 ms, e é **sem risco de lista** (a prova acima). As decodificações a menos (uns 20% no
+total dos roteiros, 49 MB de pixels no `f5_duelo`) são cargas de estágio, não regime; no console poupam também a criação e o
+envio da textura no D3D. O maior item do hash, o laço de 8 KB por página (uns 1,2 milhão de recálculos no roteiro), segue de pé:
+o que sobra é o conteúdo que muda de fato (79% dos recálculos dão um hash que a página não tinha, a textura nova do ciclo do
+estágio).
+
+#### O que não foi feito, e por quê
+
+- **Pular o recálculo quando o envio não mudou nenhum byte** (comparar dentro do `transfer_data`): só pegaria os 21% de
+  recálculos de conteúdo igual, custaria uma comparação por palavra em todo envio (o laço que já foi um quarto do tempo) e
+  mexeria em cinco caminhos de escrita: ganho e custo se anulam.
+- **Contar a página "a mais" do `transfer_data`** (`last` inclusivo, que bumpa uma página que o envio alinhado não tocou): o
+  `gGsPageGen` tem outros leitores (a idade dos alvos, o "nunca recebeu envio"), então mexer nele muda mais do que o hash;
+  precisaria de um contador à parte só para o hash.
+- **Um hash mais barato por byte** (somas com rotação, sem multiplicação de 64 bits): o ganho no Xenon não se mede no WSL
+  (a PPC no `qemu` conta instruções do GCC de 32 bits, não os `mulld` do Xenon) e o risco de colisão em texturas de gradiente
+  não vale um ganho que não se vê. Fica para depois da medição no console.

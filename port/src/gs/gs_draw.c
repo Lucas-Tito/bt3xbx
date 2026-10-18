@@ -194,6 +194,31 @@ int GsDraw_X360Abre(uint32_t w, uint32_t h, int modo) {
 }
 #endif
 
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+/* (F5, etapa 8, degrau 1) Quantas páginas de 8 KB, a partir de tbp / 32, a decodificação de uma textura pode ler: as do
+   canto de baixo e da direita (a página só cresce com x e com y), mais a página a que um bloco do fim da última página
+   da grade vaza quando tbp não começa numa página. É a conta do vram_rw (as mesmas expressões, em páginas): o laço de antes,
+   `i <= pages` sobre o tamanho linear, hasheava uma página a mais (e, nos formatos de 8 e 4 bits dentro de 32, a menos). O
+   `gen` do texture_get só precisa do conteúdo do que a decodificação lê. */
+static uint32_t tex_pages(uint32_t tbp, uint32_t bw, uint32_t psm, uint32_t tw, uint32_t th) {
+    uint32_t x = tw - 1, y = th - 1, grid;
+
+    if ((psm & 0x30) == 0x30) {
+        psm &= 0x0F;
+    }
+    if (bw == 0) {
+        bw = 1;
+    }
+    switch (psm) {
+    case 0x02: case 0x0A: grid = (y >> 6) * bw + (x >> 6); break;        /* 16 bits: páginas de 64 x 64 */
+    case 0x13: grid = (y >> 6) * (bw >> 1) + (x >> 7); break;            /* 8 bits: 128 x 64 */
+    case 0x14: grid = (y >> 7) * (bw >> 1) + (x >> 7); break;            /* 4 bits: 128 x 128 */
+    default: grid = (y >> 5) * bw + (x >> 6); break;                     /* 32 bits e os que moram num pixel de 32: 64 x 32 */
+    }
+    return grid + ((tbp & 31) != 0) + 1;
+}
+#endif
+
 /* GS memory -> an RGBA texture for the current TEX0 (alpha as stored: 0x80 is opaque). The back end makes
    the texture and takes the decoded pixels (freed after it has uploaded them). */
 static GsTex texture_get(int ctx) {
@@ -221,7 +246,8 @@ static GsTex texture_get(int ctx) {
         if (memo[m].epoch == gGsPageEpoch + 1 && memo[m].t0 == t0) {
             gen = memo[m].gen;
         } else {
-            for (i = 0; i <= pages; i++) {
+            pages = tex_pages(tbp, tbw, psm, tw, th);
+            for (i = 0; i < pages; i++) {
                 gen = (gen ^ Gs_PageHash(tbp / 32 + i)) * 16777619u + i;
             }
             if (bits <= 8) {
