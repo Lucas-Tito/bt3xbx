@@ -200,6 +200,10 @@ int ADXF_GetFsizeSct(void *h) {
 int ADXF_ReadNw(void *h, int nsct, void *buf) {
     PortFile *f = h;
     size_t got;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    extern void Port_GsEspera(void); /* a carga escreve na memória do jogo: a lista em gravação não pode estar lendo dali */
+    Port_GsEspera();
+#endif
 
     if (nsct > f->sizeSct - f->posSct) {
         nsct = f->sizeSct - f->posSct;

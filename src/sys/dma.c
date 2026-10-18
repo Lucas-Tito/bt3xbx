@@ -122,6 +122,10 @@ void Dma_EndDirect(u64 *end) {
 
 /* Makes both buffers an empty list (a lone END tag) and rewinds the cursor to the current one. */
 void Dma_ResetBuffers(void) {
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    extern void Port_GsEspera(void); /* a lista do quadro anterior pode ainda estar sendo gravada: os buffers são dela */
+    Port_GsEspera();
+#endif
     ((u32 *)gDmaBuf[0])[0] = DMA_TAG_END;
     ((u32 *)gDmaBuf[0])[1] = 0;
     ((u32 *)gDmaBuf[0])[2] = 0;
@@ -150,6 +154,10 @@ s32 Dma_GetFreeSize(void) {
 
 /* Shrinks both buffers to 0x51000 bytes and hands their upper 0xAF000 bytes to the caller. */
 void Dma_LendBufferTails(u32 *tail0, u32 *tail1, s32 *size) {
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    extern void Port_GsEspera(void); /* o que se empresta é o que a lista em gravação ainda lê */
+    Port_GsEspera();
+#endif
     gDmaBufSize = 0x51000;
     gDmaBufEnd[0] = gDmaBuf[0] + 0x51000;
     gDmaBufEnd[1] = gDmaBuf[1] + 0x51000;
@@ -160,6 +168,10 @@ void Dma_LendBufferTails(u32 *tail0, u32 *tail1, s32 *size) {
 
 /* Gives the buffers their full 1 MB back. */
 void Dma_ReclaimBufferTails(void) {
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    extern void Port_GsEspera(void);
+    Port_GsEspera();
+#endif
     gDmaBufSize = DMA_BUF_SIZE;
     gDmaBufEnd[0] = gDmaBuf[0] + DMA_BUF_SIZE;
     gDmaBufEnd[1] = gDmaBuf[1] + DMA_BUF_SIZE;

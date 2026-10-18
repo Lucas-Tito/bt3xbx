@@ -43,7 +43,14 @@ void sceGsResetGraph() {}
 void sceGsResetPath() {}
 void sceGsSetDefStoreImage() {}
 int sceGsExecStoreImage() { return 0; }
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+/* (F5, etapa 8, degrau 1) o ponto onde o jogo espera o GS acabar a lista do quadro anterior: com a gravação em thread
+   (BT3_GS_THREAD) é aqui que o jogo espera a thread; sem ela, Port_GsEspera não faz nada */
+extern void Port_GsEspera(void);
+int sceGsSyncPath() { Port_GsEspera(); return 0; }
+#else
 int sceGsSyncPath() { return 0; }
+#endif
 void *sceGsSyncVCallback(int (*handler)(int)) { void *old = (void *)sVsyncHandler; sVsyncHandler = handler; return old; }
 /* One vertical blank: runs the game's VBlank handler, as the interrupt would. */
 extern void Port_Trace(unsigned vblanks);

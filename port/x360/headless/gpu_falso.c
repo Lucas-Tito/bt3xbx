@@ -320,12 +320,21 @@ static void amostra(int sig, siginfo_t *si, void *uc) {
 }
 #endif
 
+/* (F5, etapa 8, degrau 1) só existe nas builds com a espera do jogo pela thread de gravação (gs_core.c) */
+extern void Port_GsEspera(void) __attribute__((weak));
+extern unsigned gGsFrameJogo __attribute__((weak)); /* o contador de quadros do lado do jogo (avança na entrega) */
+
 static void relatorio(void) {
     int f;
     const char *saida = getenv("BT3_PERFIL_SAIDA");
     FILE *fp = saida != NULL ? fopen(saida, "w") : stderr;
     uint32_t i;
 
+    if (Port_GsEspera != NULL) {
+        Port_GsEspera(); /* o último quadro entregue acaba de ser gravado antes do resumo (o atexit do backend roda antes do do gs_core) */
+        /* depois da espera os dois contadores são o mesmo número: o do jogo avançou na entrega, o do desenho no fim da gravação */
+        fprintf(stderr, "gpu_falso: contador de quadros do jogo %u, do desenho %u\n", gGsFrameJogo, gGsFrame);
+    }
     fprintf(stderr, "gpu_falso: %u quadros, hash do jogo %016llx, %u texturas decodificadas (%u KB), %d pipelines\n", sFrames,
             (unsigned long long)sTotal, sTexNovas, sTexBytes / 1024, sPipeCount);
     if (sPerfil <= 0 || fp == NULL) {

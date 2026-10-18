@@ -208,7 +208,13 @@ static unsigned script_buttons(void) {
         }
     }
     for (i = 0; i < count; i++) {
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+        /* o pad do jogo lê no quadro do jogo: com a gravação em thread o gGsFrame é o do desenho, uns quadros atrás */
+        extern unsigned gGsFrameJogo;
+        if (gGsFrameJogo >= ev[i].frame && gGsFrameJogo < ev[i].frame + 4) {
+#else
         if (gGsFrame >= ev[i].frame && gGsFrame < ev[i].frame + 4) {
+#endif
             btn |= ev[i].bit;
         }
     }

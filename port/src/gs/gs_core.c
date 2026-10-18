@@ -42,6 +42,11 @@ uint32_t gGsPageGen[512];
 #if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 uint32_t gGsPageEpoch; /* (F5, etapa 8) bumped with every change to any gGsPageGen entry: texture_get remembers by it */
 #endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+#define BT3_GS_ESPERAS 1 /* (F5, etapa 8, degrau 1) a thread de gravação com as esperas que o PS2 já fazia */
+void Port_GsEspera(void);
+void Port_GsParar(void);
+#endif
 unsigned gGsFbUploads; /* bit 0 / 1: pixels were uploaded into display buffer 0 / 0x70 since the back end last looked */
 unsigned gGsFrame;
 #define gs gGs
@@ -191,6 +196,9 @@ static uint32_t sMoved;
 
 void Gs_StateKeep(void) {
     extern void GsVu1_StateKeep(int restore); /* gs_vu1.c: the vertex unit's memory and programs */
+#ifdef BT3_GS_ESPERAS
+    Port_GsEspera(); /* a lista que está sendo gravada mexe na VRAM e no estado */
+#endif
     if (sKept.vram == NULL) {
         sKept.vram = malloc(sizeof(sVram));
     }
@@ -204,6 +212,9 @@ void Gs_StateKeep(void) {
 void Gs_StateBack(void) {
     extern void GsVu1_StateKeep(int restore);
     int i;
+#ifdef BT3_GS_ESPERAS
+    Port_GsEspera();
+#endif
     if (!sKept.valid) {
         return;
     }
@@ -1148,19 +1159,96 @@ static void race_compare(void) {
     }
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, degrau 1) A gravação inteira na thread, com as esperas que o PS2 já fazia:
+     - Port_GsEspera() é o ponto de espera do jogo (sceGsSyncPath, Dma_ResetBuffers, Dma_LendBufferTails,
+       Dma_ReclaimBufferTails, o começo de uma leitura de disco, Gs_StateKeep/Gs_StateBack): a thread de gravação já
+       acabou a lista entregue. Sem a espera o jogo reescreve a lista e os dados que ela cita enquanto são lidos.
+     - Uma transferência pelo canal da GIF (o clear do quadro, envio de textura fora da lista) também vai para a
+       thread, como trabalho que o jogo espera: a gravação toda (e o dispositivo do 360) é de uma thread só.
+     - gGsFrameJogo é o contador de quadros do lado do jogo: avança na entrega, não no fim do desenho. gGsFrame é
+       o da thread de gravação e só ela o lê (o descarte de texturas dos dois quadros, o gs_d3d). */
+unsigned gGsFrameJogo;
+volatile int gGsThreadEstado; /* 0 sem thread, 1 ociosa, 2 gravando, 3 gravando a pedido do canal da GIF (o vigia do 360) */
+unsigned gGsCopiaMax, gGsCopiaEstouros; /* a cópia dos REF pequenos: o maior uso da área por quadro, REF sem cópia por falta de área */
+static volatile int sParar;
+static int sParado;
+static uint32_t sJobQwc;
+static void render_wait(void);
+static void gif_corpo(uint32_t addr, uint32_t qwc, int chain);
+#ifdef PORT_X360
+extern void Port_GsThreadPartida(void);                                   /* main360.cpp: processador e identidade da thread */
+extern int GsD3d_Repete(void);                                             /* gs_d3d.cpp: mostra de novo o último quadro */
+extern void GsD3d_Soltar(void);                                            /* gs_d3d.cpp: o dispositivo volta para a main */
+extern int Port_X360CondEsperaMs(pthread_cond_t *c, pthread_mutex_t *m, unsigned ms); /* posix360.c: 1 se o tempo acabou */
+#endif
+#ifdef BT3_GPU_FALSO
+static int sAtrasoUs = -1; /* BT3_GS_ATRASO_US: a thread de gravação demora de propósito (teste das corridas) */
+#endif
+#endif
+
 static void *render_thread(void *arg) {
     (void)arg;
+#if defined(BT3_GS_ESPERAS) && defined(PORT_X360)
+    Port_GsThreadPartida();
+#endif
     pthread_mutex_lock(&sLock);
     for (;;) {
         while (sJob == 0) {
+#if defined(BT3_GS_ESPERAS) && defined(PORT_X360)
+            /* o jogo que passa de meio segundo sem entregar quadro (carga) deixa o último na tela: a Guide só abre se alguém
+               apresenta, e o dispositivo é desta thread */
+            gGsThreadEstado = 1;
+            if (Port_X360CondEsperaMs(&sWake, &sLock, 50) && sJob == 0 && !sParar) {
+                pthread_mutex_unlock(&sLock);
+                GsD3d_Repete();
+                pthread_mutex_lock(&sLock);
+            }
+            if (sParar && sJob == 0) {
+                sJob = 3;
+            }
+#else
             pthread_cond_wait(&sWake, &sLock);
+#endif
         }
         if (sJob == 1) {
             sInitResult = GsGpu_Init();
+#ifdef BT3_GS_ESPERAS
+        } else if (sJob == 3) { /* parar: o dispositivo volta para quem o criou */
+#ifdef PORT_X360
+            GsD3d_Soltar();
+#endif
+            gGsThreadEstado = 0;
+            sJob = 0;
+            pthread_cond_broadcast(&sDone);
+            pthread_mutex_unlock(&sLock);
+            return NULL;
+        } else if (sJob == 4) { /* uma transferência pelo canal da GIF, a pedido do jogo (que espera) */
+            uint32_t addr = sJobTadr, qwc = sJobQwc;
+            int chain = sJobTte;
+            gGsThreadEstado = 3;
+            pthread_mutex_unlock(&sLock);
+            gif_corpo(addr, qwc, chain);
+            pthread_mutex_lock(&sLock);
+#endif
         } else {
             uint32_t tadr = sJobTadr;
             int tte = sJobTte;
+#ifdef BT3_GS_ESPERAS
+            gGsThreadEstado = 2;
+#endif
             pthread_mutex_unlock(&sLock);
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+            if (sAtrasoUs < 0) {
+                sAtrasoUs = getenv("BT3_GS_ATRASO_US") != NULL ? atoi(getenv("BT3_GS_ATRASO_US")) : 0;
+            }
+            if (sAtrasoUs > 0) { /* antes de a lista andar: o jogo, rápido, tem de esperar nos pontos certos */
+                struct timespec ts;
+                ts.tv_sec = sAtrasoUs / 1000000;
+                ts.tv_nsec = (long)(sAtrasoUs % 1000000) * 1000L;
+                nanosleep(&ts, NULL);
+            }
+#endif
             run_chain(tadr, tte);
             if (getenv("BT3_GS_RACE") != NULL) {
                 race_walk(tadr, 1);
@@ -1169,6 +1257,9 @@ static void *render_thread(void *arg) {
             pthread_mutex_lock(&sLock);
         }
         sJob = 0;
+#ifdef BT3_GS_ESPERAS
+        gGsThreadEstado = 1;
+#endif
         pthread_cond_broadcast(&sDone);
     }
     return NULL;
@@ -1192,6 +1283,87 @@ static void render_post(int job, uint32_t tadr, int tte) {
     pthread_mutex_unlock(&sLock);
 }
 
+#ifdef BT3_GS_ESPERAS
+/* O ponto de espera do jogo: a thread de gravação acabou o que tinha. Sem a thread, não faz nada. */
+void Port_GsEspera(void) {
+    if (sThreaded) {
+        render_wait();
+    }
+}
+
+/* Para a thread de gravação (saída do jogo): espera o que ela tem, manda parar e junta. O dispositivo do 360 volta
+   para a main por ela mesma (GsD3d_Soltar, no trabalho de parar). Pode ser chamada mais de uma vez. */
+void Port_GsParar(void) {
+    if (!sThreaded) {
+        return;
+    }
+    render_wait();
+    render_post(3, 0, 0);
+    pthread_join(sThread, NULL);
+    if (getenv("BT3_GS_RACE") != NULL) {
+        fprintf(stderr, "gs: cópia dos REF pequenos: no máximo %u bytes por quadro, %u REF sem cópia por falta de área\n", gGsCopiaMax, gGsCopiaEstouros);
+    }
+    sParado = 1; /* o que o jogo ainda mandar na saída se perde: o dispositivo já não é desta thread */
+}
+
+/* Pede a parada sem esperar (uma queda do jogo): a thread acaba o trabalho em andamento, solta o dispositivo e sai. */
+void Port_GsPararJa(void) {
+    sParar = 1;
+}
+#endif
+
+#ifdef BT3_GS_ESPERAS
+/* Os REF pequenos da lista (as etiquetas dentro dos dois buffers de lista) levam uma cópia dos dados, feita na entrega.
+   Há pacotes que o jogo monta em estruturas persistentes e refaz na lógica do quadro seguinte (o CLUT em tempo de execução,
+   gfxm_b_b.c: GfxClut_InitPacket, 73 quadwords): nenhuma espera do PS2 cobre esse caso (ele só espera o GS no fim do quadro, e
+   a lógica vem antes), e a thread de gravação lê o REF no meio da lista, depois de o jogo ter mexido. Copiar na entrega dá o
+   que a gravação na thread do jogo sempre deu: os bytes do instante da entrega. Os REF grandes (texturas, modelos) não se
+   copiam: é o volume que a espera dos pontos do PS2 já cobre (seção 3.4 do estudo). O jogo espera a lista anterior antes de
+   copiar (render_wait na entrega), por isso uma área só basta. */
+#define COPIA_QWC_MAX 128u
+#define COPIA_BYTES (1u << 20)
+static uint8_t sCopia[COPIA_BYTES];
+
+static void ref_copia(uint32_t tadr) {
+    extern uint32_t gDmaBuf[2];
+    uint32_t stack[2], sp = 0, usado = 0;
+    int guard;
+
+    for (guard = 0; guard < 100000; guard++) {
+        uint32_t *tag = (uint32_t *)(uintptr_t)tadr;
+        uint32_t qwc = tag[0] & 0xFFFF, id = (tag[0] >> 28) & 7, addr = tag[1];
+        uint32_t at = (uint32_t)(uintptr_t)tag;
+        int end = 0;
+
+        switch (id) {
+        case 0: case 3: case 4:
+            if (qwc != 0 && qwc <= COPIA_QWC_MAX && ((at >= gDmaBuf[0] && at < gDmaBuf[0] + 0x100000u) || (at >= gDmaBuf[1] && at < gDmaBuf[1] + 0x100000u))) {
+                if (usado + qwc * 16 <= COPIA_BYTES) {
+                    memcpy(sCopia + usado, (const void *)(uintptr_t)addr, qwc * 16);
+                    tag[1] = (uint32_t)(uintptr_t)(sCopia + usado);
+                    usado += qwc * 16;
+                } else {
+                    gGsCopiaEstouros++;
+                }
+            }
+            if (id == 0) { end = 1; } else { tadr += 16; }
+            break;
+        case 1: tadr += 16 + qwc * 16; break;
+        case 2: tadr = addr; break;
+        case 5: if (sp < 2) { stack[sp++] = tadr + 16 + qwc * 16; } tadr = addr; break;
+        case 6: if (sp > 0) { tadr = stack[--sp]; } else { end = 1; } break;
+        default: end = 1; break;
+        }
+        if (end) {
+            break;
+        }
+    }
+    if (usado > gGsCopiaMax) {
+        gGsCopiaMax = usado;
+    }
+}
+#endif
+
 static uint64_t now_ns(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -1201,6 +1373,46 @@ static uint64_t now_ns(void) {
 /* getenv for the renderer's files (gs_internal.h): remembered per name. The names are string literals, so the
    same call site always passes the same pointer and the search is a few pointer comparisons. */
 #undef getenv
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, degrau 1) Com duas threads no GS (o jogo e a de gravação) a tabela é publicada com barreira: na PowerPC o
+   leitor pode ver a entrada antes dos campos. Cada entrada é preenchida inteira, a barreira vem antes do ponteiro dela
+   aparecer na tabela, e o leitor chega aos campos pelo ponteiro (a dependência de endereço o ordena); um ponteiro que ainda
+   não apareceu só leva ao caminho lento (o getenv de novo, uma entrada repetida que não faz mal). */
+#ifdef PORT_X360
+extern void Port_X360Barreira(void); /* posix360.c: __lwsync */
+#define BARREIRA_ENV() Port_X360Barreira()
+#else
+#define BARREIRA_ENV() __sync_synchronize()
+#endif
+const char *Port_GetEnv(const char *name) {
+    struct EnvEntrada { const char *name, *value; };
+    static struct EnvEntrada pool[256];
+    static struct EnvEntrada *volatile known[256];
+    static volatile int count;
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    const char *value;
+    int i, n = count;
+
+    for (i = 0; i < n; i++) {
+        struct EnvEntrada *e = known[i];
+        if (e != NULL && e->name == name) {
+            return e->value;
+        }
+    }
+    value = getenv(name);
+    pthread_mutex_lock(&lock);
+    if (count < 256) {
+        pool[count].name = name;
+        pool[count].value = value;
+        BARREIRA_ENV();
+        known[count] = &pool[count];
+        BARREIRA_ENV();
+        count++; /* published last: a reader never sees a half-written entry */
+    }
+    pthread_mutex_unlock(&lock);
+    return value;
+}
+#else
 const char *Port_GetEnv(const char *name) {
     static struct { const char *name, *value; } known[256];
     static volatile int count;
@@ -1223,6 +1435,7 @@ const char *Port_GetEnv(const char *name) {
     pthread_mutex_unlock(&lock);
     return value;
 }
+#endif
 /* Each place a variable is asked for remembers its answer (the names are literals; the environment does not
    change while the game runs). Asked in the middle of drawing, the search in Port_GetEnv was 3% of a frame. */
 #ifdef PORT_X360 /* the Xbox 360's compiler is C89 (no statement expressions); see gs_internal.h */
@@ -1262,10 +1475,25 @@ static int gs_on(void) {
                to change data a list still refers to, which shows as a jumping camera). Default: this thread. */
             sThreaded = getenv("BT3_GS_THREAD") != NULL;
             if (sThreaded) {
+#ifdef BT3_GS_ESPERAS
+                {
+                    pthread_attr_t at;
+                    pthread_attr_init(&at);
+                    pthread_attr_setstacksize(&at, 4u * 1024u * 1024u); /* a gravação anda fundo (VU1, texturas): 4 MB */
+                    pthread_create(&sThread, &at, render_thread, NULL);
+                }
+                gGsFrameJogo = gGsFrame;
+#else
                 pthread_create(&sThread, NULL, render_thread, NULL);
+#endif
                 render_post(1, 0, 0);
                 render_wait();
                 sGpu = sInitResult;
+#if defined(BT3_GS_ESPERAS) && !defined(PORT_X360)
+                /* a saída espera o último quadro (no 360 é o Port_Sair que para a thread). Registrada depois da
+                   inicialização do backend: o atexit dele (o resumo do backend falso) roda depois deste */
+                atexit(Port_GsParar);
+#endif
             } else {
                 sGpu = GsGpu_Init();
             }
@@ -1277,6 +1505,26 @@ static int gs_on(void) {
 /* A transfer on the GIF channel itself (the game uses it for texture uploads outside the frame's list):
    `qwc` quadwords of GIF data at `addr`, or with chain = 1 a source chain of them starting at `addr`. */
 void Port_GsGifChannel(uint32_t addr, uint32_t qwc, int chain) {
+#ifdef BT3_GS_ESPERAS
+    if (!gs_on()) {
+        return;
+    }
+    if (sParado) {
+        return;
+    }
+    if (sThreaded) { /* depois da lista que está sendo gravada, e na thread dela: o jogo espera o fim da transferência */
+        render_wait();
+        sJobQwc = qwc;
+        render_post(4, addr, chain);
+        render_wait();
+        return;
+    }
+    gif_corpo(addr, qwc, chain);
+}
+
+static void gif_corpo(uint32_t addr, uint32_t qwc, int chain) {
+    int guard;
+#else
     int guard;
 
     if (!gs_on()) {
@@ -1285,6 +1533,7 @@ void Port_GsGifChannel(uint32_t addr, uint32_t qwc, int chain) {
     if (sThreaded) {
         render_wait(); /* the GS is one device: this transfer goes after the list that is being drawn */
     }
+#endif
     if (!chain) {
         Gs_Gif((const uint8_t *)(uintptr_t)addr, qwc);
         return;
@@ -1315,6 +1564,23 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
     if (!gs_on()) {
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    if (sParado) {
+        return;
+    }
+    if (!sGpu) {
+        run_chain(tadr, tte);
+        gGsFrameJogo = gGsFrame;
+        return;
+    }
+    tChain = now_ns();
+    if (sThreaded) {
+        render_wait(); /* the previous list must be finished before this one starts (the PS2's sceGsSyncPath) */
+    } else {
+        run_chain(tadr, tte);
+        gGsFrameJogo = gGsFrame;
+    }
+#else
     if (!sGpu) {
         run_chain(tadr, tte);
         return;
@@ -1325,6 +1591,7 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
     } else {
         run_chain(tadr, tte);
     }
+#endif
     /* The frame's work ends here. Time it (BT3_GS_VERBOSE), then keep 30 frames per second. */
     t = now_ns();
     if (start != 0) {
@@ -1386,10 +1653,20 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
     }
     start = t;
     if (sThreaded) {
+#ifdef BT3_GS_ESPERAS
+        if (getenv("BT3_GS_SEM_COPIA") == NULL) { /* (teste: sem a cópia, a corrida do CLUT volta) */
+            ref_copia(tadr);
+        }
+#endif
         if (getenv("BT3_GS_RACE") != NULL) {
             race_walk(tadr, 0);
         }
         render_post(2, tadr, tte);
+#ifdef BT3_GS_ESPERAS
+        if (!gPortResim) {
+            gGsFrameJogo++; /* o quadro do lado do jogo avança na entrega (o gGsFrame, quando a thread acaba de gravar) */
+        }
+#endif
     }
 }
 

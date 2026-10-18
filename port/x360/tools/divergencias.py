@@ -8,7 +8,8 @@ cai no meio ou pula um quadro não desloca as outras). Diz: quadros de cada lado
 diferente (e as seções que diferem), o primeiro e o último, um histograma de mil em mil quadros, e as linhas `race:` do OUTRO
 (o BT3_GS_RACE: os quadros em que o jogo mexeu no que a lista ainda apontava), e se o OUTRO terminou (a linha
 `gpu_falso: N quadros, hash do jogo`) ou caiu. Sai com 0 só se os dois têm os mesmos quadros, todos iguais, e o OUTRO
-terminou sem linha `race:`; com 1 em qualquer outro caso.
+terminou sem linha `race:` (e, se o log tem a linha `contador de quadros do jogo`, com os dois contadores iguais); com 1
+em qualquer outro caso.
 
 --secoes: só essas seções do hash (contadas de 0: texturas, contagens, desenhos, vértices de CPU, vértices da VU1, índices,
 constantes), como o SECOES do vu1_perfil.sh compara.
@@ -24,10 +25,11 @@ Q = re.compile(r"^gpu_falso: quadro (\d+) lista (\w+) .* secoes (.*)$")
 FIM = re.compile(r"^gpu_falso: (\d+) quadros, hash do jogo (\w+)")
 QN = re.compile(r"^gpu_falso: normal quadro (\d+) (\w+)$")
 RACE = re.compile(r"^race: frame (\d+): (.*)$")
+CONTADOR = re.compile(r"^gpu_falso: contador de quadros do jogo (\d+), do desenho (\d+)$")
 
 
 def le(caminho, secoes, normal=False):
-    quadros, corridas, fim = {}, [], None
+    quadros, corridas, fim, contador = {}, [], None, None
     with open(caminho, errors="replace") as f:
         for linha in f:
             linha = linha.rstrip("\n")
@@ -48,7 +50,11 @@ def le(caminho, secoes, normal=False):
             m = RACE.match(linha)
             if m:
                 corridas.append((int(m.group(1)), m.group(2)))
-    return quadros, corridas, fim
+                continue
+            m = CONTADOR.match(linha)
+            if m:
+                contador = (int(m.group(1)), int(m.group(2)))
+    return quadros, corridas, fim, contador
 
 
 def main():
@@ -63,8 +69,8 @@ def main():
         del args[i:i + 2]
     if len(args) != 2:
         sys.exit(__doc__)
-    a, _, fim_a = le(args[0], secoes, normal)
-    b, corridas, fim_b = le(args[1], secoes, normal)
+    a, _, fim_a, _ = le(args[0], secoes, normal)
+    b, corridas, fim_b, contador = le(args[1], secoes, normal)
     if normal and (not a or not b):
         sys.exit("ERRO: nenhuma linha 'gpu_falso: normal quadro' (faltou BT3_GPU_NORMAL=1) em " + (args[0] if not a else args[1]))
     comuns = sorted(set(a) & set(b))
@@ -95,7 +101,11 @@ def main():
         print("linhas race: 0")
     if fim_a and fim_b:
         print(f"hash do jogo: base {fim_a[1]}, outro {fim_b[1]} ({'iguais' if fim_a[1] == fim_b[1] else 'DIFERENTES'})")
-    ok = not so_a and not so_b and not dif and fim_b is not None and not corridas
+    # (degrau 1) o contador de quadros do jogo, que avança na entrega, tem de ter chegado ao mesmo número que o do desenho
+    contador_ok = contador is None or contador[0] == contador[1]
+    if contador is not None:
+        print(f"contador de quadros: jogo {contador[0]}, desenho {contador[1]} ({'iguais' if contador_ok else 'DIFERENTES'})")
+    ok = not so_a and not so_b and not dif and fim_b is not None and not corridas and contador_ok
     print("iguais" if ok else "DIFERENTES")
     sys.exit(0 if ok else 1)
 
