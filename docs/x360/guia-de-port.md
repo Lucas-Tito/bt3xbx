@@ -154,6 +154,8 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | Ferramenta | O que faz |
 | --- | --- |
 | `headless.py --alvo x86\|ppc [--rastreio\|--chamadas]` | builds sem janela do port de PC: x86 de 32 bits (clang `-m32`, a referência little-endian com ponteiros de 32 bits como o 360) e PowerPC 32 bits big-endian (GCC cross, roda no `qemu-ppc`). As duas usam float por software (o do PS2), então uma diferença entre elas só pode vir da ordem dos bytes. Na x86r, `SEM_RASTREIO` diz o que compila sem a instrumentação (o checksum de estado e as letras dos nomes, `namefont.c`) |
+| `headless.py --alvo x86\|ppc --gpu [--vu1]` | (F5, etapa 8) o GS em modo gpu com um backend falso (`headless/gpu_falso.c`): o `gs_draw.c` de verdade e os lotes da VU1 pelo caminho dos shaders (`hle_program*`, `GsGpu_DrawVu*`), como no 360, sem desenhar; hash da lista de cada quadro por seção. `--vu1` (só x86) liga na x86 as otimizações que a PPC tem em `PORT_BIG_ENDIAN`. Pastas `x86g`, `x86gv`, `ppcg` |
+| `vu1_perfil.sh` / `vu1_perfil.py` | (F5, etapa 8) o perfil da gravação da VU1 e a prova de que uma mudança nela deixou a lista igual: `x86` (tiques por família, amostras por função e linha), `lista` + `compara` (hash por quadro; `SECOES=2,4,5,6` só a VU1), `ppc` (instruções e acessos à memória de uma janela de quadros no qemu) |
 | `f1.sh` | o ciclo inteiro: builds, rastreio, mapa, luta na PPC, comparações. `F1_SEM_RASTREIO=1` reaproveita o rastreio (que leva cerca de 1 h) |
 | `menus.sh` | o ciclo dos menus (F3, etapa 3): boot até as demos sem `BT3_DEMO`, PPC sem mapa com os arquivos que a x86 lê, lutas das demos e memória num quadro comparadas |
 | `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X num ciclo de 90 leituras) entra no menu principal pelo New Game, sem criar o save (responde "não" ao "criar o save?"); a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Os testes novos usam os roteiros de controle (abaixo) |
@@ -1347,3 +1349,35 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `CharRef.state` na carga ou no modelo), entra em `TELAS_MEM` e `TELAS_IMG`, e o `TELAS_MEM_ARQUIVOS` exige o
   arquivo do modelo vivo e conforme (`fora-do-formato 0`). O `IMAGENS_DISTINTAS` recusa o modelo girado igual ao
   aberto (um `gira` que não girou daria duas imagens idênticas nas duas builds, e a comparação passaria).
+
+### A gravação da VU1 na F5, etapa 8 (o perfil no WSL, `plano/F5/08.md`)
+
+- **As builds de teste não rodavam o caminho do 360.** Sem janela o GS rasteriza por software e a VU1 roda pelo
+  interpretador: `hle_program*` e `GsGpu_DrawVu0/4/6` (o que o `GsVu1_Call` faz no console) nunca executavam no WSL, e
+  qualquer mudança nelas só podia ser conferida compilando. A `headless.py --gpu` liga o GS em modo gpu com um
+  backend falso que só guarda a lista do quadro e faz o hash dela por seção: com isso o `gs_draw.c` de verdade é medido
+  e provado. A prova de uma otimização é a lista igual quadro a quadro (`vu1_perfil.sh lista` e `compara`) na mesma
+  arquitetura, antes e depois; entre x86 e PPC compare só as seções da VU1 (`SECOES=2,4,5,6`), porque 1/16 de pixel
+  de um sprite de CPU difere em 11 quadros do `f5_duelo` entre as duas (já era assim).
+- **Um verificador de lista só vale visto falhando**: a otimização foi estragada de propósito (a tabela sem olhar a
+  época) e a lista saiu diferente em 8.358 de 8.380 quadros, com o hash do jogo mudado.
+- **A contagem de instruções no `qemu-ppc` é uns 15 a 20 vezes mais lenta que a corrida normal (e o `-dfilter` só
+  corta o que se imprime, não o custo de seguir cada bloco.** O filtro tem de listar só o que roda na janela:
+  qualquer função que o jogo também chama antes dela (libc, `Gs_Gif`, `GsVu1_UnpackWords`, `GsGpu_FrameEnd`) enche o
+  log de centenas de milhões de linhas e a rodada passa de uma hora sem chegar à janela (quatro tentativas assim). A
+  saída certa: pular as chamadas da VU1 e os desenhos de CPU até o quadro A (`BT3_PERFIL_JANELA=A,B`, que sai em B),
+  `-one-insn-per-tb` com `-D` numa FIFO e um `awk` que conta por endereço sem guardar o log, e o filtro gerado do
+  `.map` (`vu1_perfil.py faixas`). O que fica de fora (libc, hash de página) entra na estimativa por contas.
+- **A `texture_get` entra em linha na `draw_state`**: a parte que decodifica uma textura nova (rara em regime, mas a
+  janela parte do zero e decodifica as 63 da luta) vale 75% das instruções da janela. O `vu1_perfil.py ppc` separa pela
+  linha do `addr2line` (o fonte tem de ser o da build, `--fonte`), senão o "maior custo" é falso.
+- **Cada rodada pede o save vazio**: a rodada que reaproveita o save da anterior para em "4000 quadros sem mcflow
+  10". Cada rodada usa um `BT3_SAVES` novo. A `ppcg` pede a x86 normal do mesmo carimbo (o carimbo inclui o hash do
+  diff): refaça a x86 antes da PPC a cada mudança.
+- **Amostragem de programa**: `setitimer` e o relógio de CPU só disparam a cada uns 4 ms neste kernel (5 mil amostras
+  em 20 s); `timer_create` com `CLOCK_MONOTONIC` e sinal dá 100 mil.
+- **O hash de página custa mais que o pedido dele.** 107 milhões de pedidos para 1,4 milhão de recálculos, e os
+  recálculos (8 KB cada, 351 por quadro de luta) são o laço quente; só 21% deles dão o hash antigo. Cortar os pedidos
+  (cache por `t0` com época) rendeu 7% na x86 e uns 13% das instruções; o recálculo só cai com outro algoritmo ou
+  menos páginas, e isso se decide com a medida do console (`tempo por quadro: gravação`).
+
