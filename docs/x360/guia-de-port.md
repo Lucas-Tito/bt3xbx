@@ -72,6 +72,14 @@ própria só para isso). Para cá só volta texto.
   matou o serviço inteiro. Dispare com `--property=MemoryMax=5G` no `systemd-run` e peça processamento arquivo por
   arquivo. A retomada é `cursor-agent --resume <uuid>`, com o UUID da pasta em `~/.cursor/chats/<hash>/` (o hash
   sozinho é recusado).
+- **O disco do WSL mora no C: do Windows e só cresce** (`ext4.vhdx`): em 17/10/2026 o C: encheu (456 MB livres), o
+  WSL passou a dar erro de E/S (até o `getpwnam` falhava, "User not found") e o Cursor caiu no meio da etapa 8. As
+  saídas das rodadas (`port/build/roteiros`, os dumps de memória por tela) e as pastas de trabalho dos agentes tinham
+  levado o disco a 106 GB. Recuperação: liberar espaço no C:, `wsl --shutdown` (o ext4 se recupera sozinho no boot),
+  apagar as saídas antigas, `fstrim /`, e compactar o `ext4.vhdx` com o `diskpart` (`select vdisk file=...`,
+  `attach vdisk readonly`, `compact vdisk`, `detach vdisk`, numa sessão de administrador; o vhdx não pode estar
+  esparso: `wsl --manage <distro> --set-sparse false` antes). Devolveu 77 GB. Apague as saídas de uma rodada depois
+  de conferida e confira o espaço do C: antes de rodadas longas.
 
 ### 1.2b Steam Deck: a segunda fila de emulador (16/10/2026)
 
