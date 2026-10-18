@@ -13,7 +13,8 @@
  * Com BT3_GS=gpu (F3, etapa 7) o jogo desenha: o dispositivo passa para a thread do jogo, que apresenta um quadro por
  * quadro do GS (port/x360/src/gs/gs_d3d.cpp), e a main só espera; quando o jogo termina, ela pega o dispositivo de
  * volta para a cor do fim.
- * Por quadro: game:\hash.txt (o mesmo formato da build de PC, para port/x360/tools/compara.py) e o tempo de cada
+ * Por quadro: game:\hash.txt, só com BT3_HASH no ambiente.txt (o mesmo formato da build de PC, para
+ * port/x360/tools/compara.py), e o tempo de cada
  * quadro no log (port/x360/src/f2/estado360.c).
  */
 #include <xtl.h>

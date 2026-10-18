@@ -147,6 +147,8 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `compara_quadros.py` | capturas do console (`gpu_NNNNN.ppm`) contra as do rasterizador de software (`frame_NNNNN.ppm`), por fase e pelos piores quadros: pixels iguais, até 2 e até 8 de diferença, erro médio, PSNR, imagens pretas. Roda no WSL; só números voltam |
 | `ppm_stats.py` | triagem de capturas sem PIL nem numpy (o WSL só tem a biblioteca padrão): `png` (converte, recorta e amplia, para ver a imagem), `patch` (luminância de um retângulo), `stats` (luminância média, % saturado, % escuro, gradiente horizontal = nitidez da área 3D). Recusa arquivo truncado ou que não seja P6 |
 | `subir_f2.sh` | envia o `.xex` sempre junto com o `.dat` e o `.swap` da mesma build: os dois dependem dos endereços do `.map`, e um par de outra build copia as tabelas para o lugar errado sem erro nenhum |
+| `teste_diario.sh` | o `diario.c` (anel e thread escritora) no Linux, com uma API do Xbox de brinquedo e um disco de 40 ms por flush: ordem, integridade, que quem escreve não espera, a queda, o anel cheio; `--mutantes` estraga o `diario.c` de quatro jeitos e exige que o teste acuse cada um |
+| `picos_log.py` | de um `bt3xbx.log` do console, a média, o pior quadro e a média sem o pior de cada trecho de 60 quadros, e o custo por linha gravada do relatório anterior (`F5/08.md`, "Os logs e os engasgos") |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
 ### Builds de teste da ordem de bytes (F1, rodam no WSL)
@@ -1389,3 +1391,28 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   (cache por `t0` com época) rendeu 7% na x86 e uns 13% das instruções; o recálculo só cai com outro algoritmo ou
   menos páginas, e isso se decide com a medida do console (`tempo por quadro: gravação`).
 
+### Os logs do console travavam o jogo (F5, etapa 8, `plano/F5/08.md`, "Os logs e os engasgos")
+
+- **No FATX do HD, `WriteFile` + `FlushFileBuffers` custa uns 30 ms por linha, e o diário de antes pagava isso dentro da
+  thread do jogo.** O relatório do backend (8 a 12 linhas a cada 60 quadros) era um quadro de 200 a 430 ms por segundo,
+  e os "19 a 20 ms de média nos menus" eram esse quadro dividido pelos 60: tirado ele, a média dos outros quadros era
+  16,6 ms. O custo ficou escondido nas rodadas de desempenho da F5 porque o medidor era o próprio log. **Antes de otimizar a
+  lógica, tire o pior quadro de cada trecho da média**: se o resto está no tempo do vblank, o problema é um evento
+  periódico, e o periódico mais provável é o que o próprio medidor grava (`picos_log.py`).
+- **Onde o medidor mede muda o que ele vê.** O `frame_end` lê o relógio do quadro antes de escrever o relatório, então o
+  custo da escrita cai no quadro seguinte e aparece como "pior quadro" do trecho seguinte: o pico de 360 ms sai
+  deslocado de um quadro do relatório que o causou, e o primeiro trecho (sem relatório antes) não tem pico.
+- **Diário no console: anel em memória, thread escritora de baixa prioridade em outro núcleo, `FlushFileBuffers` por
+  lote, e descarga síncrona só no filtro de exceção e na saída.** A regra "numa queda o que foi escrito está no disco"
+  vale para a queda com exceção (o filtro chama `Diario_Descarregar`); para um travamento sem exceção ela passa a valer
+  até a idade do último flush (250 ms). Mantenha a chave que volta ao jeito síncrono (`BT3_LOG_SINCRONO`): é o que
+  permite medir um contra o outro com a mesma build. O hiddriver (`referencias_log`) foi o modelo; o CollectionUI faz
+  como o 360 fazia, e aguenta porque não tem lógica pesada por quadro.
+- **O arquivo "c" da CRT (`saida.txt`) também é um flush.** Cada `fflush` de um arquivo aberto com "c" chama
+  `FlushFileBuffers` (também vazio); o `printf` do port dava um por chamada, e o vblank um por quadro. O commit passou
+  para o gancho da thread do diário.
+- **Um arquivo de log que o jogo grava por quadro (`hash.txt`) tem de ser opt-in no console**: ele estende o arquivo do
+  FATX na thread do jogo, e a comparação que ele servia (F2) é coberta pela F1 (decisão 17).
+- **O diário vale uma bateria de teste no Linux**, mesmo sem o compilador do 360: uma API de brinquedo sobre pthreads
+  pega a emenda do anel, a ordem e o anel cheio (`teste_diario.sh`). Os laços do teste precisam de limite de tempo: um mutante
+  que paga o disco por linha levaria minutos (ou travaria) sem ele.
