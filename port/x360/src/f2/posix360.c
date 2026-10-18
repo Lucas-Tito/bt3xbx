@@ -4,7 +4,8 @@
  *   - ambiente: getenv lê uma tabela (padrões da build sem janela + game:\ambiente.txt, linhas NOME=VALOR, e
  *     -NOME para tirar uma variável, como BT3_DEMO para rodar os menus);
  *   - arquivos: caminhos com '/' viram '\' e caminho relativo vai para game:\ (a pasta do .xex);
- *   - saída de texto (stdout, stderr, printf): game:\saida.txt, com buffer e fflush por printf;
+ *   - saída de texto (stdout, stderr, printf): game:\saida.txt, com buffer; o commit ("c") é da thread do diário (a cada
+ *     50 ms, só com algo no buffer), não da thread do jogo (F5/08.md, "Os logs e os engasgos");
  *   - tempo, pastas, threads (pthread sobre threads e seções críticas) e os atômicos do GCC.
  */
 #include <xtl.h>
@@ -45,6 +46,18 @@ static void definir(const char *nome, const char *valor) {
     }
 }
 
+void Port_X360FecharSaida(void);
+
+/* As chaves do diário (diario.c, que não lê o ambiente): BT3_LOG_SINCRONO=1 (uma linha, um flush, como antes do anel) e
+   BT3_LOG_FLUSH_MS=<ms> (a idade máxima de uma linha gravada sem flush). Também liga o game:\saida.txt à thread do
+   diário. Chamada nos dois fins de Ambiente_Carregar. */
+static void diario_ambiente(void) {
+    const char *s = getenv("BT3_LOG_SINCRONO");
+    const char *m = getenv("BT3_LOG_FLUSH_MS");
+    Diario_Gancho(Port_X360FecharSaida);
+    Diario_Configurar(s != NULL && atoi(s) != 0, m != NULL ? atoi(m) : 0);
+}
+
 /* Padrões da luta de demonstração sem janela (os do ciclo da F1, port/x360/tools/f1.sh), e por cima o arquivo. */
 void Ambiente_Carregar(const char *caminho) {
     FILE *f;
@@ -65,6 +78,7 @@ void Ambiente_Carregar(const char *caminho) {
     f = fopen(caminho, "r");
     if (f == NULL) {
         Diario_Escrever("ambiente: sem %s, só os padrões", caminho);
+        diario_ambiente();
         return;
     }
     while (fgets(linha, sizeof(linha), f) != NULL) {
@@ -83,6 +97,7 @@ void Ambiente_Carregar(const char *caminho) {
         }
     }
     fclose(f);
+    diario_ambiente();
 }
 
 char *getenv(const char *nome) {
@@ -218,11 +233,13 @@ FILE *Port_X360Saida(void) {
     return sSaida;
 }
 
-/* Na saída do jogo (Port_Sair) e a cada vblank (estado360.c): o buffer vai até o disco ("c"). Sem fclose, de
-   propósito: uma escrita tardia de outra thread reabriria com "w" e apagaria o arquivo. */
+/* Na saída do jogo (Port_Sair), na queda, pela thread do diário a cada lote (Diario_Gancho) e, sem ela, a cada vblank
+   (estado360.c): o buffer vai até o disco ("c"). Sem fclose, de propósito: uma escrita tardia de outra thread
+   reabriria com "w" e apagaria o arquivo. O fflush trava o FILE: um fprintf do jogo que chegue durante o commit espera
+   por ele, e isso só acontece quando o jogo imprime. */
 void Port_X360FecharSaida(void) {
     /* só com algo no buffer: com "c" o fflush chama FlushFileBuffers mesmo vazio (Source/crt/fflush.c:114), e
-       isto roda a cada vblank */
+       isto roda a cada lote do diário (ou a cada vblank, no jeito síncrono) */
     if (sSaida != NULL && sSaida->_ptr != sSaida->_base) {
         fflush(sSaida);
     }
@@ -238,7 +255,9 @@ int Port_Printf(const char *formato, ...) {
     va_start(ap, formato);
     r = vfprintf(f, formato, ap);
     va_end(ap);
-    fflush(f);
+    if (!Diario_Assincrono()) { /* (com a thread do diário, o commit é dela, a cada 50 ms: o fflush por printf era um flush) */
+        fflush(f);
+    }
     return r;
 }
 

@@ -134,7 +134,11 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
         Diario_Escrever("vblank %u: %s", vblank, luta ? "luta começou" : "luta terminou");
         gX360Luta = luta ? vblank : 0;
     }
-    Port_X360FecharSaida(); /* o fprintf(stderr) do jogo chega ao disco mesmo num travamento sem exceção */
+    if (!Diario_Assincrono()) {
+        /* o fprintf(stderr) do jogo chega ao disco mesmo num travamento sem exceção; com a thread do diário é ela quem
+           faz isto (Diario_Gancho, a cada 50 ms), e o commit sai da thread do jogo */
+        Port_X360FecharSaida();
+    }
     QueryPerformanceCounter(&sAntes); /* sem o tempo da própria gravação */
     if (vblank >= ate) {
         Diario_Escrever("BT3_ATE: vblank %u", vblank);

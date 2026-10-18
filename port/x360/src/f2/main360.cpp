@@ -92,6 +92,7 @@ extern "C" void Port_Sair(int codigo) {
     Estado_Resumo();
     Port_X360FecharSaida();
     _flushall();
+    Diario_Descarregar(); /* o que o anel ainda tem, no disco antes de a thread do jogo acabar */
     GsD3d_Soltar(); /* o dispositivo volta para a main mostrar a cor do fim */
     InterlockedExchange(&gCodigo, codigo);
     InterlockedExchange((volatile LONG *)&gCor, codigo == 0 ? 0xFF20A040 : 0xFFC02020);
@@ -117,6 +118,7 @@ static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
     } else {
         Diario_Escrever("CRASH sem contexto (fase: %s)", gPortStage);
     }
+    Diario_Descarregar(); /* a linha CRASH no disco já: o que vem a seguir (Port_UnpackPendenteNaQueda) pode falhar de novo */
     {   /* um Sprite_Unpack ainda sem gancho é a causa provável (dados de menu little-endian): diz quem chamou */
         static char linha[256]; /* (fora da pilha, que pode ser o problema) */
         if (Port_UnpackPendenteNaQueda(linha, sizeof(linha))) {
@@ -124,6 +126,7 @@ static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
         }
     }
     _flushall();
+    Diario_Descarregar();
     gCor = 0xFFC02020;
     InterlockedExchange(&gTerminou, 1);
     if (GetCurrentThreadId() == gThreadJogo) {
