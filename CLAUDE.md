@@ -48,8 +48,10 @@ Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddr
 ## Lições do 360 que custaram rodadas
 
 - `main` nunca retorna; em falha, laço com cor de tela por fase.
-- Log em arquivo com `WriteFile` + `FlushFileBuffers` por linha, com trava. `SetUnhandledExceptionFilter`
-  registrando `Iar`, `Lr` e endereço acessado, resolvidos pelo `.map`. **Fazer o programa dizer onde
+- Log em arquivo: o diário (`port/x360/src/diario.c`) guarda as linhas num anel em memória e uma thread de baixa
+  prioridade grava em lote; `Diario_Descarregar` no filtro de exceção e na saída. Gravar com flush por linha na
+  thread do jogo custava uns 30 ms por linha e engasgava os menus (F5, etapa 8); `BT3_LOG_SINCRONO=1` volta a esse jeito.
+  `SetUnhandledExceptionFilter` registrando `Iar`, `Lr` e endereço acessado, resolvidos pelo `.map`. **Fazer o programa dizer onde
   morreu antes de adivinhar.**
 - Sem pipeline fixo: tudo é shader. Texturas lineares precisam de `D3DFMT_LIN_*`.
 - XAudio2 mora nas threads de hardware 4 e 5: nada de I/O lá. Dados XMA em `XPhysicalAlloc` com
