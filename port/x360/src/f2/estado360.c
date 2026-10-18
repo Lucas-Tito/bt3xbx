@@ -1,7 +1,8 @@
 /*
  * F2: no lugar de port/src/gs/state.c (checksum de tudo, salvar e voltar estado, rede), só o que a medição usa:
  *   - Port_StateLog: a linha por quadro de BT3_HASH, no formato da build de PC (vblank, dois checksums, e numa
- *     luta vida, posições, relógio e gerador), para port/x360/tools/compara.py; os checksums vão como 0;
+ *     luta vida, posições, relógio e gerador), para port/x360/tools/compara.py; os checksums vão como 0. Desligada por
+ *     padrão no console (sem BT3_HASH no ambiente.txt; F5/08.md);
  *   - o tempo: a build sem janela não espera o vblank, então o intervalo entre duas chamadas (uma por vblank) é o
  *     que o jogo levou. A luta faz um quadro a cada 2 vblanks (30 fps, decisão 15): o trabalho cai num intervalo
  *     do par e o outro fica quase vazio, então o que vale contra o orçamento de 33,3 ms é a soma de cada par.

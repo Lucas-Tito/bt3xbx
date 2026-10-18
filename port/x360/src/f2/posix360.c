@@ -71,7 +71,8 @@ void Ambiente_Carregar(const char *caminho) {
     definir("BT3_SETTINGS", "");
     definir("BT3_DATA", "game:\\gamedata");
     definir("BT3_SAVES", "game:\\saves");
-    definir("BT3_HASH", "game:\\hash.txt");
+    /* BT3_HASH (a linha por quadro do estado360.c) não tem padrão: o hash.txt do console não é critério (decisão 17, F5/08.md)
+       e custa uma escrita que estende o arquivo no FATX a cada 4 KB; liga-se com BT3_HASH=game:\hash.txt no ambiente.txt */
     /* o item 4 do menu principal (Dragon Net Battle, src/menu/menu_a.c) fica escondido, como nos roteiros sem
        janela (menus.sh): o mesmo menu nas três builds, e os roteiros de controle não se desalinham (decisão 22) */
     definir("BT3_MENU_ITEM4", "0");
