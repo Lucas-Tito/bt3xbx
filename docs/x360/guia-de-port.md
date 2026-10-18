@@ -698,6 +698,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   - **Sem xbdm não há como ler o contexto de outra thread** (`DmGetThreadContext` é do xbdm, `XcrashGetThreadContext`
     lê arquivo de queda): para achar onde uma thread parou, ela grava marcas e contadores, e outra thread os registra
     quando ela para de andar (o vigia da `main360.cpp`).
+  - **Tempo de GPU por passada sem xbdm** (F5, etapa 8, `plano/F5/08.md`; ainda não medido no console): o
+    `D3DPerfCounterBatch` com `D3DPERFCOUNTERINDEX_TIMESTAMP` (o do exemplo `FastDepthRestore`) só existe no
+    `d3d9i.lib`, que importa funções do xbdm; o `d3d9.lib` de Release tem só o `Lock`/`Unlock`. O que existe nele:
+    `InsertCallback(D3DCALLBACK_IDLE | D3DCALLBACK_CPUn)`, que a GPU executa depois de terminar o que veio antes e
+    espera voltar, com o `__mftb()` na callback (uma DPC: só guardar o relógio). Fuja da CPU 4 (o padrão, a do
+    áudio). Cada trecho entre marcas inclui o custo de uma marca: meça duas marcas seguidas a cada quadro e desconte.
+    E o trecho pode incluir a GPU esperando a CPU (o ring buffer vai em segmentos de 64 KB): guarde também quando a
+    CPU pôs cada marca para limitar essa espera.
   - Da documentação, ainda não medido no console: recurso preso no dispositivo (`SetTexture`) fica `IsBusy` até ser
     solto, e `LockRect` ou o último `Release` esperam por ele, então solte as texturas antes de ler uma de volta e só
     libere as soltas depois de `InsertFence` e `IsBusy() == FALSE`; o destino do `Resolve` não deve estar preso como
