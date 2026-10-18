@@ -34,7 +34,9 @@
  *   BT3_SHOT_LISTA=G,G...  só esses quadros do GS (até 32), com ou sem o BT3_SHOT: os das imagens da etapa 6 da F4
  *                     (a linha "imagem: ... gs G" da build sem janela), para medir os menus contra elas;
  *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado, e a
- *                     memória por classe (F5, etapa 1).
+ *                     memória por classe (F5, etapa 1);
+ *   BT3_TEMPOS=1      (o padrão; 0 desliga) o tempo de GPU e de CPU de cada passada do fim do quadro no mesmo log
+ *                     (F5, etapa 8; tempo_* abaixo).
  *
  * Memória (F5, etapa 1; o contrato de posse está em docs/x360/plano/F5/01.md): os bytes reais de cada classe
  * (texturas decodificadas, alvos, buffers fixos, o que espera a GPU na cova), um piso de memória física livre e um
@@ -317,6 +319,215 @@ static double ms_desde(const LARGE_INTEGER *a) {
     LARGE_INTEGER b;
     QueryPerformanceCounter(&b);
     return (double)(b.QuadPart - a->QuadPart) * 1000.0 / (double)sFreq.QuadPart;
+}
+
+/* ---- tempos por passada (F5, etapa 8; BT3_TEMPOS, ligado por padrão) ----------------------------------------- */
+
+/* O tempo de GPU de cada classe de trabalho do fim do quadro, pelo método do autoteste da profundidade (a GPU parada
+   antes e depois), mas sem parar a CPU: a cada troca de classe uma marca, InsertCallback(D3DCALLBACK_IDLE), que a GPU
+   só executa depois de terminar tudo o que veio antes (esvazia o pipeline) e que chama tempo_cb numa DPC da thread de
+   hardware 1 (longe do áudio, 4 e 5, e do jogo, 2); a GPU espera a DPC voltar. A DPC guarda o relógio (mftb). O
+   trecho entre duas marcas é o tempo da classe da primeira, mais o custo de uma marca: o quadro começa com duas
+   marcas seguidas (o trecho vazio, a classe medição), e o log desconta esse custo de cada trecho. As marcas de um
+   quadro são lidas dois quadros depois (dois buffers, com uma cerca depois da última marca). A CPU do fim do quadro é
+   dividida nas mesmas classes (mais a cópia da VU1 e o Present) pelo mesmo relógio, a cada troca. Sem efeito na
+   imagem: só callbacks e cercas. Ver docs/x360/plano/F5/08.md, "Tempo por passada no log". */
+enum {
+    T_OUTROS, T_COMUM, T_VU0, T_VU4, T_VU6, T_PROF, T_CONTORNO, T_TAB_IDS, T_TAB_PROF, T_IDS, T_FBA, T_DATE, T_COR_RES,
+    T_COR_ENTRA, T_TELA, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
+    T_VU_COPIA = T_GPU_N, T_PRESENT, T_N
+};
+static const char *const kTempoNome[T_N] = {"outros", "comum", "vu0", "vu4", "vu6", "profundidade", "contorno",
+                                            "tabela pelos ids", "tabela pela profundidade", "cópia dos ids", "FBA",
+                                            "DATE", "resolves de cor", "entradas na EDRAM", "tela", "medição",
+                                            "cópia da VU1", "Present"};
+#define T_MARCAS 4096 /* por quadro; um quadro com mais é descartado (contado); 136 KB nos dois buffers */
+static volatile unsigned __int64 sMarcaGpu[2 * T_MARCAS]; /* o relógio quando a GPU chegou à marca (tempo_cb) */
+static unsigned __int64 sMarcaCpu[2 * T_MARCAS];          /* o relógio quando a CPU terminou de pô-la */
+static unsigned char sMarcaCl[2 * T_MARCAS];              /* a classe do trecho que começa na marca */
+static struct {
+    int ligado, quadro, aberta, gpu, cpu, buf, transbordou;
+    unsigned n[2];
+    DWORD cerca[2];
+    int estado[2];                   /* 0 nada a ler, 1 a ler, 2 a descartar (captura ou transbordo) */
+    unsigned __int64 desde, cq[T_N]; /* a CPU: a última troca e o quadro por classe */
+    double freq;                     /* tiques do relógio por ms */
+    /* no trecho */
+    unsigned __int64 gSoma[T_GPU_N], gEsp[T_GPU_N], quadroSoma, cSoma[T_N], esperaTiques;
+    unsigned gTrechos[T_GPU_N], lidos, descartados, perdidos, esperas, cQuadros;
+    double gPior[T_GPU_N], quadroPior, medPior, cPior[T_N], cFim;
+} sTempo;
+
+static void WINAPI tempo_cb(DWORD k) {
+    sMarcaGpu[k] = __mftb();
+    __lwsync();
+}
+
+/* uma marca: o trecho da GPU que começa nela é da classe c (fim: a última do quadro, que sempre cabe) */
+static void tempo_marca(int c, int fim) {
+    unsigned k = sTempo.n[sTempo.buf], i = sTempo.buf * T_MARCAS + k;
+    unsigned __int64 t0 = __mftb(), t1;
+    sTempo.cq[sTempo.cpu] += t0 - sTempo.desde;
+    if (k >= (unsigned)T_MARCAS - (fim ? 0 : 1)) {
+        sTempo.transbordou = 1;
+        sTempo.desde = t0;
+        return;
+    }
+    sMarcaGpu[i] = 0;
+    sMarcaCl[i] = (unsigned char)c;
+    sDev->InsertCallback(D3DCALLBACK_IDLE | D3DCALLBACK_CPU1, tempo_cb, i);
+    t1 = __mftb();
+    sMarcaCpu[i] = t1;
+    sTempo.n[sTempo.buf] = k + 1;
+    sTempo.gpu = c;
+    sTempo.cq[T_MED] += t1 - t0;
+    sTempo.desde = t1;
+}
+
+/* o fim do quadro passa para a classe c: na CPU sempre, na GPU (uma marca) só se a classe mudou */
+static void tempo_poe(int c) {
+    unsigned __int64 t;
+    if (!sTempo.quadro || c == sTempo.cpu) {
+        return;
+    }
+    t = __mftb();
+    sTempo.cq[sTempo.cpu] += t - sTempo.desde;
+    sTempo.desde = t;
+    sTempo.cpu = c;
+    if (sTempo.aberta && c < T_GPU_N && c != sTempo.gpu) {
+        tempo_marca(c, 0);
+    }
+}
+
+/* as n primeiras marcas do buffer b estão escritas e em ordem */
+static int tempo_valida(int b, unsigned n) {
+    const volatile unsigned __int64 *g = &sMarcaGpu[b * T_MARCAS];
+    unsigned k;
+    for (k = 0; k < n; k++) {
+        if (g[k] == 0 || (k > 0 && g[k] < g[k - 1])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* O quadro marcado no buffer b (dois quadros atrás): os trechos por classe, o custo de uma marca (o trecho vazio) e
+   o limite da espera da GPU pela CPU (o trecho começou na GPU antes de a CPU terminar de pô-lo). */
+static void tempo_le(int b) {
+    const volatile unsigned __int64 *g = &sMarcaGpu[b * T_MARCAS];
+    const unsigned __int64 *cp = &sMarcaCpu[b * T_MARCAS];
+    const unsigned char *cl = &sMarcaCl[b * T_MARCAS];
+    unsigned __int64 raw[T_GPU_N], esp[T_GPU_N], vazio, total;
+    unsigned seg[T_GPU_N], n = sTempo.n[b], k;
+    double f = sTempo.freq, v;
+    int c, e = sTempo.estado[b];
+    sTempo.estado[b] = 0;
+    if (e == 0) {
+        return;
+    }
+    if (sDev->IsFencePending(sTempo.cerca[b])) {
+        unsigned __int64 t = __mftb();
+        sDev->BlockOnFence(sTempo.cerca[b]);
+        sTempo.esperas++;
+        sTempo.esperaTiques += __mftb() - t;
+    }
+    __lwsync();
+    if (e == 2 || n < 3) {
+        sTempo.descartados++;
+        return;
+    }
+    if (!tempo_valida(b, n)) {
+        sTempo.perdidos++;
+        return;
+    }
+    memset(raw, 0, sizeof(raw));
+    memset(esp, 0, sizeof(esp));
+    memset(seg, 0, sizeof(seg));
+    for (k = 0; k + 1 < n; k++) {
+        unsigned __int64 s = g[k + 1] - g[k];
+        c = cl[k];
+        raw[c] += s;
+        seg[c]++;
+        if (cp[k + 1] > g[k]) {
+            unsigned __int64 w = cp[k + 1] - g[k];
+            esp[c] += w < s ? w : s;
+        }
+    }
+    vazio = raw[T_MED]; /* (só a marca 0 é da medição) */
+    total = g[n - 1] - g[0];
+    for (c = 0; c < T_GPU_N; c++) {
+        sTempo.gSoma[c] += raw[c];
+        sTempo.gTrechos[c] += seg[c];
+        sTempo.gEsp[c] += esp[c];
+        if (c == T_MED) {
+            v = (double)vazio * (n - 1) / f;
+            if (v > sTempo.medPior) sTempo.medPior = v;
+        } else {
+            v = ((double)raw[c] - (double)seg[c] * (double)vazio) / f;
+            if (v > sTempo.gPior[c]) sTempo.gPior[c] = v;
+        }
+    }
+    sTempo.quadroSoma += total;
+    if ((double)total / f > sTempo.quadroPior) sTempo.quadroPior = (double)total / f;
+    sTempo.lidos++;
+}
+
+/* o começo do fim do quadro: lê o quadro de dois atrás, no buffer que este vai usar */
+static void tempo_comeca(void) {
+    sTempo.quadro = sTempo.ligado && !Passos_Medindo();
+    if (!sTempo.quadro) {
+        return;
+    }
+    memset(sTempo.cq, 0, sizeof(sTempo.cq));
+    sTempo.desde = __mftb();
+    sTempo.cpu = T_MED;
+    sTempo.aberta = 0;
+    sTempo.buf ^= 1;
+    tempo_le(sTempo.buf);
+    sTempo.n[sTempo.buf] = 0;
+    sTempo.transbordou = 0;
+    tempo_poe(T_OUTROS);
+}
+
+/* a GPU do quadro começa: duas marcas seguidas (o trecho vazio: o custo de uma marca neste quadro) */
+static void tempo_abre(void) {
+    if (!sTempo.quadro) {
+        return;
+    }
+    sTempo.aberta = 1;
+    tempo_marca(T_MED, 0);
+    tempo_marca(T_OUTROS, 0);
+}
+
+/* a GPU do quadro termina (antes do Present): a última marca e a cerca para a leitura */
+static void tempo_fecha_gpu(int captura) {
+    if (!sTempo.quadro || !sTempo.aberta) {
+        return;
+    }
+    tempo_marca(T_OUTROS, 1);
+    sTempo.aberta = 0;
+    sTempo.cerca[sTempo.buf] = sDev->InsertFence();
+    sTempo.estado[sTempo.buf] = captura || sTempo.transbordou ? 2 : 1;
+}
+
+/* o fim do quadro terminou (msFim, pelo QueryPerformanceCounter): a CPU por classe, se o quadro vale */
+static void tempo_fecha_cpu(double msFim, int vale) {
+    int c;
+    if (!sTempo.quadro) {
+        return;
+    }
+    tempo_poe(T_OUTROS);
+    sTempo.quadro = 0;
+    if (!vale) {
+        return;
+    }
+    for (c = 0; c < T_N; c++) {
+        double v = (double)sTempo.cq[c] / sTempo.freq;
+        sTempo.cSoma[c] += sTempo.cq[c];
+        if (v > sTempo.cPior[c]) sTempo.cPior[c] = v;
+    }
+    sTempo.cFim += msFim;
+    sTempo.cQuadros++;
 }
 
 static void ret_une(Ret *r, int x0, int y0, int x1, int y1) {
@@ -946,6 +1157,7 @@ static void prof_entrega(void) {
         LARGE_INTEGER t;
         Ret rz = sSujoZ;
         QueryPerformanceCounter(&t);
+        tempo_poe(T_PROF);
         sDev->SetTexture(0, NULL);
         sDev->SetTexture(1, NULL);
         sCurTex = (GsTex)-1;
@@ -984,6 +1196,7 @@ static void sai_da_edram(void) {
         return;
     }
     if (r.x1 > r.x0 && sAlvos[sResidente].tex != NULL) {
+        tempo_poe(T_COR_RES);
         /* o destino do Resolve não fica preso como textura (a cópia de volta deixou a dele no estágio 0) */
         sDev->SetTexture(0, NULL);
         sDev->SetTexture(1, NULL);
@@ -1027,6 +1240,7 @@ static void entra_na_edram(int i, int usaZ) {
             poeZ = 1;
         }
     }
+    tempo_poe(T_COR_ENTRA);
     sDev->SetRenderTarget(0, sEdramCor);
     sDev->SetDepthStencilSurface(sEdramProf);
     sDev->SetViewport(&vp);
@@ -1049,6 +1263,7 @@ static void entra_na_edram(int i, int usaZ) {
             LARGE_INTEGER t;
             Ret r = sProf[i].conteudo;
             QueryPerformanceCounter(&t);
+            tempo_poe(T_PROF);
             prof_poe(&sProf[i], &r, sModoZ);
             sConta.zRest++;
             sConta.zRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
@@ -1317,6 +1532,83 @@ static void vu_init(void) {
 
 static void nat_init(void);
 
+/* (F5, etapa 8) Os tempos por passada (BT3_TEMPOS=0 desliga): o relógio (o mftb contra o QueryPerformanceCounter), o
+   verificador das marcas (64 marcas seguidas têm de voltar escritas e em ordem; o controle, uma marca a mais que não
+   foi posta, tem de ser recusado), o custo de uma marca na GPU e na CPU, e uma tarefa conhecida medida dos dois jeitos:
+   a cópia de um alvo inteiro, 8 vezes, entre duas marcas e com a GPU parada antes e depois (prof_cronometra). */
+static void tempo_init(void) {
+    D3DVIEWPORT9 vp = {0, 0, TAM, TAM, 0.0f, 1.0f};
+    LARGE_INTEGER q0, q1;
+    unsigned __int64 m0, m1;
+    double usGpu, usCpu, msMarcas, msParada;
+    int ok, controle;
+    unsigned k;
+    sTempo.ligado = env_num("BT3_TEMPOS", 1) != 0;
+    if (!sTempo.ligado) {
+        Diario_Escrever("gs_d3d: tempos: desligados (BT3_TEMPOS=0)");
+        return;
+    }
+    gGsD3dEtapa = "autoteste dos tempos";
+    QueryPerformanceCounter(&q0);
+    m0 = __mftb();
+    Sleep(20);
+    QueryPerformanceCounter(&q1);
+    m1 = __mftb();
+    sTempo.freq = (double)(m1 - m0) / ((double)(q1.QuadPart - q0.QuadPart) * 1000.0 / (double)sFreq.QuadPart);
+    /* 64 marcas seguidas, sem nada entre elas */
+    sDev->BlockUntilIdle();
+    sTempo.buf = 0;
+    sTempo.n[0] = 0;
+    sTempo.quadro = 1;
+    sTempo.cpu = T_OUTROS;
+    sTempo.desde = __mftb();
+    m0 = __mftb();
+    for (k = 0; k < 64; k++) {
+        tempo_marca(T_OUTROS, 0);
+    }
+    m1 = __mftb();
+    sDev->BlockUntilIdle();
+    __lwsync();
+    sMarcaGpu[64] = 0; /* (o controle: a marca 64 não foi posta) */
+    ok = sTempo.n[0] == 64 && tempo_valida(0, 64);
+    controle = tempo_valida(0, 65);
+    usGpu = ok ? (double)(sMarcaGpu[63] - sMarcaGpu[0]) / 63.0 / sTempo.freq * 1000.0 : 0.0;
+    usCpu = (double)(m1 - m0) / 64.0 / sTempo.freq * 1000.0;
+    /* a cópia de um alvo inteiro, 8 vezes, entre duas marcas e com a GPU parada (o autoteste da profundidade) */
+    sDev->SetRenderTarget(0, sEdramCor);
+    sDev->SetDepthStencilSurface(sEdramProf);
+    sDev->SetViewport(&vp);
+    sTempo.n[0] = 0;
+    tempo_marca(T_TELA, 0);
+    for (k = 0; k < 8; k++) {
+        cr_correst(sDate);
+    }
+    tempo_marca(T_OUTROS, 0);
+    sDev->BlockUntilIdle();
+    __lwsync();
+    msMarcas = tempo_valida(0, 2) ? ((double)(sMarcaGpu[1] - sMarcaGpu[0]) / sTempo.freq - usGpu / 1000.0) / 8.0 : -1.0;
+    msParada = prof_cronometra(cr_correst, sDate, 8);
+    sDev->SetTexture(0, NULL);
+    sDev->SetRenderTarget(0, sTela);
+    sDev->SetDepthStencilSurface(NULL);
+    esquece_estado();
+    sTempo.n[0] = sTempo.n[1] = 0;
+    sTempo.estado[0] = sTempo.estado[1] = 0;
+    sTempo.quadro = 0;
+    sTempo.gpu = -1;
+    memset(sTempo.cq, 0, sizeof(sTempo.cq));
+    Diario_Escrever("gs_d3d: tempos: BT3_TEMPOS=1; relógio %.3f MHz (mftb contra o QueryPerformanceCounter de %.3f MHz); 64 "
+                    "marcas seguidas %s, controle (uma marca a mais, não posta) %s; uma marca custa %.1f us de GPU e %.2f us "
+                    "de CPU; a cópia de um alvo inteiro: %.3f ms pelas marcas, %.3f ms com a GPU parada",
+                    sTempo.freq / 1000.0, (double)sFreq.QuadPart / 1e6, ok ? "escritas e em ordem" : "ERRADAS",
+                    controle ? "ACEITO" : "recusado", usGpu, usCpu, msMarcas, msParada);
+    if (!ok || controle || sTempo.freq <= 0.0) {
+        Diario_Escrever("gs_d3d: ERRO: tempos: o autoteste das marcas não bateu; os tempos por passada ficam desligados");
+        sTempo.ligado = 0;
+    }
+    gGsD3dEtapa = "antes do primeiro quadro";
+}
+
 static int d3d_init(void) {
     static const D3DVERTEXELEMENT9 elemGs[] = {
         {0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
@@ -1417,6 +1709,7 @@ static int d3d_init(void) {
     }
     prof_autoteste();
     nat_init(); /* (F5, etapa 7, segunda parte) */
+    tempo_init(); /* (F5, etapa 8) */
     Diario_Escrever("gs_d3d: pronto; alvo %dx%d, EDRAM: cor %u + profundidade %u de %u tiles; %u MB livres", TAM, TAM,
                     tilesCor, tilesProf, (unsigned)EDRAM_TILES, mb_livres());
     if (tilesCor + tilesProf > EDRAM_TILES) {
@@ -1606,6 +1899,7 @@ static void desenha_fba(const GsDraw *d, uint32_t ini);
 
 /* um desenho preparado: as chamadas (duas passadas no FBA com mistura pelo alfa da fonte) e o que ele sujou */
 static void desenha_comum(const GsDraw *d, uint32_t ini, const Ret *a) {
+    tempo_poe(d->vu >= 1 && d->vu <= 3 ? T_VU0 + d->vu - 1 : T_COMUM);
     if (fba_duas(d)) {
         desenha_fba(d, ini);
     } else {
@@ -1867,6 +2161,89 @@ static void log_nativas(unsigned t) {
     sTabTipoN = 0;
 }
 
+/* (F5, etapa 8) Os tempos por passada no trecho, por quadro (média e pior), em ms: a GPU por classe, sem o custo das
+   marcas (o trecho vazio de cada quadro vezes os trechos da classe), a medição (esse custo somado) e o que não bateu
+   entre a soma e o quadro da GPU (da primeira à última marca); o limite da espera da GPU pela CPU dentro das classes; a
+   CPU do fim do quadro pelas mesmas classes, contra o fim do quadro medido pelo QueryPerformanceCounter. */
+static void tempo_zera(void) {
+    memset(sTempo.gSoma, 0, sizeof(sTempo.gSoma));
+    memset(sTempo.gEsp, 0, sizeof(sTempo.gEsp));
+    memset(sTempo.cSoma, 0, sizeof(sTempo.cSoma));
+    memset(sTempo.gTrechos, 0, sizeof(sTempo.gTrechos));
+    memset(sTempo.gPior, 0, sizeof(sTempo.gPior));
+    memset(sTempo.cPior, 0, sizeof(sTempo.cPior));
+    sTempo.quadroSoma = sTempo.esperaTiques = 0;
+    sTempo.lidos = sTempo.descartados = sTempo.perdidos = sTempo.esperas = sTempo.cQuadros = 0;
+    sTempo.quadroPior = sTempo.medPior = sTempo.cFim = 0.0;
+}
+
+static int tempo_junta(char *s, int n, int tam, const char *nome, double a, double b) {
+    int k;
+    if (n >= tam - 1) {
+        return n;
+    }
+    k = _snprintf(s + n, tam - n - 1, "%s%s %.2f (%.2f)", n ? "; " : "", nome, a, b);
+    if (k < 0) {
+        s[tam - 1] = '\0';
+        return tam - 1;
+    }
+    return n + k;
+}
+
+static void log_tempos(double msQuadro) {
+    char lg[768], le[768], lc[768];
+    int ng = 0, ne = 0, nc = 0, c;
+    double q = (double)sTempo.lidos, f = sTempo.freq, vazio, soma = 0.0, esp = 0.0, med, tot, marcas = 0.0, cs = 0.0;
+    if (!sTempo.ligado) {
+        return;
+    }
+    lg[0] = le[0] = lc[0] = '\0';
+    if (sTempo.lidos > 0) {
+        vazio = (double)sTempo.gSoma[T_MED] / q; /* tiques: o custo de uma marca (um trecho vazio por quadro) */
+        for (c = 0; c < T_GPU_N; c++) {
+            double v = ((double)sTempo.gSoma[c] - (double)sTempo.gTrechos[c] * vazio) / q / f,
+                   e = (double)sTempo.gEsp[c] / q / f;
+            marcas += (double)sTempo.gTrechos[c] / q;
+            if (c == T_MED) {
+                continue;
+            }
+            soma += v;
+            esp += e;
+            ng = tempo_junta(lg, ng, sizeof(lg), kTempoNome[c], v, sTempo.gPior[c]);
+            if (e >= 0.005 && ne < (int)sizeof(le) - 1) {
+                int k = _snprintf(le + ne, sizeof(le) - ne - 1, "; %s %.2f", kTempoNome[c], e);
+                ne = k < 0 ? (int)sizeof(le) - 1 : ne + k;
+                le[sizeof(le) - 1] = '\0';
+            }
+        }
+        med = vazio * marcas / f;
+        tot = (double)sTempo.quadroSoma / q / f;
+        Diario_Escrever("gs_d3d:   tempos, GPU por quadro (ms, média e pior): quadro %.2f (pior %.2f) de %.2f do quadro "
+                        "inteiro, em %u quadros lidos (%u descartados por captura ou mais de %u marcas, %u com marca "
+                        "perdida, %u esperas pela cerca, %.3f ms); medição %.2f (pior %.2f): %.1f marcas por quadro, %.1f "
+                        "us cada; soma das classes %.2f; não bateu %.3f",
+                        tot, sTempo.quadroPior, msQuadro, sTempo.lidos, sTempo.descartados, (unsigned)T_MARCAS,
+                        sTempo.perdidos, sTempo.esperas, (double)sTempo.esperaTiques / f, med, sTempo.medPior, marcas + 1.0,
+                        vazio / f * 1000.0, soma, tot - soma - med);
+        Diario_Escrever("gs_d3d:   tempos, GPU por classe: %s", lg);
+        Diario_Escrever("gs_d3d:   tempos, a GPU pode ter esperado pela CPU (limite, ms por quadro): %.2f%s", esp, le);
+    } else {
+        Diario_Escrever("gs_d3d:   tempos, GPU: nenhum quadro lido no trecho (%u descartados, %u com marca perdida)",
+                        sTempo.descartados, sTempo.perdidos);
+    }
+    if (sTempo.cQuadros > 0) {
+        double qc = (double)sTempo.cQuadros;
+        for (c = 0; c < T_N; c++) {
+            double v = (double)sTempo.cSoma[c] / qc / f;
+            cs += v;
+            nc = tempo_junta(lc, nc, sizeof(lc), kTempoNome[c], v, sTempo.cPior[c]);
+        }
+        Diario_Escrever("gs_d3d:   tempos, CPU do fim do quadro (ms, média e pior; %u quadros): fim do quadro %.2f, soma das "
+                        "classes %.2f, não bateu %.3f; %s", sTempo.cQuadros, sTempo.cFim / qc, cs, sTempo.cFim / qc - cs, lc);
+    }
+    tempo_zera();
+}
+
 static void log_quadros(void) {
     /* os tempos sem os quadros que tiveram captura (cada uma pesa centenas de ms e encobria o resto) */
     unsigned q = sConta.quadros, t = sConta.quadros + sConta.capturas;
@@ -1883,6 +2260,7 @@ static void log_quadros(void) {
         log_memoria_zera();
         log_vu1_zera();
         sTabTipoN = 0;
+        tempo_zera();
         return;
     }
     if (q == 0) {
@@ -1905,6 +2283,7 @@ static void log_quadros(void) {
     log_vu1_zera();
     log_prof(t);
     log_nativas(t);
+    log_tempos(sConta.msQuadro / q);
     log_memoria();
     memset(&sConta, 0, sizeof(sConta));
 }
@@ -2025,6 +2404,7 @@ static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
         return;
     }
     nat_entra(d->target, n, cur);
+    tempo_poe(T_IDS);
     sDev->SetTexture(3, NULL);
     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
     sIdsQuadro = gGsFrame + 1;
@@ -2051,6 +2431,7 @@ static void nat_tabela(const GsDraw *d, uint32_t n, int *cur) {
     if (d->src == 0 && sZDono == t) {
         prof_sincroniza(); /* (a textura de profundidade em dia, a posse fica) */
     }
+    tempo_poe(d->src ? T_TAB_IDS : T_TAB_PROF);
     aplica_pipe(d->pipeline); /* a mistura e a máscara do jogo; a chave de tabela desliga a profundidade */
     {
         int b = (int)(d->blendc * 255.0f + 0.5f);
@@ -2083,6 +2464,7 @@ static void nat_contorno(const GsDraw *d, uint32_t n, int *cur) {
         return;
     }
     nat_entra(d->target, n, cur);
+    tempo_poe(T_CONTORNO);
     nat_contorno_passa(&r);
     sConta.natCont++;
 }
@@ -2126,6 +2508,7 @@ static void desenha_fba(const GsDraw *d, uint32_t ini) {
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, mascara(p->wmask & ~GS_CC_A));
     chamadas(d, ini);
     if (p->wmask & GS_CC_A) {
+        tempo_poe(T_FBA);
         m[2] = 1.0f;
         sDev->SetPixelShaderConstantF(1, m, 1);
         sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALPHA);
@@ -2424,6 +2807,7 @@ static void frame_end(void) {
     static int every = -1;
 
     QueryPerformanceCounter(&t0);
+    tempo_comeca(); /* (F5, etapa 8: lê o quadro de dois atrás) */
     mem_buffers();
     gGsD3dEtapa = "fim do quadro: refazendo a lista";
     if (gX360Luta != sLutaVista) { /* os primeiros quadros da luta, passo a passo (a primeira rodada travou ali) */
@@ -2437,6 +2821,7 @@ static void frame_end(void) {
     sDateFonte = NULL;
     gGsD3dEtapa = "fim do quadro: texturas de profundidade";
     prof_garante();
+    tempo_poe(T_OUTROS);
     gGsD3dEtapa = "fim do quadro: refazendo a lista";
     sConta.msZQuadro = 0.0;
     if (sConta.quadros == 30 && sConta.alfaAltoDes == 0) {
@@ -2450,10 +2835,13 @@ static void frame_end(void) {
         if (g > sConta.msVuGravPior) sConta.msVuGravPior = g;
         QueryPerformanceCounter(&tv);
         gGsD3dEtapa = "fim do quadro: cópia da VU1";
+        tempo_poe(T_VU_COPIA);
         vu_copia();
+        tempo_poe(T_OUTROS);
         msVu = ms_desde(&tv);
         gGsD3dEtapa = "fim do quadro: refazendo a lista";
     }
+    tempo_abre(); /* (a GPU do quadro começa aqui) */
     for (n = 0; n < gsDrawCount; n++) {
         const GsDraw *d = &gsDraws[n];
         if (d->native >= 100) {
@@ -2474,6 +2862,7 @@ static void frame_end(void) {
                 if (r.x1 > r.x0 && sDate != NULL) {
                     D3DRECT fonte;
                     D3DPOINT destino;
+                    tempo_poe(T_DATE);
                     alinha8(&r);
                     fonte.x1 = r.x0; fonte.y1 = r.y0; fonte.x2 = r.x1; fonte.y2 = r.y1;
                     destino.x = r.x0; destino.y = r.y0;
@@ -2563,6 +2952,7 @@ static void frame_end(void) {
         captura(mostrado);
     }
     gGsD3dEtapa = "fim do quadro: cópia para a tela";
+    tempo_poe(T_TELA);
     {
         D3DVIEWPORT9 vp = {0, 0, TELA_W, TELA_H, 0.0f, 1.0f};
         sDev->SetRenderTarget(0, sTela);
@@ -2580,10 +2970,13 @@ static void frame_end(void) {
                   512.0f / TAM, 448.0f / TAM, 1);
         }
     }
+    tempo_fecha_gpu(capturas != sConta.capturas);
+    tempo_poe(T_PRESENT);
     QueryPerformanceCounter(&tp);
     gGsD3dEtapa = "fim do quadro: Present";
     sDev->Present(NULL, NULL, NULL, NULL);
     msPresent = ms_desde(&tp);
+    tempo_poe(T_OUTROS);
     Passos_Apresentou(gGsFrame, (unsigned)(msPresent * 1000.0));
     gGsD3dEtapa = "fim do quadro: texturas soltas";
     /* nada do quadro fica preso no dispositivo: as texturas soltas podem ir quando a GPU terminar com elas */
@@ -2600,6 +2993,7 @@ static void frame_end(void) {
     alvos_sem_textura();
 
     msFim = ms_desde(&t0);
+    tempo_fecha_cpu(msFim, capturas == sConta.capturas);
     ms = ms_desde(&sUltimoFim);
     QueryPerformanceCounter(&sUltimoFim);
     if (capturas == sConta.capturas) {
