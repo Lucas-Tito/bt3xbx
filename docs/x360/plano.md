@@ -39,7 +39,7 @@ Resumo (texto completo em [plano/base.md](plano/base.md)):
 | F2 | concluída | idem |
 | F3 | concluída | [plano/F3.md](plano/F3.md) |
 | F4 | concluída (16/10/2026): rodada completa no WSL e sessão no console com o Lucas | [plano/F4/00-escopo.md](plano/F4/00-escopo.md) |
-| F5 | em andamento: etapas 1 a 6 concluídas (a luta jogável no console, com os defeitos de profundidade e alfa da etapa 7); 7 e 8 por fazer (da 8, o perfil e uma otimização da gravação da VU1 no WSL, [08](plano/F5/08.md)) | [plano/F5/00-escopo.md](plano/F5/00-escopo.md) |
+| F5 | em andamento: etapas 1 a 7 concluídas (a luta jogável e renderizada no console, a uns 12 quadros por segundo); a 8 (desempenho) começou pela VU1 na CPU; a 9 com a parte do WSL feita | [plano/F5/00-escopo.md](plano/F5/00-escopo.md) |
 | F6 | plano decidido (decisão 25), por implementar | [plano/F6/00-escopo.md](plano/F6/00-escopo.md) |
 | F7 a F9 | por fazer | só a entrega da tabela acima |
 
