@@ -12,6 +12,10 @@
                  comparar as duas builds com port/x360/tools/chamadas.py   -> port/build/<alvo>c/
     --rastreio   (x86) instrumenta as leituras de memória: port/x360/headless/rastreio.c diz quais bytes de
                  cada arquivo do disco o jogo lê como número          -> port/build/x86r/bt3_x86r
+    --gpu        (F5, etapa 8) o GS em modo gpu com um backend falso (port/x360/headless/gpu_falso.c): o gs_draw.c de
+                 verdade grava a lista do quadro, os programas da VU1 vão pelo caminho dos shaders (hle_program*) como
+                 no 360, e nada se desenha. Só para medir e provar o custo da gravação da VU1 (BT3_GS=gpu)
+                                                                      -> port/build/<alvo>g/bt3_<alvo>g
 
 As duas usam a aritmética em software da build de PC (-msoft-float chama port/src/softfloat_ps2.c): uma
 diferença entre elas só pode vir da ordem dos bytes. Reaproveita portsrc e eeconst do upstream sem mudá-los;
@@ -43,13 +47,13 @@ SEM_RASTREIO = {"state", "namefont"}
 
 
 class Alvo:
-    def __init__(self, nome, rastreio, chamadas=False):
-        self.nome, self.rastreio, self.chamadas = nome, rastreio, chamadas
+    def __init__(self, nome, rastreio, chamadas=False, gpu=False):
+        self.nome, self.rastreio, self.chamadas, self.gpu = nome, rastreio, chamadas, gpu
         self.be = nome == "ppc"  # big-endian: campos de bits na ordem do PS2 (bitfields.py)
         # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
         # diverge no quadro 2755).
         self.opt = "-O2"
-        pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "")
+        pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "")
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
         self.exe = self.b / f"bt3_{pasta}"
@@ -158,10 +162,12 @@ def construir(alvo):
     # referência saía com pixels de borda diferentes da x86 (que não tem FMA) em 4 de 125 quadros do título
     fma = ["-ffp-contract=off"] if alvo.be else []
     for f in sorted((ROOT / "port/src/gs").glob("*.c")):
-        if f.stem in GS_SEM_SDL:
+        # (--gpu: o gs_draw.c de verdade, com o pedaço de SDL do 360 que o compila sem janela, como o c89.py faz)
+        if f.stem in GS_SEM_SDL or (alvo.gpu and f.stem == "gs_draw"):
             o = alvo.obj / ("gs_" + f.stem + ".o")
+            sdl360 = ["-Iport/x360/src/gs/sdl"] if f.stem == "gs_draw" else []
             junta(f, o, compile_ee(alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w"] +
-                                   alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) +
+                                   alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) + sdl360 +
                                    ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], f, o, ee=False, be=alvo.be))
 
     # a camada do port: aritmética do PS2 em software, menos as duas pontes com a FPU (interface só de inteiros)
@@ -178,7 +184,7 @@ def construir(alvo):
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
     extras = ["sem_janela", "roteiro", "imagens", "ponte_pow", "passos", "memoria"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
-        (["chamadas"] if alvo.chamadas else [])
+        (["chamadas"] if alvo.chamadas else []) + (["gpu_falso"] if alvo.gpu else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
         # (o roteiro lê o save do jogo pela estrutura dele, include/sys/save.h, com os tipos do jogo: port_compat.h)
@@ -186,7 +192,9 @@ def construir(alvo):
         # (F5, etapa 3: a medida de tempo diz no log de que commit a build saiu, o mesmo CARIMBO desta pasta)
         if nome == "passos":
             tipos_jogo = [f'-DBT3_CARIMBO="{carimbo().strip()}"']
-        junta(nome, o, run(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-w"] + alvo.hard + tipos_jogo +
+        # (--gpu: o sem_janela.c sem as entradas GsGpu_* vazias, que vêm do gs_draw.c, como na build do 360)
+        gpu_def = ["-DX360_GS_D3D"] if alvo.gpu and nome == "sem_janela" else []
+        junta(nome, o, run(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-w"] + alvo.hard + gpu_def + tipos_jogo +
                            [f"port/x360/headless/{nome}.c", "-o", o]))
     # big-endian: a conversão por formato (port/x360/conv), que o jogo chama em tempo de jogo (Port_ConvertAnim)
     if alvo.be:
@@ -235,6 +243,8 @@ def ligar(alvo, objs):
              # as ações do roteiro de evento da luta que começam, no rastro dos roteiros (roteiro.c, F4 etapa 9b): os
              # gatilhos do btl_script.c, a ação principal do battle_work.c e a da carga do battle_load.c
              "-Wl,--wrap=Gsc_StartAction", "-Wl,--wrap=Gsc_StartMain", "-Wl,--wrap=Gsc_RunAction"]
+    if alvo.gpu:  # a medida da VU1 (gpu_falso.c, BT3_PERFIL): passam por lá o GsVu1_Call, o Unpack, os três desenhos e o Gs_PageHash
+        resto += [f"-Wl,--wrap={s}" for s in ("GsVu1_Call", "GsVu1_Unpack", "GsGpu_Draw", "GsGpu_DrawVu0", "GsGpu_DrawVu4", "GsGpu_DrawVu6", "Gs_PageHash")]
     if alvo.rastreio:
         resto += ["-Wl,--wrap=memcpy", "-Wl,--wrap=memmove", "-Wl,--wrap=memset"]
     if alvo.rastreio or alvo.nome == "ppc":  # o rastreio marca a origem; a PowerPC inverte os bytes (inverter.c)
@@ -413,10 +423,13 @@ def main():
     ap.add_argument("--alvo", choices=["ppc", "x86"], required=True)
     ap.add_argument("--rastreio", action="store_true")
     ap.add_argument("--chamadas", action="store_true", help="registra a sequência de funções do jogo (BT3_CHAMADAS)")
+    ap.add_argument("--gpu", action="store_true", help="GS em modo gpu com backend falso (F5, etapa 8: custo da VU1)")
     a = ap.parse_args()
     if a.rastreio and a.alvo != "x86":
         sys.exit("o rastreio roda na x86 (é a build em que o jogo já funciona)")
-    construir(Alvo(a.alvo, a.rastreio, a.chamadas))
+    if a.gpu and (a.rastreio or a.chamadas):
+        sys.exit("--gpu não se combina com --rastreio nem com --chamadas")
+    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu))
 
 
 main()
