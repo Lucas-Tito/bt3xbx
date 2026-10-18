@@ -368,3 +368,63 @@ então os dois têm que ser iguais entre si).
 - Não vi o XDK (está na outra máquina): o que digo da posse do dispositivo e de `CreateTexture` fora do dono é o que o
   código e o guia dizem (`guia-de-port.md`, "só a thread dona usa o dispositivo"), e o que falta confirmar está marcado.
 - "Dias de agente" seguem a régua do plano da F5 (um dia útil são 6 h; a etapa 6 estimou 2 a 4 dias) e são palpite pela leitura.
+
+## Degrau 1
+
+Feito no branch `cursor/f5-degrau1`, a partir de `troca/main` (`2da745d`, a tarefa em
+[`tarefas/f5-degrau1.md`](../../tarefas/f5-degrau1.md)). O Lucas aprovou a recomendação deste estudo com as respostas
+conservadoras da seção 9. As partes, na ordem da tarefa, cada uma com commit próprio: as medições baratas (1), o corte do
+hash de página (2), a gravação numa thread (3). Convenção: **[medido]** é o que uma rodada deste branch deu.
+
+### Parte 1: as medições baratas, no WSL
+
+#### 1a. Os bytes que a cadeia leva por quadro [medido]
+
+`gs_core.c` ganhou, só nas builds `--gpu` (`-DBT3_GPU_FALSO`, posto por `headless.py`; as outras builds não o têm e a
+`.text` da x86 não muda), o `bytes_walk`: antes de andar a cadeia do quadro, anda-a de novo contando etiquetas, bytes da lista
+(as etiquetas e os dados dentro dos dois buffers de lista do jogo), bytes de cadeia externa (CNT e CALL fora dos buffers: as
+cadeias de vértices dos modelos), bytes de REF/REFS/REFE (os dados do jogo apontados) com e sem contar duas vezes o mesmo
+(endereço, tamanho), e bytes de imagem (os IMAGE, o envio de textura; os envios pelo canal GIF fora da lista entram no
+quadro seguinte). `BT3_GPU_BYTES=1` imprime uma linha `gpu_falso: bytes quadro N ...` por quadro; `bytes_quadro.py` resume
+(confere uma linha de bytes por linha de lista, na mesma ordem, e valores possíveis). A lista de cada quadro saiu igual à de
+antes nos dois roteiros (a medida não toca na gravação).
+
+Por quadro de luta (os de mais de 20 mil vértices de VU1), em KiB:
+
+| Roteiro | Quadros | Lista | Externa | REF | REF sem repetir | Imagem (dentro dos REF) | Etiquetas |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `f5_duelo` | 3.869 | 168,5 (máx 262) | 1.771 (máx 2.364) | 2.318 (máx 3.216) | 2.234 | 2.266 | 1.668 |
+| `f5_treino` | 3.166 | 176,0 (máx 237) | 1.550 (máx 2.067) | 2.101 (máx 2.682) | 2.026 | 2.052 | 1.492 |
+
+O **fecho** que uma cópia da cadeia na entrega levaria (lista + externa + REF sem repetir) é de **4,08 MiB por quadro de luta
+no `f5_duelo` (máximo 5,37) e 3,66 no `f5_treino` (máximo 4,65)**; nos menus, 0,86 e 0,81 MiB (máximo 2,5). A estimativa da
+seção 4.2 (5 a 7 MB) estava um pouco alta. O que isso diz: copiar a cadeia custaria uns 4 MB de `memcpy` por quadro na thread do
+jogo (de 1 a 2 ms no Xenon [estimado]) e 8 a 11 MiB de memória nos dois jogos, contra **zero** da espera. A espera nos pontos
+do PS2 é o caminho, e a cópia só entra se a Parte 3 mostrar que a espera não basta. Quase todo REF é textura (a imagem é
+97% do REF): o jogo reenvia as texturas do estágio inteiras em todo quadro, e o hash de página (2,8 MB estimados) é sobre o
+mesmo volume.
+
+#### 1b. O `BT3_GS_THREAD=1` sem mudar nada: a linha de base [medido]
+
+`vu1_perfil.sh lista` com `BT3_GS_THREAD=1 BT3_GS_RACE=1`, no código de antes (o `gs_core.c` do `9010268` mais a medida acima),
+contra a lista sem thread (`divergencias.py`, que casa os quadros pelo número):
+
+| Build e roteiro | Quadros que saem | Quadros com a lista diferente | Quadros com linha `race:` | Fim |
+|---|---:|---:|---:|---|
+| `x86g` `f5_treino` | 7.235 de 7.386 | 4.183 (o primeiro, 233) | 12 (24 linhas) | `SIGSEGV` no quadro 7.235 |
+| `x86g` `f5_duelo` | 8.229 de 8.380 | 5.202 (o primeiro, 233) | 15 (27 linhas) | `SIGSEGV` no quadro 8.229 |
+| `ppcg` `f5_treino` | 7.235 de 7.386 | 4.181 (o primeiro, 737) | 11 (22 linhas) | `SIGSEGV` no quadro 7.235 |
+| `ppcg` `f5_duelo` | 8.229 de 8.380 | 4.096 (o primeiro, 989) | 12 (23 linhas) | `SIGSEGV` no quadro 8.229 |
+
+**A hipótese da seção 3.3 se confirma.** Todas as corridas dos menus e das cargas (os quadros 234 e 486, 738, 990, 1.242,
+1.494, 1.746, de 252 em 252, depois 2.869, 3.036 a 3.262, 3.978 a 4.136) têm a forma "a lista tinha N blocos na entrega e 1
+depois" e o bloco 0 mudado: a etiqueta na primeira posição de um dos dois buffers de lista (`006bd740`, `007bd780`), que é
+o `END` que o `Dma_ResetBuffers` escreve nos dois. Três corridas de outro tipo, em luta (quadros 4.905, 4.934 e 6.971, só nos
+roteiros do duelo e do treino conforme o caso): um REF de 73 palavras de quatro (`01039d00`, 1.168 bytes) que o jogo mexe
+enquanto a lista o lê, o pacote em estrutura persistente da seção 3.4 (o CLUT em tempo de execução). A lista que sai errada
+num quadro desloca o número das texturas criadas depois dele (o backend falso numera por ordem de criação): por isso a
+divergência vira quase todos os quadros a partir da primeira luta, e **o número de quadros divergentes não conta corridas**,
+conta o quanto uma corrida se propaga; o número que conta é o de quadros com `race:`. O fim por `SIGSEGV` nos quadros 7.235 e
+8.229 é o mesmo nas duas CPUs (o jogo lê memória que a carga já reaproveitou).
+
+O que o degrau 1 tem de vencer: **zero linhas `race:`, zero quadros diferentes e o fim do roteiro**, nas quatro combinações.

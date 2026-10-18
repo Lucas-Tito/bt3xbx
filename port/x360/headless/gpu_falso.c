@@ -36,6 +36,7 @@
 #include "../../src/gs/gs_texpack.h"
 
 extern unsigned gGsFrame;
+extern uint32_t gGsBytes[8]; /* gs_core.c (BT3_GPU_FALSO): os bytes que a cadeia do quadro leva */
 extern void __real_GsVu1_Call(int addr);
 extern void __real_GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data);
 struct GsVertex;
@@ -64,11 +65,40 @@ static void mix_words(const void *p, uint32_t words) {
     }
 }
 
+/* (F5, etapa 8, degrau 1) O conteúdo de cada textura decodificada, pelo número que fake_tex_create deu: o hash "normal" do
+   quadro (BT3_GPU_NORMAL=1) troca o número de cada textura do desenho pelo conteúdo dela, e assim duas rodadas que decodificam
+   um número diferente de texturas (uma que não refaz a que já tinha) se comparam pelo que cada desenho de fato amostra. */
+static uint64_t *sConteudo;
+static uintptr_t sConteudoN, sConteudoCap;
+
 static int fake_init(void) { return 1; }
 static GsTex fake_white(void) { return 1; }
 static GsTex fake_tex_create(uint32_t w, uint32_t h, int format, int levels) {
     (void)w; (void)h; (void)format; (void)levels;
+    if (sNextTex - 16 >= sConteudoCap) {
+        sConteudoCap = sConteudoCap != 0 ? sConteudoCap * 2 : 4096;
+        sConteudo = (uint64_t *)realloc(sConteudo, sConteudoCap * sizeof(uint64_t));
+    }
+    sConteudo[sNextTex - 16] = 0;
+    sConteudoN = sNextTex - 16 + 1;
     return sNextTex++;
+}
+static void conteudo_mistura(GsTex tex, int level, uint32_t w, uint32_t h, int format, const void *px, uint32_t bytes) {
+    uint64_t c;
+    const uint32_t *p = (const uint32_t *)px;
+    uint32_t i, ch[5];
+    if (tex < 16 || tex - 16 >= sConteudoN) {
+        return;
+    }
+    c = sConteudo[tex - 16] * 1099511628211ull + 0x9E3779B97F4A7C15ull;
+    ch[0] = (uint32_t)level; ch[1] = w; ch[2] = h; ch[3] = (uint32_t)format; ch[4] = bytes;
+    for (i = 0; i < 5; i++) {
+        c = (c ^ ch[i]) * 1099511628211ull;
+    }
+    for (i = 0; i < bytes / 4; i++) {
+        c = (c ^ p[i]) * 1099511628211ull;
+    }
+    sConteudo[tex - 16] = c;
 }
 /* o conteúdo de cada textura decodificada entra no hash: a decodificação (texture_get) faz parte do que se prova */
 static int fake_tex_upload(GsTex tex, int level, uint32_t w, uint32_t h, int format, const void *px, uint32_t bytes) {
@@ -79,6 +109,7 @@ static int fake_tex_upload(GsTex tex, int level, uint32_t w, uint32_t h, int for
     mix((uint32_t)format);
     mix(bytes);
     mix_words(px, bytes / 4);
+    conteudo_mistura(tex, level, w, h, format, px, bytes);
     sTexNovas++;
     sTexBytes += bytes;
     free((void *)px); /* a posse é do backend */
@@ -180,6 +211,31 @@ static void fake_frame_end(void) {
             fprintf(stderr, " %08x", (unsigned)(sSecao[i] >> 32 ^ sSecao[i]));
         }
         fprintf(stderr, "\n");
+    }
+    if (getenv("BT3_GPU_BYTES") != NULL) { /* (F5, degrau 1) o que a cadeia leva por quadro: gs_core.c, bytes_walk */
+        fprintf(stderr, "gpu_falso: bytes quadro %u tags %u lista %u externa %u ref %u refunico %u imagem %u vu %u/%u/%u\n", gGsFrame,
+                gGsBytes[0], gGsBytes[1], gGsBytes[2], gGsBytes[3], gGsBytes[4], gGsBytes[5], gsVuVertCount, gsVuIdxCount, gsVuUniCount);
+    }
+    if (getenv("BT3_GPU_NORMAL") != NULL) { /* (F5, degrau 1) o quadro sem o que depende de quantas texturas se decodificaram */
+        uint64_t n = 1469598103934665603ull, d = 1469598103934665603ull;
+        uint32_t k;
+        n = (n ^ sSecao[S_CONTAGENS]) * 1099511628211ull;
+        for (i = 0; i < gsDrawCount; i++) {
+            GsDraw g = gsDraws[i];
+            const uint32_t *w;
+            if (!g.tex_is_target && g.tex >= 16 && g.tex - 16 < sConteudoN) {
+                g.tex = (GsTex)(sConteudo[g.tex - 16] ^ sConteudo[g.tex - 16] >> 32); /* o conteúdo no lugar do número */
+            }
+            w = (const uint32_t *)&g;
+            for (k = 0; k < (uint32_t)(sizeof(GsDraw) / 4); k++) {
+                d = (d ^ w[k]) * 1099511628211ull;
+            }
+        }
+        n = (n ^ d) * 1099511628211ull;
+        for (i = S_VERTICES; i < S_N; i++) {
+            n = (n ^ sSecao[i]) * 1099511628211ull;
+        }
+        fprintf(stderr, "gpu_falso: normal quadro %u %016llx\n", gGsFrame, (unsigned long long)n);
     }
     sFrames++;
     /* o que o gs_gpu.c zera ao fim do quadro */

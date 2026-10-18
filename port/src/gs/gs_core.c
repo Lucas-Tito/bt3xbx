@@ -1393,10 +1393,71 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
     }
 }
 
+#ifdef BT3_GPU_FALSO
+/* (F5, etapa 8, degrau 1) Medida das builds --gpu (headless.py): quantos bytes cada quadro leva pela cadeia, para decidir
+   entre esperar a thread e copiar a cadeia na entrega. gGsBytes, na ordem: etiquetas, bytes da lista (as etiquetas e os
+   dados dentro dos dois buffers de lista do jogo), bytes de cadeia externa (CNT e CALL fora dos buffers: as cadeias de
+   vértices dos modelos), bytes de REF/REFS/REFE (dados do jogo apontados, contando cada REF), os mesmos sem contar o mesmo
+   (endereço, tamanho) duas vezes, e os bytes de imagem (envio de textura, 16 vezes as palavras de quatro que o IMAGE leva). */
+uint32_t gGsBytes[8];
+static void bytes_walk(uint32_t tadr) {
+    extern uint32_t gDmaBuf[2];
+    static struct { uint32_t addr, qwc; } seen[8192];
+    uint32_t stack[2], sp = 0, k, nseen = 0;
+    int guard;
+
+    memset(gGsBytes, 0, sizeof(gGsBytes));
+    memset(seen, 0, sizeof(seen));
+    for (guard = 0; guard < 100000; guard++) {
+        const uint32_t *tag = (const uint32_t *)(uintptr_t)tadr;
+        uint32_t qwc = tag[0] & 0xFFFF, id = (tag[0] >> 28) & 7, addr = tag[1];
+        uint32_t at = (uint32_t)(uintptr_t)tag;
+        int inlist = (at >= gDmaBuf[0] && at < gDmaBuf[0] + 0x100000u) || (at >= gDmaBuf[1] && at < gDmaBuf[1] + 0x100000u);
+        int end = 0, ref = 0;
+
+        gGsBytes[0]++;
+        switch (id) {
+        case 0: ref = 1; end = 1; break;
+        case 1: tadr += 16 + qwc * 16; break;
+        case 2: tadr = addr; break;
+        case 3: case 4: ref = 1; tadr += 16; break;
+        case 5: if (sp < 2) { stack[sp++] = tadr + 16 + qwc * 16; } tadr = addr; break;
+        case 6: if (sp > 0) { tadr = stack[--sp]; } else { end = 1; } break;
+        default: end = 1; break;
+        }
+        if (ref) {
+            gGsBytes[inlist ? 1 : 2] += 16;
+            gGsBytes[3] += qwc * 16;
+            k = ((addr >> 4) * 2654435761u + qwc) >> 19;
+            while (seen[k].qwc != 0 && (seen[k].addr != addr || seen[k].qwc != qwc)) {
+                k = (k + 1) & 8191;
+            }
+            if (seen[k].qwc == 0 && nseen < 6000) { /* (a tabela cheia só deixa de contar o que é igual) */
+                seen[k].addr = addr;
+                seen[k].qwc = qwc;
+                nseen++;
+                gGsBytes[4] += qwc * 16;
+            } else if (seen[k].qwc == 0) {
+                gGsBytes[4] += qwc * 16;
+            }
+        } else {
+            gGsBytes[inlist ? 1 : 2] += 16 + (id == 7 ? 0 : qwc * 16);
+        }
+        if (end) {
+            break;
+        }
+    }
+}
+#endif
+
 /* Executes one frame's list: the DMA chain at `tadr` on VIF1, then the end-of-frame work of the back end. */
 static void run_chain(uint32_t tadr, int tte) {
     uint32_t stack[2], sp = 0;
     int guard;
+
+#ifdef BT3_GPU_FALSO
+    bytes_walk(tadr);
+#endif
 
     for (guard = 0; guard < 100000; guard++) {
         const uint32_t *tag = (const uint32_t *)(uintptr_t)tadr;
@@ -1441,6 +1502,9 @@ static void run_chain(uint32_t tadr, int tte) {
     if (sDumpFrame == (int)sFrame) {
         fprintf(stderr, "  pixels: %u outside scissor, %u failed alpha test, %u failed depth test, %u written\n", sPix[0], sPix[1], sPix[2], sPix[3]);
     }
+#ifdef BT3_GPU_FALSO
+    gGsBytes[5] = sStat[6] * 16;
+#endif
     memset(sPix, 0, sizeof(sPix));
     memset(sStat, 0, sizeof(sStat));
     GsVu1_FrameEnd();
