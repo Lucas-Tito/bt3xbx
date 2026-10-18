@@ -53,6 +53,9 @@ typedef struct GsState {
 
 extern GsState gGs;
 extern uint32_t gGsPageGen[512]; /* bumped whenever an upload writes into that 8 KB page of GS memory */
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+extern uint32_t gGsPageEpoch; /* changes whenever any gGsPageGen entry does (F5, etapa 8) */
+#endif
 extern unsigned gGsFrame;
 
 uint32_t Gs_PageHash(uint32_t page); /* content hash of an 8 KB page of GS memory */

@@ -16,6 +16,8 @@
                  verdade grava a lista do quadro, os programas da VU1 vão pelo caminho dos shaders (hle_program*) como
                  no 360, e nada se desenha. Só para medir e provar o custo da gravação da VU1 (BT3_GS=gpu)
                                                                       -> port/build/<alvo>g/bt3_<alvo>g
+    --vu1        (x86 com --gpu) compila também com -DBT3_TESTE_VU1: a otimização da gravação da VU1, que na PPC vem
+                 com o PORT_BIG_ENDIAN, para medir e provar a mesma mudança na x86 -> port/build/x86gv/bt3_x86gv
 
 As duas usam a aritmética em software da build de PC (-msoft-float chama port/src/softfloat_ps2.c): uma
 diferença entre elas só pode vir da ordem dos bytes. Reaproveita portsrc e eeconst do upstream sem mudá-los;
@@ -47,13 +49,13 @@ SEM_RASTREIO = {"state", "namefont"}
 
 
 class Alvo:
-    def __init__(self, nome, rastreio, chamadas=False, gpu=False):
-        self.nome, self.rastreio, self.chamadas, self.gpu = nome, rastreio, chamadas, gpu
+    def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False):
+        self.nome, self.rastreio, self.chamadas, self.gpu, self.vu1 = nome, rastreio, chamadas, gpu, vu1
         self.be = nome == "ppc"  # big-endian: campos de bits na ordem do PS2 (bitfields.py)
         # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
         # diverge no quadro 2755).
         self.opt = "-O2"
-        pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "")
+        pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "")
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
         self.exe = self.b / f"bt3_{pasta}"
@@ -75,6 +77,9 @@ class Alvo:
             # -Wno-error=return-mismatch: o clang trata `return;` em função não-void como erro (3 arquivos do jogo)
             self.soft = ["-msoft-float", "-mno-sse", "-mno-mmx", "-mno-x87", "-malign-double", "-Wno-error=return-mismatch"]
             self.hard = ["-msse2", "-mfpmath=sse"]
+            if vu1:  # (F5, etapa 8) a otimização da gravação da VU1, que na PPC já vem com o PORT_BIG_ENDIAN
+                self.soft += ["-DBT3_TESTE_VU1"]
+                self.hard += ["-DBT3_TESTE_VU1"]
         # Rastreio: uma chamada antes de cada leitura/escrita (rastreio.c), cópias de estrutura via memcpy.
         # As leituras de variáveis locais também: o jogo copia um vetor do arquivo para a pilha e lê um
         # componente dali (o ASan pularia por "provar" o acesso seguro).
@@ -424,12 +429,15 @@ def main():
     ap.add_argument("--rastreio", action="store_true")
     ap.add_argument("--chamadas", action="store_true", help="registra a sequência de funções do jogo (BT3_CHAMADAS)")
     ap.add_argument("--gpu", action="store_true", help="GS em modo gpu com backend falso (F5, etapa 8: custo da VU1)")
+    ap.add_argument("--vu1", action="store_true", help="(x86 com --gpu) liga na x86 a otimização da gravação da VU1 que a PPC já tem (BT3_TESTE_VU1)")
     a = ap.parse_args()
     if a.rastreio and a.alvo != "x86":
         sys.exit("o rastreio roda na x86 (é a build em que o jogo já funciona)")
     if a.gpu and (a.rastreio or a.chamadas):
         sys.exit("--gpu não se combina com --rastreio nem com --chamadas")
-    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu))
+    if a.vu1 and not (a.gpu and a.alvo == "x86"):
+        sys.exit("--vu1 só vale com --alvo x86 --gpu (na PPC a otimização já vem com o PORT_BIG_ENDIAN)")
+    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1))
 
 
 main()

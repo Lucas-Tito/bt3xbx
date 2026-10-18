@@ -210,6 +210,29 @@ static GsTex texture_get(int ctx) {
     if (tw > 1024) { tw = 1024; }
     if (th > 1024) { th = 1024; }
     pages = ((tbw ? tbw : 1) * 64 * th * (bits == 24 ? 32 : bits) / 8 + 8191) / 8192;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    /* (F5, etapa 8) `gen` depende só de t0 e do conteúdo da VRAM, e o conteúdo só muda quando uma gGsPageGen muda
+       (todo lugar que a muda sobe gGsPageEpoch). Um desenho da VU1 pede a mesma textura que o anterior, ou uma das
+       poucas da luta, centenas de vezes entre dois envios: o resultado do laço abaixo fica numa tabela por t0 e vale
+       enquanto a época for a mesma. É o mesmo número que o laço dá, sem pedir o hash de cada página a cada desenho. */
+    {
+        static struct { uint64_t t0; uint32_t epoch, gen; } memo[16];
+        uint32_t m = ((uint32_t)(t0 ^ (t0 >> 29) ^ (t0 >> 47)) * 2654435761u) >> 28;
+        if (memo[m].epoch == gGsPageEpoch + 1 && memo[m].t0 == t0) {
+            gen = memo[m].gen;
+        } else {
+            for (i = 0; i <= pages; i++) {
+                gen = (gen ^ Gs_PageHash(tbp / 32 + i)) * 16777619u + i;
+            }
+            if (bits <= 8) {
+                gen = (gen ^ clut_hash(cbp, cpsm, bits == 8 ? 256 : 16)) * 16777619u;
+            }
+            memo[m].t0 = t0;
+            memo[m].epoch = gGsPageEpoch + 1;
+            memo[m].gen = gen;
+        }
+    }
+#else
     /* `gen` identifies the CONTENT: a hash over the pages the texture and its palette occupy */
     for (i = 0; i <= pages; i++) {
         gen = (gen ^ Gs_PageHash(tbp / 32 + i)) * 16777619u + i;
@@ -217,6 +240,7 @@ static GsTex texture_get(int ctx) {
     if (bits <= 8) {
         gen = (gen ^ clut_hash(cbp, cpsm, bits == 8 ? 256 : 16)) * 16777619u;
     }
+#endif
     if (sTexPackOn && TexPack_Count() != 0) {
         gen ^= 0x5BD1E995u; /* with the pack and without it are different textures: switching it takes effect at once */
     }

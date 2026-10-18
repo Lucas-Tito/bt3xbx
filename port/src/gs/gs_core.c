@@ -39,6 +39,9 @@ typedef struct Target {
 
 GsState gGs;
 uint32_t gGsPageGen[512];
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+uint32_t gGsPageEpoch; /* (F5, etapa 8) bumped with every change to any gGsPageGen entry: texture_get remembers by it */
+#endif
 unsigned gGsFbUploads; /* bit 0 / 1: pixels were uploaded into display buffer 0 / 0x70 since the back end last looked */
 unsigned gGsFrame;
 #define gs gGs
@@ -214,6 +217,9 @@ void Gs_StateBack(void) {
     for (i = 0; i < 512; i++) {
         gGsPageGen[i] = sKept.gen[i] != 0 ? sKept.gen[i] + sMoved : 0;
     }
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    gGsPageEpoch++;
+#endif
     GsVu1_StateKeep(1);
     if (sGpu) {
         extern void GsGpu_PagesMoved(uint32_t delta); /* gs_gpu.c */
@@ -673,6 +679,9 @@ static void vertex(uint32_t x, uint32_t y, uint32_t z, int kick) {
                 draw_sprite(sf, ctx, &gs.vtx[0], &gs.vtx[1]);
                 gGsPageGen[fb]++;
                 gGsPageGen[(fb + 1) & 511]++;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+                gGsPageEpoch++;
+#endif
             } else if (kick) {
                 if (sGpu) { GsGpu_Draw(6, ctx, gs.vtx); } else { draw_sprite(sf, ctx, &gs.vtx[0], &gs.vtx[1]); }
             }
@@ -788,6 +797,9 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
         for (i = first; i <= last; i++) {
             gGsPageGen[i & 511]++;
         }
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+        gGsPageEpoch++;
+#endif
     }
 }
 
