@@ -25,7 +25,10 @@
  *   - Sem janela, painel de configurações nem pacote de texturas.
  *
  * O dispositivo é criado pela main (port/x360/src/f2/main360.cpp) e passa a ser desta thread (a do jogo) no init;
- * GsD3d_Soltar o devolve quando o jogo termina. O desenho e o present são na thread do jogo, um por quadro do GS.
+ * GsD3d_Soltar o devolve quando o jogo termina. O desenho e o present são na thread do jogo, um por quadro do GS. Com
+ * BT3_GS_THREAD=1 (F5, etapa 8, degrau 1) a gravação do quadro e este desenho são de uma thread só, a de gravação do
+ * gs_core.c (que roda o init, é dona do dispositivo e o solta ao parar); o jogo só entrega a lista e espera nos pontos do
+ * PS2. GsD3d_Repete mostra de novo o último quadro quando o jogo passa de 50 ms sem entregar um (a Guide).
  *
  * Saídas para conferência (port/x360/tools/compara_quadros.py, no WSL):
  *   BT3_SHOT=N        a imagem mostrada a cada N quadros do GS em game:\shots\gpu_NNNNN.ppm, no formato do
@@ -195,7 +198,7 @@ static struct {
     double descBytesTot;
     unsigned maxVerts, maxVu, maxIdx, maxUni, maxDraws;                  /* buffers: o máximo de um quadro no trecho */
     unsigned emUso;                    /* entradas protegidas na última pressão (usadas nos dois últimos quadros) */
-    int seguro;                        /* 0: BT3_INTERP ou BT3_GS_THREAD ligados, sem descarte */
+    int seguro;                        /* 0: BT3_INTERP ligado, sem descarte */
     unsigned semAlvo;                  /* alvos sem textura agora */
 } sMem;
 
@@ -1472,7 +1475,9 @@ static void mem_init(void) {
     sMem.pisoMb = env_num("BT3_MEM_PISO_MB", 32);
     sMem.texTetoMb = env_num("BT3_MEM_TEX_MB", 128);
     sMem.folga = sMem.pisoMb * MB / 2;
-    sMem.seguro = (getenv("BT3_INTERP") == NULL || atoi(getenv("BT3_INTERP")) == 0) && getenv("BT3_GS_THREAD") == NULL;
+    /* o BT3_GS_THREAD do degrau 1 grava e desenha na mesma thread: o descarte vale (o do PC, com a gravação num lado e o
+       desenho no outro, é que não valia) */
+    sMem.seguro = getenv("BT3_INTERP") == NULL || atoi(getenv("BT3_INTERP")) == 0;
     sMem.buffers = MAX_VERTS * (unsigned)sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u +
                    MAX_VU_UNIFORMS * (unsigned)sizeof(Vu0Uniform) + MAX_DRAWS * (unsigned)sizeof(GsDraw);
     sCorFundo = (DWORD)env_num("BT3_COR_FUNDO", 0xFF010101u);
@@ -1480,7 +1485,7 @@ static void mem_init(void) {
     Diario_Escrever("gs_d3d: memória: piso %u MB livres (BT3_MEM_PISO_MB), teto das texturas %u MB (BT3_MEM_TEX_MB), "
                     "folga do descarte %u MB, descarte %s; buffers do gs_draw.c %u KB; alvo %u KB; %u MB livres de %u; "
                     "cor de fundo 0x%08X (BT3_COR_FUNDO)", sMem.pisoMb, sMem.texTetoMb, sMem.folga >> 20,
-                    sMem.seguro ? "ligado" : "DESLIGADO (BT3_INTERP ou BT3_GS_THREAD)", sMem.buffers >> 10,
+                    sMem.seguro ? "ligado" : "DESLIGADO (BT3_INTERP)", sMem.buffers >> 10,
                     tam_alvo() >> 10, sMem.livres >> 20, sMem.total >> 20, (unsigned)sCorFundo);
     for (k = 0; k < 2; k++) {
         unsigned antes = mem_mede(), depois, feitas = 0;
@@ -2796,6 +2801,28 @@ static void nat_init(void) {
                     sCorte, sCorte ? "a VU1 recortada pelo w, profundidade por pixel" : "z da VU1 preso em 0..w por vértice");
 }
 
+/* A imagem mostrada na tela de 1280 x 720: o alvo `mostrado` (o buffer de vídeo do GS) no meio, em 4:3, e as barras da cor de
+   fundo. Do fim do quadro e de GsD3d_Repete. */
+static void tela_copia(int mostrado) {
+    D3DVIEWPORT9 vp = {0, 0, TELA_W, TELA_H, 0.0f, 1.0f};
+    sDev->SetRenderTarget(0, sTela);
+    sDev->SetDepthStencilSurface(NULL);
+    sDev->SetViewport(&vp);
+    sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    sDev->Clear(0, NULL, D3DCLEAR_TARGET, sCorFundo, 1.0f, 0);
+    if (mostrado >= 0 && gsTargets[mostrado].cleared && sAlvos[mostrado].tex != NULL) {
+        /* 512 x 448 do GS na forma da imagem (4:3: 960 x 720 no meio da tela de 1280 x 720) */
+        int w = (int)((float)TELA_H * (float)Port_AspectMilli() / 1000.0f + 0.5f), x;
+        w = w > TELA_W ? TELA_W : w;
+        x = (TELA_W - w) / 2;
+        copia(sAlvos[mostrado].tex, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f,
+              512.0f / TAM, 448.0f / TAM, 1);
+    }
+}
+
+static uint32_t sFbpMostrado = ~0u; /* o buffer de vídeo (fbp) da última imagem apresentada; ~0: nenhuma */
+
 static void frame_end(void) {
     LARGE_INTEGER t0, tp, tv;
     double msVu;
@@ -2953,23 +2980,8 @@ static void frame_end(void) {
     }
     gGsD3dEtapa = "fim do quadro: cópia para a tela";
     tempo_poe(T_TELA);
-    {
-        D3DVIEWPORT9 vp = {0, 0, TELA_W, TELA_H, 0.0f, 1.0f};
-        sDev->SetRenderTarget(0, sTela);
-        sDev->SetDepthStencilSurface(NULL);
-        sDev->SetViewport(&vp);
-        sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-        sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
-        sDev->Clear(0, NULL, D3DCLEAR_TARGET, sCorFundo, 1.0f, 0);
-        if (mostrado >= 0 && gsTargets[mostrado].cleared && sAlvos[mostrado].tex != NULL) {
-            /* 512 x 448 do GS na forma da imagem (4:3: 960 x 720 no meio da tela de 1280 x 720) */
-            int w = (int)((float)TELA_H * (float)Port_AspectMilli() / 1000.0f + 0.5f), x;
-            w = w > TELA_W ? TELA_W : w;
-            x = (TELA_W - w) / 2;
-            copia(sAlvos[mostrado].tex, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f,
-                  512.0f / TAM, 448.0f / TAM, 1);
-        }
-    }
+    tela_copia(mostrado);
+    sFbpMostrado = mostrado >= 0 && gsTargets[mostrado].cleared && sAlvos[mostrado].tex != NULL ? gsTargets[mostrado].fbp : ~0u;
     tempo_fecha_gpu(capturas != sConta.capturas);
     tempo_poe(T_PRESENT);
     QueryPerformanceCounter(&tp);
@@ -3029,6 +3041,28 @@ static void frame_end(void) {
     sPs2Total += gsSkipped;
     gsSkipped = 0;
     gsNative = 0;
+}
+
+/* (F5, etapa 8, degrau 1) A thread de gravação ociosa há um tempo (o jogo carrega, não entrega quadro): apresenta de novo a
+   última imagem, para a Guide e o sistema terem um present a cada tanto. É desta thread, dona do dispositivo, no intervalo
+   entre dois quadros (nenhum trabalho em andamento: os alvos estão como o fim do quadro os deixou). Devolve 1 se apresentou.
+   Não conta como quadro (gGsD3dQuadros, o que o vigia olha, não anda). */
+extern "C" int GsD3d_Repete(void) {
+    int i;
+    if (sDev == NULL || sFbpMostrado == ~0u || sDev->QueryThreadOwnership() != GetCurrentThreadId()) {
+        return 0;
+    }
+    i = GsDraw_TargetGet(sFbpMostrado, 0);
+    if (i < 0 || !gsTargets[i].cleared || sAlvos[i].tex == NULL) {
+        return 0; /* o alvo foi reaproveitado ou perdeu a textura: sem imagem para repetir */
+    }
+    gGsD3dEtapa = "repetindo o último quadro (o jogo não entrega)";
+    tela_copia(i);
+    sDev->Present(NULL, NULL, NULL, NULL);
+    sDev->SetTexture(0, NULL);
+    esquece_estado();
+    gGsD3dEtapa = "jogo e gravação do quadro";
+    return 1;
 }
 
 /* O jogo terminou nesta thread (Port_Sair ou queda): o dispositivo volta para quem for usá-lo (a main). */

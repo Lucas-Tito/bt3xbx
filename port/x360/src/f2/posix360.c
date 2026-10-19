@@ -456,6 +456,22 @@ int pthread_cond_wait(pthread_cond_t *c, pthread_mutex_t *m) {
     return 0;
 }
 
+/* (F5, etapa 8, degrau 1) como o pthread_cond_wait, com tempo: devolve 1 se os `ms` passaram sem sinal. É o que deixa a
+   thread de gravação do gs_core.c acordar a cada tanto no intervalo entre quadros (GsD3d_Repete, a Guide). */
+int Port_X360CondEsperaMs(pthread_cond_t *c, pthread_mutex_t *m, unsigned ms) {
+    HANDLE e = evento(c);
+    DWORD r;
+    LeaveCriticalSection(secao(m));
+    r = WaitForSingleObject(e, ms);
+    EnterCriticalSection(secao(m));
+    return r == WAIT_TIMEOUT;
+}
+
+/* a barreira de publicação do Port_GetEnv (gs_core.c): o que a thread gravou antes dela aparece antes do que grava depois */
+void Port_X360Barreira(void) {
+    __lwsync();
+}
+
 int pthread_cond_signal(pthread_cond_t *c) {
     SetEvent(evento(c));
     return 0;
