@@ -1196,7 +1196,7 @@ static void *render_thread(void *arg) {
     for (;;) {
         while (sJob == 0) {
 #if defined(BT3_GS_ESPERAS) && defined(PORT_X360)
-            /* o jogo que passa de meio segundo sem entregar quadro (carga) deixa o último na tela: a Guide só abre se alguém
+            /* o jogo que passa de 50 ms sem entregar quadro (carga) deixa o último na tela: a Guide só abre se alguém
                apresenta, e o dispositivo é desta thread */
             gGsThreadEstado = 1;
             if (Port_X360CondEsperaMs(&sWake, &sLock, 50) && sJob == 0 && !sParar) {
@@ -1322,7 +1322,8 @@ void Port_GsPararJa(void) {
    copiar (render_wait na entrega), por isso uma área só basta. */
 #define COPIA_QWC_MAX 128u
 #define COPIA_BYTES (1u << 20)
-static uint8_t sCopia[COPIA_BYTES];
+static uint64_t sCopia64[COPIA_BYTES / 8]; /* os dados vêm em quadwords e o Gs_Gif lê em 8 bytes: a área alinhada como eles */
+#define sCopia ((uint8_t *)sCopia64)
 
 static void ref_copia(uint32_t tadr) {
     extern uint32_t gDmaBuf[2];
