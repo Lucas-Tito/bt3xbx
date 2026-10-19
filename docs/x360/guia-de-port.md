@@ -1416,3 +1416,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **O diário vale uma bateria de teste no Linux**, mesmo sem o compilador do 360: uma API de brinquedo sobre pthreads
   pega a emenda do anel, a ordem e o anel cheio (`teste_diario.sh`). Os laços do teste precisam de limite de tempo: um mutante
   que paga o disco por linha levaria minutos (ou travaria) sem ele.
+
+### A gravação do GS numa thread (F5, etapa 8, degrau 1, `plano/F5/08-threads.md`)
+
+- **O detector de corrida não vê tudo; a lista quadro a quadro vê.** Sem a espera do `sceGsSyncPath` 3.316 quadros saíram diferentes e
+  nenhuma linha `race:`. A prova de uma divisão em threads é a lista igual à da build sem thread (`divergencias.py`), não a falta de aviso do detector.
+- **Atrasar a thread de gravação de propósito (`BT3_GS_ATRASO_US`) é o que dá chance a uma espera que falta de aparecer.** Com a gravação
+  mais lenta que o jogo, o jogo chega ao ponto sem espera com a lista ainda em andamento; as provas negativas desta etapa usaram 5 ms.
+  (Não se mediu o mesmo estrago com 0 ms.)
+- **O jogo refaz pacotes persistentes na lógica do quadro seguinte, antes de qualquer espera do PS2.** O CLUT em tempo de execução
+  (`GfxClut_InitPacket`, REF de 73 quadwords) só se cobre copiando o dado na entrega; os REF pequenos da lista (até 128 quadwords, uns 200 KB por quadro) se copiam todos.
+- **A saída de uma thread com `atexit`: o resumo do backend falso rodava antes da drenagem** (o `atexit` do backend é registrado depois, no primeiro
+  `GsVu1_Call`) e saía com um quadro a menos e o hash do jogo diferente. O resumo espera a thread (`Port_GsEspera`, referência fraca).
+- **Nunca restaurar um arquivo de teste com `git checkout` com trabalho sem commit nele.** Uma prova negativa (estragar uma linha e
+  restaurar) apagou três arquivos de trabalho não commitados; commite antes de estragar. E uma sabotagem por `sed`/`python` que não casa o texto
+  passa em silêncio como "a prova não viu falhar": confira com `assert` que a troca aconteceu (a primeira da espera do `ADXF_ReadNw` não casava por uma linha em branco).
+- **Uma queda do WSL no meio de uma prova negativa deixa a sabotagem no arquivo.** Depois de uma queda, `git diff` antes de tudo.
+- **Gravação e dispositivo de uma thread só.** O que o frontend faz ao gravar (textura, alvo, shader) é D3D: o canal da GIF (o clear do quadro) também grava, então
+  vai para a thread de gravação como trabalho que o jogo espera; no 360 isso evita criar recurso fora da thread dona.

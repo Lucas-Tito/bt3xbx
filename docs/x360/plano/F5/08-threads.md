@@ -495,3 +495,117 @@ estágio).
 - **Um hash mais barato por byte** (somas com rotação, sem multiplicação de 64 bits): o ganho no Xenon não se mede no WSL
   (a PPC no `qemu` conta instruções do GCC de 32 bits, não os `mulld` do Xenon) e o risco de colisão em texturas de gradiente
   não vale um ganho que não se vê. Fica para depois da medição no console.
+
+### Parte 3: a gravação inteira numa thread (a opção (c) com as esperas do PS2)
+
+#### O que mudou
+
+Tudo na chave `BT3_GS_THREAD` (no `ambiente.txt` do 360, junto com `BT3_GS=gpu`; sem a linha, ou com `0`, o jogo grava na
+própria thread como antes). A parte portável vale nas builds com `PORT_BIG_ENDIAN` (a PPC e o 360) ou `BT3_TESTE_VU1` (a
+`x86gv`), com o original no `#else`; a `.text` da x86 plana não muda.
+
+| Peça | Onde | O que faz |
+|---|---|---|
+| `Port_GsEspera` | `gs_core.c`; chamada em `sceGsSyncPath` (`plat_stub.c`), `Dma_ResetBuffers`, `Dma_LendBufferTails`, `Dma_ReclaimBufferTails` (`dma.c`), `ADXF_ReadNw` (`plat_file.c`), `Gs_StateKeep` e `Gs_StateBack` | o jogo espera a thread acabar a lista entregue, onde o PS2 já esperava. Sem a thread, não faz nada |
+| O canal da GIF na thread | `Port_GsGifChannel` vira o trabalho 4 da thread (`gif_corpo`), que o jogo espera | o clear do quadro e os envios de textura fora da lista criam textura e alvo no backend: com a gravação e o dispositivo de uma thread só (no 360 o D3D só vê uma thread) |
+| Cópia dos REF pequenos | `ref_copia`, na entrega | os REF de até 128 quadwords cuja etiqueta está num dos dois buffers de lista levam uma cópia dos dados (área de 1 MiB, uma só: o jogo espera a lista anterior antes de copiar). Até **235 KB por quadro** no `f5_duelo` (200 KB no treino), nenhum REF sem cópia por falta de área |
+| Contador do jogo | `gGsFrameJogo` (avança na entrega); `gs_input.c` o lê no lugar do `gGsFrame` | o `gGsFrame` segue sendo o da gravação (o descarte dos dois quadros e o `gs_d3d` o leem, só na thread de gravação) |
+| Parada | `Port_GsParar` (espera, manda o trabalho 3, junta; `atexit` nos testes, `Port_Sair` no 360), `Port_GsPararJa` (a queda: só pede) | a thread solta o dispositivo (`GsD3d_Soltar`, ela é a dona) e sai |
+| `Port_GetEnv` | `gs_core.c` | entradas publicadas com barreira e lidas pelo ponteiro (a ordem de memória do PowerPC, seção 6) |
+| Chaves só dos testes | `BT3_GS_ATRASO_US` (a gravação demora de propósito, só nas builds `--gpu`), `BT3_GS_SEM_COPIA` | as provas negativas e a prova das esperas com a gravação lenta |
+
+**A cópia dos REF pequenos não estava prevista como certa** (a tarefa a pedia "se as corridas do CLUT persistirem"): o pacote
+do CLUT em tempo de execução (`GfxClut_InitPacket`, 73 quadwords, REF no meio da lista) é refeito pela lógica do quadro
+seguinte, que roda **antes** do `sceGsSyncPath` do fim do quadro; nenhuma espera do PS2 o cobre, e a thread de gravação lê o
+REF no meio da lista, depois de o jogo ter mexido. Sem a cópia o `f5_duelo` dá as 3 corridas de sempre (quadros 4.905, 4.934
+e 6.971) e um quadro de lista diferente (4.933). Copiar na entrega dá o que a gravação na thread do jogo sempre deu: os bytes
+do instante da entrega. Copiou-se tudo que é pequeno e está na lista, e não só o 73 do CLUT, porque o detector só vê os
+pacotes que mudam nos roteiros de hoje; o custo é uma `memcpy` de uns 200 KB por quadro (menos de 0,1 ms).
+
+**A transferência da GIF vai para a thread, e o jogo a espera**, em vez de rodar na thread do jogo como no `BT3_GS_THREAD`
+do PC: o clear de cada quadro (`sceGsSwapDBuff`) é um desenho, e o backend cria o alvo e as texturas na hora em que o grava.
+O custo são duas trocas de thread por quadro de luta.
+
+**Não se copiou a cadeia inteira** (decisão da parte 1: 4 MB por quadro de luta): a espera nos pontos do PS2 mais a cópia dos
+REF pequenos bastaram.
+
+#### O que ficou provado (WSL)
+
+A base de cada prova é a mesma build sem thread (`x86gv`, `ppcg`), comparada quadro a quadro (`divergencias.py`: o hash da
+lista, cada seção, as linhas `race:`, o fim do roteiro e os dois contadores de quadros iguais no fim). A linha de base
+da parte 1 (4.096 a 5.202 quadros diferentes, 11 a 15 quadros com corrida, `SIGSEGV` no fim) virou:
+
+| Build | Roteiro | Atraso da gravação | Quadros diferentes | Linhas `race:` | Fim |
+|---|---|---|---:|---:|---|
+| `x86gv` | `f5_treino` (7.386) | 0, 1, 5 e 20 ms | 0 nos quatro | 0 | normal, hash do jogo igual (`70b6b1d1bb3f1d85`) |
+| `x86gv` | `f5_duelo` (8.380) | 0, 1, 5 e 20 ms | 0 nos quatro | 0 | normal, hash do jogo igual (`29caae14a161459a`) |
+| `ppcg` | `f5_treino` | 0 | 0 | 0 | normal, hash igual (`70b6b1d1bb3f1d85`) |
+| `ppcg` | `f5_duelo` | 0, 5 e 20 ms | 0 nos três | 0 | normal, hash igual (`b65001fe18962dda`) |
+| `ppcg` sem thread, depois contra antes (a `ppcg` do `5445c3f`) | os dois | | 0 | | hash do jogo igual: a parte 3 não muda a lista sem thread |
+
+O atraso de 5 ms dobra o tempo da rodada do `f5_treino` na x86 (29 para 66 s) e o de 20 ms o multiplica por seis: a gravação
+é de fato o lado lento, e o jogo espera nos pontos certos.
+
+**Verificadores vistos falhando de propósito** (`x86gv`, o mesmo roteiro, a gravação atrasada em 5 ms onde se diz):
+
+| Estrago | Resultado |
+|---|---|
+| `sceGsSyncPath` sem a espera (`f5_treino`, 5 ms) | 3.316 de 7.386 quadros diferentes (o primeiro, 4.070); **nenhuma linha `race:`**: o detector não vê tudo, a comparação das listas vê |
+| `Dma_ResetBuffers` sem a espera (`f5_treino`, 5 ms) | 3.319 quadros diferentes (o primeiro, 3.195) e 8 linhas `race:` (a lista que "tinha 406 blocos e 1 depois") |
+| Sem a cópia dos REF pequenos (`BT3_GS_SEM_COPIA=1`, `f5_duelo`) | o quadro 4.933 diferente e as 3 linhas `race:` do CLUT (`01039d00`, 73 quadwords) |
+| `gGsFrameJogo` sem avançar (`f5_treino`) | `divergencias.py` sai com 1: "contador de quadros: jogo 0, desenho 7386" |
+
+**Não ficou visto falhando:** a espera do `ADXF_ReadNw` (sem ela, `f5_treino` com 5 ms e `f5_duelo` com 20 ms saem iguais: nas
+cargas dos roteiros o `sceGsSyncPath` do fim do quadro já cobre o que a carga reaproveita). Fica como no desenho do PS2, sem
+prova de que é necessária. O contador do jogo também não tem consumidor nas builds de teste (o `gs_input.c`, o pad por roteiro,
+só existe na build com janela): o que se prova é que ele chega ao mesmo número do contador do desenho. O descarte com a regra dos
+dois quadros é do `gs_d3d.cpp` (360) e só o console o exercita.
+
+#### A parte do 360, escrita sem compilar
+
+`port/x360/src` (o `cl.exe` e o XDK só existem no Linux da revisão; aqui o C89 foi conferido preparando os fontes pelo
+`c89.py` e passando o `clang -std=c89 -Wdeclaration-after-statement`, que só reclama das três declarações antigas de `__sync_*`):
+
+- `main360.cpp`: `Port_GsThreadPartida` (a thread de gravação na thread de hardware 0, o jogo na 2, o áudio na 4 e 5, nunca a
+  3); `Port_Sair` para a thread antes de soltar o dispositivo; a queda do jogo pede a parada sem esperar e a da própria gravação
+  solta o dispositivo e sai; a espera final da main pelo jogo ganha 3 s de limite (o jogo pode ficar preso esperando uma
+  gravação que caiu); o vigia diz o estado da gravação (ociosa, gravando, no canal da GIF).
+- `posix360.c`: `Port_X360CondEsperaMs` (a condição com tempo) e `Port_X360Barreira` (`__lwsync`).
+- `gs_d3d.cpp`: `GsD3d_Repete`, a **Guide**: a thread de gravação, ociosa por 50 ms (o jogo carrega e não entrega quadro),
+  apresenta de novo a última imagem (`tela_copia`, a mesma cópia do fim do quadro, e `Present`), porque o dispositivo é dela e
+  sem `Present` a Guide congela o console. Não conta como quadro (o vigia continua vendo o jogo parado). O descarte de texturas
+  deixa de ser desligado pelo `BT3_GS_THREAD`: gravação e desenho são da mesma thread, como na divisão (c); só o `BT3_INTERP` o desliga.
+- A posse do dispositivo não mudou de lugar no código: o `d3d_init` pega com `AcquireThreadOwnership` quem roda o `GsGpu_Init`,
+  que agora é a thread de gravação; a main o soltou antes de criar o jogo.
+
+#### A estimativa de ganho no 360 [estimado]
+
+Pelo estudo (a opção (c), seção 4.3): o quadro de luta de 75,7 ms vira **uns 61 ms** (a thread do jogo com uns 16 ms, a de
+gravação com os 61 ms de gravação mais fim do quadro, que passam a ser o período), menos de 0,5 a 1,8 ms do hash de página
+(parte 2), mais a cópia dos REF pequenos (menos de 0,1 ms) e as trocas do canal da GIF (dezenas de microssegundos): **uns 59 a
+60 ms na luta, ainda o dobro do período de 33,37 ms**. Os **menus** (60 fps, 16,6 ms por quadro) ficam com folga na thread
+do jogo, e a **Guide e as cargas** deixam de depender da thread do jogo (o dispositivo é da gravação). Não é a rodada que fecha
+os 30 fps: o degrau 2 e o corte de W e V seguem (seção 5).
+
+#### O que falta compilar e conferir no console
+
+1. **Compilar** `main360.cpp`, `posix360.c`, `gs_d3d.cpp` (C++ do backend) e os fontes portáveis preparados (C89 do `cl.exe`).
+2. A **posse do dispositivo**: o `d3d_init` na thread de gravação (`AcquireThreadOwnership`) e o `ReleaseThreadOwnership` do `GsD3d_Soltar` nela;
+   o `CreateTexture` e o `LockRect` na mesma thread do `Present`.
+3. A **Guide** durante uma carga: a linha `repetindo o último quadro` no estado do vigia e a Guide abrindo e fechando; que o `Present` repetido mostra a imagem
+   certa (o buffer de trás depois de um `Present` com `SwapEffect` DISCARD: se aparecer lixo, a `tela_copia` é refeita a cada vez, então só uma
+   textura de alvo perdida o causaria).
+4. A **saída** (a pausa, o dashboard) e a **queda** (uma exceção do jogo e uma da gravação): a tela vermelha, o log descarregado, o `XLaunchNewImage`.
+5. O **tempo por quadro** da luta (as linhas `gs_d3d: ... Present` e os 60 quadros) contra os 75,7 ms, e o custo das esperas (o `vigia` diz onde fica a thread do jogo).
+6. A **ordem de memória** (nenhuma barreira se vê na x86 nem no `qemu`): um quadro raro errado seria o sintoma; os pontos sem trava são o `Port_GetEnv` e os contadores lidos pelo vigia.
+7. A pilha de 4 MB da thread de gravação (a VU1 e as texturas), e a thread de hardware 0 (`XSetThreadProcessor`).
+
+**Roteiro da rodada** (o `.xex` do commit final com o `default.dat` e o `default.swap` da mesma build, como na rodada de 18/10):
+
+- **Abertura 1**, `BT3_GS_THREAD=1` ligado: o `ambiente.txt` de sempre (`BT3_ISO`, `BT3_GS=gpu`, `BT3_MEM_PISO_MB=32`, `BT3_MEM_TEX_MB=128`,
+  `BT3_VU1=1`, `BT3_VU_VERTS=98304`, `BT3_SHOT=600`) mais `BT3_GS_THREAD=1`. Menus até o Duelo, Goku contra Kuririn, estágio 5, uns 60 s de
+  luta, **abrir a Guide uma vez no menu e uma vez durante a carga da luta**, sair pela pausa.
+- **Abertura 2**, desligado: o mesmo, sem a linha `BT3_GS_THREAD` (ou com `BT3_GS_THREAD=0`), uns 30 s de luta: a comparação
+  com a de antes (75,7 ms). Baixar o `bt3xbx.log` e o `saida.txt` entre as duas.
+- O que ler: na abertura 1, `thread de gravação do GS (BT3_GS_THREAD) na thread de hardware 0` e `descarte ligado`; o quadro inteiro
+  da luta; nenhuma linha `vigia` com a gravação "gravando" por mais de 3 s; no fim, `saída do jogo com código 0`.
