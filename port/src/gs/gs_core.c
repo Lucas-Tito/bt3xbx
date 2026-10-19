@@ -1473,7 +1473,12 @@ static int gs_on(void) {
         if (on && strcmp(gs_mode(), "gpu") == 0) {
             /* BT3_GS_THREAD=1: the back end and the list run on the render thread (experimental: the game was seen
                to change data a list still refers to, which shows as a jumping camera). Default: this thread. */
+#ifdef BT3_GS_ESPERAS
+            /* (degrau 1) no ambiente.txt do 360: BT3_GS_THREAD=1 liga; sem a linha, ou com 0, fica na thread do jogo */
+            sThreaded = getenv("BT3_GS_THREAD") != NULL && strcmp(getenv("BT3_GS_THREAD"), "0") != 0;
+#else
             sThreaded = getenv("BT3_GS_THREAD") != NULL;
+#endif
             if (sThreaded) {
 #ifdef BT3_GS_ESPERAS
                 {
