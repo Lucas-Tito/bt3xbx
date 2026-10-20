@@ -238,6 +238,14 @@ static void fake_frame_end(void) {
         fprintf(stderr, "gpu_falso: normal quadro %u %016llx\n", gGsFrame, (unsigned long long)n);
     }
     sFrames++;
+    /* (F5, etapa 8, degrau 2, etapa 3) o cleared ligado como o gs_gpu.c o liga ao refazer a lista: todo alvo em que o quadro
+       desenha primitivas (native 0, a VU1 inclusive) ou recebe uma imagem enviada (native 100 e 101); as nativas 1 a 5 não.
+       Sem isto o caminho do alvo como textura (gs_draw.c, draw_state: gsTargets[src].cleared) nunca aparecia no WSL */
+    for (i = 0; i < gsDrawCount; i++) {
+        if (gsDraws[i].native == 0 || gsDraws[i].native >= 100) {
+            gsTargets[gsDraws[i].target].cleared = 1;
+        }
+    }
     /* o que o gs_gpu.c zera ao fim do quadro */
     for (i = 0; i < (uint32_t)gsTargetCount; i++) {
         gsTargets[i].draws = 0;
