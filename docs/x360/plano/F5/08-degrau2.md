@@ -206,3 +206,21 @@ seguinte enquanto a gravação ainda o lia. A captura fecha a janela; que ela ex
 `bt3xbx-d2` para a pasta do jogo (o `ambiente.txt` já traz `-BT3_DEMO`, o `BT3_GS_THREAD=1` e o `BT3_SHOT=600`); abrir pela
 FreeStyle; menu principal, modo duelo, uma luta de uns dois minutos com troca de personagem e golpes especiais, um menu 3D
 (o `ChrView`), sair para o dashboard; trazer o `bt3xbx.log` e a pasta `shots`.
+
+### A rodada no console (20/10/2026) [medido]
+
+O `.xex` `8c29afa22ddb53c644606657ba902331` com `BT3_GS_THREAD=1`, Duelo, Goku contra Kuririn, estágio 5, saída pela pausa e
+pela Guide. A primeira abertura pareceu travar numa tela preta depois das logos: era o filme de abertura, que no 360 é contado e
+não desenhado (cabeçalho do `gs_d3d.cpp`, fica para a F6) e dura uns dois minutos; START o pula. O log era idêntico ao do degrau 1
+até ali.
+
+| | Degrau 1 (20/10, abertura 1) | Etapa 2 (XG) |
+|---|---:|---:|
+| Calibração da memória (8x8 e 256x256) | 256 KB e 4096 KB | **256 KB e 4096 KB**, contadas igual às medidas |
+| Luta, passos (mediana, p95, p99) | 48,33, 72,87, 97,92 ms | 48,91, 71,64, 85,36 ms |
+| Texturas pretas (RGB zero, do próprio jogo) | 32, nos mesmos grupos | 32, nos mesmos grupos |
+| Texturas brancas | 0 | 0 |
+| Descarte | 4 pressões, 649 texturas (66 MB), 0 esperas | 3 pressões, 409 texturas (49 MB), 0 esperas |
+
+Os recursos do XG funcionam na GPU (texturas, alvos e profundidades), a cerca deles vale (o descarte soltou 409 texturas sem
+espera e sem queda), a conta da memória bate e a velocidade é a do degrau 1. A etapa 3 pode partir daqui.

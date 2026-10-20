@@ -1436,6 +1436,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   vai para a thread de gravação como trabalho que o jogo espera; no 360 isso evita criar recurso fora da thread dona.
 - **O `ambiente.txt` de uma rodada de menus começa com `-BT3_DEMO`.** A build sem janela liga a luta de demonstração por padrão
   (`posix360.c`); sem a linha, o jogo abre direto na demo e sai com a tela verde. Copiar o bloco de uma nota antiga sem ela custou uma abertura.
+- **Tela preta depois das logos, com o jogo vivo, é o filme de abertura:** o 360 ainda não desenha os filmes (contados, não
+  desenhados, `gs_d3d.cpp`) e ele dura uns dois minutos. START o pula. Na rodada da etapa 2 do degrau 2 pareceu trava e custou uma
+  abertura; o sinal no log é um desenho por quadro com o resto idêntico à rodada anterior.
 - **Área estática que recebe dados de quadword: alinhe pelo tipo, não por `aligned`.** O `uint8_t sCopia[]` da cópia dos REF não tinha
   alinhamento garantido no `cl` (o `Gs_Gif` lê em 8 bytes; no Xenon o não alinhado pode falhar). E o `__attribute__((aligned(N)))` não passa
   no `c89.py` num fonte com acentos (a posição do `clang` é em bytes, o texto em caracteres: "aligned sem valor"); um vetor de `uint64_t` resolve.
