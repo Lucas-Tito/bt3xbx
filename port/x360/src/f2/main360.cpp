@@ -41,10 +41,14 @@ void GsD3d_Soltar(void);                   /* port/x360/src/gs/gs_d3d.cpp */
 void Port_GsParar(void);                   /* port/src/gs/gs_core.c: a thread de gravação (BT3_GS_THREAD) acaba e solta o dispositivo */
 void Port_GsPararJa(void);                 /* a mesma, sem esperar (a queda do jogo) */
 extern volatile int gGsThreadEstado;       /* gs_core.c: 0 sem thread de gravação, 1 ociosa, 2 gravando, 3 canal da GIF */
+extern volatile int gGsDesenhoEstado;      /* gs_draw.c: 0 sem thread de desenho, 1 ociosa, 2 desenhando, 3 repetindo, 4 init */
+void GsDraw_DesenhoPararJa(void);          /* gs_draw.c: a de desenho sai sem esperar e solta o dispositivo (uma queda) */
+void GsDraw_DesenhoCaiu(void);             /* gs_draw.c: a de desenho caiu: quem espera por ela segue */
 int Port_UnpackPendenteNaQueda(char *linha, int n); /* port/x360/conv/conv_jogo.c: a guarda do Sprite_Unpack */
 D3DDevice *gX360Dev;                       /* o dispositivo, para o backend do GS */
 /* o que o vigia lê da thread do jogo (sem xbdm não há como ler o contexto de outra thread no console) */
-extern volatile const char *gGsD3dEtapa;   /* gs_d3d.cpp: onde o fim do quadro está */
+extern volatile const char *gGsD3dEtapa;   /* gs_d3d.cpp: onde o fim do quadro está (a thread que desenha) */
+extern volatile const char *gGsD3dEtapaGrav; /* gs_d3d.cpp: onde a parte do backend que roda na gravação está */
 extern volatile unsigned gGsD3dQuadros;    /* quadros apresentados */
 extern volatile unsigned gGsVu1Instr, gGsVu1Prog; /* port/src/gs/gs_vu1.c: instruções interpretadas, programa */
 extern unsigned gGsFrame, gPortVBlanks;    /* gs_core.c, plat_stub.c */
@@ -53,7 +57,8 @@ extern volatile unsigned gX360Luta;        /* estado360.c */
 
 /* BT3_GS=gpu: a main só espera; a cada 50 ms olha se a thread do jogo andou (vblank ou quadro apresentado). Parada
    há 3 s, o log diz onde ela estava, de novo a cada 5 s: a primeira rodada travou no começo da luta sem dizer nada, e
-   com o jogo parado ninguém apresenta (nem a Guide abre). */
+   com o jogo parado ninguém apresenta (nem a Guide abre). (degrau 2, etapa 4) O estado das três threads (o jogo, a
+   gravação e o desenho) e as duas etapas do backend (a do desenho e a da gravação). */
 static void Vigiar(void) {
     static unsigned vb = ~0u, qd = ~0u, vu, falas;
     static DWORD desde, ultimaFala;
@@ -72,19 +77,23 @@ static void Vigiar(void) {
     if (agora - desde < 3000 || (falas != 0 && agora - ultimaFala < 5000) || falas >= 30) {
         return;
     }
-    Diario_Escrever("vigia: a thread do jogo está parada há %u ms: vblank %u, quadro do GS %u, %u apresentados, %s, luta "
+    Diario_Escrever("vigia: a thread do jogo está parada há %u ms: vblank %u, quadro do GS %u, %u apresentados, desenho: %s, luta "
                     "desde o vblank %u; VU1: programa de %u instruções, %u instruções interpretadas desde a última olhada; "
-                    "thread de gravação: %s",
+                    "thread de gravação: %s (backend: %s); thread de desenho: %s",
                     (unsigned)(agora - desde), gPortVBlanks, gGsFrame, gGsD3dQuadros, (const char *)gGsD3dEtapa, gX360Luta,
                     gGsVu1Prog, gGsVu1Instr - vu,
                     gGsThreadEstado == 0 ? "não há" : gGsThreadEstado == 1 ? "ociosa (o jogo não entrega)" :
-                    gGsThreadEstado == 2 ? "gravando uma lista" : "no canal da GIF");
+                    gGsThreadEstado == 2 ? "gravando uma lista" : "no canal da GIF", (const char *)gGsD3dEtapaGrav,
+                    gGsDesenhoEstado == 0 ? "não há" : gGsDesenhoEstado == 1 ? "ociosa (a gravação não entrega)" :
+                    gGsDesenhoEstado == 2 ? "desenhando um retrato" : gGsDesenhoEstado == 3 ? "repetindo o último quadro" :
+                    "no init do backend");
     vu = gGsVu1Instr;
     ultimaFala = agora;
     falas++;
 }
 
 static volatile DWORD gThreadGravacao;       /* a thread de gravação do gs_core.c (BT3_GS_THREAD), 0 sem ela */
+static volatile DWORD gThreadDesenho;        /* a thread de desenho do gs_draw.c (BT3_GS_DESENHO), 0 sem ela */
 static volatile DWORD gCor = 0xFFE0C000;     /* amarelo */
 static volatile LONG gTerminou = 0;
 static volatile LONG gCodigo = 0;
@@ -103,6 +112,23 @@ extern "C" void Port_GsThreadPartida(void) {
     Diario_Escrever("thread de gravação do GS (BT3_GS_THREAD) na thread de hardware 0");
 }
 
+/* (F5, etapa 8, degrau 2, etapa 4) O primeiro que a thread de desenho do gs_draw.c faz (BT3_GS_DESENHO=1): a identidade (a
+   queda dela tem ramo próprio no AoMorrer) e o processador, pelo BT3_GS_DESENHO_HW: 3 (o padrão, a irmã do jogo, no núcleo
+   1) ou 1 (a irmã da gravação, no núcleo 0), para comparar. Nunca a 4 nem a 5 (o áudio), nem a 0 e a 2 (gravação e jogo). */
+extern "C" void Port_GsDesenhoPartida(void) {
+#pragma warning(suppress : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
+    const char *e = getenv("BT3_GS_DESENHO_HW");
+    int hw = e != NULL ? atoi(e) : 3;
+    _controlfp(_RC_CHOP, _MCW_RC); /* (o mesmo arredondamento do frame_end na thread de gravação) */
+    if (hw != 1 && hw != 3) {
+        Diario_Escrever("BT3_GS_DESENHO_HW=%s recusado (só 1 ou 3): fica a 3", e);
+        hw = 3;
+    }
+    XSetThreadProcessor(GetCurrentThread(), (DWORD)hw);
+    gThreadDesenho = GetCurrentThreadId();
+    Diario_Escrever("thread de desenho do GS (BT3_GS_DESENHO) na thread de hardware %d", hw);
+}
+
 /* exit() e abort() do jogo e do port (c89.py os renomeia): grava o que falta e encerra só a thread do jogo. */
 extern "C" void Port_Sair(int codigo) {
     Diario_Escrever("saída do jogo com código %d (%s)", codigo, gPortStage);
@@ -110,8 +136,12 @@ extern "C" void Port_Sair(int codigo) {
     Port_X360FecharSaida();
     _flushall();
     Diario_Descarregar(); /* o que o anel ainda tem, no disco antes de a thread do jogo acabar */
-    if (gThreadGravacao != 0 && GetCurrentThreadId() != gThreadGravacao) {
-        Port_GsParar(); /* a thread de gravação acaba o quadro, solta o dispositivo (é a dona) e sai, antes de a main tomar a tela */
+    if (gThreadGravacao != 0 && GetCurrentThreadId() != gThreadGravacao && GetCurrentThreadId() != gThreadDesenho) {
+        /* a thread de gravação acaba o quadro e sai; com a divisão, antes a de desenho desenha o último retrato, solta o
+           dispositivo (é a dona) e sai; sem ela, a de gravação solta. Tudo antes de a main tomar a tela */
+        Port_GsParar();
+    } else if (gThreadDesenho != 0 && GetCurrentThreadId() == gThreadGravacao) {
+        GsDraw_DesenhoPararJa(); /* (a saída na própria gravação: o desenho sai sem esperar e solta o dispositivo) */
     }
     GsD3d_Soltar(); /* o dispositivo volta para a main mostrar a cor do fim (só solta quem é o dono) */
     InterlockedExchange(&gCodigo, codigo);
@@ -149,13 +179,32 @@ static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
     Diario_Descarregar();
     gCor = 0xFFC02020;
     InterlockedExchange(&gTerminou, 1);
+    if (gThreadDesenho != 0 && GetCurrentThreadId() == gThreadDesenho) {
+        /* (degrau 2, etapa 4) caiu o desenho (o dono do dispositivo): solta; a gravação para de esperar por ele e perde os
+           quadros seguintes; a main segue com a tela vermelha */
+        Diario_Escrever("a queda foi na thread de desenho (BT3_GS_DESENHO), na etapa \"%s\"", (const char *)gGsD3dEtapa);
+        GsDraw_DesenhoCaiu();
+        GsD3d_Soltar();
+        Diario_Descarregar();
+        ExitThread(7);
+    }
     if (gThreadGravacao != 0 && GetCurrentThreadId() == gThreadGravacao) {
-        GsD3d_Soltar(); /* caiu a gravação (a dona do dispositivo): a thread do jogo vai ficar esperando, a main segue sem ela */
+        /* caiu a gravação: sem a divisão ela é a dona do dispositivo e solta; com ela, pede ao desenho que saia sem esperar e
+           solte. A thread do jogo vai ficar esperando, a main segue sem ela */
+        if (gThreadDesenho != 0) {
+            Diario_Escrever("a queda foi na thread de gravação, na etapa \"%s\" do backend", (const char *)gGsD3dEtapaGrav);
+            GsDraw_DesenhoPararJa();
+        }
+        GsD3d_Soltar();
+        Diario_Descarregar();
         ExitThread(6);
     }
     if (GetCurrentThreadId() == gThreadJogo) {
         if (gThreadGravacao != 0) {
             Port_GsPararJa(); /* sem esperar: a de gravação acaba o que tem e solta o dispositivo; a main espera até 2 s por ele */
+        }
+        if (gThreadDesenho != 0) {
+            GsDraw_DesenhoPararJa(); /* (com a divisão o dono é o desenho: sai sem esperar e solta) */
         }
         GsD3d_Soltar();
         ExitThread(5); /* só o jogo morre: a main segue com a tela vermelha e volta ao dashboard no botão */
@@ -356,7 +405,8 @@ void __cdecl main() {
 
     Diario_Escrever("voltando ao dashboard");
     if (t != NULL) {
-        /* (com a thread de gravação, a do jogo pode ficar presa esperando uma que caiu: 3 s e segue; o XLaunchNewImage acaba com tudo) */
+        /* (com a thread de gravação, a do jogo pode ficar presa esperando uma que caiu, ou a de gravação esperando a de desenho:
+           3 s e segue; o XLaunchNewImage acaba com tudo) */
         WaitForSingleObject(t, gThreadGravacao != 0 ? 3000 : INFINITE);
         CloseHandle(t);
     }

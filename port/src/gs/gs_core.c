@@ -1217,7 +1217,15 @@ static void *render_thread(void *arg) {
 #ifdef BT3_GS_ESPERAS
         } else if (sJob == 3) { /* parar: o dispositivo volta para quem o criou */
 #ifdef PORT_X360
-            GsD3d_Soltar();
+            if (gGsDesenhoParar != NULL) { /* (degrau 2, etapa 4) a parada sem esperar (Port_GsPararJa): o desenho acaba o
+                                              retrato que tem, solta o dispositivo e sai antes */
+                void (*parar)(void) = gGsDesenhoParar;
+                gGsDesenhoParar = NULL;
+                pthread_mutex_unlock(&sLock);
+                parar();
+                pthread_mutex_lock(&sLock);
+            }
+            GsD3d_Soltar(); /* (com a divisão, não é a dona: nada) */
 #endif
             gGsThreadEstado = 0;
             sJob = 0;

@@ -208,6 +208,12 @@ extern GsBackend sGlBackend;     /* gs_gl.c */
 int GsDraw_TargetGet(uint32_t fbp, int create);
 #ifdef BT3_GS_ESPERAS
 void GsDraw_DesenhoEspera(void); /* (degrau 2) a thread de desenho acabou o retrato entregue (nada sem a divisão) */
+#ifdef PORT_X360
+int GsDraw_Dividido(void);        /* (degrau 2, etapa 4) 1: o desenho numa terceira thread, dona do dispositivo */
+void GsDraw_DesenhoAcorda(void);  /* acorda o desenho ocioso (o pedido de memória da gravação) */
+void GsDraw_DesenhoPararJa(void); /* uma queda: o desenho sai sem esperar e solta o dispositivo */
+void GsDraw_DesenhoCaiu(void);    /* a thread de desenho caiu (no AoMorrer dela) */
+#endif
 #endif
 
 #endif

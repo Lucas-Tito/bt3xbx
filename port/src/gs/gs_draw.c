@@ -52,6 +52,9 @@ static GsBackend *sBackend;
    ela (desenho_entrega, mais abaixo) */
 static void solta_pede(GsTex tex, int alvo);
 static void divisao_decide(void);
+#ifdef PORT_X360
+static int desenho_init(void);
+#endif
 static void backend_frame_end(void);
 #define BACKEND_FRAME_END() backend_frame_end()
 #define TEX_DESTROY(t) solta_pede((t), -1)
@@ -1403,10 +1406,24 @@ int GsGpu_Init(void) {
         extern GsBackend sD3dBackend;
         sb = &sD3dBackend;
         sBackend = sb;
+#ifdef BT3_GS_ESPERAS
+        /* (degrau 2, etapa 4) a divisão antes do init: com ela, o init roda na thread de desenho, que fica dona do
+           dispositivo; a gravação (esta thread) espera, e as alocações acima ficam com ela */
+        divisao_decide();
+        if (GsDraw_Dividido() ? !desenho_init() : !sb->init()) {
+            if (gGsDesenhoParar != NULL) {
+                gGsDesenhoParar();
+                gGsDesenhoParar = NULL;
+            }
+            sBackend = NULL;
+            return 0;
+        }
+#else
         if (!sb->init()) {
             sBackend = NULL;
             return 0;
         }
+#endif
     }
 #else
     /* BT3_GPU_API=vulkan|gl|auto picks the back end. Both are complete renderers of the same list, so a
@@ -1449,7 +1466,7 @@ int GsGpu_Init(void) {
     gPortMusicPercent = Port_Setting("music", 100);
     gPortSePercent = Port_Setting("effects", 100);
     TexPack_Init();
-#ifdef BT3_GS_ESPERAS
+#if defined(BT3_GS_ESPERAS) && !defined(PORT_X360)
     divisao_decide();
 #endif
     return 1;
@@ -3349,14 +3366,18 @@ void GsGpu_InterpFlush(void) { /* (the name Port_VBlank knew it by) */
 /* (os acentos das mensagens vão por escape octal: o c89.py conta as posições do AST em caracteres e o clang em bytes, e
    um literal com acento desloca toda reescrita que vem depois no mesmo fonte; guia, seção 6) */
 /* ------------------------------------------------------------------ (F5, etapa 8, degrau 2, etapa 3) a divisão
-   BT3_GS_DESENHO=1 (só com BT3_GS_THREAD=1; recusada com BT3_INTERP e, até a etapa 4, no 360): o frameEnd do backend sai
+   BT3_GS_DESENHO=1 (só com BT3_GS_THREAD=1; recusada com BT3_INTERP): o frameEnd do backend sai
    da thread de gravação para uma terceira thread. Na entrega (desenho_entrega, no lugar do frameEnd), a gravação espera o
    desenho largar o retrato anterior, copia a parte usada das listas e os campos do quadro para o retrato (uma área só, com
    o dobro dos máximos medidos: 08-threads.md, seção 4.2), liga o seu cleared, zera os contadores e segue com o quadro
    seguinte. Um quadro que não cabe no retrato vai sem cópia: o desenho lê as listas vivas e a gravação espera ele acabar
    (em série, como no degrau 1). Os pedidos de soltar (texturas, a vaga de um alvo) vão numa fila que viaja com o retrato
    do quadro em que foram feitos: o desenho solta depois de ter desenhado esse quadro (o risco 4 do inventário,
-   08-degrau2.md). O sPipes do backend não se copia: só cresce, e a entrega é a barreira. */
+   08-degrau2.md). O sPipes do backend não se copia: só cresce, e a entrega é a barreira.
+   No 360 (etapa 4) a thread de desenho é a dona do dispositivo: o init do backend roda nela (a gravação espera), ociosa ela
+   atende o pedido de memória da gravação (GsD3d_Ocioso) e, sem retrato há 50 ms, repete o último quadro (GsD3d_Repete, a
+   Guide), e ao sair solta o dispositivo (GsD3d_Soltar). Enquanto a gravação monta o retrato (sEntregando) o desenho não
+   repete: a entrega mexe no estado do desenho do backend, com ele parado. */
 #define RET_VERTS (32u << 10)
 #define RET_VU_VERTS (128u << 10)
 #define RET_VU_IDX (256u << 10)
@@ -3385,7 +3406,17 @@ static int sSoltaPend;
 static pthread_t sDesenho;
 static pthread_mutex_t sDesLock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t sDesAcorda = PTHREAD_COND_INITIALIZER, sDesFeito = PTHREAD_COND_INITIALIZER;
-static int sDesTem, sDesPara;
+static int sDesTem, sDesPara; /* sDesTem: 1 um retrato; no 360 também 2 repetindo o último quadro, 3 o init do backend */
+#ifdef PORT_X360
+static int sEntregando, sDesInitRes;
+static volatile int sDesParaJa, sDesParado; /* a parada sem esperar (uma queda); a thread de desenho já saiu */
+volatile int gGsDesenhoEstado; /* (o vigia) 0 sem a thread de desenho, 1 ociosa, 2 desenhando, 3 repetindo o último quadro, 4 no init */
+extern void Port_GsDesenhoPartida(void); /* main360.cpp: processador e identidade da thread */
+extern int GsD3d_Repete(void);           /* gs_d3d.cpp */
+extern void GsD3d_Ocioso(void);          /* gs_d3d.cpp: o pedido de memória da gravação */
+extern void GsD3d_Soltar(void);          /* gs_d3d.cpp: o dispositivo volta para a main */
+extern int Port_X360CondEsperaMs(pthread_cond_t *c, pthread_mutex_t *m, unsigned ms); /* posix360.c: 1 se o tempo acabou */
+#endif
 static unsigned sEntregas, sNaoCouberam, sSoltasPedidas;
 static uint32_t sMaior[5]; /* desenhos, vértices de CPU, da VU, índices, constantes: o maior quadro entregue */
 static uint64_t sCopiaNs, sCopiaPior;
@@ -3470,14 +3501,58 @@ static void solta_pede(GsTex tex, int alvo) {
 static void *desenho_thread(void *arg) {
     uint32_t i;
     (void)arg;
+#ifdef PORT_X360
+    Port_GsDesenhoPartida();
+#endif
     pthread_mutex_lock(&sDesLock);
     for (;;) {
+#ifdef PORT_X360
+        while (!sDesTem && !sDesPara && !sDesParaJa) {
+            int repete;
+            gGsDesenhoEstado = 1;
+            Port_X360CondEsperaMs(&sDesAcorda, &sDesLock, 50);
+            if (sDesTem || sDesPara || sDesParaJa) {
+                continue;
+            }
+            repete = !sEntregando; /* (a entrega mexe no estado do desenho; o pedido de memória não) */
+            if (repete) {
+                sDesTem = 2;
+            }
+            pthread_mutex_unlock(&sDesLock);
+            GsD3d_Ocioso();
+            if (repete) {
+                gGsDesenhoEstado = 3;
+                GsD3d_Repete(); /* (só se passou de 50 ms sem apresentar) */
+            }
+            pthread_mutex_lock(&sDesLock);
+            if (repete) {
+                sDesTem = 0;
+                pthread_cond_broadcast(&sDesFeito);
+            }
+        }
+        if (sDesParaJa) {
+            break;
+        }
+#else
         while (!sDesTem && !sDesPara) {
             pthread_cond_wait(&sDesAcorda, &sDesLock);
         }
+#endif
         if (!sDesTem) {
             break;
         }
+#ifdef PORT_X360
+        if (sDesTem == 3) {
+            gGsDesenhoEstado = 4;
+            pthread_mutex_unlock(&sDesLock);
+            sDesInitRes = sBackend->init();
+            pthread_mutex_lock(&sDesLock);
+            sDesTem = 0;
+            pthread_cond_broadcast(&sDesFeito);
+            continue;
+        }
+        gGsDesenhoEstado = 2;
+#endif
         pthread_mutex_unlock(&sDesLock);
 #ifdef BT3_GPU_FALSO
         if (sDesAtrasoUs > 0) { /* antes de desenhar: a gravação do quadro seguinte corre junto */
@@ -3492,12 +3567,25 @@ static void *desenho_thread(void *arg) {
         for (i = 0; i < sRetrato.soltaCount; i++) {
             sBackend->solta(sRetrato.soltas[i].tex, sRetrato.soltas[i].alvo);
         }
+#ifdef PORT_X360
+        GsD3d_Ocioso(); /* (o que a gravação espera pode ter saído com este quadro) */
+#endif
         pthread_mutex_lock(&sDesLock);
         sDesTem = 0;
         pthread_cond_broadcast(&sDesFeito);
     }
+#ifdef PORT_X360
+    sDesTem = 0; /* (na parada sem esperar, o retrato pendente fica sem desenho) */
+    sDesParado = 1;
+    gGsDesenhoEstado = 0;
+    pthread_cond_broadcast(&sDesFeito);
+    pthread_mutex_unlock(&sDesLock);
+    GsD3d_Soltar(); /* o dispositivo volta para quem for usá-lo (a main) */
+    return NULL;
+#else
     pthread_mutex_unlock(&sDesLock);
     return NULL;
+#endif
 }
 
 void GsDraw_DesenhoEspera(void) {
@@ -3505,17 +3593,89 @@ void GsDraw_DesenhoEspera(void) {
         return;
     }
     pthread_mutex_lock(&sDesLock);
+#ifdef PORT_X360
+    while (sDesTem && !sDesParado) {
+#else
     while (sDesTem) {
+#endif
         pthread_cond_wait(&sDesFeito, &sDesLock);
     }
     pthread_mutex_unlock(&sDesLock);
 }
+
+#ifdef PORT_X360
+/* (degrau 2, etapa 4) para o gs_d3d.cpp e a main360.cpp */
+int GsDraw_Dividido(void) {
+    return sDividido;
+}
+
+/* acorda o desenho ocioso (o pedido de memória da gravação) */
+void GsDraw_DesenhoAcorda(void) {
+    pthread_cond_signal(&sDesAcorda);
+}
+
+/* uma queda: o desenho sai sem esperar (sem desenhar o retrato pendente) e solta o dispositivo */
+void GsDraw_DesenhoPararJa(void) {
+    sDesParaJa = 1;
+    pthread_cond_signal(&sDesAcorda);
+}
+
+/* a própria thread de desenho caiu (o AoMorrer dela): quem espera por ela segue, e o que vier depois se perde */
+void GsDraw_DesenhoCaiu(void) {
+    sDesParado = 1;
+    sDesTem = 0;
+    gGsDesenhoEstado = 0;
+    pthread_cond_broadcast(&sDesFeito);
+}
+
+/* o init do backend na thread de desenho, a dona do dispositivo; a gravação espera */
+static int desenho_init(void) {
+    pthread_mutex_lock(&sDesLock);
+    while (sDesTem && !sDesParado) { /* (o desenho ocioso pode estar no meio de uma volta: sDesTem 2) */
+        pthread_cond_wait(&sDesFeito, &sDesLock);
+    }
+    sDesTem = 3;
+    pthread_cond_signal(&sDesAcorda);
+    while (sDesTem && !sDesParado) {
+        pthread_cond_wait(&sDesFeito, &sDesLock);
+    }
+    pthread_mutex_unlock(&sDesLock);
+    return sDesParado ? 0 : sDesInitRes;
+}
+
+/* a thread de desenho já saiu: o quadro se perde (a gravação não é dona do dispositivo) */
+static void desenho_descarta(void) {
+    int k;
+    for (k = 0; k < gsTargetCount; k++) {
+        gsTargets[k].draws = 0;
+    }
+    gsVertCount = 0;
+    gsVuVertCount = 0;
+    gsVuIdxCount = 0;
+    gsVuUniCount = 0;
+    gsDrawCount = 0;
+    gsAnchor = 0;
+    gsSkipped = 0;
+    gsNative = 0;
+}
+#endif
 
 /* (o falso o chama no resumo: o tamanho do maior quadro, quantos não couberam, o tempo da cópia) */
 void GsDraw_DesenhoResumo(void) {
     if (!sDividido) {
         return;
     }
+#ifdef PORT_X360
+    {
+        extern void Diario_Escrever(const char *formato, ...);
+        Diario_Escrever("gs: divis\303\243o: %u retratos, %u sem c\303\263pia (n\303\243o couberam), %u pedidos de soltar; maior quadro %u "
+                        "desenhos, %u v\303\251rtices, %u da VU, %u \303\255ndices, %u constantes; entrega m\303\251dia %.3f ms, pior %.3f ms",
+                        sEntregas, sNaoCouberam, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
+                        sEntregas ? (double)sCopiaNs / sEntregas / 1e6 : 0.0, (double)sCopiaPior / 1e6);
+        sCopiaPior = 0; /* (o pior é do trecho) */
+        return;
+    }
+#endif
     fprintf(stderr, "gs: divis\303\243o: %u retratos, %u sem c\303\263pia (n\303\243o couberam), %u pedidos de soltar; maior quadro %u desenhos, %u "
                     "v\303\251rtices, %u da VU, %u \303\255ndices, %u constantes; entrega m\303\251dia %.3f ms, pior %.3f ms\n",
             sEntregas, sNaoCouberam, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
@@ -3529,14 +3689,16 @@ static void desenho_parar(void) {
     pthread_cond_signal(&sDesAcorda);
     pthread_mutex_unlock(&sDesLock);
     pthread_join(sDesenho, NULL);
+#ifdef PORT_X360
+    sDesParado = 1; /* (a gravação não volta a ser dona do dispositivo: o que vier depois se perde) */
+#else
     sDividido = 0;
+#endif
 }
 
 static void divisao_decide(void) {
     const char *e = getenv("BT3_GS_DESENHO");
-#ifndef PORT_X360
-    int interp;
-#endif
+    int interp, r;
     if (e == NULL || strcmp(e, "0") == 0) {
         return;
     }
@@ -3544,10 +3706,6 @@ static void divisao_decide(void) {
         divisao_log("BT3_GS_DESENHO=1 sem BT3_GS_THREAD=1: ignorado, tudo na thread de grava\303\247\303\243o");
         return;
     }
-#ifdef PORT_X360
-    divisao_log("BT3_GS_DESENHO=1 recusado: o desenho numa terceira thread no 360 \303\251 a etapa 4 do degrau 2; segue o degrau 1");
-    return;
-#else
     interp = getenv("BT3_INTERP") != NULL ? atoi(getenv("BT3_INTERP")) : Port_Setting("interp", 0);
     if (interp > 0) {
         divisao_log("BT3_GS_DESENHO=1 recusado com BT3_INTERP (o frameEnd roda v\303\241rias vezes por quadro trocando as listas)");
@@ -3569,13 +3727,32 @@ static void divisao_decide(void) {
 #ifdef BT3_GPU_FALSO
     sDesAtrasoUs = getenv("BT3_GS_DESENHO_ATRASO_US") != NULL ? atoi(getenv("BT3_GS_DESENHO_ATRASO_US")) : 0;
 #endif
-    if (pthread_create(&sDesenho, NULL, desenho_thread, NULL) != 0) {
+#ifdef PORT_X360
+    {
+        pthread_attr_t at;
+        pthread_attr_init(&at);
+        pthread_attr_setstacksize(&at, 4u * 1024u * 1024u); /* (o frame_end do 360 rodava na de gravação, com 4 MB) */
+        r = pthread_create(&sDesenho, &at, desenho_thread, NULL);
+    }
+#else
+    r = pthread_create(&sDesenho, NULL, desenho_thread, NULL);
+#endif
+    if (r != 0) {
         divisao_log("BT3_GS_DESENHO=1 recusado: a thread de desenho n\303\243o partiu");
         return;
     }
     sDividido = 1;
     gsQuadro = &sRetrato;
     gGsDesenhoParar = desenho_parar;
+#ifdef PORT_X360
+    {
+        char m[160];
+        sprintf(m, "BT3_GS_DESENHO=1: o desenho numa terceira thread, retrato de %u KB",
+                (unsigned)((RET_DRAWS * sizeof(GsDraw) + RET_VERTS * sizeof(Vtx) + RET_VU_VERTS * 48u + RET_VU_IDX * 4u +
+                            RET_VU_UNI * sizeof(Vu0Uniform)) >> 10));
+        divisao_log(m);
+    }
+#else
     fprintf(stderr, "gs: BT3_GS_DESENHO=1: o desenho numa terceira thread, retrato de %u KB\n",
             (unsigned)((RET_DRAWS * sizeof(GsDraw) + RET_VERTS * sizeof(Vtx) + RET_VU_VERTS * 48u + RET_VU_IDX * 4u +
                         RET_VU_UNI * sizeof(Vu0Uniform)) >> 10));
@@ -3589,7 +3766,16 @@ static void desenho_entrega(void) {
     int k, cabe;
     uint64_t t0, dt;
 
+#ifdef PORT_X360
+    pthread_mutex_lock(&sDesLock); /* o desenho largou o retrato anterior e não repete o último quadro até a entrega acabar */
+    while (sDesTem && !sDesParado) {
+        pthread_cond_wait(&sDesFeito, &sDesLock);
+    }
+    sEntregando = 1;
+    pthread_mutex_unlock(&sDesLock);
+#else
     GsDraw_DesenhoEspera(); /* o desenho largou o retrato anterior e soltou o que viajava com ele */
+#endif
     t0 = gpu_now();
     c[0] = gsDrawCount;
     c[1] = gsVertCount;
@@ -3677,6 +3863,9 @@ static void desenho_entrega(void) {
     }
     sEntregas++;
     pthread_mutex_lock(&sDesLock);
+#ifdef PORT_X360
+    sEntregando = 0;
+#endif
     sDesTem = 1;
     pthread_cond_signal(&sDesAcorda);
     pthread_mutex_unlock(&sDesLock);
@@ -3721,6 +3910,13 @@ void GsGpu_FrameEnd(void) {
         }
 #ifdef BT3_GS_ESPERAS
         if (sDividido) { /* (degrau 2) o retrato vai para a thread de desenho; a gravação segue */
+#ifdef PORT_X360
+            if (sDesParado) {
+                desenho_descarta();
+                gGpuEndNs += gpu_now() - t0;
+                return;
+            }
+#endif
             desenho_entrega();
             gGpuEndNs += gpu_now() - t0;
             return;
