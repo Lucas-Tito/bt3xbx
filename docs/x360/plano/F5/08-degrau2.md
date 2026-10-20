@@ -370,3 +370,151 @@ rodada seguem no log, todas inteiras. A etapa 3 vale na PPC.
 `gGsFrame`, `GS_FBP_QUADRO` e `gGsVu1Ms` do inventário viram `q->`), sem zerar contadores com `dividido`; o `entrega` (o
 `sVuIni ~0`, os pedidos de alvo), o `soltaPede` e o `solta` (a cova); o `cleared` e o conteúdo dos alvos persistentes do lado do
 desenho; a thread dona do dispositivo, o `Present`, a Guide, a saída e a queda; e tirar a recusa do `divisao_decide`.
+
+## Etapa 4: a thread de desenho no 360
+
+Feita em 20/10/2026 no branch `f5-degrau2` (commit `ea1a01e`). Com `BT3_GS_THREAD=1` e `BT3_GS_DESENHO=1` no `ambiente.txt`, o
+360 passa a ter três threads no GS: o jogo (hardware 2), a gravação (hardware 0) e o desenho (hardware 3, ou 1 com
+`BT3_GS_DESENHO_HW=1`). Sem a chave, o caminho é o da etapa 2 (a gravação grava e desenha).
+
+**A posse do dispositivo.** No 360 a divisão se decide antes do init do backend (`GsGpu_Init`, `divisao_decide`): com ela, o
+`d3d_init` (e o `AcquireThreadOwnership`) roda na thread de desenho, num trabalho próprio (`desenho_init`), e a gravação
+espera; as alocações das listas do `GsGpu_Init` ficam na gravação. A thread de desenho é a única que chama o dispositivo: o
+`frame_end`, o `Present`, a cova (`IsBusy`, `BlockUntilNotBusy`, `xg_libera`), a repetição do último quadro para a Guide e a
+soltura na saída. Ociosa, ela acorda a cada 50 ms (`Port_X360CondEsperaMs`) e: atende o pedido de memória da gravação
+(`GsD3d_Ocioso`) e, se passou de 50 ms sem `Present`, repete o último quadro (`GsD3d_Repete`, com a textura que o próprio
+desenho guardou, `sMostradoTex`; a cova a esquece quando ela é solta). Enquanto repete, a entrega espera (`sDesTem` 2);
+enquanto a gravação monta o retrato (`sEntregando`), o desenho não repete. O `GsD3d_Repete` da thread de gravação (degrau 1)
+segue no código e não faz nada com a divisão (só a dona do dispositivo, `sDono`, repete).
+
+**O `gs_d3d.cpp` lendo o retrato.** Todo o `frame_end` lê `gsQuadro` (`sQ` nas funções que ele chama): listas, contagens, a
+tabela de alvos (o `cleared` do desenho é o da cópia), `quadro`, `frame[2]`, `fbp`, `texCount`, `skipped` e `vu1Ms`. Sem a
+divisão ele zera os contadores da gravação como antes; com ela, não (a entrega zerou). O alvo mostrado se busca em
+`q->targets` (`alvo_do_fbp`), sem o `GsDraw_TargetGet` (que escreve o `last`): com a divisão, a entrega o chama no lugar do
+`frame_end`, no mesmo ponto da gravação (o mesmo `gGsFrame`), então o `last` e a escolha da vaga a reaproveitar não mudam.
+
+**A entrega** (`entrega`, o gancho do `GsBackend`, na gravação com o desenho parado): é o ponto em que um lado passa ao outro o
+que mudou, sem trava, porque o outro está parado (a barreira é o mutex da entrega).
+
+1. O `last` do alvo mostrado (acima).
+2. A conta da VU1 (`vu_plano`): o que cabe no par de buffers só depende da lista e da capacidade fixa (`sVuCapV`, `sVuCapI`),
+   então a entrega a faz e guarda, por desenho, o índice no par (`sVuIni`), o primeiro vértice e quantos (`sVuLo`, `sVuNv`,
+   512 KB a mais); o desenho só copia (`vu_copia`), sem varrer os índices de novo. Com ela, **a regra do `cleared` da gravação**
+   (o caso do `sVuIni ~0`): `limpa[t]` só para o alvo com algum desenho não nativo que o desenho vai fazer; o da VU1 que não
+   coube não conta. É a regra que o `frame_end` aplicava ao entrar na EDRAM.
+3. As profundidades novas (`prof_garante`) e as vagas sem textura (`alvos_sem_textura`, que desliga também o `limpa` da vaga
+   que ganhou textura): as duas abrem espaço no cache pelo `GsDraw_X360Abre`, agora só na gravação (riscos 3 e 7). Diferença do
+   degrau 1: a nova tentativa da vaga sem textura acontece no fim da gravação do quadro, não no fim do desenho, então o
+   `cleared` zerado dela vale um quadro depois (caso raro: só com a memória esgotada).
+4. A medida da memória do quadro (`mem_mede`, a base da estimativa da gravação; o desenho mede por `livres_agora`, sem
+   escrever na medida da gravação).
+5. As texturas das vagas para o lado do desenho (`sincroniza_alvos`, risco 6): `sAlvos`/`sProf` são da gravação (criação pelo
+   XG, `target_color`, a fila), `sAlvoD`/`sProfD` do desenho (a textura e o `conteudo`). Cada troca na gravação (`target_ensure`,
+   a vaga solta, a vaga que ganhou textura, a profundidade criada ou solta) sobe a versão (`ver`) da vaga; na entrega, a vaga cuja
+   cor mudou esquece o conteúdo dela e o da profundidade, a cuja profundidade mudou, o da profundidade. Como o próximo quadro que
+   o desenho desenha é o entregue, isto é "no começo do quadro certo". O `sResidente`, o `sZDono` e o `sDateFonte` não precisam
+   de evento: entre dois quadros eles são sempre -1 e NULL (o `frame_end` acaba com `sai_da_edram` e `prof_entrega` e começa
+   zerando o `sDateFonte`). Sem a divisão, a mesma sincronização roda no começo do `frame_end`.
+6. A fila das profundidades soltas troca de lado (`sProfFila`, abaixo) e os contadores do trecho que a gravação escreve passam
+   para os do log (`grav_junta`: pressões, descartes, brancas, texturas novas e recusadas, e os lotes e instruções da VU1 do
+   `gs_vu1.c`, que o log zerava de outra thread).
+
+**A liberação** (risco 4, a fila da etapa 3 no 360): `soltaPede` (na gravação) passa os bytes de vivos a pendentes já
+(`cova_conta`; os pendentes mudam dos dois lados, então são atômicos, `pend_soma`) e, na vaga reaproveitada, tira as texturas
+da vaga (o `targetEnsure` seguinte cria as novas); `solta` (no desenho, depois de desenhar o quadro do pedido) põe o recurso na
+cova (`cova_poe`), que o solta quando a GPU o largar. A cor da vaga viaja na fila do `gs_draw.c` (o `tex` que ele guarda é o
+`target_color` da vaga); a profundidade, que não cabe no `GsSolta`, numa fila do backend com dois lados (`sProfFila`), posta na
+cova no fim do `frame_end` do quadro em que foi pedida. O cabeçalho que lê a profundidade como cor passou a morar com ela
+(`ProfXg`), e a cova espera os dois cabeçalhos (`xg_ocupado`, `xg_espera`): o `prof_solta` não bloqueia mais.
+
+**O descarte por pressão** (risco 8): com a divisão, a cova é do desenho, então o `GsD3d_Falta` não a varre e o
+`GsD3d_Descartou` não espera a GPU: pede ao desenho (`espera_desenho`: `sPedeLivre` e acorda o ocioso; o que está desenhando
+atende no fim do quadro) e espera um evento, com limite de 100 ms. Não espera quando tudo o que está pendente foi pedido desde a
+última entrega (`sPendGrav`: viaja com o quadro em gravação, e só sai depois de uma entrega que esta espera atrasaria), nem
+depois de atendido com a cova vazia. As esperas da gravação pelo desenho saem no log à parte das esperas pela GPU.
+
+**As threads no `main360.cpp`.** `Port_GsDesenhoPartida` (o primeiro que a thread de desenho faz): arredondamento por
+truncamento como a gravação, a thread de hardware pelo `BT3_GS_DESENHO_HW` (1 ou 3; outro valor vira 3, com uma linha no log) e
+a identidade. A saída em ordem: o `Port_Sair` chama o `Port_GsParar`, que espera a gravação, depois para o desenho (ele desenha o
+último retrato, solta o dispositivo e sai) e por fim a gravação; a main toma o dispositivo como antes (até 2 s, depois à força).
+O `AoMorrer` ganhou o ramo "caiu o desenho" (solta o dispositivo, `GsDraw_DesenhoCaiu` para a gravação não esperar por ele, e os
+quadros seguintes se perdem); a queda da gravação pede a parada do desenho sem esperar (`GsDraw_DesenhoPararJa`: ele sai na
+volta seguinte, sem desenhar o retrato pendente, e solta o dispositivo); a queda do jogo pede as duas. O vigia diz as três
+threads e as duas etapas: `gGsD3dEtapa` (o desenho) e `gGsD3dEtapaGrav` (a parte do backend que roda na gravação: criando
+alvos e profundidades, esperando o desenho soltar memória, a entrega). O `gs_core.c` só mudou no trabalho de parar da gravação:
+com a parada pedida sem esperar (`Port_GsPararJa`), ela para o desenho antes de sair.
+
+**O log novo, com a divisão:** `gs_d3d: o dispositivo é da thread N (a de desenho, BT3_GS_DESENHO=1)` no init, `thread de
+desenho do GS (BT3_GS_DESENHO) na thread de hardware 3` (ou 1), `gs: BT3_GS_DESENHO=1: o desenho numa terceira thread, retrato de
+10304 KB`, e a cada 60 quadros, depois da memória, `gs: divisão: N retratos, N sem cópia (não couberam), N pedidos de soltar;
+maior quadro ...; entrega média X ms, pior Y ms` (o pior é do trecho). A linha `gs_d3d:   descarte:` ganhou "N da gravação pelo
+desenho". Na linha de 60 quadros, "jogo e gravação" vira, com a divisão, o tempo em que o desenho ficou esperando retrato.
+
+**A build do 360** (`build_f2.sh` no worktree `bt3xbx-d2`, o código do `ea1a01e`): 317 de 317 fontes sem erro e de primeira, os
+avisos por fonte iguais aos da main (0 fontes com avisos diferentes; `gs_d3d.cpp` e `main360.cpp` sem nenhum), os mesmos 103
+stubs (`diff` com o `stubs.txt` da main vazio), `default.dat` `6d30baaf87b1177fb2359a855f8befc0` e `default.swap`
+`a7cf723fbfaea860fcc3707ad288e755`, iguais. O `default.xex` da rodada no console é o da build refeita no commit da nota (o md5
+está no relatório da etapa; muda a cada build, pela data embutida). Nas mensagens novas do `gs_draw.c` nenhuma string tem acento
+(o `c89.py`, guia, seção da etapa 3); o `.c` preparado em `build/x360/f2/c89` foi conferido no `desenho_thread`.
+
+**As provas rápidas na x86 de teste** (`x86gv`, WSL, commit `ea1a01e`; script `~/provas-d2e4-x86.sh`, resumo em
+`~/provas-d2e4-x86/resumo`): só o lado portável, que mudou no `gs_draw.c` e no `gs_core.c` dentro de `#ifdef PORT_X360` (no PC
+e no falso a divisão segue igual). Base: a mesma build sem thread; t1 o degrau 1, d0 e d20 a divisão com a gravação atrasada em
+0 e 20 ms, r20 a divisão com o desenho atrasado em 20 ms, todas com `BT3_GS_RACE=1`.
+
+| Roteiro | Casos | Quadros diferentes | `race:` | Texturas usadas depois de soltas | Hash do jogo |
+|---|---|---:|---:|---:|---|
+| `f5_treino` (7.386) | t1, d0, d20, r20 | 0 em todos | 0 | 0 | `f76f0f6849b64629` em todos (o da base) |
+| `f5_duelo` (8.380) | t1, d0, d20, r20 | 0 em todos | 0 | 0 | `08a98b6d05b8775a` em todos (o da base) |
+
+`divergencias.py` saiu com 0 nas oito; a build `x86gv` com os 104 stubs de sempre. Na `d20` do `f5_duelo`: 8.380 retratos, 0 sem
+cópia, entrega média 0,219 ms, pior 3,011 ms. O WSL não prova nada do `gs_d3d.cpp` nem do `main360.cpp` (o falso não tem
+dispositivo): a posse, o `Present`, a Guide, a cova no desenho, a espera por memória e as quedas só o console mostra.
+
+**A rodada do critério (serviço `claude-d2e4` no WSL, disparado sem esperar).** O script `~/rodada-d2e4.sh` (usuário `codex`)
+refaz as três builds do HEAD do `f5-degrau2` (`headless.py --alvo x86`, `--alvo x86 --rastreio`, `--alvo ppc`, nessa ordem),
+confere a `.text` da x86 plana contra `cc46fa0752f092fca305bc8bf2e2e54390763af0` e roda, em série, `REF=1 SEMMAPA=1 IMG=1
+roteiros.sh f5_duelo f5_treino` e `SEMMAPA=1 IMG=1 roteiros.sh duelo`. Saída do serviço em `~/rodada-d2e4.log`, logs em
+`~/rodada-d2e4-build-*.log`, `~/rodada-d2e4-f5.log` e `~/rodada-d2e4-duelo.log`; o resumo em `~/rodada-d2e4.resumo`, uma linha
+por passo com `RC=` e a linha da `.text` ("a mesma" ou "DIFERENTE"), terminando com `FIM`. Vale com os cinco `RC=0`, a `.text` a
+mesma e o git sem alterados no fim. Leva umas 2 h 40.
+
+**O que só o console prova** (o `bt3xbx.log` de cada abertura; a 3 é a referência da mesma sessão):
+
+1. Nas aberturas 1 e 2: `thread de desenho do GS (BT3_GS_DESENHO) na thread de hardware 3` (na 2, `1`), `gs: BT3_GS_DESENHO=1: o
+   desenho numa terceira thread, retrato de 10304 KB` e `gs_d3d: o dispositivo é da thread N (a de desenho, BT3_GS_DESENHO=1)`;
+   na 3, `(a de gravação ou a do jogo)` e nenhuma das outras duas.
+2. Os autotestes do init (calibração da memória, profundidade, tempos, nativas) com os números da etapa 2: agora rodam na
+   thread de desenho.
+3. O resumo de 60 quadros na luta: o quadro inteiro (o período) contra os 48 ms do degrau 1 (a estimativa é de 38 a 42 ms: o
+   período vira o da gravação); o "fim do quadro" (o desenho, uns 12,5 ms) e, com a divisão, "jogo e gravação" é o tempo em
+   que o desenho esperou retrato. Os passos da luta (mediana, p95, p99) como na tabela da etapa 2, e a comparação entre a
+   thread de hardware 3 e a 1 (o estudo pede as duas).
+4. A linha `gs: divisão:` a cada 60 quadros: quantos não couberam (esperado 0), a entrega média e a pior no 360 (estimada em 1,5
+   a 2 ms; na x86 do WSL, 0,2 ms).
+5. A memória: as linhas `gs_d3d: pressão` e `gs_d3d:   descarte:` (as esperas da gravação pelo desenho, novas; nenhum `NÃO
+   CABE`), o mínimo livre visto contra o piso (31 MB com piso 32 no degrau 1: as liberações agora chegam um quadro e meio mais
+   tarde, e o retrato ocupa 10 MB), nenhuma linha `BRANCA`, `ficou sem textura` ou `a fila das profundidades soltas encheu`.
+6. As capturas `BT3_SHOT=600` (`game:\shots`): a luta e os menus sem textura errada, preta ou branca; o alvo de um quadro com
+   o conteúdo dele (o risco 6: uma vaga reaproveitada mostraria o conteúdo antigo ou um retângulo preto).
+7. A Guide: abre no menu, na carga e na pausa, nas três aberturas; nenhuma linha `vigia:` além das de carga que o degrau 1 já
+   tinha (se houver, ela diz as três threads e as duas etapas).
+8. A saída: `saída do jogo com código 0` e `voltando ao dashboard`, sem `o dispositivo ainda era da thread N: tomado` (a de
+   desenho soltou) e sem `CRASH`. Uma queda diz a thread (`a queda foi na thread de desenho` ou `de gravação`) e a etapa.
+
+**Roteiro da rodada no console (três aberturas).** Copiar do worktree `bt3xbx-d2`, de `build/x360/f2/`, o `default.xex`, o
+`default.dat` e o `default.swap` para a pasta do jogo. Para cada abertura, copiar o `ambiente_abN.txt` como `ambiente.txt` (todos
+começam com `-BT3_DEMO` e trazem o `BT3_GS_THREAD=1` e o `BT3_SHOT=600`): 1, `BT3_GS_DESENHO=1` e `BT3_GS_DESENHO_HW=3`; 2,
+`BT3_GS_DESENHO=1` e `BT3_GS_DESENHO_HW=1`; 3, sem o `BT3_GS_DESENHO` (o degrau 1). Abrir pela FreeStyle; pular o filme de
+abertura com START (a tela preta depois das logos é o filme, contado e não desenhado); abrir a Guide no menu principal e fechar;
+modo Duelo, Goku contra Kuririn, estágio 5; abrir a Guide durante a carga e fechar; uns 60 s de luta (golpes especiais, troca
+de personagem se houver); pausa, abrir a Guide e fechar; sair pela pausa e voltar ao dashboard. Trazer o `bt3xbx.log` de cada
+abertura (renomeado `bt3xbx_abN.log` antes da seguinte) e a pasta `shots` (as capturas levam o número do quadro do GS; separar
+por abertura).
+
+**O que fica em aberto.** Tudo do lado do dispositivo só o console confere: a posse na thread de desenho, o `Present`, a
+repetição para a Guide, a cova e o `xg_libera` no desenho, a espera da gravação por memória (o limite de 100 ms e o pedido ao
+desenho ocioso nunca rodaram) e os ramos de queda. Diferenças de comportamento que se aceitaram: a nova tentativa da vaga sem
+textura vale um quadro depois (só com a memória esgotada); as liberações chegam à cova um quadro e meio mais tarde que no
+degrau 1; um `target_color` de vaga reaproveitada sem textura conta uma branca a mais no log (a fila do `gs_draw.c` pede a cor da
+vaga); 512 KB a mais de memória fixa para a conta da VU1 (`sVuLo`, `sVuNv`).

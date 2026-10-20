@@ -1475,3 +1475,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   com um `fputs`; o verificador passou a contar as linhas misturadas e a falhar com elas.
 - **A build `ppcg` (`headless.py --alvo ppc --gpu`) pede a x86 plana do mesmo commit pronta antes** (o mapa das tabelas sai dos
   `.i` dela): num script que leva commit novo ao WSL, a x86 vem primeiro, ou ele para na build com "a build x86 é de outra origem".
+
+### A thread de desenho no 360 (F5, etapa 8, degrau 2, etapa 4, `plano/F5/08-degrau2.md`)
+
+- **Não edite fonte com o `build_f2.sh` rodando.** O passo 1 (`c89.py`) lê os fontes e o carimbo (`commit diff:sha1`) guarda a
+  diferença daquele instante; uma correção feita no meio da build ficou fora do `.xex` e a build teve de ser refeita. Para
+  conferir que uma build é de um estado, compare o carimbo da linha 2 do `build_f2.log` com o do estado (ou faça o commit antes).
+- **Thread ociosa que faz trabalho próprio precisa de um estado de ocupada que quem posta trabalho espera.** O desenho ocioso do
+  360 repete o último quadro sozinho (a Guide); o primeiro `desenho_init` punha o pedido de init (`sDesTem = 3`) sem esperar, e
+  uma repetição em andamento (`sDesTem = 2`) o apagava ao terminar (`sDesTem = 0`): o init "falhava" sem ter rodado. Achado na
+  revisão, antes de rodar. Regra: todo ponto que posta trabalho espera o estado livre (0) sob a mesma trava, como a entrega já
+  fazia.
+- **No 360, a decisão de dividir vem antes do init do backend.** O init pega o dispositivo (`AcquireThreadOwnership`) e só a
+  dona o chama: com o desenho numa terceira thread, o init tem de rodar nela, então a thread nasce antes e a gravação espera o
+  init por um trabalho dela. No PC e no falso a ordem de antes não muda nada (a divisão segue no fim do `GsGpu_Init`).
+- **Para dividir um backend em duas threads, um ponto de troca com o outro lado parado vale mais que travas por campo.** No
+  `gs_d3d.cpp`, tudo o que passa da gravação para o desenho (as texturas das vagas por versão, a conta da VU1, os contadores do
+  log) passa na entrega, com o desenho esperando; o resto tem dono único, e o que os dois mexem de verdade (os bytes pendentes)
+  é atômico. O inventário campo a campo (`08-degrau2.md`, seções 1 e 2) é o que mostra quais campos sobram para esse ponto.
