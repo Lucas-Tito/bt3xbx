@@ -630,7 +630,7 @@ static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *u
             }
         }
         if (Gs_PsmBits(fpsm) == 16 || fbp == zbp) {
-            if (fbp != zbp && fbp != (uint32_t)gGsMainFbp) {
+            if (fbp != zbp && fbp != (uint32_t)GS_FBP_QUADRO) {
                 /* A work buffer drawn through a 16-bit view (the outline's edge image): not drawable here, but
                    the game has now written the buffer, so whatever samples it next means this buffer and not the
                    stage textures that share its address. Without this the outline's later passes read those
@@ -653,7 +653,7 @@ static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *u
         }
         if (tme && ((tpsm & 0x30) == 0x30 || tbp / 32 == zbp || tpsm == 0x1B || tpsm == 0x24 || tpsm == 0x2C)) {
             int t = GsDraw_TargetGet(fbp, 0);
-            if (t >= 0 && fbp != (uint32_t)gGsMainFbp) {
+            if (t >= 0 && fbp != (uint32_t)GS_FBP_QUADRO) {
                 gsTargets[t].stale = 1; /* a work buffer missed a pass */
             }
             gsSkipped++;
@@ -688,13 +688,13 @@ static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *u
             /* The user's switches act on the pass that puts a work buffer back over the picture: added (the
                glare and the object glow, blend "source + destination") or mixed in by the destination's alpha
                (the blur of distant things). */
-            if (sprite && (uint32_t)(gGs.frame[ctx] & 0x1FF) == (uint32_t)gGsMainFbp && ((prim >> 6) & 1) &&
+            if (sprite && (uint32_t)(gGs.frame[ctx] & 0x1FF) == (uint32_t)GS_FBP_QUADRO && ((prim >> 6) & 1) &&
                 ((((gGs.alpha[ctx] & 0xFF) == 0x68) && (gsFxOff & 8)) || (((gGs.alpha[ctx] & 0xFF) == 0x54) && (gsFxOff & 16)))) {
                 gsSkipped++;
                 return 0;
             }
             if (src == d->target || tp > 1) {
-                if (d->target != src && (uint32_t)(gGs.frame[ctx] & 0x1FF) != (uint32_t)gGsMainFbp) {
+                if (d->target != src && (uint32_t)(gGs.frame[ctx] & 0x1FF) != (uint32_t)GS_FBP_QUADRO) {
                     gsTargets[d->target].stale = 1; /* a work buffer missed a pass */
                 }
                 gsSkipped++;
@@ -921,7 +921,7 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
             gsVerts[k].t -= dt;
         }
         /* the user's strength for the glare and the glow: the pass that adds the blurred buffer to the picture */
-        if (gsGlowPercent != 100 && (uint32_t)(gGs.frame[ctx] & 0x1FF) == (uint32_t)gGsMainFbp && ((gGs.prim >> 6) & 1) &&
+        if (gsGlowPercent != 100 && (uint32_t)(gGs.frame[ctx] & 0x1FF) == (uint32_t)GS_FBP_QUADRO && ((gGs.prim >> 6) & 1) &&
             (gGs.alpha[ctx] & 0xFF) == 0x68) {
             for (k = d.first; k < gsVertCount; k++) {
                 gsVerts[k].r = (uint8_t)(gsVerts[k].r * gsGlowPercent / 100 > 255 ? 255 : gsVerts[k].r * gsGlowPercent / 100);
@@ -930,7 +930,7 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
             }
         }
     }
-    if (Port_IsWide() && !gPortMenuMode && !d.tex_is_target && (type == 6 || fst) && gsTargets[d.target].fbp == (uint32_t)gGsMainFbp) {
+    if (Port_IsWide() && !gPortMenuMode && !d.tex_is_target && (type == 6 || fst) && gsTargets[d.target].fbp == (uint32_t)GS_FBP_QUADRO) {
         /* Widescreen. The 3D scene is projected for a 16:9 picture by the game itself; 2D art is laid out for
            4:3 and would come out a third too wide. Each 2D piece is narrowed to 3/4 about a fixed point:
              (not in the menus: their pages are shown whole, stretched to the width; see Port_WideFactor)
@@ -2753,7 +2753,7 @@ static uint32_t interp_prims(InterpPrim *out) {
         }
         /* Which buffer it draws into, in a way that is the same next picture: the game shows its two frame buffers
            in turn, so "the picture's own buffer" is one role; any other buffer is itself. */
-        role = d->target >= 0 && d->target < gsTargetCount && gGsMainFbp >= 0 && gsTargets[d->target].fbp == (uint32_t)gGsMainFbp
+        role = d->target >= 0 && d->target < gsTargetCount && GS_FBP_QUADRO >= 0 && gsTargets[d->target].fbp == (uint32_t)GS_FBP_QUADRO
                    ? 0u : 1u + (d->target >= 0 && d->target < gsTargetCount ? gsTargets[d->target].fbp : 0x3FFu);
         /* The unit that is paired and moved is a PIECE: triangles that follow each other and share an edge (the two
            halves of a sprite or of a puff of smoke, a strip). Paired one triangle at a time, the halves of a quad

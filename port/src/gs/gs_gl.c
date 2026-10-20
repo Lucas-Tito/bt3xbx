@@ -944,7 +944,7 @@ static void frame_end(void) {
     }
 
     /* the shown buffer: the one sceGsSwapDBuff set up for this frame, else the first target */
-    best = gGsMainFbp >= 0 ? GsDraw_TargetGet((uint32_t)gGsMainFbp, 0) : -1;
+    best = GS_FBP_QUADRO >= 0 ? GsDraw_TargetGet((uint32_t)GS_FBP_QUADRO, 0) : -1;
     for (i = 0; best < 0 && i < gsTargetCount; i++) { best = i; }
     glBindVertexArray(0);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

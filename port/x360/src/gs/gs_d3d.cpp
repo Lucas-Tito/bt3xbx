@@ -2979,7 +2979,7 @@ static void frame_end(void) {
     }
 
     /* a imagem mostrada: a que o sceGsSwapDBuff montou para este quadro, senão o primeiro alvo (como o gs_gl.c) */
-    mostrado = gGsMainFbp >= 0 ? GsDraw_TargetGet((uint32_t)gGsMainFbp, 0) : -1;
+    mostrado = GS_FBP_QUADRO >= 0 ? GsDraw_TargetGet((uint32_t)GS_FBP_QUADRO, 0) : -1;
     for (i = 0; mostrado < 0 && i < gsTargetCount; i++) {
         mostrado = i;
     }
