@@ -169,8 +169,8 @@ typedef struct Pipe { uint32_t key, bkey, wmask; int ztst, zwrite, topo, vu, fx;
 static Pipe sPipes[1024];
 static int sPipeCount;
 
-/* recursos soltos que a GPU ainda pode estar lendo: Release só quando IsBusy diz que não (senão bloqueia) */
-static D3DResource *sCova[MAX_COVA];
+/* recursos soltos que a GPU ainda pode estar lendo: xg_libera só quando IsBusy diz que não (senão BlockUntilNotBusy) */
+static D3DTexture *sCova[MAX_COVA]; /* (só recursos do XG, TexXg: ver xg_cria) */
 static unsigned sCovaBytes[MAX_COVA];
 static unsigned char sCovaClasse[MAX_COVA];
 static int sCovaN;
@@ -215,6 +215,48 @@ static unsigned tam_alvo(void) {
         t = tam_real(TAM, TAM, D3DFMT_A8R8G8B8);
     }
     return t;
+}
+
+/* (F5, etapa 8, degrau 2, etapa 2) As texturas do jogo, os alvos e as profundidades são feitos sem o dispositivo, para a
+   gravação poder criá-los fora da thread que desenha: o cabeçalho pelo XG em memória comum e os dados em XPhysicalAlloc
+   (alinhamento de página, 4 KB, o que o XG pede para textura; escrita combinada, a que o XDK exige para recurso feito à
+   mão e a mesma do D3D sem D3DUSAGE_CPU_CACHED_MEMORY). O D3D não conta esse recurso: nunca Release. xg_libera solta os
+   dados e o cabeçalho e só se chama com a GPU sem ele (IsBusy falso ou depois do BlockUntilNotBusy, que valem para o
+   cabeçalho do XG). O cabeçalho é o primeiro campo: o ponteiro serve de D3DTexture * e de GsTex. Os bytes são os do
+   tam_real (o XPhysicalAlloc arredonda para a página), então a conta da memória e o dwAvailPhys andam juntos. */
+typedef struct TexXg {
+    D3DTexture cab;
+    void *dados;    /* o endereço virtual dos dados (XPhysicalAlloc) */
+    unsigned bytes; /* os bytes reservados, os mesmos do tam_real */
+    unsigned pitch; /* bytes por linha do nível 0, o do XG */
+} TexXg;
+
+static TexXg *xg_cria(UINT w, UINT h, D3DFORMAT f) {
+    TexXg *x = (TexXg *)calloc(1, sizeof(TexXg));
+    XGTEXTURE_DESC d;
+    UINT t;
+    if (x == NULL) {
+        return NULL;
+    }
+    t = XGSetTextureHeader(w, h, 1, 0, f, (D3DPOOL)0, 0, 0, 0, &x->cab, NULL, NULL);
+    x->bytes = (t + 4095u) & ~4095u;
+    x->dados = XPhysicalAlloc(x->bytes, MAXULONG_PTR, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    if (x->dados == NULL) {
+        free(x);
+        return NULL;
+    }
+    XGOffsetResourceAddress(&x->cab, x->dados);
+    XGGetTextureDesc(&x->cab, 0, &d);
+    x->pitch = d.RowPitch;
+    return x;
+}
+
+static void xg_libera(D3DTexture *t) {
+    TexXg *x = (TexXg *)t;
+    if (x != NULL) {
+        XPhysicalFree(x->dados);
+        free(x);
+    }
 }
 
 /* a memória física livre agora, em bytes (e o menor valor visto) */
@@ -548,7 +590,7 @@ static void ret_une(Ret *r, int x0, int y0, int x1, int y1) {
 }
 
 static void cova_solta(int i) {
-    sCova[i]->Release();
+    xg_libera(sCova[i]);
     sMem.pend[sCovaClasse[i]] -= sCovaBytes[i];
     sMem.nPend[sCovaClasse[i]]--;
 }
@@ -572,7 +614,7 @@ static void cova_espera_primeira(void) {
 }
 
 /* um recurso solto, com os bytes dele, que saem dos vivos e passam a pendentes */
-static void cova(D3DResource *r, int cl, unsigned bytes) {
+static void cova(D3DTexture *r, int cl, unsigned bytes) {
     if (r == NULL) {
         return;
     }
@@ -639,11 +681,7 @@ extern "C" uint32_t GsD3d_Falta(uint32_t w, uint32_t h, int modo) {
 
 /* os bytes reais de uma textura do cache */
 extern "C" uint32_t GsD3d_TexBytes(GsTex tex) {
-    D3DSURFACE_DESC d;
-    if (tex == 0 || FAILED(((D3DTexture *)tex)->GetLevelDesc(0, &d))) {
-        return 0;
-    }
-    return tam_tex(d.Width, d.Height);
+    return tex == 0 ? 0 : ((const TexXg *)tex)->bytes;
 }
 
 /* O frontend descartou `n` texturas (`bytes`, a mais recente sem uso há `idade` quadros; `emUso` protegidas). O que a
@@ -707,7 +745,7 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
    O espaço já foi aberto pelo frontend (GsDraw_X360Abre); aqui só o piso é conferido de novo (as paletas vêm sem
    passar por lá, 1 KB cada). */
 static GsTex tex_create(uint32_t w, uint32_t h, int format, int levels) {
-    D3DTexture *t = NULL;
+    TexXg *t;
     unsigned bytes = tam_tex(w, h);
     (void)levels;
     if (format != GS_TEXFMT_RGBA8) {
@@ -719,22 +757,23 @@ static GsTex tex_create(uint32_t w, uint32_t h, int format, int levels) {
         sConta.semTextura++;
         return 0; /* (quem chamou conta o motivo) */
     }
-    if (FAILED(sDev->CreateTexture(w, h, 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
+    t = xg_cria(w, h, D3DFMT_LIN_A8B8G8R8);
+    if (t == NULL) {
         sConta.semTextura++;
         return 0;
     }
-    mem_cria(CL_TEX, bytes);
+    mem_cria(CL_TEX, t->bytes);
     sConta.texNovas++;
     return (GsTex)t;
 }
 
 static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int format, const void *px, uint32_t bytes) {
-    D3DTexture *t = (D3DTexture *)handle;
-    D3DLOCKED_RECT r;
+    TexXg *t = (TexXg *)handle;
     uint32_t y;
     (void)format;
     (void)bytes;
-    if (t == NULL || level != 0 || FAILED(t->LockRect(0, &r, NULL, 0))) {
+    /* (a textura acabou de ser criada: a GPU nunca a viu, o envio é direto no endereço, sem LockRect) */
+    if (t == NULL || level != 0) {
         free((void *)px);
         return 0;
     }
@@ -758,20 +797,18 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
         }
     }
     for (y = 0; y < h; y++) {
-        memcpy((BYTE *)r.pBits + y * r.Pitch, (const uint32_t *)px + y * w, w * 4);
+        memcpy((BYTE *)t->dados + y * t->pitch, (const uint32_t *)px + y * w, w * 4);
     }
-    t->UnlockRect(0);
     free((void *)px);
     return 1;
 }
 
 static void tex_destroy(GsTex tex) {
-    D3DTexture *t = (D3DTexture *)tex;
-    D3DSURFACE_DESC d;
+    TexXg *t = (TexXg *)tex;
     if (t == NULL) {
         return;
     }
-    cova(t, CL_TEX, SUCCEEDED(t->GetLevelDesc(0, &d)) ? tam_tex(d.Width, d.Height) : 0);
+    cova(&t->cab, CL_TEX, t->bytes);
 }
 
 /* só as paletas (clut_texture) perguntam: o texture_get do 360 abre espaço por GsDraw_X360Abre */
@@ -780,18 +817,13 @@ static GsTex white_tex(void) { return (GsTex)sBranco; }
 
 /* textura tiled (destino de Resolve), zerada: o conteúdo de um alvo novo é o da limpeza */
 static D3DTexture *textura_alvo(void) {
-    D3DTexture *t = NULL;
-    D3DLOCKED_RECT r;
-    if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() ||
-        FAILED(sDev->CreateTexture(TAM, TAM, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
+    TexXg *t = NULL;
+    if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() || (t = xg_cria(TAM, TAM, D3DFMT_A8R8G8B8)) == NULL) {
         return NULL;
     }
     mem_cria(CL_ALVO, tam_alvo());
-    if (SUCCEEDED(t->LockRect(0, &r, NULL, 0))) {
-        memset(r.pBits, 0, (size_t)r.Pitch * TAM);
-        t->UnlockRect(0);
-    }
-    return t;
+    memset(t->dados, 0, t->bytes); /* (nova: a GPU nunca a viu) */
+    return &t->cab;
 }
 
 /* ---- alvos --------------------------------------------------------------------------------------------------- */
@@ -1073,8 +1105,7 @@ static void prof_tira(Prof *z, const Ret *r) {
 /* a textura de profundidade de um alvo e o cabeçalho que a lê como cor; 0: não coube */
 static int prof_cria(int i, int abre) {
     Prof *z = &sProf[i];
-    D3DTexture *t = NULL;
-    XGTEXTURE_DESC desc;
+    TexXg *t = NULL;
     UINT base = 0;
     if (abre) {
         const char *antes = (const char *)gGsD3dEtapa;
@@ -1082,15 +1113,14 @@ static int prof_cria(int i, int abre) {
         GsDraw_X360Abre(TAM, TAM, MODO_ALVO); /* (mesmo tamanho de um alvo: 4 MB) */
         gGsD3dEtapa = antes;
     }
-    if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() ||
-        FAILED(sDev->CreateTexture(TAM, TAM, 1, 0, D3DFMT_D24S8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
+    if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() || (t = xg_cria(TAM, TAM, D3DFMT_D24S8)) == NULL) {
         return 0;
     }
     mem_cria(CL_PROF, tam_alvo());
-    XGGetTextureDesc(t, 0, &desc);
-    XGGetTextureLayout(t, &base, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0);
-    XGSetTextureHeader(TAM, TAM, 1, 0, D3DFMT_A8B8G8R8, (D3DPOOL)0, base, 0, desc.RowPitch, &z->cor, NULL, NULL);
-    z->tex = t;
+    /* (nova, como a do CreateTexture: o conteúdo só vale depois do primeiro Resolve; `conteudo` vazio até lá) */
+    XGGetTextureLayout(&t->cab, &base, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0);
+    XGSetTextureHeader(TAM, TAM, 1, 0, D3DFMT_A8B8G8R8, (D3DPOOL)0, base, 0, t->pitch, &z->cor, NULL, NULL);
+    z->tex = &t->cab;
     z->conteudo.x0 = z->conteudo.x1 = 0;
     return 1;
 }
@@ -1287,27 +1317,18 @@ static void entra_na_edram(int i, int usaZ) {
 /* Quantas palavras de a e b são iguais: inteiras, sem o byte baixo e sem o alto (qual dos dois é o stencil na memória
    não importa aqui: o modo 2 não restaura o stencil); nz: quantas de a não são zero (o padrão foi mesmo escrito). */
 static void prof_compara(D3DTexture *a, D3DTexture *b, unsigned c[5]) {
-    D3DLOCKED_RECT ra, rb;
+    const TexXg *xa = (const TexXg *)a, *xb = (const TexXg *)b; /* (do prof_cria, pelo XG; quem chama parou a GPU) */
     unsigned n, k;
     c[0] = c[1] = c[2] = c[3] = c[4] = 0;
-    if (FAILED(a->LockRect(0, &ra, NULL, D3DLOCK_READONLY))) {
-        return;
-    }
-    if (FAILED(b->LockRect(0, &rb, NULL, D3DLOCK_READONLY))) {
-        a->UnlockRect(0);
-        return;
-    }
-    n = (unsigned)ra.Pitch / 4 * TAM;
+    n = xa->pitch / 4 * TAM;
     c[4] = n;
     for (k = 0; k < n; k++) {
-        unsigned x = ((const unsigned *)ra.pBits)[k], y = ((const unsigned *)rb.pBits)[k];
+        unsigned x = ((const unsigned *)xa->dados)[k], y = ((const unsigned *)xb->dados)[k];
         c[0] += x == y;
         c[1] += (x & 0xFFFFFF00u) == (y & 0xFFFFFF00u);
         c[2] += (x & 0x00FFFFFFu) == (y & 0x00FFFFFFu);
         c[3] += x != 0;
     }
-    b->UnlockRect(0);
-    a->UnlockRect(0);
 }
 
 /* o tempo da GPU de `vezes` chamadas de f (com a GPU parada antes e depois), em ms por chamada */
@@ -1375,7 +1396,7 @@ static void prof_autoteste(void) {
     if (!prof_cria(MAX_TARGETS - 1, 0)) {
         Diario_Escrever("gs_d3d: ERRO: profundidade: as texturas do autoteste não foram criadas; desligada");
         pad->Release();
-        za.tex->Release();
+        xg_libera(za.tex); /* (nunca usada pela GPU) */
         sMem.vivos[CL_PROF] -= tam_alvo();
         sMem.nVivos[CL_PROF]--;
         return;
@@ -1445,8 +1466,10 @@ static void prof_autoteste(void) {
                     tam_alvo() >> 10);
     za.cor.BlockUntilNotBusy();
     zb.cor.BlockUntilNotBusy();
-    za.tex->Release();
-    zb.tex->Release();
+    za.tex->BlockUntilNotBusy(); /* (o Release do D3D esperava a GPU; o recurso do XG espera aqui) */
+    zb.tex->BlockUntilNotBusy();
+    xg_libera(za.tex);
+    xg_libera(zb.tex);
     pad->Release();
     sMem.vivos[CL_PROF] -= 2 * tam_alvo();
     sMem.nVivos[CL_PROF] -= 2;
@@ -1466,11 +1489,12 @@ static unsigned env_num(const char *nome, unsigned padrao) {
 }
 
 /* Os ajustes da memória (o único lugar com os valores), os buffers fixos do gs_draw.c e uma calibração: o que o
-   dwAvailPhys mede ao criar texturas pequenas e médias contra o que tam_tex conta (o alinhamento real do D3D). */
+   dwAvailPhys mede ao criar texturas pequenas e médias contra o que tam_tex conta (o alinhamento real); desde a etapa 2 do
+   degrau 2, pelo mesmo caminho das texturas do jogo (xg_cria). */
 static void mem_init(void) {
     static const UINT lado[2] = {8, 256};
     static const int quantas[2] = {64, 16};
-    static D3DTexture *teste[64];
+    static TexXg *teste[64];
     int k, i;
     sMem.pisoMb = env_num("BT3_MEM_PISO_MB", 32);
     sMem.texTetoMb = env_num("BT3_MEM_TEX_MB", 128);
@@ -1490,16 +1514,12 @@ static void mem_init(void) {
     for (k = 0; k < 2; k++) {
         unsigned antes = mem_mede(), depois, feitas = 0;
         for (i = 0; i < quantas[k]; i++) {
-            teste[i] = NULL;
-            if (SUCCEEDED(sDev->CreateTexture(lado[k], lado[k], 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &teste[i], NULL))) {
-                feitas++;
-            }
+            teste[i] = xg_cria(lado[k], lado[k], D3DFMT_LIN_A8B8G8R8);
+            feitas += teste[i] != NULL;
         }
         depois = mem_mede();
         for (i = 0; i < quantas[k]; i++) {
-            if (teste[i] != NULL) {
-                teste[i]->Release(); /* (nunca usadas pela GPU) */
-            }
+            xg_libera((D3DTexture *)teste[i]); /* (nunca usadas pela GPU; NULL não faz nada) */
         }
         Diario_Escrever("gs_d3d: calibração: %u texturas de %ux%u: contadas %u KB, medidas %d KB pelo dwAvailPhys",
                         feitas, lado[k], lado[k], feitas * (tam_tex(lado[k], lado[k]) >> 10), ((int)antes - (int)depois) / 1024);
@@ -1767,7 +1787,6 @@ static void captura(int alvo) {
     static unsigned char ppm[16 + 640 * 448 * 3];
     static const char cab[] = "P6\n640 448\n255\n";
     char nome[64];
-    D3DLOCKED_RECT r;
     HANDLE h;
     DWORD n;
     RECT ret;
@@ -1789,12 +1808,9 @@ static void captura(int alvo) {
     sDev->SetTexture(1, NULL);
     esquece_estado();
     sDev->BlockUntilIdle();
-    if (FAILED(sAlvos[alvo].tex->LockRect(0, &r, NULL, D3DLOCK_READONLY))) {
-        return;
-    }
+    /* (a textura do alvo é do XG: lida direto no endereço, com a GPU parada) */
     ret.left = 0; ret.top = 0; ret.right = fbw; ret.bottom = 448;
-    XGUntileSurface(linear, 640 * 4, NULL, r.pBits, TAM, TAM, &ret, 4);
-    sAlvos[alvo].tex->UnlockRect(0);
+    XGUntileSurface(linear, 640 * 4, NULL, ((const TexXg *)sAlvos[alvo].tex)->dados, TAM, TAM, &ret, 4);
     memcpy(ppm, cab, sizeof(cab) - 1);
     o = ppm + sizeof(cab) - 1;
     for (y = 0; y < 448; y++) {
