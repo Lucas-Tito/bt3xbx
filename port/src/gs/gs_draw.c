@@ -3360,7 +3360,13 @@ void GsGpu_InterpFlush(void) { /* (the name Port_VBlank knew it by) */
 #define RET_VU_IDX (256u << 10)
 #define RET_VU_UNI 4096u
 #define RET_DRAWS 8192u
-extern double gGsVu1Ms; /* gs_vu1.c */
+#ifdef PORT_X360
+extern double gGsVu1Ms; /* gs_vu1.c (só no 360) */
+#define VU1_MS gGsVu1Ms
+#else
+static double sVu1MsZero; /* (fora do 360 o gs_vu1.c não mede) */
+#define VU1_MS sVu1MsZero
+#endif
 static GsQuadro sQuadroVivo;
 const GsQuadro *gsQuadro = &sQuadroVivo;
 static int sDividido;
@@ -3417,7 +3423,7 @@ static void backend_frame_end(void) {
     q->texCount = gsTexCount;
     q->skipped = gsSkipped;
     q->native = gsNative;
-    q->vu1Ms = gGsVu1Ms;
+    q->vu1Ms = VU1_MS;
     q->soltas = NULL;
     q->soltaCount = 0;
     q->vivo = 1;
@@ -3628,8 +3634,8 @@ static void desenho_entrega(void) {
     sRetrato.texCount = gsTexCount;
     sRetrato.skipped = gsSkipped;
     sRetrato.native = gsNative;
-    sRetrato.vu1Ms = gGsVu1Ms;
-    gGsVu1Ms = 0.0;
+    sRetrato.vu1Ms = VU1_MS;
+    VU1_MS = 0.0;
     sRetrato.soltas = sSoltas[sSoltaPend];
     sRetrato.soltaCount = sSoltaN[sSoltaPend];
     sSoltaPend ^= 1;
