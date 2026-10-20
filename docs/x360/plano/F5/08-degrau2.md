@@ -224,3 +224,111 @@ até ali.
 
 Os recursos do XG funcionam na GPU (texturas, alvos e profundidades), a cerca deles vale (o descarte soltou 409 texturas sem
 espera e sem queda), a conta da memória bate e a velocidade é a do degrau 1. A etapa 3 pode partir daqui.
+
+## Etapa 3: a divisão portável, provada no WSL
+
+Feita em 20/10/2026 no branch `f5-degrau2`, só no lado portável (`gs_core.c`, `gs_draw.c`, `gs_draw.h`, `gs_internal.h`) e no
+falso, tudo dentro de `#ifdef BT3_GS_ESPERAS` (o `gs_draw.h` passou a definir o símbolo com a mesma condição, para o falso, que
+não inclui o `gs_internal.h`, ver o mesmo `GsBackend`). Commits: `fa7883f` (o falso liga o `cleared`), `48075f6` (o retrato, a
+terceira thread e a fila), `582bbe7`, `56ca15b` e `e92cdb2` (correções: o `gGsVu1Ms` só existe no 360; os acentos das mensagens
+por escape octal para o `c89.py`; um aviso C4101 no 360). O `gs_d3d.cpp` não mudou: no 360 a chave é recusada.
+
+**O que mudou.**
+
+1. **O falso liga o `cleared` como o `gs_gpu.c`** (risco 2): no fim do quadro, todo alvo com desenho de primitivas (native 0,
+   a VU1 inclusive) ou com imagem enviada (native 100 e 101); as nativas 1 a 5 não. Linha de base nova da `x86gv` sem thread:
+   `f5_treino` 7.386 quadros, hash do jogo **`f76f0f6849b64629`** (era `70b6b1d1bb3f1d85`); `f5_duelo` 8.380 quadros,
+   **`08a98b6d05b8775a`** (era `29caae14a161459a`). O hash mudou: o caminho do alvo como textura passou a existir no WSL.
+2. **O retrato e a terceira thread.** `BT3_GS_DESENHO=1`, só com `BT3_GS_THREAD=1` (sem ela, uma linha no log e nada muda),
+   decidido no fim do `GsGpu_Init`. O `frameEnd` do backend lê o quadro por `gsQuadro` (`const GsQuadro *`, `gs_draw.h`): sem a
+   divisão ele aponta para as listas vivas com as contagens de agora (`vivo` 1, `dividido` 0) e o backend zera os contadores
+   como antes; com ela, para o retrato. Na entrega (`desenho_entrega`, no lugar do `frameEnd`, na gravação): espera o desenho
+   largar o retrato anterior, copia a parte usada de `gsDraws`, `gsVerts`, `gsVuVerts`, `gsVuIdx` e `gsVuUni` para uma área de
+   **10.304 KB** (8.192 desenhos, 32 Ki vértices de CPU, 128 Ki da VU, 256 Ki índices, 4.096 constantes, o dobro da seção 4.2
+   de `08-threads.md`), copia a tabela de alvos, o `gGsFrame`, `gGs.frame[0..1]`, o `GS_FBP_QUADRO`, `gsAnchor`, `gsTexCount`,
+   `gsSkipped`, `gsNative` e o `gGsVu1Ms` (zerado ali), liga o `cleared` da gravação, zera os contadores e acorda a thread de
+   desenho. Um quadro que não cabe vai sem cópia: o retrato aponta para as listas vivas e a gravação espera o desenho acabar
+   (em série). O `sPipes` não se copia: o desenho só usa índices abaixo da contagem da entrega, e a entrega é a barreira.
+   `BT3_INTERP` recusa a divisão (risco 10). O `Port_GsParar` para a thread de desenho depois da de gravação
+   (`gGsDesenhoParar`).
+3. **O `cleared` dividido** (riscos 1, 3 e 7). A gravação liga o seu na entrega, a partir da lista: 1 para todo alvo com
+   desenho não nativo, num vetor `limpa[]` que o backend pode ajustar na nova entrada `GsBackend.entrega` (chamada na gravação,
+   com o retrato pronto). O falso acrescenta os alvos com imagem enviada (a regra do `gs_gpu.c`); o `gs_d3d.cpp` não os liga
+   (conta `semFb`), e é por esse gancho que a etapa 4 trata o caso do `sVuIni ~0` (d3d 2932): a decisão do `vu_copia` sobre o
+   que cabe no par de buffers só depende da lista e da capacidade fixa (`sVuCapV`, `sVuCapI`), então a entrega pode fazer a mesma
+   conta e desligar a marca do alvo cujos desenhos são todos da VU que não cabem (ou levar o próprio `vu_copia` para a entrega,
+   com buffers do XG, a economia anotada acima). Na etapa 3 o 360 não divide, e o caso não existe no falso. O do desenho fica na
+   cópia da tabela que vai no retrato (`GsQuadro.targets`): o desenho nunca escreve na tabela viva, e não deve chamar o
+   `GsDraw_TargetGet` (escreve `last`; o `gs_d3d.cpp` 2966 e 3055 terão de buscar o `fbp` em `q->targets` na etapa 4). O
+   cache de texturas segue só da gravação.
+4. **A fila de liberação por quadro** (risco 4). Todo `texDestroy` do `gs_draw.c` (o `MAX_TEX`, o `clut_texture`, o
+   `GsDraw_X360Abre`) e a vaga de alvo reaproveitada (`GsDraw_TargetGet`, no lugar do `targetDrop`) passam por `solta_pede`:
+   sem a divisão, direto ao backend como antes; com ela, `GsBackend.soltaPede` na gravação (o falso mistura no hash o mesmo que o
+   `texDestroy` e o `targetDrop` misturavam, no mesmo ponto) e um item `{tex, alvo, quadro}` numa lista que viaja com o retrato
+   do quadro em que foi pedido; o desenho chama `GsBackend.solta` de cada item depois de desenhar esse quadro. O falso envenena a
+   textura solta (um mapa de bits fixo, sem `realloc`) e conta todo desenho que a use: a linha `gpu_falso: N desenhos com
+   textura já solta`, que o `divergencias.py` passou a exigir 0. Para a vaga de alvo a etapa 4 terá de, no `soltaPede`, tirar as
+   texturas da vaga (o `targetEnsure` seguinte cria as novas) e soltá-las no `solta`.
+5. **O falso como desenho:** lê tudo pelo `gsQuadro`, faz as seções depois da `S_TEX` num hash próprio, e recebe na entrega o
+   que a gravação segue mudando (a `S_TEX` fechada no mesmo ponto, `sTexNovas`, `sPipeCount`, `gGsBytes` e o hash normal dos
+   desenhos, que lê o `sConteudo`), o risco 11.
+6. **Chaves só de teste**, nas builds `--gpu` (o `headless.py` passou a compilar o `gs_draw.c` com `-DBT3_GPU_FALSO`):
+   `BT3_GS_DESENHO_ATRASO_US` (o desenho dorme antes de desenhar) e `BT3_GS_TEX_MAX=N` (o cache "cheio" com N texturas, para a
+   varredura soltar texturas do quadro anterior: sem ela nenhum roteiro solta textura que o desenho ainda use, e a fila não se
+   prova; no `f5_treino` sem ela não há nenhum pedido de soltar).
+7. **O 360:** `BT3_GS_DESENHO=1` é recusado com a linha `gs: BT3_GS_DESENHO=1 recusado: o desenho numa terceira thread no 360 é
+   a etapa 4 do degrau 2; segue o degrau 1` no `bt3xbx.log`. Sem a chave o caminho é o da etapa 2 (o `backend_frame_end` só
+   preenche o `GsQuadro` vivo antes do `frameEnd`, que o `gs_d3d.cpp` não lê).
+
+**As provas na x86 de teste (`x86gv`, WSL).** Base: a mesma build sem thread. Rodadas com `BT3_GS_RACE=1`; t1 é o degrau 1
+(`BT3_GS_THREAD=1` sem o desenho), d0, d5 e d20 a divisão com a gravação atrasada em 0, 5 e 20 ms, r5 e r20 a divisão com o
+desenho atrasado em 5 e 20 ms; tr20 é a divisão com `BT3_GS_TEX_MAX=256` e o desenho atrasado 20 ms, contra a base com o mesmo
+`BT3_GS_TEX_MAX`. Commit `582bbe7` (tr20 do `f5_duelo` refeito no `e92cdb2`).
+
+| Roteiro | Casos | Quadros diferentes | `race:` | Texturas usadas depois de soltas | Hash do jogo |
+|---|---|---:|---:|---:|---|
+| `f5_treino` (7.386) | t1, d0, d5, d20, r5, r20 | 0 em todos | 0 | 0 | `f76f0f6849b64629` em todos |
+| `f5_duelo` (8.380) | t1, d0, d5, d20, r5, r20 | 0 em todos | 0 | 0 | `08a98b6d05b8775a` em todos |
+| `f5_treino` | tr20 (3.694 pedidos de soltar) | 0 | 0 | 0 | `75d7f76b58fea039`, o da base com o mesmo `BT3_GS_TEX_MAX` |
+| `f5_duelo` | tr20 (4.906 pedidos de soltar) | 0 | 0 | 0 | `ee6b3bc673e9f8aa`, idem |
+
+`divergencias.py` saiu com 0 em todos (os dois contadores de quadros iguais no fim). Nenhum quadro deixou de caber no retrato.
+O maior quadro: `f5_treino` 2.472 desenhos, 9.312 vértices de CPU, 48.481 da VU, 117.621 índices, 2.235 constantes; `f5_duelo`
+2.473, 13.125, 53.618, 128.907 e 2.253 (desenhos e constantes acima dos 2.454 e 2.228 da etapa 6, todos com folha de mais de
+três vezes). A entrega inteira (cópia, tabela, `cleared`, zerar) levou em média 0,11 a 0,18 ms por quadro na x86 do WSL; no 360
+o estimado segue 1,5 a 2 ms (`08-threads.md`, seção 4.2), a medir na etapa 4. A `.text` da x86 plana continua
+`cc46fa0752f092fca305bc8bf2e2e54390763af0`.
+
+**As provas negativas** (commit `e92cdb2`; cada sabotagem por `python` com `assert` de que casou, desfeita por `git checkout`
+com a árvore limpa; o git do WSL terminou com 0 alterados):
+
+| Sabotagem | Resultado |
+|---|---|
+| A entrega sem a cópia (o retrato aponta para as listas vivas e a gravação não espera) | com o desenho atrasado 20 ms: 7.382 de 7.386 quadros diferentes no `f5_treino` e 8.374 de 8.380 no `f5_duelo`; **sem atraso (d0), 0 nos dois**: o desenho do falso é rápido demais para a corrida aparecer, a chave de atraso é o que a mostra |
+| A liberação sem a fila (o `solta` chamado já no pedido, na gravação) | com `BT3_GS_TEX_MAX=256` e o desenho atrasado 20 ms: 5.019 desenhos com textura já solta no `f5_treino` e 12.738 no `f5_duelo` (as listas iguais; o `divergencias.py` sai com 1 pela contagem); **sem o `BT3_GS_TEX_MAX`, 0**: nenhum roteiro solta textura que o desenho ainda use |
+| O `cleared` ligado pelo desenho (a gravação não liga o seu; o falso liga o da tabela viva) | com o desenho atrasado 5 ou 20 ms: 1 quadro diferente em cada roteiro (o 4.071 do `f5_treino`, o 4.137 do `f5_duelo`; seções 2 e 3, desenhos e vértices de CPU); sem atraso, 0 |
+
+**A build do 360** (`build_f2.sh`, commit `e92cdb2`): 317 de 317 fontes sem erro, avisos por fonte iguais aos da main (só os dois
+C4090 de sempre no `gs_draw.c`), os mesmos 103 stubs, `default.dat` `6d30baaf87b1177fb2359a855f8befc0` e `default.swap`
+`a7cf723fbfaea860fcc3707ad288e755`, iguais; `default.xex` `2fc2041c945da4a1e4344c5e9e49801a`. Não houve rodada no console nesta
+etapa: sem a chave, o 360 roda o caminho da etapa 2.
+
+**A PPC (serviço `claude-d2e3` no WSL, disparado sem esperar).** O script `~/provas-degrau2-e3.sh` (usuário `codex`; fica só
+no WSL) faz, em série: a build `ppcg` e a x86 plana; a pasta de dados de cada roteiro só pelo passo do
+`roteiros.sh` que a gera (os arquivos que a rodada lê, pelo `dprintf` `LEU` da x86 sob o gdb, convertidos pelo `conv_tool
+--saida`; sem o rastreio e sem o mapa, que só conferem); e, nos dois roteiros, `vu1_perfil.sh lista ppc` da base sem thread e da
+divisão (`BT3_GS_THREAD=1 BT3_GS_DESENHO=1 BT3_GS_RACE=1`) com a gravação atrasada em 0 e 20 ms e com o desenho atrasado em
+20 ms, e o `divergencias.py` de cada par. Saída em `~/provas-degrau2-e3.log`, logs em `~/provas-degrau2-e3/`.
+
+**Como ler o resumo** (`~/provas-degrau2-e3.resumo`): a linha `início` (commit `e92cdb2` e 0 alterados); `build ppcg`; `dados
+ROTEIRO` (arquivos lidos e convertidos; um `AVISO` se a x86 sob o gdb não chegou ao fim); `base ROTEIRO` (quadros, hash do jogo
+da PPC e `0 desenhos com textura já solta`); uma linha **`OK`** ou **`FALHA`** por par (seis no total), com os quadros comuns e
+os diferentes, as texturas usadas depois de soltas e os dois hashes; os tempos de cada rodada; e `FIM`. A etapa vale na PPC com
+seis `OK`. O hash da base da PPC não precisa ser o da x86 (no degrau 1 o do `f5_duelo` já era outro, `b65001fe18962dda`): o
+critério é o par. Se a PPC parar na guarda por um arquivo que o `LEU` não listou, base e divisão param juntas e a linha diz
+`SEM a linha final`: aí a pasta precisa do passo inteiro do `roteiros.sh` (o rastreio).
+
+**O que fica para a etapa 4:** o `gs_d3d.cpp` lendo pelo `gsQuadro` (as leituras de `gsDraws`, `gsVerts`, `gsVu*`, `gsTargets`,
+`gGsFrame`, `GS_FBP_QUADRO` e `gGsVu1Ms` do inventário viram `q->`), sem zerar contadores com `dividido`; o `entrega` (o
+`sVuIni ~0`, os pedidos de alvo), o `soltaPede` e o `solta` (a cova); o `cleared` e o conteúdo dos alvos persistentes do lado do
+desenho; a thread dona do dispositivo, o `Present`, a Guide, a saída e a queda; e tirar a recusa do `divisao_decide`.

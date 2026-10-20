@@ -1442,3 +1442,27 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Área estática que recebe dados de quadword: alinhe pelo tipo, não por `aligned`.** O `uint8_t sCopia[]` da cópia dos REF não tinha
   alinhamento garantido no `cl` (o `Gs_Gif` lê em 8 bytes; no Xenon o não alinhado pode falhar). E o `__attribute__((aligned(N)))` não passa
   no `c89.py` num fonte com acentos (a posição do `clang` é em bytes, o texto em caracteres: "aligned sem valor"); um vetor de `uint64_t` resolve.
+
+### A divisão entre gravação e desenho (F5, etapa 8, degrau 2, etapa 3, `plano/F5/08-degrau2.md`)
+
+- **O `c89.py` conta as posições do AST em caracteres e o `clang` em bytes: todo literal de string com acento desloca as
+  reescritas que vêm depois no mesmo fonte.** Não é só o `aligned` do degrau 1: seis mensagens novas com acento no `gs_draw.c`
+  puseram o `{` da declaração depois de comando do `GsGpu_FrameEnd` nove caracteres adiante (`uint64_t { t0 = ...`) e o `cl`
+  recusou o fonte. Os comentários não contam (o `clang -E` os tira). Nos fontes que o `c89.py` prepara, acento em string vai por
+  escape octal (`"divis\303\243o"`), ou a mensagem sai sem acento. Um deslocamento que ainda compile seria um erro silencioso:
+  depois de mexer em string de um desses fontes, olhe o `.c` gerado em `build/x360/f2/c89` perto das reescritas.
+- **Na build sem janela, símbolo que não existe vira stub, e escrever nele cai.** O `gGsVu1Ms` só existe no 360 (`gs_vu1.c`,
+  `#ifdef PORT_X360`); a entrega o zerava e a `x86gv` caiu no primeiro quadro, com o ligador calado. O sinal é a contagem de
+  stubs subir (104 para 105): compare a linha `N stubs` do `headless.py` com a de antes a cada build.
+- **A prova de uma fila de liberação precisa de liberação que a use.** Nos dois roteiros nenhuma textura solta é do quadro que o
+  desenho ainda desenha (no `f5_treino`, nenhum pedido de soltar): soltar sem a fila passa limpo. Com o cache pequeno de
+  propósito (`BT3_GS_TEX_MAX=256`, só nas builds `--gpu`) a varredura solta texturas do quadro anterior, e a sabotagem aparece
+  como milhares de desenhos com textura já solta.
+- **Na divisão, o atraso que mostra a corrida é o do desenho, não o da gravação.** A entrega sem a cópia e o `cleared` ligado pelo
+  desenho saíram limpos sem atraso (o desenho do falso termina antes de a gravação chegar lá); com `BT3_GS_DESENHO_ATRASO_US`
+  de 5 ou 20 ms, falharam. Cada prova negativa de uma thread nova precisa da chave que atrasa essa thread.
+- **No WSL, processo deixado por `nohup ... &` dentro do `wsl -- bash -s` morre quando a sessão do ssh fecha.** Use
+  `setsid nohup ... < /dev/null &` (ou um serviço). E `git fetch BUNDLE ramo:ramo` recusa o ramo que está em uso: `git fetch
+  BUNDLE ramo && git reset --hard FETCH_HEAD`, só com a árvore limpa.
+- **Antes de mandar commit novo ao WSL, `pgrep` pelos trabalhos do anterior.** Um `reset --hard` e uma build nova no meio de uma
+  rodada põem dois emuladores juntos e podem trocar o binário de uma rodada em andamento; custou refazer a última da matriz.
