@@ -309,12 +309,18 @@ static void fake_frame_end(void) {
     }
     sTotal = (sTotal ^ quadro) * 1099511628211ull;
     if (getenv("BT3_GPU_LISTA") != NULL) {
-        fprintf(stderr, "gpu_falso: quadro %u lista %016llx desenhos %u vértices %u vu %u/%u/%u texturas %u secoes", q.quadro,
-                (unsigned long long)quadro, q.drawCount, q.vertCount, q.vuVertCount, q.vuIdxCount, q.vuUniCount, novas);
+        /* A linha inteira numa escrita só: com a divisão (degrau 2, etapa 3) quem a escreve é a thread de desenho, e na
+           PPC a do jogo escreve ao mesmo tempo as linhas "LEU arquivo" (BT3_LEU=1) no mesmo arquivo; com um fprintf por
+           seção, uma delas caía no meio da linha e o divergencias.py via quadro faltando ou com a lista diferente. */
+        char linha[256];
+        int n = snprintf(linha, sizeof(linha), "gpu_falso: quadro %u lista %016llx desenhos %u vértices %u vu %u/%u/%u texturas %u secoes",
+                         q.quadro, (unsigned long long)quadro, q.drawCount, q.vertCount, q.vuVertCount, q.vuIdxCount, q.vuUniCount,
+                         novas);
         for (i = 0; i < S_N; i++) {
-            fprintf(stderr, " %08x", (unsigned)(sSecao[i] >> 32 ^ sSecao[i]));
+            n += snprintf(linha + n, sizeof(linha) - (size_t)n, " %08x", (unsigned)(sSecao[i] >> 32 ^ sSecao[i]));
         }
-        fprintf(stderr, "\n");
+        snprintf(linha + n, sizeof(linha) - (size_t)n, "\n");
+        fputs(linha, stderr);
     }
     if (getenv("BT3_GPU_BYTES") != NULL) { /* (F5, degrau 1) o que a cadeia leva por quadro: gs_core.c, bytes_walk */
         fprintf(stderr, "gpu_falso: bytes quadro %u tags %u lista %u externa %u ref %u refunico %u imagem %u vu %u/%u/%u\n", q.quadro,
