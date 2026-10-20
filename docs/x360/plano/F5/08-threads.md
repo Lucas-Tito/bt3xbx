@@ -602,10 +602,34 @@ os 30 fps: o degrau 2 e o corte de W e V seguem (seção 5).
 
 **Roteiro da rodada** (o `.xex` do commit final com o `default.dat` e o `default.swap` da mesma build, como na rodada de 18/10):
 
-- **Abertura 1**, `BT3_GS_THREAD=1` ligado: o `ambiente.txt` de sempre (`BT3_ISO`, `BT3_GS=gpu`, `BT3_MEM_PISO_MB=32`, `BT3_MEM_TEX_MB=128`,
+- **Abertura 1**, `BT3_GS_THREAD=1` ligado: o `ambiente.txt` de sempre (`-BT3_DEMO`, `BT3_ISO`, `BT3_GS=gpu`, `BT3_SAVES`, `BT3_MEM_PISO_MB=32`, `BT3_MEM_TEX_MB=128`,
   `BT3_VU1=1`, `BT3_VU_VERTS=98304`, `BT3_SHOT=600`) mais `BT3_GS_THREAD=1`. Menus até o Duelo, Goku contra Kuririn, estágio 5, uns 60 s de
   luta, **abrir a Guide uma vez no menu e uma vez durante a carga da luta**, sair pela pausa.
 - **Abertura 2**, desligado: o mesmo, sem a linha `BT3_GS_THREAD` (ou com `BT3_GS_THREAD=0`), uns 30 s de luta: a comparação
   com a de antes (75,7 ms). Baixar o `bt3xbx.log` e o `saida.txt` entre as duas.
 - O que ler: na abertura 1, `thread de gravação do GS (BT3_GS_THREAD) na thread de hardware 0` e `descarte ligado`; o quadro inteiro
   da luta; nenhuma linha `vigia` com a gravação "gravando" por mais de 3 s; no fim, `saída do jogo com código 0`.
+
+#### A rodada no console (20/10/2026) [medido]
+
+A build do `eb0b8fd` (o degrau 1 mais a área de cópia alinhada em 8 bytes; `.xex` `1d23a2a05a9f56f4d8418386bb387302`, `.dat` e
+`.swap` iguais aos da etapa 7), a primeira compilação da parte do 360: 317 de 317 fontes sem erro nem aviso, os 103 stubs de sempre.
+Duelo, Goku contra Kuririn, estágio 5. A primeira tentativa rodou a luta de demonstração (o `ambiente.txt` sem `-BT3_DEMO`, que a build
+sem janela liga por padrão) e saiu com código 0: a parada da thread de gravação e a volta do dispositivo para a main funcionaram.
+
+| | Abertura 1, `BT3_GS_THREAD=1` | Abertura 2, sem a thread | 18/10, sem a thread |
+|---|---:|---:|---:|
+| Luta, passos (mediana, p95) | **48,3 ms**, 72,9 | 72,3 ms, 91,0 | |
+| Luta, quadro inteiro do `gs_d3d` (trechos de 60) | 50,0 a 62,0 ms | 65,9 a 89,9 ms | 75,7 ms |
+| Menus | 16,6 ms (60 fps) | 16,6 ms | 16,6 ms |
+
+- **A luta ficou um terço mais curta** (mediana de 72,3 para 48,3 ms, de uns 14 para uns 21 quadros por segundo), melhor que a
+  estimativa (59 a 60 ms): com a thread, a gravação da VU1 da luta caiu para 16 a 25 ms por quadro (26,3 em 18/10) e o fim do quadro
+  ficou em 9 a 13,5 ms. Ainda longe dos 33,37 ms: o degrau 2 e o corte de W e V seguem (seção 5).
+- **A Guide abriu e fechou no menu e durante a carga da luta**, sem lixo na tela (a repetição do último quadro pela thread de
+  gravação). Nenhuma linha `vigia`.
+- **Thread de hardware 0 e descarte ligado**, como previsto. O descarte trabalhou: 4 pressões, 649 texturas (66 MB), o mínimo de
+  memória livre visto em 31 MB (piso 32), sem textura branca.
+- **Não exercitado:** a saída pela pausa até o fim do jogo (as duas aberturas voltaram pela Guide; a demo cobriu a saída com código 0)
+  e uma queda com a thread ligada.
+
