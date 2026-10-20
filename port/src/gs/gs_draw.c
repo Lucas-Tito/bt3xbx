@@ -3534,7 +3534,9 @@ static void desenho_parar(void) {
 
 static void divisao_decide(void) {
     const char *e = getenv("BT3_GS_DESENHO");
+#ifndef PORT_X360
     int interp;
+#endif
     if (e == NULL || strcmp(e, "0") == 0) {
         return;
     }
@@ -3577,7 +3579,6 @@ static void divisao_decide(void) {
     fprintf(stderr, "gs: BT3_GS_DESENHO=1: o desenho numa terceira thread, retrato de %u KB\n",
             (unsigned)((RET_DRAWS * sizeof(GsDraw) + RET_VERTS * sizeof(Vtx) + RET_VU_VERTS * 48u + RET_VU_IDX * 4u +
                         RET_VU_UNI * sizeof(Vu0Uniform)) >> 10));
-    (void)interp;
 #endif
 }
 
