@@ -1207,6 +1207,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   custou rodadas de folhas de contato. A volta (recodificar e comparar byte a byte) vale como verificador de
   que se pode trocar a imagem no lugar; viu-se falhar com um pixel mudado.
 
+- **Posição de ferramenta externa: confira a unidade (bytes ou caracteres) antes de fatiar o texto.** O `clang` dá
+  no AST em JSON deslocamentos em bytes do arquivo; o `c89.py` aplicava as reescritas sobre o `str` do Python, em
+  caracteres. Cada acento (dois bytes em UTF-8) numa string ou num comentário antes de uma reescrita a deslocava de
+  um: viu-se como "aligned sem valor" e como o `cl` recusando o `gs_draw.c`, mas o caso perigoso é o silencioso (um
+  `for (int i...` depois de `"ação"` virou `for ({  = 0; i <; int in; ...`, e outro deslocamento podia formar C
+  válido e errado). A correção: o `rebaixar` trabalha na vista de um caractere por byte
+  (`encode("utf-8").decode("latin-1")`, e o inverso no fim), e o arquivo do AST sai nos mesmos bytes. A foto dos 317
+  fontes antes e depois saiu idêntica: nenhum fonte da build tinha reescrita depois de um acento (os quatro com
+  acento no corpo, `gs_core`, `hl_passos`, `hl_roteiro` e `pc_plat_mc`, não tinham). O verificador
+  (fonte pequeno com `"ação"` antes de um `for` com declaração) foi visto falhando com o `c89.py` antigo.
+
 ---
 
 ## 7. Lista de passos para um port novo
@@ -1438,4 +1449,5 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   (`posix360.c`); sem a linha, o jogo abre direto na demo e sai com a tela verde. Copiar o bloco de uma nota antiga sem ela custou uma abertura.
 - **Área estática que recebe dados de quadword: alinhe pelo tipo, não por `aligned`.** O `uint8_t sCopia[]` da cópia dos REF não tinha
   alinhamento garantido no `cl` (o `Gs_Gif` lê em 8 bytes; no Xenon o não alinhado pode falhar). E o `__attribute__((aligned(N)))` não passa
-  no `c89.py` num fonte com acentos (a posição do `clang` é em bytes, o texto em caracteres: "aligned sem valor"); um vetor de `uint64_t` resolve.
+  no `c89.py` antigo num fonte com acentos (a posição do `clang` é em bytes, o texto em caracteres: "aligned sem valor", corrigido
+  depois, seção 6); um vetor de `uint64_t` resolve.

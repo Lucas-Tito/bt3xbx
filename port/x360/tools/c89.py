@@ -92,7 +92,7 @@ def grupos():
 def preprocessar(src, f, flags):
     cmd = [CLANG, "-E", "--target=powerpc-unknown-unknown", "-m32", "-fsigned-char", "-nostdinc",
            "-isystem", str(ROOT / "port/x360/shim"), "-fno-builtin"] + DEFS + flags + [str(src)]
-    r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+    r = subprocess.run(cmd, capture_output=True, encoding="utf-8", cwd=ROOT)
     if r.returncode:
         raise RuntimeError(r.stderr.strip()[-600:])
     return r.stdout
@@ -142,12 +142,14 @@ void __sync_synchronize(void);
 
 
 def ast(texto):
-    """O AST JSON do clang do texto pré-processado (as posições são deslocamentos neste texto)."""
-    with tempfile.NamedTemporaryFile("w", suffix=".c", delete=False) as t:
-        t.write(texto)
+    """O AST JSON do clang do texto pré-processado. As posições são deslocamentos em BYTES do arquivo; texto vem na
+    vista de um caractere por byte (rebaixar), que volta aos mesmos bytes em latin-1."""
+    with tempfile.NamedTemporaryFile("wb", suffix=".c", delete=False) as t:
+        t.write(texto.encode("latin-1"))
     try:
         r = subprocess.run([CLANG, "--target=powerpc-unknown-unknown", "-m32", "-std=gnu89", "-fsigned-char",
-                            "-fsyntax-only", "-w", "-Xclang", "-ast-dump=json", t.name], capture_output=True, text=True)
+                            "-fsyntax-only", "-w", "-Xclang", "-ast-dump=json", t.name], capture_output=True,
+                           encoding="utf-8", errors="replace")
     finally:
         os.unlink(t.name)
     if not r.stdout:
@@ -214,7 +216,10 @@ EXPRS_TOPO = {"BinaryOperator", "CompoundAssignOperator", "CallExpr", "UnaryOper
 
 
 def rebaixar(texto):
-    """Reescreve o que o cl (C89) não aceita, com as posições que o AST do clang dá."""
+    """Reescreve o que o cl (C89) não aceita, com as posições que o AST do clang dá. O clang dá deslocamentos em
+    bytes; o texto UTF-8 fica, até o fim, na vista de um caractere por byte (latin-1), para cada deslocamento cair no
+    mesmo lugar do Python. Sem isso, um acento numa string ou num comentário desloca toda reescrita que vem depois."""
+    texto = texto.encode("utf-8").decode("latin-1")
     raiz = ast(texto)
     r = Reescrita(texto)
     pragmas = []
@@ -471,7 +476,7 @@ def rebaixar(texto):
     for m in re.finditer(r'\b__asm__\s*\(\s*"[A-Za-z_]\w*"\s*\)', texto):
         r.apaga(m.start(), m.end())
     defs = "".join("#define %s ((unsigned char *)0x%X)\n" % (n, ABSOLUTOS[n]) for n in sorted(absolutos))
-    return PRELUDIO + defs + "\n".join(sorted(set(pragmas))) + "\n" + r.aplica()
+    return PRELUDIO + defs + "\n".join(sorted(set(pragmas))) + "\n" + r.aplica().encode("latin-1").decode("utf-8")
 
 
 FMAX_LIT = re.compile(r'"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|(?<![\w.])(\d+\.\d*|\.\d+)[eE]\+?38[fF]\b')
@@ -500,7 +505,7 @@ def preparar(grupo, f, flags, ee, saida):
     texto = float_max(texto)
     texto = linhas(texto)
     nome = grupo + (str(f.relative_to(ROOT / "src")).replace("/", "_") if not grupo else f.name)
-    (saida / nome).write_text(texto)
+    (saida / nome).write_text(texto, encoding="utf-8")
     return nome
 
 
