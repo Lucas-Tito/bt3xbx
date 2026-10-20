@@ -3346,6 +3346,8 @@ void GsGpu_InterpFlush(void) { /* (the name Port_VBlank knew it by) */
 }
 
 #ifdef BT3_GS_ESPERAS
+/* (os acentos das mensagens vão por escape octal: o c89.py conta as posições do AST em caracteres e o clang em bytes, e
+   um literal com acento desloca toda reescrita que vem depois no mesmo fonte; guia, seção 6) */
 /* ------------------------------------------------------------------ (F5, etapa 8, degrau 2, etapa 3) a divisão
    BT3_GS_DESENHO=1 (só com BT3_GS_THREAD=1; recusada com BT3_INTERP e, até a etapa 4, no 360): o frameEnd do backend sai
    da thread de gravação para uma terceira thread. Na entrega (desenho_entrega, no lugar do frameEnd), a gravação espera o
@@ -3514,8 +3516,8 @@ void GsDraw_DesenhoResumo(void) {
     if (!sDividido) {
         return;
     }
-    fprintf(stderr, "gs: divisão: %u retratos, %u sem cópia (não couberam), %u pedidos de soltar; maior quadro %u desenhos, %u "
-                    "vértices, %u da VU, %u índices, %u constantes; entrega média %.3f ms, pior %.3f ms\n",
+    fprintf(stderr, "gs: divis\303\243o: %u retratos, %u sem c\303\263pia (n\303\243o couberam), %u pedidos de soltar; maior quadro %u desenhos, %u "
+                    "v\303\251rtices, %u da VU, %u \303\255ndices, %u constantes; entrega m\303\251dia %.3f ms, pior %.3f ms\n",
             sEntregas, sNaoCouberam, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
             sEntregas ? (double)sCopiaNs / sEntregas / 1e6 : 0.0, (double)sCopiaPior / 1e6);
 }
@@ -3537,20 +3539,20 @@ static void divisao_decide(void) {
         return;
     }
     if (!Port_GsComThread()) {
-        divisao_log("BT3_GS_DESENHO=1 sem BT3_GS_THREAD=1: ignorado, tudo na thread de gravação");
+        divisao_log("BT3_GS_DESENHO=1 sem BT3_GS_THREAD=1: ignorado, tudo na thread de grava\303\247\303\243o");
         return;
     }
 #ifdef PORT_X360
-    divisao_log("BT3_GS_DESENHO=1 recusado: o desenho numa terceira thread no 360 é a etapa 4 do degrau 2; segue o degrau 1");
+    divisao_log("BT3_GS_DESENHO=1 recusado: o desenho numa terceira thread no 360 \303\251 a etapa 4 do degrau 2; segue o degrau 1");
     return;
 #else
     interp = getenv("BT3_INTERP") != NULL ? atoi(getenv("BT3_INTERP")) : Port_Setting("interp", 0);
     if (interp > 0) {
-        divisao_log("BT3_GS_DESENHO=1 recusado com BT3_INTERP (o frameEnd roda várias vezes por quadro trocando as listas)");
+        divisao_log("BT3_GS_DESENHO=1 recusado com BT3_INTERP (o frameEnd roda v\303\241rias vezes por quadro trocando as listas)");
         return;
     }
     if (sBackend->soltaPede == NULL || sBackend->solta == NULL) {
-        divisao_log("BT3_GS_DESENHO=1 recusado: o backend não tem a fila de liberação");
+        divisao_log("BT3_GS_DESENHO=1 recusado: o backend n\303\243o tem a fila de libera\303\247\303\243o");
         return;
     }
     sRetDraws = (GsDraw *)malloc(RET_DRAWS * sizeof(GsDraw));
@@ -3559,14 +3561,14 @@ static void divisao_decide(void) {
     sRetVuIdx = (uint32_t *)malloc(RET_VU_IDX * sizeof(uint32_t));
     sRetVuUni = (Vu0Uniform *)malloc(RET_VU_UNI * sizeof(Vu0Uniform));
     if (sRetDraws == NULL || sRetVerts == NULL || sRetVuVerts == NULL || sRetVuIdx == NULL || sRetVuUni == NULL) {
-        divisao_log("BT3_GS_DESENHO=1 recusado: sem memória para o retrato");
+        divisao_log("BT3_GS_DESENHO=1 recusado: sem mem\303\263ria para o retrato");
         return;
     }
 #ifdef BT3_GPU_FALSO
     sDesAtrasoUs = getenv("BT3_GS_DESENHO_ATRASO_US") != NULL ? atoi(getenv("BT3_GS_DESENHO_ATRASO_US")) : 0;
 #endif
     if (pthread_create(&sDesenho, NULL, desenho_thread, NULL) != 0) {
-        divisao_log("BT3_GS_DESENHO=1 recusado: a thread de desenho não partiu");
+        divisao_log("BT3_GS_DESENHO=1 recusado: a thread de desenho n\303\243o partiu");
         return;
     }
     sDividido = 1;
