@@ -46,6 +46,19 @@ extern int gPortMenuMode;       /* headless.c: the menus are running */
 extern int gPortMusicPercent, gPortSePercent;
 
 static GsBackend *sBackend;
+#ifdef BT3_GS_ESPERAS
+#include <pthread.h>
+/* (degrau 2, etapa 3) o pedido de soltar uma textura ou o alvo de uma vaga: direto ao backend sem a divisão, pela fila com
+   ela (desenho_entrega, mais abaixo) */
+static void solta_pede(GsTex tex, int alvo);
+static void divisao_decide(void);
+static void backend_frame_end(void);
+#define BACKEND_FRAME_END() backend_frame_end()
+#define TEX_DESTROY(t) solta_pede((t), -1)
+#else
+#define TEX_DESTROY(t) sBackend->texDestroy(t)
+#define BACKEND_FRAME_END() sBackend->frameEnd()
+#endif
 
 /* The one window both back ends share: shape (aspect), full screen and display are the renderer's, not a
    back end's, so the settings window and F11 work the same whichever back end is running. */
@@ -174,7 +187,7 @@ int GsDraw_X360Abre(uint32_t w, uint32_t h, int modo) {
         /* fora do cache e do balde antes de soltar: nada fica apontando para o recurso */
         for (m = 0, i = 0; i < (uint32_t)gsTexCount; i++) {
             if (sX360Sai[i]) {
-                sBackend->texDestroy(sTex[i].tex);
+                TEX_DESTROY(sTex[i].tex);
             } else {
                 sTex[m++] = sTex[i];
             }
@@ -296,16 +309,28 @@ static GsTex texture_get(int ctx) {
         return gsWhite;
     }
 #endif
-    if (gsTexCount == MAX_TEX) {
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+    /* (degrau 2, etapa 3, só nas builds --gpu do WSL) BT3_GS_TEX_MAX=N: o cache "cheio" com N texturas, para a varredura
+       soltar texturas do quadro anterior, as que o desenho ainda pode estar desenhando (a prova da fila de liberação) */
+    static int texMax;
+    if (texMax == 0) {
+        texMax = getenv("BT3_GS_TEX_MAX") != NULL ? atoi(getenv("BT3_GS_TEX_MAX")) : MAX_TEX;
+        texMax = texMax < 64 ? 64 : texMax > MAX_TEX ? MAX_TEX : texMax;
+    }
+#define TEX_CHEIO (gsTexCount >= texMax)
+#else
+#define TEX_CHEIO (gsTexCount == MAX_TEX)
+#endif
+    if (TEX_CHEIO) {
         /* full: drop everything not used for two seconds (or, failing that, not used this frame) in one sweep */
         unsigned keep = gGsFrame > 120 ? gGsFrame - 120 : 0;
         int pass, n;
-        for (pass = 0; pass < 2 && gsTexCount == MAX_TEX; pass++, keep = gGsFrame) {
+        for (pass = 0; pass < 2 && TEX_CHEIO; pass++, keep = gGsFrame) {
             for (n = 0, i = 0; i < (uint32_t)gsTexCount; i++) {
                 if (sTex[i].last >= keep) {
                     sTex[n++] = sTex[i];
                 } else {
-                    sBackend->texDestroy(sTex[i].tex);
+                    TEX_DESTROY(sTex[i].tex);
                 }
             }
             gsTexCount = n;
@@ -457,7 +482,7 @@ static GsTex clut_texture(uint32_t cbp) {
         return 0;
     }
     if (sCluts[old].tex != 0) {
-        sBackend->texDestroy(sCluts[old].tex);
+        TEX_DESTROY(sCluts[old].tex);
     }
     upload = malloc(sizeof(px));
     memcpy(upload, px, sizeof(px));
@@ -541,7 +566,11 @@ int GsDraw_TargetGet(uint32_t fbp, int create) {
         if (slot < 0) {
             return -1;
         }
+#ifdef BT3_GS_ESPERAS
+        solta_pede(0, slot);
+#else
         sBackend->targetDrop(slot);
+#endif
     }
     sBackend->targetEnsure(slot);
     gsTargets[slot].fbp = fbp;
@@ -1420,6 +1449,9 @@ int GsGpu_Init(void) {
     gPortMusicPercent = Port_Setting("music", 100);
     gPortSePercent = Port_Setting("effects", 100);
     TexPack_Init();
+#ifdef BT3_GS_ESPERAS
+    divisao_decide();
+#endif
     return 1;
 }
 
@@ -3238,14 +3270,14 @@ static void interp_show(int step) {
             gsVerts = sInterpBlendVerts;
         }
         gsVuUni = sInterpBlend;
-        sBackend->frameEnd();
+        BACKEND_FRAME_END();
         gsVuUni = real;
         gsVerts = realVerts;
         interp_present_log('B');
         gInterpShown++;
     } else {
         interp_remember(); /* (only now: the in-between pictures were built from the previous tick's copy) */
-        sBackend->frameEnd();
+        BACKEND_FRAME_END();
         interp_present_log('R');
         scale_apply();
     }
@@ -3313,6 +3345,342 @@ void GsGpu_InterpFlush(void) { /* (the name Port_VBlank knew it by) */
     GsGpu_InterpPump(6, 0);
 }
 
+#ifdef BT3_GS_ESPERAS
+/* ------------------------------------------------------------------ (F5, etapa 8, degrau 2, etapa 3) a divisão
+   BT3_GS_DESENHO=1 (só com BT3_GS_THREAD=1; recusada com BT3_INTERP e, até a etapa 4, no 360): o frameEnd do backend sai
+   da thread de gravação para uma terceira thread. Na entrega (desenho_entrega, no lugar do frameEnd), a gravação espera o
+   desenho largar o retrato anterior, copia a parte usada das listas e os campos do quadro para o retrato (uma área só, com
+   o dobro dos máximos medidos: 08-threads.md, seção 4.2), liga o seu cleared, zera os contadores e segue com o quadro
+   seguinte. Um quadro que não cabe no retrato vai sem cópia: o desenho lê as listas vivas e a gravação espera ele acabar
+   (em série, como no degrau 1). Os pedidos de soltar (texturas, a vaga de um alvo) vão numa fila que viaja com o retrato
+   do quadro em que foram feitos: o desenho solta depois de ter desenhado esse quadro (o risco 4 do inventário,
+   08-degrau2.md). O sPipes do backend não se copia: só cresce, e a entrega é a barreira. */
+#define RET_VERTS (32u << 10)
+#define RET_VU_VERTS (128u << 10)
+#define RET_VU_IDX (256u << 10)
+#define RET_VU_UNI 4096u
+#define RET_DRAWS 8192u
+extern double gGsVu1Ms; /* gs_vu1.c */
+static GsQuadro sQuadroVivo;
+const GsQuadro *gsQuadro = &sQuadroVivo;
+static int sDividido;
+static GsQuadro sRetrato;
+static GsTarget sRetAlvos[MAX_TARGETS];
+static GsDraw *sRetDraws;
+static Vtx *sRetVerts;
+static float *sRetVuVerts;
+static uint32_t *sRetVuIdx;
+static Vu0Uniform *sRetVuUni;
+static GsSolta *sSoltas[2]; /* uma lista enche na gravação, a outra viaja com o retrato */
+static uint32_t sSoltaN[2], sSoltaCap[2];
+static int sSoltaPend;
+static pthread_t sDesenho;
+static pthread_mutex_t sDesLock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t sDesAcorda = PTHREAD_COND_INITIALIZER, sDesFeito = PTHREAD_COND_INITIALIZER;
+static int sDesTem, sDesPara;
+static unsigned sEntregas, sNaoCouberam, sSoltasPedidas;
+static uint32_t sMaior[5]; /* desenhos, vértices de CPU, da VU, índices, constantes: o maior quadro entregue */
+static uint64_t sCopiaNs, sCopiaPior;
+#ifdef BT3_GPU_FALSO
+static int sDesAtrasoUs = -1; /* BT3_GS_DESENHO_ATRASO_US: o desenho demora de propósito (teste, só nas builds --gpu) */
+#endif
+
+static void divisao_log(const char *msg) {
+#ifdef PORT_X360
+    extern void Diario_Escrever(const char *formato, ...);
+    Diario_Escrever("gs: %s", msg);
+#else
+    fprintf(stderr, "gs: %s\n", msg);
+#endif
+}
+
+/* sem a divisão: o quadro que o frameEnd lê são as listas vivas, com as contagens de agora */
+static void backend_frame_end(void) {
+    GsQuadro *q = &sQuadroVivo;
+    q->draws = gsDraws;
+    q->drawCount = gsDrawCount;
+    q->verts = gsVerts;
+    q->vertCount = gsVertCount;
+    q->vuVerts = gsVuVerts;
+    q->vuVertCount = gsVuVertCount;
+    q->vuIdx = gsVuIdx;
+    q->vuIdxCount = gsVuIdxCount;
+    q->vuUni = gsVuUni;
+    q->vuUniCount = gsVuUniCount;
+    q->targets = gsTargets;
+    q->targetCount = gsTargetCount;
+    q->quadro = gGsFrame;
+    q->frame[0] = gGs.frame[0];
+    q->frame[1] = gGs.frame[1];
+    q->fbp = GS_FBP_QUADRO;
+    q->anchor = gsAnchor;
+    q->texCount = gsTexCount;
+    q->skipped = gsSkipped;
+    q->native = gsNative;
+    q->vu1Ms = gGsVu1Ms;
+    q->soltas = NULL;
+    q->soltaCount = 0;
+    q->vivo = 1;
+    q->dividido = 0;
+    gsQuadro = q;
+    sBackend->frameEnd();
+}
+
+static void solta_pede(GsTex tex, int alvo) {
+    GsSolta *s;
+    if (!sDividido) {
+        if (alvo < 0) {
+            sBackend->texDestroy(tex);
+        } else {
+            sBackend->targetDrop(alvo);
+        }
+        return;
+    }
+    if (alvo >= 0) {
+        tex = sBackend->targetColor(alvo);
+    }
+    sBackend->soltaPede(tex, alvo);
+    sSoltasPedidas++;
+    if (sSoltaN[sSoltaPend] == sSoltaCap[sSoltaPend]) {
+        uint32_t cap = sSoltaCap[sSoltaPend] != 0 ? sSoltaCap[sSoltaPend] * 2 : 1024;
+        GsSolta *n = (GsSolta *)realloc(sSoltas[sSoltaPend], cap * sizeof(GsSolta));
+        if (n == NULL) { /* sem memória para a fila: o desenho acaba o retrato em andamento (o único que pode usar o que
+                            se solta: o quadro em gravação nunca pede o que ele mesmo usa) e solta-se já */
+            GsDraw_DesenhoEspera();
+            sBackend->solta(tex, alvo);
+            return;
+        }
+        sSoltas[sSoltaPend] = n;
+        sSoltaCap[sSoltaPend] = cap;
+    }
+    s = &sSoltas[sSoltaPend][sSoltaN[sSoltaPend]++];
+    s->tex = tex;
+    s->alvo = alvo;
+    s->quadro = gGsFrame;
+}
+
+static void *desenho_thread(void *arg) {
+    uint32_t i;
+    (void)arg;
+    pthread_mutex_lock(&sDesLock);
+    for (;;) {
+        while (!sDesTem && !sDesPara) {
+            pthread_cond_wait(&sDesAcorda, &sDesLock);
+        }
+        if (!sDesTem) {
+            break;
+        }
+        pthread_mutex_unlock(&sDesLock);
+#ifdef BT3_GPU_FALSO
+        if (sDesAtrasoUs > 0) { /* antes de desenhar: a gravação do quadro seguinte corre junto */
+            struct timespec ts;
+            ts.tv_sec = sDesAtrasoUs / 1000000;
+            ts.tv_nsec = (long)(sDesAtrasoUs % 1000000) * 1000L;
+            nanosleep(&ts, NULL);
+        }
+#endif
+        gsQuadro = &sRetrato;
+        sBackend->frameEnd();
+        for (i = 0; i < sRetrato.soltaCount; i++) {
+            sBackend->solta(sRetrato.soltas[i].tex, sRetrato.soltas[i].alvo);
+        }
+        pthread_mutex_lock(&sDesLock);
+        sDesTem = 0;
+        pthread_cond_broadcast(&sDesFeito);
+    }
+    pthread_mutex_unlock(&sDesLock);
+    return NULL;
+}
+
+void GsDraw_DesenhoEspera(void) {
+    if (!sDividido) {
+        return;
+    }
+    pthread_mutex_lock(&sDesLock);
+    while (sDesTem) {
+        pthread_cond_wait(&sDesFeito, &sDesLock);
+    }
+    pthread_mutex_unlock(&sDesLock);
+}
+
+/* (o falso o chama no resumo: o tamanho do maior quadro, quantos não couberam, o tempo da cópia) */
+void GsDraw_DesenhoResumo(void) {
+    if (!sDividido) {
+        return;
+    }
+    fprintf(stderr, "gs: divisão: %u retratos, %u sem cópia (não couberam), %u pedidos de soltar; maior quadro %u desenhos, %u "
+                    "vértices, %u da VU, %u índices, %u constantes; entrega média %.3f ms, pior %.3f ms\n",
+            sEntregas, sNaoCouberam, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
+            sEntregas ? (double)sCopiaNs / sEntregas / 1e6 : 0.0, (double)sCopiaPior / 1e6);
+}
+
+static void desenho_parar(void) {
+    GsDraw_DesenhoEspera();
+    pthread_mutex_lock(&sDesLock);
+    sDesPara = 1;
+    pthread_cond_signal(&sDesAcorda);
+    pthread_mutex_unlock(&sDesLock);
+    pthread_join(sDesenho, NULL);
+    sDividido = 0;
+}
+
+static void divisao_decide(void) {
+    const char *e = getenv("BT3_GS_DESENHO");
+    int interp;
+    if (e == NULL || strcmp(e, "0") == 0) {
+        return;
+    }
+    if (!Port_GsComThread()) {
+        divisao_log("BT3_GS_DESENHO=1 sem BT3_GS_THREAD=1: ignorado, tudo na thread de gravação");
+        return;
+    }
+#ifdef PORT_X360
+    divisao_log("BT3_GS_DESENHO=1 recusado: o desenho numa terceira thread no 360 é a etapa 4 do degrau 2; segue o degrau 1");
+    return;
+#else
+    interp = getenv("BT3_INTERP") != NULL ? atoi(getenv("BT3_INTERP")) : Port_Setting("interp", 0);
+    if (interp > 0) {
+        divisao_log("BT3_GS_DESENHO=1 recusado com BT3_INTERP (o frameEnd roda várias vezes por quadro trocando as listas)");
+        return;
+    }
+    if (sBackend->soltaPede == NULL || sBackend->solta == NULL) {
+        divisao_log("BT3_GS_DESENHO=1 recusado: o backend não tem a fila de liberação");
+        return;
+    }
+    sRetDraws = (GsDraw *)malloc(RET_DRAWS * sizeof(GsDraw));
+    sRetVerts = (Vtx *)malloc(RET_VERTS * sizeof(Vtx));
+    sRetVuVerts = (float *)malloc(RET_VU_VERTS * 48u);
+    sRetVuIdx = (uint32_t *)malloc(RET_VU_IDX * sizeof(uint32_t));
+    sRetVuUni = (Vu0Uniform *)malloc(RET_VU_UNI * sizeof(Vu0Uniform));
+    if (sRetDraws == NULL || sRetVerts == NULL || sRetVuVerts == NULL || sRetVuIdx == NULL || sRetVuUni == NULL) {
+        divisao_log("BT3_GS_DESENHO=1 recusado: sem memória para o retrato");
+        return;
+    }
+#ifdef BT3_GPU_FALSO
+    sDesAtrasoUs = getenv("BT3_GS_DESENHO_ATRASO_US") != NULL ? atoi(getenv("BT3_GS_DESENHO_ATRASO_US")) : 0;
+#endif
+    if (pthread_create(&sDesenho, NULL, desenho_thread, NULL) != 0) {
+        divisao_log("BT3_GS_DESENHO=1 recusado: a thread de desenho não partiu");
+        return;
+    }
+    sDividido = 1;
+    gsQuadro = &sRetrato;
+    gGsDesenhoParar = desenho_parar;
+    fprintf(stderr, "gs: BT3_GS_DESENHO=1: o desenho numa terceira thread, retrato de %u KB\n",
+            (unsigned)((RET_DRAWS * sizeof(GsDraw) + RET_VERTS * sizeof(Vtx) + RET_VU_VERTS * 48u + RET_VU_IDX * 4u +
+                        RET_VU_UNI * sizeof(Vu0Uniform)) >> 10));
+    (void)interp;
+#endif
+}
+
+/* A entrega, na thread de gravação, no lugar do frameEnd. */
+static void desenho_entrega(void) {
+    unsigned char limpa[MAX_TARGETS];
+    uint32_t i, c[5];
+    int k, cabe;
+    uint64_t t0, dt;
+
+    GsDraw_DesenhoEspera(); /* o desenho largou o retrato anterior e soltou o que viajava com ele */
+    t0 = gpu_now();
+    c[0] = gsDrawCount;
+    c[1] = gsVertCount;
+    c[2] = gsVuVertCount;
+    c[3] = gsVuIdxCount;
+    c[4] = gsVuUniCount;
+    for (k = 0; k < 5; k++) {
+        if (c[k] > sMaior[k]) {
+            sMaior[k] = c[k];
+        }
+    }
+    cabe = c[0] <= RET_DRAWS && c[1] <= RET_VERTS && c[2] <= RET_VU_VERTS && c[3] <= RET_VU_IDX && c[4] <= RET_VU_UNI;
+    if (cabe) {
+        memcpy(sRetDraws, gsDraws, c[0] * sizeof(GsDraw));
+        memcpy(sRetVerts, gsVerts, c[1] * sizeof(Vtx));
+        memcpy(sRetVuVerts, gsVuVerts, c[2] * 48u);
+        memcpy(sRetVuIdx, gsVuIdx, c[3] * sizeof(uint32_t));
+        memcpy(sRetVuUni, gsVuUni, c[4] * sizeof(Vu0Uniform));
+        sRetrato.draws = sRetDraws;
+        sRetrato.verts = sRetVerts;
+        sRetrato.vuVerts = sRetVuVerts;
+        sRetrato.vuIdx = sRetVuIdx;
+        sRetrato.vuUni = sRetVuUni;
+    } else { /* em série: as listas vivas, e a gravação espera o desenho no fim desta função */
+        sRetrato.draws = gsDraws;
+        sRetrato.verts = gsVerts;
+        sRetrato.vuVerts = gsVuVerts;
+        sRetrato.vuIdx = gsVuIdx;
+        sRetrato.vuUni = gsVuUni;
+        sNaoCouberam++;
+    }
+    sRetrato.drawCount = c[0];
+    sRetrato.vertCount = c[1];
+    sRetrato.vuVertCount = c[2];
+    sRetrato.vuIdxCount = c[3];
+    sRetrato.vuUniCount = c[4];
+    memcpy(sRetAlvos, gsTargets, sizeof(sRetAlvos));
+    sRetrato.targets = sRetAlvos;
+    sRetrato.targetCount = gsTargetCount;
+    sRetrato.quadro = gGsFrame;
+    sRetrato.frame[0] = gGs.frame[0];
+    sRetrato.frame[1] = gGs.frame[1];
+    sRetrato.fbp = GS_FBP_QUADRO;
+    sRetrato.anchor = gsAnchor;
+    sRetrato.texCount = gsTexCount;
+    sRetrato.skipped = gsSkipped;
+    sRetrato.native = gsNative;
+    sRetrato.vu1Ms = gGsVu1Ms;
+    gGsVu1Ms = 0.0;
+    sRetrato.soltas = sSoltas[sSoltaPend];
+    sRetrato.soltaCount = sSoltaN[sSoltaPend];
+    sSoltaPend ^= 1;
+    sSoltaN[sSoltaPend] = 0;
+    sRetrato.vivo = !cabe;
+    sRetrato.dividido = 1;
+    /* o cleared da gravação (o risco 1): ligado aqui para todo alvo com desenho não nativo, mais o que a regra do backend
+       pedir; o do desenho fica na cópia da tabela que vai no retrato */
+    memset(limpa, 0, sizeof(limpa));
+    for (i = 0; i < c[0]; i++) {
+        if (gsDraws[i].native == 0 && gsDraws[i].target >= 0 && gsDraws[i].target < MAX_TARGETS) {
+            limpa[gsDraws[i].target] = 1;
+        }
+    }
+    if (sBackend->entrega != NULL) {
+        sBackend->entrega(&sRetrato, limpa);
+    }
+    for (k = 0; k < gsTargetCount; k++) {
+        if (limpa[k]) {
+            gsTargets[k].cleared = 1;
+        }
+        gsTargets[k].draws = 0;
+    }
+    gsVertCount = 0;
+    gsVuVertCount = 0;
+    gsVuIdxCount = 0;
+    gsVuUniCount = 0;
+    gsDrawCount = 0;
+    gsAnchor = 0;
+    gsSkipped = 0;
+    gsNative = 0;
+    dt = gpu_now() - t0;
+    sCopiaNs += dt;
+    if (dt > sCopiaPior) {
+        sCopiaPior = dt;
+    }
+    sEntregas++;
+    pthread_mutex_lock(&sDesLock);
+    sDesTem = 1;
+    pthread_cond_signal(&sDesAcorda);
+    pthread_mutex_unlock(&sDesLock);
+    if (!cabe) {
+        GsDraw_DesenhoEspera();
+    }
+    if (gsPendingScale) { /* (o backend muda de tamanho com o desenho parado) */
+        GsDraw_DesenhoEspera();
+        scale_apply();
+    }
+}
+#endif
+
 void GsGpu_FrameEnd(void) {
     if (gPortResim) { /* a frame that is only being re-run: nothing was recorded, nothing is shown */
         return;
@@ -3342,6 +3710,13 @@ void GsGpu_FrameEnd(void) {
             sInterpPrims = malloc(INTERP_MAX_PRIMS * sizeof(InterpPrim));
             sInterpPrimUsed = malloc(INTERP_MAX_PRIMS);
         }
+#ifdef BT3_GS_ESPERAS
+        if (sDividido) { /* (degrau 2) o retrato vai para a thread de desenho; a gravação segue */
+            desenho_entrega();
+            gGpuEndNs += gpu_now() - t0;
+            return;
+        }
+#endif
         {
             /* A scene the game shows at 60 a second (one vertical blank per picture: menus, the character select) has
                half the time per tick and needs half the pictures: none at "60", one at "120". How many blanks this
@@ -3396,7 +3771,7 @@ void GsGpu_FrameEnd(void) {
                 interp_remember();
                 gInterpSkipped++;
             }
-            sBackend->frameEnd();
+            BACKEND_FRAME_END();
             interp_present_log('S');
             scale_apply();
         }

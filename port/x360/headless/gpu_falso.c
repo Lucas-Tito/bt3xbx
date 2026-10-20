@@ -115,7 +115,23 @@ static int fake_tex_upload(GsTex tex, int level, uint32_t w, uint32_t h, int for
     free((void *)px); /* a posse é do backend */
     return 1;
 }
-static void fake_tex_destroy(GsTex tex) { mix(0xDE57u); mix((uint32_t)tex); }
+/* (F5, etapa 8, degrau 2, etapa 3) A textura solta fica "envenenada": todo desenho que ainda a use é contado e dito (o
+   verificador da fila de liberação, o risco 4 do inventário). Os números das texturas nunca se repetem (sNextTex só cresce);
+   um mapa de bits fixo, sem realloc, porque com a divisão quem solta e quem confere é a thread de desenho, e quem cria é a
+   de gravação. */
+#define VENENO_N (1u << 24)
+static uint8_t sVeneno[VENENO_N / 8];
+static unsigned sUsadasSoltas;
+static void envenena(GsTex tex) {
+    if (tex < VENENO_N) {
+        sVeneno[tex >> 3] |= (uint8_t)(1u << (tex & 7));
+    }
+}
+static int envenenada(GsTex tex) {
+    return tex < VENENO_N && (sVeneno[tex >> 3] >> (tex & 7) & 1) != 0;
+}
+/* sem a divisão: o pedido e a liberação são a mesma chamada, na gravação */
+static void fake_tex_destroy(GsTex tex) { mix(0xDE57u); mix((uint32_t)tex); envenena(tex); }
 static int fake_slots(void) { return 1 << 20; }
 static void fake_target_ensure(int i) { mix(0xE45Eu); mix((uint32_t)i); }
 static void fake_target_drop(int i) { mix(0xD409u); mix((uint32_t)i); }
@@ -142,51 +158,139 @@ static int fake_pipe_get(uint32_t key) {
 }
 
 /* ------------------------------------------------------------------------------------------------ o fim do quadro */
-/* o hash do quadro em seções (cada uma com a sua semente), para dizer onde duas builds divergem */
+/* o hash do quadro em seções (cada uma com a sua semente), para dizer onde duas builds divergem. (degrau 2) As seções
+   depois da S_TEX se fazem num hash próprio (sH), do lado do desenho: com a divisão, o sHash continua recebendo, na
+   gravação, as texturas do quadro seguinte. */
 enum { S_TEX, S_CONTAGENS, S_DESENHOS, S_VERTICES, S_VUVERT, S_VUIDX, S_VUUNI, S_N };
 static uint64_t sSecao[S_N];
-static void fecha(int k) {
-    sSecao[k] = sHash;
-    sHash = 1469598103934665603ull;
+static uint64_t sH = 1469598103934665603ull;
+static void hmix(uint32_t w) {
+    sH = (sH ^ w) * 1099511628211ull;
 }
+static void hmix_words(const void *p, uint32_t words) {
+    const uint32_t *w = (const uint32_t *)p;
+    uint32_t i;
+    for (i = 0; i < words; i++) {
+        hmix(w[i]);
+    }
+}
+static void fecha(int k) {
+    sSecao[k] = sH;
+    sH = 1469598103934665603ull;
+}
+
+/* o hash "normal" dos desenhos (BT3_GPU_NORMAL): cada textura vale pelo conteúdo. Lê o sConteudo, que a gravação aumenta
+   (realloc): com a divisão é feito na entrega, na gravação */
+static uint64_t normal_desenhos(const GsDraw *draws, uint32_t n) {
+    uint64_t d = 1469598103934665603ull;
+    uint32_t i, k;
+    for (i = 0; i < n; i++) {
+        GsDraw g = draws[i];
+        const uint32_t *w;
+        if (!g.tex_is_target && g.tex >= 16 && g.tex - 16 < sConteudoN) {
+            g.tex = (GsTex)(sConteudo[g.tex - 16] ^ sConteudo[g.tex - 16] >> 32); /* o conteúdo no lugar do número */
+        }
+        w = (const uint32_t *)&g;
+        for (k = 0; k < (uint32_t)(sizeof(GsDraw) / 4); k++) {
+            d = (d ^ w[k]) * 1099511628211ull;
+        }
+    }
+    return d;
+}
+
+/* (degrau 2) o quadro que o fim do quadro lê: o gsQuadro nas builds com a divisão (as listas vivas sem ela), as listas
+   vivas nas outras */
+typedef struct Vista {
+    const GsDraw *draws;
+    uint32_t drawCount;
+    const Vtx *verts;
+    uint32_t vertCount;
+    const float *vuVerts;
+    uint32_t vuVertCount;
+    const uint32_t *vuIdx;
+    uint32_t vuIdxCount;
+    const Vu0Uniform *vuUni;
+    uint32_t vuUniCount;
+    GsTarget *targets;
+    int targetCount;
+    unsigned quadro;
+    int anchor;
+    unsigned skipped, native;
+    int dividido;
+} Vista;
+/* o que, com a divisão, a gravação manda na entrega (fake_entrega): uma entrega por vez, o desenho lê depois do sinal */
+static struct {
+    uint64_t tex, normal;
+    unsigned novas;
+    int pipes;
+    uint32_t bytes[8];
+} sEntregue;
 
 static void fake_frame_end(void) {
     uint32_t i;
     uint64_t quadro = 1469598103934665603ull;
+    Vista q;
+    unsigned novas;
+    int pipes;
+    const uint32_t *bytes;
+#ifdef BT3_GS_ESPERAS
+    const GsQuadro *g = gsQuadro;
+    q.draws = g->draws; q.drawCount = g->drawCount; q.verts = g->verts; q.vertCount = g->vertCount;
+    q.vuVerts = g->vuVerts; q.vuVertCount = g->vuVertCount; q.vuIdx = g->vuIdx; q.vuIdxCount = g->vuIdxCount;
+    q.vuUni = g->vuUni; q.vuUniCount = g->vuUniCount; q.targets = g->targets; q.targetCount = g->targetCount;
+    q.quadro = g->quadro; q.anchor = g->anchor; q.skipped = g->skipped; q.native = g->native; q.dividido = g->dividido;
+#else
+    q.draws = gsDraws; q.drawCount = gsDrawCount; q.verts = gsVerts; q.vertCount = gsVertCount;
+    q.vuVerts = gsVuVerts; q.vuVertCount = gsVuVertCount; q.vuIdx = gsVuIdx; q.vuIdxCount = gsVuIdxCount;
+    q.vuUni = gsVuUni; q.vuUniCount = gsVuUniCount; q.targets = gsTargets; q.targetCount = gsTargetCount;
+    q.quadro = gGsFrame; q.anchor = gsAnchor; q.skipped = gsSkipped; q.native = gsNative; q.dividido = 0;
+#endif
 
-    fecha(S_TEX); /* o que os backends receberam desde o quadro anterior (texturas, alvos): já no sHash */
-    mix(gGsFrame);
-    mix(gsDrawCount);
-    mix(gsVertCount);
-    mix(gsVuVertCount);
-    mix(gsVuIdxCount);
-    mix(gsVuUniCount);
-    mix((uint32_t)gsAnchor);
-    mix(gsSkipped);
-    mix(gsNative);
-    mix((uint32_t)gsTargetCount);
-    for (i = 0; i < (uint32_t)gsTargetCount; i++) {
-        mix(gsTargets[i].fbp);
-        mix((uint32_t)gsTargets[i].cleared);
-        mix(gsTargets[i].draws);
-        mix(gsTargets[i].gen);
-        mix((uint32_t)gsTargets[i].stale);
+    if (q.dividido) { /* a S_TEX e as contagens da gravação vieram na entrega */
+        sSecao[S_TEX] = sEntregue.tex;
+        novas = sEntregue.novas;
+        pipes = sEntregue.pipes;
+        bytes = sEntregue.bytes;
+    } else {
+        sSecao[S_TEX] = sHash; /* o que os backends receberam desde o quadro anterior (texturas, alvos): já no sHash */
+        sHash = 1469598103934665603ull;
+        novas = sTexNovas;
+        pipes = sPipeCount;
+        bytes = gGsBytes;
     }
-    for (i = 0; i < (uint32_t)sPipeCount; i++) {
-        mix(sPipeKey[i]);
+    sH = 1469598103934665603ull;
+    hmix(q.quadro);
+    hmix(q.drawCount);
+    hmix(q.vertCount);
+    hmix(q.vuVertCount);
+    hmix(q.vuIdxCount);
+    hmix(q.vuUniCount);
+    hmix((uint32_t)q.anchor);
+    hmix(q.skipped);
+    hmix(q.native);
+    hmix((uint32_t)q.targetCount);
+    for (i = 0; i < (uint32_t)q.targetCount; i++) {
+        hmix(q.targets[i].fbp);
+        hmix((uint32_t)q.targets[i].cleared);
+        hmix(q.targets[i].draws);
+        hmix(q.targets[i].gen);
+        hmix((uint32_t)q.targets[i].stale);
+    }
+    for (i = 0; i < (uint32_t)pipes; i++) { /* (o sPipeKey só cresce: abaixo da contagem da entrega não muda) */
+        hmix(sPipeKey[i]);
     }
     fecha(S_CONTAGENS);
-    mix_words(gsDraws, gsDrawCount * (uint32_t)(sizeof(GsDraw) / 4));
+    hmix_words(q.draws, q.drawCount * (uint32_t)(sizeof(GsDraw) / 4));
     fecha(S_DESENHOS);
-    for (i = 0; i < gsVertCount; i++) { /* o Vtx por campo: os quatro bytes de cor não são uma palavra do host */
-        const Vtx *v = &gsVerts[i];
-        mix_words(&v->x, 3);
-        mix((uint32_t)v->r | (uint32_t)v->g << 8 | (uint32_t)v->b << 16 | (uint32_t)v->a << 24);
-        mix_words(&v->s, 3);
+    for (i = 0; i < q.vertCount; i++) { /* o Vtx por campo: os quatro bytes de cor não são uma palavra do host */
+        const Vtx *v = &q.verts[i];
+        hmix_words(&v->x, 3);
+        hmix((uint32_t)v->r | (uint32_t)v->g << 8 | (uint32_t)v->b << 16 | (uint32_t)v->a << 24);
+        hmix_words(&v->s, 3);
     }
-    if (getenv("BT3_GPU_DUMP") != NULL && (unsigned)atoi(getenv("BT3_GPU_DUMP")) == gGsFrame) { /* os vértices de um quadro, para ver onde duas builds divergem */
-        for (i = 0; i < gsVertCount; i++) {
-            const Vtx *v = &gsVerts[i];
+    if (getenv("BT3_GPU_DUMP") != NULL && (unsigned)atoi(getenv("BT3_GPU_DUMP")) == q.quadro) { /* os vértices de um quadro, para ver onde duas builds divergem */
+        for (i = 0; i < q.vertCount; i++) {
+            const Vtx *v = &q.verts[i];
             uint32_t w[6];
             memcpy(w, &v->x, 12);
             memcpy(w + 3, &v->s, 12);
@@ -194,57 +298,57 @@ static void fake_frame_end(void) {
         }
     }
     fecha(S_VERTICES);
-    mix_words(gsVuVerts, gsVuVertCount * 12);
+    hmix_words(q.vuVerts, q.vuVertCount * 12);
     fecha(S_VUVERT);
-    mix_words(gsVuIdx, gsVuIdxCount);
+    hmix_words(q.vuIdx, q.vuIdxCount);
     fecha(S_VUIDX);
-    mix_words(gsVuUni, gsVuUniCount * (uint32_t)(sizeof(Vu0Uniform) / 4));
+    hmix_words(q.vuUni, q.vuUniCount * (uint32_t)(sizeof(Vu0Uniform) / 4));
     fecha(S_VUUNI);
     for (i = 0; i < S_N; i++) {
         quadro = (quadro ^ sSecao[i]) * 1099511628211ull;
     }
     sTotal = (sTotal ^ quadro) * 1099511628211ull;
     if (getenv("BT3_GPU_LISTA") != NULL) {
-        fprintf(stderr, "gpu_falso: quadro %u lista %016llx desenhos %u vértices %u vu %u/%u/%u texturas %u secoes", gGsFrame,
-                (unsigned long long)quadro, gsDrawCount, gsVertCount, gsVuVertCount, gsVuIdxCount, gsVuUniCount, sTexNovas);
+        fprintf(stderr, "gpu_falso: quadro %u lista %016llx desenhos %u vértices %u vu %u/%u/%u texturas %u secoes", q.quadro,
+                (unsigned long long)quadro, q.drawCount, q.vertCount, q.vuVertCount, q.vuIdxCount, q.vuUniCount, novas);
         for (i = 0; i < S_N; i++) {
             fprintf(stderr, " %08x", (unsigned)(sSecao[i] >> 32 ^ sSecao[i]));
         }
         fprintf(stderr, "\n");
     }
     if (getenv("BT3_GPU_BYTES") != NULL) { /* (F5, degrau 1) o que a cadeia leva por quadro: gs_core.c, bytes_walk */
-        fprintf(stderr, "gpu_falso: bytes quadro %u tags %u lista %u externa %u ref %u refunico %u imagem %u vu %u/%u/%u\n", gGsFrame,
-                gGsBytes[0], gGsBytes[1], gGsBytes[2], gGsBytes[3], gGsBytes[4], gGsBytes[5], gsVuVertCount, gsVuIdxCount, gsVuUniCount);
+        fprintf(stderr, "gpu_falso: bytes quadro %u tags %u lista %u externa %u ref %u refunico %u imagem %u vu %u/%u/%u\n", q.quadro,
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], q.vuVertCount, q.vuIdxCount, q.vuUniCount);
     }
     if (getenv("BT3_GPU_NORMAL") != NULL) { /* (F5, degrau 1) o quadro sem o que depende de quantas texturas se decodificaram */
-        uint64_t n = 1469598103934665603ull, d = 1469598103934665603ull;
-        uint32_t k;
+        uint64_t n = 1469598103934665603ull, d = q.dividido ? sEntregue.normal : normal_desenhos(q.draws, q.drawCount);
         n = (n ^ sSecao[S_CONTAGENS]) * 1099511628211ull;
-        for (i = 0; i < gsDrawCount; i++) {
-            GsDraw g = gsDraws[i];
-            const uint32_t *w;
-            if (!g.tex_is_target && g.tex >= 16 && g.tex - 16 < sConteudoN) {
-                g.tex = (GsTex)(sConteudo[g.tex - 16] ^ sConteudo[g.tex - 16] >> 32); /* o conteúdo no lugar do número */
-            }
-            w = (const uint32_t *)&g;
-            for (k = 0; k < (uint32_t)(sizeof(GsDraw) / 4); k++) {
-                d = (d ^ w[k]) * 1099511628211ull;
-            }
-        }
         n = (n ^ d) * 1099511628211ull;
         for (i = S_VERTICES; i < S_N; i++) {
             n = (n ^ sSecao[i]) * 1099511628211ull;
         }
-        fprintf(stderr, "gpu_falso: normal quadro %u %016llx\n", gGsFrame, (unsigned long long)n);
+        fprintf(stderr, "gpu_falso: normal quadro %u %016llx\n", q.quadro, (unsigned long long)n);
+    }
+    for (i = 0; i < q.drawCount; i++) { /* (degrau 2) o verificador da fila de liberação */
+        const GsDraw *d = &q.draws[i];
+        if (!d->tex_is_target && d->tex >= 16 && envenenada(d->tex)) {
+            if (sUsadasSoltas++ < 20) {
+                fprintf(stderr, "gpu_falso: textura solta usada: quadro %u desenho %u textura %u\n", q.quadro, i, (unsigned)d->tex);
+            }
+        }
     }
     sFrames++;
     /* (F5, etapa 8, degrau 2, etapa 3) o cleared ligado como o gs_gpu.c o liga ao refazer a lista: todo alvo em que o quadro
        desenha primitivas (native 0, a VU1 inclusive) ou recebe uma imagem enviada (native 100 e 101); as nativas 1 a 5 não.
        Sem isto o caminho do alvo como textura (gs_draw.c, draw_state: gsTargets[src].cleared) nunca aparecia no WSL */
-    for (i = 0; i < gsDrawCount; i++) {
-        if (gsDraws[i].native == 0 || gsDraws[i].native >= 100) {
-            gsTargets[gsDraws[i].target].cleared = 1;
+    /* (com a divisão, na cópia da tabela que veio no retrato: o cleared do desenho; o da gravação ela liga na entrega) */
+    for (i = 0; i < q.drawCount; i++) {
+        if (q.draws[i].native == 0 || q.draws[i].native >= 100) {
+            q.targets[q.draws[i].target].cleared = 1;
         }
+    }
+    if (q.dividido) { /* os contadores, a gravação zerou na entrega */
+        return;
     }
     /* o que o gs_gpu.c zera ao fim do quadro */
     for (i = 0; i < (uint32_t)gsTargetCount; i++) {
@@ -260,12 +364,51 @@ static void fake_frame_end(void) {
     gsNative = 0;
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (degrau 2, etapa 3) com a divisão, na gravação: o que o desenho do retrato precisa e que a gravação segue mudando (a S_TEX
+   fechada no ponto em que o fim do quadro a fechava, as contagens, os bytes da cadeia, o hash normal dos desenhos); e a
+   regra do gs_gpu.c para o cleared da gravação: também o alvo que recebe uma imagem enviada (native 100 e 101) */
+static void fake_entrega(const GsQuadro *q, unsigned char *limpa) {
+    uint32_t i;
+    sEntregue.tex = sHash;
+    sHash = 1469598103934665603ull;
+    sEntregue.novas = sTexNovas;
+    sEntregue.pipes = sPipeCount;
+    memcpy(sEntregue.bytes, gGsBytes, sizeof(sEntregue.bytes));
+    sEntregue.normal = getenv("BT3_GPU_NORMAL") != NULL ? normal_desenhos(q->draws, q->drawCount) : 0;
+    for (i = 0; i < q->drawCount; i++) {
+        if (q->draws[i].native >= 100 && q->draws[i].target >= 0 && q->draws[i].target < MAX_TARGETS) {
+            limpa[q->draws[i].target] = 1;
+        }
+    }
+}
+/* o pedido, na gravação: entra no hash onde o texDestroy e o targetDrop entravam */
+static void fake_solta_pede(GsTex tex, int alvo) {
+    if (alvo < 0) {
+        mix(0xDE57u);
+        mix((uint32_t)tex);
+    } else {
+        mix(0xD409u);
+        mix((uint32_t)alvo);
+    }
+}
+/* a liberação, no desenho, depois do quadro do pedido (os alvos do falso não têm recurso a soltar) */
+static void fake_solta(GsTex tex, int alvo) {
+    if (alvo < 0) {
+        envenena(tex);
+    }
+}
+#define FAKE_DIVISAO , fake_entrega, fake_solta_pede, fake_solta
+#else
+#define FAKE_DIVISAO
+#endif
+
 GsBackend sVulkanBackend = {"falso", fake_init, fake_frame_end, fake_scale, fake_white, fake_tex_create, fake_tex_upload,
                             fake_tex_destroy, fake_slots, fake_target_ensure, fake_target_drop, fake_target_color,
-                            fake_target_aux, fake_target_depth, fake_pipe_get};
+                            fake_target_aux, fake_target_depth, fake_pipe_get FAKE_DIVISAO};
 GsBackend sGlBackend = {"falso", fake_init, fake_frame_end, fake_scale, fake_white, fake_tex_create, fake_tex_upload,
                         fake_tex_destroy, fake_slots, fake_target_ensure, fake_target_drop, fake_target_color,
-                        fake_target_aux, fake_target_depth, fake_pipe_get};
+                        fake_target_aux, fake_target_depth, fake_pipe_get FAKE_DIVISAO};
 
 /* (F5, etapa 3) os descartes da janela medida (passos.c): o backend falso não descarta nada */
 int Passos_Descartes(unsigned *v, int n) { (void)v; (void)n; return 0; }
@@ -331,6 +474,8 @@ static void amostra(int sig, siginfo_t *si, void *uc) {
 /* (F5, etapa 8, degrau 1) só existe nas builds com a espera do jogo pela thread de gravação (gs_core.c) */
 extern void Port_GsEspera(void) __attribute__((weak));
 extern unsigned gGsFrameJogo __attribute__((weak)); /* o contador de quadros do lado do jogo (avança na entrega) */
+extern void GsDraw_DesenhoEspera(void) __attribute__((weak)); /* (degrau 2) gs_draw.c, nas builds com a divisão */
+extern void GsDraw_DesenhoResumo(void) __attribute__((weak));
 
 static void relatorio(void) {
     int f;
@@ -340,11 +485,16 @@ static void relatorio(void) {
 
     if (Port_GsEspera != NULL) {
         Port_GsEspera(); /* o último quadro entregue acaba de ser gravado antes do resumo (o atexit do backend roda antes do do gs_core) */
+        if (GsDraw_DesenhoEspera != NULL) {
+            GsDraw_DesenhoEspera(); /* (degrau 2) e desenhado */
+            GsDraw_DesenhoResumo();
+        }
         /* depois da espera os dois contadores são o mesmo número: o do jogo avançou na entrega, o do desenho no fim da gravação */
         fprintf(stderr, "gpu_falso: contador de quadros do jogo %u, do desenho %u\n", gGsFrameJogo, gGsFrame);
     }
     fprintf(stderr, "gpu_falso: %u quadros, hash do jogo %016llx, %u texturas decodificadas (%u KB), %d pipelines\n", sFrames,
             (unsigned long long)sTotal, sTexNovas, sTexBytes / 1024, sPipeCount);
+    fprintf(stderr, "gpu_falso: %u desenhos com textura já solta\n", sUsadasSoltas);
     if (sPerfil <= 0 || fp == NULL) {
         return;
     }

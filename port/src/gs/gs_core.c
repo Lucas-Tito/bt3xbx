@@ -1297,6 +1297,11 @@ void Port_GsEspera(void) {
     }
 }
 
+int Port_GsComThread(void) {
+    return sThreaded;
+}
+void (*gGsDesenhoParar)(void);
+
 /* Para a thread de gravação (saída do jogo): espera o que ela tem, manda parar e junta. O dispositivo do 360 volta
    para a main por ela mesma (GsD3d_Soltar, no trabalho de parar). Pode ser chamada mais de uma vez. */
 void Port_GsParar(void) {
@@ -1304,6 +1309,10 @@ void Port_GsParar(void) {
         return;
     }
     render_wait();
+    if (gGsDesenhoParar != NULL) { /* (degrau 2) a thread de desenho acaba o último retrato e sai */
+        gGsDesenhoParar();
+        gGsDesenhoParar = NULL;
+    }
     render_post(3, 0, 0);
     pthread_join(sThread, NULL);
     if (getenv("BT3_GS_RACE") != NULL) {
