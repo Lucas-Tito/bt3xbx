@@ -328,6 +328,44 @@ seis `OK`. O hash da base da PPC não precisa ser o da x86 (no degrau 1 o do `f5
 critério é o par. Se a PPC parar na guarda por um arquivo que o `LEU` não listou, base e divisão param juntas e a linha diz
 `SEM a linha final`: aí a pasta precisa do passo inteiro do `roteiros.sh` (o rastreio).
 
+### A falha da PPC (20/10/2026)
+
+**O sintoma.** A primeira rodada do serviço (commit `e92cdb2`) deu quatro `FALHA` e dois `OK`: com a gravação atrasada 0 ou 20 ms,
+10 a 14 quadros por roteiro faltando ou "com a lista diferente", entre o 3.978 e o 4.102 (no meio, não na parada: o contador de
+quadros do jogo e o do desenho chegaram ao mesmo número); com o desenho atrasado 20 ms, tudo igual. O hash do jogo igual em todas.
+
+**A causa: o log, não a divisão.** O hash da lista (o campo do começo da linha) era igual ao da base em **todos** os quadros das
+quatro rodadas, inclusive nos "faltando". A linha `gpu_falso: quadro N lista ... secoes ...` saía em nove `fprintf` no `stderr` sem
+buffer (`gpu_falso.c` 312 a 317, no `e92cdb2`); com a divisão quem a escreve é a thread de desenho, e na PPC a thread do jogo escreve
+ao mesmo tempo as linhas `LEU arquivo` (`BT3_LEU=1`, `inverter.c` 146, só na PPC, para o `roteiros.py` comparar os arquivos lidos)
+no mesmo arquivo. Uma `LEU` no meio da linha a cortava: logo depois de `secoes`, a regex do `divergencias.py` não casava e o quadro
+"faltava"; depois de algumas seções, sobravam seções a menos e o quadro dava "diferente" nas seções que faltavam. As linhas cortadas
+(`grep -c '.LEU '`) eram 11, 14, 12 e 14 nas quatro rodadas, exatamente os quadros faltando mais os diferentes de cada uma; 0 na base
+e nas de desenho atrasado (o desenho, dormindo, escreve fora das leituras de arquivo). Na x86 não há `LEU` no log (o `dprintf` do gdb
+só roda no passo que gera a pasta de dados), por isso ela passou. O risco 11 e o resto do retrato não tiveram parte.
+
+**A correção** (`f1d25b3`, só no falso e no verificador): a linha montada num buffer e escrita com um `fputs`; o `divergencias.py`
+com a regex das seções estrita (só grupos de 8 dígitos hexa até o fim) e uma linha nova, `linhas misturadas (outra escrita no meio da
+linha do quadro)`, que conta a linha do quadro cortada e texto de outra linha no meio, e faz sair com 1. Visto falhando: o novo
+`divergencias.py` sobre os logs do `e92cdb2` (guardados em `~/provas-degrau2-e3-e92cdb2` no WSL) dá 11, 12, 14 e 14 linhas
+misturadas, nenhum quadro com a lista diferente, e sai com 1; base contra base e as de desenho atrasado seguem "iguais".
+
+**As provas** (`f1d25b3`). Na `x86gv`, a matriz curta (t1, d0, d20, r20 nos dois roteiros) com o `divergencias.py` saindo com 0 nas
+oito, 0 `race:`, 0 texturas usadas depois de soltas, os hashes `f76f0f6849b64629` e `08a98b6d05b8775a` (`~/provas-d2e3-x86/resumo`).
+Na PPC, o mesmo serviço (`claude-d2e3`; a build `ppcg` pede a x86 plana do mesmo commit antes, e o script a fazia depois: a primeira tentativa parou na build, e o script passou a fazer a x86 primeiro), **seis `OK`**:
+
+| Roteiro | Caso | Quadros comuns | Diferentes | Hash do jogo (base e divisão) | Tempo |
+|---|---|---:|---:|---|---:|
+| `f5_treino` | gravação atrasada 0 | 7.386 de 7.386 | 0 | `f76f0f6849b64629` | 145 s |
+| `f5_treino` | gravação atrasada 20 ms | 7.386 | 0 | idem | 265 s |
+| `f5_treino` | desenho atrasado 20 ms | 7.386 | 0 | idem | 211 s |
+| `f5_duelo` | gravação atrasada 0 | 8.380 de 8.380 | 0 | `994627a2aecd429a` | 170 s |
+| `f5_duelo` | gravação atrasada 20 ms | 8.380 | 0 | idem | 319 s |
+| `f5_duelo` | desenho atrasado 20 ms | 8.380 | 0 | idem | 245 s |
+
+Em todas, 0 texturas usadas depois de soltas, 0 `race:`, 0 linhas misturadas, 0 retratos sem cópia; as 42 linhas `LEU` de cada
+rodada seguem no log, todas inteiras. A etapa 3 vale na PPC.
+
 **O que fica para a etapa 4:** o `gs_d3d.cpp` lendo pelo `gsQuadro` (as leituras de `gsDraws`, `gsVerts`, `gsVu*`, `gsTargets`,
 `gGsFrame`, `GS_FBP_QUADRO` e `gGsVu1Ms` do inventário viram `q->`), sem zerar contadores com `dividido`; o `entrega` (o
 `sVuIni ~0`, os pedidos de alvo), o `soltaPede` e o `solta` (a cova); o `cleared` e o conteúdo dos alvos persistentes do lado do

@@ -1466,3 +1466,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   BUNDLE ramo && git reset --hard FETCH_HEAD`, só com a árvore limpa.
 - **Antes de mandar commit novo ao WSL, `pgrep` pelos trabalhos do anterior.** Um `reset --hard` e uma build nova no meio de uma
   rodada põem dois emuladores juntos e podem trocar o binário de uma rodada em andamento; custou refazer a última da matriz.
+- **Linha de log que um verificador lê sai numa escrita só, sobretudo quando outra thread escreve no mesmo arquivo.** A linha
+  `gpu_falso: quadro N` saía em nove `fprintf` no `stderr` sem buffer; com a divisão quem a escreve é a thread de desenho, e na
+  PPC a do jogo escreve ao mesmo tempo as linhas `LEU arquivo` (`BT3_LEU=1`, que a x86 não tem) no mesmo arquivo. Uma `LEU` no
+  meio da linha a cortava: o `divergencias.py` via quadros faltando e quadros "com a lista diferente", e a PPC parecia ter uma
+  corrida que a x86 não tinha. Antes de caçar corrida no código, compare o hash da lista (o campo do começo da linha, que sai
+  inteiro) e procure texto de outra linha no meio (`grep -c '.LEU '`): aqui os dois bastaram. Monte a linha num buffer e escreva
+  com um `fputs`; o verificador passou a contar as linhas misturadas e a falhar com elas.
+- **A build `ppcg` (`headless.py --alvo ppc --gpu`) pede a x86 plana do mesmo commit pronta antes** (o mapa das tabelas sai dos
+  `.i` dela): num script que leva commit novo ao WSL, a x86 vem primeiro, ou ele para na build com "a build x86 é de outra origem".
