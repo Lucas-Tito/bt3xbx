@@ -135,3 +135,74 @@ Fora do escopo, anotado: no 360 o `gGsFbUploads` nunca é zerado (só o `gs_gpu.
 direto para a tela, o marcador de filme nunca mais se grava. Uma economia possível, para depois: 3,1 dos 4,4 MB do retrato são
 vértices e índices da VU, que o `vu_copia` (d3d 1954) recopia para a GPU; fazer essa cópia na gravação, em buffers do XG,
 evitaria copiar duas vezes.
+
+## Etapa 2: texturas, alvos e profundidades pelo XG; o `gGsMainFbp` da entrega
+
+Feita em 20/10/2026, ainda com o arranjo do degrau 1 (gravação e desenho na mesma thread). Dois commits no branch
+`f5-degrau2`.
+
+**O que mudou no `gs_d3d.cpp`.** As texturas do jogo (`tex_create`), as dos alvos (`textura_alvo`) e as de profundidade
+(`prof_cria`) não passam mais pelo dispositivo: `xg_cria` monta o cabeçalho com `XGSetTextureHeader` num bloco de memória
+comum (`TexXg`: o cabeçalho primeiro, o endereço dos dados, os bytes e o pitch), reserva os dados com `XPhysicalAlloc`
+(página de 4 KB, que é o alinhamento que o XDK pede para textura; `PAGE_READWRITE | PAGE_WRITECOMBINE`, a memória que o XDK
+exige para recurso feito à mão e a mesma que o D3D usa sem `D3DUSAGE_CPU_CACHED_MEMORY`) e liga os dois com
+`XGOffsetResourceAddress`. O envio vira `memcpy` linha a linha no endereço com o pitch do XG; alvo e profundidade são
+zerados por `memset` (a textura é nova, a GPU nunca a viu). O cabeçalho que lê a profundidade como cor (`z->cor`) sai do
+novo cabeçalho como antes (`XGGetTextureLayout`).
+
+**A liberação.** O D3D não conta esses recursos, então nenhum `Release` neles: a cova guarda só `TexXg` e `xg_libera`
+(`XPhysicalFree` mais o cabeçalho) roda depois do `IsBusy` falso (`cova_varre`) ou do `BlockUntilNotBusy`
+(`cova_espera_primeira`), que o XDK documenta para "manually allocated resource". O autoteste da profundidade espera as
+duas texturas (`BlockUntilNotBusy`, o que o `Release` final fazia por dentro) antes de soltar. A captura `BT3_SHOT` e a
+comparação do autoteste leem direto no endereço (a GPU já está parada nas duas), sem `LockRect`. Seguem com `Release` os
+recursos do dispositivo: `sBranco`, os buffers da VU, a tela, o padrão do autoteste e as texturas dos autotestes.
+
+**A conta da memória.** Os bytes de cada recurso são os do `tam_real` (o retorno do `XGSetTextureHeader` arredondado à
+página), que é exatamente o que o `XPhysicalAlloc` reserva, e o `dwAvailPhys` cai com o `XPhysicalAlloc` como caía com o
+`CreateTexture` (que reserva pelo mesmo caminho). O cabeçalho (menos de 100 bytes no heap) fica fora da conta, como o do D3D
+ficava. A calibração do `mem_init` passou a criar as texturas de teste pelo `xg_cria`: as duas linhas `gs_d3d:
+calibração:` do log comparam a conta com o `dwAvailPhys` no caminho novo.
+
+**O `gGsMainFbp` (risco 5).** O `render_post` do `gs_core.c` guarda o `gGsMainFbp` na entrega de cada trabalho (a lista e o
+canal da GIF), e a thread o põe em `gGsFbpEntregue` ao pegar o trabalho; sem a thread, `gGsFbpEntregue` recebe o
+`gGsMainFbp` na própria thread do jogo logo antes de a lista andar. Os leitores passam a usar `GS_FBP_QUADRO`, que é o
+`gGsFbpEntregue` nas builds com `BT3_GS_ESPERAS` e o próprio `gGsMainFbp` nas outras. O `BT3_GS_ESPERAS` foi do
+`gs_core.c` para o `gs_internal.h`, com a mesma condição, para os outros arquivos o verem. **O inventário tinha listado só
+parte dos leitores:** além de draw 633, 656, 691, 697, core 1049 e d3d 2966, leem o valor durante a gravação draw 924 (o
+brilho), 933 (o esticamento da tela larga) e 2756 (`interp_prims`), e no fim do quadro os backends do PC (`gs_gl.c` 947,
+`gs_gpu.c` 912); todos passaram para o `GS_FBP_QUADRO`. O `imagens.c` do headless continua com o `gGsMainFbp`: roda na
+thread do jogo.
+
+**O que foi provado.**
+
+| Prova | Resultado |
+|---|---|
+| Build do 360 (`build_f2.sh`, commit `2d4a52d`) | 317 de 317 fontes sem erro; avisos por fonte iguais aos da main (só os dois C4090 de sempre no `gs_draw.c`); os mesmos 103 stubs; `default.dat` `6d30baaf87b1177fb2359a855f8befc0` e `default.swap` `a7cf723fbfaea860fcc3707ad288e755`, iguais; `default.xex` `8c29afa22ddb53c644606657ba902331` |
+| `.text` da x86 plana (WSL) | `cc46fa0752f092fca305bc8bf2e2e54390763af0`, a mesma |
+| Lista por quadro, `f5_treino`, x86gv, sem thread contra `BT3_GS_THREAD=1 BT3_GS_RACE=1 BT3_GS_ATRASO_US=5000` | 7.386 quadros nos dois, 0 com a lista diferente, 0 linhas race, hash do jogo `70b6b1d1bb3f1d85` nos dois (o de referência), `divergencias.py` sai com 0 |
+| O mesmo, `f5_duelo` | 8.380 quadros nos dois, 0 diferentes, 0 race, hash `29caae14a161459a` nos dois (o de referência), saída 0 |
+
+O WSL só prova o lado portável (o `GS_FBP_QUADRO` e a captura não mudam a lista, com e sem thread, e a x86 plana não
+muda). O XG não roda lá: o falso não tem dispositivo. As provas também não mostram a janela do risco 5 acontecendo: os
+hashes da base já batiam antes da mudança, ou seja, nos dois roteiros o jogo não chegou a escrever o `gGsMainFbp` do quadro
+seguinte enquanto a gravação ainda o lia. A captura fecha a janela; que ela existia é leitura do código.
+
+**O que só o console prova** (a rodada é do Lucas): no `bt3xbx.log`,
+
+1. as duas linhas `gs_d3d: calibração:` com "contadas" igual (ou muito perto) de "medidas": 64 de 8x8, 256 KB; 16 de
+   256x256, 4096 KB;
+2. a linha `gs_d3d: profundidade: autoteste ...` com os mesmos números da rodada do degrau 1 (o modo escolhido e os
+   "iguais" do modo 1 e 2): ela lê as texturas do XG direto no endereço;
+3. nenhuma linha `gs_d3d: BRANCA`, `ERRO: o alvo ... ficou sem textura` ou `ficou sem textura de profundidade` que a rodada
+   do degrau 1 não tinha, e as pressões de memória (`gs_d3d: pressão`) e os livres mínimos na mesma faixa (mínimo visto
+   31 MB com piso 32);
+4. o resumo de 60 quadros com a luta em 48 ms como no degrau 1 (o `memcpy` no lugar do `LockRect` não deve custar nada);
+5. nas capturas `BT3_SHOT=600` (`game:\shots`), a luta e os menus sem textura errada, preta ou branca, e o fundo dos alvos
+   preto (o `memset`);
+6. nenhuma queda: o `SetUnhandledExceptionFilter` diria `Iar` e `Lr`; um erro no `xg_libera` (liberar o que a GPU ainda lê)
+   apareceria como textura corrompida ou queda depois de uma pressão de memória.
+
+**Roteiro da rodada.** Copiar `build/x360/f2/default.xex`, `default.dat`, `default.swap` e `ambiente.txt` do worktree
+`bt3xbx-d2` para a pasta do jogo (o `ambiente.txt` já traz `-BT3_DEMO`, o `BT3_GS_THREAD=1` e o `BT3_SHOT=600`); abrir pela
+FreeStyle; menu principal, modo duelo, uma luta de uns dois minutos com troca de personagem e golpes especiais, um menu 3D
+(o `ChrView`), sair para o dashboard; trazer o `bt3xbx.log` e a pasta `shots`.
