@@ -70,11 +70,12 @@ extern void (*gGsDesenhoParar)(void);
    gs_draw.c (Gs_FamTrecho), também dentro da janela do passos (o log do gs_d3d fica mudo nela). O relógio: no 360 o
    mftb, em linha (são umas 24 mil leituras por quadro de luta: o Unpack e a VU1 rodam milhares de vezes, e uma chamada
    ao QueryPerformanceCounter em cada uma pesaria na medida), calibrado a cada trecho contra o relógio do sistema; fora
-   dele o CLOCK_MONOTONIC em ns. BT3_TEMPOS=0 desliga
+   dele o CLOCK_MONOTONIC em ns. No 360 vem ligado (BT3_TEMPOS=0 desliga); fora dele só com BT3_TEMPOS=1 (no qemu cada
+   leitura do relógio é uma chamada de sistema emulada, e a rodada da PPC dobrava); BT3_TEMPOS é a mesma chave
    (a mesma chave dos tempos do backend). O hash de página pedido de dentro da VU1 soma também em GS_FAM_HASH_VU1, para
    a soma das famílias não o contar duas vezes. */
 enum { GS_FAM_ENVIO, GS_FAM_HASH, GS_FAM_HASH_VU1, GS_FAM_VU1, GS_FAM_UNPACK, GS_FAM_ESPERA, GS_FAM_COPIA, GS_FAM_BACKEND, GS_FAM_N };
-extern int gGsFam;           /* 1 medindo; 0 desligado (BT3_TEMPOS=0, ou antes do primeiro fim de quadro) */
+extern int gGsFam;           /* 1 medindo; 0 desligado (BT3_TEMPOS, ou antes do primeiro fim de quadro) */
 extern int gGsFamNaVu1;      /* 1 dentro do GsVu1_Call */
 extern uint64_t gGsFamTiques[GS_FAM_N];
 extern uint32_t gGsFamVezes[GS_FAM_N];

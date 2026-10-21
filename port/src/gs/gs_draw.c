@@ -3813,9 +3813,13 @@ static void Gs_FamTrecho(void) {
 
     if (quadros == 0 && desde == 0) { /* o primeiro fim de quadro: liga e começa o trecho */
         const char *e = getenv("BT3_TEMPOS");
+#ifdef PORT_X360
         gGsFam = e == NULL || atoi(e) != 0;
+#else
+        gGsFam = e != NULL && atoi(e) != 0; /* (fora do 360 só com BT3_TEMPOS=1: gs_internal.h) */
+#endif
         if (!gGsFam) {
-            divisao_log("grava\303\247\303\243o por fam\303\255lia: desligada (BT3_TEMPOS=0)");
+            divisao_log("grava\303\247\303\243o por fam\303\255lia: desligada (BT3_TEMPOS)");
         }
         desde = gpu_now();
 #ifdef PORT_X360
