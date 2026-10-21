@@ -466,12 +466,37 @@ static GsTex clut_texture(uint32_t cbp) {
     GsTex tex;
     uint32_t *upload;
     int k, old = 0;
+#ifdef BT3_GS_ESPERAS
+    /* (F5, etapa 8, gravação) O hash da tabela lembrado por cbp e pela geração das duas páginas que ela ocupa (a mesma
+       regra do clut_hash: 16 x 16 pixels de 32 bits com largura 1 são os blocos cbp a cbp + 3). As passadas de tabela
+       pela névoa e pelos ids pedem a mesma tabela a cada primitiva, e o hash dela era refeito toda vez, 256 leituras da
+       VRAM, para achar a mesma textura no sCluts. As 256 cores só se leem quando a memória não vale, ou para criar a
+       textura. O sCluts e a escolha da vaga seguem iguais: a mesma textura volta, com o mesmo last. */
+    static struct { uint32_t key, gen0, gen1, hash; } memo[64];
+    uint32_t m = (cbp * 2654435761u) >> 26, g0 = gGsPageGen[(cbp / 32) & 511], g1 = gGsPageGen[(cbp / 32 + 1) & 511];
+    int lido = 0;
 
+    if (memo[m].key == cbp + 1 && memo[m].gen0 == g0 && memo[m].gen1 == g1) {
+        hash = memo[m].hash;
+    } else {
+        for (i = 0; i < 256; i++) {
+            uint32_t n = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
+            px[i] = Gs_VramRead(cbp, 1, 0, n & 15, n >> 4);
+            hash = (hash ^ px[i]) * 16777619u;
+        }
+        lido = 1;
+        memo[m].key = cbp + 1;
+        memo[m].gen0 = g0;
+        memo[m].gen1 = g1;
+        memo[m].hash = hash;
+    }
+#else
     for (i = 0; i < 256; i++) {
         uint32_t n = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
         px[i] = Gs_VramRead(cbp, 1, 0, n & 15, n >> 4);
         hash = (hash ^ px[i]) * 16777619u;
     }
+#endif
     for (k = 0; k < MAX_CLUTS; k++) {
         if (sCluts[k].tex != 0 && sCluts[k].hash == hash) {
             sCluts[k].last = gGsFrame;
@@ -487,6 +512,14 @@ static GsTex clut_texture(uint32_t cbp) {
     if (sCluts[old].tex != 0) {
         TEX_DESTROY(sCluts[old].tex);
     }
+#ifdef BT3_GS_ESPERAS
+    if (!lido) { /* (as páginas não mudaram desde o hash lembrado: as cores são as que deram esse hash) */
+        for (i = 0; i < 256; i++) {
+            uint32_t n = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
+            px[i] = Gs_VramRead(cbp, 1, 0, n & 15, n >> 4);
+        }
+    }
+#endif
     upload = malloc(sizeof(px));
     memcpy(upload, px, sizeof(px));
     tex = sBackend->texCreate(256, 1, GS_TEXFMT_RGBA8, 1);
