@@ -518,3 +518,10 @@ desenho ocioso nunca rodaram) e os ramos de queda. Diferenças de comportamento 
 textura vale um quadro depois (só com a memória esgotada); as liberações chegam à cova um quadro e meio mais tarde que no
 degrau 1; um `target_color` de vaga reaproveitada sem textura conta uma branca a mais no log (a fila do `gs_draw.c` pede a cor da
 vaga); 512 KB a mais de memória fixa para a conta da VU1 (`sVuLo`, `sVuNv`).
+
+### A rodada do critério (20/10/2026) [medido]
+
+No WSL, serviço `claude-d2e4`, HEAD `c79548b`, de 20:54 a 23:51: as três builds do HEAD (x86, x86 com rastreio, PPC), a `.text`
+da x86 `cc46fa0752f092fca305bc8bf2e2e54390763af0` (a mesma), `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` com RC 0 e
+"tudo certo" (11 de 11 imagens idênticas no treino), `SEMMAPA=1 IMG=1 roteiros.sh duelo` com RC 0 e "tudo certo" (9 de 9), o git
+sem alterados no fim. Saídas de `port/build/roteiros` apagadas depois de conferidas. Falta a rodada no console (as três aberturas).
