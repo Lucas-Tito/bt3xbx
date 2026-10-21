@@ -410,3 +410,27 @@ Guide.
    névoa e os ids das passadas de tabela, que o corte 4 toca), a Guide no menu, na carga e na pausa, nenhum `vigia:` novo.
 5. O custo da própria medida: são umas 24 mil leituras do `mftb` por quadro. Se a parede da janela parecer alta, uma abertura
    a mais com `BT3_TEMPOS=0` no `ambiente.txt` (sem as linhas, e sem os tempos do backend) dá o período sem ela.
+
+### A rodada do critério e o console (21/10/2026) [medido]
+
+**WSL**, serviço `claude-envio`, HEAD `3a074d9`, de 09:55 a 12:39: as listas da `x86gv` iguais às de antes nos dois roteiros, as três
+builds do HEAD, a `.text` da x86 `cc46fa0752f092fca305bc8bf2e2e54390763af0` (a mesma), `f5_duelo` e `f5_treino` com "tudo certo"
+(11 de 11 imagens idênticas) e `duelo` com "tudo certo" (9 de 9), o git limpo no fim.
+
+**Console**, `.xex` `b13d0a5c239bbe201480a429dd075df6`, `BT3_GS_THREAD=1` e `BT3_GS_DESENHO=1`, Duelo, Goku contra Kuririn,
+estágio 5, sem queda, sem textura branca:
+
+| Abertura | Luta, mediana | p95 | p99 |
+|---|---:|---:|---:|
+| Antes dos cortes (degrau 2, `BT3_TEMPOS` ligado) | 38,4 ms | 59,5 | 78,6 |
+| Com os cortes e a medição por família ligada | 39,3 ms | 61,8 | 91,9 |
+| **Com os cortes, `BT3_TEMPOS=0`** | **36,2 ms** | 58,5 | 95,0 |
+
+- **A medição por família custa uns 3 ms no 360** (39,3 contra 36,2): é de diagnóstico. Rodada de desempenho se compara sempre com
+  `BT3_TEMPOS=0` dos dois lados; a referência de agora é **36,2 ms**.
+- **Os cortes renderam no máximo 2,2 ms** (a base de 38,4 tinha a medição do backend ligada), menos que os 3 a 3,7 estimados.
+- **O rateio de dentro da luta** (as linhas `gs: gravação por família`, com a medição ligada, por quadro): VU1 22 a 25 ms (com 2,1 de
+  hash dentro), envio 6,4 ms (288 envios, 2,5 MB), `GsVu1_Unpack` 3,4 ms, entrega 2,7 de cópia e 2,4 do gancho do backend, hash fora
+  da VU1 uns 0,4 ms, o resto (andar a cadeia, a montagem, o GIF) 10 a 12 ms. O envio anda a uns 390 MB/s: no Xenon ele espera a
+  memória (escrita espalhada na VRAM do GS), e por isso o corte 2, que tirou contas, quase não rendeu lá. O hash fora da VU1 é
+  pequeno no console: o candidato 3 perde força. Faltam uns 3 ms para os 33,37: a VU1, a cópia da entrega e o `Unpack` são os alvos.

@@ -1447,6 +1447,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   vai para a thread de gravação como trabalho que o jogo espera; no 360 isso evita criar recurso fora da thread dona.
 - **O `ambiente.txt` de uma rodada de menus começa com `-BT3_DEMO`.** A build sem janela liga a luta de demonstração por padrão
   (`posix360.c`); sem a linha, o jogo abre direto na demo e sai com a tela verde. Copiar o bloco de uma nota antiga sem ela custou uma abertura.
+- **Medição de tempo fina custa no Xenon o que não custa na x86.** A medição por família da gravação (umas 24 mil leituras do
+  `mftb` por quadro) custou uns 3 ms da luta no console (39,3 contra 36,2 ms). Compare desempenho sempre com a medição desligada
+  nos dois lados (`BT3_TEMPOS=0`) e ligue-a só para o rateio. E um corte que tira contas pode não render no Xenon se o laço espera
+  a memória: o envio PSMCT32 caiu 38% na x86 e quase nada no console.
 - **Medir a luta pela janela de passos, não pela média dos trechos de 60 quadros.** Na rodada do degrau 2 a média dos trechos com
   lutadores deu 49 ms e quase descartou o ganho; a mediana da janela (`passos: janela ... trabalho p50`, fechada pela pausa) deu
   38,4 ms. Os trechos misturam a pausa e as cenas paradas. E sair pela pausa com uns 3 s de espera, para a janela fechar.
