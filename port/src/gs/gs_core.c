@@ -822,9 +822,38 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
             } else if (dpsm == 0x00) {
                 const uint16_t *in = sIn32[y & 31];
                 uint32_t base = (dbp + (y >> 5) * 32 * bw) << 6;
+#ifdef BT3_GS_ESPERAS
+                /* (F5, etapa 8, gravação) Em grupos de 8 pixels: com x múltiplo de 8 os 8 pixels caem no mesmo bloco, nas
+                   palavras o, o+1, o+4, o+5, o+8, o+9, o+12 e o+13 (kCol32: cada linha é c, c+1, c+4, c+5, ... com c par),
+                   e o + 13 não sai do bloco de 64 palavras (nem passa da volta da máscara, que é múltipla de 64). Uma
+                   consulta por grupo no lugar de 8; as pontas fora de um grupo pelo laço de antes. As cópias seguem de 4
+                   bytes, como antes: a origem (o pacote do jogo) só é alinhada a 4 quando o grupo começa num pixel
+                   ímpar, e no Xenon um acesso de 8 bytes desalinhado pode custar uma exceção. Os mesmos bytes nos
+                   mesmos lugares. */
+                const uint8_t *src = &p[i * 4];
+                j = 0;
+                for (; j < run && (x & 7) != 0; j++, x++, src += 4) {
+                    memcpy(&sVram[(base + ((x >> 6) << 11) + in[x & 63]) & 0xFFFFF], src, 4);
+                }
+                for (; j + 8 <= run; j += 8, x += 8, src += 32) {
+                    uint32_t *d = &sVram[(base + ((x >> 6) << 11) + in[x & 63]) & 0xFFFFF];
+                    memcpy(d, src, 4);
+                    memcpy(d + 1, src + 4, 4);
+                    memcpy(d + 4, src + 8, 4);
+                    memcpy(d + 5, src + 12, 4);
+                    memcpy(d + 8, src + 16, 4);
+                    memcpy(d + 9, src + 20, 4);
+                    memcpy(d + 12, src + 24, 4);
+                    memcpy(d + 13, src + 28, 4);
+                }
+                for (; j < run; j++, x++, src += 4) {
+                    memcpy(&sVram[(base + ((x >> 6) << 11) + in[x & 63]) & 0xFFFFF], src, 4);
+                }
+#else
                 for (j = 0; j < run; j++, x++) {
                     memcpy(&sVram[(base + ((x >> 6) << 11) + in[x & 63]) & 0xFFFFF], &p[(i + j) * 4], 4);
                 }
+#endif
             } else {
                 const uint16_t *in = sIn16[dpsm == 0x0A][y & 63];
                 uint32_t base = (dbp + (y >> 6) * 32 * bw) << 7;
