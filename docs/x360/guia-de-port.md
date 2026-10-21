@@ -1447,7 +1447,65 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   vai para a thread de gravação como trabalho que o jogo espera; no 360 isso evita criar recurso fora da thread dona.
 - **O `ambiente.txt` de uma rodada de menus começa com `-BT3_DEMO`.** A build sem janela liga a luta de demonstração por padrão
   (`posix360.c`); sem a linha, o jogo abre direto na demo e sai com a tela verde. Copiar o bloco de uma nota antiga sem ela custou uma abertura.
+- **Medir a luta pela janela de passos, não pela média dos trechos de 60 quadros.** Na rodada do degrau 2 a média dos trechos com
+  lutadores deu 49 ms e quase descartou o ganho; a mediana da janela (`passos: janela ... trabalho p50`, fechada pela pausa) deu
+  38,4 ms. Os trechos misturam a pausa e as cenas paradas. E sair pela pausa com uns 3 s de espera, para a janela fechar.
+- **Tela preta depois das logos, com o jogo vivo, é o filme de abertura:** o 360 ainda não desenha os filmes (contados, não
+  desenhados, `gs_d3d.cpp`) e ele dura uns dois minutos. START o pula. Na rodada da etapa 2 do degrau 2 pareceu trava e custou uma
+  abertura; o sinal no log é um desenho por quadro com o resto idêntico à rodada anterior.
 - **Área estática que recebe dados de quadword: alinhe pelo tipo, não por `aligned`.** O `uint8_t sCopia[]` da cópia dos REF não tinha
   alinhamento garantido no `cl` (o `Gs_Gif` lê em 8 bytes; no Xenon o não alinhado pode falhar). E o `__attribute__((aligned(N)))` não passa
   no `c89.py` antigo num fonte com acentos (a posição do `clang` é em bytes, o texto em caracteres: "aligned sem valor", corrigido
   depois, seção 6); um vetor de `uint64_t` resolve.
+
+### A divisão entre gravação e desenho (F5, etapa 8, degrau 2, etapa 3, `plano/F5/08-degrau2.md`)
+
+- **O `c89.py` conta as posições do AST em caracteres e o `clang` em bytes: todo literal de string com acento desloca as
+  reescritas que vêm depois no mesmo fonte.** Não é só o `aligned` do degrau 1: seis mensagens novas com acento no `gs_draw.c`
+  puseram o `{` da declaração depois de comando do `GsGpu_FrameEnd` nove caracteres adiante (`uint64_t { t0 = ...`) e o `cl`
+  recusou o fonte. Os comentários não contam (o `clang -E` os tira). Nos fontes que o `c89.py` prepara, acento em string vai por
+  escape octal (`"divis\303\243o"`), ou a mensagem sai sem acento (até o `c89.py` passar a trabalhar em bytes, `72c13bc`,
+  na mesma época; com ele o escape deixa de ser preciso). Um deslocamento que ainda compile seria um erro silencioso:
+  depois de mexer em string de um desses fontes, olhe o `.c` gerado em `build/x360/f2/c89` perto das reescritas.
+- **Na build sem janela, símbolo que não existe vira stub, e escrever nele cai.** O `gGsVu1Ms` só existe no 360 (`gs_vu1.c`,
+  `#ifdef PORT_X360`); a entrega o zerava e a `x86gv` caiu no primeiro quadro, com o ligador calado. O sinal é a contagem de
+  stubs subir (104 para 105): compare a linha `N stubs` do `headless.py` com a de antes a cada build.
+- **A prova de uma fila de liberação precisa de liberação que a use.** Nos dois roteiros nenhuma textura solta é do quadro que o
+  desenho ainda desenha (no `f5_treino`, nenhum pedido de soltar): soltar sem a fila passa limpo. Com o cache pequeno de
+  propósito (`BT3_GS_TEX_MAX=256`, só nas builds `--gpu`) a varredura solta texturas do quadro anterior, e a sabotagem aparece
+  como milhares de desenhos com textura já solta.
+- **Na divisão, o atraso que mostra a corrida é o do desenho, não o da gravação.** A entrega sem a cópia e o `cleared` ligado pelo
+  desenho saíram limpos sem atraso (o desenho do falso termina antes de a gravação chegar lá); com `BT3_GS_DESENHO_ATRASO_US`
+  de 5 ou 20 ms, falharam. Cada prova negativa de uma thread nova precisa da chave que atrasa essa thread.
+- **No WSL, processo deixado por `nohup ... &` dentro do `wsl -- bash -s` morre quando a sessão do ssh fecha.** Use
+  `setsid nohup ... < /dev/null &` (ou um serviço). E `git fetch BUNDLE ramo:ramo` recusa o ramo que está em uso: `git fetch
+  BUNDLE ramo && git reset --hard FETCH_HEAD`, só com a árvore limpa.
+- **Antes de mandar commit novo ao WSL, `pgrep` pelos trabalhos do anterior.** Um `reset --hard` e uma build nova no meio de uma
+  rodada põem dois emuladores juntos e podem trocar o binário de uma rodada em andamento; custou refazer a última da matriz.
+- **Linha de log que um verificador lê sai numa escrita só, sobretudo quando outra thread escreve no mesmo arquivo.** A linha
+  `gpu_falso: quadro N` saía em nove `fprintf` no `stderr` sem buffer; com a divisão quem a escreve é a thread de desenho, e na
+  PPC a do jogo escreve ao mesmo tempo as linhas `LEU arquivo` (`BT3_LEU=1`, que a x86 não tem) no mesmo arquivo. Uma `LEU` no
+  meio da linha a cortava: o `divergencias.py` via quadros faltando e quadros "com a lista diferente", e a PPC parecia ter uma
+  corrida que a x86 não tinha. Antes de caçar corrida no código, compare o hash da lista (o campo do começo da linha, que sai
+  inteiro) e procure texto de outra linha no meio (`grep -c '.LEU '`): aqui os dois bastaram. Monte a linha num buffer e escreva
+  com um `fputs`; o verificador passou a contar as linhas misturadas e a falhar com elas.
+- **A build `ppcg` (`headless.py --alvo ppc --gpu`) pede a x86 plana do mesmo commit pronta antes** (o mapa das tabelas sai dos
+  `.i` dela): num script que leva commit novo ao WSL, a x86 vem primeiro, ou ele para na build com "a build x86 é de outra origem".
+
+### A thread de desenho no 360 (F5, etapa 8, degrau 2, etapa 4, `plano/F5/08-degrau2.md`)
+
+- **Não edite fonte com o `build_f2.sh` rodando.** O passo 1 (`c89.py`) lê os fontes e o carimbo (`commit diff:sha1`) guarda a
+  diferença daquele instante; uma correção feita no meio da build ficou fora do `.xex` e a build teve de ser refeita. Para
+  conferir que uma build é de um estado, compare o carimbo da linha 2 do `build_f2.log` com o do estado (ou faça o commit antes).
+- **Thread ociosa que faz trabalho próprio precisa de um estado de ocupada que quem posta trabalho espera.** O desenho ocioso do
+  360 repete o último quadro sozinho (a Guide); o primeiro `desenho_init` punha o pedido de init (`sDesTem = 3`) sem esperar, e
+  uma repetição em andamento (`sDesTem = 2`) o apagava ao terminar (`sDesTem = 0`): o init "falhava" sem ter rodado. Achado na
+  revisão, antes de rodar. Regra: todo ponto que posta trabalho espera o estado livre (0) sob a mesma trava, como a entrega já
+  fazia.
+- **No 360, a decisão de dividir vem antes do init do backend.** O init pega o dispositivo (`AcquireThreadOwnership`) e só a
+  dona o chama: com o desenho numa terceira thread, o init tem de rodar nela, então a thread nasce antes e a gravação espera o
+  init por um trabalho dela. No PC e no falso a ordem de antes não muda nada (a divisão segue no fim do `GsGpu_Init`).
+- **Para dividir um backend em duas threads, um ponto de troca com o outro lado parado vale mais que travas por campo.** No
+  `gs_d3d.cpp`, tudo o que passa da gravação para o desenho (as texturas das vagas por versão, a conta da VU1, os contadores do
+  log) passa na entrega, com o desenho esperando; o resto tem dono único, e o que os dois mexem de verdade (os bytes pendentes)
+  é atômico. O inventário campo a campo (`08-degrau2.md`, seções 1 e 2) é o que mostra quais campos sobram para esse ponto.

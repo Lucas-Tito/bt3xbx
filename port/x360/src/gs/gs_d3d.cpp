@@ -29,6 +29,11 @@
  * BT3_GS_THREAD=1 (F5, etapa 8, degrau 1) a gravação do quadro e este desenho são de uma thread só, a de gravação do
  * gs_core.c (que roda o init, é dona do dispositivo e o solta ao parar); o jogo só entrega a lista e espera nos pontos do
  * PS2. GsD3d_Repete mostra de novo o último quadro quando o jogo passa de 50 ms sem entregar um (a Guide).
+ * Com BT3_GS_DESENHO=1 também (degrau 2, etapa 4; docs/x360/plano/F5/08-degrau2.md) o desenho é de uma terceira thread, a
+ * dona do dispositivo (init, frame_end, Present, Repete, Soltar), e lê o quadro pelo retrato que a gravação entrega
+ * (gsQuadro). Do lado da gravação ficam as entradas que criam (texturas, alvos e profundidades pelo XG), o cache e o
+ * descarte; a cova, o conteúdo dos alvos e a EDRAM são do desenho. A entrega (entrega, mais abaixo) roda na gravação com o
+ * desenho parado: é ali que um lado passa ao outro o que mudou (as texturas das vagas, os contadores do trecho).
  *
  * Saídas para conferência (port/x360/tools/compara_quadros.py, no WSL):
  *   BT3_SHOT=N        a imagem mostrada a cada N quadros do GS em game:\shots\gpu_NNNNN.ppm, no formato do
@@ -65,9 +70,13 @@ extern "C" {
 #include "gs_texpack.h"
 extern D3DDevice *gX360Dev; /* main360.cpp */
 int GsDraw_X360Abre(uint32_t w, uint32_t h, int modo); /* gs_draw.c: descarta texturas do cache até caber */
+void GsDraw_DesenhoResumo(void);                         /* gs_draw.c: a entrega do degrau 2 no log */
 extern volatile unsigned gX360Luta; /* estado360.c: o vblank em que a luta começou (0: fora da luta) */
 /* Para o vigia da main (main360.cpp): onde o fim do quadro está e quantos quadros já foram apresentados. */
 volatile const char *gGsD3dEtapa = "antes do primeiro quadro";
+/* (degrau 2, etapa 4) onde a parte do backend que roda na gravação está (alvos, profundidades, memória, a entrega); sem a
+   divisão as duas etapas são da mesma thread */
+volatile const char *gGsD3dEtapaGrav = "antes do primeiro quadro";
 volatile unsigned gGsD3dQuadros;
 int Port_AspectMilli(void);  /* plat_stub.c */
 }
@@ -144,9 +153,16 @@ static unsigned sNativos = 7, sFba = 1, sCorte = 1;
 typedef struct Ret { int x0, y0, x1, y1; } Ret; /* vazio quando x1 <= x0 */
 typedef struct Alvo {
     D3DTexture *tex;
-    Ret conteudo; /* onde ele já foi desenhado (fora dali, zero) */
+    Ret conteudo; /* onde ele já foi desenhado (fora dali, zero); só o do desenho vale */
+    unsigned ver; /* (degrau 2, etapa 4) a gravação o muda a cada troca da textura da vaga */
 } Alvo;
+/* (degrau 2, etapa 4) Dois lados: sAlvos é da gravação (a textura de cada vaga: target_ensure, target_color, a fila de
+   liberação, alvos_sem_textura); sAlvoD é do desenho (a textura e o conteúdo), posto em dia no começo do quadro certo por
+   sincroniza_alvos (o risco 6 do inventário): a vaga cuja textura mudou na gravação do quadro esquece o conteúdo, o dela e o
+   da profundidade. O mesmo para sProf e sProfD. Sem a divisão, os dois lados são da mesma thread e a sincronização é no
+   começo do frame_end (antes, o target_ensure zerava o conteúdo na hora; ninguém o lê entre um e outro). */
 static Alvo sAlvos[MAX_TARGETS];
+static Alvo sAlvoD[MAX_TARGETS];
 static int sResidente = -1; /* o alvo que está na EDRAM */
 static Ret sSujo;           /* o que foi desenhado nele desde que entrou */
 
@@ -155,11 +171,13 @@ static Ret sSujo;           /* o que foi desenhado nele desde que entrou */
    largura de um tile da EDRAM, por causa da troca de metades do restauro como cor). */
 typedef struct Prof {
     D3DTexture *tex; /* D24S8 tiled, o destino do Resolve da profundidade (NULL: sem) */
-    D3DTexture cor;  /* cabeçalho: a mesma memória lida como A8B8G8R8 (o restauro como cor) */
-    Ret conteudo;    /* onde ela vale (fora dali, zero, o valor da limpeza) */
-    unsigned falhou; /* o quadro em que a criação falhou (tenta de novo 60 quadros depois) */
+    D3DTexture *cor; /* cabeçalho: a mesma memória lida como A8B8G8R8 (o restauro como cor); mora com a textura (ProfXg) */
+    Ret conteudo;    /* onde ela vale (fora dali, zero, o valor da limpeza); só o do desenho vale */
+    unsigned falhou; /* o quadro em que a criação falhou (tenta de novo 60 quadros depois); só o da gravação */
+    unsigned ver;    /* (degrau 2, etapa 4) a gravação o muda ao criar e ao soltar */
 } Prof;
-static Prof sProf[MAX_TARGETS];
+static Prof sProf[MAX_TARGETS];  /* a gravação (prof_garante, prof_cria, prof_solta) */
+static Prof sProfD[MAX_TARGETS]; /* o desenho */
 static int sModoZ;       /* 0 a profundidade volta zerada (o de antes), 1 restauro como cor, 2 pelo oDepth */
 static int sZDono = -1;  /* o alvo cuja profundidade está na EDRAM (-1: nenhum; ver prof_entrega) */
 static Ret sSujoZ;       /* o que os desenhos com escrita de z do sZDono tocaram desde que ela entrou na EDRAM */
@@ -169,11 +187,27 @@ typedef struct Pipe { uint32_t key, bkey, wmask; int ztst, zwrite, topo, vu, fx;
 static Pipe sPipes[1024];
 static int sPipeCount;
 
-/* recursos soltos que a GPU ainda pode estar lendo: Release só quando IsBusy diz que não (senão bloqueia) */
-static D3DResource *sCova[MAX_COVA];
+/* recursos soltos que a GPU ainda pode estar lendo: xg_libera só quando IsBusy diz que não (senão BlockUntilNotBusy) */
+static D3DTexture *sCova[MAX_COVA]; /* (só recursos do XG, TexXg: ver xg_cria) */
 static unsigned sCovaBytes[MAX_COVA];
 static unsigned char sCovaClasse[MAX_COVA];
 static int sCovaN;
+
+/* (degrau 2, etapa 4) a divisão (BT3_GS_DESENHO=1; gs_draw.c decide antes do init, que roda na thread de desenho) */
+static int sDiv;                     /* 1: o frame_end numa thread (a dona do dispositivo) e a gravação noutra */
+static DWORD sDono;                  /* a thread dona do dispositivo (a do init; 0 depois de soltar) */
+static HANDLE sCovaEv;               /* o desenho atendeu o pedido de memória da gravação (GsD3d_Ocioso) */
+static volatile unsigned sPedeLivre; /* bytes livres que a gravação espera (0: nada pedido) */
+static unsigned sPendGrav;           /* bytes que a gravação pediu para soltar desde a última entrega (ainda não entregues) */
+/* as profundidades das vagas que a gravação reaproveitou (a cor vai pela fila do gs_draw.c): uma lista enche na gravação,
+   a outra viaja com o retrato e o desenho as põe na cova depois de desenhá-lo */
+#define PROF_FILA (2 * MAX_TARGETS)
+static D3DTexture *sProfFila[2][PROF_FILA];
+static int sProfFilaN[2], sProfFilaG, sProfFilaD = -1;
+static D3DTexture *sMostradoTex;     /* a textura do alvo da última imagem apresentada (GsD3d_Repete); NULL: nenhuma */
+static DWORD sUltimoPresent;         /* GetTickCount do último Present */
+static uint32_t sVuLo[MAX_DRAWS], sVuNv[MAX_DRAWS]; /* (vu_plano) o primeiro vértice e quantos, por desenho da VU1 que coube */
+static const GsQuadro *sQ;           /* o quadro que o frame_end desenha */
 
 static void esquece_estado(void);
 static int sCurPipe = -1, sCurSamp = -1, sEstadoGs;
@@ -193,6 +227,7 @@ static struct {
     unsigned buffers;                  /* os vetores fixos do gs_draw.c */
     unsigned livres, livresMin, criadoDesde, total; /* dwAvailPhys medido, o menor visto, criado desde a medida */
     unsigned pressoes, descN, descBytes, esperas, branca[BR_N];          /* no trecho de 60 quadros */
+    unsigned esperasDes;               /* no trecho: as esperas da gravação pelo desenho (com a divisão) */
     unsigned acimaTeto;                /* no trecho: texturas criadas acima do teto (nada descartável) */
     unsigned pressoesTot, descNTot, esperasTot, brancaTot[BR_N], falasBranca[BR_N], falasPressao;
     double descBytesTot;
@@ -217,6 +252,67 @@ static unsigned tam_alvo(void) {
     return t;
 }
 
+/* (F5, etapa 8, degrau 2, etapa 2) As texturas do jogo, os alvos e as profundidades são feitos sem o dispositivo, para a
+   gravação poder criá-los fora da thread que desenha: o cabeçalho pelo XG em memória comum e os dados em XPhysicalAlloc
+   (alinhamento de página, 4 KB, o que o XG pede para textura; escrita combinada, a que o XDK exige para recurso feito à
+   mão e a mesma do D3D sem D3DUSAGE_CPU_CACHED_MEMORY). O D3D não conta esse recurso: nunca Release. xg_libera solta os
+   dados e o cabeçalho e só se chama com a GPU sem ele (IsBusy falso ou depois do BlockUntilNotBusy, que valem para o
+   cabeçalho do XG). O cabeçalho é o primeiro campo: o ponteiro serve de D3DTexture * e de GsTex. Os bytes são os do
+   tam_real (o XPhysicalAlloc arredonda para a página), então a conta da memória e o dwAvailPhys andam juntos. */
+typedef struct TexXg {
+    D3DTexture cab;
+    void *dados;    /* o endereço virtual dos dados (XPhysicalAlloc) */
+    unsigned bytes; /* os bytes reservados, os mesmos do tam_real */
+    unsigned pitch; /* bytes por linha do nível 0, o do XG */
+    int prof;       /* 1: é um ProfXg (o cabeçalho que lê a profundidade como cor vem junto, com a cerca dele) */
+} TexXg;
+typedef struct ProfXg {
+    TexXg x;
+    D3DTexture cor;
+} ProfXg;
+
+static TexXg *xg_cria_n(UINT w, UINT h, D3DFORMAT f, size_t tam) {
+    TexXg *x = (TexXg *)calloc(1, tam);
+    XGTEXTURE_DESC d;
+    UINT t;
+    if (x == NULL) {
+        return NULL;
+    }
+    t = XGSetTextureHeader(w, h, 1, 0, f, (D3DPOOL)0, 0, 0, 0, &x->cab, NULL, NULL);
+    x->bytes = (t + 4095u) & ~4095u;
+    x->dados = XPhysicalAlloc(x->bytes, MAXULONG_PTR, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    if (x->dados == NULL) {
+        free(x);
+        return NULL;
+    }
+    XGOffsetResourceAddress(&x->cab, x->dados);
+    XGGetTextureDesc(&x->cab, 0, &d);
+    x->pitch = d.RowPitch;
+    return x;
+}
+static TexXg *xg_cria(UINT w, UINT h, D3DFORMAT f) { return xg_cria_n(w, h, f, sizeof(TexXg)); }
+
+/* a GPU ainda usa o recurso (os dois cabeçalhos de uma profundidade) */
+static int xg_ocupado(D3DTexture *t) {
+    TexXg *x = (TexXg *)t;
+    return x->cab.IsBusy() || (x->prof && ((ProfXg *)x)->cor.IsBusy());
+}
+static void xg_espera(D3DTexture *t) {
+    TexXg *x = (TexXg *)t;
+    x->cab.BlockUntilNotBusy();
+    if (x->prof) {
+        ((ProfXg *)x)->cor.BlockUntilNotBusy();
+    }
+}
+
+static void xg_libera(D3DTexture *t) {
+    TexXg *x = (TexXg *)t;
+    if (x != NULL) {
+        XPhysicalFree(x->dados);
+        free(x);
+    }
+}
+
 /* a memória física livre agora, em bytes (e o menor valor visto) */
 static unsigned mem_mede(void) {
     MEMORYSTATUS m;
@@ -230,8 +326,15 @@ static unsigned mem_mede(void) {
     return sMem.livres;
 }
 
+/* memória física livre agora, sem mexer na medida da gravação (o desenho e os logs) */
+static unsigned livres_agora(void) {
+    MEMORYSTATUS m;
+    GlobalMemoryStatus(&m);
+    return (unsigned)m.dwAvailPhys;
+}
+
 /* memória física livre, em MB */
-static unsigned mb_livres(void) { return mem_mede() >> 20; }
+static unsigned mb_livres(void) { return livres_agora() >> 20; }
 
 /* a estimativa sem chamar o sistema (o que foi criado desde a última medida sai dela); perto do piso, medida */
 static unsigned mem_livres(unsigned pedido) {
@@ -279,6 +382,13 @@ static struct { uint32_t chave; int src; unsigned n; } sTabTipo[8];
 static int sTabTipoN;
 static LARGE_INTEGER sFreq, sUltimoFim;
 static unsigned sAvisado; /* bits: o que já foi dito uma vez no log */
+/* (degrau 2, etapa 4) os contadores do trecho que a gravação escreve (o descarte, as brancas, as texturas novas e as
+   recusadas); somados aos do log por grav_junta, na entrega (o desenho parado) ou, sem a divisão, no começo do frame_end.
+   Os contadores da VU1 do gs_vu1.c (gravação) vão para as cópias do log no mesmo ponto. */
+static struct {
+    unsigned pressoes, descN, descBytes, esperas, acimaTeto, branca[BR_N], texNovas, semTextura;
+} sG;
+static unsigned sVuLotes[4][3], sVuDesc[8][2], sVuInstrDesc;
 
 /* (F5, etapa 3) o tempo por passo e os descartes da janela medida (port/x360/headless/passos.c): cada Present vai para
    lá com o quadro do GS mostrado e o tempo dentro dele, e os descartes acumulados desde o começo saem de
@@ -322,6 +432,39 @@ static double ms_desde(const LARGE_INTEGER *a) {
     LARGE_INTEGER b;
     QueryPerformanceCounter(&b);
     return (double)(b.QuadPart - a->QuadPart) * 1000.0 / (double)sFreq.QuadPart;
+}
+
+/* o que a gravação contou desde a última vez passa para os contadores do log (os dois lados parados um para o outro) */
+static void grav_junta(void) {
+    int i, j, k;
+    sMem.pressoes += sG.pressoes;
+    sMem.descN += sG.descN;
+    sMem.descBytes += sG.descBytes;
+    sMem.esperasDes += sG.esperas;
+    sMem.acimaTeto += sG.acimaTeto;
+    for (i = 0; i < BR_N; i++) {
+        sMem.branca[i] += sG.branca[i];
+    }
+    sConta.texNovas += sG.texNovas;
+    sConta.semTextura += sG.semTextura;
+    memset(&sG, 0, sizeof(sG));
+    for (i = 0; i < 4; i++) {
+        for (j = 0; j < 3; j++) {
+            sVuLotes[i][j] += gGsVu1Lotes[i][j];
+        }
+    }
+    for (i = 0; i < 8 && gGsVu1Desconhecido[i][1] != 0; i++) {
+        for (k = 0; k < 8 && sVuDesc[k][1] != 0 && sVuDesc[k][0] != gGsVu1Desconhecido[i][0]; k++) {
+        }
+        if (k < 8) {
+            sVuDesc[k][0] = gGsVu1Desconhecido[i][0];
+            sVuDesc[k][1] += gGsVu1Desconhecido[i][1];
+        }
+    }
+    sVuInstrDesc += gGsVu1InstrDesc;
+    memset(gGsVu1Lotes, 0, sizeof(gGsVu1Lotes));
+    memset(gGsVu1Desconhecido, 0, sizeof(gGsVu1Desconhecido));
+    gGsVu1InstrDesc = 0;
 }
 
 /* ---- tempos por passada (F5, etapa 8; BT3_TEMPOS, ligado por padrão) ----------------------------------------- */
@@ -547,10 +690,15 @@ static void ret_une(Ret *r, int x0, int y0, int x1, int y1) {
     if (y1 > r->y1) r->y1 = y1;
 }
 
+/* (degrau 2, etapa 4) os pendentes mudam dos dois lados com a divisão (a gravação pede, o desenho solta): atômicos */
+static void pend_soma(int cl, int bytes, int n) {
+    InterlockedExchangeAdd((LONG volatile *)&sMem.pend[cl], (LONG)bytes);
+    InterlockedExchangeAdd((LONG volatile *)&sMem.nPend[cl], (LONG)n);
+}
+
 static void cova_solta(int i) {
-    sCova[i]->Release();
-    sMem.pend[sCovaClasse[i]] -= sCovaBytes[i];
-    sMem.nPend[sCovaClasse[i]]--;
+    xg_libera(sCova[i]);
+    pend_soma(sCovaClasse[i], -(int)sCovaBytes[i], -1);
 }
 
 /* a mais antiga da cova, esperando a GPU (nada do quadro fica preso no dispositivo fora do frame_end; mesmo assim os
@@ -561,7 +709,7 @@ static void cova_espera_primeira(void) {
     sDev->SetTexture(0, NULL);
     sDev->SetTexture(1, NULL);
     esquece_estado();
-    sCova[0]->BlockUntilNotBusy();
+    xg_espera(sCova[0]);
     cova_solta(0);
     memmove(sCova, sCova + 1, (sCovaN - 1) * sizeof(sCova[0]));
     memmove(sCovaBytes, sCovaBytes + 1, (sCovaN - 1) * sizeof(sCovaBytes[0]));
@@ -571,13 +719,24 @@ static void cova_espera_primeira(void) {
     gGsD3dEtapa = antes;
 }
 
-/* um recurso solto, com os bytes dele, que saem dos vivos e passam a pendentes */
-static void cova(D3DResource *r, int cl, unsigned bytes) {
+/* os bytes de um recurso solto saem dos vivos e passam a pendentes (na gravação, no pedido) */
+static void cova_conta(int cl, unsigned bytes) {
+    sMem.vivos[cl] -= sMem.vivos[cl] >= bytes ? bytes : sMem.vivos[cl];
+    sMem.nVivos[cl]--;
+    pend_soma(cl, (int)bytes, 1);
+    if (sDiv) {
+        sPendGrav += bytes;
+    }
+}
+
+/* o recurso na cova, até a GPU o soltar (no desenho; os bytes já contados como pendentes) */
+static void cova_poe(D3DTexture *r, int cl, unsigned bytes) {
     if (r == NULL) {
         return;
     }
-    sMem.vivos[cl] -= sMem.vivos[cl] >= bytes ? bytes : sMem.vivos[cl];
-    sMem.nVivos[cl]--;
+    if (r == sMostradoTex) {
+        sMostradoTex = NULL; /* (o GsD3d_Repete não a usa mais) */
+    }
     if (sCovaN == MAX_COVA) {
         cova_espera_primeira();
     }
@@ -585,8 +744,15 @@ static void cova(D3DResource *r, int cl, unsigned bytes) {
     sCovaBytes[sCovaN] = bytes;
     sCovaClasse[sCovaN] = (unsigned char)cl;
     sCovaN++;
-    sMem.pend[cl] += bytes;
-    sMem.nPend[cl]++;
+}
+
+/* um recurso solto, com os bytes dele, que saem dos vivos e passam a pendentes (sem a divisão: os dois de uma vez) */
+static void cova(D3DTexture *r, int cl, unsigned bytes) {
+    if (r == NULL) {
+        return;
+    }
+    cova_conta(cl, bytes);
+    cova_poe(r, cl, bytes);
 }
 
 /* o que a GPU já soltou sai (no fim do quadro, depois de soltar as texturas do dispositivo e do InsertFence, e a cada
@@ -594,7 +760,7 @@ static void cova(D3DResource *r, int cl, unsigned bytes) {
 static void cova_varre(void) {
     int i, n = 0;
     for (i = 0; i < sCovaN; i++) {
-        if (sCova[i]->IsBusy()) {
+        if (xg_ocupado(sCova[i])) {
             sCova[n] = sCova[i];
             sCovaBytes[n] = sCovaBytes[i];
             sCovaClasse[n] = sCovaClasse[i];
@@ -620,7 +786,9 @@ extern "C" uint32_t GsD3d_Falta(uint32_t w, uint32_t h, int modo) {
     if (!sMem.seguro) {
         return 0;
     }
-    cova_varre();
+    if (!sDiv) {
+        cova_varre(); /* (com a divisão a cova é do desenho) */
+    }
     livres = mem_livres(pedido);
     if (livres < piso + pedido) {
         falta = piso + pedido - livres;
@@ -639,36 +807,71 @@ extern "C" uint32_t GsD3d_Falta(uint32_t w, uint32_t h, int modo) {
 
 /* os bytes reais de uma textura do cache */
 extern "C" uint32_t GsD3d_TexBytes(GsTex tex) {
-    D3DSURFACE_DESC d;
-    if (tex == 0 || FAILED(((D3DTexture *)tex)->GetLevelDesc(0, &d))) {
-        return 0;
+    return tex == 0 ? 0 : ((const TexXg *)tex)->bytes;
+}
+
+/* (degrau 2, etapa 4) A gravação sem memória, com a divisão: a cova é do desenho. Pede a ele (sPedeLivre, e acorda o
+   ocioso; o que está desenhando atende no fim do quadro, GsD3d_Ocioso) e espera o sinal, com limite de 100 ms: o que falta
+   pode estar na fila de um retrato que só se entrega depois desta espera (o risco 8 do inventário). Sem pendentes além dos
+   pedidos desde a última entrega, ou atendido e com a cova vazia, não há o que esperar. Devolve quantas vezes esperou;
+   *livres sai medido. */
+static unsigned espera_desenho(unsigned precisa, unsigned *livres) {
+    const char *antes = (const char *)gGsD3dEtapaGrav;
+    DWORD t0 = GetTickCount();
+    unsigned n = 0;
+    gGsD3dEtapaGrav = "esperando o desenho soltar memória";
+    while (*livres < precisa && GetTickCount() - t0 < 100) {
+        DWORD r;
+        if (sMem.pend[CL_TEX] + sMem.pend[CL_ALVO] + sMem.pend[CL_PROF] <= sPendGrav) {
+            break; /* (o que está pendente ainda viaja com o quadro em gravação) */
+        }
+        ResetEvent(sCovaEv);
+        sPedeLivre = precisa;
+        GsDraw_DesenhoAcorda();
+        r = WaitForSingleObject(sCovaEv, 25);
+        n++;
+        *livres = mem_mede();
+        if (r == WAIT_OBJECT_0 && *(volatile int *)&sCovaN == 0) {
+            break;
+        }
     }
-    return tam_tex(d.Width, d.Height);
+    sPedeLivre = 0;
+    gGsD3dEtapaGrav = antes;
+    return n;
 }
 
 /* O frontend descartou `n` texturas (`bytes`, a mais recente sem uso há `idade` quadros; `emUso` protegidas). O que a
-   GPU já soltou sai da cova; se o piso ainda não deixa, espera a GPU soltar o mais antigo da cova, um por vez. 1: o
-   pedido cabe no piso (o teto das texturas é macio: passar dele é melhor que a branca). */
+   GPU já soltou sai da cova; se o piso ainda não deixa, espera a GPU soltar o mais antigo da cova, um por vez (com a
+   divisão, pede ao desenho: espera_desenho). 1: o pedido cabe no piso (o teto das texturas é macio: passar dele é melhor
+   que a branca). */
 extern "C" int GsD3d_Descartou(uint32_t w, uint32_t h, int modo, unsigned n, uint32_t bytes, unsigned idade, unsigned emUso) {
-    unsigned pedido = pedido_bytes(w, h, modo), piso = sMem.pisoMb * MB, livres, esperas = sMem.esperas;
+    unsigned pedido = pedido_bytes(w, h, modo), piso = sMem.pisoMb * MB, livres, esperas;
     int cabe;
-    sMem.pressoes++;
+    sG.pressoes++;
     sMem.pressoesTot++;
-    sMem.descN += n;
+    sG.descN += n;
     sMem.descNTot += n;
-    sMem.descBytes += bytes;
+    sG.descBytes += bytes;
     sMem.descBytesTot += bytes;
     sMem.emUso = emUso;
-    cova_varre();
-    livres = mem_mede();
-    while (livres < piso + pedido && sCovaN > 0) {
-        cova_espera_primeira();
+    if (!sDiv) {
+        unsigned antes = sMem.esperas;
+        cova_varre();
         livres = mem_mede();
+        while (livres < piso + pedido && sCovaN > 0) {
+            cova_espera_primeira();
+            livres = mem_mede();
+        }
+        esperas = sMem.esperas - antes;
+    } else {
+        livres = mem_mede();
+        esperas = livres < piso + pedido ? espera_desenho(piso + pedido, &livres) : 0;
+        sG.esperas += esperas;
     }
-    sMem.esperasTot += sMem.esperas - esperas;
+    sMem.esperasTot += esperas;
     cabe = livres >= piso + pedido;
     if (n == 0 && cabe) {
-        sMem.acimaTeto++; /* (só o teto das texturas, sem nada a descartar: passa dele, sem linha) */
+        sG.acimaTeto++; /* (só o teto das texturas, sem nada a descartar: passa dele, sem linha) */
         return 1;
     }
     if (sMem.falasPressao < 300 || sMem.pressoesTot % 50 == 0 || !cabe) {
@@ -677,7 +880,7 @@ extern "C" int GsD3d_Descartou(uint32_t w, uint32_t h, int modo, unsigned n, uin
                         "recente sem uso há %u quadros, %u protegidas; %u esperas pela GPU; agora texturas %u KB + %u KB "
                         "pendentes, alvos e profundidades %u KB, livres %u MB (piso %u): %s",
                         sMem.pressoesTot, gGsFrame, pedido >> 10, modo == MODO_ALVO ? "alvo" : "textura", w, h, n, bytes >> 10,
-                        idade, emUso, sMem.esperas - esperas, sMem.vivos[CL_TEX] >> 10, sMem.pend[CL_TEX] >> 10,
+                        idade, emUso, esperas, sMem.vivos[CL_TEX] >> 10, sMem.pend[CL_TEX] >> 10,
                         (sMem.vivos[CL_ALVO] + sMem.pend[CL_ALVO] + sMem.vivos[CL_PROF] + sMem.pend[CL_PROF]) >> 10, livres >> 20, sMem.pisoMb,
                         cabe ? "cabe" : "NÃO CABE");
     }
@@ -686,7 +889,7 @@ extern "C" int GsD3d_Descartou(uint32_t w, uint32_t h, int modo, unsigned n, uin
 
 /* uma textura que saiu branca, e por quê (as primeiras de cada motivo com o retrato da memória) */
 static void branca(int motivo, uint32_t w, uint32_t h) {
-    sMem.branca[motivo]++;
+    sG.branca[motivo]++;
     sMem.brancaTot[motivo]++;
     if (sMem.falasBranca[motivo] < 20) {
         sMem.falasBranca[motivo]++;
@@ -707,34 +910,35 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
    O espaço já foi aberto pelo frontend (GsDraw_X360Abre); aqui só o piso é conferido de novo (as paletas vêm sem
    passar por lá, 1 KB cada). */
 static GsTex tex_create(uint32_t w, uint32_t h, int format, int levels) {
-    D3DTexture *t = NULL;
+    TexXg *t;
     unsigned bytes = tam_tex(w, h);
     (void)levels;
     if (format != GS_TEXFMT_RGBA8) {
-        sConta.semTextura++;
+        sG.semTextura++;
         branca(BR_FORMATO, w, h);
         return 0;
     }
     if (mem_livres(bytes) < sMem.pisoMb * MB + bytes) {
-        sConta.semTextura++;
+        sG.semTextura++;
         return 0; /* (quem chamou conta o motivo) */
     }
-    if (FAILED(sDev->CreateTexture(w, h, 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
-        sConta.semTextura++;
+    t = xg_cria(w, h, D3DFMT_LIN_A8B8G8R8);
+    if (t == NULL) {
+        sG.semTextura++;
         return 0;
     }
-    mem_cria(CL_TEX, bytes);
-    sConta.texNovas++;
+    mem_cria(CL_TEX, t->bytes);
+    sG.texNovas++;
     return (GsTex)t;
 }
 
 static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int format, const void *px, uint32_t bytes) {
-    D3DTexture *t = (D3DTexture *)handle;
-    D3DLOCKED_RECT r;
+    TexXg *t = (TexXg *)handle;
     uint32_t y;
     (void)format;
     (void)bytes;
-    if (t == NULL || level != 0 || FAILED(t->LockRect(0, &r, NULL, 0))) {
+    /* (a textura acabou de ser criada: a GPU nunca a viu, o envio é direto no endereço, sem LockRect) */
+    if (t == NULL || level != 0) {
         free((void *)px);
         return 0;
     }
@@ -758,20 +962,18 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
         }
     }
     for (y = 0; y < h; y++) {
-        memcpy((BYTE *)r.pBits + y * r.Pitch, (const uint32_t *)px + y * w, w * 4);
+        memcpy((BYTE *)t->dados + y * t->pitch, (const uint32_t *)px + y * w, w * 4);
     }
-    t->UnlockRect(0);
     free((void *)px);
     return 1;
 }
 
 static void tex_destroy(GsTex tex) {
-    D3DTexture *t = (D3DTexture *)tex;
-    D3DSURFACE_DESC d;
+    TexXg *t = (TexXg *)tex;
     if (t == NULL) {
         return;
     }
-    cova(t, CL_TEX, SUCCEEDED(t->GetLevelDesc(0, &d)) ? tam_tex(d.Width, d.Height) : 0);
+    cova(&t->cab, CL_TEX, t->bytes);
 }
 
 /* só as paletas (clut_texture) perguntam: o texture_get do 360 abre espaço por GsDraw_X360Abre */
@@ -780,18 +982,13 @@ static GsTex white_tex(void) { return (GsTex)sBranco; }
 
 /* textura tiled (destino de Resolve), zerada: o conteúdo de um alvo novo é o da limpeza */
 static D3DTexture *textura_alvo(void) {
-    D3DTexture *t = NULL;
-    D3DLOCKED_RECT r;
-    if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() ||
-        FAILED(sDev->CreateTexture(TAM, TAM, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
+    TexXg *t = NULL;
+    if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() || (t = xg_cria(TAM, TAM, D3DFMT_A8R8G8B8)) == NULL) {
         return NULL;
     }
     mem_cria(CL_ALVO, tam_alvo());
-    if (SUCCEEDED(t->LockRect(0, &r, NULL, 0))) {
-        memset(r.pBits, 0, (size_t)r.Pitch * TAM);
-        t->UnlockRect(0);
-    }
-    return t;
+    memset(t->dados, 0, t->bytes); /* (nova: a GPU nunca a viu) */
+    return &t->cab;
 }
 
 /* ---- alvos --------------------------------------------------------------------------------------------------- */
@@ -801,31 +998,26 @@ static D3DTexture *textura_alvo(void) {
    branca: o log diz, e o fim do quadro tenta de novo. */
 static D3DTexture *alvo_com_espaco(void) {
     D3DTexture *t;
-    const char *antes = (const char *)gGsD3dEtapa;
-    gGsD3dEtapa = "criando a textura de um alvo";
+    const char *antes = (const char *)gGsD3dEtapaGrav;
+    gGsD3dEtapaGrav = "criando a textura de um alvo";
     GsDraw_X360Abre(TAM, TAM, MODO_ALVO);
     t = textura_alvo();
     if (t == NULL && GsDraw_X360Abre(TAM, TAM, MODO_FALHOU)) {
         t = textura_alvo();
     }
-    gGsD3dEtapa = antes;
+    gGsD3dEtapaGrav = antes;
     return t;
 }
 
 static int sAlvoSemTex[MAX_TARGETS]; /* 1: a vaga está sem textura (o fim do quadro tenta de novo) */
 
 static void prof_solta(int i);
+/* (na gravação) a textura nova da vaga; o desenho esquece o conteúdo da vaga, o da cor e o da profundidade (que, se houver,
+   fica para o novo dono), no começo do quadro desta gravação (sincroniza_alvos). O sResidente e o sZDono não precisam: entre
+   dois quadros eles são sempre -1 (o frame_end acaba com sai_da_edram e prof_entrega). */
 static void target_ensure(int i) {
     sAlvos[i].tex = alvo_com_espaco();
-    sAlvos[i].conteudo.x0 = sAlvos[i].conteudo.x1 = 0;
-    sProf[i].conteudo.x0 = sProf[i].conteudo.x1 = 0; /* (a textura de profundidade, se houver, fica para o novo dono) */
-    if (sZDono == i) {
-        sZDono = -1;
-        sSujoZ.x0 = sSujoZ.x1 = 0;
-    }
-    if (sResidente == i) {
-        sResidente = -1; /* (a vaga mudou de dono: o que estava na EDRAM era do antigo) */
-    }
+    sAlvos[i].ver++;
     sAlvoSemTex[i] = sAlvos[i].tex == NULL;
     if (sAlvos[i].tex == NULL) {
         Diario_Escrever("gs_d3d: ERRO: o alvo %d (de %d) ficou sem textura no quadro %u: livres %u MB (piso %u), texturas "
@@ -834,9 +1026,9 @@ static void target_ensure(int i) {
     }
 }
 
-/* no fim do quadro, com os estágios soltos: as vagas que ficaram sem textura tentam de novo (o conteúdo delas já se
-   perdeu; volta a valer a partir do próximo desenho) */
-static void alvos_sem_textura(void) {
+/* no fim do quadro (com a divisão, na entrega; sempre na gravação): as vagas que ficaram sem textura tentam de novo (o
+   conteúdo delas já se perdeu; volta a valer a partir do próximo desenho). limpa: a marca da entrega, desligada junto */
+static void alvos_sem_textura(unsigned char *limpa) {
     int i;
     sMem.semAlvo = 0;
     for (i = 0; i < gsTargetCount; i++) {
@@ -844,10 +1036,13 @@ static void alvos_sem_textura(void) {
             continue;
         }
         sAlvos[i].tex = alvo_com_espaco();
-        sAlvos[i].conteudo.x0 = sAlvos[i].conteudo.x1 = 0;
         if (sAlvos[i].tex != NULL) {
+            sAlvos[i].ver++;
             sAlvoSemTex[i] = 0;
             gsTargets[i].cleared = 0;
+            if (limpa != NULL) {
+                limpa[i] = 0;
+            }
             Diario_Escrever("gs_d3d: o alvo %d ganhou a textura no quadro %u", i, gGsFrame);
         } else {
             sMem.semAlvo++;
@@ -855,19 +1050,43 @@ static void alvos_sem_textura(void) {
     }
 }
 
+/* (sem a divisão) a vaga reaproveitada: as texturas dela para a cova (o sResidente é -1 e o sDateFonte se refaz no começo
+   do quadro) */
 static void target_drop(int i) {
-    if (sResidente == i) {
-        sResidente = -1;
-    }
-    if (sDateFonte == sAlvos[i].tex) {
-        sDateFonte = NULL;
-    }
     if (sAlvos[i].tex != NULL) {
         cova(sAlvos[i].tex, CL_ALVO, tam_alvo());
     }
     sAlvos[i].tex = NULL;
+    sAlvos[i].ver++;
     sAlvoSemTex[i] = 0;
     prof_solta(i);
+}
+
+/* (degrau 2, etapa 4, com a divisão) O pedido de soltar, na gravação (no lugar do texDestroy e do targetDrop): os bytes passam
+   a pendentes já, e o recurso vai para a cova no desenho (solta) depois de ele desenhar o quadro do pedido. A vaga de alvo
+   reaproveitada fica sem as texturas (o targetEnsure seguinte cria as novas); a cor viaja na fila do gs_draw.c (o tex que
+   ele guardou é o target_color desta vaga) e a profundidade na sProfFila (prof_solta). */
+static void solta_pede(GsTex tex, int alvo) {
+    if (alvo < 0) {
+        if (tex != 0) {
+            cova_conta(CL_TEX, ((const TexXg *)tex)->bytes);
+        }
+        return;
+    }
+    if (sAlvos[alvo].tex != NULL) {
+        cova_conta(CL_ALVO, tam_alvo());
+    }
+    sAlvos[alvo].tex = NULL;
+    sAlvos[alvo].ver++;
+    sAlvoSemTex[alvo] = 0;
+    prof_solta(alvo);
+}
+
+/* no desenho, depois de desenhar o quadro do pedido: para a cova, que solta quando a GPU largar */
+static void solta(GsTex tex, int alvo) {
+    if (tex != 0) {
+        cova_poe((D3DTexture *)tex, alvo < 0 ? CL_TEX : CL_ALVO, alvo < 0 ? ((const TexXg *)tex)->bytes : tam_alvo());
+    }
 }
 
 static GsTex target_color(int i) {
@@ -1045,7 +1264,7 @@ static void prof_poe(Prof *z, const Ret *r, int modo) {
         sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
         sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
         sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
-        quad(&z->cor, sPsZCor, TAMZ, TAM, x0, y0, x1, y1, x0 / TAM, y0 / TAM, x1 / TAM, y1 / TAM, 0);
+        quad(z->cor, sPsZCor, TAMZ, TAM, x0, y0, x1, y1, x0 / TAM, y0 / TAM, x1 / TAM, y1 / TAM, 0);
         sDev->SetRenderTarget(0, sEdramCor);
         sDev->SetDepthStencilSurface(sEdramProf);
         sDev->SetViewport(&vp);
@@ -1070,52 +1289,59 @@ static void prof_tira(Prof *z, const Ret *r) {
     sDev->Resolve(D3DRESOLVE_DEPTHSTENCIL, &fonte, z->tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
 }
 
-/* a textura de profundidade de um alvo e o cabeçalho que a lê como cor; 0: não coube */
+/* a textura de profundidade de um alvo e o cabeçalho que a lê como cor (na gravação: o XG, sem o dispositivo); 0: não coube */
 static int prof_cria(int i, int abre) {
     Prof *z = &sProf[i];
-    D3DTexture *t = NULL;
-    XGTEXTURE_DESC desc;
+    ProfXg *p = NULL;
     UINT base = 0;
     if (abre) {
-        const char *antes = (const char *)gGsD3dEtapa;
-        gGsD3dEtapa = "criando a textura de profundidade de um alvo";
+        const char *antes = (const char *)gGsD3dEtapaGrav;
+        gGsD3dEtapaGrav = "criando a textura de profundidade de um alvo";
         GsDraw_X360Abre(TAM, TAM, MODO_ALVO); /* (mesmo tamanho de um alvo: 4 MB) */
-        gGsD3dEtapa = antes;
+        gGsD3dEtapaGrav = antes;
     }
     if (mem_livres(tam_alvo()) < sMem.pisoMb * MB + tam_alvo() ||
-        FAILED(sDev->CreateTexture(TAM, TAM, 1, 0, D3DFMT_D24S8, D3DPOOL_DEFAULT, &t, NULL)) || t == NULL) {
+        (p = (ProfXg *)xg_cria_n(TAM, TAM, D3DFMT_D24S8, sizeof(ProfXg))) == NULL) {
         return 0;
     }
+    p->x.prof = 1;
     mem_cria(CL_PROF, tam_alvo());
-    XGGetTextureDesc(t, 0, &desc);
-    XGGetTextureLayout(t, &base, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0);
-    XGSetTextureHeader(TAM, TAM, 1, 0, D3DFMT_A8B8G8R8, (D3DPOOL)0, base, 0, desc.RowPitch, &z->cor, NULL, NULL);
-    z->tex = t;
+    /* (nova, como a do CreateTexture: o conteúdo só vale depois do primeiro Resolve; `conteudo` vazio até lá) */
+    XGGetTextureLayout(&p->x.cab, &base, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0);
+    XGSetTextureHeader(TAM, TAM, 1, 0, D3DFMT_A8B8G8R8, (D3DPOOL)0, base, 0, p->x.pitch, &p->cor, NULL, NULL);
+    z->tex = &p->x.cab;
+    z->cor = &p->cor;
     z->conteudo.x0 = z->conteudo.x1 = 0;
+    z->ver++;
     return 1;
 }
 
+/* (na gravação) a profundidade da vaga sai: sem a divisão, para a cova já (que espera os dois cabeçalhos, xg_ocupado); com
+   ela, os bytes passam a pendentes e a textura vai na sProfFila do quadro em gravação. O desenho a esquece no começo do
+   quadro desta gravação (sincroniza_alvos; o sZDono é -1 entre dois quadros). */
 static void prof_solta(int i) {
     Prof *z = &sProf[i];
-    if (sZDono == i) {
-        sZDono = -1;
-        sSujoZ.x0 = sSujoZ.x1 = 0;
-    }
     if (z->tex != NULL) {
-        /* o cabeçalho que lê como cor tem a cerca dele: a GPU pode ainda estar lendo a memória por ele */
-        if (z->cor.IsBusy()) {
-            z->cor.BlockUntilNotBusy();
+        if (!sDiv) {
+            cova(z->tex, CL_PROF, tam_alvo());
+        } else if (sProfFilaN[sProfFilaG] < PROF_FILA) {
+            cova_conta(CL_PROF, tam_alvo());
+            sProfFila[sProfFilaG][sProfFilaN[sProfFilaG]++] = z->tex;
+        } else {
+            Diario_Escrever("gs_d3d: ERRO: a fila das profundidades soltas encheu no quadro %u; uma fica sem soltar", gGsFrame);
         }
-        cova(z->tex, CL_PROF, tam_alvo());
     }
     z->tex = NULL;
+    z->cor = NULL;
     z->conteudo.x0 = z->conteudo.x1 = 0;
     z->falhou = 0;
+    z->ver++;
 }
 
-/* No começo do fim do quadro, antes de refazer a lista (nada dela está na GPU ainda e as texturas do quadro estão
-   protegidas do descarte): a textura de profundidade de cada alvo em que algum desenho escreve z. */
-static void prof_garante(void) {
+/* Antes de refazer a lista (nada dela está na GPU ainda e as texturas do quadro estão protegidas do descarte): a textura
+   de profundidade de cada alvo em que algum desenho escreve z. Na gravação: na entrega com a divisão, no começo do
+   frame_end sem ela. */
+static void prof_garante(const GsQuadro *q) {
     static unsigned char quer[MAX_TARGETS];
     static unsigned falas;
     uint32_t n;
@@ -1124,14 +1350,14 @@ static void prof_garante(void) {
         return;
     }
     memset(quer, 0, sizeof(quer));
-    for (n = 0; n < gsDrawCount; n++) {
-        const GsDraw *d = &gsDraws[n];
-        if (d->native == 0 && d->count != 0 && d->target >= 0 && d->target < gsTargetCount &&
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        if (d->native == 0 && d->count != 0 && d->target >= 0 && d->target < q->targetCount &&
             sPipes[d->pipeline].zwrite && sPipes[d->pipeline].ztst != 0) {
             quer[d->target] = 1;
         }
     }
-    for (i = 0; i < gsTargetCount; i++) {
+    for (i = 0; i < q->targetCount; i++) {
         if (!quer[i] || sProf[i].tex != NULL || (sProf[i].falhou != 0 && gGsFrame < sProf[i].falhou + 60)) {
             continue;
         }
@@ -1155,8 +1381,8 @@ static void prof_garante(void) {
    some. Entre uma coisa e outra, as visitas de alvos que não usam z não limpam a profundidade da EDRAM: quando o
    dono volta, ela ainda está lá, sem resolve nem restauro (o caso das passadas de tela no meio do cenário). */
 static void prof_entrega(void) {
-    if (sZDono >= 0 && sSujoZ.x1 > sSujoZ.x0 && sProf[sZDono].tex != NULL) {
-        Prof *z = &sProf[sZDono];
+    if (sZDono >= 0 && sSujoZ.x1 > sSujoZ.x0 && sProfD[sZDono].tex != NULL) {
+        Prof *z = &sProfD[sZDono];
         LARGE_INTEGER t;
         Ret rz = sSujoZ;
         QueryPerformanceCounter(&t);
@@ -1198,7 +1424,7 @@ static void sai_da_edram(void) {
     if (sResidente < 0) {
         return;
     }
-    if (r.x1 > r.x0 && sAlvos[sResidente].tex != NULL) {
+    if (r.x1 > r.x0 && sAlvoD[sResidente].tex != NULL) {
         tempo_poe(T_COR_RES);
         /* o destino do Resolve não fica preso como textura (a cópia de volta deixou a dele no estágio 0) */
         sDev->SetTexture(0, NULL);
@@ -1208,8 +1434,8 @@ static void sai_da_edram(void) {
         alinha8(&r);
         fonte.x1 = r.x0; fonte.y1 = r.y0; fonte.x2 = r.x1; fonte.y2 = r.y1;
         destino.x = r.x0; destino.y = r.y0;
-        sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sAlvos[sResidente].tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
-        ret_une(&sAlvos[sResidente].conteudo, r.x0, r.y0, r.x1, r.y1);
+        sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sAlvoD[sResidente].tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+        ret_une(&sAlvoD[sResidente].conteudo, r.x0, r.y0, r.x1, r.y1);
         sConta.corResPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
     }
     sResidente = -1;
@@ -1221,12 +1447,12 @@ static void sai_da_edram(void) {
    dono anterior volta para a textura dele, a EDRAM é limpa (0, como o gs_gl.c limpa um alvo novo) e a dele volta da
    textura. Uma visita sem z não toca na profundidade. Com BT3_Z=0 (sModoZ 0), o de antes: tudo limpo a cada entrada. */
 static void entra_na_edram(int i, int usaZ) {
-    Alvo *a = &sAlvos[i];
+    Alvo *a = &sAlvoD[i];
     D3DVIEWPORT9 vp = {0, 0, TAM, TAM, 0.0f, 1.0f};
     DWORD limpa = D3DCLEAR_TARGET;
     int poeZ = 0;
     sai_da_edram();
-    if (!gsTargets[i].cleared && sZDono == i) {
+    if (!sQ->targets[i].cleared && sZDono == i) {
         sZDono = -1; /* (novo para o jogo: o que a EDRAM tem dele não vale) */
         sSujoZ.x0 = sSujoZ.x1 = 0;
     }
@@ -1234,7 +1460,7 @@ static void entra_na_edram(int i, int usaZ) {
         limpa |= D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL;
     } else if (usaZ) {
         sConta.zVisitas++;
-        sConta.zSemTex += sProf[i].tex == NULL;
+        sConta.zSemTex += sProfD[i].tex == NULL;
         if (sZDono == i) {
             sConta.zMantida++;
         } else {
@@ -1251,9 +1477,9 @@ static void entra_na_edram(int i, int usaZ) {
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
     sDev->Clear(0, NULL, limpa, 0x00000000, 0.0f, 0);
-    if (!gsTargets[i].cleared) {
+    if (!sQ->targets[i].cleared) {
         a->conteudo.x0 = a->conteudo.x1 = 0; /* novo para o jogo: começa limpo */
-        sProf[i].conteudo.x0 = sProf[i].conteudo.x1 = 0;
+        sProfD[i].conteudo.x0 = sProfD[i].conteudo.x1 = 0;
     } else {
         if (a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
             Ret r = a->conteudo;
@@ -1262,12 +1488,12 @@ static void entra_na_edram(int i, int usaZ) {
             sConta.restauros++;
             sConta.corRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
         }
-        if (poeZ && sProf[i].tex != NULL && sProf[i].conteudo.x1 > sProf[i].conteudo.x0) {
+        if (poeZ && sProfD[i].tex != NULL && sProfD[i].conteudo.x1 > sProfD[i].conteudo.x0) {
             LARGE_INTEGER t;
-            Ret r = sProf[i].conteudo;
+            Ret r = sProfD[i].conteudo;
             QueryPerformanceCounter(&t);
             tempo_poe(T_PROF);
-            prof_poe(&sProf[i], &r, sModoZ);
+            prof_poe(&sProfD[i], &r, sModoZ);
             sConta.zRest++;
             sConta.zRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
             sConta.msZQuadro += ms_desde(&t);
@@ -1287,27 +1513,18 @@ static void entra_na_edram(int i, int usaZ) {
 /* Quantas palavras de a e b são iguais: inteiras, sem o byte baixo e sem o alto (qual dos dois é o stencil na memória
    não importa aqui: o modo 2 não restaura o stencil); nz: quantas de a não são zero (o padrão foi mesmo escrito). */
 static void prof_compara(D3DTexture *a, D3DTexture *b, unsigned c[5]) {
-    D3DLOCKED_RECT ra, rb;
+    const TexXg *xa = (const TexXg *)a, *xb = (const TexXg *)b; /* (do prof_cria, pelo XG; quem chama parou a GPU) */
     unsigned n, k;
     c[0] = c[1] = c[2] = c[3] = c[4] = 0;
-    if (FAILED(a->LockRect(0, &ra, NULL, D3DLOCK_READONLY))) {
-        return;
-    }
-    if (FAILED(b->LockRect(0, &rb, NULL, D3DLOCK_READONLY))) {
-        a->UnlockRect(0);
-        return;
-    }
-    n = (unsigned)ra.Pitch / 4 * TAM;
+    n = xa->pitch / 4 * TAM;
     c[4] = n;
     for (k = 0; k < n; k++) {
-        unsigned x = ((const unsigned *)ra.pBits)[k], y = ((const unsigned *)rb.pBits)[k];
+        unsigned x = ((const unsigned *)xa->dados)[k], y = ((const unsigned *)xb->dados)[k];
         c[0] += x == y;
         c[1] += (x & 0xFFFFFF00u) == (y & 0xFFFFFF00u);
         c[2] += (x & 0x00FFFFFFu) == (y & 0x00FFFFFFu);
         c[3] += x != 0;
     }
-    b->UnlockRect(0);
-    a->UnlockRect(0);
 }
 
 /* o tempo da GPU de `vezes` chamadas de f (com a GPU parada antes e depois), em ms por chamada */
@@ -1375,7 +1592,7 @@ static void prof_autoteste(void) {
     if (!prof_cria(MAX_TARGETS - 1, 0)) {
         Diario_Escrever("gs_d3d: ERRO: profundidade: as texturas do autoteste não foram criadas; desligada");
         pad->Release();
-        za.tex->Release();
+        xg_libera(za.tex); /* (nunca usada pela GPU) */
         sMem.vivos[CL_PROF] -= tam_alvo();
         sMem.nVivos[CL_PROF]--;
         return;
@@ -1443,10 +1660,12 @@ static void prof_autoteste(void) {
                     modo == 1 ? "restauro como cor" : modo == 2 ? "restauro pelo oDepth" : "desligada",
                     modo == 0 && forcado != 0 ? ": ERRO: nenhum modo exato, a profundidade volta zerada como antes" : "",
                     tam_alvo() >> 10);
-    za.cor.BlockUntilNotBusy();
-    zb.cor.BlockUntilNotBusy();
-    za.tex->Release();
-    zb.tex->Release();
+    za.cor->BlockUntilNotBusy();
+    zb.cor->BlockUntilNotBusy();
+    za.tex->BlockUntilNotBusy(); /* (o Release do D3D esperava a GPU; o recurso do XG espera aqui) */
+    zb.tex->BlockUntilNotBusy();
+    xg_libera(za.tex);
+    xg_libera(zb.tex);
     pad->Release();
     sMem.vivos[CL_PROF] -= 2 * tam_alvo();
     sMem.nVivos[CL_PROF] -= 2;
@@ -1466,11 +1685,12 @@ static unsigned env_num(const char *nome, unsigned padrao) {
 }
 
 /* Os ajustes da memória (o único lugar com os valores), os buffers fixos do gs_draw.c e uma calibração: o que o
-   dwAvailPhys mede ao criar texturas pequenas e médias contra o que tam_tex conta (o alinhamento real do D3D). */
+   dwAvailPhys mede ao criar texturas pequenas e médias contra o que tam_tex conta (o alinhamento real); desde a etapa 2 do
+   degrau 2, pelo mesmo caminho das texturas do jogo (xg_cria). */
 static void mem_init(void) {
     static const UINT lado[2] = {8, 256};
     static const int quantas[2] = {64, 16};
-    static D3DTexture *teste[64];
+    static TexXg *teste[64];
     int k, i;
     sMem.pisoMb = env_num("BT3_MEM_PISO_MB", 32);
     sMem.texTetoMb = env_num("BT3_MEM_TEX_MB", 128);
@@ -1490,16 +1710,12 @@ static void mem_init(void) {
     for (k = 0; k < 2; k++) {
         unsigned antes = mem_mede(), depois, feitas = 0;
         for (i = 0; i < quantas[k]; i++) {
-            teste[i] = NULL;
-            if (SUCCEEDED(sDev->CreateTexture(lado[k], lado[k], 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &teste[i], NULL))) {
-                feitas++;
-            }
+            teste[i] = xg_cria(lado[k], lado[k], D3DFMT_LIN_A8B8G8R8);
+            feitas += teste[i] != NULL;
         }
         depois = mem_mede();
         for (i = 0; i < quantas[k]; i++) {
-            if (teste[i] != NULL) {
-                teste[i]->Release(); /* (nunca usadas pela GPU) */
-            }
+            xg_libera((D3DTexture *)teste[i]); /* (nunca usadas pela GPU; NULL não faz nada) */
         }
         Diario_Escrever("gs_d3d: calibração: %u texturas de %ux%u: contadas %u KB, medidas %d KB pelo dwAvailPhys",
                         feitas, lado[k], lado[k], feitas * (tam_tex(lado[k], lado[k]) >> 10), ((int)antes - (int)depois) / 1024);
@@ -1640,6 +1856,12 @@ static int d3d_init(void) {
     }
     sDev = gX360Dev;
     sDev->AcquireThreadOwnership(); /* a main o soltou antes de criar a thread do jogo */
+    sDono = GetCurrentThreadId();
+    /* (degrau 2, etapa 4) com BT3_GS_DESENHO=1 este init roda na thread de desenho (gs_draw.c decide antes) */
+    sDiv = GsDraw_Dividido();
+    sCovaEv = CreateEvent(NULL, FALSE, FALSE, NULL);
+    Diario_Escrever("gs_d3d: o dispositivo é da thread %u (%s)", (unsigned)sDono,
+                    sDiv ? "a de desenho, BT3_GS_DESENHO=1" : "a de gravação ou a do jogo");
     if (gsScale != 1) {
         Diario_Escrever("gs_d3d: SCALE %d pedido; o 360 usa 1 (a EDRAM)", gsScale);
     }
@@ -1761,18 +1983,17 @@ static int na_lista(unsigned quadro) {
    screenshot): P6 640 x 448, as colunas além da largura do quadro (FRAME.FBW * 64) em preto. A textura sai do tiling
    de uma vez (XGUntileSurface) e o arquivo vai num WriteFile só: pixel a pixel, com uma escrita por linha, cada
    captura levava 260 ms (a primeira rodada no console). */
-static void captura(int alvo) {
+static void captura(int alvo, D3DTexture *tex) {
     static int criou;
     static DWORD linear[640 * 448];
     static unsigned char ppm[16 + 640 * 448 * 3];
     static const char cab[] = "P6\n640 448\n255\n";
     char nome[64];
-    D3DLOCKED_RECT r;
     HANDLE h;
     DWORD n;
     RECT ret;
-    uint64_t fr = (gGs.frame[0] & 0x1FF) == gsTargets[alvo].fbp ? gGs.frame[0] :
-                  (gGs.frame[1] & 0x1FF) == gsTargets[alvo].fbp ? gGs.frame[1] : (8ull << 16);
+    uint64_t fr = (sQ->frame[0] & 0x1FF) == sQ->targets[alvo].fbp ? sQ->frame[0] :
+                  (sQ->frame[1] & 0x1FF) == sQ->targets[alvo].fbp ? sQ->frame[1] : (8ull << 16);
     int fbw = (int)((fr >> 16) & 0x3F), x, y;
     unsigned char *o;
     LARGE_INTEGER t0;
@@ -1789,12 +2010,9 @@ static void captura(int alvo) {
     sDev->SetTexture(1, NULL);
     esquece_estado();
     sDev->BlockUntilIdle();
-    if (FAILED(sAlvos[alvo].tex->LockRect(0, &r, NULL, D3DLOCK_READONLY))) {
-        return;
-    }
+    /* (a textura do alvo é do XG: lida direto no endereço, com a GPU parada) */
     ret.left = 0; ret.top = 0; ret.right = fbw; ret.bottom = 448;
-    XGUntileSurface(linear, 640 * 4, NULL, r.pBits, TAM, TAM, &ret, 4);
-    sAlvos[alvo].tex->UnlockRect(0);
+    XGUntileSurface(linear, 640 * 4, NULL, ((const TexXg *)tex)->dados, TAM, TAM, &ret, 4);
     memcpy(ppm, cab, sizeof(cab) - 1);
     o = ppm + sizeof(cab) - 1;
     for (y = 0; y < 448; y++) {
@@ -1805,7 +2023,7 @@ static void captura(int alvo) {
             o[2] = (unsigned char)c;
         }
     }
-    _snprintf(nome, sizeof(nome), "game:\\shots\\gpu_%05u.ppm", gGsFrame);
+    _snprintf(nome, sizeof(nome), "game:\\shots\\gpu_%05u.ppm", sQ->quadro);
     h = CreateFile(nome, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h != INVALID_HANDLE_VALUE) {
         WriteFile(h, ppm, (DWORD)(o - ppm), &n, NULL);
@@ -1939,7 +2157,7 @@ static void desenha_vu(const GsDraw *d, uint32_t ini) {
         return;
     }
     if (d->uniform != sCurUni) {
-        sDev->SetVertexShaderConstantF(VU_C0, (const float *)&gsVuUni[d->uniform], sizeof(Vu0Uniform) / 16);
+        sDev->SetVertexShaderConstantF(VU_C0, (const float *)&sQ->vuUni[d->uniform], sizeof(Vu0Uniform) / 16);
         sCurUni = d->uniform;
     }
     desenha_comum(d, ini, &a);
@@ -1950,17 +2168,60 @@ static void desenha_vu(const GsDraw *d, uint32_t ini) {
 /* F5, etapa 6: os vértices e os índices dos desenhos da VU1 do quadro (as três famílias) vão para um par de buffers da GPU, o
    que não foi usado no quadro anterior. Cada desenho leva só a faixa de vértices que os índices dele tocam, e os
    índices saem já com a posição nova (o desenho começa no índice sVuIni[n]); o que não cabe fica com ~0 e é contado.
-   A espera pelo par (a GPU ainda lendo o quadro de dois atrás) é contada; não deve acontecer com o Present no meio. */
-static void vu_copia(void) {
+   (degrau 2, etapa 4) A conta do que cabe (vu_plano) só depende da lista e da capacidade fixa do par: com a divisão ela é
+   feita na entrega, na gravação (o desenho parado), e decide também para que alvos a gravação liga o seu cleared (um alvo
+   cujos desenhos são todos da VU1 que não couberam não é desenhado); sem ela, no frame_end. A cópia (vu_copia) é do
+   desenho. */
+static uint32_t sVuCabem; /* (vu_plano) desenhos da VU1 que couberam */
+static void vu_plano(const GsQuadro *q) {
     uint32_t n, k, f, nv = 0, ni = 0, tem = 0, pedV[3] = {0, 0, 0}, pedI[3] = {0, 0, 0};
+
+    sVuCabem = 0;
+    for (n = 0; n < q->drawCount; n++) {
+        sVuIni[n] = ~0u;
+        tem += q->draws[n].vu >= 1 && q->draws[n].vu <= 3 && q->draws[n].native == 0;
+    }
+    if (tem == 0 || sVuCapV == 0) {
+        return;
+    }
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        uint32_t lo = 0xFFFFFFFFu, hi = 0;
+        if (d->vu < 1 || d->vu > 3 || d->native != 0 || d->count == 0) {
+            continue;
+        }
+        f = (uint32_t)d->vu - 1;
+        for (k = 0; k < d->count; k++) {
+            uint32_t i = q->vuIdx[d->first + k];
+            if (i < lo) lo = i;
+            if (i > hi) hi = i;
+        }
+        pedV[f] += hi >= lo ? hi - lo + 1 : 0;
+        pedI[f] += d->count;
+        if (hi >= q->vuVertCount || hi - lo + 1 > sVuCapV - nv || d->count > sVuCapI - ni) {
+            continue; /* sem espaço (ou índice fora do quadro): pulado e contado no frame_end */
+        }
+        sVuIni[n] = ni;
+        sVuLo[n] = lo;
+        sVuNv[n] = hi - lo + 1;
+        nv += hi - lo + 1;
+        ni += d->count;
+        sVuCabem++;
+    }
+    for (f = 0; f < 3; f++) { /* o pedido, mesmo o que não coube */
+        if (pedV[f] > sConta.vuMaxV[f]) sConta.vuMaxV[f] = pedV[f];
+        if (pedI[f] > sConta.vuMaxI[f]) sConta.vuMaxI[f] = pedI[f];
+    }
+    if (pedV[0] + pedV[1] + pedV[2] > sConta.vuMaxT[0]) sConta.vuMaxT[0] = pedV[0] + pedV[1] + pedV[2];
+    if (pedI[0] + pedI[1] + pedI[2] > sConta.vuMaxT[1]) sConta.vuMaxT[1] = pedI[0] + pedI[1] + pedI[2];
+}
+
+static void vu_copia(const GsQuadro *q) {
+    uint32_t n, k, nv = 0;
     float *vb = NULL;
     uint32_t *ib = NULL;
 
-    for (n = 0; n < gsDrawCount; n++) {
-        sVuIni[n] = ~0u;
-        tem += gsDraws[n].vu >= 1 && gsDraws[n].vu <= 3 && gsDraws[n].native == 0;
-    }
-    if (tem == 0 || sVuCapV == 0) {
+    if (sVuCabem == 0) {
         return;
     }
     sVuPar = (sVuPar + 1) % VU_PARES;
@@ -1972,59 +2233,42 @@ static void vu_copia(void) {
         gGsD3dEtapa = antes;
         sConta.vuEsperas++;
     }
-    if (FAILED(sVuVb[sVuPar]->Lock(0, 0, (void **)&vb, 0))) {
+    if (FAILED(sVuVb[sVuPar]->Lock(0, 0, (void **)&vb, 0)) || FAILED(sVuIb[sVuPar]->Lock(0, 0, (void **)&ib, 0))) {
+        if (vb != NULL) {
+            sVuVb[sVuPar]->Unlock();
+        }
+        for (n = 0; n < q->drawCount; n++) {
+            sVuIni[n] = ~0u; /* (nada copiado: os da VU1 ficam de fora, contados) */
+        }
         return;
     }
-    if (FAILED(sVuIb[sVuPar]->Lock(0, 0, (void **)&ib, 0))) {
-        sVuVb[sVuPar]->Unlock();
-        return;
-    }
-    for (n = 0; n < gsDrawCount; n++) {
-        const GsDraw *d = &gsDraws[n];
-        uint32_t lo = 0xFFFFFFFFu, hi = 0;
-        if (d->vu < 1 || d->vu > 3 || d->native != 0 || d->count == 0) {
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        uint32_t ini = sVuIni[n], lo = sVuLo[n];
+        if (ini == ~0u) {
             continue;
         }
-        f = (uint32_t)d->vu - 1;
+        memcpy(vb + nv * 12, q->vuVerts + lo * 12, sVuNv[n] * 48);
         for (k = 0; k < d->count; k++) {
-            uint32_t i = gsVuIdx[d->first + k];
-            if (i < lo) lo = i;
-            if (i > hi) hi = i;
+            ib[ini + k] = q->vuIdx[d->first + k] - lo + nv;
         }
-        pedV[f] += hi >= lo ? hi - lo + 1 : 0;
-        pedI[f] += d->count;
-        if (hi >= gsVuVertCount || hi - lo + 1 > sVuCapV - nv || d->count > sVuCapI - ni) {
-            continue; /* sem espaço (ou índice fora do quadro): pulado e contado no frame_end */
-        }
-        memcpy(vb + nv * 12, gsVuVerts + lo * 12, (hi - lo + 1) * 48);
-        for (k = 0; k < d->count; k++) {
-            ib[ni + k] = gsVuIdx[d->first + k] - lo + nv;
-        }
-        sVuIni[n] = ni;
-        nv += hi - lo + 1;
-        ni += d->count;
+        nv += sVuNv[n];
     }
     sVuIb[sVuPar]->Unlock();
     sVuVb[sVuPar]->Unlock();
-    for (f = 0; f < 3; f++) { /* o pedido, mesmo o que não coube */
-        if (pedV[f] > sConta.vuMaxV[f]) sConta.vuMaxV[f] = pedV[f];
-        if (pedI[f] > sConta.vuMaxI[f]) sConta.vuMaxI[f] = pedI[f];
-    }
-    if (pedV[0] + pedV[1] + pedV[2] > sConta.vuMaxT[0]) sConta.vuMaxT[0] = pedV[0] + pedV[1] + pedV[2];
-    if (pedI[0] + pedI[1] + pedI[2] > sConta.vuMaxT[1]) sConta.vuMaxT[1] = pedI[0] + pedI[1] + pedI[2];
 }
 
 /* o máximo de um quadro em cada buffer fixo do gs_draw.c (no começo do frame_end, com a lista completa) */
-static void mem_buffers(void) {
-    if (gsVertCount > sMem.maxVerts) sMem.maxVerts = gsVertCount;
-    if (gsVuVertCount > sMem.maxVu) sMem.maxVu = gsVuVertCount;
-    if (gsVuIdxCount > sMem.maxIdx) sMem.maxIdx = gsVuIdxCount;
-    if (gsVuUniCount > sMem.maxUni) sMem.maxUni = gsVuUniCount;
-    if (gsDrawCount > sMem.maxDraws) sMem.maxDraws = gsDrawCount;
+static void mem_buffers(const GsQuadro *q) {
+    if (q->vertCount > sMem.maxVerts) sMem.maxVerts = q->vertCount;
+    if (q->vuVertCount > sMem.maxVu) sMem.maxVu = q->vuVertCount;
+    if (q->vuIdxCount > sMem.maxIdx) sMem.maxIdx = q->vuIdxCount;
+    if (q->vuUniCount > sMem.maxUni) sMem.maxUni = q->vuUniCount;
+    if (q->drawCount > sMem.maxDraws) sMem.maxDraws = q->drawCount;
 }
 
 static void log_memoria_zera(void) {
-    sMem.pressoes = sMem.descN = sMem.descBytes = sMem.esperas = sMem.acimaTeto = 0;
+    sMem.pressoes = sMem.descN = sMem.descBytes = sMem.esperas = sMem.acimaTeto = sMem.esperasDes = 0;
     memset(sMem.branca, 0, sizeof(sMem.branca));
     sMem.maxVerts = sMem.maxVu = sMem.maxIdx = sMem.maxUni = sMem.maxDraws = 0;
 }
@@ -2048,10 +2292,11 @@ static void log_memoria(void) {
                     sMem.nPend[CL_ALVO], sMem.nPend[CL_PROF], sMem.pend[CL_TEX] >> 10, sMem.pend[CL_ALVO] >> 10,
                     sMem.pend[CL_PROF] >> 10, sMem.buffers >> 10, ((int)usado - (int)nosso) / (int)MB, sMem.livres >> 20,
                     sMem.livresMin >> 20, sMem.pisoMb);
-    Diario_Escrever("gs_d3d:   descarte: %u pressões, %u texturas (%u KB), %u esperas pela GPU, %u acima do teto no trecho; desde o "
+    Diario_Escrever("gs_d3d:   descarte: %u pressões, %u texturas (%u KB), %u esperas pela GPU, %u da gravação pelo desenho, %u acima "
+                    "do teto no trecho; desde o "
                     "começo %u pressões, %u texturas (%.0f MB), %u esperas; brancas no trecho %u (sem espaço %u, cache cheio %u, criação "
                     "%u, formato %u, alvo sem textura %u), alvos sem textura agora %u",
-                    sMem.pressoes, sMem.descN, sMem.descBytes >> 10, sMem.esperas, sMem.acimaTeto, sMem.pressoesTot, sMem.descNTot,
+                    sMem.pressoes, sMem.descN, sMem.descBytes >> 10, sMem.esperas, sMem.esperasDes, sMem.acimaTeto, sMem.pressoesTot, sMem.descNTot,
                     sMem.descBytesTot / MB, sMem.esperasTot, brancas, sMem.branca[BR_ESPACO], sMem.branca[BR_CACHE],
                     sMem.branca[BR_D3D], sMem.branca[BR_FORMATO], sMem.branca[BR_ALVO], sMem.semAlvo);
     Diario_Escrever("gs_d3d:   buffers, o maior quadro do trecho: vértices %u de %u%s, VU %u de %u%s, índices %u de %u%s, "
@@ -2072,9 +2317,9 @@ static void log_vu1(unsigned t) {
     int k, n = 0;
 
     desc[0] = '\0';
-    for (k = 0; k < 8 && gGsVu1Desconhecido[k][1] != 0; k++) {
-        n += _snprintf(desc + n, sizeof(desc) - n - 1, "%s%u instruções x%u", k ? ", " : "", gGsVu1Desconhecido[k][0],
-                       gGsVu1Desconhecido[k][1]);
+    for (k = 0; k < 8 && sVuDesc[k][1] != 0; k++) {
+        n += _snprintf(desc + n, sizeof(desc) - n - 1, "%s%u instruções x%u", k ? ", " : "", sVuDesc[k][0],
+                       sVuDesc[k][1]);
         if (n < 0 || n >= (int)sizeof(desc) - 1) {
             desc[sizeof(desc) - 1] = '\0';
             break;
@@ -2090,16 +2335,16 @@ static void log_vu1(unsigned t) {
                     sConta.vuMaxT[0], sVuCapV, sConta.vuMaxT[1], sVuCapI, sConta.vuEsperas);
     Diario_Escrever("gs_d3d:   VU1, lotes (shader/interpretador/não executados): vu0 %u/%u/%u, vu4 %u/%u/%u, vu6 %u/%u/%u; "
                     "não reconhecidos %u/%u (%s); instruções desconhecidas %u; tempo por quadro: gravação %.2f ms (pior "
-                    "%.2f), desenho %.2f ms (pior %.2f)", gGsVu1Lotes[0][0], gGsVu1Lotes[0][1], gGsVu1Lotes[0][2],
-                    gGsVu1Lotes[1][0], gGsVu1Lotes[1][1], gGsVu1Lotes[1][2], gGsVu1Lotes[2][0], gGsVu1Lotes[2][1],
-                    gGsVu1Lotes[2][2], gGsVu1Lotes[3][1], gGsVu1Lotes[3][2], desc[0] ? desc : "nenhum", gGsVu1InstrDesc,
+                    "%.2f), desenho %.2f ms (pior %.2f)", sVuLotes[0][0], sVuLotes[0][1], sVuLotes[0][2],
+                    sVuLotes[1][0], sVuLotes[1][1], sVuLotes[1][2], sVuLotes[2][0], sVuLotes[2][1],
+                    sVuLotes[2][2], sVuLotes[3][1], sVuLotes[3][2], desc[0] ? desc : "nenhum", sVuInstrDesc,
                     sConta.msVuGrav / t, sConta.msVuGravPior, sConta.msVuDes / t, sConta.msVuDesPior);
 }
 
 static void log_vu1_zera(void) {
-    memset(gGsVu1Lotes, 0, sizeof(gGsVu1Lotes));
-    memset(gGsVu1Desconhecido, 0, sizeof(gGsVu1Desconhecido));
-    gGsVu1InstrDesc = 0;
+    memset(sVuLotes, 0, sizeof(sVuLotes));
+    memset(sVuDesc, 0, sizeof(sVuDesc));
+    sVuInstrDesc = 0;
 }
 
 /* F5, etapa 7: a profundidade no trecho, por quadro: resolves e restauros com os pixels, as visitas que usaram z,
@@ -2135,8 +2380,8 @@ static void log_nativas(unsigned t) {
         }
         n += k;
     }
-    for (i = 0; i < gsTargetCount; i++) {
-        const Ret *c = &sAlvos[i].conteudo;
+    for (i = 0; i < sQ->targetCount; i++) {
+        const Ret *c = &sAlvoD[i].conteudo;
         int k;
         if (c->x1 <= c->x0) {
             continue;
@@ -2273,7 +2518,7 @@ static void log_quadros(void) {
     }
     Diario_Escrever("gs_d3d: quadro %u: %u quadros sem captura: quadro inteiro %.2f ms (pior %.2f), dos quais fim do quadro "
                     "%.2f (pior %.2f) e nele o Present %.2f (pior %.2f); jogo e gravação %.2f; %u acima de 16,7 e %u acima "
-                    "de 33,4 ms; %u capturas, %.1f ms cada", gGsFrame, sConta.quadros, sConta.msQuadro / q, sConta.msQuadroPior,
+                    "de 33,4 ms; %u capturas, %.1f ms cada", sQ->quadro, sConta.quadros, sConta.msQuadro / q, sConta.msQuadroPior,
                     sConta.msFim / q, sConta.msFimPior, sConta.msPresent / q, sConta.msPresentPior,
                     (sConta.msQuadro - sConta.msFim) / q, sConta.acima16, sConta.acima33, sConta.capturas,
                     sConta.capturas ? sConta.msCaptura / sConta.capturas : 0.0);
@@ -2281,7 +2526,7 @@ static void log_quadros(void) {
                     (double)sConta.desenhos / t, (double)sConta.vertices / t, (double)sConta.trocas / t, sConta.maiorDesenho);
     Diario_Escrever("gs_d3d:   %u texturas novas (%u KB de textura viva, %d no cache), %d alvos, %d pipelines; fora: %u VU1, "
                     "nativos %u/%u/%u/%u (contorno, chave, tabela, ids), %u imagens direto no quadro, %u texturas recusadas; "
-                    "%u MB livres", sConta.texNovas, sMem.vivos[CL_TEX] >> 10, gsTexCount, gsTargetCount, sPipeCount, sConta.semVu,
+                    "%u MB livres", sConta.texNovas, sMem.vivos[CL_TEX] >> 10, sQ->texCount, sQ->targetCount, sPipeCount, sConta.semVu,
                     sConta.semNativo[1], sConta.semNativo[2], sConta.semNativo[3], sConta.semNativo[4], sConta.semFb,
                     sConta.semTextura, mb_livres());
     log_vu1(t);
@@ -2290,6 +2535,9 @@ static void log_quadros(void) {
     log_nativas(t);
     log_tempos(sConta.msQuadro / q);
     log_memoria();
+    if (sDiv) {
+        GsDraw_DesenhoResumo(); /* gs_draw.c: a entrega (retratos, os que não couberam, o tempo) */
+    }
     memset(&sConta, 0, sizeof(sConta));
 }
 
@@ -2299,8 +2547,8 @@ static int usa_z(uint32_t n, int t) {
     if (sModoZ == 0) {
         return 0;
     }
-    for (; n < gsDrawCount; n++) {
-        const GsDraw *d = &gsDraws[n];
+    for (; n < sQ->drawCount; n++) {
+        const GsDraw *d = &sQ->draws[n];
         if (d->native != 0 || (d->vu && sVuIni[n] == ~0u)) {
             continue; /* (os pulados não mudam de alvo) */
         }
@@ -2404,7 +2652,7 @@ static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
         sConta.semNativo[4]++;
         return;
     }
-    if (!gsTargets[d->target].cleared) {
+    if (!sQ->targets[d->target].cleared) {
         sConta.natIdsSem++; /* (o PC pula igual) */
         return;
     }
@@ -2412,7 +2660,7 @@ static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
     tempo_poe(T_IDS);
     sDev->SetTexture(3, NULL);
     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
-    sIdsQuadro = gGsFrame + 1;
+    sIdsQuadro = sQ->quadro + 1;
     sConta.natIds++;
 }
 
@@ -2421,8 +2669,8 @@ static void nat_tabela(const GsDraw *d, uint32_t n, int *cur) {
     int t = d->target, motivo, i;
     Ret r;
     uint32_t chave = sPipes[d->pipeline].key & (0x1FFu | (15u << 16));
-    motivo = !(sNativos & (d->src ? 2 : 4)) ? 0 : d->tex == 0 ? 1 : d->src == 0 && (sModoZ == 0 || sProf[t].tex == NULL) ? 2 :
-             !gsTargets[t].cleared ? 3 : d->src != 0 && sIdsQuadro == 0 ? 4 : -1;
+    motivo = !(sNativos & (d->src ? 2 : 4)) ? 0 : d->tex == 0 ? 1 : d->src == 0 && (sModoZ == 0 || sProfD[t].tex == NULL) ? 2 :
+             !sQ->targets[t].cleared ? 3 : d->src != 0 && sIdsQuadro == 0 ? 4 : -1;
     if (motivo >= 0) {
         sConta.semNativo[3]++;
         sConta.natTabSem[motivo]++;
@@ -2431,7 +2679,7 @@ static void nat_tabela(const GsDraw *d, uint32_t n, int *cur) {
     if (!nat_ret(d, &r)) {
         return;
     }
-    sConta.natIdsVelhos += d->src != 0 && sIdsQuadro != gGsFrame + 1;
+    sConta.natIdsVelhos += d->src != 0 && sIdsQuadro != sQ->quadro + 1;
     nat_entra(t, n, cur);
     if (d->src == 0 && sZDono == t) {
         prof_sincroniza(); /* (a textura de profundidade em dia, a posse fica) */
@@ -2443,7 +2691,7 @@ static void nat_tabela(const GsDraw *d, uint32_t n, int *cur) {
         b = b < 0 ? 0 : b > 255 ? 255 : b;
         sDev->SetRenderState(D3DRS_BLENDFACTOR, D3DCOLOR_ARGB(b, b, b, b));
     }
-    nat_tabela_passa(d->src, d->misc[0], d->src == 0 ? sProf[t].tex : NULL, (D3DTexture *)d->tex, &r);
+    nat_tabela_passa(d->src, d->misc[0], d->src == 0 ? sProfD[t].tex : NULL, (D3DTexture *)d->tex, &r);
     sConta.natTab++;
     for (i = 0; i < sTabTipoN && (sTabTipo[i].chave != chave || sTabTipo[i].src != d->src); i++) {
     }
@@ -2460,7 +2708,7 @@ static void nat_tabela(const GsDraw *d, uint32_t n, int *cur) {
 /* native 1 (ObjOutline_Draw): o contorno, lendo a cópia dos ids */
 static void nat_contorno(const GsDraw *d, uint32_t n, int *cur) {
     Ret r;
-    if (!(sNativos & 1) || !gsTargets[d->target].cleared || sIdsQuadro == 0) {
+    if (!(sNativos & 1) || !sQ->targets[d->target].cleared || sIdsQuadro == 0) {
         sConta.semNativo[1]++;
         sConta.natContSem++;
         return;
@@ -2496,7 +2744,7 @@ static void chamadas(const GsDraw *d, uint32_t ini) {
     while (feitos + porPrim <= d->count) {
         uint32_t n = d->count - feitos > MAX_UP ? MAX_UP : d->count - feitos;
         n -= n % porPrim;
-        sDev->DrawPrimitiveUP(tipo, n / porPrim, &gsVerts[d->first + feitos], sizeof(Vtx));
+        sDev->DrawPrimitiveUP(tipo, n / porPrim, &sQ->verts[d->first + feitos], sizeof(Vtx));
         feitos += n;
     }
 }
@@ -2535,25 +2783,26 @@ static void desenha_fba(const GsDraw *d, uint32_t ini) {
    saturado da cor perde; o tamanho do byte exato, seção 4 da especificação). Primitivas do GS: o alfa de cada
    vértice; VU1: o color0 do bloco, ou o alfa de cada vértice nas camadas 3 e 4 (programas 8 e 7). */
 static void alfa_alto(void) {
+    const GsQuadro *q = sQ;
     uint32_t n, k;
-    for (n = 0; n < gsDrawCount; n++) {
-        const GsDraw *d = &gsDraws[n];
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
         int alto = 0;
         if (d->native != 0 || d->count == 0 || !(sPipes[d->pipeline].wmask & GS_CC_A)) {
             continue;
         }
         if (d->vu) {
-            const Vu0Uniform *u = &gsVuUni[d->uniform];
+            const Vu0Uniform *u = &q->vuUni[d->uniform];
             alto = u->color0[3] > 128.0f;
             if (u->misc[3] == 3.0f) {
                 for (k = 0; k < d->count && !alto; k++) {
-                    uint32_t v = gsVuIdx[d->first + k];
-                    alto = v < gsVuVertCount && gsVuVerts[v * 12 + 7] > 128.0f;
+                    uint32_t v = q->vuIdx[d->first + k];
+                    alto = v < q->vuVertCount && q->vuVerts[v * 12 + 7] > 128.0f;
                 }
             }
         } else {
             for (k = 0; k < d->count && !alto; k++) {
-                alto = gsVerts[d->first + k].a > 0x80;
+                alto = q->verts[d->first + k].a > 0x80;
             }
         }
         sConta.alfaAltoDes++;
@@ -2803,7 +3052,7 @@ static void nat_init(void) {
 
 /* A imagem mostrada na tela de 1280 x 720: o alvo `mostrado` (o buffer de vídeo do GS) no meio, em 4:3, e as barras da cor de
    fundo. Do fim do quadro e de GsD3d_Repete. */
-static void tela_copia(int mostrado) {
+static void tela_copia(D3DTexture *t) {
     D3DVIEWPORT9 vp = {0, 0, TELA_W, TELA_H, 0.0f, 1.0f};
     sDev->SetRenderTarget(0, sTela);
     sDev->SetDepthStencilSurface(NULL);
@@ -2811,19 +3060,50 @@ static void tela_copia(int mostrado) {
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->Clear(0, NULL, D3DCLEAR_TARGET, sCorFundo, 1.0f, 0);
-    if (mostrado >= 0 && gsTargets[mostrado].cleared && sAlvos[mostrado].tex != NULL) {
+    if (t != NULL) {
         /* 512 x 448 do GS na forma da imagem (4:3: 960 x 720 no meio da tela de 1280 x 720) */
         int w = (int)((float)TELA_H * (float)Port_AspectMilli() / 1000.0f + 0.5f), x;
         w = w > TELA_W ? TELA_W : w;
         x = (TELA_W - w) / 2;
-        copia(sAlvos[mostrado].tex, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f,
-              512.0f / TAM, 448.0f / TAM, 1);
+        copia(t, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f, 512.0f / TAM, 448.0f / TAM, 1);
     }
 }
 
-static uint32_t sFbpMostrado = ~0u; /* o buffer de vídeo (fbp) da última imagem apresentada; ~0: nenhuma */
+/* (degrau 2, etapa 4) as texturas das vagas e o conteúdo do lado do desenho, em dia com a gravação: a vaga cuja cor mudou
+   esquece o conteúdo dela e o da profundidade; a cuja profundidade mudou, o da profundidade. No começo do quadro certo:
+   na entrega (o desenho parado, e o próximo quadro que ele desenha é o entregue) ou no começo do frame_end sem a
+   divisão. O sResidente e o sZDono são -1 aqui (o frame_end acaba com sai_da_edram e prof_entrega). */
+static void sincroniza_alvos(void) {
+    int i;
+    for (i = 0; i < MAX_TARGETS; i++) {
+        if (sAlvoD[i].ver != sAlvos[i].ver) {
+            sAlvoD[i].ver = sAlvos[i].ver;
+            sAlvoD[i].tex = sAlvos[i].tex;
+            sAlvoD[i].conteudo.x0 = sAlvoD[i].conteudo.x1 = 0;
+            sProfD[i].conteudo.x0 = sProfD[i].conteudo.x1 = 0; /* (a textura de profundidade, se houver, fica para o novo dono) */
+        }
+        if (sProfD[i].ver != sProf[i].ver) {
+            sProfD[i].ver = sProf[i].ver;
+            sProfD[i].tex = sProf[i].tex;
+            sProfD[i].cor = sProf[i].cor;
+            sProfD[i].conteudo.x0 = sProfD[i].conteudo.x1 = 0;
+        }
+    }
+}
+
+/* o alvo de um fbp na tabela do quadro (a cópia da entrega com a divisão): o GsDraw_TargetGet sem escrever o last */
+static int alvo_do_fbp(const GsQuadro *q, int fbp) {
+    int i;
+    for (i = 0; fbp >= 0 && i < q->targetCount; i++) {
+        if (q->targets[i].fbp == (uint32_t)fbp) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 static void frame_end(void) {
+    const GsQuadro *q = gsQuadro;
     LARGE_INTEGER t0, tp, tv;
     double msVu;
     double msFim, msPresent;
@@ -2831,23 +3111,31 @@ static void frame_end(void) {
     int cur = -1, mostrado, i;
     uint32_t n;
     double ms;
+    D3DTexture *mtex;
     static int every = -1;
 
     QueryPerformanceCounter(&t0);
+    sQ = q;
     tempo_comeca(); /* (F5, etapa 8: lê o quadro de dois atrás) */
-    mem_buffers();
+    if (!q->dividido) {
+        grav_junta(); /* (com a divisão, na entrega) */
+    }
+    mem_buffers(q);
     gGsD3dEtapa = "fim do quadro: refazendo a lista";
     if (gX360Luta != sLutaVista) { /* os primeiros quadros da luta, passo a passo (a primeira rodada travou ali) */
         sLutaVista = gX360Luta;
         sPassoAPasso = gX360Luta != 0 ? 8 : 0;
     }
     if (sPassoAPasso > 0) {
-        Diario_Escrever("gs_d3d: quadro %u (luta): %u desenhos, %u vértices, %u da VU1, %d alvos, %d texturas", gGsFrame,
-                        gsDrawCount, gsVertCount, gsVuVertCount, gsTargetCount, gsTexCount);
+        Diario_Escrever("gs_d3d: quadro %u (luta): %u desenhos, %u vértices, %u da VU1, %d alvos, %d texturas", q->quadro,
+                        q->drawCount, q->vertCount, q->vuVertCount, q->targetCount, q->texCount);
     }
     sDateFonte = NULL;
-    gGsD3dEtapa = "fim do quadro: texturas de profundidade";
-    prof_garante();
+    if (!q->dividido) { /* (com a divisão, a gravação fez na entrega) */
+        gGsD3dEtapa = "fim do quadro: texturas de profundidade";
+        prof_garante(q);
+        sincroniza_alvos();
+    }
     tempo_poe(T_OUTROS);
     gGsD3dEtapa = "fim do quadro: refazendo a lista";
     sConta.msZQuadro = 0.0;
@@ -2856,21 +3144,26 @@ static void frame_end(void) {
     }
     {
         /* F5, etapa 6: o tempo da VU1 na gravação do quadro (gs_vu1.c) e a cópia das três famílias para a GPU */
-        double g = gGsVu1Ms;
-        gGsVu1Ms = 0.0;
+        double g = q->vu1Ms;
+        if (!q->dividido) {
+            gGsVu1Ms = 0.0; /* (com a divisão, a entrega zerou) */
+        }
         sConta.msVuGrav += g;
         if (g > sConta.msVuGravPior) sConta.msVuGravPior = g;
         QueryPerformanceCounter(&tv);
         gGsD3dEtapa = "fim do quadro: cópia da VU1";
         tempo_poe(T_VU_COPIA);
-        vu_copia();
+        if (!q->dividido) {
+            vu_plano(q); /* (com a divisão, a entrega fez a conta) */
+        }
+        vu_copia(q);
         tempo_poe(T_OUTROS);
         msVu = ms_desde(&tv);
         gGsD3dEtapa = "fim do quadro: refazendo a lista";
     }
     tempo_abre(); /* (a GPU do quadro começa aqui) */
-    for (n = 0; n < gsDrawCount; n++) {
-        const GsDraw *d = &gsDraws[n];
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
         if (d->native >= 100) {
             sConta.semFb++;
             continue;
@@ -2878,14 +3171,14 @@ static void frame_end(void) {
         if (d->native == 5) {
             /* o começo de uma sequência de desenhos com DATE: a cópia da cor do alvo agora */
             sConta.dateMarc++;
-            if (!gsTargets[d->target].cleared) {
+            if (!q->targets[d->target].cleared) {
                 continue;
             }
-            sDateFonte = sAlvos[d->target].tex; /* fora da EDRAM, a textura do alvo já é a imagem dele agora */
+            sDateFonte = sAlvoD[d->target].tex; /* fora da EDRAM, a textura do alvo já é a imagem dele agora */
             if (d->target == sResidente) {
                 Ret r = sSujo;
-                ret_une(&r, sAlvos[d->target].conteudo.x0, sAlvos[d->target].conteudo.y0, sAlvos[d->target].conteudo.x1,
-                        sAlvos[d->target].conteudo.y1);
+                ret_une(&r, sAlvoD[d->target].conteudo.x0, sAlvoD[d->target].conteudo.y0, sAlvoD[d->target].conteudo.x1,
+                        sAlvoD[d->target].conteudo.y1);
                 if (r.x1 > r.x0 && sDate != NULL) {
                     D3DRECT fonte;
                     D3DPOINT destino;
@@ -2928,7 +3221,7 @@ static void frame_end(void) {
             continue;
         }
         if (d->vu) {
-            /* F5, etapa 6: as três famílias (1 vu0, 2 vu4, 3 vu6); o que vu_copia não pôs no par é contado */
+            /* F5, etapa 6: as três famílias (1 vu0, 2 vu4, 3 vu6); o que vu_plano não pôs no par é contado */
             if (sVuIni[n] == ~0u) {
                 int f = d->vu >= 1 && d->vu <= 3 ? d->vu - 1 : 0;
                 sConta.semVu++;
@@ -2939,7 +3232,7 @@ static void frame_end(void) {
         }
         if (cur != d->target || sResidente != d->target) {
             entra_na_edram(d->target, usa_z(n, d->target));
-            gsTargets[d->target].cleared = 1;
+            q->targets[d->target].cleared = 1; /* (com a divisão, na cópia do retrato: o cleared do desenho) */
             cur = d->target;
         }
         if (d->vu) {
@@ -2958,38 +3251,45 @@ static void frame_end(void) {
     sConta.msZ += sConta.msZQuadro;
     if (sConta.msZQuadro > sConta.msZPior) sConta.msZPior = sConta.msZQuadro;
     if (sPassoAPasso > 0) {
-        Diario_Escrever("gs_d3d: quadro %u (luta): lista refeita (maior desenho até aqui %u vértices)", gGsFrame,
+        Diario_Escrever("gs_d3d: quadro %u (luta): lista refeita (maior desenho até aqui %u vértices)", q->quadro,
                         sConta.maiorDesenho);
     }
 
-    /* a imagem mostrada: a que o sceGsSwapDBuff montou para este quadro, senão o primeiro alvo (como o gs_gl.c) */
-    mostrado = gGsMainFbp >= 0 ? GsDraw_TargetGet((uint32_t)gGsMainFbp, 0) : -1;
-    for (i = 0; mostrado < 0 && i < gsTargetCount; i++) {
+    /* a imagem mostrada: a que o sceGsSwapDBuff montou para este quadro, senão o primeiro alvo (como o gs_gl.c). O alvo
+       se busca na tabela do quadro, sem o GsDraw_TargetGet (que escreve o last, da gravação: com a divisão, a entrega o
+       chama no lugar deste) */
+    if (!q->dividido && q->fbp >= 0) {
+        GsDraw_TargetGet((uint32_t)q->fbp, 0); /* (o last, como antes) */
+    }
+    mostrado = alvo_do_fbp(q, q->fbp);
+    for (i = 0; mostrado < 0 && i < q->targetCount; i++) {
         mostrado = i;
     }
+    mtex = mostrado >= 0 && q->targets[mostrado].cleared ? sAlvoD[mostrado].tex : NULL;
     if (every < 0) {
         every = getenv("BT3_SHOT") != NULL ? atoi(getenv("BT3_SHOT")) : 0;
     }
-    if (((every > 0 && gGsFrame % (unsigned)every == 0 &&
-          (getenv("BT3_SHOT_FROM") == NULL || (int)gGsFrame >= atoi(getenv("BT3_SHOT_FROM"))) &&
-          (getenv("BT3_SHOT_TO") == NULL || (int)gGsFrame <= atoi(getenv("BT3_SHOT_TO")))) ||
-         na_lista(gGsFrame)) &&
-        mostrado >= 0 && gsTargets[mostrado].cleared && sAlvos[mostrado].tex != NULL) {
+    if (((every > 0 && q->quadro % (unsigned)every == 0 &&
+          (getenv("BT3_SHOT_FROM") == NULL || (int)q->quadro >= atoi(getenv("BT3_SHOT_FROM"))) &&
+          (getenv("BT3_SHOT_TO") == NULL || (int)q->quadro <= atoi(getenv("BT3_SHOT_TO")))) ||
+         na_lista(q->quadro)) &&
+        mtex != NULL) {
         gGsD3dEtapa = "fim do quadro: captura";
-        captura(mostrado);
+        captura(mostrado, mtex);
     }
     gGsD3dEtapa = "fim do quadro: cópia para a tela";
     tempo_poe(T_TELA);
-    tela_copia(mostrado);
-    sFbpMostrado = mostrado >= 0 && gsTargets[mostrado].cleared && sAlvos[mostrado].tex != NULL ? gsTargets[mostrado].fbp : ~0u;
+    tela_copia(mtex);
+    sMostradoTex = mtex;
     tempo_fecha_gpu(capturas != sConta.capturas);
     tempo_poe(T_PRESENT);
     QueryPerformanceCounter(&tp);
     gGsD3dEtapa = "fim do quadro: Present";
     sDev->Present(NULL, NULL, NULL, NULL);
+    sUltimoPresent = GetTickCount();
     msPresent = ms_desde(&tp);
     tempo_poe(T_OUTROS);
-    Passos_Apresentou(gGsFrame, (unsigned)(msPresent * 1000.0));
+    Passos_Apresentou(q->quadro, (unsigned)(msPresent * 1000.0));
     gGsD3dEtapa = "fim do quadro: texturas soltas";
     /* nada do quadro fica preso no dispositivo: as texturas soltas podem ir quando a GPU terminar com elas */
     sDev->SetTexture(0, NULL);
@@ -2999,10 +3299,22 @@ static void frame_end(void) {
     sDev->SetIndices(NULL);
     esquece_estado();
     sDev->InsertFence();
+    if (q->dividido && sProfFilaD >= 0) {
+        /* (degrau 2, etapa 4) as profundidades das vagas que a gravação deste quadro reaproveitou (a cor e as texturas vêm
+           pelo solta, do gs_draw.c, logo depois deste frame_end) */
+        int k;
+        for (k = 0; k < sProfFilaN[sProfFilaD]; k++) {
+            cova_poe(sProfFila[sProfFilaD][k], CL_PROF, tam_alvo());
+        }
+        sProfFilaN[sProfFilaD] = 0;
+        sProfFilaD = -1;
+    }
     cova_varre();
     gGsD3dEtapa = "fim do quadro: memória";
-    mem_mede(); /* (uma medida por quadro: o mínimo livre visto e a base da estimativa) */
-    alvos_sem_textura();
+    if (!q->dividido) { /* (com a divisão, a gravação mede e tenta de novo na entrega) */
+        mem_mede(); /* (uma medida por quadro: o mínimo livre visto e a base da estimativa) */
+        alvos_sem_textura(NULL);
+    }
 
     msFim = ms_desde(&t0);
     tempo_fecha_cpu(msFim, capturas == sConta.capturas);
@@ -3023,12 +3335,16 @@ static void frame_end(void) {
         log_quadros();
     }
     if (sPassoAPasso > 0) {
-        Diario_Escrever("gs_d3d: quadro %u (luta): apresentado em %.2f ms (Present %.2f)", gGsFrame, msFim, msPresent);
+        Diario_Escrever("gs_d3d: quadro %u (luta): apresentado em %.2f ms (Present %.2f)", q->quadro, msFim, msPresent);
         sPassoAPasso--;
     }
     gGsD3dQuadros++;
-    gGsD3dEtapa = "jogo e gravação do quadro";
+    gGsD3dEtapa = q->dividido ? "esperando o retrato seguinte" : "jogo e gravação do quadro";
 
+    if (q->dividido) {
+        sPs2Total += q->skipped; /* (os contadores da gravação, a entrega zerou) */
+        return;
+    }
     for (i = 0; i < gsTargetCount; i++) {
         gsTargets[i].draws = 0;
     }
@@ -3043,33 +3359,88 @@ static void frame_end(void) {
     gsNative = 0;
 }
 
-/* (F5, etapa 8, degrau 1) A thread de gravação ociosa há um tempo (o jogo carrega, não entrega quadro): apresenta de novo a
-   última imagem, para a Guide e o sistema terem um present a cada tanto. É desta thread, dona do dispositivo, no intervalo
-   entre dois quadros (nenhum trabalho em andamento: os alvos estão como o fim do quadro os deixou). Devolve 1 se apresentou.
-   Não conta como quadro (gGsD3dQuadros, o que o vigia olha, não anda). */
+/* A thread dona do dispositivo, sem quadro há 50 ms (o jogo carrega, não entrega quadro): apresenta de novo a última
+   imagem, para a Guide e o sistema terem um present a cada tanto. No degrau 1, a de gravação ociosa; com a divisão (degrau
+   2, etapa 4), a de desenho ociosa, com a entrega parada (gs_draw.c, desenho_thread). Usa a textura que o próprio desenho
+   guardou (sMostradoTex; a cova a esquece quando ela é solta), nunca a tabela da gravação. Devolve 1 se apresentou. Não
+   conta como quadro (gGsD3dQuadros, o que o vigia olha, não anda). */
 extern "C" int GsD3d_Repete(void) {
-    int i;
-    if (sDev == NULL || sFbpMostrado == ~0u || sDev->QueryThreadOwnership() != GetCurrentThreadId()) {
+    if (sDev == NULL || sDono == 0 || GetCurrentThreadId() != sDono || sMostradoTex == NULL ||
+        GetTickCount() - sUltimoPresent < 50) {
         return 0;
     }
-    i = GsDraw_TargetGet(sFbpMostrado, 0);
-    if (i < 0 || !gsTargets[i].cleared || sAlvos[i].tex == NULL) {
-        return 0; /* o alvo foi reaproveitado ou perdeu a textura: sem imagem para repetir */
-    }
     gGsD3dEtapa = "repetindo o último quadro (o jogo não entrega)";
-    tela_copia(i);
+    tela_copia(sMostradoTex);
     sDev->Present(NULL, NULL, NULL, NULL);
+    sUltimoPresent = GetTickCount();
     sDev->SetTexture(0, NULL);
     esquece_estado();
-    gGsD3dEtapa = "jogo e gravação do quadro";
+    gGsD3dEtapa = sDiv ? "esperando o retrato seguinte" : "jogo e gravação do quadro";
     return 1;
+}
+
+/* (degrau 2, etapa 4) O desenho ocioso, ou no fim de um quadro: se a gravação espera memória (espera_desenho), o que a GPU
+   já soltou sai da cova e, se ainda não basta, espera a GPU soltar o mais antigo, um por vez; depois o sinal. */
+extern "C" void GsD3d_Ocioso(void) {
+    unsigned precisa = sPedeLivre;
+    const char *antes;
+    if (precisa == 0 || sDev == NULL || sDono == 0 || GetCurrentThreadId() != sDono) {
+        return;
+    }
+    antes = (const char *)gGsD3dEtapa;
+    gGsD3dEtapa = "soltando memória para a gravação";
+    cova_varre();
+    while (livres_agora() < precisa && sCovaN > 0) {
+        cova_espera_primeira();
+    }
+    SetEvent(sCovaEv);
+    gGsD3dEtapa = antes;
 }
 
 /* O jogo terminou nesta thread (Port_Sair ou queda): o dispositivo volta para quem for usá-lo (a main). */
 extern "C" void GsD3d_Soltar(void) {
     if (sDev != NULL && sDev->QueryThreadOwnership() == GetCurrentThreadId()) {
         sDev->ReleaseThreadOwnership();
+        sDono = 0;
     }
+}
+
+/* (degrau 2, etapa 4) A entrega, na gravação, com o retrato pronto e o desenho parado (gs_draw.c, desenho_entrega): o que o
+   frame_end fazia do lado da gravação e o que passa de um lado ao outro.
+     - o last do alvo mostrado (o GsDraw_TargetGet que o frame_end chamava);
+     - a conta da VU1 (vu_plano, o que cabe no par) e, com ela, a regra do cleared da gravação: só o alvo com algum desenho
+       não nativo que o desenho vai fazer (o da VU1 que não coube não conta, o sVuIni ~0); limpa[] chega com 1 para todo
+       alvo com desenho não nativo e sai com a regra deste backend;
+     - as profundidades novas (prof_garante) e as vagas sem textura (alvos_sem_textura), que abrem espaço no cache (só da
+       gravação: o desenho não chama mais o GsDraw_X360Abre);
+     - a medida da memória do quadro;
+     - as texturas das vagas para o lado do desenho (sincroniza_alvos: o começo do quadro entregue), a fila das
+       profundidades soltas e os contadores do trecho. */
+static void entrega(const GsQuadro *q, unsigned char *limpa) {
+    const char *antes = (const char *)gGsD3dEtapaGrav;
+    uint32_t n;
+    gGsD3dEtapaGrav = "entrega do retrato";
+    grav_junta();
+    sPendGrav = 0; /* (o que foi pedido até aqui viaja com este retrato) */
+    if (q->fbp >= 0) {
+        GsDraw_TargetGet((uint32_t)q->fbp, 0);
+    }
+    vu_plano(q);
+    memset(limpa, 0, MAX_TARGETS);
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        if (d->native == 0 && d->target >= 0 && d->target < MAX_TARGETS && !(d->vu && sVuIni[n] == ~0u)) {
+            limpa[d->target] = 1;
+        }
+    }
+    prof_garante(q);
+    alvos_sem_textura(limpa);
+    mem_mede();
+    sincroniza_alvos();
+    sProfFilaD = sProfFilaG;
+    sProfFilaG ^= 1;
+    sProfFilaN[sProfFilaG] = 0;
+    gGsD3dEtapaGrav = antes;
 }
 
 extern "C" {
@@ -3089,6 +3460,9 @@ GsBackend sD3dBackend = {
     target_none,
     target_none,
     pipe_get,
+    entrega,
+    solta_pede,
+    solta,
 };
 }
 

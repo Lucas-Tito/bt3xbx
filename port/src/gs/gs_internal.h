@@ -56,6 +56,25 @@ extern uint32_t gGsPageGen[512]; /* bumped whenever an upload writes into that 8
 #if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 extern uint32_t gGsPageEpoch; /* changes whenever any gGsPageGen entry does (F5, etapa 8) */
 #endif
+#if (defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)) && !defined(BT3_GS_ESPERAS)
+#define BT3_GS_ESPERAS 1 /* (F5, etapa 8, degrau 1) a thread de gravação com as esperas que o PS2 já fazia */
+#endif
+#ifdef BT3_GS_ESPERAS
+/* (degrau 2, etapa 3) gs_core.c: 1 se a gravação roda na sua thread (BT3_GS_THREAD=1); e quem para a thread de desenho
+   (gs_draw.c a põe ao ligar a divisão; o Port_GsParar a chama depois de a gravação parar) */
+int Port_GsComThread(void);
+extern void (*gGsDesenhoParar)(void);
+#endif
+extern int gGsMainFbp; /* gs_sony.c: o buffer do quadro, escrito pelo jogo no sceGsSwapDBuff */
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, degrau 2, etapa 2) o gGsMainFbp capturado na entrega da lista (gs_core.c, render_post) e posto pela thread
+   que grava ao pegar o trabalho: com BT3_GS_THREAD=1 o jogo já pode ter escrito o do quadro seguinte. Tudo o que grava ou
+   fecha o quadro lê o GS_FBP_QUADRO; sem a thread, ele recebe o gGsMainFbp logo antes de a lista andar (o mesmo valor) */
+extern int gGsFbpEntregue;
+#define GS_FBP_QUADRO gGsFbpEntregue
+#else
+#define GS_FBP_QUADRO gGsMainFbp
+#endif
 extern unsigned gGsFrame;
 
 uint32_t Gs_PageHash(uint32_t page); /* content hash of an 8 KB page of GS memory */

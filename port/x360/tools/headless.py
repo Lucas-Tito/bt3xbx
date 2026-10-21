@@ -171,9 +171,10 @@ def construir(alvo):
         if f.stem in GS_SEM_SDL or (alvo.gpu and f.stem == "gs_draw"):
             o = alvo.obj / ("gs_" + f.stem + ".o")
             sdl360 = ["-Iport/x360/src/gs/sdl"] if f.stem == "gs_draw" else []
-            # (--gpu: -DBT3_GPU_FALSO no gs_core.c, a medida dos bytes da cadeia por quadro; as builds sem --gpu não a têm)
+            # (--gpu: -DBT3_GPU_FALSO no gs_core.c, a medida dos bytes da cadeia por quadro, e no gs_draw.c, as chaves de teste
+            # da divisão do degrau 2; as builds sem --gpu não a têm)
             junta(f, o, compile_ee(alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w"] +
-                                   (["-DBT3_GPU_FALSO"] if alvo.gpu and f.stem == "gs_core" else []) + alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) + sdl360 +
+                                   (["-DBT3_GPU_FALSO"] if alvo.gpu and f.stem in ("gs_core", "gs_draw") else []) + alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) + sdl360 +
                                    ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], f, o, ee=False, be=alvo.be))
 
     # a camada do port: aritmética do PS2 em software, menos as duas pontes com a FPU (interface só de inteiros)

@@ -909,7 +909,7 @@ static void vk_frame_end(void) {
     }
     /* Show the frame's own buffer: the one sceGsSwapDBuff set up for this frame. (Guessing "the buffer with the most
        draws" showed the shadow buffer, a grey fighter on black, on frames where it happened to receive more.) */
-    best = gGsMainFbp >= 0 ? GsDraw_TargetGet((uint32_t)gGsMainFbp, 0) : -1;
+    best = GS_FBP_QUADRO >= 0 ? GsDraw_TargetGet((uint32_t)GS_FBP_QUADRO, 0) : -1;
     for (i = 0; best < 0 && i < gsTargetCount; i++) {
         best = i;
     }

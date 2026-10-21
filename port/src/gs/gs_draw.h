@@ -127,6 +127,48 @@ extern uint64_t gGpuTexNs, gGpuPipeNs, gGpuEndNs;
 #define GS_CC_B 4u
 #define GS_CC_A 8u
 
+#if (defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)) && !defined(BT3_GS_ESPERAS)
+#define BT3_GS_ESPERAS 1 /* (o mesmo do gs_internal.h, para o backend que inclui só este) */
+#endif
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, degrau 2, etapa 3) A divisão entre gravação e desenho (BT3_GS_DESENHO=1, com BT3_GS_THREAD=1): a gravação
+   entrega um retrato do quadro (gs_draw.c, desenho_entrega) e segue com o seguinte; uma terceira thread chama o frameEnd do
+   backend sobre o retrato. O frameEnd lê o quadro por gsQuadro: sem a divisão ele aponta para as listas vivas, com as
+   contagens de agora (vivo 1, dividido 0), e o backend zera os contadores como antes; com a divisão, para o retrato (as
+   listas copiadas, ou as vivas num quadro que não coube, em série), e quem zera é a gravação na entrega. */
+typedef struct GsSolta {
+    GsTex tex;       /* a textura a soltar; com alvo >= 0, a cor do alvo cuja vaga a gravação reaproveitou */
+    int alvo;        /* -1: textura */
+    unsigned quadro; /* o gGsFrame da gravação no pedido */
+} GsSolta;
+typedef struct GsQuadro {
+    const GsDraw *draws;
+    uint32_t drawCount;
+    const Vtx *verts;
+    uint32_t vertCount;
+    const float *vuVerts;
+    uint32_t vuVertCount;
+    const uint32_t *vuIdx;
+    uint32_t vuIdxCount;
+    const Vu0Uniform *vuUni;
+    uint32_t vuUniCount;
+    GsTarget *targets;  /* a tabela: a viva sem a divisão; com ela, a cópia da entrega (o cleared de antes de a gravação
+                           ligar o seu), em que o desenho liga o dele: nunca a viva, e nunca o GsDraw_TargetGet (o last) */
+    int targetCount;
+    unsigned quadro;    /* o gGsFrame do quadro */
+    uint64_t frame[2];  /* gGs.frame[0..1] no fim da gravação */
+    int fbp;            /* GS_FBP_QUADRO */
+    int anchor, texCount;
+    unsigned skipped, native;
+    double vu1Ms;       /* gGsVu1Ms do quadro (com a divisão, zerado na entrega) */
+    const GsSolta *soltas; /* o que a gravação pediu para soltar até a entrega: o desenho solta depois de desenhar este quadro */
+    uint32_t soltaCount;
+    int vivo;           /* 1: draws, verts e as listas da VU são as vivas */
+    int dividido;       /* 1: desenhado na thread de desenho; o backend não mexe em nada da gravação */
+} GsQuadro;
+extern const GsQuadro *gsQuadro;
+#endif
+
 /* The interface a back end implements (gs_gpu.c today, gs_gl.c in time). All GPU state stays the back
    end's: the shared layer only hands it handles and asks for the few numbers it must know (whether it can
    still take a texture this frame, a target's attachments). */
@@ -146,6 +188,16 @@ typedef struct GsBackend {
     GsTex (*targetAux)(int i);
     GsTex (*targetDepth)(int i);
     int (*pipeGet)(uint32_t key);         /* the back end's pipeline for a key, creating it if new */
+#ifdef BT3_GS_ESPERAS
+    /* (degrau 2, etapa 3) só com a divisão; sem os dois últimos o BT3_GS_DESENHO=1 é recusado. entrega: na gravação, o
+       retrato pronto (antes de zerar os contadores): o que o backend leva do lado da gravação, e limpa[i] (já 1 para todo
+       alvo com desenho não nativo) diz para que alvos a gravação liga o seu cleared, a regra do backend. soltaPede: na
+       gravação, o pedido de soltar uma textura (alvo -1) ou o alvo de uma vaga reaproveitada (no lugar de texDestroy e
+       targetDrop); solta: no desenho, depois de ter desenhado o quadro do pedido. */
+    void (*entrega)(const GsQuadro *q, unsigned char *limpa);
+    void (*soltaPede)(GsTex tex, int alvo);
+    void (*solta)(GsTex tex, int alvo);
+#endif
 } GsBackend;
 
 extern GsBackend sVulkanBackend; /* gs_gpu.c */
@@ -154,5 +206,14 @@ extern GsBackend sGlBackend;     /* gs_gl.c */
 /* gs_draw.c: the shared target table's entry for a frame-buffer address (create: one is made if absent,
    with the back end's attachments through GsBackend.targetEnsure). */
 int GsDraw_TargetGet(uint32_t fbp, int create);
+#ifdef BT3_GS_ESPERAS
+void GsDraw_DesenhoEspera(void); /* (degrau 2) a thread de desenho acabou o retrato entregue (nada sem a divisão) */
+#ifdef PORT_X360
+int GsDraw_Dividido(void);        /* (degrau 2, etapa 4) 1: o desenho numa terceira thread, dona do dispositivo */
+void GsDraw_DesenhoAcorda(void);  /* acorda o desenho ocioso (o pedido de memória da gravação) */
+void GsDraw_DesenhoPararJa(void); /* uma queda: o desenho sai sem esperar e solta o dispositivo */
+void GsDraw_DesenhoCaiu(void);    /* a thread de desenho caiu (no AoMorrer dela) */
+#endif
+#endif
 
 #endif

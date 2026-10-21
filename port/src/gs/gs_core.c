@@ -42,8 +42,7 @@ uint32_t gGsPageGen[512];
 #if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 uint32_t gGsPageEpoch; /* (F5, etapa 8) bumped with every change to any gGsPageGen entry: texture_get remembers by it */
 #endif
-#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
-#define BT3_GS_ESPERAS 1 /* (F5, etapa 8, degrau 1) a thread de gravação com as esperas que o PS2 já fazia */
+#ifdef BT3_GS_ESPERAS /* (gs_internal.h) */
 void Port_GsEspera(void);
 void Port_GsParar(void);
 #endif
@@ -1048,7 +1047,7 @@ static void screenshot(void) {
     {
         extern int gGsMainFbp; /* the frame's own buffer (sceGsSwapDBuff), else the one that received most pixels */
         for (i = 0; i < sTargetCount; i++) {
-            if (gGsMainFbp >= 0 ? sTargets[i].fbp == (uint32_t)gGsMainFbp : (best == NULL || sTargets[i].drawn > best->drawn)) {
+            if (GS_FBP_QUADRO >= 0 ? sTargets[i].fbp == (uint32_t)GS_FBP_QUADRO : (best == NULL || sTargets[i].drawn > best->drawn)) {
                 best = &sTargets[i];
             }
         }
@@ -1174,6 +1173,8 @@ unsigned gGsCopiaMax, gGsCopiaEstouros; /* a cópia dos REF pequenos: o maior us
 static volatile int sParar;
 static int sParado;
 static uint32_t sJobQwc;
+static int sJobFbp; /* o gGsMainFbp na entrega do trabalho (render_post) */
+int gGsFbpEntregue = -1;
 static void render_wait(void);
 static void gif_corpo(uint32_t addr, uint32_t qwc, int chain);
 #ifdef PORT_X360
@@ -1216,7 +1217,15 @@ static void *render_thread(void *arg) {
 #ifdef BT3_GS_ESPERAS
         } else if (sJob == 3) { /* parar: o dispositivo volta para quem o criou */
 #ifdef PORT_X360
-            GsD3d_Soltar();
+            if (gGsDesenhoParar != NULL) { /* (degrau 2, etapa 4) a parada sem esperar (Port_GsPararJa): o desenho acaba o
+                                              retrato que tem, solta o dispositivo e sai antes */
+                void (*parar)(void) = gGsDesenhoParar;
+                gGsDesenhoParar = NULL;
+                pthread_mutex_unlock(&sLock);
+                parar();
+                pthread_mutex_lock(&sLock);
+            }
+            GsD3d_Soltar(); /* (com a divisão, não é a dona: nada) */
 #endif
             gGsThreadEstado = 0;
             sJob = 0;
@@ -1226,6 +1235,7 @@ static void *render_thread(void *arg) {
         } else if (sJob == 4) { /* uma transferência pelo canal da GIF, a pedido do jogo (que espera) */
             uint32_t addr = sJobTadr, qwc = sJobQwc;
             int chain = sJobTte;
+            gGsFbpEntregue = sJobFbp;
             gGsThreadEstado = 3;
             pthread_mutex_unlock(&sLock);
             gif_corpo(addr, qwc, chain);
@@ -1235,6 +1245,7 @@ static void *render_thread(void *arg) {
             uint32_t tadr = sJobTadr;
             int tte = sJobTte;
 #ifdef BT3_GS_ESPERAS
+            gGsFbpEntregue = sJobFbp;
             gGsThreadEstado = 2;
 #endif
             pthread_mutex_unlock(&sLock);
@@ -1279,6 +1290,9 @@ static void render_post(int job, uint32_t tadr, int tte) {
     sJob = job;
     sJobTadr = tadr;
     sJobTte = tte;
+#ifdef BT3_GS_ESPERAS
+    sJobFbp = gGsMainFbp; /* (degrau 2, etapa 2) o do quadro entregue, antes de o jogo seguir */
+#endif
     pthread_cond_signal(&sWake);
     pthread_mutex_unlock(&sLock);
 }
@@ -1291,6 +1305,11 @@ void Port_GsEspera(void) {
     }
 }
 
+int Port_GsComThread(void) {
+    return sThreaded;
+}
+void (*gGsDesenhoParar)(void);
+
 /* Para a thread de gravação (saída do jogo): espera o que ela tem, manda parar e junta. O dispositivo do 360 volta
    para a main por ela mesma (GsD3d_Soltar, no trabalho de parar). Pode ser chamada mais de uma vez. */
 void Port_GsParar(void) {
@@ -1298,6 +1317,10 @@ void Port_GsParar(void) {
         return;
     }
     render_wait();
+    if (gGsDesenhoParar != NULL) { /* (degrau 2) a thread de desenho acaba o último retrato e sai */
+        gGsDesenhoParar();
+        gGsDesenhoParar = NULL;
+    }
     render_post(3, 0, 0);
     pthread_join(sThread, NULL);
     if (getenv("BT3_GS_RACE") != NULL) {
@@ -1525,6 +1548,7 @@ void Port_GsGifChannel(uint32_t addr, uint32_t qwc, int chain) {
         render_wait();
         return;
     }
+    gGsFbpEntregue = gGsMainFbp; /* (sem a thread: o mesmo valor, na mesma thread) */
     gif_corpo(addr, qwc, chain);
 }
 
@@ -1575,6 +1599,7 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
         return;
     }
     if (!sGpu) {
+        gGsFbpEntregue = gGsMainFbp;
         run_chain(tadr, tte);
         gGsFrameJogo = gGsFrame;
         return;
@@ -1583,6 +1608,7 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
     if (sThreaded) {
         render_wait(); /* the previous list must be finished before this one starts (the PS2's sceGsSyncPath) */
     } else {
+        gGsFbpEntregue = gGsMainFbp;
         run_chain(tadr, tte);
         gGsFrameJogo = gGsFrame;
     }
