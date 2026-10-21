@@ -299,7 +299,114 @@ ou o do desenho (15 ms mais a cópia da VU1).
   rodada com tempos por família na gravação, como já existe para a VU1 (`gGsVu1Ms`): o `transfer_data`, o recálculo do
   `Gs_PageHash`, o `GsVu1_Unpack`, e a entrega dividida em cópia e backend; e que essas linhas saiam também **dentro** da janela
   do `passos` (hoje o log fica mudo nela). É uma rodada de console e acerta a ordem dos itens 1 a 4 sem adivinhar.
+  **Feito no código** (seção 7, a linha `gs: gravação por família`); falta a rodada no console.
 - **A VU1 dentro da janela** saiu da proporção dos trechos vizinhos (42 a 49%), não de medida dentro da luta.
 - **A PPC não foi usada.** A x86 bastou para ordenar, e a dúvida que sobra é de memória e de execução em ordem, que a contagem
   de instruções do `qemu-ppc` também não vê. A medida certa é a do console.
 - **A memória do item 1** depende da decisão de capacidade das listas vivas.
+
+## 7. Os cortes 2 e 4 e a medição por família (21/10/2026)
+
+Branch `f5-envio`, sobre a main `c2606a9`. Tudo em `BT3_GS_ESPERAS` (a condição `PORT_BIG_ENDIAN || BT3_TESTE_VU1`), com o
+código de antes no `#else`: a `.text` da x86 plana segue `cc46fa0752f092fca305bc8bf2e2e54390763af0`.
+
+### O que mudou
+
+| Commit | O quê |
+|---|---|
+| `7ac8ee5` | **A medição por família.** A gravação soma o próprio tempo em `gGsFamTiques` (`gs_internal.h`): o envio (`transfer_data`, depois do teste de envio ativo), o recálculo do `Gs_PageHash` (só quando refaz o laço; a parte pedida de dentro da VU1 soma também à parte), o `GsVu1_Call`, o `GsVu1_Unpack` (o corpo virou `vu1_unpack`, com o tempo em volta) e a entrega em três pedaços: a espera pelo desenho, a cópia (as cinco listas e a tabela de alvos) e o gancho `GsBackend.entrega`. O `Gs_FamTrecho` (`gs_draw.c`, chamado no começo do `GsGpu_FrameEnd`, na thread de gravação) escreve uma linha a cada 60 fins de quadro, **também dentro da janela do `passos`** (ele não consulta o `Passos_Medindo` para calar, só para contar os quadros da janela; no 360 a linha vai pelo diário, que grava noutra thread) |
+| `b1cb898` | **Corte 2, o envio PSMCT32 em grupos de 8 pixels** (`gs_core.c`, `transfer_data`): com x múltiplo de 8 os 8 pixels caem no mesmo bloco, nas palavras o, o+1, o+4, o+5, o+8, o+9, o+12 e o+13; uma consulta de `sIn32` e um cálculo de endereço por grupo no lugar de 8, as pontas pelo laço de antes. As cópias seguem de 4 bytes (ver abaixo) |
+| `fc980e7` | **Corte 4, a memória do `clut_texture`** (`gs_draw.c`): o hash da tabela de 256 cores lembrado por `cbp` e pela geração das duas páginas que ela ocupa (a regra do `clut_hash`; 64 vagas); as 256 leituras da VRAM só quando a memória não vale, ou para criar a textura. O `sCluts`, a escolha da vaga e o `last` seguem iguais |
+| `123ba2a` | No 360 o relógio das famílias é o `__mftb` declarado como no `ppcintrinsics.h` (o `cl` o emite em linha, um `mftb`, sem chamada; o `default.map` não tem o símbolo), calibrado a cada trecho contra o `gpu_now` |
+| `b04ecd3` | Fora do 360 a medição só liga com `BT3_TEMPOS=1` (na PPC do `qemu` a leitura do relógio é uma chamada de sistema emulada: a rodada das listas da `ppcg` foi de 121 para 232 s); no 360 vem ligada, e `BT3_TEMPOS=0` desliga, a mesma chave dos tempos do backend |
+
+**Por que as cópias do envio seguem de 4 bytes.** A primeira versão copiava os quatro pares de 8 bytes; foi trocada antes das
+provas. A origem é o pacote do jogo, alinhada a 16, mas o grupo começa no pixel `i + j`, que só é par quando a largura e o
+começo da linha ajudam: uma cópia de 8 bytes alinhada só a 4 no Xenon pode cair numa exceção de alinhamento (e o `cl` pode
+gerar `ld`/`std` para um `memcpy` de 8). O ganho do corte é a consulta e o endereço por pixel, não a largura da cópia.
+
+### A linha nova do log
+
+```
+gs: gravação por família, quadro Q (60 quadros, K na janela): parede P ms por quadro; envio E (N vezes, B KB), hash H (R
+recálculos; HV dentro da VU1), VU1 V (L lotes), Unpack U (n), entrega: espera W, cópia C, backend K2; soma S, fora delas F;
+CPU da thread T
+```
+
+Tudo em ms por quadro, médias do trecho. `K na janela` diz quantos dos 60 quadros a janela do `passos` cobriu (os trechos da
+luta têm 60). A **parede** é o período da gravação no trecho (do `gpu_now`, de um fim de quadro ao do trecho seguinte). A
+**soma** conta o hash só uma vez (o hash total menos o de dentro da VU1, mais a VU1). **Fora delas** é a parede menos a soma:
+andar a cadeia de DMA e o VIF, o GIF fora do envio e os desenhos de CPU. A **CPU da thread** só existe fora do 360 (`-1` no
+console). O `espera` é o tempo da gravação esperando o desenho largar o retrato anterior (no x86 é zero; no console, se passar
+de zero, o desenho virou o gargalo).
+
+### As provas no WSL [medido]
+
+Antes: `main-local` (`91d076f`, o mesmo código da main), script `~/envio-antes.sh`, resumo `~/envio/antes.resumo`, logs e as
+builds em `~/envio/antes`. Depois: o `f5-envio` em `fc980e7`, script `~/envio-depois.sh`, resumo `~/envio/depois.resumo`, logs
+em `~/envio/depois`. Uma rodada de emulador por vez; a pasta de dados de cada roteiro pelo passo do `roteiros.sh` que a gera
+(como no `~/provas-degrau2-e3.sh`). Os dois commits do relógio (`123ba2a`, `b04ecd3`) vieram depois: o primeiro não muda o
+código pré-processado fora do 360 (conferido com `gcc -E` nas três fontes, nas configurações da `x86gv` e da `ppcg`), o
+segundo só muda o padrão da chave, e a rodada do critério refaz as listas da `x86gv` com ele (abaixo).
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `cc46fa0752f092fca305bc8bf2e2e54390763af0`, antes e depois |
+| `x86gv`, `f5_treino` (7.386 quadros) e `f5_duelo` (8.380), sem chaves e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, antes contra depois | as quatro com `divergencias.py` saindo 0: nenhum quadro com a lista diferente, hashes `f76f0f6849b64629` e `08a98b6d05b8775a` |
+| `ppcg`, os mesmos quatro casos | os quatro com 0: hashes `f76f0f6849b64629` e `994627a2aecd429a` (o da PPC no `f5_duelo`, o mesmo de antes) |
+| Texturas decodificadas | as mesmas (1.248 e 2.431): nenhum corte muda a ordem de criação, e o hash de sempre basta (o normal não foi preciso) |
+| Sabotagem S1: o envio com dois pixels do grupo trocados | `f5_treino` 255 quadros diferentes, `f5_duelo` 544 (o primeiro no 22), hash do jogo diferente: `divergencias.py` sai 1 |
+| Sabotagem S2: a memória do `clut_texture` sem a geração das páginas | `f5_duelo` 3.416 quadros diferentes (do 4.905 em diante), sai 1; **`f5_treino` 0**: lá nenhuma tabela é reescrita no mesmo `cbp`, então só o `f5_duelo` vê esse erro |
+| Sabotagem S3: 5 us de espera ativa em cada envio | o envio da linha nova sobe 1,33 ms por quadro com 274 envios por quadro (o esperado, 274 x 5 us, é 1,37): a medição mede o que se põe nela |
+| O git do WSL depois das sabotagens | 0 alterados (cada uma desfeita por `git checkout`) |
+
+**O ganho na x86.** `x86gv`, `f5_duelo` com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, as builds M (`7ac8ee5`, só a medição), E
+(`b1cb898`, mais o envio) e C (`fc980e7`, mais o `clut_texture`), alternadas três vezes; médias dos 49 trechos inteiros dentro da
+janela da luta, em ms por quadro:
+
+| Build | Envio | Hash | VU1 | Unpack | Cópia | CPU da gravação | Parede |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| M | 0,569 | 0,230 | 1,038 | 0,356 | 0,214 | **3,024** | 3,254 |
+| E | 0,353 | 0,230 | 1,046 | 0,353 | 0,200 | **2,798** | 3,046 |
+| C | 0,355 | 0,231 | 1,043 | 0,357 | 0,198 | **2,675** | 2,962 |
+
+O envio caiu **38%** (0,216 ms); o `clut_texture` tirou mais 0,123 ms (ele não é família própria: aparece na CPU, e no "fora
+delas", porque roda nas passadas de tabela, fora da VU1). Os dois juntos: **11,5% da CPU da gravação** (3,02 para 2,68 ms). As
+três rodadas de cada build ficaram dentro de 0,08 ms. Com a medição desligada (`BT3_TEMPOS=0`, o padrão de agora fora do 360) a
+rodada inteira leva uns 1,5 s a menos que com ela (12,2 contra 13,7 s): o relógio da x86 custa uns 0,18 ms por quadro com
+umas 24 mil leituras (por isso o 360 usa o `mftb` em linha).
+
+**A estimativa no console [estimado].** Na mesma proporção: o envio de 5,2 a 6,3 ms para uns 3,2 a 3,9 (de **2 a 2,4 ms** a
+menos; abaixo dos 2 a 3,5 da seção 5, que contava com cópias de 8 bytes), e o `clut_texture` de 1,6 a 1,9 para uns 0,5 (de
+**1,1 a 1,3 ms** a menos: na x86 o corte tirou uns dois terços dos 6,1% que ele tinha). Juntos, uns **3 a 3,7 ms** dos 38,4: a luta perto de 35 ms,
+ainda acima dos 33,37. O que confirma é a linha nova no console.
+
+### A rodada do critério (serviço `claude-envio` no WSL, disparado sem esperar)
+
+O script `~/rodada-envio.sh` (usuário `codex`) refaz, no HEAD do `f5-envio`: a `x86gv` e as listas dela nos dois roteiros com a
+divisão (a medição no padrão novo, desligada), com o `divergencias.py` contra as de antes; depois as três builds do critério
+(`headless.py --alvo x86`, `--alvo x86 --rastreio`, `--alvo ppc`, nessa ordem), a `.text` da x86 plana, e em série `REF=1
+SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` e `SEMMAPA=1 IMG=1 roteiros.sh duelo`. Saída do serviço em
+`~/rodada-envio.log`, logs em `~/rodada-envio-*.log`, resumo em `~/rodada-envio.resumo`: uma linha por passo com `RC=`, a linha
+da `.text` ("a mesma" ou "DIFERENTE"), o git no fim e `FIM`. Vale com todos os `RC=0`, as duas listas com o `divergencias.py`
+saindo 0, a `.text` a mesma e o git sem alterados.
+
+### A rodada no console: o que olhar
+
+A build: `build/x360/f2/default.xex` do worktree, com o `ambiente.txt` de lá (`BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`,
+`BT3_VU1=1`, `BT3_VU_VERTS=98304`, piso de 32 MB, teto de textura de 128 MB, `BT3_SHOT=600`, a ISO convertida e os saves
+`saves19`). O roteiro: START pula o filme; Duelo, Goku contra Kuririn, estágio 5; 60 s de luta; a pausa com uns 3 s de espera e a
+Guide.
+
+1. **As linhas `gs: gravação por família` com `60 na janela`**: é a primeira medida de dentro da luta. Para cada família, a
+   mediana dos trechos da janela, contra o rateio da seção 2.2: envio (era 5,2 a 6,3 estimado; o esperado agora é de 3 a 4),
+   hash (4,4 a 5,3), VU1 (16 a 19; ela inclui o hash de dentro da VU1, que a linha mostra à parte), Unpack (2,3 a 2,7), a cópia
+   da entrega (a parte maior dos 4,8) e o backend, e o "fora delas" (a cadeia, o VIF, o GIF e os desenhos de CPU, sem medida
+   até aqui). É essa tabela que reordena os itens 1, 3, 5 a 9 da seção 5.
+2. **A parede** das linhas da janela contra a mediana dos passos (`passos: janela`): a parede é o período da gravação; se ela
+   ficar abaixo do período dos passos, o gargalo passou para o jogo ou para o desenho (e o `espera` sobe).
+3. **O período da luta**: a mediana dos passos contra os 38,4 ms da abertura 1 do degrau 2 (a estimativa é de uns 35).
+4. O resto como no degrau 2: a linha `gs: divisão` (0 sem cópia), as capturas `BT3_SHOT=600` sem textura errada (em especial a
+   névoa e os ids das passadas de tabela, que o corte 4 toca), a Guide no menu, na carga e na pausa, nenhum `vigia:` novo.
+5. O custo da própria medida: são umas 24 mil leituras do `mftb` por quadro. Se a parede da janela parecer alta, uma abertura
+   a mais com `BT3_TEMPOS=0` no `ambiente.txt` (sem as linhas, e sem os tempos do backend) dá o período sem ela.

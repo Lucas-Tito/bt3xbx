@@ -1531,3 +1531,23 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   em segundo plano do lado de cá).
 - **O log do console na janela do `passos` fica mudo** (`log_quadros` volta cedo com `Passos_Medindo()`), e a `entrega média`
   do `gs: divisão` é cumulativa desde o boot: o valor de um trecho sai da diferença das somas (média × retratos).
+
+### Cortes e medição na gravação (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 7)
+
+- **Não alargar uma cópia de 4 para 8 bytes em código que roda no Xenon sem provar o alinhamento da origem.** O envio PSMCT32
+  em grupos saiu primeiro com quatro `memcpy` de 8 bytes; o pacote do jogo é alinhado a 16, mas o grupo começa num pixel que
+  pode ser ímpar, e uma leitura de 8 bytes alinhada a 4 no Xenon pode cair numa exceção de alinhamento. Custou parar o serviço
+  de provas já disparado e refazer o commit. O ganho do corte era a consulta de tabela por pixel, não a largura da cópia.
+- **Medir por evento custa o relógio vezes os eventos.** A linha por família lê o relógio umas 24 mil vezes por quadro de
+  luta (o `Unpack` roda uns 7 mil vezes, a VU1 uns 4 mil). Na x86 do WSL, com o `clock_gettime` do vDSO, isso já é 10% do tempo
+  da rodada; na PPC do `qemu` cada leitura é uma chamada de sistema emulada e a rodada das listas da `ppcg` dobrou (121 para
+  232 s). No 360 o certo é o `mftb` em linha: o `cl` aceita `uint64_t __mftb();` declarado à mão (o mesmo do
+  `ppcintrinsics.h`) e emite uma instrução, sem símbolo no `default.map`; o `clang` do `c89.py` (alvo `powerpc`) aceita a
+  declaração. Fora do 360 a medição fica desligada por padrão (`BT3_TEMPOS=1` liga).
+- **Toda medida nova vista medindo o que se põe nela**: 5 us de espera ativa em cada envio subiram o envio da linha em 1,33 ms
+  por quadro, com 274 envios por quadro (o esperado era 1,37).
+- **Uma sabotagem pode passar num roteiro e falhar no outro.** A memória do `clut_texture` sem a geração das páginas deu 0
+  quadros diferentes no `f5_treino` (nenhuma tabela reescrita no mesmo `cbp`) e 3.416 no `f5_duelo`: rode a prova negativa nos
+  dois roteiros, não num só.
+- **Uma mudança só no 360 depois das provas do WSL**: confira com `gcc -E` (nas definições da `x86gv` e da `ppcg`) que o
+  pré-processado das fontes não mudou fora do 360; se não mudou, as provas valem sem refazer as rodadas.
