@@ -50,6 +50,7 @@ int gGsFam, gGsFamNaVu1;
 uint64_t gGsFamTiques[GS_FAM_N];
 uint32_t gGsFamVezes[GS_FAM_N];
 uint64_t gGsFamBytes;
+uint32_t gGsFamUnpVet[3];
 #ifdef PORT_X360
 double gGsFamTbMs = 49875.0; /* (o mftb do Xenon anda a uns 50 MHz; o Gs_FamTrecho mede a cada trecho) */
 uint64_t Gs_FamTique(void) {

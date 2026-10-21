@@ -74,12 +74,19 @@ extern void (*gGsDesenhoParar)(void);
    leitura do relógio é uma chamada de sistema emulada, e a rodada da PPC dobrava); BT3_TEMPOS é a mesma chave
    (a mesma chave dos tempos do backend). O hash de página pedido de dentro da VU1 soma também em GS_FAM_HASH_VU1, para
    a soma das famílias não o contar duas vezes. */
-enum { GS_FAM_ENVIO, GS_FAM_HASH, GS_FAM_HASH_VU1, GS_FAM_VU1, GS_FAM_UNPACK, GS_FAM_ESPERA, GS_FAM_COPIA, GS_FAM_BACKEND, GS_FAM_N };
+enum {
+    GS_FAM_ENVIO, GS_FAM_HASH, GS_FAM_HASH_VU1, GS_FAM_VU1, GS_FAM_UNPACK, GS_FAM_ESPERA, GS_FAM_COPIA, GS_FAM_BACKEND,
+    /* (por dentro, fora da soma) o gancho do backend (gs_d3d.cpp, entrega): o vu_plano com a regra do cleared, as
+       profundidades e as vagas sem textura, a medida da memória; e o Unpack pelo caminho do desempacotar (a cópia V4-32, o
+       laço rápido dos outros formatos sem máscara, o laço geral) */
+    GS_FAM_E_PLANO, GS_FAM_E_ALVOS, GS_FAM_E_MEM, GS_FAM_UNP_COPIA, GS_FAM_UNP_RAPIDO, GS_FAM_UNP_GERAL, GS_FAM_N
+};
 extern int gGsFam;           /* 1 medindo; 0 desligado (BT3_TEMPOS, ou antes do primeiro fim de quadro) */
 extern int gGsFamNaVu1;      /* 1 dentro do GsVu1_Call */
 extern uint64_t gGsFamTiques[GS_FAM_N];
 extern uint32_t gGsFamVezes[GS_FAM_N];
 extern uint64_t gGsFamBytes; /* os bytes que o envio recebeu */
+extern uint32_t gGsFamUnpVet[3]; /* os vetores do Unpack por caminho (GS_FAM_UNP_COPIA em diante) */
 uint64_t Gs_FamTique(void);  /* gs_core.c */
 double Gs_FamMs(uint64_t tiques);
 #if defined(PORT_X360) && !defined(__cplusplus)
@@ -91,6 +98,8 @@ extern double gGsFamTbMs; /* tiques do mftb por ms, do último trecho (gs_draw.c
 #endif
 #define GS_FAM_INI(t) ((t) = gGsFam ? GS_FAM_TIQUE() : 0)
 #define GS_FAM_FIM(f, t) do { if (gGsFam) { gGsFamTiques[f] += GS_FAM_TIQUE() - (t); gGsFamVezes[f]++; } } while (0)
+/* fecha a parte f e abre a seguinte com a mesma leitura do relógio */
+#define GS_FAM_PASSO(f, t) do { if (gGsFam) { uint64_t t_ = GS_FAM_TIQUE(); gGsFamTiques[f] += t_ - (t); gGsFamVezes[f]++; (t) = t_; } } while (0)
 #endif
 extern int gGsMainFbp; /* gs_sony.c: o buffer do quadro, escrito pelo jogo no sceGsSwapDBuff */
 #ifdef BT3_GS_ESPERAS

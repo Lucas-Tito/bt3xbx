@@ -128,13 +128,23 @@ static inline uint32_t unpack_elem(const uint8_t *data, uint32_t b, uint32_t bit
 #endif
 
 #ifdef BT3_GS_ESPERAS
-/* (F5, etapa 8, gravação) o tempo do Unpack por família (gs_internal.h) */
+/* (F5, etapa 8, gravação) o tempo do Unpack por família (gs_internal.h), e por caminho: o corpo diz qual tomou em
+   sUnpVia (0 a cópia V4-32, 1 o laço rápido, 2 o geral), com a mesma leitura do relógio */
 static void vu1_unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data);
+static int sUnpVia;
 void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data) {
     uint64_t t;
     GS_FAM_INI(t);
+    sUnpVia = 2;
     vu1_unpack(cmd, num, imm, data);
-    GS_FAM_FIM(GS_FAM_UNPACK, t);
+    if (gGsFam) {
+        uint64_t d = GS_FAM_TIQUE() - t;
+        gGsFamTiques[GS_FAM_UNPACK] += d;
+        gGsFamVezes[GS_FAM_UNPACK]++;
+        gGsFamTiques[GS_FAM_UNP_COPIA + sUnpVia] += d;
+        gGsFamVezes[GS_FAM_UNP_COPIA + sUnpVia]++;
+        gGsFamUnpVet[sUnpVia] += num ? num : 256;
+    }
 }
 static void vu1_unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data) {
 #else
@@ -150,6 +160,9 @@ void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data
     if (!masked && vu.mode == 0 && cl == wl && !(vn == 3 && vl == 3) && vn != 0 && vl != 3) {
         uint32_t comps = vn + 1;
         if (vn == 3 && vl == 0) { /* four words per vector, which is all the game's models and effects send: a copy */
+#ifdef BT3_GS_ESPERAS
+            sUnpVia = 0;
+#endif
             for (k = 0; k < n; k++) {
                 uint32_t at = (addr + k) & 0x3FF, run = 0x400 - at;
                 if (run > n - k) {
@@ -160,6 +173,9 @@ void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data
             }
             return;
         }
+#ifdef BT3_GS_ESPERAS
+        sUnpVia = 1;
+#endif
         for (k = 0; k < n; k++) {
             uint32_t out[4] = {0, 0, 0, 0};
             if (vl == 0) {

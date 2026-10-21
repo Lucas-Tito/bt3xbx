@@ -3422,12 +3422,18 @@ extern "C" void GsD3d_Soltar(void) {
 static void entrega(const GsQuadro *q, unsigned char *limpa) {
     const char *antes = (const char *)gGsD3dEtapaGrav;
     uint32_t n;
+#ifdef BT3_GS_ESPERAS
+    uint64_t ft; /* (F5, etapa 8, gravação) as partes do gancho por família, fora da soma (gs_internal.h) */
+#endif
     gGsD3dEtapaGrav = "entrega do retrato";
     grav_junta();
     sPendGrav = 0; /* (o que foi pedido até aqui viaja com este retrato) */
     if (q->fbp >= 0) {
         GsDraw_TargetGet((uint32_t)q->fbp, 0);
     }
+#ifdef BT3_GS_ESPERAS
+    GS_FAM_INI(ft);
+#endif
     vu_plano(q);
     memset(limpa, 0, MAX_TARGETS);
     for (n = 0; n < q->drawCount; n++) {
@@ -3436,9 +3442,18 @@ static void entrega(const GsQuadro *q, unsigned char *limpa) {
             limpa[d->target] = 1;
         }
     }
+#ifdef BT3_GS_ESPERAS
+    GS_FAM_PASSO(GS_FAM_E_PLANO, ft);
+#endif
     prof_garante(q);
     alvos_sem_textura(limpa);
+#ifdef BT3_GS_ESPERAS
+    GS_FAM_PASSO(GS_FAM_E_ALVOS, ft);
+#endif
     mem_mede();
+#ifdef BT3_GS_ESPERAS
+    GS_FAM_PASSO(GS_FAM_E_MEM, ft);
+#endif
     sincroniza_alvos();
     sProfFilaD = sProfFilaG;
     sProfFilaG ^= 1;

@@ -3928,8 +3928,21 @@ static void Gs_FamTrecho(void) {
              (double)gGsFamVezes[GS_FAM_UNPACK] / quadros, ms[GS_FAM_ESPERA], ms[GS_FAM_COPIA], ms[GS_FAM_BACKEND], soma,
              parede - soma, cpu);
     divisao_log(linha);
+    /* a linha irmã: o gancho do backend por dentro (o resto é o gancho menos as três partes: o grav_junta, o last do alvo
+       mostrado, o sincroniza_alvos e a fila das profundidades) e o Unpack por caminho, com as vezes e os vetores */
+    snprintf(linha, sizeof(linha),
+             "grava\303\247\303\243o por fam\303\255lia, por dentro, quadro %u: backend %.2f: plano da VU1 %.2f, alvos e "
+             "profundidades %.2f, mem\303\263ria %.2f, o resto %.2f; Unpack %.2f: c\303\263pia V4-32 %.2f (%.0f vezes, %.0f "
+             "vetores), r\303\241pido %.2f (%.0f vezes, %.0f vetores), geral %.2f (%.0f vezes, %.0f vetores)",
+             gGsFrame, ms[GS_FAM_BACKEND], ms[GS_FAM_E_PLANO], ms[GS_FAM_E_ALVOS], ms[GS_FAM_E_MEM],
+             ms[GS_FAM_BACKEND] - ms[GS_FAM_E_PLANO] - ms[GS_FAM_E_ALVOS] - ms[GS_FAM_E_MEM], ms[GS_FAM_UNPACK],
+             ms[GS_FAM_UNP_COPIA], (double)gGsFamVezes[GS_FAM_UNP_COPIA] / quadros, (double)gGsFamUnpVet[0] / quadros,
+             ms[GS_FAM_UNP_RAPIDO], (double)gGsFamVezes[GS_FAM_UNP_RAPIDO] / quadros, (double)gGsFamUnpVet[1] / quadros,
+             ms[GS_FAM_UNP_GERAL], (double)gGsFamVezes[GS_FAM_UNP_GERAL] / quadros, (double)gGsFamUnpVet[2] / quadros);
+    divisao_log(linha);
     memset(gGsFamTiques, 0, sizeof(gGsFamTiques));
     memset(gGsFamVezes, 0, sizeof(gGsFamVezes));
+    memset(gGsFamUnpVet, 0, sizeof(gGsFamUnpVet));
     gGsFamBytes = 0;
     quadros = 0;
     naJanela = 0;
