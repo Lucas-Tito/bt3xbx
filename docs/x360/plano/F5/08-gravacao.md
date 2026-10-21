@@ -570,3 +570,44 @@ o quadro anterior quando a câmera anda rápido. A dúvida é a intensidade cont
 suaviza, e há uma passada de borrão pelo alfa do destino (`BT3_FX_OFF=16`) parecida com o "borrado" que a etapa 7 investigou. Para
 conferir, sem código: comparar com o original (PS2 ou PCSX2) voando com o A, e uma abertura com `BT3_FX_OFF=16` para ver se o
 embaçado do voo some.
+
+## 9. O gancho do backend e o `Unpack` por dentro (21/10/2026)
+
+Branch `f5-perfil`, sobre o `f5-pingpong`. Faltam uns 1,5 ms para os 33,37; o gancho `backend` da entrega (2,0 a 2,1 ms) e o
+`GsVu1_Unpack` (3,3 a 3,8 ms) são dois alvos sem divisão interna. Esta medição os divide, no mesmo mecanismo da seção 7 (só com
+`gGsFam`, o `mftb` em linha no 360; fora do 360 só com `BT3_TEMPOS=1`; tudo em `BT3_GS_ESPERAS`, a `.text` da x86 plana não muda).
+
+### O que cada um faz, só lendo
+
+- **O gancho** (`port/x360/src/gs/gs_d3d.cpp`, `entrega`): o `grav_junta` e o `GsDraw_TargetGet` (fixos); o `vu_plano`
+  (`:2179`), que passa duas vezes pelos desenhos e, para cada desenho da VU1, por **todos os índices** dele atrás do menor e do
+  maior (uns 129 mil índices, 516 KB, por quadro de luta), mais a regra do cleared, outra passada pelos desenhos; o `prof_garante`
+  (`:1345`), outra passada pelos desenhos com o `sPipes[d->pipeline]` de cada um; o `alvos_sem_textura` (24 vagas, só cria se
+  faltar); o `mem_mede` (`:318`), um `GlobalMemoryStatus`, chamada ao sistema; o `sincroniza_alvos` (24 vagas). Proporcional aos
+  índices da VU1 (o `vu_plano`) e aos desenhos (quatro passadas por uns 2,5 mil `GsDraw` de 128 bytes, uns 320 KB cada).
+- **O `Unpack`** (`port/src/gs/gs_vu1.c`, chamado pelo `vif` em `port/src/gs/gs_core.c:1058` e `:1077`): proporcional aos
+  vetores; três caminhos. A cópia `V4-32` (um `memcpy` do pacote do jogo para a `vu.mem`, a origem fria); o laço rápido dos
+  outros formatos sem máscara (no 360 cada elemento de 8 ou 16 bits passa pelo `unpack_elem`, um `memcpy` de 4 bytes e um
+  deslocamento); o laço geral (máscara, `mode`, `cl != wl`, `V4-5`), com ramos por componente.
+
+### A linha nova
+
+Logo depois da `gs: gravação por família`, também dentro da janela do `passos`:
+
+```
+gs: gravação por família, por dentro, quadro Q: backend B: plano da VU1 P, alvos e profundidades A, memória M, o resto R;
+Unpack U: cópia V4-32 C (n vezes, v vetores), rápido X (n vezes, v vetores), geral G (n vezes, v vetores)
+```
+
+Em ms por quadro, médias do trecho. O **plano da VU1** é o `vu_plano` mais a regra do cleared; **alvos e profundidades**, o
+`prof_garante` e o `alvos_sem_textura`; **memória**, o `mem_mede`; **o resto** é o gancho menos os três (o `grav_junta`, o last
+do alvo mostrado, o `sincroniza_alvos`, a fila das profundidades). O gancho ganha três leituras do relógio por quadro; o `Unpack`
+nenhuma (o caminho sai de uma variável que o corpo marca). As novas famílias ficam fora da `soma` da linha de cima.
+
+### A build e a rodada no console
+
+`build/x360/f2/default.xex` do worktree `bt3xbx-p` (`4afb25bc5fee6881e71c05973bdfda8a`): 317 de 317, os mesmos 993 avisos e
+os mesmos 103 stubs da main, `.dat` e `.swap` iguais. O `ambiente.txt` é o da abertura 2 da seção 8 (a medição ligada). O
+roteiro de sempre (Duelo, Goku contra Kuririn, estágio 5, 60 s de luta); olhar as linhas `por dentro` com `60 na janela` na
+linha de cima. A aposta antes de medir: o plano da VU1 leva a maior parte do gancho (o laço por índice), a memória quase nada;
+no `Unpack`, a cópia `V4-32` leva a maior parte, presa à leitura fria do pacote, e o laço rápido custa mais por vetor que ela.
