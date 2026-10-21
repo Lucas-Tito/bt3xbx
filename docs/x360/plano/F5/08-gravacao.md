@@ -544,3 +544,29 @@ filme; Duelo, Goku contra Kuririn, estágio 5; 60 s de luta; a pausa com uns 3 s
    16.384); e o `sem espaço` da linha da VU1 (os buffers do próprio `gs_d3d`) e o das brancas em zero, como antes.
 6. O resto como no degrau 2: as capturas `BT3_SHOT=600` sem textura errada, a Guide no menu, na carga e na pausa, nenhum
    `vigia:` novo.
+
+### A rodada no console da entrega sem cópia (21/10/2026) [medido]
+
+`.xex` `f33df29754d2e25b90dcf074dc27dae0`, `BT3_GS_THREAD=1` e `BT3_GS_DESENHO=1`, Duelo, Goku contra Kuririn, estágio 5, sem
+queda, sem textura branca, nenhum `CHEIO` nas duas aberturas.
+
+| | Antes (cortes 2 e 4) | Com os dois jogos de listas |
+|---|---:|---:|
+| Luta, mediana, `BT3_TEMPOS=0` | 36,2 ms | **34,9 ms** |
+| p95 e p99, `BT3_TEMPOS=0` | 58,5 e 95,0 ms | **45,8 e 72,5 ms** |
+| Luta, mediana, com a medição | 39,3 ms | 37,5 ms |
+| Cópia da entrega (por família) | 2,7 ms | 0,00 ms |
+| Memória livre mínima | 31 MB | 38 MB |
+
+A cópia sumiu, mas a mediana caiu só 1,3 ms dos 2,7 dela; os picos caíram mais (p95 menos 12,7 ms). No rateio com a medição: VU1
+22 a 25 ms, envio 6,4, `Unpack` 3,3 a 3,8, o gancho do backend na entrega 2,0 a 2,1, hash fora da VU1 uns 0,3, o resto 9,5 a 11,4.
+Faltam uns 1,5 ms para os 33,37.
+
+### Pendente (para depois do desempenho): o embaçado no voo
+
+O Lucas nota, desde antes da etapa 8, as texturas embaçadas em movimento (o voo para frente com o A). Provavelmente é o efeito do
+próprio jogo, o desfoque de movimento do cenário (`StgPanBlur`, `src/sys/gfxm_a.c`, ligado em `src/battle/stg_c.c:629`), que mistura
+o quadro anterior quando a câmera anda rápido. A dúvida é a intensidade contra o PS2: a imagem de 640x448 ampliada para 960x720
+suaviza, e há uma passada de borrão pelo alfa do destino (`BT3_FX_OFF=16`) parecida com o "borrado" que a etapa 7 investigou. Para
+conferir, sem código: comparar com o original (PS2 ou PCSX2) voando com o A, e uma abertura com `BT3_FX_OFF=16` para ver se o
+embaçado do voo some.
