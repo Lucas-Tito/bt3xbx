@@ -1218,6 +1218,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   acento no corpo, `gs_core`, `hl_passos`, `hl_roteiro` e `pc_plat_mc`, não tinham). O verificador
   (fonte pequeno com `"ação"` antes de um `for` com declaração) foi visto falhando com o `c89.py` antigo.
 
+- **Roteiro parando no boot em 1 s com "600 quadros sem mcflow 15": a pasta do `BT3_SAVES` não tem pai.** Na F5 (etapa 8,
+  o `vu_plano`) as listas do `vu1_perfil.sh` no Deck pararam todas no boot (`tela 1, mcflow 17`), x86 e PPC, antes de
+  qualquer código novo: o script aponta o `BT3_SAVES` para `~/perfil/sv_l`, e no Deck o `~/perfil` não existia. O jogo
+  não cria a cadeia de pastas do cartão, o fluxo do cartão vai para o caminho de erro e o roteiro espera o passo que não vem.
+  Custou uma rodada (o script em série seguiu para a PPC com as listas vazias). O `vu1_perfil.sh` agora faz `mkdir -p` da
+  pasta; numa máquina nova, confira as pastas fora do repositório que os scripts pressupõem (`~/perfil`, `~/referencias`)
+  e olhe o fim do log da primeira rodada antes de deixar a série correr.
+
 ---
 
 ## 7. Lista de passos para um port novo
