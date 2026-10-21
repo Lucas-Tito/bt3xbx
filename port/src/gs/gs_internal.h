@@ -65,6 +65,23 @@ extern uint32_t gGsPageEpoch; /* changes whenever any gGsPageGen entry does (F5,
 int Port_GsComThread(void);
 extern void (*gGsDesenhoParar)(void);
 #endif
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação) O tempo da thread de gravação por família, somado aqui e escrito a cada 60 quadros pelo
+   gs_draw.c (Gs_FamTrecho), também dentro da janela do passos (o log do gs_d3d fica mudo nela). O relógio: no 360 o
+   QueryPerformanceCounter do gs_d3d.cpp (o mesmo do gGsVu1Ms), fora dele o CLOCK_MONOTONIC em ns. BT3_TEMPOS=0 desliga
+   (a mesma chave dos tempos do backend). O hash de página pedido de dentro da VU1 soma também em GS_FAM_HASH_VU1, para
+   a soma das famílias não o contar duas vezes. */
+enum { GS_FAM_ENVIO, GS_FAM_HASH, GS_FAM_HASH_VU1, GS_FAM_VU1, GS_FAM_UNPACK, GS_FAM_ESPERA, GS_FAM_COPIA, GS_FAM_BACKEND, GS_FAM_N };
+extern int gGsFam;           /* 1 medindo; 0 desligado (BT3_TEMPOS=0, ou antes do primeiro fim de quadro) */
+extern int gGsFamNaVu1;      /* 1 dentro do GsVu1_Call */
+extern uint64_t gGsFamTiques[GS_FAM_N];
+extern uint32_t gGsFamVezes[GS_FAM_N];
+extern uint64_t gGsFamBytes; /* os bytes que o envio recebeu */
+uint64_t Gs_FamTique(void);  /* gs_core.c */
+double Gs_FamMs(uint64_t tiques);
+#define GS_FAM_INI(t) ((t) = gGsFam ? Gs_FamTique() : 0)
+#define GS_FAM_FIM(f, t) do { if (gGsFam) { gGsFamTiques[f] += Gs_FamTique() - (t); gGsFamVezes[f]++; } } while (0)
+#endif
 extern int gGsMainFbp; /* gs_sony.c: o buffer do quadro, escrito pelo jogo no sceGsSwapDBuff */
 #ifdef BT3_GS_ESPERAS
 /* (F5, etapa 8, degrau 2, etapa 2) o gGsMainFbp capturado na entrega da lista (gs_core.c, render_post) e posto pela thread

@@ -127,7 +127,19 @@ static inline uint32_t unpack_elem(const uint8_t *data, uint32_t b, uint32_t bit
 }
 #endif
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação) o tempo do Unpack por família (gs_internal.h) */
+static void vu1_unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data);
 void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data) {
+    uint64_t t;
+    GS_FAM_INI(t);
+    vu1_unpack(cmd, num, imm, data);
+    GS_FAM_FIM(GS_FAM_UNPACK, t);
+}
+static void vu1_unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data) {
+#else
+void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data) {
+#endif
     uint32_t vn = (cmd >> 2) & 3, vl = cmd & 3, masked = (cmd >> 4) & 1, usn = (imm >> 14) & 1;
     uint32_t addr = (imm & 0x3FF) + ((imm >> 15) & 1 ? vu.tops : 0), n = num ? num : 256;
     uint32_t cl = vu.cl ? vu.cl : 1, wl = vu.wl ? vu.wl : 1, cyc = 0, bitpos = 0, k, c;
@@ -715,17 +727,21 @@ static int hle_program6(void) {
 }
 
 /* MSCAL / MSCALF (addr = instruction address) or MSCNT (addr < 0: continue where the last run stopped). */
-#ifdef PORT_X360
+#if defined(PORT_X360) || defined(BT3_GS_ESPERAS)
 static void vu1_call(int addr);
+#endif
+#ifdef PORT_X360
 
 /* F5, etapa 6: cada chamada contada pela família do programa e pelo caminho que tomou, e o tempo dela */
 void GsVu1_Call(int addr) {
     unsigned hle = sHle, runs = sStatRuns, tam = sProgSize;
-    uint64_t t0 = GsD3d_Tique();
+    uint64_t t0 = GsD3d_Tique(), t1;
     int fam = tam == 127 || tam == 124 || tam == 99 || tam == 101 || tam == 94 || tam == 104 ? 0 : tam == 399 ? 1 : tam == 451 ? 2 : 3;
     int k;
 
+    gGsFamNaVu1 = 1;
     vu1_call(addr);
+    gGsFamNaVu1 = 0;
     gGsVu1Lotes[fam][sHle != hle ? 0 : sStatRuns != runs ? 1 : 2]++;
     if (fam == 3) {
         for (k = 0; k < 8 && gGsVu1Desconhecido[k][1] != 0 && gGsVu1Desconhecido[k][0] != tam; k++) {
@@ -735,9 +751,26 @@ void GsVu1_Call(int addr) {
             gGsVu1Desconhecido[k][1]++;
         }
     }
-    gGsVu1Ms += GsD3d_Ms(GsD3d_Tique() - t0);
+    t1 = GsD3d_Tique();
+    gGsVu1Ms += GsD3d_Ms(t1 - t0);
+    if (gGsFam) { /* (F5, etapa 8, gravação) o mesmo intervalo, na família da VU1 */
+        gGsFamTiques[GS_FAM_VU1] += t1 - t0;
+        gGsFamVezes[GS_FAM_VU1]++;
+    }
 }
+#elif defined(BT3_GS_ESPERAS)
+/* (F5, etapa 8, gravação) o tempo da VU1 por família fora do 360 (gs_internal.h) */
+void GsVu1_Call(int addr) {
+    uint64_t t;
+    GS_FAM_INI(t);
+    gGsFamNaVu1 = 1;
+    vu1_call(addr);
+    gGsFamNaVu1 = 0;
+    GS_FAM_FIM(GS_FAM_VU1, t);
+}
+#endif
 
+#if defined(PORT_X360) || defined(BT3_GS_ESPERAS)
 static void vu1_call(int addr) {
 #else
 void GsVu1_Call(int addr) {

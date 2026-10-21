@@ -3759,13 +3759,89 @@ static void divisao_decide(void) {
 #endif
 }
 
+/* (F5, etapa 8, gravação) A cada 60 fins de quadro, na thread de gravação: o tempo por família desde o trecho anterior
+   (gs_internal.h), em ms por quadro, e quantas vezes cada uma rodou. Sai também dentro da janela do passos (o log de 60
+   quadros do gs_d3d fica mudo nela, e o diário do 360 grava fora da thread); "N na janela" diz quantos dos quadros do
+   trecho a janela cobriu. A parede é o período da gravação; "fora delas" é a parede menos a soma (o hash de dentro da VU1 só uma vez):
+   andar a cadeia e o VIF, o GIF, os desenhos de CPU e, sem a divisão, o desenho. Fora do 360, a CPU da própria thread. */
+int Passos_Medindo(void); /* port/x360/headless/passos.c */
+static void Gs_FamTrecho(void) {
+    static uint64_t desde;
+    static unsigned quadros, naJanela;
+#ifndef PORT_X360
+    static uint64_t cpuDesde;
+#endif
+    double ms[GS_FAM_N], soma, parede, cpu = -1.0;
+    uint64_t agora;
+    int k;
+    char linha[700];
+
+    if (quadros == 0 && desde == 0) { /* o primeiro fim de quadro: liga e começa o trecho */
+        const char *e = getenv("BT3_TEMPOS");
+        gGsFam = e == NULL || atoi(e) != 0;
+        if (!gGsFam) {
+            divisao_log("grava\303\247\303\243o por fam\303\255lia: desligada (BT3_TEMPOS=0)");
+        }
+        desde = gpu_now();
+#ifndef PORT_X360
+        {
+            struct timespec ts;
+            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+            cpuDesde = (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+        }
+#endif
+        return;
+    }
+    if (!gGsFam) {
+        return;
+    }
+    naJanela += Passos_Medindo() != 0;
+    if (++quadros < 60) {
+        return;
+    }
+    agora = gpu_now();
+    parede = (double)(agora - desde) / 1e6 / quadros;
+    for (k = 0; k < GS_FAM_N; k++) {
+        ms[k] = Gs_FamMs(gGsFamTiques[k]) / quadros;
+    }
+    soma = ms[GS_FAM_ENVIO] + ms[GS_FAM_HASH] - ms[GS_FAM_HASH_VU1] + ms[GS_FAM_VU1] + ms[GS_FAM_UNPACK] + ms[GS_FAM_ESPERA] +
+           ms[GS_FAM_COPIA] + ms[GS_FAM_BACKEND];
+#ifndef PORT_X360
+    {
+        struct timespec ts;
+        uint64_t c;
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+        c = (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+        cpu = (double)(c - cpuDesde) / 1e6 / quadros;
+        cpuDesde = c;
+    }
+#endif
+    snprintf(linha, sizeof(linha),
+             "grava\303\247\303\243o por fam\303\255lia, quadro %u (%u quadros, %u na janela): parede %.2f ms por quadro; envio %.2f "
+             "(%.0f vezes, %.0f KB), hash %.2f (%.0f rec\303\241lculos; %.2f dentro da VU1), VU1 %.2f (%.0f lotes), Unpack %.2f (%.0f), "
+             "entrega: espera %.2f, c\303\263pia %.2f, backend %.2f; soma %.2f, fora delas %.2f; CPU da thread %.2f",
+             gGsFrame, quadros, naJanela, parede, ms[GS_FAM_ENVIO], (double)gGsFamVezes[GS_FAM_ENVIO] / quadros,
+             (double)gGsFamBytes / 1024.0 / quadros, ms[GS_FAM_HASH], (double)gGsFamVezes[GS_FAM_HASH] / quadros,
+             ms[GS_FAM_HASH_VU1], ms[GS_FAM_VU1], (double)gGsFamVezes[GS_FAM_VU1] / quadros, ms[GS_FAM_UNPACK],
+             (double)gGsFamVezes[GS_FAM_UNPACK] / quadros, ms[GS_FAM_ESPERA], ms[GS_FAM_COPIA], ms[GS_FAM_BACKEND], soma,
+             parede - soma, cpu);
+    divisao_log(linha);
+    memset(gGsFamTiques, 0, sizeof(gGsFamTiques));
+    memset(gGsFamVezes, 0, sizeof(gGsFamVezes));
+    gGsFamBytes = 0;
+    quadros = 0;
+    naJanela = 0;
+    desde = agora;
+}
+
 /* A entrega, na thread de gravação, no lugar do frameEnd. */
 static void desenho_entrega(void) {
     unsigned char limpa[MAX_TARGETS];
     uint32_t i, c[5];
     int k, cabe;
-    uint64_t t0, dt;
+    uint64_t t0, dt, f0, f1;
 
+    GS_FAM_INI(f0); /* (F5, etapa 8, gravação: a espera pelo desenho, a cópia e o gancho do backend, gs_internal.h) */
 #ifdef PORT_X360
     pthread_mutex_lock(&sDesLock); /* o desenho largou o retrato anterior e não repete o último quadro até a entrega acabar */
     while (sDesTem && !sDesParado) {
@@ -3776,6 +3852,8 @@ static void desenho_entrega(void) {
 #else
     GsDraw_DesenhoEspera(); /* o desenho largou o retrato anterior e soltou o que viajava com ele */
 #endif
+    GS_FAM_FIM(GS_FAM_ESPERA, f0);
+    GS_FAM_INI(f1);
     t0 = gpu_now();
     c[0] = gsDrawCount;
     c[1] = gsVertCount;
@@ -3813,6 +3891,7 @@ static void desenho_entrega(void) {
     sRetrato.vuIdxCount = c[3];
     sRetrato.vuUniCount = c[4];
     memcpy(sRetAlvos, gsTargets, sizeof(sRetAlvos));
+    GS_FAM_FIM(GS_FAM_COPIA, f1);
     sRetrato.targets = sRetAlvos;
     sRetrato.targetCount = gsTargetCount;
     sRetrato.quadro = gGsFrame;
@@ -3840,7 +3919,9 @@ static void desenho_entrega(void) {
         }
     }
     if (sBackend->entrega != NULL) {
+        GS_FAM_INI(f1);
         sBackend->entrega(&sRetrato, limpa);
+        GS_FAM_FIM(GS_FAM_BACKEND, f1);
     }
     for (k = 0; k < gsTargetCount; k++) {
         if (limpa[k]) {
@@ -3883,6 +3964,9 @@ void GsGpu_FrameEnd(void) {
     if (gPortResim) { /* a frame that is only being re-run: nothing was recorded, nothing is shown */
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    Gs_FamTrecho();
+#endif
     uint64_t t0 = gpu_now();
     if (sBackend != NULL) {
         int i;

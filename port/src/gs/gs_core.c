@@ -45,6 +45,30 @@ uint32_t gGsPageEpoch; /* (F5, etapa 8) bumped with every change to any gGsPageG
 #ifdef BT3_GS_ESPERAS /* (gs_internal.h) */
 void Port_GsEspera(void);
 void Port_GsParar(void);
+/* (F5, etapa 8, gravação) o tempo por família da thread de gravação (gs_internal.h) */
+int gGsFam, gGsFamNaVu1;
+uint64_t gGsFamTiques[GS_FAM_N];
+uint32_t gGsFamVezes[GS_FAM_N];
+uint64_t gGsFamBytes;
+#ifdef PORT_X360
+uint64_t GsD3d_Tique(void); /* gs_d3d.cpp: o QueryPerformanceCounter */
+double GsD3d_Ms(uint64_t tiques);
+uint64_t Gs_FamTique(void) {
+    return GsD3d_Tique();
+}
+double Gs_FamMs(uint64_t tiques) {
+    return GsD3d_Ms(tiques);
+}
+#else
+uint64_t Gs_FamTique(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+}
+double Gs_FamMs(uint64_t tiques) {
+    return (double)tiques / 1e6;
+}
+#endif
 #endif
 unsigned gGsFbUploads; /* bit 0 / 1: pixels were uploaded into display buffer 0 / 0x70 since the back end last looked */
 unsigned gGsFrame;
@@ -249,11 +273,17 @@ uint32_t Gs_PageHash(uint32_t page) {
     static uint8_t valid[512];
     uint32_t h = 2166136261u, i;
     const uint32_t *w;
+#ifdef BT3_GS_ESPERAS
+    uint64_t famT;
+#endif
 
     page &= 511;
     if (valid[page] && seen[page] == gGsPageGen[page]) {
         return hash[page];
     }
+#ifdef BT3_GS_ESPERAS
+    GS_FAM_INI(famT);
+#endif
     w = &sVram[page * 2048];
     {   /* four independent 64-bit lanes (the processor runs them side by side), folded at the end */
         uint64_t l[4] = {0x9E3779B97F4A7C15ull, 0xC2B2AE3D27D4EB4Full, 0x165667B19E3779F9ull, 0x27D4EB2F165667C5ull}, q;
@@ -289,6 +319,17 @@ uint32_t Gs_PageHash(uint32_t page) {
     hash[page] = h;
     seen[page] = gGsPageGen[page];
     valid[page] = 1;
+#ifdef BT3_GS_ESPERAS
+    if (gGsFam) {
+        uint64_t d = Gs_FamTique() - famT;
+        gGsFamTiques[GS_FAM_HASH] += d;
+        gGsFamVezes[GS_FAM_HASH]++;
+        if (gGsFamNaVu1) {
+            gGsFamTiques[GS_FAM_HASH_VU1] += d;
+            gGsFamVezes[GS_FAM_HASH_VU1]++;
+        }
+    }
+#endif
     return h;
 }
 
@@ -728,10 +769,17 @@ static void transfer_begin(void) {
 static void transfer_data(const uint8_t *p, uint32_t bytes) {
     uint32_t dbp = (gs.bitbltbuf >> 32) & 0x3FFF, dbw = (gs.bitbltbuf >> 48) & 0x3F, dpsm = (gs.bitbltbuf >> 56) & 0x3F;
     uint32_t bits, total, i;
+#ifdef BT3_GS_ESPERAS
+    uint64_t famT;
+#endif
 
     if (!gs.transfer || gs.tw == 0) {
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    GS_FAM_INI(famT);
+    gGsFamBytes += bytes;
+#endif
     /* A picture uploaded straight into a display buffer (the movies: page 0, 512 wide, the second buffer 448 lines
        down): the GPU back end has to copy it from GS memory into that buffer's texture at the end of the frame. */
     if (dbp == 0 && dbw == 8 && Gs_PsmBits(dpsm) == 32) {
@@ -811,6 +859,9 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
         gGsPageEpoch++;
 #endif
     }
+#ifdef BT3_GS_ESPERAS
+    GS_FAM_FIM(GS_FAM_ENVIO, famT);
+#endif
 }
 
 /* PRMODECONT.AC = 1: the attributes (shading, texturing, fogging, blending, ...) are PRIM's own; AC = 0: they come

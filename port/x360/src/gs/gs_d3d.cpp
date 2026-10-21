@@ -44,7 +44,8 @@
  *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado, e a
  *                     memória por classe (F5, etapa 1);
  *   BT3_TEMPOS=1      (o padrão; 0 desliga) o tempo de GPU e de CPU de cada passada do fim do quadro no mesmo log
- *                     (F5, etapa 8; tempo_* abaixo).
+ *                     (F5, etapa 8; tempo_* abaixo), e o tempo da thread de gravação por família, uma linha "gs: gravação
+ *                     por família" a cada 60 quadros, também dentro da janela do passos (gs_draw.c, Gs_FamTrecho).
  *
  * Memória (F5, etapa 1; o contrato de posse está em docs/x360/plano/F5/01.md): os bytes reais de cada classe
  * (texturas decodificadas, alvos, buffers fixos, o que espera a GPU na cova), um piso de memória física livre e um
