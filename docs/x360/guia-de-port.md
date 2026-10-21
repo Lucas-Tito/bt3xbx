@@ -1555,3 +1555,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   dois roteiros, não num só.
 - **Uma mudança só no 360 depois das provas do WSL**: confira com `gcc -E` (nas definições da `x86gv` e da `ppcg`) que o
   pré-processado das fontes não mudou fora do 360; se não mudou, as provas valem sem refazer as rodadas.
+
+### A entrega sem cópia (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 8)
+
+- **Confira no código o contador que a tarefa cita antes de pô-lo no roteiro do console.** O "sem espaço" do log do `gs_d3d`
+  parecia ser o desenho que não cabe nas listas do `gs_draw.c`; não é: lá o desenho que não cabe volta sem gravar e sem contar,
+  e o "sem espaço" do `gs_d3d` é dos buffers da VU1 dele e do cache de texturas. O sinal de lista cheia é o `CHEIO` da linha
+  `buffers, o maior quadro do trecho`.
+- **Um divisor só de capacidade não enche todas as listas.** Com `BT3_GS_CAP_DIV=40` os índices enchem antes e os desenhos da
+  VU param ali, então as constantes e os desenhos nunca chegam ao teto: a prova pediu mais uma rodada com 8 e 5 para as
+  constantes. Leia o "maior quadro" de cada rodada para saber que lista de fato encheu.
+- **A pasta de dados dos roteiros (`port/build/roteiros/ROTEIRO/dados`) fica vazia depois de uma rodada do `roteiros.sh`.** Antes
+  das listas da PPC, refaça-a pelo passo que a gera (como no `~/provas-pingpong.sh`).
+- **Com dois jogos de listas, a falta da troca aparece mesmo sem atraso** (1.582 quadros diferentes no `f5_treino`): a gravação
+  zera e reescreve o jogo logo depois de acordar o desenho. No retrato copiado a mesma sabotagem só aparecia com a chave de
+  atraso.
