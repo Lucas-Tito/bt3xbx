@@ -486,6 +486,11 @@ Padrões que o Lucas deixou e que podem ser revertidos:
 
 - **SCALE = 1.** Um alvo do GS de 1024 x 1024 com profundidade ocupa 832 + 832 dos 2.048 tiles da EDRAM. Escala maior
   exige tiling predicado.
+  **Revisto em 21/10/2026:** o Lucas decidiu trazer a resolução interna maior (720p em 4:3: escala 2, 1280 x 896 reduzida a
+  960 x 720, ou uma escala perto de 1,6) para dentro da F5, etapa 8, no fim dela, depois de a luta chegar aos 30 fps. Sem
+  tiling predicado, cabe na EDRAM se cada alvo tiver o tamanho da área usada (1280 x 896 com profundidade: 1.792 dos 2.048
+  tiles), não os 1024 x 1024 fixos de hoje. A GPU da luta estava em 11 a 13 ms; a estimativa a 720p é de 25 a 35 ms (escala 2)
+  ou 18 a 25 (perto de 1,6): medir antes de decidir a escala.
 - **Saída 1280 x 720**, a imagem 4:3 (512 x 448 do GS) em 960 x 720 no meio da tela, filtro linear.
 - **O desenho na thread do jogo,** com present a cada quadro do GS. A main cria o dispositivo e o solta
   (`ReleaseThreadOwnership`); o backend o pega no init; `GsD3d_Soltar` o devolve no fim do jogo ou numa queda, e a main
