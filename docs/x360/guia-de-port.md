@@ -1509,3 +1509,25 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `gs_d3d.cpp`, tudo o que passa da gravação para o desenho (as texturas das vagas por versão, a conta da VU1, os contadores do
   log) passa na entrega, com o desenho esperando; o resto tem dono único, e o que os dois mexem de verdade (os bytes pendentes)
   é atômico. O inventário campo a campo (`08-degrau2.md`, seções 1 e 2) é o que mostra quais campos sobram para esse ponto.
+
+### O perfil da thread de gravação no WSL (F5, etapa 8, `plano/F5/08-gravacao.md`)
+
+- **O `perf` do WSL (`/usr/lib/linux-tools/6.18.54.1-microsoft-standard-WSL2/bin/perf`) não tem unwinder** (feito sem libdw e
+  sem libunwind): `--call-graph dwarf` grava dezenas de MB e não desenrola nada. E o `perf report` não resolve os símbolos da
+  x86 de teste (estática, i386, ligada em `0x20000000`): mostra deslocamentos. O caminho que deu certo: `perf script -F tid,ip`
+  e o `addr2line -a -f -i` sobre os endereços (somando `0x20000000` aos que vierem abaixo dele); para pilha, uma cópia da build
+  com `-fno-omit-frame-pointer` (uma cópia do `headless.py` fora do git, pasta própria) e `--call-graph fp`. A primeira rodada,
+  com `dwarf`, se perdeu.
+- **Com frame pointer, a folha sem quadro perde o chamador**: o `memcpy` da libc não monta quadro, então a pilha pula para o
+  chamador do chamador. A **linha** do endereço de retorno diz qual chamada era (`run_chain:1821` é o `GsGpu_FrameEnd`, logo a
+  entrega). E o frame pointer **infla os laços quentes** no i386 (o `transfer_data` foi de 20% para 31%): a build com pilha só
+  reparte; as porcentagens vêm da build normal.
+- **O clang `-O2 -g` não dá ao `addr2line -i` o nome da função em linha** (`transfer_data` dentro do `Gs_Gif`, `texture_get`
+  dentro do `draw_state`), só as linhas: classifique pela faixa de linhas do fonte.
+- **Cortar o perfil num trecho do roteiro**: `perf record ... --control fifo:ctl,ack -D -1` e um leitor da saída do binário (com
+  `stdbuf -oL`) que escreve `enable` numa linha do roteiro (`roteiro: seq 3`, o combate) e `disable` noutra (`roteiro: seq 4`);
+  `/proc/PID/task/*/stat` nas duas pontas dá a CPU de cada thread na janela.
+- **`nohup setsid` numa sessão `wsl` aberta pelo ssh morre quando a sessão fecha**: a rodada tem de manter o ssh aberto (rodá-la
+  em segundo plano do lado de cá).
+- **O log do console na janela do `passos` fica mudo** (`log_quadros` volta cedo com `Passos_Medindo()`), e a `entrega média`
+  do `gs: divisão` é cumulativa desde o boot: o valor de um trecho sai da diferença das somas (média × retratos).

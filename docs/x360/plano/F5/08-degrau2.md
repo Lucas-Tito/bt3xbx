@@ -543,4 +543,4 @@ do `gs_d3d`, que mistura a pausa e as cenas paradas.
 - Sem queda, sem linha do vigia; a Guide abriu no menu e na carga com a thread de desenho dona do dispositivo; 7.500 retratos sem
   nenhum fora da área; nenhuma textura branca vista na tela (o log conta 4 num trecho de pressão de memória na abertura 1).
 - O descarte trabalha mais que no degrau 1 (43 e 19 pressões contra 5): as liberações chegam um quadro e meio depois.
-- Falta para os 30 fps: uns 5 ms. Com o desenho fora, o período é o da gravação (andar a lista e a VU1): é a outra frente do estudo.
+- Falta para os 30 fps: uns 5 ms. Com o desenho fora, o período é o da gravação (andar a lista e a VU1): é a outra frente do estudo. O inventário dela (onde vai o tempo e o que cortar, em ordem) está em [`08-gravacao.md`](08-gravacao.md).
