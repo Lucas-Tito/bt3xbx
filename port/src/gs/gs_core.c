@@ -51,13 +51,12 @@ uint64_t gGsFamTiques[GS_FAM_N];
 uint32_t gGsFamVezes[GS_FAM_N];
 uint64_t gGsFamBytes;
 #ifdef PORT_X360
-uint64_t GsD3d_Tique(void); /* gs_d3d.cpp: o QueryPerformanceCounter */
-double GsD3d_Ms(uint64_t tiques);
+double gGsFamTbMs = 49875.0; /* (o mftb do Xenon anda a uns 50 MHz; o Gs_FamTrecho mede a cada trecho) */
 uint64_t Gs_FamTique(void) {
-    return GsD3d_Tique();
+    return __mftb();
 }
 double Gs_FamMs(uint64_t tiques) {
-    return GsD3d_Ms(tiques);
+    return (double)tiques / gGsFamTbMs;
 }
 #else
 uint64_t Gs_FamTique(void) {
@@ -321,7 +320,7 @@ uint32_t Gs_PageHash(uint32_t page) {
     valid[page] = 1;
 #ifdef BT3_GS_ESPERAS
     if (gGsFam) {
-        uint64_t d = Gs_FamTique() - famT;
+        uint64_t d = GS_FAM_TIQUE() - famT;
         gGsFamTiques[GS_FAM_HASH] += d;
         gGsFamVezes[GS_FAM_HASH]++;
         if (gGsFamNaVu1) {

@@ -735,13 +735,15 @@ static void vu1_call(int addr);
 /* F5, etapa 6: cada chamada contada pela família do programa e pelo caminho que tomou, e o tempo dela */
 void GsVu1_Call(int addr) {
     unsigned hle = sHle, runs = sStatRuns, tam = sProgSize;
-    uint64_t t0 = GsD3d_Tique(), t1;
+    uint64_t t0 = GsD3d_Tique(), t1, ft;
     int fam = tam == 127 || tam == 124 || tam == 99 || tam == 101 || tam == 94 || tam == 104 ? 0 : tam == 399 ? 1 : tam == 451 ? 2 : 3;
     int k;
 
+    GS_FAM_INI(ft);
     gGsFamNaVu1 = 1;
     vu1_call(addr);
     gGsFamNaVu1 = 0;
+    GS_FAM_FIM(GS_FAM_VU1, ft); /* (F5, etapa 8, gravação) a família da VU1, pelo relógio das famílias */
     gGsVu1Lotes[fam][sHle != hle ? 0 : sStatRuns != runs ? 1 : 2]++;
     if (fam == 3) {
         for (k = 0; k < 8 && gGsVu1Desconhecido[k][1] != 0 && gGsVu1Desconhecido[k][0] != tam; k++) {
@@ -753,10 +755,6 @@ void GsVu1_Call(int addr) {
     }
     t1 = GsD3d_Tique();
     gGsVu1Ms += GsD3d_Ms(t1 - t0);
-    if (gGsFam) { /* (F5, etapa 8, gravação) o mesmo intervalo, na família da VU1 */
-        gGsFamTiques[GS_FAM_VU1] += t1 - t0;
-        gGsFamVezes[GS_FAM_VU1]++;
-    }
 }
 #elif defined(BT3_GS_ESPERAS)
 /* (F5, etapa 8, gravação) o tempo da VU1 por família fora do 360 (gs_internal.h) */

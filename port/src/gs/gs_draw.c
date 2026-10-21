@@ -3803,6 +3803,8 @@ static void Gs_FamTrecho(void) {
     static unsigned quadros, naJanela;
 #ifndef PORT_X360
     static uint64_t cpuDesde;
+#else
+    static uint64_t tbDesde; /* o mftb no começo do trecho: a calibração do relógio das famílias */
 #endif
     double ms[GS_FAM_N], soma, parede, cpu = -1.0;
     uint64_t agora;
@@ -3816,7 +3818,9 @@ static void Gs_FamTrecho(void) {
             divisao_log("grava\303\247\303\243o por fam\303\255lia: desligada (BT3_TEMPOS=0)");
         }
         desde = gpu_now();
-#ifndef PORT_X360
+#ifdef PORT_X360
+        tbDesde = GS_FAM_TIQUE();
+#else
         {
             struct timespec ts;
             clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
@@ -3834,6 +3838,15 @@ static void Gs_FamTrecho(void) {
     }
     agora = gpu_now();
     parede = (double)(agora - desde) / 1e6 / quadros;
+#ifdef PORT_X360
+    {
+        uint64_t tb = GS_FAM_TIQUE();
+        if (agora > desde) {
+            gGsFamTbMs = (double)(tb - tbDesde) / ((double)(agora - desde) / 1e6);
+        }
+        tbDesde = tb;
+    }
+#endif
     for (k = 0; k < GS_FAM_N; k++) {
         ms[k] = Gs_FamMs(gGsFamTiques[k]) / quadros;
     }

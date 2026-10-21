@@ -68,7 +68,9 @@ extern void (*gGsDesenhoParar)(void);
 #ifdef BT3_GS_ESPERAS
 /* (F5, etapa 8, gravação) O tempo da thread de gravação por família, somado aqui e escrito a cada 60 quadros pelo
    gs_draw.c (Gs_FamTrecho), também dentro da janela do passos (o log do gs_d3d fica mudo nela). O relógio: no 360 o
-   QueryPerformanceCounter do gs_d3d.cpp (o mesmo do gGsVu1Ms), fora dele o CLOCK_MONOTONIC em ns. BT3_TEMPOS=0 desliga
+   mftb, em linha (são umas 24 mil leituras por quadro de luta: o Unpack e a VU1 rodam milhares de vezes, e uma chamada
+   ao QueryPerformanceCounter em cada uma pesaria na medida), calibrado a cada trecho contra o relógio do sistema; fora
+   dele o CLOCK_MONOTONIC em ns. BT3_TEMPOS=0 desliga
    (a mesma chave dos tempos do backend). O hash de página pedido de dentro da VU1 soma também em GS_FAM_HASH_VU1, para
    a soma das famílias não o contar duas vezes. */
 enum { GS_FAM_ENVIO, GS_FAM_HASH, GS_FAM_HASH_VU1, GS_FAM_VU1, GS_FAM_UNPACK, GS_FAM_ESPERA, GS_FAM_COPIA, GS_FAM_BACKEND, GS_FAM_N };
@@ -79,8 +81,15 @@ extern uint32_t gGsFamVezes[GS_FAM_N];
 extern uint64_t gGsFamBytes; /* os bytes que o envio recebeu */
 uint64_t Gs_FamTique(void);  /* gs_core.c */
 double Gs_FamMs(uint64_t tiques);
-#define GS_FAM_INI(t) ((t) = gGsFam ? Gs_FamTique() : 0)
-#define GS_FAM_FIM(f, t) do { if (gGsFam) { gGsFamTiques[f] += Gs_FamTique() - (t); gGsFamVezes[f]++; } } while (0)
+#if defined(PORT_X360) && !defined(__cplusplus)
+uint64_t __mftb(); /* o intrínseco do cl (o mesmo do ppcintrinsics.h): o cl o emite em linha, uma instrução, sem chamada */
+extern double gGsFamTbMs; /* tiques do mftb por ms, do último trecho (gs_draw.c) */
+#define GS_FAM_TIQUE() __mftb()
+#else
+#define GS_FAM_TIQUE() Gs_FamTique()
+#endif
+#define GS_FAM_INI(t) ((t) = gGsFam ? GS_FAM_TIQUE() : 0)
+#define GS_FAM_FIM(f, t) do { if (gGsFam) { gGsFamTiques[f] += GS_FAM_TIQUE() - (t); gGsFamVezes[f]++; } } while (0)
 #endif
 extern int gGsMainFbp; /* gs_sony.c: o buffer do quadro, escrito pelo jogo no sceGsSwapDBuff */
 #ifdef BT3_GS_ESPERAS
