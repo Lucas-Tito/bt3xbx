@@ -96,6 +96,63 @@ unsigned gsSkipped;
 unsigned gGpuNewTex, gGpuNewTexPixels, gGpuNewPipes; /* created since the front end last cleared them (slow-frame report) */
 unsigned gGpuTexReplaced; /* textures taken from a texture pack so far */
 uint64_t gGpuTexNs, gGpuPipeNs, gGpuEndNs; /* time spent decoding textures, creating pipelines, in GsGpu_FrameEnd */
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+/* (F5, etapa 8, gravação) BT3_GS_CAP_DIV=N, só de teste nas builds --gpu: as capacidades das listas divididas por N, para ver o
+   que não cabe se comportar igual com a divisão ligada e desligada */
+static uint32_t sCapDiv = 1;
+#define CAP_VERTS (MAX_VERTS / sCapDiv)
+#define CAP_DRAWS (MAX_DRAWS / sCapDiv)
+#define CAP_VU_VERTS (MAX_VU_VERTS / sCapDiv)
+#define CAP_VU_IDX (MAX_VU_IDX / sCapDiv)
+#define CAP_VU_UNIFORMS (MAX_VU_UNIFORMS / sCapDiv)
+#else
+#define CAP_VERTS MAX_VERTS
+#define CAP_DRAWS MAX_DRAWS
+#define CAP_VU_VERTS MAX_VU_VERTS
+#define CAP_VU_IDX MAX_VU_IDX
+#define CAP_VU_UNIFORMS MAX_VU_UNIFORMS
+#endif
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação) Os dois jogos de listas: gsDraws, gsVerts e as três da VU apontam para o jogo em que a gravação
+   grava; na entrega, com a divisão, o jogo vai para o desenho como está e a gravação passa para o outro (desenho_entrega).
+   Sem a divisão só existe o primeiro. */
+typedef struct GsJogo {
+    GsDraw *draws;
+    Vtx *verts;
+    float *vuVerts;
+    uint32_t *vuIdx;
+    Vu0Uniform *vuUni;
+} GsJogo;
+static GsJogo sJogos[2];
+static int sJogo; /* o jogo da gravação */
+#define JOGO_BYTES ((unsigned)(MAX_DRAWS * sizeof(GsDraw) + MAX_VERTS * sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u + \
+                               MAX_VU_UNIFORMS * sizeof(Vu0Uniform)))
+static int jogo_aloca(GsJogo *j) {
+    j->verts = (Vtx *)malloc(MAX_VERTS * sizeof(Vtx));
+    j->vuVerts = (float *)malloc(MAX_VU_VERTS * 48u);
+    j->vuIdx = (uint32_t *)malloc(MAX_VU_IDX * sizeof(uint32_t));
+    j->vuUni = (Vu0Uniform *)malloc(MAX_VU_UNIFORMS * sizeof(Vu0Uniform));
+    j->draws = (GsDraw *)malloc(MAX_DRAWS * sizeof(GsDraw));
+    if (j->verts == NULL || j->vuVerts == NULL || j->vuIdx == NULL || j->vuUni == NULL || j->draws == NULL) {
+        free(j->verts);
+        free(j->vuVerts);
+        free(j->vuIdx);
+        free(j->vuUni);
+        free(j->draws);
+        memset(j, 0, sizeof(*j));
+        return 0;
+    }
+    return 1;
+}
+static void jogo_usa(int k) {
+    sJogo = k;
+    gsDraws = sJogos[k].draws;
+    gsVerts = sJogos[k].verts;
+    gsVuVerts = sJogos[k].vuVerts;
+    gsVuIdx = sJogos[k].vuIdx;
+    gsVuUni = sJogos[k].vuUni;
+}
+#endif
 
 static uint64_t gpu_now(void) {
     struct timespec ts;
@@ -629,7 +686,7 @@ static void depth_clut(int ctx) {
     uint32_t wm = (uint32_t)(gGs.frame[ctx] >> 32);
     GsDraw d, *last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
 
-    if (gsDrawCount == MAX_DRAWS) {
+    if (gsDrawCount == CAP_DRAWS) {
         return;
     }
     memset(&d, 0, sizeof(d));
@@ -689,7 +746,7 @@ static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *u
                 memset(&c, 0, sizeof(c));
                 c.native = 4;
                 c.target = GsDraw_TargetGet(tbp / 32, 0);
-                if (c.target >= 0 && gsDrawCount < MAX_DRAWS && !(last != NULL && last->native == 4)) {
+                if (c.target >= 0 && gsDrawCount < CAP_DRAWS && !(last != NULL && last->native == 4)) {
                     gsDraws[gsDrawCount++] = c;
                 }
             }
@@ -850,7 +907,7 @@ static void date_snapshot(const GsDraw *d) {
     memset(&c, 0, sizeof(c));
     c.native = 5;
     c.target = d->target;
-    if (gsDrawCount + 1 < MAX_DRAWS) {
+    if (gsDrawCount + 1 < CAP_DRAWS) {
         gsDraws[gsDrawCount++] = c;
     }
 }
@@ -880,7 +937,7 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
     GsDraw d, *last;
     int i, packed2d = 0;
 
-    if (gsVertCount + 6 > MAX_VERTS || gsDrawCount == MAX_DRAWS) {
+    if (gsVertCount + 6 > CAP_VERTS || gsDrawCount == CAP_DRAWS) {
         return;
     }
     if (!draw_state(ctx, type == 1 ? 1 : type == 0 ? 2 : 0, type == 6, 0, &d, &us, &vs)) {
@@ -1064,8 +1121,8 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     float us, vs;
     uint32_t i, k, flag;
 
-    if (count < 3 || gsVuVertCount + count > MAX_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > MAX_VU_IDX || gsDrawCount == MAX_DRAWS ||
-        gsVuUniCount == MAX_VU_UNIFORMS) {
+    if (count < 3 || gsVuVertCount + count > CAP_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > CAP_VU_IDX || gsDrawCount == CAP_DRAWS ||
+        gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
     if (!draw_state(ctx, 0, 0, 3, &d, &us, &vs)) {
@@ -1125,8 +1182,8 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     float us, vs;
     uint32_t i, k;
 
-    if (count < 3 || gsVuVertCount + count > MAX_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > MAX_VU_IDX || gsDrawCount == MAX_DRAWS ||
-        gsVuUniCount == MAX_VU_UNIFORMS) {
+    if (count < 3 || gsVuVertCount + count > CAP_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > CAP_VU_IDX || gsDrawCount == CAP_DRAWS ||
+        gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
     if (!draw_state(ctx, 0, 0, 2, &d, &us, &vs)) {
@@ -1171,8 +1228,8 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     float us, vs;
     uint32_t i, k;
 
-    if (count < 3 || gsVuVertCount + count > MAX_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > MAX_VU_IDX || gsDrawCount == MAX_DRAWS ||
-        gsVuUniCount == MAX_VU_UNIFORMS) {
+    if (count < 3 || gsVuVertCount + count > CAP_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > CAP_VU_IDX || gsDrawCount == CAP_DRAWS ||
+        gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
     if (!draw_state(ctx, 0, 0, 1, &d, &us, &vs)) {
@@ -1229,7 +1286,7 @@ void GsGpu_FbUpload(int second) {
     }
     GsDraw d;
 
-    if (gsDrawCount == MAX_DRAWS) {
+    if (gsDrawCount == CAP_DRAWS) {
         return;
     }
     memset(&d, 0, sizeof(d));
@@ -1253,7 +1310,7 @@ void GsGpu_Native(int effect) {
         gsAnchor = effect == 0x13 ? 0 : effect == 0x14 ? 4 : effect - 0x0F; /* 1 left, 2 right, 3 centre, 4 by position */
         return;
     }
-    if (effect != 1 || gsDrawCount == MAX_DRAWS || (gsFxOff & 1)) {
+    if (effect != 1 || gsDrawCount == CAP_DRAWS || (gsFxOff & 1)) {
         return;
     }
     gsNative++;
@@ -1427,11 +1484,19 @@ int GsGpu_Init(void) {
     gsScale = getenv("BT3_SCALE") != NULL ? atoi(getenv("BT3_SCALE")) : Port_Setting("scale", 2);
     gsScale = gsScale < 1 ? 1 : gsScale > 8 ? 8 : gsScale;
     gsPendingScale = 0;
+#ifdef BT3_GS_ESPERAS
+#ifdef BT3_GPU_FALSO
+    sCapDiv = getenv("BT3_GS_CAP_DIV") != NULL && atoi(getenv("BT3_GS_CAP_DIV")) > 1 ? (uint32_t)atoi(getenv("BT3_GS_CAP_DIV")) : 1u;
+#endif
+    jogo_aloca(&sJogos[0]); /* (o segundo, só com a divisão: divisao_decide) */
+    jogo_usa(0);
+#else
     gsVerts = malloc(MAX_VERTS * sizeof(Vtx));
     gsVuVerts = malloc(MAX_VU_VERTS * 48);
     gsVuIdx = malloc(MAX_VU_IDX * sizeof(uint32_t));
     gsVuUni = malloc(MAX_VU_UNIFORMS * sizeof(Vu0Uniform));
     gsDraws = malloc(MAX_DRAWS * sizeof(GsDraw));
+#endif
 #ifdef PORT_X360
     /* The Xbox 360 has one back end, Direct3D 9 on its own device (port/x360/src/gs/gs_d3d.cpp). */
     (void)api;
@@ -3401,21 +3466,16 @@ void GsGpu_InterpFlush(void) { /* (the name Port_VBlank knew it by) */
 /* ------------------------------------------------------------------ (F5, etapa 8, degrau 2, etapa 3) a divisão
    BT3_GS_DESENHO=1 (só com BT3_GS_THREAD=1; recusada com BT3_INTERP): o frameEnd do backend sai
    da thread de gravação para uma terceira thread. Na entrega (desenho_entrega, no lugar do frameEnd), a gravação espera o
-   desenho largar o retrato anterior, copia a parte usada das listas e os campos do quadro para o retrato (uma área só, com
-   o dobro dos máximos medidos: 08-threads.md, seção 4.2), liga o seu cleared, zera os contadores e segue com o quadro
-   seguinte. Um quadro que não cabe no retrato vai sem cópia: o desenho lê as listas vivas e a gravação espera ele acabar
-   (em série, como no degrau 1). Os pedidos de soltar (texturas, a vaga de um alvo) vão numa fila que viaja com o retrato
+   desenho largar o retrato anterior, passa ao desenho o jogo de listas em que gravou o quadro, sem cópia, copia os campos
+   pequenos do quadro para o retrato, liga o seu cleared, zera os contadores e segue com o quadro seguinte no outro jogo
+   (sJogos, mais acima). Um quadro em voo só: o jogo para onde a gravação passa é o do retrato anterior, que o desenho
+   acabou de largar. Os pedidos de soltar (texturas, a vaga de um alvo) vão numa fila que viaja com o retrato
    do quadro em que foram feitos: o desenho solta depois de ter desenhado esse quadro (o risco 4 do inventário,
    08-degrau2.md). O sPipes do backend não se copia: só cresce, e a entrega é a barreira.
    No 360 (etapa 4) a thread de desenho é a dona do dispositivo: o init do backend roda nela (a gravação espera), ociosa ela
    atende o pedido de memória da gravação (GsD3d_Ocioso) e, sem retrato há 50 ms, repete o último quadro (GsD3d_Repete, a
    Guide), e ao sair solta o dispositivo (GsD3d_Soltar). Enquanto a gravação monta o retrato (sEntregando) o desenho não
    repete: a entrega mexe no estado do desenho do backend, com ele parado. */
-#define RET_VERTS (32u << 10)
-#define RET_VU_VERTS (128u << 10)
-#define RET_VU_IDX (256u << 10)
-#define RET_VU_UNI 4096u
-#define RET_DRAWS 8192u
 #ifdef PORT_X360
 extern double gGsVu1Ms; /* gs_vu1.c (só no 360) */
 #define VU1_MS gGsVu1Ms
@@ -3428,11 +3488,6 @@ const GsQuadro *gsQuadro = &sQuadroVivo;
 static int sDividido;
 static GsQuadro sRetrato;
 static GsTarget sRetAlvos[MAX_TARGETS];
-static GsDraw *sRetDraws;
-static Vtx *sRetVerts;
-static float *sRetVuVerts;
-static uint32_t *sRetVuIdx;
-static Vu0Uniform *sRetVuUni;
 static GsSolta *sSoltas[2]; /* uma lista enche na gravação, a outra viaja com o retrato */
 static uint32_t sSoltaN[2], sSoltaCap[2];
 static int sSoltaPend;
@@ -3450,7 +3505,7 @@ extern void GsD3d_Ocioso(void);          /* gs_d3d.cpp: o pedido de memória da 
 extern void GsD3d_Soltar(void);          /* gs_d3d.cpp: o dispositivo volta para a main */
 extern int Port_X360CondEsperaMs(pthread_cond_t *c, pthread_mutex_t *m, unsigned ms); /* posix360.c: 1 se o tempo acabou */
 #endif
-static unsigned sEntregas, sNaoCouberam, sSoltasPedidas;
+static unsigned sEntregas, sSoltasPedidas;
 static uint32_t sMaior[5]; /* desenhos, vértices de CPU, da VU, índices, constantes: o maior quadro entregue */
 static uint64_t sCopiaNs, sCopiaPior;
 #ifdef BT3_GPU_FALSO
@@ -3701,17 +3756,17 @@ void GsDraw_DesenhoResumo(void) {
 #ifdef PORT_X360
     {
         extern void Diario_Escrever(const char *formato, ...);
-        Diario_Escrever("gs: divis\303\243o: %u retratos, %u sem c\303\263pia (n\303\243o couberam), %u pedidos de soltar; maior quadro %u "
+        Diario_Escrever("gs: divis\303\243o: %u retratos (os dois jogos de listas, sem c\303\263pia), %u pedidos de soltar; maior quadro %u "
                         "desenhos, %u v\303\251rtices, %u da VU, %u \303\255ndices, %u constantes; entrega m\303\251dia %.3f ms, pior %.3f ms",
-                        sEntregas, sNaoCouberam, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
+                        sEntregas, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
                         sEntregas ? (double)sCopiaNs / sEntregas / 1e6 : 0.0, (double)sCopiaPior / 1e6);
         sCopiaPior = 0; /* (o pior é do trecho) */
         return;
     }
 #endif
-    fprintf(stderr, "gs: divis\303\243o: %u retratos, %u sem c\303\263pia (n\303\243o couberam), %u pedidos de soltar; maior quadro %u desenhos, %u "
+    fprintf(stderr, "gs: divis\303\243o: %u retratos (os dois jogos de listas, sem c\303\263pia), %u pedidos de soltar; maior quadro %u desenhos, %u "
                     "v\303\251rtices, %u da VU, %u \303\255ndices, %u constantes; entrega m\303\251dia %.3f ms, pior %.3f ms\n",
-            sEntregas, sNaoCouberam, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
+            sEntregas, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
             sEntregas ? (double)sCopiaNs / sEntregas / 1e6 : 0.0, (double)sCopiaPior / 1e6);
 }
 
@@ -3748,13 +3803,8 @@ static void divisao_decide(void) {
         divisao_log("BT3_GS_DESENHO=1 recusado: o backend n\303\243o tem a fila de libera\303\247\303\243o");
         return;
     }
-    sRetDraws = (GsDraw *)malloc(RET_DRAWS * sizeof(GsDraw));
-    sRetVerts = (Vtx *)malloc(RET_VERTS * sizeof(Vtx));
-    sRetVuVerts = (float *)malloc(RET_VU_VERTS * 48u);
-    sRetVuIdx = (uint32_t *)malloc(RET_VU_IDX * sizeof(uint32_t));
-    sRetVuUni = (Vu0Uniform *)malloc(RET_VU_UNI * sizeof(Vu0Uniform));
-    if (sRetDraws == NULL || sRetVerts == NULL || sRetVuVerts == NULL || sRetVuIdx == NULL || sRetVuUni == NULL) {
-        divisao_log("BT3_GS_DESENHO=1 recusado: sem mem\303\263ria para o retrato");
+    if (sJogos[0].draws == NULL || !jogo_aloca(&sJogos[1])) {
+        divisao_log("BT3_GS_DESENHO=1 recusado: sem mem\303\263ria para o segundo jogo de listas");
         return;
     }
 #ifdef BT3_GPU_FALSO
@@ -3772,6 +3822,12 @@ static void divisao_decide(void) {
 #endif
     if (r != 0) {
         divisao_log("BT3_GS_DESENHO=1 recusado: a thread de desenho n\303\243o partiu");
+        free(sJogos[1].verts);
+        free(sJogos[1].vuVerts);
+        free(sJogos[1].vuIdx);
+        free(sJogos[1].vuUni);
+        free(sJogos[1].draws);
+        memset(&sJogos[1], 0, sizeof(sJogos[1]));
         return;
     }
     sDividido = 1;
@@ -3780,15 +3836,11 @@ static void divisao_decide(void) {
 #ifdef PORT_X360
     {
         char m[160];
-        sprintf(m, "BT3_GS_DESENHO=1: o desenho numa terceira thread, retrato de %u KB",
-                (unsigned)((RET_DRAWS * sizeof(GsDraw) + RET_VERTS * sizeof(Vtx) + RET_VU_VERTS * 48u + RET_VU_IDX * 4u +
-                            RET_VU_UNI * sizeof(Vu0Uniform)) >> 10));
+        sprintf(m, "BT3_GS_DESENHO=1: o desenho numa terceira thread, dois jogos de listas de %u KB", JOGO_BYTES >> 10);
         divisao_log(m);
     }
 #else
-    fprintf(stderr, "gs: BT3_GS_DESENHO=1: o desenho numa terceira thread, retrato de %u KB\n",
-            (unsigned)((RET_DRAWS * sizeof(GsDraw) + RET_VERTS * sizeof(Vtx) + RET_VU_VERTS * 48u + RET_VU_IDX * 4u +
-                        RET_VU_UNI * sizeof(Vu0Uniform)) >> 10));
+    fprintf(stderr, "gs: BT3_GS_DESENHO=1: o desenho numa terceira thread, dois jogos de listas de %u KB\n", JOGO_BYTES >> 10);
 #endif
 }
 
@@ -3888,7 +3940,7 @@ static void Gs_FamTrecho(void) {
 static void desenho_entrega(void) {
     unsigned char limpa[MAX_TARGETS];
     uint32_t i, c[5];
-    int k, cabe;
+    int k;
     uint64_t t0, dt, f0, f1;
 
     GS_FAM_INI(f0); /* (F5, etapa 8, gravação: a espera pelo desenho, a cópia e o gancho do backend, gs_internal.h) */
@@ -3915,26 +3967,12 @@ static void desenho_entrega(void) {
             sMaior[k] = c[k];
         }
     }
-    cabe = c[0] <= RET_DRAWS && c[1] <= RET_VERTS && c[2] <= RET_VU_VERTS && c[3] <= RET_VU_IDX && c[4] <= RET_VU_UNI;
-    if (cabe) {
-        memcpy(sRetDraws, gsDraws, c[0] * sizeof(GsDraw));
-        memcpy(sRetVerts, gsVerts, c[1] * sizeof(Vtx));
-        memcpy(sRetVuVerts, gsVuVerts, c[2] * 48u);
-        memcpy(sRetVuIdx, gsVuIdx, c[3] * sizeof(uint32_t));
-        memcpy(sRetVuUni, gsVuUni, c[4] * sizeof(Vu0Uniform));
-        sRetrato.draws = sRetDraws;
-        sRetrato.verts = sRetVerts;
-        sRetrato.vuVerts = sRetVuVerts;
-        sRetrato.vuIdx = sRetVuIdx;
-        sRetrato.vuUni = sRetVuUni;
-    } else { /* em série: as listas vivas, e a gravação espera o desenho no fim desta função */
-        sRetrato.draws = gsDraws;
-        sRetrato.verts = gsVerts;
-        sRetrato.vuVerts = gsVuVerts;
-        sRetrato.vuIdx = gsVuIdx;
-        sRetrato.vuUni = gsVuUni;
-        sNaoCouberam++;
-    }
+    /* o jogo em que a gravação gravou vai como está; ela passa para o outro no fim desta função */
+    sRetrato.draws = gsDraws;
+    sRetrato.verts = gsVerts;
+    sRetrato.vuVerts = gsVuVerts;
+    sRetrato.vuIdx = gsVuIdx;
+    sRetrato.vuUni = gsVuUni;
     sRetrato.drawCount = c[0];
     sRetrato.vertCount = c[1];
     sRetrato.vuVertCount = c[2];
@@ -3958,7 +3996,7 @@ static void desenho_entrega(void) {
     sRetrato.soltaCount = sSoltaN[sSoltaPend];
     sSoltaPend ^= 1;
     sSoltaN[sSoltaPend] = 0;
-    sRetrato.vivo = !cabe;
+    sRetrato.vivo = 0;
     sRetrato.dividido = 1;
     /* o cleared da gravação (o risco 1): ligado aqui para todo alvo com desenho não nativo, mais o que a regra do backend
        pedir; o do desenho fica na cópia da tabela que vai no retrato */
@@ -3987,6 +4025,7 @@ static void desenho_entrega(void) {
     gsAnchor = 0;
     gsSkipped = 0;
     gsNative = 0;
+    jogo_usa(sJogo ^ 1); /* o do retrato anterior: o desenho já o largou (a espera do começo desta função) */
     dt = gpu_now() - t0;
     sCopiaNs += dt;
     if (dt > sCopiaPior) {
@@ -4000,9 +4039,6 @@ static void desenho_entrega(void) {
     sDesTem = 1;
     pthread_cond_signal(&sDesAcorda);
     pthread_mutex_unlock(&sDesLock);
-    if (!cabe) {
-        GsDraw_DesenhoEspera();
-    }
     if (gsPendingScale) { /* (o backend muda de tamanho com o desenho parado) */
         GsDraw_DesenhoEspera();
         scale_apply();
