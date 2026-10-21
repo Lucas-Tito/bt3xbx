@@ -1699,8 +1699,10 @@ static void mem_init(void) {
     /* o BT3_GS_THREAD do degrau 1 grava e desenha na mesma thread: o descarte vale (o do PC, com a gravação num lado e o
        desenho no outro, é que não valia) */
     sMem.seguro = getenv("BT3_INTERP") == NULL || atoi(getenv("BT3_INTERP")) == 0;
-    sMem.buffers = MAX_VERTS * (unsigned)sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u +
-                   MAX_VU_UNIFORMS * (unsigned)sizeof(Vu0Uniform) + MAX_DRAWS * (unsigned)sizeof(GsDraw);
+    /* (com a divisão, os dois jogos de listas do gs_draw.c; sem ela, um) */
+    sMem.buffers = (GsDraw_Dividido() ? 2u : 1u) *
+                   (MAX_VERTS * (unsigned)sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u +
+                    MAX_VU_UNIFORMS * (unsigned)sizeof(Vu0Uniform) + MAX_DRAWS * (unsigned)sizeof(GsDraw));
     sCorFundo = (DWORD)env_num("BT3_COR_FUNDO", 0xFF010101u);
     mem_mede();
     Diario_Escrever("gs_d3d: memória: piso %u MB livres (BT3_MEM_PISO_MB), teto das texturas %u MB (BT3_MEM_TEX_MB), "

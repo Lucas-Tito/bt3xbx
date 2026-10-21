@@ -16,11 +16,25 @@ extern int gsScale;
 #define GS_W 1024
 #define GS_H 1024
 
+#if (defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)) && !defined(BT3_GS_ESPERAS)
+#define BT3_GS_ESPERAS 1 /* (o mesmo do gs_internal.h, para o backend que inclui só este) */
+#endif
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação) Com a divisão, dois jogos destas listas que se alternam entre a gravação e o desenho (gs_draw.c,
+   desenho_entrega), cada um com uns 31 MiB no 360: perto de nove vezes o maior quadro medido (13.182 vértices de CPU, 53.618
+   da VU, 128.907 índices, 2.253 constantes, 2.517 desenhos), menos as constantes, as de antes. O que não cabe é pulado na
+   gravação, como antes. */
+#define MAX_VERTS 470000
+#define MAX_DRAWS (1 << 14)
+#define MAX_VU_VERTS 260000
+#define MAX_VU_IDX (1 << 19)
+#else
 #define MAX_VERTS (1 << 20)
 #define MAX_DRAWS (1 << 16)
-#define MAX_TARGETS 24
 #define MAX_VU_VERTS (1 << 19)
 #define MAX_VU_IDX (1 << 20)
+#endif
+#define MAX_TARGETS 24
 #define MAX_VU_UNIFORMS 8192
 #define MAX_TEX 8192
 #define TEX_BUCKETS 32768 /* a power of two, four times MAX_TEX */
@@ -127,15 +141,13 @@ extern uint64_t gGpuTexNs, gGpuPipeNs, gGpuEndNs;
 #define GS_CC_B 4u
 #define GS_CC_A 8u
 
-#if (defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)) && !defined(BT3_GS_ESPERAS)
-#define BT3_GS_ESPERAS 1 /* (o mesmo do gs_internal.h, para o backend que inclui só este) */
-#endif
 #ifdef BT3_GS_ESPERAS
 /* (F5, etapa 8, degrau 2, etapa 3) A divisão entre gravação e desenho (BT3_GS_DESENHO=1, com BT3_GS_THREAD=1): a gravação
    entrega um retrato do quadro (gs_draw.c, desenho_entrega) e segue com o seguinte; uma terceira thread chama o frameEnd do
    backend sobre o retrato. O frameEnd lê o quadro por gsQuadro: sem a divisão ele aponta para as listas vivas, com as
-   contagens de agora (vivo 1, dividido 0), e o backend zera os contadores como antes; com a divisão, para o retrato (as
-   listas copiadas, ou as vivas num quadro que não coube, em série), e quem zera é a gravação na entrega. */
+   contagens de agora (vivo 1, dividido 0), e o backend zera os contadores como antes; com a divisão, para o retrato (o jogo
+   de listas em que a gravação gravou o quadro, sem cópia desde a etapa 8 da gravação; ela segue no outro), e quem zera é a
+   gravação na entrega. */
 typedef struct GsSolta {
     GsTex tex;       /* a textura a soltar; com alvo >= 0, a cor do alvo cuja vaga a gravação reaproveitou */
     int alvo;        /* -1: textura */
@@ -163,7 +175,7 @@ typedef struct GsQuadro {
     double vu1Ms;       /* gGsVu1Ms do quadro (com a divisão, zerado na entrega) */
     const GsSolta *soltas; /* o que a gravação pediu para soltar até a entrega: o desenho solta depois de desenhar este quadro */
     uint32_t soltaCount;
-    int vivo;           /* 1: draws, verts e as listas da VU são as vivas */
+    int vivo;           /* 1: draws, verts e as listas da VU são as que a gravação está gravando (sem a divisão) */
     int dividido;       /* 1: desenhado na thread de desenho; o backend não mexe em nada da gravação */
 } GsQuadro;
 extern const GsQuadro *gsQuadro;

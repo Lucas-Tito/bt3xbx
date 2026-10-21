@@ -434,3 +434,139 @@ estágio 5, sem queda, sem textura branca:
   da VU1 uns 0,4 ms, o resto (andar a cadeia, a montagem, o GIF) 10 a 12 ms. O envio anda a uns 390 MB/s: no Xenon ele espera a
   memória (escrita espalhada na VRAM do GS), e por isso o corte 2, que tirou contas, quase não rendeu lá. O hash fora da VU1 é
   pequeno no console: o candidato 3 perde força. Faltam uns 3 ms para os 33,37: a VU1, a cópia da entrega e o `Unpack` são os alvos.
+
+## 8. A entrega sem cópia: dois jogos de listas (candidato 1, 21/10/2026)
+
+Branch `f5-pingpong`, sobre a main `024cff3`. O corte 1 da seção 5: a cópia da entrega custava 2,7 ms por quadro de luta no
+360, na thread de gravação, a mais lenta (seção 7).
+
+### O que mudou
+
+| Commit | O quê |
+|---|---|
+| `c9f05ae` | **Dois jogos de listas que se alternam** (`gs_draw.c`, `sJogos`, `jogo_aloca`, `jogo_usa`). `gsDraws`, `gsVerts`, `gsVuVerts`, `gsVuIdx` e `gsVuUni` apontam para o jogo em que a gravação grava. Na entrega (`desenho_entrega`), com a divisão, o retrato aponta para esse jogo como está e a gravação passa para o outro (`jogo_usa(sJogo ^ 1)`, no fim da entrega). Um quadro em voo só, como antes: a entrega começa esperando o desenho largar o retrato anterior, e o jogo para onde a gravação passa é justamente o desse retrato. O retrato copiado (`sRetDraws` e companhia, 10,06 MiB) e o caminho em série do quadro que não cabia nele deixaram de existir. Os campos pequenos (a tabela de alvos, `gGsFrame`, `gGs.frame[0..1]`, `GS_FBP_QUADRO`, `gsAnchor`, `gsTexCount`, `gsSkipped`, `gsNative`, `gGsVu1Ms`, a fila de soltar) seguem copiados como antes. Sem a divisão só se aloca o primeiro jogo. **As capacidades** (`gs_draw.h`, só com `BT3_GS_ESPERAS`): 470.000 vértices de CPU (eram 1.048.576), 260.000 da VU (524.288), 524.288 índices (1.048.576), 8.192 constantes (as mesmas) e 16.384 desenhos (65.536); a x86 plana segue com as de antes. O `gs_d3d.cpp` conta os dois jogos na linha `buffers do gs_draw.c`. `BT3_GS_CAP_DIV=N`, só nas builds `--gpu` (`BT3_GPU_FALSO`), divide as cinco capacidades por N, para a prova do que não cabe |
+
+**A memória (360, ponteiros de 4 bytes).**
+
+| | Antes | Depois |
+|---|---:|---:|
+| Listas | 66,38 MiB (1 jogo, capacidade cheia) | 61,65 MiB (2 jogos de 30,83 MiB) |
+| Retrato | 10,06 MiB | 0 |
+| **Total** | **76,44 MiB** | **61,65 MiB** (14,78 MiB a menos) |
+| Sem a divisão | 66,38 MiB | 30,83 MiB |
+
+Mais 576 KB a menos nas tabelas do `gs_d3d.cpp` medidas por `MAX_DRAWS` (`sVuIni`, `sVuLo`, `sVuNv`). Por jogo, contra o
+maior quadro medido: vértices de CPU 470.000 contra 13.182 (35 vezes), da VU 260.000 contra 53.618 (4,8), índices 524.288
+contra 128.907 (4,1), constantes 8.192 contra 2.253 (3,6), desenhos 16.384 contra 2.517 (6,5). Nenhuma precisou de potência
+de dois: o código só compara contagens com a capacidade.
+
+**O que acontece quando uma lista enche (conferido no código).** Não há saída nova. Cada um dos caminhos que gravam na lista
+testa a capacidade antes de gravar e, se não cabe, volta sem gravar nada, sem contar: `GsGpu_Draw` (vértices de CPU mais 6, e
+desenhos), os três de desenho da VU (`count` vértices, `(count - 2) * 3` índices, um desenho e uma constante), `depth_clut`,
+a cópia dos ids e o `date_snapshot` (desenhos), `GsGpu_FbUpload` e `GsGpu_Native` (desenhos). Nenhum incremento escapa do teste,
+então a contagem nunca passa da capacidade (e o `BT3_GS_CAP_DIV` pode usar os mesmos testes de igualdade). O caminho é o mesmo
+com a divisão ligada ou desligada: os testes são da gravação, antes da entrega. **O "sem espaço" do log do `gs_d3d` não é
+esse caso**: ele conta os desenhos da VU1 que não couberam nos buffers do próprio `gs_d3d` (`BT3_VU_VERTS`), e a brancura
+"sem espaço" é do cache de texturas. O sinal de lista cheia no console é o `CHEIO` na linha `buffers, o maior quadro do
+trecho` (vértices de CPU podem parar até 5 abaixo da capacidade sem o `CHEIO`, pelo teste de 6 de folga).
+
+**O backend.** O `gs_d3d.cpp` guarda um ponteiro só, o `sQ` (o quadro que o `frame_end` desenha, posto no começo dele); tudo o
+que lê das listas é por ele ou pelo `q` da entrega (`vu_plano`, `vu_copia`, `mem_buffers`, os nativos, os desenhos de CPU por
+`DrawPrimitiveUP`). Fora do `frame_end` o `sQ` só é lido pelas profundidades e pelos alvos (`sQ->targets`, a cópia da
+tabela) e pela captura (`sQ->quadro`); o `GsD3d_Repete` usa a textura do último alvo mostrado, não as listas, e não corre
+durante a entrega (`sEntregando`). O falso (`gpu_falso.c`) lê o quadro pelo `gsQuadro` no `fake_frame_end` e pelo `q` no
+`fake_entrega`, sem guardar ponteiro. Nenhum dos dois mudou, fora a conta dos buffers.
+
+### As provas no WSL [medido]
+
+Serviço `claude-pingpong-provas` (script `~/provas-pingpong.sh` do `codex`, resumo `~/provas-pingpong.resumo`, logs em
+`~/pingpong/`), de 13:02 a 14:53, em série. Antes: `3a074d9` (o código da main). Depois: `c9f05ae`. A pasta de dados dos dois
+roteiros refeita pelo passo do `roteiros.sh` que a gera (a rodada do critério anterior a deixou vazia).
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `cc46fa0752f092fca305bc8bf2e2e54390763af0`, antes e depois |
+| `x86gv`, `f5_treino` (7.386 quadros) e `f5_duelo` (8.380): sem chaves, com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, com o desenho atrasado (`BT3_GS_DESENHO_ATRASO_US=20000`) e com a gravação atrasada (`BT3_GS_ATRASO_US=20000`), antes contra depois | as oito com `divergencias.py` saindo 0, hashes `f76f0f6849b64629` e `08a98b6d05b8775a`, 0 desenhos com textura já solta |
+| `ppcg`, os mesmos oito casos | os oito com 0, hashes `f76f0f6849b64629` e `994627a2aecd429a`; de 165 a 323 s por rodada |
+| O maior quadro com a divisão (`gs: divisão`) | `f5_duelo` 2.473 desenhos, 13.125 vértices de CPU, 53.618 da VU, 128.907 índices, 2.253 constantes, como antes |
+| **O que não cabe**, `BT3_GS_CAP_DIV=40`, sem a divisão contra a divisão e contra a divisão com o desenho atrasado 20 ms | 0 nos quatro pares (os dois roteiros); o maior quadro do `f5_duelo` com 11.745 vértices de CPU (de 11.750: cheia), 13.107 índices (de 13.107: cheia), 5.783 da VU, 153 constantes, 303 desenhos |
+| O mesmo com `BT3_GS_CAP_DIV=8` e `=5` (`f5_duelo`, sem contra com a divisão) | 0 nos dois; com 8, 1.024 constantes de 1.024 e 65.535 índices de 65.536; com 5, 1.638 constantes de 1.638 |
+| Verificador visto falhando: a capacidade dividida contra a normal | sai 1: 3.316 quadros diferentes no `f5_treino` e 4.244 no `f5_duelo` (/40), 4.197 (/8 e /5) |
+| Sabotagem N1: a gravação não troca de jogo na entrega (volta ao que o desenho ainda tem), com o desenho atrasado 20 ms | sai 1: 7.382 de 7.386 quadros diferentes no `f5_treino`, 8.375 de 8.380 no `f5_duelo` |
+| A mesma sem atraso | sai 1 também: 1.582 quadros diferentes no `f5_treino` (a gravação zera e reescreve o jogo logo depois de acordar o desenho) |
+| O git do WSL no fim | 0 alterados (a sabotagem desfeita por `git checkout`, com `assert` de que casou) |
+
+Os vértices da VU e os desenhos não chegam ao teto com um divisor só: os índices e as constantes enchem antes, e o desenho da VU
+que não cabe para no mesmo teste (`count` vértices, os índices, um desenho e uma constante numa condição só). O teste dos
+desenhos é o mesmo `gsDrawCount == CAP_DRAWS` em todos os caminhos.
+
+**A entrega na x86** (`f5_duelo` com a divisão e `BT3_TEMPOS=1`, antes e depois alternados três vezes, médias das 147 linhas
+com 60 quadros na janela): a cópia de **0,159 para 0,000 ms** por quadro; a parede da gravação de 2,856 para 2,691 ms e a CPU da
+thread de 2,551 para 2,401 (uns 0,15 ms a menos, a cópia que saiu). A `entrega média` da linha `gs: divisão` caiu de 0,079 para
+0,003 ms na x86 e de 0,435 para 0,016 ms na PPC do `qemu`.
+
+**A estimativa no console [estimado].** A cópia media 2,7 ms por quadro de luta (seção 7). Sem ela, a família "cópia" fica
+só com a tabela de alvos (24 entradas): perto de zero. A luta de 36,2 ms (`BT3_TEMPOS=0`) deve ir para perto de **33,5 ms**,
+se a gravação seguir como gargalo; abaixo dos 33,37 só com a VU1 ou o `Unpack`.
+
+### A build do 360
+
+`build_f2.sh` no `c9f05ae`: 317 de 317 fontes sem erro, avisos por fonte iguais aos da main (os dois C4090 de sempre no
+`gs_draw.c`), os mesmos 103 stubs, `default.dat` `6d30baaf87b1177fb2359a855f8befc0` e `default.swap`
+`a7cf723fbfaea860fcc3707ad288e755`, iguais; `default.xex` `f33df29754d2e25b90dcf074dc27dae0`.
+
+### A rodada do critério (serviço `claude-pingpong` no WSL, disparado sem esperar)
+
+O script `~/rodada-pingpong.sh` (usuário `codex`) espera o serviço das provas acabar e refaz, no HEAD do `f5-pingpong`, as três
+builds do critério (`headless.py --alvo x86`, `--alvo x86 --rastreio`, `--alvo ppc`, nessa ordem), a `.text` da x86 plana, e
+em série `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` e `SEMMAPA=1 IMG=1 roteiros.sh duelo`. Saída em
+`~/rodada-pingpong.log`, logs em `~/rodada-pingpong-*.log`, resumo em `~/rodada-pingpong.resumo` (uma linha por passo com
+`RC=`, a linha da `.text`, o git no fim e `FIM`). Vale com todos os `RC=0`, a `.text` a mesma e o git sem alterados.
+
+### A rodada no console: o que olhar
+
+A build: `build/x360/f2/default.xex` do worktree `bt3xbx-a` (`f33df29754d2e25b90dcf074dc27dae0`), em duas aberturas: o
+`ambiente_ab1.txt` (com `BT3_TEMPOS=0`, o desempenho) e o `ambiente_ab2.txt` (sem ele, o rateio por família), copiado como
+`ambiente.txt`. Os dois com `-BT3_DEMO`, a ISO convertida, `BT3_GS=gpu`, os saves `saves19`, piso de 32 MB, teto de textura de
+128 MB, `BT3_VU1=1`, `BT3_VU_VERTS=98304`, `BT3_SHOT=600`, `BT3_GS_THREAD=1` e `BT3_GS_DESENHO=1`. O roteiro: START pula o
+filme; Duelo, Goku contra Kuririn, estágio 5; 60 s de luta; a pausa com uns 3 s de espera e a Guide.
+
+1. **A mediana da luta na abertura 1** (`passos: janela`) contra os **36,2 ms** de `BT3_TEMPOS=0` da seção 7; o esperado é
+   perto de 33,5. O p95 e o p99 contra 58,5 e 95,0.
+2. **A cópia na abertura 2**: nas linhas `gs: gravação por família` com `60 na janela`, a `cópia` da entrega perto de zero
+   (era 2,7); a `espera` subir mostra o desenho virando o gargalo.
+3. **A linha `gs: BT3_GS_DESENHO=1`**: `dois jogos de listas de 31567 KB`; e a `gs: divisão` com `(os dois jogos de listas, sem
+   cópia)`, a `entrega média` menor que antes.
+4. **A memória** (`gs_d3d:   memória`): `buffers 63134 KB` (eram 67.968 das listas, sem contar os 10.304 do retrato), e a
+   **memória livre mínima** (`mínimo visto`) contra os 31 MB do degrau 2: uns 14 MB a mais de folga.
+5. **O que não cabe**: na linha `gs_d3d:   buffers, o maior quadro do trecho`, nenhum `CHEIO` (os maiores perto de 13 mil
+   vértices, 54 mil da VU, 129 mil índices, 2,3 mil constantes e 2,5 mil desenhos, contra 470 mil, 260 mil, 524 mil, 8.192 e
+   16.384); e o `sem espaço` da linha da VU1 (os buffers do próprio `gs_d3d`) e o das brancas em zero, como antes.
+6. O resto como no degrau 2: as capturas `BT3_SHOT=600` sem textura errada, a Guide no menu, na carga e na pausa, nenhum
+   `vigia:` novo.
+
+### A rodada no console da entrega sem cópia (21/10/2026) [medido]
+
+`.xex` `f33df29754d2e25b90dcf074dc27dae0`, `BT3_GS_THREAD=1` e `BT3_GS_DESENHO=1`, Duelo, Goku contra Kuririn, estágio 5, sem
+queda, sem textura branca, nenhum `CHEIO` nas duas aberturas.
+
+| | Antes (cortes 2 e 4) | Com os dois jogos de listas |
+|---|---:|---:|
+| Luta, mediana, `BT3_TEMPOS=0` | 36,2 ms | **34,9 ms** |
+| p95 e p99, `BT3_TEMPOS=0` | 58,5 e 95,0 ms | **45,8 e 72,5 ms** |
+| Luta, mediana, com a medição | 39,3 ms | 37,5 ms |
+| Cópia da entrega (por família) | 2,7 ms | 0,00 ms |
+| Memória livre mínima | 31 MB | 38 MB |
+
+A cópia sumiu, mas a mediana caiu só 1,3 ms dos 2,7 dela; os picos caíram mais (p95 menos 12,7 ms). No rateio com a medição: VU1
+22 a 25 ms, envio 6,4, `Unpack` 3,3 a 3,8, o gancho do backend na entrega 2,0 a 2,1, hash fora da VU1 uns 0,3, o resto 9,5 a 11,4.
+Faltam uns 1,5 ms para os 33,37.
+
+### Pendente (para depois do desempenho): o embaçado no voo
+
+O Lucas nota, desde antes da etapa 8, as texturas embaçadas em movimento (o voo para frente com o A). Provavelmente é o efeito do
+próprio jogo, o desfoque de movimento do cenário (`StgPanBlur`, `src/sys/gfxm_a.c`, ligado em `src/battle/stg_c.c:629`), que mistura
+o quadro anterior quando a câmera anda rápido. A dúvida é a intensidade contra o PS2: a imagem de 640x448 ampliada para 960x720
+suaviza, e há uma passada de borrão pelo alfa do destino (`BT3_FX_OFF=16`) parecida com o "borrado" que a etapa 7 investigou. Para
+conferir, sem código: comparar com o original (PS2 ou PCSX2) voando com o A, e uma abertura com `BT3_FX_OFF=16` para ver se o
+embaçado do voo some.
