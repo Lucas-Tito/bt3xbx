@@ -122,23 +122,27 @@ typedef struct GsJogo {
     float *vuVerts;
     uint32_t *vuIdx;
     Vu0Uniform *vuUni;
+    uint32_t *vuFaixa; /* (vu_faixa) o menor e o maior índice de cada desenho da VU1, dois por desenho */
 } GsJogo;
 static GsJogo sJogos[2];
 static int sJogo; /* o jogo da gravação */
+static uint32_t *sVuFaixa; /* a vuFaixa do jogo da gravação */
 #define JOGO_BYTES ((unsigned)(MAX_DRAWS * sizeof(GsDraw) + MAX_VERTS * sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u + \
-                               MAX_VU_UNIFORMS * sizeof(Vu0Uniform)))
+                               MAX_VU_UNIFORMS * sizeof(Vu0Uniform) + MAX_DRAWS * 8u))
 static int jogo_aloca(GsJogo *j) {
     j->verts = (Vtx *)malloc(MAX_VERTS * sizeof(Vtx));
     j->vuVerts = (float *)malloc(MAX_VU_VERTS * 48u);
     j->vuIdx = (uint32_t *)malloc(MAX_VU_IDX * sizeof(uint32_t));
     j->vuUni = (Vu0Uniform *)malloc(MAX_VU_UNIFORMS * sizeof(Vu0Uniform));
     j->draws = (GsDraw *)malloc(MAX_DRAWS * sizeof(GsDraw));
-    if (j->verts == NULL || j->vuVerts == NULL || j->vuIdx == NULL || j->vuUni == NULL || j->draws == NULL) {
+    j->vuFaixa = (uint32_t *)malloc(MAX_DRAWS * 8u);
+    if (j->verts == NULL || j->vuVerts == NULL || j->vuIdx == NULL || j->vuUni == NULL || j->draws == NULL || j->vuFaixa == NULL) {
         free(j->verts);
         free(j->vuVerts);
         free(j->vuIdx);
         free(j->vuUni);
         free(j->draws);
+        free(j->vuFaixa);
         memset(j, 0, sizeof(*j));
         return 0;
     }
@@ -151,6 +155,26 @@ static void jogo_usa(int k) {
     gsVuVerts = sJogos[k].vuVerts;
     gsVuIdx = sJogos[k].vuIdx;
     gsVuUni = sJogos[k].vuUni;
+    sVuFaixa = sJogos[k].vuFaixa;
+}
+/* (F5, etapa 8, gravação) O menor e o maior índice de um desenho da VU1, guardados quando a gravação gera os índices, para o
+   vu_plano do backend não reler todos eles (uns 129 mil por quadro de luta no 360). Os três GsGpu_DrawVu* geram os índices de
+   um trecho em ordem crescente (base + i + k, com i e k crescendo), então o menor é o primeiro do trecho e o maior o último;
+   quando o trecho se junta ao desenho anterior (same_state), a faixa é a união das duas. Um desenho sem índices fica com a
+   faixa vazia (menor 0xFFFFFFFF, maior 0), que não muda a união. A tabela é do jogo (sJogos), como as listas: o desenho lê a
+   do retrato entregue e a gravação escreve na do outro. */
+static void vu_faixa(uint32_t n, uint32_t first, uint32_t count, int junta) {
+    uint32_t lo = 0xFFFFFFFFu, hi = 0;
+    if (count != 0) {
+        lo = gsVuIdx[first];
+        hi = gsVuIdx[first + count - 1];
+    }
+    if (junta) {
+        if (sVuFaixa[2 * n] < lo) lo = sVuFaixa[2 * n];
+        if (sVuFaixa[2 * n + 1] > hi) hi = sVuFaixa[2 * n + 1];
+    }
+    sVuFaixa[2 * n] = lo;
+    sVuFaixa[2 * n + 1] = hi;
 }
 #endif
 
@@ -1163,11 +1187,17 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
+#ifdef BT3_GS_ESPERAS
+        vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
+#endif
         last->count += d.count;
         return;
     }
     d.uniform = (int)gsVuUniCount;
     gsVuUni[gsVuUniCount++] = u;
+#ifdef BT3_GS_ESPERAS
+    vu_faixa(gsDrawCount, d.first, d.count, 0);
+#endif
     gsDraws[gsDrawCount++] = d;
 }
 
@@ -1209,11 +1239,17 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
+#ifdef BT3_GS_ESPERAS
+        vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
+#endif
         last->count += d.count;
         return;
     }
     d.uniform = (int)gsVuUniCount;
     gsVuUni[gsVuUniCount++] = u;
+#ifdef BT3_GS_ESPERAS
+    vu_faixa(gsDrawCount, d.first, d.count, 0);
+#endif
     gsDraws[gsDrawCount++] = d;
 }
 
@@ -1270,11 +1306,17 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
+#ifdef BT3_GS_ESPERAS
+        vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
+#endif
         last->count += d.count;
         return;
     }
     d.uniform = (int)gsVuUniCount;
     gsVuUni[gsVuUniCount++] = u;
+#ifdef BT3_GS_ESPERAS
+    vu_faixa(gsDrawCount, d.first, d.count, 0);
+#endif
     gsDraws[gsDrawCount++] = d;
 }
 
@@ -3532,6 +3574,7 @@ static void backend_frame_end(void) {
     q->vuVertCount = gsVuVertCount;
     q->vuIdx = gsVuIdx;
     q->vuIdxCount = gsVuIdxCount;
+    q->vuFaixa = sVuFaixa;
     q->vuUni = gsVuUni;
     q->vuUniCount = gsVuUniCount;
     q->targets = gsTargets;
@@ -3827,6 +3870,7 @@ static void divisao_decide(void) {
         free(sJogos[1].vuIdx);
         free(sJogos[1].vuUni);
         free(sJogos[1].draws);
+        free(sJogos[1].vuFaixa);
         memset(&sJogos[1], 0, sizeof(sJogos[1]));
         return;
     }
@@ -3985,6 +4029,7 @@ static void desenho_entrega(void) {
     sRetrato.verts = gsVerts;
     sRetrato.vuVerts = gsVuVerts;
     sRetrato.vuIdx = gsVuIdx;
+    sRetrato.vuFaixa = sVuFaixa;
     sRetrato.vuUni = gsVuUni;
     sRetrato.drawCount = c[0];
     sRetrato.vertCount = c[1];
@@ -4059,12 +4104,56 @@ static void desenho_entrega(void) {
 }
 #endif
 
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+/* (F5, etapa 8, gravação) BT3_VU_PLANO_CONFERE=1, só de teste nas builds --gpu: no fim de cada quadro, a faixa guardada de cada
+   desenho da VU1 (vu_faixa) contra o menor e o maior índice relidos como o vu_plano do gs_d3d.cpp fazia. O vu_plano só depende
+   dessa faixa, da contagem, do vuVertCount e da capacidade, então faixas iguais dão o mesmo plano. Uma linha a cada 1000
+   quadros com o acumulado, e uma por desenho diferente (até 20). */
+static void vu_faixa_confere(void) {
+    static int liga = -1;
+    static unsigned quadros, conferidos, diferentes;
+    uint32_t n, k;
+    if (liga < 0) {
+        liga = getenv("BT3_VU_PLANO_CONFERE") != NULL && atoi(getenv("BT3_VU_PLANO_CONFERE")) != 0;
+    }
+    if (!liga) {
+        return;
+    }
+    for (n = 0; n < gsDrawCount; n++) {
+        const GsDraw *d = &gsDraws[n];
+        uint32_t lo = 0xFFFFFFFFu, hi = 0;
+        if (d->vu < 1 || d->vu > 3 || d->native != 0 || d->count == 0) {
+            continue;
+        }
+        for (k = 0; k < d->count; k++) {
+            uint32_t i = gsVuIdx[d->first + k];
+            if (i < lo) lo = i;
+            if (i > hi) hi = i;
+        }
+        conferidos++;
+        if (lo != sVuFaixa[2 * n] || hi != sVuFaixa[2 * n + 1]) {
+            if (diferentes++ < 20) {
+                fprintf(stderr, "gs: BT3_VU_PLANO_CONFERE: quadro %u, desenho %u (vu %d, %u índices): relido %u a %u, guardado %u a %u\n",
+                        gGsFrame, n, d->vu, d->count, lo, hi, sVuFaixa[2 * n], sVuFaixa[2 * n + 1]);
+            }
+        }
+    }
+    if (++quadros % 1000 == 0) {
+        fprintf(stderr, "gs: BT3_VU_PLANO_CONFERE: %u quadros, %u desenhos da VU1 conferidos, %u diferentes\n", quadros, conferidos,
+                diferentes);
+    }
+}
+#endif
+
 void GsGpu_FrameEnd(void) {
     if (gPortResim) { /* a frame that is only being re-run: nothing was recorded, nothing is shown */
         return;
     }
 #ifdef BT3_GS_ESPERAS
     Gs_FamTrecho();
+#endif
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+    vu_faixa_confere();
 #endif
     uint64_t t0 = gpu_now();
     if (sBackend != NULL) {

@@ -1702,7 +1702,8 @@ static void mem_init(void) {
     /* (com a divisão, os dois jogos de listas do gs_draw.c; sem ela, um) */
     sMem.buffers = (GsDraw_Dividido() ? 2u : 1u) *
                    (MAX_VERTS * (unsigned)sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u +
-                    MAX_VU_UNIFORMS * (unsigned)sizeof(Vu0Uniform) + MAX_DRAWS * (unsigned)sizeof(GsDraw));
+                    MAX_VU_UNIFORMS * (unsigned)sizeof(Vu0Uniform) + MAX_DRAWS * (unsigned)sizeof(GsDraw) +
+                    MAX_DRAWS * 8u); /* (a faixa de índices de cada desenho da VU1, gs_draw.c) */
     sCorFundo = (DWORD)env_num("BT3_COR_FUNDO", 0xFF010101u);
     mem_mede();
     Diario_Escrever("gs_d3d: memória: piso %u MB livres (BT3_MEM_PISO_MB), teto das texturas %u MB (BT3_MEM_TEX_MB), "
@@ -2177,28 +2178,26 @@ static void desenha_vu(const GsDraw *d, uint32_t ini) {
    desenho. */
 static uint32_t sVuCabem; /* (vu_plano) desenhos da VU1 que couberam */
 static void vu_plano(const GsQuadro *q) {
-    uint32_t n, k, f, nv = 0, ni = 0, tem = 0, pedV[3] = {0, 0, 0}, pedI[3] = {0, 0, 0};
+    uint32_t n, f, lo, hi, nv = 0, ni = 0, pedV[3] = {0, 0, 0}, pedI[3] = {0, 0, 0};
 
     sVuCabem = 0;
-    for (n = 0; n < q->drawCount; n++) {
-        sVuIni[n] = ~0u;
-        tem += q->draws[n].vu >= 1 && q->draws[n].vu <= 3 && q->draws[n].native == 0;
-    }
-    if (tem == 0 || sVuCapV == 0) {
+    if (sVuCapV == 0) {
+        for (n = 0; n < q->drawCount; n++) {
+            sVuIni[n] = ~0u;
+        }
         return;
     }
+    /* (F5, etapa 8, gravação) o menor e o maior índice de cada desenho vêm da faixa que a gravação guardou ao gerar os índices
+       (gs_draw.c, vu_faixa): uma passada só pelos desenhos, sem reler os índices (eram uns 129 mil por quadro de luta) */
     for (n = 0; n < q->drawCount; n++) {
         const GsDraw *d = &q->draws[n];
-        uint32_t lo = 0xFFFFFFFFu, hi = 0;
+        sVuIni[n] = ~0u;
         if (d->vu < 1 || d->vu > 3 || d->native != 0 || d->count == 0) {
             continue;
         }
         f = (uint32_t)d->vu - 1;
-        for (k = 0; k < d->count; k++) {
-            uint32_t i = q->vuIdx[d->first + k];
-            if (i < lo) lo = i;
-            if (i > hi) hi = i;
-        }
+        lo = q->vuFaixa[2 * n];
+        hi = q->vuFaixa[2 * n + 1];
         pedV[f] += hi >= lo ? hi - lo + 1 : 0;
         pedI[f] += d->count;
         if (hi >= q->vuVertCount || hi - lo + 1 > sVuCapV - nv || d->count > sVuCapI - ni) {

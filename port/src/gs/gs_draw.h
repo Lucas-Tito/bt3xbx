@@ -162,6 +162,7 @@ typedef struct GsQuadro {
     uint32_t vuVertCount;
     const uint32_t *vuIdx;
     uint32_t vuIdxCount;
+    const uint32_t *vuFaixa; /* o menor e o maior índice de cada desenho da VU1, dois por desenho (gs_draw.c, vu_faixa) */
     const Vu0Uniform *vuUni;
     uint32_t vuUniCount;
     GsTarget *targets;  /* a tabela: a viva sem a divisão; com ela, a cópia da entrega (o cleared de antes de a gravação
