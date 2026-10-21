@@ -525,3 +525,22 @@ No WSL, serviço `claude-d2e4`, HEAD `c79548b`, de 20:54 a 23:51: as três build
 da x86 `cc46fa0752f092fca305bc8bf2e2e54390763af0` (a mesma), `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` com RC 0 e
 "tudo certo" (11 de 11 imagens idênticas no treino), `SEMMAPA=1 IMG=1 roteiros.sh duelo` com RC 0 e "tudo certo" (9 de 9), o git
 sem alterados no fim. Saídas de `port/build/roteiros` apagadas depois de conferidas. Falta a rodada no console (as três aberturas).
+
+### A rodada no console (21/10/2026) [medido]
+
+O `.xex` `a9dfad59276f216acfbd0b1be733c4c3` (`c79548b`), três aberturas, Duelo, Goku contra Kuririn, estágio 5, START no filme,
+pausa e Guide. A medida é a mediana da janela da luta (`passos: janela`, fechada pela pausa), não a média dos trechos de 60 quadros
+do `gs_d3d`, que mistura a pausa e as cenas paradas.
+
+| Abertura | Luta, mediana | p95 | p99 |
+|---|---:|---:|---:|
+| 3. Degrau 1 (`BT3_GS_THREAD=1`) | 47,4 ms | 73,0 | 104,5 |
+| 2. Degrau 2, desenho na thread de hardware 1 | 45,6 ms | 66,7 | 87,7 |
+| **1. Degrau 2, desenho na thread de hardware 3** | **38,4 ms** | **59,5** | **78,6** |
+
+- **O desenho na 3 tira 19% da luta** (de uns 21 para uns 26 quadros por segundo), dentro da estimativa (38 a 42 ms). Na 1, irmã da
+  gravação, o ganho quase some: o desenho divide o núcleo com a thread mais lenta. Fica a 3 como padrão.
+- Sem queda, sem linha do vigia; a Guide abriu no menu e na carga com a thread de desenho dona do dispositivo; 7.500 retratos sem
+  nenhum fora da área; nenhuma textura branca vista na tela (o log conta 4 num trecho de pressão de memória na abertura 1).
+- O descarte trabalha mais que no degrau 1 (43 e 19 pressões contra 5): as liberações chegam um quadro e meio depois.
+- Falta para os 30 fps: uns 5 ms. Com o desenho fora, o período é o da gravação (andar a lista e a VU1): é a outra frente do estudo.
