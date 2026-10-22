@@ -570,3 +570,123 @@ o quadro anterior quando a câmera anda rápido. A dúvida é a intensidade cont
 suaviza, e há uma passada de borrão pelo alfa do destino (`BT3_FX_OFF=16`) parecida com o "borrado" que a etapa 7 investigou. Para
 conferir, sem código: comparar com o original (PS2 ou PCSX2) voando com o A, e uma abertura com `BT3_FX_OFF=16` para ver se o
 embaçado do voo some.
+
+## 9. O gancho do backend e o `Unpack` por dentro (21/10/2026)
+
+Branch `f5-perfil`, sobre o `f5-pingpong`. Faltam uns 1,5 ms para os 33,37; o gancho `backend` da entrega (2,0 a 2,1 ms) e o
+`GsVu1_Unpack` (3,3 a 3,8 ms) são dois alvos sem divisão interna. Esta medição os divide, no mesmo mecanismo da seção 7 (só com
+`gGsFam`, o `mftb` em linha no 360; fora do 360 só com `BT3_TEMPOS=1`; tudo em `BT3_GS_ESPERAS`, a `.text` da x86 plana não muda).
+
+### O que cada um faz, só lendo
+
+- **O gancho** (`port/x360/src/gs/gs_d3d.cpp`, `entrega`): o `grav_junta` e o `GsDraw_TargetGet` (fixos); o `vu_plano`
+  (`:2179`), que passa duas vezes pelos desenhos e, para cada desenho da VU1, por **todos os índices** dele atrás do menor e do
+  maior (uns 129 mil índices, 516 KB, por quadro de luta), mais a regra do cleared, outra passada pelos desenhos; o `prof_garante`
+  (`:1345`), outra passada pelos desenhos com o `sPipes[d->pipeline]` de cada um; o `alvos_sem_textura` (24 vagas, só cria se
+  faltar); o `mem_mede` (`:318`), um `GlobalMemoryStatus`, chamada ao sistema; o `sincroniza_alvos` (24 vagas). Proporcional aos
+  índices da VU1 (o `vu_plano`) e aos desenhos (quatro passadas por uns 2,5 mil `GsDraw` de 128 bytes, uns 320 KB cada).
+- **O `Unpack`** (`port/src/gs/gs_vu1.c`, chamado pelo `vif` em `port/src/gs/gs_core.c:1058` e `:1077`): proporcional aos
+  vetores; três caminhos. A cópia `V4-32` (um `memcpy` do pacote do jogo para a `vu.mem`, a origem fria); o laço rápido dos
+  outros formatos sem máscara (no 360 cada elemento de 8 ou 16 bits passa pelo `unpack_elem`, um `memcpy` de 4 bytes e um
+  deslocamento); o laço geral (máscara, `mode`, `cl != wl`, `V4-5`), com ramos por componente.
+
+### A linha nova
+
+Logo depois da `gs: gravação por família`, também dentro da janela do `passos`:
+
+```
+gs: gravação por família, por dentro, quadro Q: backend B: plano da VU1 P, alvos e profundidades A, memória M, o resto R;
+Unpack U: cópia V4-32 C (n vezes, v vetores), rápido X (n vezes, v vetores), geral G (n vezes, v vetores)
+```
+
+Em ms por quadro, médias do trecho. O **plano da VU1** é o `vu_plano` mais a regra do cleared; **alvos e profundidades**, o
+`prof_garante` e o `alvos_sem_textura`; **memória**, o `mem_mede`; **o resto** é o gancho menos os três (o `grav_junta`, o last
+do alvo mostrado, o `sincroniza_alvos`, a fila das profundidades). O gancho ganha três leituras do relógio por quadro; o `Unpack`
+nenhuma (o caminho sai de uma variável que o corpo marca). As novas famílias ficam fora da `soma` da linha de cima.
+
+### A build e a rodada no console
+
+`build/x360/f2/default.xex` do worktree `bt3xbx-p` (`4afb25bc5fee6881e71c05973bdfda8a`): 317 de 317, os mesmos 993 avisos e
+os mesmos 103 stubs da main, `.dat` e `.swap` iguais. O `ambiente.txt` é o da abertura 2 da seção 8 (a medição ligada). O
+roteiro de sempre (Duelo, Goku contra Kuririn, estágio 5, 60 s de luta); olhar as linhas `por dentro` com `60 na janela` na
+linha de cima. A aposta antes de medir: o plano da VU1 leva a maior parte do gancho (o laço por índice), a memória quase nada;
+no `Unpack`, a cópia `V4-32` leva a maior parte, presa à leitura fria do pacote, e o laço rápido custa mais por vetor que ela.
+
+## 10. O `vu_plano` sem reler os índices (21/10/2026)
+
+Branch `f5-vuplano`, sobre o `f5-perfil`. Medido no console (seção 9): o gancho `entrega` leva 1,8 a 2,1 ms por quadro de luta,
+e 95% disso é o `vu_plano`, que relia todos os índices da VU1 (uns 129 mil por quadro) só para achar o menor e o maior índice de
+cada desenho.
+
+### O que mudou
+
+| Commit | O quê |
+|---|---|
+| `7f0dade` | **A faixa de cada desenho guardada na gravação** (`gs_draw.c`, `vu_faixa`). Cada jogo de listas ganha a `vuFaixa`, dois `uint32_t` por desenho (o menor e o maior índice), e o `GsQuadro` a leva (`q->vuFaixa`, posta no `backend_frame_end` e na entrega, do jogo que vai). Os três `GsGpu_DrawVu*` geram os índices de um trecho em ordem crescente (`base + i + k`), então o menor é o primeiro índice do trecho e o maior o último; quando o trecho se junta ao desenho anterior (`same_state`), a faixa é a união das duas; o desenho sem índices (o `DrawVu0` das lascas com todos os triângulos marcados) fica com a faixa vazia, que não muda a união. O `vu_plano` (`gs_d3d.cpp`) passa uma vez só pelos desenhos e lê a faixa: o resultado (`sVuIni`, `sVuLo`, `sVuNv`, `sVuCabem`, os maiores pedidos do log e, por eles, a regra do cleared da entrega) só depende da faixa, da contagem, do `vuVertCount` e da capacidade do par, e sai igual. O `GsDraw` segue com 128 bytes (o `gs_d3d.cpp` confere o layout) e tudo fica em `BT3_GS_ESPERAS`. A conta dos buffers (`JOGO_BYTES`, `sMem.buffers`) soma os 128 KB da tabela por jogo. **Verificador de teste**, só nas builds `--gpu`: `BT3_VU_PLANO_CONFERE=1` relê no fim de cada quadro os índices de cada desenho da VU1, como o `vu_plano` fazia, e conta as faixas diferentes (uma linha a cada 1.000 quadros, e uma por diferença, até 20). O falso não tem `vu_plano`; a conferência fica no `gs_draw.c`, que as duas builds compartilham |
+| `dfb5c84` | O `vu1_perfil.sh` cria a pasta das rodadas (`~/perfil`): no Deck ela não existia e os roteiros paravam no boot (guia, seção 6) |
+
+**A entrega sem cópia não estraga a faixa.** A tabela é do jogo, como as listas: na entrega o retrato aponta para a do jogo que
+vai, o `vu_plano` a lê ali mesmo, na gravação, antes do `jogo_usa(sJogo ^ 1)`, e a gravação passa a escrever na do outro. O
+desenho não lê a faixa (o `vu_copia` usa o `sVuIni`, o `sVuLo` e o `sVuNv` que o plano deixou). Sem a divisão, o `frame_end` lê a
+do jogo único, viva. A interpolação (`interp_counts_restore`) só trunca as contagens; nada fora dos três `DrawVu*` escreve índices
+ou muda o `first` e o `count` de um desenho da VU1 (conferido por `grep` no `gs_draw.c`).
+
+### As provas no Deck [medido]
+
+Script `~/provas-vuplano.sh`, resumo `~/vuplano/provas.resumo`, listas e logs em `~/vuplano/`, em série. Antes: `f5-perfil`
+(`4dbedd3`). Depois: `dfb5c84` (o código de `7f0dade`), as rodadas do depois com `BT3_VU_PLANO_CONFERE=1`. A pasta de dados dos
+dois roteiros já estava no Deck.
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `cc46fa0752f092fca305bc8bf2e2e54390763af0` |
+| `x86gv`, `f5_treino` (7.386 quadros) e `f5_duelo` (8.380), sem chaves e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, antes contra depois | os quatro com `divergencias.py` saindo 0, hashes `f76f0f6849b64629` e `08a98b6d05b8775a` |
+| `ppcg`, os mesmos quatro casos | os quatro com 0, hashes `f76f0f6849b64629` e `994627a2aecd429a`; de 208 a 452 s por rodada |
+| A conferência, nas oito rodadas do depois | 0 diferentes: 6.375.164 desenhos da VU1 conferidos nos primeiros 7.000 quadros do `f5_treino`, 7.422.923 nos primeiros 8.000 do `f5_duelo` (uns 900 por quadro), nenhuma linha de diferença em quadro nenhum |
+| Sabotagem: o maior guardado com 1 a menos (`x86gv`, `f5_duelo` com a divisão) | 7.422.923 diferentes de 7.422.923; a primeira no quadro 4.136, desenho 1 (`vu 2`, 129 índices): relido 0 a 48, guardado 0 a 47 |
+| O git do Deck no fim | 0 alterados (a sabotagem desfeita por `git checkout`, com `assert` de que casou, e a `x86gv` refeita) |
+
+### A build do 360
+
+`build_f2.sh` no `7f0dade`: 317 de 317 fontes sem erro, avisos por fonte iguais aos da main, os mesmos 103 stubs, `default.dat`
+`6d30baaf87b1177fb2359a855f8befc0` e `default.swap` `a7cf723fbfaea860fcc3707ad288e755`, iguais; `default.xex`
+`3b8f679dd133e4820f9e0b261be34800`. O `ambiente.txt` do worktree `bt3xbx-v` tem a medição desligada (`BT3_TEMPOS=0`).
+
+### A rodada do critério (no Deck, disparada sem esperar)
+
+O script `~/rodada-vuplano.sh` do Deck (dentro do contêiner) traz o HEAD do `f5-vuplano`, refaz as três builds do critério
+(`headless.py --alvo x86`, `--alvo x86 --rastreio`, `--alvo ppc`, nessa ordem), confere a `.text` da x86 plana e roda em série
+`REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` e `SEMMAPA=1 IMG=1 roteiros.sh duelo`. Saída em `~/rodada-vuplano.log`,
+logs por passo em `~/rodada-vuplano-*.log`, resumo em `~/rodada-vuplano.resumo` (uma linha por passo com `RC=`, a `.text`, o
+git no fim e `FIM`). As referências dos roteiros do Deck são as mesmas do WSL (o mesmo sha1). Vale com todos os `RC=0`, os dois
+`roteiros.sh` com "tudo certo", a `.text` a mesma e o git sem alterados.
+
+### A rodada no console: o que olhar
+
+A build: `build/x360/f2/default.xex` do worktree `bt3xbx-v` (`3b8f679dd133e4820f9e0b261be34800`), com o `ambiente.txt` de lá
+(`-BT3_DEMO`, a ISO convertida, `BT3_GS=gpu`, os saves `saves19`, piso de 32 MB, teto de textura de 128 MB, `BT3_VU1=1`,
+`BT3_VU_VERTS=98304`, `BT3_SHOT=600`, `BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`, `BT3_TEMPOS=0`). O roteiro de sempre: START pula o
+filme; Duelo, Goku contra Kuririn, estágio 5; 60 s de luta; a pausa com uns 3 s de espera e a Guide.
+
+1. **A mediana da luta** (`passos: janela`) contra os **34,9 ms** da seção 8 (`BT3_TEMPOS=0`); a meta é 33,37. O p95 e o p99
+   contra 45,8 e 72,5. A estimativa [estimado]: o plano passa de uns 1,7 a 2,0 ms para uma passada pelos uns 2,5 mil desenhos
+   (perto de 0,1 a 0,2 ms); se a gravação seguir como gargalo, a luta perto de 33,3 a 33,6 ms, mas a cópia da seção 8 rendeu só
+   metade do que media, então de 34 para baixo já confirma o corte.
+2. As capturas `BT3_SHOT=600` iguais às de antes (um desenho da VU1 com a faixa errada sai sem parte dos vértices ou é pulado
+   como "sem espaço"), e o `sem espaço` da linha da VU1 em zero, como antes.
+3. A linha `gs_d3d:   memória` com `buffers` 256 KB acima da de antes (a tabela dos dois jogos), nenhum `CHEIO`.
+4. Para ver o gancho por dentro, uma abertura a mais sem `BT3_TEMPOS=0`: na linha `por dentro`, o `plano da VU1` perto de zero.
+
+### A rodada no console do vu_plano sem reler os índices (22/10/2026) [medido]
+
+`.xex` `3b8f679dd133e4820f9e0b261be34800`, `BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`, `BT3_TEMPOS=0`, Duelo, Goku contra Kuririn,
+estágio 5 (931 passos de luta). Critério no Deck com tudo certo (21/10).
+
+| | Entrega sem cópia | Com o vu_plano sem reler |
+|---|---:|---:|
+| Luta, mediana | 34,9 ms | **33,8 ms** |
+| p95 e p99 | 45,8 e 72,5 ms | 45,5 e 66,4 ms |
+
+Sem queda, sem `CHEIO`, sem textura branca, as 32 texturas pretas de sempre, memória livre mínima 38 MB. A luta ficou a 0,4 ms
+dos 33,37: a meta ainda não fecha com margem, e o p95 (45 ms) mostra os picos. O próximo alvo é o `GsVu1_Unpack` (3 a 4 ms, a cópia
+V4-32 presa à memória, seção 9).

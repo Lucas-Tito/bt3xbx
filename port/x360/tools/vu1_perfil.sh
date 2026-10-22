@@ -15,6 +15,7 @@
 set -uo pipefail
 export DEBUGINFOD_URLS=
 B=port/build; V=${V:-$HOME/perfil}; P=${PPCG:-$B/ppcg} # PPCG=pasta de uma build ppcg guardada (a "antes" de uma otimização)
+mkdir -p $V # (sem ela o BT3_SAVES aponta para uma pasta que não se cria e o boot para em "600 quadros sem mcflow 15", guia, seção 6)
 amb() { export BT3_GS=gpu BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1 BT3_UNCAPPED=1 BT3_NOSOUND=1; }
 modo=$1; shift
 case $modo in
