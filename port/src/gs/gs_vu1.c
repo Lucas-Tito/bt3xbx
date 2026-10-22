@@ -905,7 +905,10 @@ static void run_medido(uint32_t start) {
 /* F5, etapa 6: cada chamada contada pela família do programa e pelo caminho que tomou, e o tempo dela */
 void GsVu1_Call(int addr) {
     unsigned hle = sHle, runs = sStatRuns, tam = sProgSize;
-    uint64_t t0 = GsD3d_Tique(), t1, ft;
+    /* (seção 15 da nota da gravação) o tempo do gGsVu1Ms (o log do backend) só com a medição ligada: eram duas chamadas ao
+       QueryPerformanceCounter por lote, uns 10 mil por quadro de luta, também com BT3_TEMPOS=0 */
+    int mede = gGsFam;
+    uint64_t t0 = mede ? GsD3d_Tique() : 0, t1, ft;
     int fam = tam == 127 || tam == 124 || tam == 99 || tam == 101 || tam == 94 || tam == 104 ? 0 : tam == 399 ? 1 : tam == 451 ? 2 : 3;
     int k;
     static unsigned amostra; /* (a VU1 por dentro: um lote em cada GS_VU_AMOSTRA, gs_internal.h) */
@@ -931,8 +934,10 @@ void GsVu1_Call(int addr) {
             gGsVu1Desconhecido[k][1]++;
         }
     }
-    t1 = GsD3d_Tique();
-    gGsVu1Ms += GsD3d_Ms(t1 - t0);
+    if (mede) {
+        t1 = GsD3d_Tique();
+        gGsVu1Ms += GsD3d_Ms(t1 - t0);
+    }
 }
 #elif defined(BT3_GS_ESPERAS)
 /* (F5, etapa 8, gravação) o tempo da VU1 por família fora do 360 (gs_internal.h) */
