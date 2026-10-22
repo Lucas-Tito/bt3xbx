@@ -159,10 +159,16 @@ static void mods_no_boot(void) {
     Diario_Escrever("arquivos: %s %s", c, sSemMods ? "não existe: os caminhos de mods/ não vão ao FATX" : "existe");
 }
 
+FILE *Port_X360Saida(void);
+
 /* o que se faz uma vez com o ambiente lido, nos dois fins de Ambiente_Carregar */
 static void depois_do_ambiente(void) {
     diario_ambiente();
     mods_no_boot();
+    /* (F6) o game:\saida.txt criado aqui, na main antes das threads: o primeiro fprintf(stderr) do jogo o criava na
+       thread do jogo (o do dispositivo de som, snd_adx.c, dentro de um RPC; o suspeito do RPC de 54 ms da rodada do
+       console, plano/F6/05.md) */
+    Port_X360Saida();
 }
 
 /* Leitura sob a raiz de dados (BT3_DATA): da ISO, se houver uma. O resto é arquivo de verdade; sob a raiz, os dados
