@@ -178,6 +178,11 @@ typedef struct GsQuadro {
     uint32_t soltaCount;
     int vivo;           /* 1: draws, verts e as listas da VU são as que a gravação está gravando (sem a divisão) */
     int dividido;       /* 1: desenhado na thread de desenho; o backend não mexe em nada da gravação */
+    /* (F5, etapa 8, BT3_VU1_DIRETO) o jogo de buffers do backend em que a gravação gravou os vértices e os índices da VU1
+       (vuVerts e vuIdx apontam para ele; o backend desenha dali sem copiar) e o número de ordem dele, que o backend devolve
+       pelo vuFeito quando a GPU acabar de lê-lo; -1: nas listas do gs_draw.c, como antes (o backend copia) */
+    int vuJogo;
+    uint32_t vuSeq;
 } GsQuadro;
 extern const GsQuadro *gsQuadro;
 #endif
@@ -210,6 +215,13 @@ typedef struct GsBackend {
     void (*entrega)(const GsQuadro *q, unsigned char *limpa);
     void (*soltaPede)(GsTex tex, int alvo);
     void (*solta)(GsTex tex, int alvo);
+    /* (F5, etapa 8, BT3_VU1_DIRETO=1, só com a divisão; sem os dois, a chave é recusada) A gravação grava os vértices e os
+       índices da VU1 direto em buffers do backend, VU_JOGOS deles em rodízio (gs_draw.c), em vez das listas que o backend
+       copiaria no fim do quadro. vuJogo: no fim do init, o jogo k (0 a VU_JOGOS - 1): os endereços e as capacidades (em
+       vértices de 48 bytes e em índices); 0 se não há. vuFeito: o maior vuSeq de quadro que a GPU acabou de ler (cresce
+       sempre); a gravação só regrava um jogo depois disso. Lido na gravação, escrito pelo lado do desenho. */
+    int (*vuJogo)(int k, float **verts, uint32_t **idx, uint32_t *capV, uint32_t *capI);
+    uint32_t (*vuFeito)(void);
 #endif
 } GsBackend;
 
