@@ -1244,6 +1244,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 
 ### O som no WSL (F6, etapa 2, `plano/F6/02.md`)
 
+- **A referência da `.text` da x86 plana mudou em 22/10/2026** (main `a768ad2`, o merge das etapas 1 e 2 da F6): de
+  `cc46fa0752f092fca305bc8bf2e2e54390763af0` para `ee54716ba7d86744152b9b71e6ac8e500f985d97`. A mudança é só de código de
+  teste do `headless/` (o rastro de som `som.c` por `--wrap` e o `BT3_SOM_ESTADO` do `roteiro.c`); a etapa 2 comparou os
+  objetos um a um (só o `x360_som.o` novo e o `x360_passos.o` do carimbo). Daqui em diante, a prova de que um corte não
+  muda a x86 plana compara com a referência nova.
+
 - **Endereço que vem de `malloc` do host não se compara entre builds.** O rastro de som gravava os endereços das tabelas
   do banco na memória do IOP; o `IopHeap_Alloc` do port é um `malloc`, e o rastro da x86 com o gravador saiu diferente do
   da x86 sem ele só por isso (custou uma rodada). Num rastro que se compara, endereço do PS2 (memória do jogo, do chip)
