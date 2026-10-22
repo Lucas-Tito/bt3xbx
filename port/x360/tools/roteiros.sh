@@ -134,8 +134,11 @@ for n in "${NOMES[@]}"; do
         python3 port/x360/tools/som.py rastro $D/som_a.txt $D/som_b.txt > $D/som_xx.txt
         r=$?; sed 's/^/   /' $D/som_xx.txt
         [ $r = 0 ] || falhou "som: o rastro de som das duas rodadas da x86 diferente (rede 2)"
-        # (rede 4) a x86 com o dispositivo gravador: o jogo igual (telas e rastro de som) e a gravação, para a ppca
-        roda_x86 && BT3_SOUND=1 BT3_GRAVADOR=$D/grav_x.bin BT3_SOM=$D/som_xa.txt BT3_ROTEIRO=$R BT3_SAVES=$D/sa \
+        # (rede 4) a x86 com o dispositivo gravador: o jogo igual (telas e rastro de som) e a gravação, para a ppca.
+        # O cartão dela começa vazio, numa pasta só dela: o boot.txt faz o New Game, que só existe com o cartão vazio, e
+        # a pasta sa já tem o save da rodada (a) (com ela a x86a carregava o save e ficava 4000 quadros sem o mcflow 10)
+        roda_x86 && rm -rf $D/sxa
+        roda_x86 && BT3_SOUND=1 BT3_GRAVADOR=$D/grav_x.bin BT3_SOM=$D/som_xa.txt BT3_ROTEIRO=$R BT3_SAVES=$D/sxa \
             BT3_HASH=$D/hxa.txt timeout 900 $B/x86a/bt3_x86a > $D/x86a.txt 2>&1
         python3 port/x360/tools/roteiros.py telas $D/x86a.txt > $D/telas_xa.txt
         python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_xa.txt > /dev/null ||

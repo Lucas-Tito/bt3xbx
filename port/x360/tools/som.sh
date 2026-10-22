@@ -3,8 +3,9 @@
 # (plano/F6/02.md). Um ciclo de emulador por vez: rodar dentro da trava do WSL.
 #   som.sh amostras        rede 3: constrói o teste_som da x86 e da PPC (headless.py --teste-som), faz o censo dos
 #                          cabeçalhos e compara o PCM do port com a referência independente (som.py amostras); depois
-#                          os três controles negativos (o c1 mais 1, um byte da amostra do banco, um byte da saída da
-#                          PPC), cada um tem de sair com 1 e dizer o porquê
+#                          os quatro controles negativos (o c1 mais 1, um byte da amostra do banco, um byte da saída da
+#                          PPC, um byte da saída da x86 logo depois da volta do laço, onde vale a exceção da decisão
+#                          25.10), cada um tem de sair com 1 e dizer o porquê
 #   som.sh controles NOME  redes 2 e 4: sobre as saídas do roteiros.sh SOM=1 em $O/NOME (o som_a.txt; a x86a refeita
 #                          aqui), o rastro estragado numa cópia (um volume trocado, uma linha a menos) tem de falhar no
 #                          som.py rastro, e a x86a com cada estrago de propósito (BT3_SABOTA=pitch, pan, banco) e uma
@@ -39,8 +40,9 @@ amostras)
     r=$?; sed 's/^/   /' $T/amostras.txt
     [ $r = 0 ] || falhou "rede 3: amostras diferentes (som.py amostras)"
     echo "== rede 3: controles negativos"
-    for e in adx vag ppc; do
-        case $e in adx) t="x86 diferente da referência";; vag) t="amostras do banco diferentes";; ppc) t="PPC diferente da x86";; esac
+    for e in adx vag ppc laco; do
+        case $e in adx) t="x86 diferente da referência";; vag) t="amostras do banco diferentes";; ppc) t="PPC diferente da x86";;
+            laco) t="depois da volta do laço, x86 diferente";; esac
         deve_falhar "estraga $e" "$t" python3 port/x360/tools/som.py amostras --dados gamedata --x86 $B/x86t/teste_som \
             --ppc $B/ppct/teste_som --tmp $T/controle --estraga $e
     done
@@ -60,6 +62,7 @@ P
     : > $T/som_vazio.txt
     deve_falhar "rastro vazio" "não prova nada" python3 port/x360/tools/som.py rastro $T/som_vazio.txt $T/som_vazio.txt
     echo "== rede 4: o gravador com estragos de propósito (x86a)"
+    rm -rf $T/s0  # (o cartão começa vazio: o boot.txt faz o New Game)
     BT3_SOUND=1 BT3_GRAVADOR=$T/grav_ok.bin BT3_ROTEIRO=$R BT3_SAVES=$T/s0 timeout 900 $B/x86a/bt3_x86a > $T/x86a_ok.txt 2>&1
     rm -rf $T/s0
     for e in pitch pan banco; do
