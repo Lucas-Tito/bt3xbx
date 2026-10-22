@@ -30,6 +30,7 @@ void Port_MapMemory(void);              /* port/src/plat_mem.c, ramo PORT_X360 *
 int __real_main(int argc, char **argv); /* src/main.c, renomeado por c89.py */
 void *Port_X360Reserve(unsigned addr, unsigned size);
 void Port_Sair(int codigo);
+int MpegMede_Rodar(void);                   /* mpeg_mede.c (F6, etapa 6): 0 sem BT3_MPEG_MEDE */
 void Port_Abortar(void);
 void Ambiente_Carregar(const char *caminho); /* posix360.c */
 void Estado_Resumo(void);                  /* estado360.c */
@@ -224,6 +225,9 @@ static DWORD WINAPI Jogo(LPVOID arg) {
     _controlfp(_RC_CHOP, _MCW_RC); /* soma e multiplicação truncadas, como no PS2 (decisões 4 e 5) */
     Diario_Escrever("jogo começando (%s)", gPortStage);
     gCor = 0xFF2040C0; /* azul */
+    if (MpegMede_Rodar()) { /* (F6, etapa 6) BT3_MPEG_MEDE=1: só a medição do decodificador dos filmes, e sai */
+        Port_Sair(0);
+    }
     r = __real_main(1, argv);
     Port_Sair(r);
     return 0;
