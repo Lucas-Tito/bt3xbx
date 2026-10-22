@@ -1889,9 +1889,17 @@ static void bytes_walk(uint32_t tadr) {
 #endif
 
 /* Executes one frame's list: the DMA chain at `tadr` on VIF1, then the end-of-frame work of the back end. */
+#ifdef PORT_X360
+int GsVu1_Pre(void);                       /* gs_vu1.c: BT3_UNPACK_PRE, a pré-carga do Unpack (protótipo, só no 360) */
+void __dcbt(int offset, const void *base); /* o intrínseco do cl (o mesmo do ppcintrinsics.h), em linha */
+#endif
+
 static void run_chain(uint32_t tadr, int tte) {
     uint32_t stack[2], sp = 0;
     int guard;
+#ifdef PORT_X360
+    int pre = GsVu1_Pre();
+#endif
 
 #ifdef BT3_GPU_FALSO
     bytes_walk(tadr);
@@ -1916,6 +1924,12 @@ static void run_chain(uint32_t tadr, int tte) {
             fprintf(stderr, "  dma tag at %08x: id %u qwc %u addr %08x | %08x %08x (depth %u)\n", (unsigned)(uintptr_t)tag, id, qwc, addr, tag[2], tag[3], sp);
         }
         sStat[0]++;
+#ifdef PORT_X360
+        if (pre > 0 && !end) { /* a etiqueta seguinte e o começo dos dados dela, enquanto o VIF passa os desta */
+            __dcbt(0, (const void *)(uintptr_t)tadr);
+            __dcbt(128, (const void *)(uintptr_t)tadr);
+        }
+#endif
         if (tte) {
             vif(tag + 2, 2);
         }

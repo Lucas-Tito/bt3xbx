@@ -127,6 +127,83 @@ static inline uint32_t unpack_elem(const uint8_t *data, uint32_t b, uint32_t bit
 }
 #endif
 
+#ifdef BT3_TESTE_VU1
+/* (F5, etapa 8, estudo do Unpack) BT3_UNPACK_CONTA=1, só na build x86gv (headless.py --gpu --vu1; nem a x86 plana nem o 360
+   têm): o que a cópia V4-32 põe na vu.mem e quanto disso se lê. Cada vetor copiado fica pendente até uma leitura do caminho
+   do shader (as regiões que os hle_program* e os GsGpu_DrawVu* leem, CONTA_LE) ou até uma chamada que roda o interpretador,
+   que conta a memória toda como lida (o limite de cima). Um pendente que outro Unpack sobrescreve não foi lido nunca. Conta
+   também as origens (ponteiro, vetores) que se repetem no quadro. Uma linha "vu1 unpack:" por quadro (GsVu1_FrameEnd). */
+static int sConta = -1;
+static uint8_t sPend[1024];
+static uint32_t sCt[6]; /* vetores V4-32, lidos, perdidos, chamadas V4-32, vetores de origem repetida, vetores dos outros caminhos */
+static struct { const void *src; uint32_t n; } sVisto[16384];
+static uint32_t sVistos;
+static void conta_le(uint32_t q, uint32_t n) {
+    for (; n != 0; n--, q++) {
+        if (sPend[q & 0x3FF]) {
+            sPend[q & 0x3FF] = 0;
+            sCt[1]++;
+        }
+    }
+}
+static void conta_unpack(int v4, const void *src, uint32_t addr, uint32_t n) {
+    uint32_t k, h;
+    if (!v4) {
+        sCt[5] += n;
+        for (k = 0; k < n; k++) {
+            if (sPend[(addr + k) & 0x3FF]) {
+                sPend[(addr + k) & 0x3FF] = 0;
+                sCt[2]++;
+            }
+        }
+        return;
+    }
+    sCt[0] += n;
+    sCt[3]++;
+    for (k = 0; k < n; k++) {
+        if (sPend[(addr + k) & 0x3FF]) {
+            sCt[2]++;
+        }
+        sPend[(addr + k) & 0x3FF] = 1;
+    }
+    h = (uint32_t)((((uintptr_t)src >> 4) * 2654435761u) & 0xFFFFFFFFu) >> 18;
+    while (sVisto[h].src != NULL && (sVisto[h].src != src || sVisto[h].n != n)) {
+        h = (h + 1) & 16383;
+    }
+    if (sVisto[h].src != NULL) {
+        sCt[4] += n;
+    } else if (sVistos < 12000) {
+        sVisto[h].src = src;
+        sVisto[h].n = n;
+        sVistos++;
+    }
+}
+#define CONTA_LE(q, n) do { if (sConta > 0) { conta_le((uint32_t)(q), (uint32_t)(n)); } } while (0)
+#else
+#define CONTA_LE(q, n) ((void)0)
+#endif
+
+#ifdef PORT_X360
+/* (F5, etapa 8, estudo do Unpack; só no 360, ligada por padrão desde 22/10) BT3_UNPACK_PRE=N: a cópia V4-32 pede antes, com dcbt, as linhas de
+   128 bytes da origem inteira e mais D bytes depois dela (o começo do Unpack seguinte, que na cadeia vem logo atrás), para a
+   memória atender várias faltas de uma vez em vez de uma por vez. N = 1 usa D = 1024; N >= 128 é o próprio D; sem a chave ou
+   com 0, a cópia de sempre. Com a chave, o run_chain (gs_core.c) pede também as duas primeiras linhas da etiqueta seguinte
+   antes de passar os dados da atual ao VIF (o CALL para a cadeia de um modelo cai longe). O dcbt é só um aviso: não falha
+   nem muda o que se copia. No console, uns 9 mil Unpack por quadro de luta de uns 16 vetores cada (264 bytes, 2 ou 3
+   linhas) a uns 440 ns cada: perto de uma falta de memória por chamada, que o dcbt de dentro do memcpy não esconde. */
+void __dcbt(int offset, const void *base); /* o intrínseco do cl (o mesmo do ppcintrinsics.h), em linha */
+static int sPre = -1;
+int GsVu1_Pre(void) { /* a distância da pré-carga em bytes, 0 desligada */
+    if (sPre < 0) {
+        const char *e = getenv("BT3_UNPACK_PRE");
+        /* (22/10) ligada por padrão com D = 1024: no console a cópia caiu de 439 para 360 ns; com 4096 subiu para 538 e
+           a VU1 piorou 3,6 ms (a pré-carga longe tira do cache o que a VU1 usa). BT3_UNPACK_PRE=0 desliga */
+        sPre = e == NULL ? 1024 : atoi(e) <= 0 ? 0 : atoi(e) < 128 ? 1024 : atoi(e);
+    }
+    return sPre;
+}
+#endif
+
 #ifdef BT3_GS_ESPERAS
 /* (F5, etapa 8, gravação) o tempo do Unpack por família (gs_internal.h), e por caminho: o corpo diz qual tomou em
    sUnpVia (0 a cópia V4-32, 1 o laço rápido, 2 o geral), com a mesma leitura do relógio */
@@ -155,6 +232,14 @@ void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data
     uint32_t cl = vu.cl ? vu.cl : 1, wl = vu.wl ? vu.wl : 1, cyc = 0, bitpos = 0, k, c;
     const uint8_t *src = (const uint8_t *)data;
 
+#ifdef BT3_TESTE_VU1
+    if (sConta < 0) {
+        sConta = getenv("BT3_UNPACK_CONTA") != NULL && atoi(getenv("BT3_UNPACK_CONTA")) != 0;
+    }
+    if (sConta > 0) {
+        conta_unpack(!masked && vu.mode == 0 && cl == wl && vn == 3 && vl == 0, data, addr, n);
+    }
+#endif
     /* The usual case by far (every vertex of every model): no mask, no row arithmetic, consecutive vectors. The
        same result as the general loop below, one tight loop per format. */
     if (!masked && vu.mode == 0 && cl == wl && !(vn == 3 && vl == 3) && vn != 0 && vl != 3) {
@@ -162,6 +247,18 @@ void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data
         if (vn == 3 && vl == 0) { /* four words per vector, which is all the game's models and effects send: a copy */
 #ifdef BT3_GS_ESPERAS
             sUnpVia = 0;
+#endif
+#ifdef PORT_X360
+            if (sPre < 0) {
+                GsVu1_Pre();
+            }
+            if (sPre > 0) {
+                uint32_t o, fim = n * 16 + (uint32_t)sPre + (uint32_t)((uintptr_t)src & 127);
+                const uint8_t *linha = (const uint8_t *)((uintptr_t)src & ~(uintptr_t)127);
+                for (o = 0; o < fim; o += 128) {
+                    __dcbt((int)o, linha);
+                }
+            }
 #endif
             for (k = 0; k < n; k++) {
                 uint32_t at = (addr + k) & 0x3FF, run = 0x400 - at;
@@ -594,6 +691,8 @@ static int hle_program0(void) {
     if (count < 3 || top + 5 + count * 3 > 1024) {
         return 0;
     }
+    CONTA_LE(top, 5 + count * 3);
+    CONTA_LE(0, 24);
     for (layer = 0; layer < 2; layer++) {
         memcpy(pkt, &vu.mem[top * 16], 16);
         memcpy(pkt + 16, &vu.mem[(top + 1 + (uint32_t)layer) * 16], 16);
@@ -622,9 +721,14 @@ static int hle_program1(void) {
         return 0;
     }
     memcpy(&mark, &vu.mem[(top + 6) * 16 + 12], 4);
+    CONTA_LE(top + 3, 1);
+    CONTA_LE(top + 6, 1);
     if ((mark & 0xFFFF) == 0) {
         return 1;
     }
+    CONTA_LE(top, 5 + count * 3);
+    CONTA_LE(0, 24);
+    CONTA_LE(26, 1);
     for (layer = 0; layer < 2; layer++) {
         memcpy(pkt, &vu.mem[top * 16], 16);
         memcpy(pkt + 16, layer == 0 ? &vu.mem[(top + 1) * 16] : &vu.mem[26 * 16], 16);
@@ -652,6 +756,8 @@ static int hle_program4(void) {
     if (count < 3 || top + 3 + count * 3 > 1024) {
         return 0;
     }
+    CONTA_LE(top, 3 + count * 3);
+    CONTA_LE(0, 4);
     Gs_Gif(&vu.mem[top * 16], 2);
     Gs_RegWrite(0, (PS2_PKT64(tag[0]) >> 47) & 0x7FF);
     GsGpu_DrawVu4((int)((PS2_PKT64(tag[0]) >> 56) & 1), (const float *)&vu.mem[(top + 3) * 16], count, (const float *)vu.mem);
@@ -676,6 +782,9 @@ static int hle_program2(void) {
     if (count < 3 || top + 5 + count * 3 > 1024) {
         return 0;
     }
+    CONTA_LE(top, 2);
+    CONTA_LE(top + 4, 1 + count * 3);
+    CONTA_LE(0, 15);
     memset(consts, 0, sizeof(consts));
     memcpy(&consts[0], &vu.mem[0], 10 * 16);          /* bones and pivots: as in program 0 */
     memcpy(&consts[56], &vu.mem[11 * 16], 4 * 16);    /* screen matrix: program 0 has it at 14..17 */
@@ -708,6 +817,9 @@ static int hle_program78(int layer) {
     if (count < 3 || top + 3 + count * 3 > 1024) {
         return 0;
     }
+    CONTA_LE(top, 3 + count * 3);
+    CONTA_LE(0, layer == 3 ? 14 : 8);
+    CONTA_LE(12, layer == 3 ? 0 : 1);
     memset(consts, 0, sizeof(consts));
     if (layer == 3) {
         memcpy(&consts[0], &vu.mem[0], 10 * 16);        /* matrices A, B and their pivots */
@@ -736,6 +848,18 @@ static int hle_program6(void) {
     if (count < 3 || top + 3 + count * 4 > 1024) {
         return 0;
     }
+#ifdef BT3_TESTE_VU1
+    {
+        uint32_t i;
+        CONTA_LE(top + 2, 1);
+        for (i = 0; i < count; i++) { /* o GsGpu_DrawVu6 lê a posição e a cor de cada vértice, não a normal nem o s, t */
+            CONTA_LE(top + 3 + i * 4, 1);
+            CONTA_LE(top + 3 + i * 4 + 2, 1);
+        }
+        CONTA_LE(0, 4);
+        CONTA_LE(0x0C, 5);
+    }
+#endif
     Gs_RegWrite(0, (PS2_PKT64(tag[0]) >> 47) & 0x7FF);
     GsGpu_DrawVu6((int)((gGs.prim >> 9) & 1), (const float *)&vu.mem[(top + 3) * 16], count, (const float *)vu.mem);
     sStatKicks++;
@@ -776,10 +900,18 @@ void GsVu1_Call(int addr) {
 /* (F5, etapa 8, gravação) o tempo da VU1 por família fora do 360 (gs_internal.h) */
 void GsVu1_Call(int addr) {
     uint64_t t;
+#ifdef BT3_TESTE_VU1
+    unsigned runs = sStatRuns;
+#endif
     GS_FAM_INI(t);
     gGsFamNaVu1 = 1;
     vu1_call(addr);
     gGsFamNaVu1 = 0;
+#ifdef BT3_TESTE_VU1
+    if (sStatRuns != runs) {
+        CONTA_LE(0, 1024);
+    }
+#endif
     GS_FAM_FIM(GS_FAM_VU1, t);
 }
 #endif
@@ -932,6 +1064,19 @@ void GsVu1_FrameEnd(void) {
                     sProg[k].instr, sStatInstr ? sProg[k].instr * 100 / sStatInstr : 0, sProg[k].kicks);
         }
     }
+#ifdef BT3_TESTE_VU1
+    if (sConta > 0) {
+        uint32_t q, pend = 0;
+        for (q = 0; q < 1024; q++) {
+            pend += sPend[q];
+        }
+        fprintf(stderr, "vu1 unpack: quadro %u: v4 %u em %u chamadas, lidos %u, perdidos %u, pendentes no fim %u, origem repetida %u, "
+                        "outros caminhos %u\n", gGsFrame, sCt[0], sCt[3], sCt[1], sCt[2], pend, sCt[4], sCt[5]);
+        memset(sCt, 0, sizeof(sCt));
+        memset(sVisto, 0, sizeof(sVisto));
+        sVistos = 0;
+    }
+#endif
     sStatRuns = sStatInstr = sStatKicks = 0;
     sHle = 0;
     memset(sProg, 0, sizeof(sProg));
