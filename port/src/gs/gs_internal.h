@@ -79,7 +79,17 @@ enum {
     /* (por dentro, fora da soma) o gancho do backend (gs_d3d.cpp, entrega): o vu_plano com a regra do cleared, as
        profundidades e as vagas sem textura, a medida da memória; e o Unpack pelo caminho do desempacotar (a cópia V4-32, o
        laço rápido dos outros formatos sem máscara, o laço geral) */
-    GS_FAM_E_PLANO, GS_FAM_E_ALVOS, GS_FAM_E_MEM, GS_FAM_UNP_COPIA, GS_FAM_UNP_RAPIDO, GS_FAM_UNP_GERAL, GS_FAM_N
+    GS_FAM_E_PLANO, GS_FAM_E_ALVOS, GS_FAM_E_MEM, GS_FAM_UNP_COPIA, GS_FAM_UNP_RAPIDO, GS_FAM_UNP_GERAL,
+#ifdef PORT_X360
+    /* (a VU1 por dentro, só no 360, fora da soma; seção 14 da nota da gravação) nos lotes da amostra, o GsVu1_Call
+       dividido em partes encadeadas: o programa (o hle_program*, o Gs_Gif, o que nenhuma outra parte leva), o estado do
+       desenho (draw_state e date_snapshot, com o hash de dentro da VU1), as constantes (o bloco uniforme), os índices,
+       a cópia dos vértices para o gsVuVerts (a primeira do lote e as seguintes, a camada repetida dos programas 0 e 1),
+       o fecho (juntar ao desenho anterior ou abrir outro) e o interpretador */
+    GS_FAM_V_PROG, GS_FAM_V_ESTADO, GS_FAM_V_CONST, GS_FAM_V_IDX, GS_FAM_V_COPIA, GS_FAM_V_COPIA2, GS_FAM_V_FECHO,
+    GS_FAM_V_INTERP,
+#endif
+    GS_FAM_N
 };
 extern int gGsFam;           /* 1 medindo; 0 desligado (BT3_TEMPOS, ou antes do primeiro fim de quadro) */
 extern int gGsFamNaVu1;      /* 1 dentro do GsVu1_Call */
@@ -93,6 +103,14 @@ double Gs_FamMs(uint64_t tiques);
 uint64_t __mftb(); /* o intrínseco do cl (o mesmo do ppcintrinsics.h): o cl o emite em linha, uma instrução, sem chamada */
 extern double gGsFamTbMs; /* tiques do mftb por ms, do último trecho (gs_draw.c) */
 #define GS_FAM_TIQUE() __mftb()
+/* (a VU1 por dentro) gGsVuMede é 1 durante um lote da amostra (um em cada GS_VU_AMOSTRA, com a medição ligada); cada
+   marca fecha a parte f com uma leitura do relógio e abre a seguinte (gGsVuT é a última leitura). gGsFamVuVet conta os
+   vértices das duas cópias da amostra. */
+#define GS_VU_AMOSTRA 4
+extern int gGsVuMede;
+extern uint64_t gGsVuT;
+extern uint32_t gGsFamVuVet[2];
+#define GS_VU_MARCA(f) do { if (gGsVuMede) { uint64_t t_ = __mftb(); gGsFamTiques[f] += t_ - gGsVuT; gGsVuT = t_; } } while (0)
 #else
 #define GS_FAM_TIQUE() Gs_FamTique()
 #endif

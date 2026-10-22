@@ -887,6 +887,14 @@ static const char *sEnvDump, *sEnvCalls, *sEnvInterp;
 #define VU_ENV_DUMP sEnvDump
 #define VU_ENV_CALLS sEnvCalls
 #define VU_ENV_INTERP sEnvInterp
+/* (a VU1 por dentro, gs_internal.h) o interpretador como parte própria nos lotes da amostra: as chamadas ao run daqui
+   em diante passam por aqui */
+static void run_medido(uint32_t start) {
+    GS_VU_MARCA(GS_FAM_V_PROG);
+    run(start);
+    GS_VU_MARCA(GS_FAM_V_INTERP);
+}
+#define run(start) run_medido(start)
 #else
 #define VU_ENV_DUMP getenv("BT3_VU_DUMP")
 #define VU_ENV_CALLS getenv("BT3_VU_CALLS")
@@ -900,11 +908,19 @@ void GsVu1_Call(int addr) {
     uint64_t t0 = GsD3d_Tique(), t1, ft;
     int fam = tam == 127 || tam == 124 || tam == 99 || tam == 101 || tam == 94 || tam == 104 ? 0 : tam == 399 ? 1 : tam == 451 ? 2 : 3;
     int k;
+    static unsigned amostra; /* (a VU1 por dentro: um lote em cada GS_VU_AMOSTRA, gs_internal.h) */
 
     GS_FAM_INI(ft);
+    gGsVuMede = gGsFam && ++amostra % GS_VU_AMOSTRA == 0;
+    if (gGsVuMede) {
+        gGsVuT = ft;
+        gGsFamVezes[GS_FAM_V_PROG]++; /* (os lotes da amostra) */
+    }
     gGsFamNaVu1 = 1;
     vu1_call(addr);
     gGsFamNaVu1 = 0;
+    GS_VU_MARCA(GS_FAM_V_PROG);
+    gGsVuMede = 0;
     GS_FAM_FIM(GS_FAM_VU1, ft); /* (F5, etapa 8, gravação) a família da VU1, pelo relógio das famílias */
     gGsVu1Lotes[fam][sHle != hle ? 0 : sStatRuns != runs ? 1 : 2]++;
     if (fam == 3) {
