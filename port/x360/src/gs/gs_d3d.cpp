@@ -210,6 +210,21 @@ static DWORD sUltimoPresent;         /* GetTickCount do último Present */
 static uint32_t sVuLo[MAX_DRAWS], sVuNv[MAX_DRAWS]; /* (vu_plano) o primeiro vértice e quantos, por desenho da VU1 que coube */
 static const GsQuadro *sQ;           /* o quadro que o frame_end desenha */
 
+/* (F5, etapa 8, picos) os contadores do registro dos quadros lentos (gs_internal.h; o registro em si mais abaixo, depois do
+   grav_junta). Os de fora deste arquivo (o jogo, a gravação no gs_core.c e no gs_draw.c, o iso360.c, o diario.c) andam
+   sempre; os relógios, só com o limiar. Os daqui: as criações pelo XG por classe (0 textura, 1 alvo, 2 profundidade), o
+   KB e o tempo delas (o XPhysicalAlloc), as solturas (o XPhysicalFree), o tempo esperando a GPU soltar um recurso da
+   cova (BlockUntilNotBusy), o da gravação esperando o desenho soltar memória (espera_desenho), as medidas da memória
+   (GlobalMemoryStatus) e as apresentações repetidas (GsD3d_Repete). Os da gravação se zeram na entrega dela; os que
+   mais de uma thread toca, lidos por diferença. */
+extern "C" {
+unsigned gPicos;
+unsigned gPicosTexN, gPicosTexPx, gPicosEnvios, gPicosHash, gPicosJEsperas, gPicosQJogo;
+uint64_t gPicosTexNs, gPicosEnvioBytes, gPicosJEspera, gPicosGOcioso;
+}
+static volatile unsigned sPicoXgN[3], sPicoXgKb, sPicoSoltas, sPicoMemMede, sPicoRepete;
+static volatile unsigned __int64 sPicoXgTiques, sPicoCovaTiques, sPicoEspMemTiques;
+
 static void esquece_estado(void);
 static int sCurPipe = -1, sCurSamp = -1, sEstadoGs;
 static GsTex sCurTex = (GsTex)-1;
@@ -281,11 +296,17 @@ static TexXg *xg_cria_n(UINT w, UINT h, D3DFORMAT f, size_t tam) {
     }
     t = XGSetTextureHeader(w, h, 1, 0, f, (D3DPOOL)0, 0, 0, 0, &x->cab, NULL, NULL);
     x->bytes = (t + 4095u) & ~4095u;
-    x->dados = XPhysicalAlloc(x->bytes, MAXULONG_PTR, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    {
+        unsigned __int64 t0 = __mftb();
+        x->dados = XPhysicalAlloc(x->bytes, MAXULONG_PTR, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+        sPicoXgTiques += __mftb() - t0;
+    }
     if (x->dados == NULL) {
         free(x);
         return NULL;
     }
+    sPicoXgN[f == D3DFMT_D24S8 ? 2 : f == D3DFMT_LIN_A8B8G8R8 ? 0 : 1]++;
+    sPicoXgKb += x->bytes >> 10;
     XGOffsetResourceAddress(&x->cab, x->dados);
     XGGetTextureDesc(&x->cab, 0, &d);
     x->pitch = d.RowPitch;
@@ -309,6 +330,7 @@ static void xg_espera(D3DTexture *t) {
 static void xg_libera(D3DTexture *t) {
     TexXg *x = (TexXg *)t;
     if (x != NULL) {
+        sPicoSoltas++;
         XPhysicalFree(x->dados);
         free(x);
     }
@@ -317,6 +339,7 @@ static void xg_libera(D3DTexture *t) {
 /* a memória física livre agora, em bytes (e o menor valor visto) */
 static unsigned mem_mede(void) {
     MEMORYSTATUS m;
+    sPicoMemMede++;
     GlobalMemoryStatus(&m);
     sMem.livres = (unsigned)m.dwAvailPhys;
     sMem.total = (unsigned)m.dwTotalPhys;
@@ -330,6 +353,7 @@ static unsigned mem_mede(void) {
 /* memória física livre agora, sem mexer na medida da gravação (o desenho e os logs) */
 static unsigned livres_agora(void) {
     MEMORYSTATUS m;
+    sPicoMemMede++;
     GlobalMemoryStatus(&m);
     return (unsigned)m.dwAvailPhys;
 }
@@ -435,6 +459,8 @@ static double ms_desde(const LARGE_INTEGER *a) {
     return (double)(b.QuadPart - a->QuadPart) * 1000.0 / (double)sFreq.QuadPart;
 }
 
+static unsigned sPicoPress, sPicoDescN, sPicoEsperas, sPicoLotes; /* (picos) da gravação, desde a última entrega */
+
 /* o que a gravação contou desde a última vez passa para os contadores do log (os dois lados parados um para o outro) */
 static void grav_junta(void) {
     int i, j, k;
@@ -448,10 +474,14 @@ static void grav_junta(void) {
     }
     sConta.texNovas += sG.texNovas;
     sConta.semTextura += sG.semTextura;
+    sPicoPress += sG.pressoes; /* (picos: o quadro que a gravação entrega) */
+    sPicoDescN += sG.descN;
+    sPicoEsperas += sG.esperas;
     memset(&sG, 0, sizeof(sG));
     for (i = 0; i < 4; i++) {
         for (j = 0; j < 3; j++) {
             sVuLotes[i][j] += gGsVu1Lotes[i][j];
+            sPicoLotes += gGsVu1Lotes[i][j];
         }
     }
     for (i = 0; i < 8 && gGsVu1Desconhecido[i][1] != 0; i++) {
@@ -466,6 +496,262 @@ static void grav_junta(void) {
     memset(gGsVu1Lotes, 0, sizeof(gGsVu1Lotes));
     memset(gGsVu1Desconhecido, 0, sizeof(gGsVu1Desconhecido));
     gGsVu1InstrDesc = 0;
+}
+
+/* ---- o registro dos quadros lentos (F5, etapa 8, picos; BT3_PICOS=L) ------------------------------------------- */
+/* (gs_internal.h; a leitura em docs/x360/plano/F5/08-gravacao.md, seção 11) Três lados por quadro, cada um escrito pela
+   própria thread na fronteira dela, numa vaga do anel pelo número do quadro do GS: o jogo (Picos_Jogo, na entrega da
+   lista), a gravação (Picos_Gravou, na entrega do retrato) e o desenho (picos_apresentou e picos_desenho, no frame_end,
+   que também põe a marca da GPU antes do Present). O desenho do quadro N escreve a linha do N - 2: os três lados dele já
+   passaram e a GPU já chegou à marca dele (se não chegou, a linha diz -1). Por quadro: duas leituras do mftb no jogo
+   (mais duas por espera de fato), quatro na gravação, duas no desenho, uma marca na GPU (D3DCALLBACK_IDLE: a GPU esvazia
+   o pipeline uma vez por quadro, antes do Present). As linhas vão pelo diário (um anel; a escritora grava noutra thread),
+   também dentro da janela do passos. */
+extern "C" {
+extern unsigned gPicosIsoN, gPicosDiario, gPicosDiarioDiscoUs; /* iso360.c, diario.c */
+extern unsigned __int64 gPicosIsoBytes, gPicosIsoTiques;
+extern unsigned gPortVBlanks; /* plat_stub.c */
+}
+#define PICOS_N 16
+struct PicoJ {
+    unsigned q, esperas, vblanks, vblank, isoN, isoKb, diario;
+    float per, espera, vb, isoMs, discoMs;
+};
+struct PicoG {
+    unsigned q, qJogo, texN, texKpx, envios, envioKb, hash, lotes, desenhos, verts, vuVerts, vuIdx, press, descN, esperasMem;
+    unsigned xg[3], xgKb, soltas, memMede;
+    float per, ocupada, espDes, ocioso, espMem, texMs, xgMs;
+};
+struct PicoD {
+    unsigned q, captura, repete;
+    float per, fim, present, cova;
+    unsigned __int64 marca; /* o mftb quando a CPU pôs a marca da GPU */
+};
+static PicoJ sPJ[PICOS_N];
+static PicoG sPG[PICOS_N];
+static PicoD sPD[PICOS_N];
+static volatile unsigned __int64 sPicoGpu[PICOS_N]; /* o mftb quando a GPU terminou o quadro (picos_cb) */
+static double sPicoTbMs = 49875.0;                    /* tiques do mftb por ms (calibrado a cada resumo) */
+static unsigned __int64 sPicoPresAnt, sPicoPres;      /* o mftb logo depois do Present: o anterior e o deste quadro */
+
+static float picos_ms(unsigned __int64 tiques) {
+    return (float)((double)tiques / sPicoTbMs);
+}
+
+/* o jogo entregou a lista do quadro (gs_core.c, Port_GsVif1Chain): o período desde a entrega anterior, a espera pela
+   gravação nele (render_wait), a espera de vblank, os vblanks; o disco e o diário desde a entrega anterior */
+extern "C" void Picos_Jogo(unsigned quadro, uint64_t vblankNs) {
+    static unsigned __int64 ant, isoB, isoT;
+    static unsigned vbAnt, isoN, diario, discoUs;
+    unsigned __int64 t = __mftb(), b, tt;
+    PicoJ *p = &sPJ[quadro % PICOS_N];
+    unsigned vb = gPortVBlanks, n;
+    p->q = ~0u; /* (a vaga em escrita) */
+    __lwsync();
+    p->per = ant != 0 ? picos_ms(t - ant) : 0.0f;
+    ant = t;
+    p->espera = picos_ms(gPicosJEspera);
+    p->esperas = gPicosJEsperas;
+    gPicosJEspera = 0;
+    gPicosJEsperas = 0;
+    p->vb = (float)((double)vblankNs / 1e6);
+    p->vblanks = vb - vbAnt;
+    vbAnt = vb;
+    p->vblank = vb;
+    n = gPicosIsoN;
+    p->isoN = n - isoN;
+    isoN = n;
+    b = gPicosIsoBytes;
+    p->isoKb = (unsigned)((b - isoB) >> 10);
+    isoB = b;
+    tt = gPicosIsoTiques;
+    p->isoMs = sFreq.QuadPart != 0 ? (float)((double)(tt - isoT) * 1000.0 / (double)sFreq.QuadPart) : 0.0f;
+    isoT = tt;
+    n = gPicosDiario;
+    p->diario = n - diario;
+    diario = n;
+    n = gPicosDiarioDiscoUs;
+    p->discoMs = (float)(n - discoUs) / 1000.0f;
+    discoUs = n;
+    __lwsync();
+    p->q = quadro;
+}
+
+/* a gravação entregou o retrato do quadro (gs_draw.c, desenho_entrega; sem a divisão, antes do frameEnd): o período
+   desde a entrega anterior e, dele, a espera pelo desenho, o tempo sem trabalho (esperando a lista do jogo) e o resto,
+   ocupada; e o que ela fez no quadro. c: desenhos, vértices de CPU, da VU, índices, constantes. */
+extern "C" void Picos_Gravou(unsigned quadro, uint64_t esperaTiques, const uint32_t *c) {
+    static unsigned __int64 ant, xgT;
+    static unsigned xg[3], xgKb, soltas, memMede;
+    unsigned __int64 t = __mftb(), x;
+    PicoG *p = &sPG[quadro % PICOS_N];
+    unsigned i, n;
+    p->q = ~0u;
+    __lwsync();
+    p->per = ant != 0 ? picos_ms(t - ant) : 0.0f;
+    ant = t;
+    p->ocioso = picos_ms(gPicosGOcioso);
+    gPicosGOcioso = 0;
+    p->espDes = picos_ms(esperaTiques);
+    p->espMem = picos_ms(sPicoEspMemTiques);
+    sPicoEspMemTiques = 0;
+    p->ocupada = p->per - p->ocioso - p->espDes;
+    p->qJogo = gPicosQJogo;
+    p->texN = gPicosTexN;
+    p->texKpx = (gPicosTexPx + 500) / 1000;
+    p->texMs = (float)((double)gPicosTexNs / 1e6);
+    p->envios = gPicosEnvios;
+    p->envioKb = (unsigned)(gPicosEnvioBytes >> 10);
+    p->hash = gPicosHash;
+    gPicosTexN = gPicosTexPx = gPicosEnvios = gPicosHash = 0;
+    gPicosTexNs = gPicosEnvioBytes = 0;
+    p->lotes = sPicoLotes;
+    p->press = sPicoPress;
+    p->descN = sPicoDescN;
+    p->esperasMem = sPicoEsperas;
+    sPicoLotes = sPicoPress = sPicoDescN = sPicoEsperas = 0;
+    p->desenhos = c[0];
+    p->verts = c[1];
+    p->vuVerts = c[2];
+    p->vuIdx = c[3];
+    for (i = 0; i < 3; i++) { /* (os que outra thread também toca: por diferença) */
+        n = sPicoXgN[i];
+        p->xg[i] = n - xg[i];
+        xg[i] = n;
+    }
+    n = sPicoXgKb;
+    p->xgKb = n - xgKb;
+    xgKb = n;
+    x = sPicoXgTiques;
+    p->xgMs = picos_ms(x - xgT);
+    xgT = x;
+    n = sPicoSoltas;
+    p->soltas = n - soltas;
+    soltas = n;
+    n = sPicoMemMede;
+    p->memMede = n - memMede;
+    memMede = n;
+    __lwsync();
+    p->q = quadro;
+}
+
+static void WINAPI picos_cb(DWORD k) {
+    sPicoGpu[k] = __mftb();
+    __lwsync();
+}
+
+/* antes do Present: a marca da GPU (o callback roda quando a GPU acabou tudo o que veio antes, numa DPC da thread de
+   hardware 1, como as marcas do BT3_TEMPOS) */
+static void picos_marca(unsigned quadro) {
+    unsigned k = quadro % PICOS_N;
+    sPicoGpu[k] = 0;
+    sPD[k].marca = __mftb();
+    sDev->InsertCallback(D3DCALLBACK_IDLE | D3DCALLBACK_CPU1, picos_cb, k);
+}
+
+static unsigned sPicoHist[5], sPicoQuadros, sPicoJanela, sPicoAcima, sPicoAcimaJogo, sPicoAcimaCap, sPicoPiorQ;
+static unsigned sPicoGpuPend;
+static float sPicoPior;
+static unsigned __int64 sPicoCalTb;
+static LARGE_INTEGER sPicoCalQ;
+
+/* a linha do quadro n (dois atrás do que o desenho acabou de apresentar) e, a cada 60, o resumo */
+static void picos_escreve(unsigned n) {
+    static const PicoJ semJ = {0, 0, 0, 0, 0, 0, 0, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
+    static PicoG semG;
+    unsigned k = n % PICOS_N, b;
+    const PicoD *d = &sPD[k];
+    const PicoJ *j;
+    const PicoG *g;
+    unsigned __int64 gf = sPicoGpu[k], ga = sPicoGpu[(n - 1) % PICOS_N];
+    float per = d->per, gpuFim, gpuPer;
+    if (d->q != n) {
+        return;
+    }
+    if (semG.per == 0.0f) {
+        semG.per = semG.ocupada = semG.espDes = semG.ocioso = semG.espMem = -1.0f;
+    }
+    g = sPG[k].q == n ? &sPG[k] : &semG;
+    /* o lado do jogo pelo quadro do jogo que a gravação recebeu com a lista (os dois contadores andam juntos na luta; sem a
+       gravação, pelo mesmo número) */
+    b = g != &semG ? g->qJogo : n;
+    j = sPJ[b % PICOS_N].q == b ? &sPJ[b % PICOS_N] : &semJ;
+    b = per <= 36.7f ? 0 : per <= 45.0f ? 1 : per <= 58.0f ? 2 : per <= 83.0f ? 3 : 4;
+    sPicoHist[b]++;
+    sPicoQuadros++;
+    sPicoJanela += Passos_Medindo() != 0;
+    if (per > sPicoPior) {
+        sPicoPior = per;
+        sPicoPiorQ = n;
+    }
+    sPicoGpuPend += gf == 0;
+    if (per > (float)gPicos || j->per > (float)gPicos) {
+        sPicoAcima++;
+        sPicoAcimaJogo += j->per > (float)gPicos;
+        sPicoAcimaCap += d->captura != 0;
+        gpuFim = gf != 0 ? picos_ms(gf - d->marca) : -1.0f;
+        gpuPer = gf != 0 && ga != 0 && gf > ga ? picos_ms(gf - ga) : -1.0f;
+        Diario_Escrever("picos: quadro %u (vblank %u)%s%s: apresentação %.1f ms; jogo %.1f (espera da gravação %.1f em %u, "
+                        "vblank %.1f, %u vblanks); gravação %.1f (ocupada %.1f, dela memória %.1f; esperando o desenho %.1f, "
+                        "sem trabalho %.1f); desenho: frame_end %.1f, Present %.1f, cova %.1f, %u repetidas; GPU: fim %.1f "
+                        "depois da CPU, período %.1f",
+                        n, j->vblank, d->captura ? ", CAPTURA" : "", Passos_Medindo() ? ", na janela" : "", per, j->per,
+                        j->espera, j->esperas, j->vb, j->vblanks, g->per, g->ocupada, g->espMem, g->espDes, g->ocioso, d->fim,
+                        d->present, d->cova, d->repete, gpuFim, gpuPer);
+        Diario_Escrever("picos:   quadro %u, o que teve: texturas %u (%u mil pixels, %.1f ms), envios %u (%u KB), hash %u, "
+                        "VU1 %u lotes, desenhos %u, vértices %u de CPU e %u da VU (%u índices); descarte: %u pressões, %u "
+                        "texturas, %u esperas; memória medida %u vezes; XG: %u texturas, %u alvos, %u profundidades (%u KB, "
+                        "%.1f ms), %u soltas; disco %u leituras (%u KB, %.1f ms); diário %u linhas, escritora %.1f ms",
+                        n, g->texN, g->texKpx, g->texMs, g->envios, g->envioKb, g->hash, g->lotes, g->desenhos, g->verts,
+                        g->vuVerts, g->vuIdx, g->press, g->descN, g->esperasMem, g->memMede, g->xg[0], g->xg[1], g->xg[2],
+                        g->xgKb, g->xgMs, g->soltas, j->isoN, j->isoKb, j->isoMs, j->diario, j->discoMs);
+    }
+    if (sPicoQuadros < 60) {
+        return;
+    }
+    {   /* a calibração do mftb contra o QueryPerformanceCounter, no trecho */
+        LARGE_INTEGER qn;
+        unsigned __int64 tb = __mftb();
+        QueryPerformanceCounter(&qn);
+        if (sPicoCalTb != 0 && qn.QuadPart > sPicoCalQ.QuadPart && sFreq.QuadPart != 0) {
+            sPicoTbMs = (double)(tb - sPicoCalTb) / ((double)(qn.QuadPart - sPicoCalQ.QuadPart) * 1000.0 / (double)sFreq.QuadPart);
+        }
+        sPicoCalTb = tb;
+        sPicoCalQ = qn;
+    }
+    Diario_Escrever("picos: resumo, quadro %u: %u quadros (%u na janela), %u acima de %u ms (%u pelo jogo, %u com captura); "
+                    "apresentação até 36,7 ms %u, até 45 %u, até 58 %u, até 83 %u, acima %u; pior %.1f ms no quadro %u; GPU "
+                    "sem chegar à marca em dois quadros %u",
+                    n, sPicoQuadros, sPicoJanela, sPicoAcima, gPicos, sPicoAcimaJogo, sPicoAcimaCap, sPicoHist[0], sPicoHist[1],
+                    sPicoHist[2], sPicoHist[3], sPicoHist[4], sPicoPior, sPicoPiorQ, sPicoGpuPend);
+    memset(sPicoHist, 0, sizeof(sPicoHist));
+    sPicoQuadros = sPicoJanela = sPicoAcima = sPicoAcimaJogo = sPicoAcimaCap = sPicoGpuPend = 0;
+    sPicoPior = 0.0f;
+}
+
+/* logo depois do Present: o período entre duas apresentações de quadro novo */
+static void picos_apresentou(void) {
+    sPicoPresAnt = sPicoPres;
+    sPicoPres = __mftb();
+}
+
+/* no fim do frame_end: o lado do desenho do quadro e a linha do de dois atrás */
+static void picos_desenho(const GsQuadro *q, double msFim, double msPresent, int captura) {
+    static unsigned __int64 covaAnt;
+    static unsigned repAnt;
+    PicoD *p = &sPD[q->quadro % PICOS_N];
+    unsigned __int64 c = sPicoCovaTiques;
+    unsigned r = sPicoRepete;
+    p->per = sPicoPresAnt != 0 ? picos_ms(sPicoPres - sPicoPresAnt) : 0.0f;
+    p->fim = (float)msFim;
+    p->present = (float)msPresent;
+    p->captura = (unsigned)captura;
+    p->cova = picos_ms(c - covaAnt);
+    covaAnt = c;
+    p->repete = r - repAnt;
+    repAnt = r;
+    p->q = q->quadro;
+    picos_escreve(q->quadro - 2);
 }
 
 /* ---- tempos por passada (F5, etapa 8; BT3_TEMPOS, ligado por padrão) ----------------------------------------- */
@@ -710,7 +996,11 @@ static void cova_espera_primeira(void) {
     sDev->SetTexture(0, NULL);
     sDev->SetTexture(1, NULL);
     esquece_estado();
-    xg_espera(sCova[0]);
+    {
+        unsigned __int64 t0 = __mftb();
+        xg_espera(sCova[0]);
+        sPicoCovaTiques += __mftb() - t0;
+    }
     cova_solta(0);
     memmove(sCova, sCova + 1, (sCovaN - 1) * sizeof(sCova[0]));
     memmove(sCovaBytes, sCovaBytes + 1, (sCovaN - 1) * sizeof(sCovaBytes[0]));
@@ -820,6 +1110,7 @@ static unsigned espera_desenho(unsigned precisa, unsigned *livres) {
     const char *antes = (const char *)gGsD3dEtapaGrav;
     DWORD t0 = GetTickCount();
     unsigned n = 0;
+    unsigned __int64 pt0 = __mftb();
     gGsD3dEtapaGrav = "esperando o desenho soltar memória";
     while (*livres < precisa && GetTickCount() - t0 < 100) {
         DWORD r;
@@ -837,6 +1128,7 @@ static unsigned espera_desenho(unsigned precisa, unsigned *livres) {
         }
     }
     sPedeLivre = 0;
+    sPicoEspMemTiques += __mftb() - pt0;
     gGsD3dEtapaGrav = antes;
     return n;
 }
@@ -1941,6 +2233,11 @@ static int d3d_init(void) {
     prof_autoteste();
     nat_init(); /* (F5, etapa 7, segunda parte) */
     tempo_init(); /* (F5, etapa 8) */
+    gPicos = env_num("BT3_PICOS", 0); /* (F5, etapa 8, picos) */
+    if (gPicos != 0) {
+        Diario_Escrever("gs_d3d: picos: o registro dos quadros lentos ligado, limiar %u ms (BT3_PICOS): uma linha por quadro "
+                        "acima dele, dois quadros depois, e um resumo a cada 60", gPicos);
+    }
     Diario_Escrever("gs_d3d: pronto; alvo %dx%d, EDRAM: cor %u + profundidade %u de %u tiles; %u MB livres", TAM, TAM,
                     tilesCor, tilesProf, (unsigned)EDRAM_TILES, mb_livres());
     if (tilesCor + tilesProf > EDRAM_TILES) {
@@ -3285,11 +3582,17 @@ static void frame_end(void) {
     sMostradoTex = mtex;
     tempo_fecha_gpu(capturas != sConta.capturas);
     tempo_poe(T_PRESENT);
+    if (gPicos != 0) {
+        picos_marca(q->quadro); /* (picos: a GPU terminou o quadro) */
+    }
     QueryPerformanceCounter(&tp);
     gGsD3dEtapa = "fim do quadro: Present";
     sDev->Present(NULL, NULL, NULL, NULL);
     sUltimoPresent = GetTickCount();
     msPresent = ms_desde(&tp);
+    if (gPicos != 0) {
+        picos_apresentou();
+    }
     tempo_poe(T_OUTROS);
     Passos_Apresentou(q->quadro, (unsigned)(msPresent * 1000.0));
     gGsD3dEtapa = "fim do quadro: texturas soltas";
@@ -3340,6 +3643,9 @@ static void frame_end(void) {
         Diario_Escrever("gs_d3d: quadro %u (luta): apresentado em %.2f ms (Present %.2f)", q->quadro, msFim, msPresent);
         sPassoAPasso--;
     }
+    if (gPicos != 0) {
+        picos_desenho(q, msFim, msPresent, capturas != sConta.capturas);
+    }
     gGsD3dQuadros++;
     gGsD3dEtapa = q->dividido ? "esperando o retrato seguinte" : "jogo e gravação do quadro";
 
@@ -3371,6 +3677,7 @@ extern "C" int GsD3d_Repete(void) {
         GetTickCount() - sUltimoPresent < 50) {
         return 0;
     }
+    sPicoRepete++;
     gGsD3dEtapa = "repetindo o último quadro (o jogo não entrega)";
     tela_copia(sMostradoTex);
     sDev->Present(NULL, NULL, NULL, NULL);

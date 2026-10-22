@@ -690,3 +690,93 @@ estágio 5 (931 passos de luta). Critério no Deck com tudo certo (21/10).
 Sem queda, sem `CHEIO`, sem textura branca, as 32 texturas pretas de sempre, memória livre mínima 38 MB. A luta ficou a 0,4 ms
 dos 33,37: a meta ainda não fecha com margem, e o p95 (45 ms) mostra os picos. O próximo alvo é o `GsVu1_Unpack` (3 a 4 ms, a cópia
 V4-32 presa à memória, seção 9).
+
+## 11. O registro dos quadros lentos, `BT3_PICOS` (22/10/2026)
+
+Branch `f5-picos`, sobre a main `1ac0a42`. A luta tem mediana de 33,8 ms (seção 10), mas p95 de 45,5 e p99 de 66,4, com
+máximos de centenas de ms: os picos são o que se sente. A medição por família (`BT3_TEMPOS`) custa uns 3 ms (24 mil leituras do
+relógio por quadro) e mede médias de 60 quadros; os picos pedem o contrário: o quadro lento sozinho, com quase nenhum custo.
+Só mede, não muda nada no caminho do quadro.
+
+### O que se mede
+
+Só no 360 (`PORT_X360`; nas outras builds o código pré-processado não muda). Ligado por `BT3_PICOS=L` no `ambiente.txt`, o limiar
+em ms; ausente ou 0, desligado (os contadores inteiros andam sempre, os relógios e as linhas só com o limiar). Por quadro, cada
+thread escreve o seu lado na fronteira dela, numa vaga de um anel de 16 pelo número do quadro do GS:
+
+| Lado | Fronteira | O que guarda | Relógio |
+|---|---|---|---|
+| Jogo (hardware 2) | a entrega da lista (`Port_GsVif1Chain`, antes do `render_post`): `Picos_Jogo` | o período desde a entrega anterior; dele, a espera pela gravação (`render_wait`: o `Port_GsEspera` de todos os pontos, a espera da lista anterior e os envios pelo canal da GIF) e quantas; a espera de vblank (o `gPortSleptNs` que o próprio `Port_GsVif1Chain` lê e zera); os vblanks no período e o `gPortVBlanks`; as leituras do disco (o `ler` do `iso360.c`: quantas, KB, ms) e as linhas do diário desde a entrega anterior (de qualquer thread), com o tempo da escritora no disco (lotes e flushes) | 2 `mftb`, mais 2 por espera de fato |
+| Gravação (hardware 0) | a entrega do retrato (`desenho_entrega`): `Picos_Gravou` | o período desde a entrega anterior; dele, a espera pelo desenho (largar o retrato anterior), o tempo sem trabalho (esperando a lista do jogo, no laço da `render_thread`) e o resto, **ocupada**; dentro de ocupada, a espera por memória (`espera_desenho`, o pedido ao desenho para soltar); o que fez: texturas decodificadas, os pixels e o tempo da decodificação; envios (`transfer_data`) e KB; recálculos do `Gs_PageHash`; lotes da VU1 (o `gGsVu1Lotes` que o `grav_junta` junta); desenhos, vértices de CPU, da VU e índices; do descarte, pressões, texturas descartadas e esperas; as medidas da memória (`GlobalMemoryStatus`); o XG: texturas, alvos e profundidades criados, os KB e o tempo do `XPhysicalAlloc`, e as solturas (`XPhysicalFree`) | 4 `mftb` |
+| Desenho (hardware 3) | o fim do `frame_end` | o período entre duas apresentações de quadro novo (do `mftb` logo depois do `Present`); o `frame_end` inteiro na CPU e o `Present` (os mesmos números do log de 60 quadros); a espera da GPU soltar um recurso da cova (`BlockUntilNotBusy`); as apresentações repetidas (`GsD3d_Repete`) entre dois quadros; se o quadro teve captura | 2 `mftb` |
+| GPU | uma marca antes do `Present` | `InsertCallback(D3DCALLBACK_IDLE \| D3DCALLBACK_CPU1)`, como as marcas do `BT3_TEMPOS`: o callback roda quando a GPU acabou tudo o que veio antes e guarda o `mftb`. Daí o **fim da GPU depois da CPU** (quanto depois de a CPU pôr a marca a GPU terminou o quadro) e o **período da GPU** (entre os fins de dois quadros) | 1 marca por quadro |
+
+**Por que a marca da GPU e não o `Present` sozinho.** O `Present` do 360 só bloqueia quando a fila de comandos está cheia ou a GPU
+está atrasada; o tempo dele mistura as duas coisas. A marca diz quando a GPU acabou o quadro, sem parar a CPU. O custo: a GPU
+esvazia o pipeline uma vez por quadro, no fim dele, onde já está acabando. As cercas comuns (`InsertFence`) só dizem "passou" ou
+"não passou", sem o instante.
+
+O lado do jogo fica na vaga do quadro do jogo (`gGsFrameJogo`); a gravação recebe esse número com a lista (`sJobJogo`, lido ao
+pegar o trabalho) e o guarda, e a linha junta os dois por ele, não por contarem igual. O desenho do quadro N escreve a linha do quadro **N - 2**: os três lados dele já passaram e a GPU já chegou à marca (se não chegou,
+`-1`, e o resumo conta). O relógio do `mftb` é calibrado a cada resumo contra o `QueryPerformanceCounter`. As linhas vão pelo diário
+(um anel em memória; a escritora grava noutra thread, na de hardware 1), **também dentro da janela do `passos`**: o mudo de lá é
+só do resumo de 60 quadros do `gs_d3d` (`log_quadros` consulta o `Passos_Medindo`), e o registro não consulta. O custo de uma linha
+é um `_vsnprintf` de uns 600 bytes na thread de desenho, depois do `Present` e só nos quadros lentos.
+
+### As linhas
+
+```
+gs_d3d: picos: o registro dos quadros lentos ligado, limiar 40 ms (BT3_PICOS): ...
+picos: quadro Q (vblank V)[, CAPTURA][, na janela]: apresentação A ms; jogo J (espera da gravação E em n, vblank B, v vblanks);
+  gravação G (ocupada O, dela memória M; esperando o desenho D, sem trabalho S); desenho: frame_end F, Present P, cova C, r
+  repetidas; GPU: fim X depois da CPU, período Y
+picos:   quadro Q, o que teve: texturas t (p mil pixels, T ms), envios e (K KB), hash h, VU1 l lotes, desenhos d, vértices v de
+  CPU e u da VU (i índices); descarte: p pressões, x texturas, w esperas; memória medida m vezes; XG: a texturas, b alvos, c
+  profundidades (K KB, T ms), s soltas; disco n leituras (K KB, T ms); diário n linhas, escritora T ms
+picos: resumo, quadro Q: 60 quadros (K na janela), N acima de 40 ms (j pelo jogo, c com captura); apresentação até 36,7 ms a,
+  até 45 b, até 58 c, até 83 d, acima e; pior P ms no quadro X; GPU sem chegar à marca em dois quadros g
+```
+
+Tudo em ms, do quadro. As duas primeiras saem juntas quando a **apresentação** (o que se vê) ou o **período do jogo** passa do
+limiar. O resumo sai a cada 60 quadros desenhados; as faixas do histograma são 33 (até 36,7: dois vblanks), 40 (até 45), 50 (até 58:
+três vblanks), 66 (até 83: quatro) e 100 ou mais. Um lado que não chegou à vaga (o jogo fora da thread de gravação, um quadro
+refeito) sai com `-1` nos tempos.
+
+### Como ler
+
+- **Qual thread puxou.** No quadro lento, as três têm o mesmo período (uma espera a outra); a que tem o tempo **próprio** alto é
+  a culpada: o jogo com `J - E - B` alto (o código do jogo, a carga, o disco), a gravação com `ocupada` alta, o desenho com
+  `frame_end` alto, a GPU com `fim X depois da CPU` alto (ou período da GPU acima do da apresentação). Se a gravação passa o
+  tempo `esperando o desenho`, o desenho é o gargalo; se passa `sem trabalho`, o jogo é.
+- **O que veio junto.** A segunda linha diz o que o quadro teve a mais que um quadro comum da luta (perto de 288 envios, 2,5 MB,
+  2,5 mil desenhos, 13 mil vértices de CPU, 54 mil da VU, 129 mil índices; seções 7 e 8): texturas novas (e o tempo de
+  decodificá-las), pressões e esperas do descarte, criações pelo XG (o `XPhysicalAlloc` pode demorar), leituras do disco, um surto
+  de linhas no diário. Um pico com `texturas 40 (… 9 ms)` é decodificação; com `descarte: … 3 esperas` e `memória` alta, é a
+  gravação esperando o desenho soltar memória; com `disco 2 leituras (300 KB, 25 ms)` e o jogo alto, é carga.
+- **A captura.** O `BT3_SHOT=600` captura um quadro a cada 600 (uns 20 s), e cada captura custa de 100 a 200 ms no desenho: um
+  pico artificial. A linha diz `CAPTURA` e o resumo conta à parte; para os percentis do `passos` sem elas, tirar o `BT3_SHOT` numa
+  abertura a mais.
+- **O vblank.** O `vblank V` (o `gPortVBlanks` na entrega) junta a linha ao resto do log; `v vblanks` é quantos o período do jogo
+  levou (2 na luta em dia).
+
+### As provas
+
+- `build_f2.sh` no `2e9df0f` (o código): 317 de 317 fontes sem erro, avisos por fonte iguais aos da main (os do jogo e os do 360),
+  os mesmos 103 stubs, `default.dat` `6d30baaf87b1177fb2359a855f8befc0` e `default.swap` `a7cf723fbfaea860fcc3707ad288e755`,
+  iguais; `default.xex` `5aa16a31153a2b7d36e4bfb4ac0998d7`. No `default.map` não há `__mftb` (em linha) e estão os `Picos_*`.
+- **Fora do 360 nada muda.** O `gcc -E -P` do `gs_core.c`, do `gs_draw.c` e do `gs_vu1.c` nas configurações da x86 plana, da
+  `x86gv` (`-DBT3_TESTE_VU1 -DBT3_GPU_FALSO`) e da `ppcg` (`-DPORT_BIG_ENDIAN -DBT3_GPU_FALSO`) é o mesmo antes (`1ac0a42`) e
+  depois; o mesmo com `-DPORT_X360` sai diferente (o verificador vê a mudança). A `.text` da x86 plana no WSL ficou para depois:
+  o WSL não respondia (sem rota para a máquina) durante o trabalho.
+
+### A build e a rodada no console
+
+`build/x360/f2/default.xex` do worktree `bt3xbx-k`, com o `ambiente.txt` de lá: o da seção 10 (`-BT3_DEMO`, a ISO convertida,
+`BT3_GS=gpu`, os saves `saves19`, piso de 32 MB, teto de textura de 128 MB, `BT3_VU1=1`, `BT3_VU_VERTS=98304`, `BT3_SHOT=600`,
+`BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`, `BT3_TEMPOS=0`) mais `BT3_PICOS=40`. O roteiro: START pula o filme; Duelo, Goku contra
+Kuririn, estágio 5; uns 90 s de luta, com golpes especiais e o voo para frente com o A; a pausa com uns 3 s de espera e a Guide.
+
+O que olhar: (1) a linha `gs_d3d: picos: ... ligado`; (2) a mediana do `passos: janela` contra os 33,8 ms da seção 10 (o custo do
+registro tem de ficar dentro do ruído, uns 0,3 ms); (3) os resumos `picos: resumo` com `60 na janela`, somados, contra o p95 e o
+p99 do `passos`; (4) para cada linha `picos: quadro` na janela, sem `CAPTURA`, qual lado tem o tempo próprio alto e o que o quadro
+teve, agrupando por causa.

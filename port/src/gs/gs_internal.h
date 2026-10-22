@@ -101,6 +101,21 @@ extern double gGsFamTbMs; /* tiques do mftb por ms, do último trecho (gs_draw.c
 /* fecha a parte f e abre a seguinte com a mesma leitura do relógio */
 #define GS_FAM_PASSO(f, t) do { if (gGsFam) { uint64_t t_ = GS_FAM_TIQUE(); gGsFamTiques[f] += t_ - (t); gGsFamVezes[f]++; (t) = t_; } } while (0)
 #endif
+#ifdef PORT_X360
+/* (F5, etapa 8, picos) O registro dos quadros lentos, só no 360: BT3_PICOS=L (o limiar em ms; ausente ou 0, desligado).
+   Por quadro, poucas leituras do mftb por thread e contadores inteiros; o gs_d3d.cpp junta os três lados (o jogo, a
+   gravação e o desenho) num anel por número de quadro e escreve pelo diário uma linha por quadro acima do limiar e um
+   resumo a cada 60 (docs/x360/plano/F5/08-gravacao.md, seção 11). Os contadores andam sempre (um incremento); os
+   relógios só com o limiar. gPicosJ* são do jogo, gPicosG* da gravação. */
+extern unsigned gPicos;                                            /* o limiar em ms; 0 desligado */
+extern unsigned gPicosTexN, gPicosTexPx, gPicosEnvios, gPicosHash; /* texturas decodificadas e pixels, envios, recálculos */
+extern uint64_t gPicosTexNs, gPicosEnvioBytes;                     /* a decodificação (gpu_now, ns), os bytes enviados */
+extern uint64_t gPicosJEspera, gPicosGOcioso; /* mftb: o jogo esperando a gravação; a gravação sem trabalho */
+extern unsigned gPicosJEsperas;
+extern unsigned gPicosQJogo; /* o quadro do jogo (gGsFrameJogo) da lista que a gravação grava agora (gs_core.c) */
+void Picos_Jogo(unsigned quadro, uint64_t vblankNs); /* o jogo entregou a lista do quadro (gs_core.c) */
+void Picos_Gravou(unsigned quadro, uint64_t esperaTiques, const uint32_t *c); /* a gravação entregou (gs_draw.c) */
+#endif
 extern int gGsMainFbp; /* gs_sony.c: o buffer do quadro, escrito pelo jogo no sceGsSwapDBuff */
 #ifdef BT3_GS_ESPERAS
 /* (F5, etapa 8, degrau 2, etapa 2) o gGsMainFbp capturado na entrega da lista (gs_core.c, render_post) e posto pela thread
