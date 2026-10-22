@@ -879,6 +879,20 @@ static int hle_program6(void) {
 static void vu1_call(int addr);
 #endif
 #ifdef PORT_X360
+/* (F5, etapa 8, (d2) da seção 12 da nota da gravação) no 360 o getenv é o Port_GetEnv, uma busca na tabela a cada
+   chamada, e o vu1_call fazia três por lote (uns 5 mil lotes por quadro de luta): as três respostas lidas uma vez, na
+   primeira chamada com a VU1 ligada (o ambiente não muda com o jogo rodando). Fora do 360 cada getenv já se lembra da
+   resposta (gs_internal.h). */
+static const char *sEnvDump, *sEnvCalls, *sEnvInterp;
+#define VU_ENV_DUMP sEnvDump
+#define VU_ENV_CALLS sEnvCalls
+#define VU_ENV_INTERP sEnvInterp
+#else
+#define VU_ENV_DUMP getenv("BT3_VU_DUMP")
+#define VU_ENV_CALLS getenv("BT3_VU_CALLS")
+#define VU_ENV_INTERP getenv("BT3_VU_INTERP")
+#endif
+#ifdef PORT_X360
 
 /* F5, etapa 6: cada chamada contada pela família do programa e pelo caminho que tomou, e o tempo dela */
 void GsVu1_Call(int addr) {
@@ -955,13 +969,16 @@ void GsVu1_Call(int addr) {
         static int on = -1;
         if (on < 0) {
             on = getenv("BT3_VU1") != NULL && atoi(getenv("BT3_VU1")) != 0;
+            sEnvDump = getenv("BT3_VU_DUMP");
+            sEnvCalls = getenv("BT3_VU_CALLS");
+            sEnvInterp = getenv("BT3_VU_INTERP");
         }
         if (!on) {
             return;
         }
     }
 #endif
-    if (getenv("BT3_VU_DUMP") != NULL && (int)gGsFrame == atoi(getenv("BT3_VU_DUMP")) && sProgSize == 127) {
+    if (VU_ENV_DUMP != NULL && (int)gGsFrame == atoi(VU_ENV_DUMP) && sProgSize == 127) {
         static int shown;
         if (shown < 3 && addr < 0) {
             uint32_t q, w[4];
@@ -978,7 +995,7 @@ void GsVu1_Call(int addr) {
             }
         }
     }
-    if (getenv("BT3_VU_CALLS") != NULL) { /* which entry addresses each program is called with (-1 = MSCNT) */
+    if (VU_ENV_CALLS != NULL) { /* which entry addresses each program is called with (-1 = MSCNT) */
         static struct { unsigned size; int addr; unsigned n; } seen[64];
         static unsigned total;
         int k;
@@ -993,7 +1010,7 @@ void GsVu1_Call(int addr) {
             }
         }
     }
-    if (sProgSize == 399 && GsGpu_Enabled() && getenv("BT3_VU_INTERP") == NULL) {
+    if (sProgSize == 399 && GsGpu_Enabled() && VU_ENV_INTERP == NULL) {
         if (addr >= 0) {          /* MSCALF 0: constants only */
             sP4Batches = 0;
             sHle++;
@@ -1011,7 +1028,7 @@ void GsVu1_Call(int addr) {
         run(0);
         vu.pc = 21;
     }
-    if (sProgSize == 451 && GsGpu_Enabled() && getenv("BT3_VU_INTERP") == NULL) {
+    if (sProgSize == 451 && GsGpu_Enabled() && VU_ENV_INTERP == NULL) {
         if (addr >= 0) {          /* MSCALF 0: constants to registers only */
             sP6Batches = 0;
             sHle++;
@@ -1025,7 +1042,7 @@ void GsVu1_Call(int addr) {
         sHle++;
         return;
     }
-    if ((sProgSize == 94 || sProgSize == 104) && GsGpu_Enabled() && getenv("BT3_VU_INTERP") == NULL) {
+    if ((sProgSize == 94 || sProgSize == 104) && GsGpu_Enabled() && VU_ENV_INTERP == NULL) {
         /* MSCALF 0 only loads registers; every MSCNT is one batch */
         if (addr >= 0 || hle_program78(sProgSize == 94 ? 3 : 4)) {
             sHle++;
@@ -1034,7 +1051,7 @@ void GsVu1_Call(int addr) {
         run(0); /* a batch the shader path cannot take: give the interpreter the registers the setup loads */
         vu.pc = sProgSize == 94 ? 15 : 52;
     }
-    if ((sProgSize == 99 || sProgSize == 101) && GsGpu_Enabled() && getenv("BT3_VU_INTERP") == NULL) {
+    if ((sProgSize == 99 || sProgSize == 101) && GsGpu_Enabled() && VU_ENV_INTERP == NULL) {
         /* MSCALF 0 only loads registers; every MSCNT is one batch */
         if (addr >= 0 || hle_program2()) {
             sHle++;
@@ -1043,7 +1060,7 @@ void GsVu1_Call(int addr) {
         run(0); /* a batch the shader path cannot take: give the interpreter the registers the setup loads */
         vu.pc = 16;
     }
-    if (sProgSize == 124 && GsGpu_Enabled() && getenv("BT3_VU_INTERP") == NULL) {
+    if (sProgSize == 124 && GsGpu_Enabled() && VU_ENV_INTERP == NULL) {
         /* MSCALF 0 only loads registers; every MSCNT is one batch */
         if (addr >= 0 || hle_program1()) {
             sHle++;
@@ -1052,7 +1069,7 @@ void GsVu1_Call(int addr) {
         run(0);
         vu.pc = 15;
     }
-    if (sProgSize == 127 && GsGpu_Enabled() && getenv("BT3_VU_INTERP") == NULL) {
+    if (sProgSize == 127 && GsGpu_Enabled() && VU_ENV_INTERP == NULL) {
         /* MSCALF 0 only prepares derived constants (the shader derives them itself); every MSCNT is one batch */
         if (addr >= 0 || hle_program0()) {
             sHle++;
