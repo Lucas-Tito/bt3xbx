@@ -14,7 +14,12 @@
  * uma linha só ("V stat p0=3 p1=0 ..."), e vblanks seguidos que só leram os mesmos estados viram "V-W stat ...".
  * Os players são numerados pela ordem do ADXT_Create (o ponteiro não se compara entre builds). Os endereços da memória
  * do jogo e os da memória do chip são os do PS2, iguais nas duas builds; os da memória do IOP (o IopHeap_Alloc do port
- * é um malloc do host) não: viram "iopN", pela ordem em que aparecem. Sem a variável, nada se grava.
+ * é um malloc do host) não: viram "iopN", pela ordem em que aparecem, e um bloco devolvido (IopHeap_Free, também por
+ * --wrap) sai da tabela: o malloc do host reaproveita o endereço, e o bloco novo no mesmo endereço ganha outro número
+ * (sem isso a PPC com e sem o gravador numeravam o mesmo banco diferente no f5_duelo). Dos RPCs só se gravam os
+ * argumentos que o jogo escreve para aquele número (a tabela argumentos()): o buffer de envio é um só para todos, e o
+ * resto dele é sobra do RPC anterior, gravada como palavra e lida como meia palavra (ou o contrário), que muda com a
+ * ordem dos bytes e com os ponteiros do host e que o SOUNDS.IRX não lê. Sem a variável, nada se grava.
  *
  * Com -DBT3_GRAVADOR (a build --gravador, rede 4) passa por aqui também o relógio do dispositivo gravador
  * (gravador.c, a cada vblank) e os estragos de propósito do controle negativo (BT3_SABOTA): pitch (+100 cents em todo
@@ -280,14 +285,19 @@ static uint32_t crc32(const uint8_t *p, uint32_t n) {
     return ~c;
 }
 
-/* os endereços da memória do IOP, pela ordem em que aparecem */
-#define MAXIOP 256
+/* os endereços da memória do IOP, pela ordem em que aparecem; um bloco devolvido sai da tabela (sVivo 0) */
+#define MAXIOP 4096
 static uint32_t sIop[MAXIOP];
+static uint8_t sVivo[MAXIOP];
 static int sNIop;
 
 static void iop(char *t, uint32_t a) {
     int i;
-    for (i = 0; i < sNIop && sIop[i] != a; i++) {
+    for (i = 0; i < sNIop && !(sVivo[i] && sIop[i] == a); i++) {
+    }
+    if (i == sNIop && sNIop < MAXIOP) {
+        sVivo[sNIop] = 1;
+        sIop[sNIop++] = a;
     }
     if (i == sNIop && sNIop < MAXIOP) {
         sIop[sNIop++] = a;
@@ -296,6 +306,35 @@ static void iop(char *t, uint32_t a) {
         sprintf(t, "iop%d", i);
     } else {
         sprintf(t, "iop?");
+    }
+}
+
+int __real_IopHeap_Free(void *addr);
+int __wrap_IopHeap_Free(void *addr) {
+    uint32_t a = (uint32_t)(uintptr_t)addr;
+    int i;
+    for (i = 0; i < sNIop; i++) {
+        if (sVivo[i] && sIop[i] == a) {
+            sVivo[i] = 0;
+        }
+    }
+    return __real_IopHeap_Free(addr);
+}
+
+/* quantas palavras de 32 bits o jogo escreve no buffer de envio para cada RPC (include/sys/snd.h, src/sys/snd.c);
+   0xD e 0xF têm formato próprio (a fila e as meias palavras), e um número fora da tabela grava as 6 primeiras */
+static int argumentos(int fno) {
+    switch (fno) {
+    case 0x0: case 0x1: case 0x2: case 0x9: case 0xE:
+        return 0; /* sem argumentos: os 4 bytes que vão são sobra */
+    case 0x3:
+        return 4;
+    case 0x4: case 0x5: case 0xA: case 0xC:
+        return 1;
+    case 0x6: case 0x7: case 0xB:
+        return 2;
+    default:
+        return 6;
     }
 }
 
@@ -338,10 +377,22 @@ int __wrap_sceSifCallRpc(void *client, int fno, int mode, void *send, int sendSi
                         c[6], c[7], pitch);
                 evento(t);
             }
+        } else if (fno == 0xF && send != NULL) {
+            /* FIGHTERS: s16 count e count ids de s16 (Snd_RpcSetFighters); o resto dos 0x18 bytes é sobra */
+            const int16_t *h = send;
+            int k, n = h[0];
+            int len = sprintf(t, "rpc 0xf tam %d n %d", sendSize, n);
+            for (k = 0; k < n && k < sendSize / 2 - 1; k++) {
+                len += sprintf(t + len, " %d", h[k + 1]);
+            }
+            evento(t);
         } else {
             int k, n = send != NULL ? sendSize / 4 : 0;
             int len = sprintf(t, "rpc 0x%x tam %d", fno, sendSize);
-            for (k = 0; k < n && k < 6; k++) {
+            if (n > argumentos(fno)) {
+                n = argumentos(fno);
+            }
+            for (k = 0; k < n; k++) {
                 if (fno == 0x3 && k >= 2) { /* SET_BANK: as duas tabelas na memória do IOP */
                     char a[16];
                     iop(a, (uint32_t)w[k]);

@@ -306,7 +306,8 @@ def ligar(alvo, objs):
     # snd_adx.c e o snd_se.c atendem, e o fim de cada vblank
     resto += [f"-Wl,--wrap={s}" for s in ("ADXT_Create", "ADXT_StartAfs", "ADXT_StartFname", "ADXT_Stop", "ADXT_Pause",
                                           "ADXT_SetOutVol", "ADXT_SetOutPan", "ADXT_SetOutputMono", "ADXT_GetStat",
-                                          "sceSifCallRpc", "sceSifSetDma", "func_002967C0", "Port_AdxTick")]
+                                          "sceSifCallRpc", "sceSifSetDma", "func_002967C0", "Port_AdxTick",
+                                          "IopHeap_Free")]
     if alvo.gpu:  # a medida da VU1 (gpu_falso.c, BT3_PERFIL): passam por lá o GsVu1_Call, o Unpack, os três desenhos e o Gs_PageHash
         resto += [f"-Wl,--wrap={s}" for s in ("GsVu1_Call", "GsVu1_Unpack", "GsGpu_Draw", "GsGpu_DrawVu0", "GsGpu_DrawVu4", "GsGpu_DrawVu6", "Gs_PageHash")]
     if alvo.rastreio:
