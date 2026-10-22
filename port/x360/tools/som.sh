@@ -3,9 +3,10 @@
 # (plano/F6/02.md). Um ciclo de emulador por vez: rodar dentro da trava do WSL.
 #   som.sh amostras        rede 3: constrói o teste_som da x86 e da PPC (headless.py --teste-som), faz o censo dos
 #                          cabeçalhos e compara o PCM do port com a referência independente (som.py amostras); depois
-#                          os quatro controles negativos (o c1 mais 1, um byte da amostra do banco, um byte da saída da
-#                          PPC, um byte da saída da x86 logo depois da volta do laço, onde vale a exceção da decisão
-#                          25.10), cada um tem de sair com 1 e dizer o porquê
+#                          os cinco controles negativos (o c1 mais 1, um byte da amostra do banco, um byte da saída da
+#                          PPC, um byte da saída da x86 logo depois da volta do laço, e a saída da x86 depois da volta
+#                          trocada pela variante "continua", o port de antes da decisão 25.10), cada um tem de sair com 1
+#                          e dizer o porquê
 #   som.sh controles NOME  redes 2 e 4: sobre as saídas do roteiros.sh SOM=1 em $O/NOME (o som_a.txt; a x86a refeita
 #                          aqui), o rastro estragado numa cópia (um volume trocado, uma linha a menos) tem de falhar no
 #                          som.py rastro, e a x86a com cada estrago de propósito (BT3_SABOTA=pitch, pan, banco) e uma
@@ -40,9 +41,9 @@ amostras)
     r=$?; sed 's/^/   /' $T/amostras.txt
     [ $r = 0 ] || falhou "rede 3: amostras diferentes (som.py amostras)"
     echo "== rede 3: controles negativos"
-    for e in adx vag ppc laco; do
+    for e in adx vag ppc laco continua; do
         case $e in adx) t="x86 diferente da referência";; vag) t="amostras do banco diferentes";; ppc) t="PPC diferente da x86";;
-            laco) t="depois da volta do laço, x86 diferente";; esac
+            laco|continua) t="depois da volta do laço, x86 diferente";; esac
         deve_falhar "estraga $e" "$t" python3 port/x360/tools/som.py amostras --dados gamedata --x86 $B/x86t/teste_som \
             --ppc $B/ppct/teste_som --tmp $T/controle --estraga $e
     done
