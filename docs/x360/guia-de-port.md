@@ -1578,3 +1578,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Com dois jogos de listas, a falta da troca aparece mesmo sem atraso** (1.582 quadros diferentes no `f5_treino`): a gravação
   zera e reescreve o jogo logo depois de acordar o desenho. No retrato copiado a mesma sabotagem só aparecia com a chave de
   atraso.
+
+### O custo do `Unpack` (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 11)
+
+- **Antes de cortar uma cópia, divida o tempo pelas vezes, não pelos bytes.** O `Unpack` parecia "2 MB a 0,6 GB/s, preso à
+  banda"; dividido pelas chamadas (uns 9 mil por quadro, 264 bytes cada) dá uns 440 ns por chamada, perto de uma falta de memória
+  com página de 4 KB (345 ns): o custo é a primeira linha de cada cópia, e o remédio é pedir adiante, não copiar menos.
+- **O código que o `cl` gerou se lê sem console:** monte o `bin/win32` do XDK no contêiner (`-v $XDK/bin/win32:/xbin:ro`) e rode
+  `wine /xbin/dumpbin.exe /disasm /range:INICIO,FIM build/x360/f2/default.exe`, com os endereços do `default.map` da mesma build
+  (os de outra build não servem). Assim se viu que o `memcpy` do CRT escolhe o caminho pelo alinhamento (8 bytes, 4 bytes ou
+  byte a byte), já faz `dcbt` até 8 linhas adiante só dentro da própria cópia, e que a `vu.mem` está em 4 módulo 8 (o endereço
+  da estrutura sai do `lis`/`addi` do começo da função; variáveis `static` não aparecem no `.map`).
