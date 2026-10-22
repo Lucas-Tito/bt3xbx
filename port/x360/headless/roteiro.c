@@ -1222,6 +1222,133 @@ static unsigned quadro(void) {
     }
 }
 
+/* ------------------------------------------------------------------ o estado do som (F6, etapa 1) */
+
+/* BT3_SOM_ESTADO=N (docs/x360/plano/F6/01.md): o estado dos seis players de som como o jogo o vê, a boca de quem fala
+   e a tela de resultado da História, numa linha "som: ..." a cada mudança e, com N > 0, também a cada N leituras do
+   controle do jogador 1 (para uma tela parada dizer como parou). Com ou sem roteiro; sem a variável, nada. Fora do
+   rastro: a linha não passa pelo diz() (nem pelas âncoras das imagens), e o roteiros.py só lê "tela", "mcflow" e
+   "roteiro:". Também as bandeiras do gerenciador de menus (gProgress->flags; 0x100, MPROG_FREEZE, para as telas).
+   Só lê memória, sem chamar código do jogo além do ADXT_GetStat do port, como a luta acima.
+     players: gAdxPlayerTbl (include/sys/file.h: o handle em +0x10), criados na ordem BGM, MAP, SE0, SE1, VOICE0,
+     VOICE1 (File_InitAdx, src/sys/file.c), então o player i do port é o canal i; o estado contado em vblanks é o
+     gPortAdxView[i] de port/src/plat_sndstate.c (stat 0 parado, 3 tocando, 5 fim; "p" pausado; l, os vblanks até o
+     fim, -1 em laço; a, o arquivo da partição); o ADXT_GetStat, o que o jogo de fato lê, só aparece ("lido") quando
+     difere do contado;
+     boca: gLipSyncWaiting, gLipSync.active e .time (include/battle/view_b.h, src/battle/view_b_c.c: a boca espera o
+     Voice_GetStat(0) == 3 e depois conta um por quadro);
+     resultado da História (tela 8): gHistResult (include/menu/menu_c.h) flags +0x80, state +0x90, seState +0x9C (2
+     espera o StreamSe_GetStat(0) == 5, HistResult_UpdateSe), rewardIdx/rewardCount +0x13C/+0x138, e do flash[0]
+     (+0x18; include/menu/menu_a.h) flags +0x20 (MFLASH_PAD 2: a animação aceita o controle) e trig +0x24. */
+typedef struct { int stat, paused, left, vol, pan[2]; char path[256]; } SomVista; /* PortAdxView, plat_sndstate.c */
+extern int gPortAdxCount;
+extern SomVista gPortAdxView[16];
+extern struct { char *label; int workSize, reloadSct; void *work; void *adxt; } gAdxPlayerTbl[6];
+int ADXT_GetStat(void *adxt);
+extern struct { int active; unsigned char *keys; unsigned short index, count; float time, length; } gLipSync;
+extern int gLipSyncWaiting;
+extern unsigned char *gHistResult;
+#ifdef PORT_X360
+#include <time.h> /* (o clock_gettime do posix360.c: o tempo real de cada linha, só no console) */
+#endif
+#define SOM_CANAIS 6
+#define SOM_CAMPOS 40
+#define TELA_HIST_RESULTADO 8
+
+static int som_i32(const unsigned char *p, int desl) {
+    int v;
+    memcpy(&v, p + desl, 4); /* (ordem do host: o jogo grava estes campos como int) */
+    return v;
+}
+
+/* o número do arquivo do caminho (".../pzs3us2/65151.bin" -> 65151), ou -1 */
+static int som_arquivo(const char *caminho) {
+    const char *b = strrchr(caminho, '/');
+    int n;
+    return b != NULL && sscanf(b + 1, "%d.bin", &n) == 1 ? n : -1;
+}
+
+void Roteiro_SomEstado(void) {
+    static int ligado = -1, periodo;
+    static unsigned leituras, ultima;
+    static int antes[SOM_CAMPOS];
+    static const char *const nomes[SOM_CANAIS] = {"BGM", "MAP", "SE0", "SE1", "V0", "V1"};
+    int agora[SOM_CAMPOS], n = 0, i, mudou, t;
+    char s[700], *p = s;
+    if (ligado < 0) {
+        const char *e = getenv("BT3_SOM_ESTADO");
+        ligado = e != NULL && e[0] != '\0';
+        periodo = ligado ? atoi(e) : 0;
+    }
+    if (!ligado) {
+        return;
+    }
+    leituras++;
+    t = tela_atual();
+    agora[n++] = t;
+    for (i = 0; i < SOM_CANAIS; i++) {
+        const SomVista *v = &gPortAdxView[i];
+        agora[n++] = i < gPortAdxCount ? v->stat : -1;
+        agora[n++] = i < gPortAdxCount ? v->paused : -1;
+        agora[n++] = i < gPortAdxCount ? som_arquivo(v->path) : -1;
+        agora[n++] = gAdxPlayerTbl[i].adxt != NULL ? ADXT_GetStat(gAdxPlayerTbl[i].adxt) : -1;
+    }
+    agora[n++] = gLipSyncWaiting;
+    agora[n++] = gLipSync.active;
+    agora[n++] = gProgress != NULL ? gProgress->flags : -1;
+    if (t == TELA_HIST_RESULTADO && gHistResult != NULL) {
+        agora[n++] = som_i32(gHistResult, 0x80);
+        agora[n++] = som_i32(gHistResult, 0x90);
+        agora[n++] = som_i32(gHistResult, 0x9C);
+        agora[n++] = som_i32(gHistResult, 0x13C);
+        agora[n++] = som_i32(gHistResult, 0x20) & 2;
+        agora[n++] = som_i32(gHistResult, 0x24) & 1;
+    }
+    while (n < SOM_CAMPOS) {
+        agora[n++] = -9;
+    }
+    mudou = memcmp(agora, antes, sizeof(agora)) != 0;
+    if (!mudou && !(periodo > 0 && leituras - ultima >= (unsigned)periodo)) {
+        return;
+    }
+    memcpy(antes, agora, sizeof(agora));
+    ultima = leituras;
+    p += sprintf(p, "som: vblank %u leitura %u tela %d %s |", gPortVBlanks, leituras, t, mudou ? "muda" : "igual");
+    for (i = 0; i < SOM_CANAIS && i < gPortAdxCount; i++) {
+        const SomVista *v = &gPortAdxView[i];
+        int g = gAdxPlayerTbl[i].adxt != NULL ? ADXT_GetStat(gAdxPlayerTbl[i].adxt) : -1;
+        p += sprintf(p, " %s %d%s l%d a%d", nomes[i], v->stat, v->paused ? "p" : "", v->left, som_arquivo(v->path));
+        if (g != v->stat) {
+            p += sprintf(p, " lido%d", g);
+        }
+    }
+    p += sprintf(p, " | boca espera %d ativa %d t %d | menus 0x%x", gLipSyncWaiting, gLipSync.active, (int)gLipSync.time,
+                 gProgress != NULL ? gProgress->flags : -1);
+    if (t == TELA_HIST_RESULTADO && gHistResult != NULL) {
+        sprintf(p, " | resultado flags 0x%x state %d se %d premio %d/%d pad %d trig %d", som_i32(gHistResult, 0x80),
+                som_i32(gHistResult, 0x90), som_i32(gHistResult, 0x9C), som_i32(gHistResult, 0x13C),
+                som_i32(gHistResult, 0x138), (som_i32(gHistResult, 0x20) & 2) != 0, som_i32(gHistResult, 0x24) & 1);
+    }
+#ifdef PORT_X360
+    {
+        /* no console, o tempo real no fim da linha (" | ms N", desde a primeira linha): a duração de uma fala em ms
+           contra a contada em vblanks, a deriva que a decisão 25.1 manda medir. Fora da comparação com o WSL (a
+           nota tira o " | ms N" antes do diff) */
+        static struct timespec t0;
+        struct timespec agora_ts;
+        clock_gettime(CLOCK_MONOTONIC, &agora_ts);
+        if (t0.tv_sec == 0 && t0.tv_nsec == 0) {
+            t0 = agora_ts;
+        }
+        Diario_Escrever("%s | ms %ld", s,
+                        (agora_ts.tv_sec - t0.tv_sec) * 1000L + (agora_ts.tv_nsec - t0.tv_nsec) / 1000000L);
+    }
+#else
+    printf("%s\n", s);
+    fflush(stdout);
+#endif
+}
+
 /* O Port_PadRead das builds com roteiro: 18 bytes como o scePad2Read (botões ativos em 0, analógicos no centro,
    pressões zeradas); 0 sem roteiro, e no jogador 2 (o plat_stub.c preenche o controle parado, como sem janela). */
 int Roteiro_Pad(int socket, unsigned char *data) {
