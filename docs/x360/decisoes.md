@@ -698,7 +698,8 @@ As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md)
     de um arquivo só (10 LSB); medindo os 72 ADX com laço, a diferença depois da volta chega a 3.951 LSB (`65120.bin` e
     `65143.bin`, uns 12% da escala), audível como estalo. O codificador grava o começo do laço contando com o estado de
     lá, então continuar o do fim só serve se fim e começo forem quase iguais. Ainda sem prova contra a CRI; a escuta da
-    etapa 8 confere. A mudança vai no `snd_adx.c` (`plano/F6/02.md`).
+    etapa 8 confere. A mudança está no `snd_adx.c`, e o `som.py` passou a exigir a volta igual à referência
+    (`plano/F6/02.md`, seção 7).
 
 ## 26. 16:9 ligado já, na etapa de desempenho da F5 (22/10/2026)
 

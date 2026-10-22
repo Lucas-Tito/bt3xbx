@@ -1257,6 +1257,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   teste do `headless/` (o rastro de som `som.c` por `--wrap` e o `BT3_SOM_ESTADO` do `roteiro.c`); a etapa 2 comparou os
   objetos um a um (só o `x360_som.o` novo e o `x360_passos.o` do carimbo). Daqui em diante, a prova de que um corte não
   muda a x86 plana compara com a referência nova.
+- **E mudou de novo em 22/10/2026, pela volta do laço do ADX** (decisão 25.10 revista, `plano/F6/02.md`, seção 7): de
+  `ee54716ba7d86744152b9b71e6ac8e500f985d97` para `43444ea4d03a6d448aa1ae74a631e35b356a7caa`. Esta muda o jogo de
+  propósito (o `snd_adx.c`); dos 326 objetos sem a depuração só diferem o `gs_snd_adx.o` e o `x360_passos.o` (carimbo).
+  Uma build da x86 plana que der a `ee54716...` não tem a volta que restaura.
 
 - **Endereço que vem de `malloc` do host não se compara entre builds.** O rastro de som gravava os endereços das tabelas
   do banco na memória do IOP; o `IopHeap_Alloc` do port é um `malloc`, e o rastro da x86 com o gravador saiu diferente do
@@ -1288,6 +1292,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   medida numa música (10 LSB) e virou decisão; com os 72 ADX com laço na amostra deu 3951 LSB. E um verificador que
   pede uma janela fixa precisa do caso menor que a janela (laços de 36 amostras): o `som.py` parou com uma exceção do
   Python, que a rodada contou como "amostras diferentes".
+- **Uma exceção no verificador esconde a variante que ela aceita.** Com a exceção do laço, o `som.py` passava o port que
+  continuava o histórico, e passaria um que o fizesse por engano. Corrigido o port, a exceção sai no mesmo commit e entra um
+  controle com a variante antiga (`--estraga continua`), para o verificador não voltar a aceitá-la calado. E o controle de
+  um caso raro (laço) escolhe arquivos que têm o caso: os quatro primeiros da amostra podiam não ter laço nenhum.
+- **O teste das amostras compila aqui, sem o WSL.** Os cinco fontes do `headless.py --teste-som` saem com o `gcc` do Linux
+  (`-std=gnu99 -DBT3_GRAVADOR -Iport/x360/headless`, sem o `gen/gs`), e o `som.py amostras` roda sobre uma pasta
+  `pzs3us2` de ADX sintéticos (`--n 0`): dá para provar o decodificador e o verificador, inclusive falhando com a versão
+  da `main`, antes da rodada com os dados do jogo.
 
 ### A camada de áudio do 360 (F6, etapa 3, `plano/F6/03.md`)
 
