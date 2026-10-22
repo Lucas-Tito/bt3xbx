@@ -1642,3 +1642,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   compara (o `lis r9,8` do teste de capacidade dos índices, 0x80000, marcou o registrador do `gsVuIdxCount`).
 - **Ao tirar uma variável do laço novo, tire-a da declaração dentro do mesmo `#ifdef`** (a linha de antes no `#else`): uma local sem
   uso é o C4101 do `cl`, e os avisos por fonte deixariam de bater com os da base.
+
+### O tamanho dos alvos em variáveis (F5, etapa 8, 720p, etapa 2, `plano/F5/08-720p.md`, seção 7)
+
+- **O controle de um `gcc -E` tem de mudar um token que sobrevive à expansão.** O primeiro controle do pré-processado trocou `GS_W`
+  por `GS_H` numa cópia do `gs_draw.c` e saiu "igual": as duas valem 1024. Troque um número escrito (`0.5f` por `0.25f`). E o
+  `gs_draw.c` só pré-processa com `-Iport/x360/headless` (o `SDL3/SDL.h` de mentira); sem ele o `gcc` para no include e, com o erro
+  jogado fora, as três configurações dão o mesmo arquivo truncado.
+- **Uma constante de tamanho que vira registrador não muda a conta se o recíproco for potência de 2:** `x / 512.0f` e
+  `x * c14.x` com `c14.x = 2 / 1024` dão o mesmo `float`. Ao trocar um literal de shader por constante, escolha a forma em que o
+  padrão é exato.
+- **Um alvo de tamanho variável com o `gs_draw.c` normalizando por 1024:** o backend leva o uv à textura de verdade no shader (um
+  fator por textura, com os gradientes do `tex2Dgrad`), e o que passa da área sai pela borda preta do amostrador (o Xenos aceita
+  `D3DTADDRESS_BORDER` com a cor 0), que é o que a parte limpa do alvo grande dava. Nada portável muda.
+- **`Clear(0, NULL, ...)` limpa a viewport:** com a superfície da EDRAM do tamanho da área, a limpeza de toda troca de alvo encolhe
+  sem mexer no código dela.
+- **Para trocar um `#define` usado em umas 50 contas, um script com a contagem esperada de cada troca** (o `assert` do número de
+  ocorrências antes de substituir) achou na hora as duas linhas que pareciam iguais e não eram; o `grep` do nome velho no fim
+  confere que nada ficou.
