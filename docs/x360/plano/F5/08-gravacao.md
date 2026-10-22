@@ -1245,3 +1245,180 @@ python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.
    referência.
 2. **A VU1 por dentro** (abertura com medição): os índices perto de 0,3 a 0,5 ms (eram 1,9), o resto das partes como no `f5-estado`.
 3. Nenhum `roteiro: FALHA`, nenhum `vigia:`.
+
+## 17. As texturas novas fora do caminho da gravação: o estudo, a medida e a decodificação por linha (22/10/2026)
+
+Branch `f5-texturas`, sobre a main `193821f`. Os picos da seção 13: uns 13% dos quadros lentos da luta tinham mais de 5 ms de
+texturas novas decodificadas, nos especiais e nas trocas de câmera. Pedido do Lucas: tirar esses engasgos sem nenhum quadro a mais
+de atraso entre o controle e a tela. Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+### O caminho da textura nova [lido]
+
+1. **O `texture_get` (`gs_draw.c`)** procura a textura por `TEX0`, `TEXA` e `gen`. O `gen` é o conteúdo: um hash das páginas de 8 KB
+   que a textura ocupa (`Gs_PageHash`, refeito só depois de um envio tocar a página; o resultado do laço fica numa tabela por `TEX0`
+   enquanto a época das páginas for a mesma) e, com paleta, o `clut_hash` das 16 ou 256 entradas. Acerto: a mesma entrada do
+   desenho anterior (`sLast`) ou o balde. Erro: textura nova.
+2. **O espaço** (só no 360): `GsDraw_X360Abre` pergunta ao backend quanto falta (piso de memória livre, teto das texturas) e só
+   descarta quando falta, as usadas há mais tempo, nunca as dos dois últimos quadros.
+3. **A decodificação**: `malloc` de `w x h x 4` e, **por pixel**, um `vram_rw` da textura (o `switch` do formato, as tabelas de
+   bloco e coluna, o `GS_LE32`), mais um `vram_rw` da paleta (8 e 4 bits) e um `Gs_Expand` (que relê o `TEXA` a cada chamada).
+4. **A criação no backend** (`gs_d3d.cpp`): `tex_create` pelo XG (`XGSetTextureHeader` e `XPhysicalAlloc` de escrita combinada) e
+   `tex_upload`, a cópia linha a linha para a memória da textura e a varredura das pretas (para na primeira cor); `free`.
+
+**O custo no console** [medido, o log dos picos da seção 13, `BT3_PICOS=40`]: a decodificação leva **110 ns por pixel** (quartis 108
+e 114 nos 367 quadros com texturas, muito estável: o custo é por pixel). Nos quadros com mais de 5 ms de texturas, a mediana é 9
+texturas, 77 mil pixels e 8,3 ms; o XG (o `XPhysicalAlloc`) leva 1,4 ms em média nesses quadros, uns 5% da decodificação. Na x86 o
+mesmo laço leva 12,2 ns por pixel dentro do jogo [medido]: o Xenon paga 9 vezes mais pelas duas chamadas e os acessos por pixel.
+
+### A medida no WSL [medido]
+
+A contagem `BT3_TEX_CONTA=arquivo` (`aa9f404`, só nas builds `--gpu` do WSL) escreve uma linha por textura decodificada: o quadro, o
+tamanho, os formatos, a chave do cache, um hash do conteúdo decodificado, o tempo e a conferência da decodificação nova (abaixo).
+O `port/x360/tools/tex_conta.py` separa cada decodificação em: **primeira** (o conteúdo nunca visto), **descartada** (a mesma chave
+já decodificada: a entrada saiu do cache e voltou), **página** (o mesmo `TEX0` e `TEXA`, o mesmo conteúdo, outro `gen`: uma página
+que a textura ocupa mudou sem mudar a textura) e **outro TEX0** (o mesmo conteúdo, já decodificado noutro endereço ou com outra
+paleta igual). O custo no console é estimado pelos pixels a 110 ns.
+
+**`f5_duelo`, `x86gv`, 4:3** (8.380 quadros; a luta, do combate controlável ao KO, nos quadros 4.673 a 7.758 do GS):
+
+| | O roteiro inteiro | A luta |
+|---|---:|---:|
+| Texturas decodificadas | 2.424 | 1.798 |
+| Pixels | 37,8 M | 19,2 M |
+| Quadros com decodificação | 546 | 403 de 3.085 |
+| Primeira vez (dos pixels) | 55,1% | **19,0%** |
+| Página mudou, textura igual | 28,1% | **49,2%** |
+| Outro `TEX0`, textura igual | 16,8% | **31,8%** |
+| Descartada e decodificada de novo | 0 | 0 |
+
+Formatos: 8 bits 1.897 texturas (23,8 M pixels), 4 bits 521 (13,9 M), 32 bits 6 (0,2 M); nenhum de 16 bits nem dos outros.
+Dos "outro `TEX0`", 606 de 699 mudam o `TBP` e o `CBP` juntos: a mesma imagem enviada outra vez a outro endereço, com a paleta.
+
+**Os quadros da luta pela estimativa no console** (quantos quadros em cada faixa de ms de decodificação):
+
+| Faixa | Hoje (110 ns por pixel) | Com a decodificação por linha (uns 10 ns, [estimado]) | Só a primeira vez, hoje |
+|---|---:|---:|---:|
+| até 1 ms | 112 | 384 | 23 (e 345 sem nada) |
+| 1 a 5 ms | 173 | 16 | 22 |
+| 5 a 10 ms | 98 | 2 | 2 |
+| 10 a 20 ms | 3 | 0 | 0 |
+| 20 ms ou mais | 17 | 1 | 11 |
+
+**Onde caem as rajadas** (5 ms ou mais no roteiro inteiro, 177 quadros): 83 no laço de golpes e técnicas depois da pausa, 26 na
+tela de escolha dos lutadores, 12 nos primeiros golpes, 8 na técnica com câmera (o Blast 2), o resto em menus e na carga. O maior da
+luta (4:3) é o **quadro 5.338, o Blast 2**: 65 texturas, **3,2 M pixels (uns 350 ms no console), todas já decodificadas antes com outro
+`TEX0`** (o jogo reenvia o conjunto a outro endereço); depois os quadros 7.015 a 7.017 (557, 282 e 504 mil pixels, todos de página
+mudada) e os 4.976 a 4.980 (291 mil pixels de primeira vez em cada quadro: um efeito que muda a cada quadro).
+
+**Leitura.** A rajada não vem do descarte por uso (zero), e no console o descarte só tira texturas sem uso há milhares de quadros
+(as pressões da seção 13). Quatro quintos dos pixels da luta são imagens que o cache já tinha, com outra chave; o resto, de
+primeira vez, é pouco por quadro, exceto num efeito de cinco quadros. E o custo por pixel do laço é o que transforma qualquer
+rajada em engasgo.
+
+**Em 16:9** (`BT3_WIDE=1`, decisão 26; o mesmo roteiro, a câmera mais aberta) [medido]: a câmera aberta **não traz mais
+texturas**. O roteiro inteiro decodifica 2.410 texturas (contra 2.424 em 4:3); a luta, 1.785 texturas e 18,8 M pixels em 400
+quadros (contra 1.798, 19,2 M e 403), com as mesmas proporções: primeira vez 19,3%, página 48,4%, outro `TEX0` 32,3%, descartada 0.
+
+| Faixa (a luta, 16:9) | Hoje (110 ns por pixel) | Com a decodificação por linha (uns 10 ns, [estimado]) | Só a primeira vez, hoje |
+|---|---:|---:|---:|
+| até 1 ms | 111 | 383 | 23 |
+| 1 a 5 ms | 174 | 15 | 22 |
+| 5 a 10 ms | 97 | 0 | 2 |
+| 10 a 20 ms | 3 | 1 | 0 |
+| 20 ms ou mais | 15 | 1 | 11 |
+
+A diferença está nos quadros da página mudada perto do fim da luta: em 16:9 eles se juntam num só (o 7.017, 18 texturas e 1,08 M
+pixels, uns 120 ms hoje e uns 11 com a decodificação por linha [estimado]), em 4:3 se espalham por três. O Blast 2 é o mesmo
+(quadro 5.338, 65 texturas, 3,2 M pixels de outro `TEX0`).
+
+### As opções
+
+**(d) A decodificação por linha (feita, abaixo).** O laço por pixel trocado por um por linha, com as tabelas do envio (`sIn8`,
+`sIn4`, `sIn32`, `sIn16`: as mesmas contas do `vram_rw`, em páginas) e a paleta lida e expandida uma vez (256 ou 16 entradas). Os
+mesmos pixels. Ganho: todas as decodificações, primeira vez ou não; na x86, de 12,2 para 1,19 ns por pixel dentro do jogo
+[medido], 10 vezes. No `dumpbin` do `.exe` do 360 o laço dos 8 bits tem 12 instruções por pixel, três leituras (a tabela, o byte
+da textura, a paleta na pilha) e uma escrita, sem chamada [lido]; no Xenon, de 110 para uns 8 a 15 ns por pixel com a escrita e a
+cópia para a memória da textura [estimado]: as rajadas de 5 a 10 ms viram menos de 1 ms, e o Blast 2 de uns 350 para uns 30 ms.
+Risco: baixo (a conferência pixel a pixel em cada textura dos roteiros, nas duas ordens de byte). Não muda nada fora do
+`texture_get` nem o momento em que a textura fica pronta: nenhum atraso.
+
+**(a) Um cache pelo conteúdo da origem** (o próximo passo, se a rodada do console mostrar que vale). Hoje a chave é `TEX0` + `gen`
+das páginas; a proposta é, no erro, calcular uma segunda chave só do que a decodificação lê (os blocos da textura, não as páginas
+inteiras; o `clut_hash` da paleta; o formato, o tamanho e o `TEXA`) e, se ela já existe, **reusar o `GsTex`** sem decodificar nem
+criar. Pega a "página" (49%) e o "outro `TEX0`" (32%) da luta, inclusive o Blast 2 inteiro. Custo: um hash dos bytes da textura no
+erro (64 KB num 256 x 256 de 8 bits, perto de 1 ns por byte [estimado], contra 7 ms de decodificação hoje). Risco: médio. Duas
+entradas apontando o mesmo recurso pedem contagem de referências no descarte por uso (`GsDraw_X360Abre`), na varredura do cache
+cheio e na fila de liberação do desenho; e as listas do `gpu_falso` mudam de propósito (o número de texturas novas e os índices
+dos recursos entram no hash), então a prova é a lista normalizada (`BT3_GPU_NORMAL`, que tira o que depende de quantas texturas se
+decodificaram) mais o hash do conteúdo de cada desenho. Com (d) feita, o que sobra para (a) são uns 30 ms no Blast 2 e uns 5 ms
+nos quadros 7.015 a 7.017 [estimado].
+
+**(b) Decodificar adiantado.** No envio (`transfer_data`) não serve: o envio não sabe o formato, a paleta nem o tamanho com que a
+página será lida (vêm no `TEX0` do desenho), a mesma página serve a várias texturas, e o jogo reenvia uns 2,5 MB por quadro de
+luta, quase tudo igual ao que já estava (seções 7 e 8): decodificar no envio custaria mais que hoje. Numa thread com folga (a de
+hardware 1, a do diário, quase parada) daria sem atraso: a gravação só precisa do `GsTex` para gravar o desenho, e os pixels só
+na thread de desenho, que desenha a lista depois de a gravação acabar. A gravação copiaria os blocos da origem (a VRAM muda com os
+envios seguintes do mesmo quadro), criaria o recurso e entregaria a decodificação; o desenho esperaria a decodificação daquela
+textura antes do primeiro desenho com ela. Ganho: o que (d) deixar, sem passar do quadro. Risco: alto (uma thread, a cópia, a
+espera do desenho, a posse do recurso no descarte). Só se (d) e (a) não bastarem.
+
+**(c) Espalhar** o que não fica pronto (desenhar um quadro sem a textura, ou com a anterior) muda a imagem: não serve.
+
+### O protótipo: a decodificação por linha sob `BT3_TEX_RAPIDA`
+
+| Commit | O quê |
+|---|---|
+| `5d504a9` | `Gs_TexDecode` (`gs_core.c`, em `BT3_GS_ESPERAS`): a textura inteira uma linha por vez com as tabelas do envio e a paleta expandida uma vez; 8 e 4 bits com qualquer paleta, 32 e 16 bits (o `Gs_Expand` dos 16 bits com o `TEXA` lido uma vez); os outros formatos devolvem 0 e ficam com o laço. No `texture_get`, `BT3_TEX_RAPIDA=1` (lida uma vez) a usa; **desligada por padrão**; o laço de antes inteiro no `#else` (o `TEX_LACO` vira `!replaced`, o mesmo texto de antes) |
+| `aa9f404` | A contagem `BT3_TEX_CONTA` e o `tex_conta.py` (acima). A conferência: com a chave desligada, cada textura decodificada pelo laço é decodificada outra vez pelo `Gs_TexDecode` noutro buffer e comparada byte a byte |
+
+**As provas no WSL** [medido]. Serviço `claude-tex`, script `~/tex/rodada-tex.sh`, resumo `~/tex/provas.resumo`, num worktree
+próprio (`~/bt3xbx-tex`, do pacote `tex.bundle`), cada passo pesado dentro do `flock ~/wsl.lock`; o clone ficou em `f5-pingpong`,
+sem alterados.
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `ee54716ba7d86744152b9b71e6ac8e500f985d97` na main (`193821f`) e no `aa9f404`, a mesma (a referência da main) |
+| Teste de unidade (VRAM aleatória, 1.500 texturas de 1 a 256 de lado, os cinco formatos, `TBW` 0 a 16, `TEXA` e paleta sorteados): o `Gs_TexDecode` contra o laço | 0 diferentes na x86 e **0 na PPC de verdade** (`powerpc-linux-gnu-gcc -static` no `qemu-ppc`). Na x86 com `-DPORT_BIG_ENDIAN` dá 1.179 diferentes: ali o `GS_LE32` troca os bytes mas a memória segue little-endian, e o caminho por byte dos 8 e 4 bits (o mesmo do envio) não é simulado; só a PPC prova a ordem dos bytes |
+| A conferência em cada textura dos roteiros (chave desligada) | `f5_duelo` 2.424 de 2.424 iguais e `f5_treino` 1.242 de 1.242, na `x86gv` e na `ppcg`, sem e com as duas threads |
+| Listas, `BT3_TEX_RAPIDA=0` contra `1`, `x86gv` e `ppcg`, `f5_duelo` (8.380 quadros) e `f5_treino` (7.386), sem e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1` | os 8 pares com `divergencias.py` saindo 0; hashes `08a98b6d05b8775a` e `f76f0f6849b64629` na `x86gv`, `994627a2aecd429a` e `f76f0f6849b64629` na `ppcg` (os de sempre); 0 desenhos com textura já solta |
+| O mesmo em 16:9 (`BT3_WIDE=1`): os 8 pares, e a conferência | os 8 pares com `divergencias.py` saindo 0; hashes `9f85962173d0bd7f` (`x86gv`) e `53f776da4b2d1e3f` (`ppcg`) no `f5_duelo`, `e74bbb9ad3627bdb` nas duas no `f5_treino`; conferência 2.410 de 2.410 e 1.191 de 1.191 iguais nas duas builds. (A lista de 16:9 difere da de 4:3, como deve: a projeção muda) |
+| Sabotagem: os meios bytes trocados nos 4 bits do `Gs_TexDecode`, `x86gv`, `f5_duelo` | a conferência acusa **510 texturas** diferentes (as de 4 bits); com a chave ligada, a lista difere em **141 quadros** (a seção 0, a das texturas: o `fake_tex_upload` do `gpu_falso` hasheia os pixels enviados), hash `25b75fa7a48d391a`, `divergencias.py` sai 1 |
+| O git do worktree no fim | 0 alterados (a sabotagem desfeita e a `x86gv` refeita) |
+
+O `f5_treino`, para comparar [medido]: 1.242 texturas, 28,4 M pixels em 257 quadros; primeira vez 62,1% dos pixels, página 24,0%,
+outro `TEX0` 13,9%, descartada 0; 95 quadros com 5 ms ou mais estimados, 30 deles depois da técnica.
+
+**A build do 360** (`build_f2.sh` no `aa9f404`, carimbo sem diferença): 317 de 317 fontes sem erro, os avisos por fonte iguais aos
+da main (993, arquivo por arquivo), os mesmos 103 stubs, `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap`
+`abbd7589c8425797c4a2639068c9bf54` iguais; **`default.xex` `d18e4dcd2541dc984dae9454ad85eb9e`**. O `Gs_TexDecode` em
+`0x8217f720` no `default.map`; o laço dos 8 bits no `dumpbin` (acima). A contagem não entra no 360 (só `BT3_GPU_FALSO`).
+
+### A rodada no console proposta
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-tex`: `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
+`port/x360/roteiros/`), `ambiente_t0.txt` (`BT3_TEX_RAPIDA=0`, saves `saves_tx0`) e `ambiente_t1.txt` (`BT3_TEX_RAPIDA=1`, saves
+`saves_tx1`), os dois como o `ambiente_picos.txt` da main (o `f5_duelo` pelo roteiro, `BT3_TEMPOS=0`, `BT3_PICOS=36`,
+`BT3_WIDE=1`, decisão 26); o `ambiente.txt` é a cópia do `ambiente_t0.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_t0.txt build/x360/f2/ambiente_t1.txt
+# abertura 1 (chave desligada); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_t1.txt
+# abertura 2 (chave ligada); baixar o log de novo
+```
+
+**O que olhar:**
+
+1. **Os nanossegundos por pixel** nas linhas `picos:   quadro ..., texturas t (p mil pixels, T ms)`: uns 110 na abertura 1, de 8 a
+   15 na 2 [estimado]. Se ficar acima de 30, o custo é a escrita no `malloc` novo ou a cópia para a memória da textura, não o laço.
+2. **O p99 e o pior quadro** do `passos: janela` da luta (as duas janelas) contra a abertura 1; a mediana não deve mudar (as texturas
+   pesam nos picos). Pelo WSL, das rajadas de 5 ms ou mais da luta (uns 118 quadros) devem sobrar umas 3 [estimado].
+3. Nos picos, os quadros que ainda tiverem `texturas` acima de 5 ms: o Blast 2 (65 texturas, uns 3,2 M pixels) é o candidato a (a).
+4. Os passos por janela e o resultado iguais aos da referência; nenhum `roteiro: FALHA`, nenhum `vigia:`; a imagem igual (a
+   conferência do WSL já prova os pixels).
+
+**Recomendação.** Ligar a decodificação por linha por padrão se a rodada confirmar o custo por pixel (o que se espera: o mesmo
+resultado em menos instruções, sem nada novo entre as threads). Depois, se o Blast 2 e os quadros de página mudada ainda passarem
+de 5 ms, o cache pelo conteúdo da origem (a). A thread auxiliar (b) só se as duas não bastarem.
