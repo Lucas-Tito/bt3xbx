@@ -1306,7 +1306,7 @@ Dos "outro `TEX0`", 606 de 699 mudam o `TBP` e o `CBP` juntos: a mesma imagem en
 
 **Onde caem as rajadas** (5 ms ou mais no roteiro inteiro, 177 quadros): 83 no laço de golpes e técnicas depois da pausa, 26 na
 tela de escolha dos lutadores, 12 nos primeiros golpes, 8 na técnica com câmera (o Blast 2), o resto em menus e na carga. O maior da
-luta é o **quadro 5.338, o Blast 2**: 65 texturas, **3,2 M pixels (uns 350 ms no console), todas já decodificadas antes com outro
+luta (4:3) é o **quadro 5.338, o Blast 2**: 65 texturas, **3,2 M pixels (uns 350 ms no console), todas já decodificadas antes com outro
 `TEX0`** (o jogo reenvia o conjunto a outro endereço); depois os quadros 7.015 a 7.017 (557, 282 e 504 mil pixels, todos de página
 mudada) e os 4.976 a 4.980 (291 mil pixels de primeira vez em cada quadro: um efeito que muda a cada quadro).
 
@@ -1315,7 +1315,21 @@ mudada) e os 4.976 a 4.980 (291 mil pixels de primeira vez em cada quadro: um ef
 primeira vez, é pouco por quadro, exceto num efeito de cinco quadros. E o custo por pixel do laço é o que transforma qualquer
 rajada em engasgo.
 
-ESPAÇO-WIDE
+**Em 16:9** (`BT3_WIDE=1`, decisão 26; o mesmo roteiro, a câmera mais aberta) [medido]: a câmera aberta **não traz mais
+texturas**. O roteiro inteiro decodifica 2.410 texturas (contra 2.424 em 4:3); a luta, 1.785 texturas e 18,8 M pixels em 400
+quadros (contra 1.798, 19,2 M e 403), com as mesmas proporções: primeira vez 19,3%, página 48,4%, outro `TEX0` 32,3%, descartada 0.
+
+| Faixa (a luta, 16:9) | Hoje (110 ns por pixel) | Com a decodificação por linha (uns 10 ns, [estimado]) | Só a primeira vez, hoje |
+|---|---:|---:|---:|
+| até 1 ms | 111 | 383 | 23 |
+| 1 a 5 ms | 174 | 15 | 22 |
+| 5 a 10 ms | 97 | 0 | 2 |
+| 10 a 20 ms | 3 | 1 | 0 |
+| 20 ms ou mais | 15 | 1 | 11 |
+
+A diferença está nos quadros da página mudada perto do fim da luta: em 16:9 eles se juntam num só (o 7.017, 18 texturas e 1,08 M
+pixels, uns 120 ms hoje e uns 11 com a decodificação por linha [estimado]), em 4:3 se espalham por três. O Blast 2 é o mesmo
+(quadro 5.338, 65 texturas, 3,2 M pixels de outro `TEX0`).
 
 ### As opções
 
@@ -1367,7 +1381,7 @@ sem alterados.
 | Teste de unidade (VRAM aleatória, 1.500 texturas de 1 a 256 de lado, os cinco formatos, `TBW` 0 a 16, `TEXA` e paleta sorteados): o `Gs_TexDecode` contra o laço | 0 diferentes na x86 e **0 na PPC de verdade** (`powerpc-linux-gnu-gcc -static` no `qemu-ppc`). Na x86 com `-DPORT_BIG_ENDIAN` dá 1.179 diferentes: ali o `GS_LE32` troca os bytes mas a memória segue little-endian, e o caminho por byte dos 8 e 4 bits (o mesmo do envio) não é simulado; só a PPC prova a ordem dos bytes |
 | A conferência em cada textura dos roteiros (chave desligada) | `f5_duelo` 2.424 de 2.424 iguais e `f5_treino` 1.242 de 1.242, na `x86gv` e na `ppcg`, sem e com as duas threads |
 | Listas, `BT3_TEX_RAPIDA=0` contra `1`, `x86gv` e `ppcg`, `f5_duelo` (8.380 quadros) e `f5_treino` (7.386), sem e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1` | os 8 pares com `divergencias.py` saindo 0; hashes `08a98b6d05b8775a` e `f76f0f6849b64629` na `x86gv`, `994627a2aecd429a` e `f76f0f6849b64629` na `ppcg` (os de sempre); 0 desenhos com textura já solta |
-| ESPAÇO-WIDE-LISTAS |
+| O mesmo em 16:9 (`BT3_WIDE=1`): os 8 pares, e a conferência | os 8 pares com `divergencias.py` saindo 0; hashes `9f85962173d0bd7f` (`x86gv`) e `53f776da4b2d1e3f` (`ppcg`) no `f5_duelo`, `e74bbb9ad3627bdb` nas duas no `f5_treino`; conferência 2.410 de 2.410 e 1.191 de 1.191 iguais nas duas builds. (A lista de 16:9 difere da de 4:3, como deve: a projeção muda) |
 | Sabotagem: os meios bytes trocados nos 4 bits do `Gs_TexDecode`, `x86gv`, `f5_duelo` | a conferência acusa **510 texturas** diferentes (as de 4 bits); com a chave ligada, a lista difere em **141 quadros** (a seção 0, a das texturas: o `fake_tex_upload` do `gpu_falso` hasheia os pixels enviados), hash `25b75fa7a48d391a`, `divergencias.py` sai 1 |
 | O git do worktree no fim | 0 alterados (a sabotagem desfeita e a `x86gv` refeita) |
 
