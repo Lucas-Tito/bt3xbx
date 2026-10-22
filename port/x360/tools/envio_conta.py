@@ -5,9 +5,9 @@ Lê o arquivo do BT3_ENVIO_CONTA (uma linha por chamada do transfer_data, gs_cor
 a posição no começo, os bytes, ns, os pixels que foram pelo envio por colunas) e, se vier, o log da rodada (as linhas
 "gpu_falso: quadro N" e "roteiro: seq 3" / "roteiro: seq 4", que dão os quadros do combate). Diz, no roteiro inteiro e no
 combate: as chamadas, os envios (as chamadas que começam um retângulo), os bytes, o tempo e os ns por byte de cada formato;
-quanto dos bytes de 8 e de 4 bits cabe no envio por colunas (o retângulo alinhado às colunas: tx e tw múltiplos de 16 nos
-8 bits, de 32 nos 4 bits; e as faixas de 4 linhas inteiras dentro de um pedaço); e a média por quadro do combate e nos
-quadros mais pesados dele.
+quanto dos bytes de 32 bits cabe no envio por linhas de cache (BT3_ENVIO_RAPIDO: tx e tw múltiplos de 8, e as faixas de 4
+linhas inteiras alinhadas a 4 dentro de um pedaço) e quanto foi por ele; e a média por quadro do combate e nos quadros mais
+pesados dele.
 
   envio_conta.py CONTA [LOG] [--pesados 10]
 """
@@ -33,18 +33,19 @@ def combate(log):
                 ini = q
             elif linha.startswith("roteiro: seq 4") and ini is not None and fim is None:
                 fim = q - 1
+    if ini is not None and fim is None:
+        fim = q  # (o f5_treino não tem o anúncio do fim: até o último quadro do log)
     return ini, fim
 
 
 def faixas_possiveis(psm, tx, ty, tw, th, tpos, n):
-    """os pixels deste pedaço que caem em faixas de 4 linhas inteiras do envio por colunas (a mesma regra do transfer_data)"""
-    larg = 16 if psm == 0x13 else 32
-    if psm not in (0x13, 0x14) or tx % larg or tw % larg:
+    """os pixels deste pedaço que caem em faixas de 4 linhas inteiras do envio por linhas (a mesma regra do transfer_data)"""
+    if psm != 0x00 or tx % 8 or tw % 8:
         return 0
     total, fim, k, i = tw * th, min(tpos + n, tw * th), 0, tpos
     while i < fim:
         col, y = i % tw, ty + i // tw
-        if col == 0 and y % 4 == 0 and fim - i >= 4 * tw and total - i >= 4 * tw and (psm == 0x13 or (i - tpos) % 2 == 0):
+        if col == 0 and y % 4 == 0 and fim - i >= 4 * tw and total - i >= 4 * tw:
             k += 4 * tw
             i += 4 * tw
         else:
@@ -95,12 +96,12 @@ def main():
         tb = sum(e["bytes"] for e in t.values()) or 1
         tn = sum(e["ns"] for e in t.values()) or 1
         print(f"== {nome}" + (f" ({nq} quadros)" if nq else ""))
-        print("   formato    chamadas  envios      bytes  %bytes  ns/byte  %tempo  cabe nas colunas  foi pelas colunas")
+        print("   formato    chamadas  envios      bytes  %bytes  ns/byte  %tempo  cabe nas linhas  foi pelas linhas")
         for psm in sorted(t, key=lambda p: -t[p]["bytes"]):
             e = t[psm]
             pxb = max(e["px"], 1)
             print(f"   {NOMES.get(psm, hex(psm)):9s} {e['chamadas']:9d} {e['envios']:7d} {e['bytes']:10d} {100 * e['bytes'] / tb:6.1f}%"
-                  f" {e['ns'] / max(e['bytes'], 1):8.3f} {100 * e['ns'] / tn:6.1f}%  {100 * e['pode_px'] / pxb:15.1f}%  {100 * e['faixas_px'] / pxb:16.1f}%")
+                  f" {e['ns'] / max(e['bytes'], 1):8.3f} {100 * e['ns'] / tn:6.1f}%  {100 * e['pode_px'] / pxb:14.1f}%  {100 * e['faixas_px'] / pxb:15.1f}%")
         print(f"   total     {sum(e['chamadas'] for e in t.values()):9d} {sum(e['envios'] for e in t.values()):7d} {tb:10d}"
               f"          {tn / tb:8.3f}")
         if nq:

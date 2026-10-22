@@ -1,13 +1,15 @@
 /*
- * (F5, etapa 8, gravação: docs/x360/plano/F5/08-gravacao.md, seção 18) O teste do envio por colunas
- * (BT3_ENVIO_RAPIDO, o envio_faixa8 e o envio_faixa4 do port/src/gs/gs_core.c) contra o vram_rw, pixel a pixel.
+ * (F5, etapa 8, gravação: docs/x360/plano/F5/08-gravacao.md, seção 18) O teste do envio de 32 bits por linhas de cache
+ * (BT3_ENVIO_RAPIDO, o envio_faixa32 do port/src/gs/gs_core.c) contra o vram_rw, pixel a pixel.
  *
  *   teste_envio [N]        N envios sorteados (1500 por padrão); sai com 0 só se todos deram a mesma VRAM
- *   teste_envio --mede     o tempo do transfer_data por byte, chave desligada contra ligada, nos envios que o jogo faz
+ *   teste_envio --mede     o tempo do transfer_data por byte, chave 0, 1 e 2, nos tamanhos que o jogo envia
  *
- * Cada envio sorteado (o formato, dbp, dbw, o retângulo, alinhado às colunas ou não, e os pedaços IMAGE em que os dados
- * chegam, múltiplos de 16 bytes) parte da mesma VRAM aleatória e roda três vezes: a referência, um vram_rw de escrita por
- * pixel na ordem do envio, e o transfer_data com a chave desligada e ligada. As três VRAMs têm de sair iguais byte a byte.
+ * Cada envio sorteado (o formato, dbp, dbw, o retângulo, alinhado às linhas de cache ou não, e os pedaços IMAGE em que os
+ * dados chegam, múltiplos de 16 bytes) parte da mesma VRAM aleatória e roda quatro vezes: a referência, um vram_rw de
+ * escrita por pixel na ordem do envio, e o transfer_data com a chave em 0, 1 e 2. As VRAMs têm de sair iguais byte a byte.
+ * Compilado com -DBT3_TESTE_ENVIO, o dcbz128 do 360 vira um memset da linha de 128 bytes: uma linha zerada e não escrita
+ * inteira aparece como diferença.
  * (Os de 24 bits vão num pedaço só: o transfer_data conta os pixels a partir do começo de cada pedaço, e um pixel de 3
  * bytes partido entre dois pedaços de 16 sai errado, com ou sem a chave; o jogo não envia 24 bits, envio_conta.py.)
  * Roda na x86 (-DBT3_TESTE_VU1) e na PPC de verdade (powerpc-linux-gnu-gcc -static -DPORT_BIG_ENDIAN, no qemu-ppc):
@@ -61,13 +63,13 @@ static uint32_t pixel_de(const uint8_t *d, uint32_t bits, uint32_t k) {
 }
 
 static int mede(void) {
-    /* os envios que pesam na luta (envio_conta.py, seção 18): texturas de 8 e de 4 bits inteiras, alinhadas */
-    static const struct { uint32_t psm, tw, th; } c[] = {{0x13, 128, 128}, {0x13, 256, 256}, {0x14, 128, 128}, {0x14, 256, 256}, {0x00, 128, 128}};
+    /* os envios que pesam na luta (envio_conta.py, seção 18): PSMCT32 em 0,0, os tamanhos mais comuns */
+    static const struct { uint32_t psm, tw, th; } c[] = {{0x00, 128, 64}, {0x00, 128, 128}, {0x00, 256, 256}, {0x00, 512, 128}, {0x00, 64, 32}};
     uint32_t k, r, v;
     for (k = 0; k < sizeof(c) / sizeof(c[0]); k++) {
         uint32_t bytes = c[k].tw * c[k].th * (uint32_t)Gs_PsmBits(c[k].psm) / 8, vezes = (64u << 20) / bytes;
-        double ns[2];
-        for (v = 0; v < 2; v++) {
+        double ns[3];
+        for (v = 0; v < 3; v++) {
             struct timespec t0, t1;
             sEnvioRapido = (int)v;
             clock_gettime(CLOCK_MONOTONIC, &t0);
@@ -77,15 +79,15 @@ static int mede(void) {
             clock_gettime(CLOCK_MONOTONIC, &t1);
             ns[v] = ((double)(t1.tv_sec - t0.tv_sec) * 1e9 + (double)(t1.tv_nsec - t0.tv_nsec)) / ((double)vezes * bytes);
         }
-        printf("mede psm %02x %ux%u (%u bytes): %.3f ns por byte com a chave desligada, %.3f ligada (%.1f vezes)\n", (unsigned)c[k].psm,
-               (unsigned)c[k].tw, (unsigned)c[k].th, (unsigned)bytes, ns[0], ns[1], ns[0] / ns[1]);
+        printf("mede psm %02x %ux%u (%u bytes): ns por byte com a chave 0 %.3f, 1 %.3f, 2 %.3f\n", (unsigned)c[k].psm,
+               (unsigned)c[k].tw, (unsigned)c[k].th, (unsigned)bytes, ns[0], ns[1], ns[2]);
     }
     return 0;
 }
 
 int main(int argc, char **argv) {
-    static const uint32_t psms[] = {0x13, 0x14, 0x13, 0x14, 0x00, 0x02, 0x0A, 0x01, 0x1B, 0x24, 0x2C};
-    uint32_t i, n = 1500, ruins[2] = {0, 0}, porpsm[64], faixas = 0;
+    static const uint32_t psms[] = {0x00, 0x00, 0x00, 0x00, 0x13, 0x14, 0x02, 0x0A, 0x01, 0x1B, 0x24, 0x2C};
+    uint32_t i, n = 1500, ruins[3] = {0, 0, 0}, porpsm[64], faixas = 0;
     memset(porpsm, 0, sizeof(porpsm));
     tables_init();
     for (i = 0; i < (1u << 20); i++) {
@@ -102,7 +104,7 @@ int main(int argc, char **argv) {
     }
     for (i = 0; i < n; i++) {
         uint32_t psm = psms[sorteia() % (sizeof(psms) / sizeof(psms[0]))], bits = (uint32_t)Gs_PsmBits(psm);
-        uint32_t larg = psm == 0x14 ? 32 : 16, dbp = 1 + sorteia() % 0x3FFF, dbw = sorteia() % 17, tx, ty, tw, th, bytes, k, v;
+        uint32_t larg = 8, dbp = 1 + sorteia() % 0x3FFF, dbw = sorteia() % 17, tx, ty, tw, th, bytes, k, v;
         int alinhado = sorteia() % 4 != 0;
         if (sorteia() % 5 == 0) {
             dbw = sorteia() % 2; /* bw >> 1 == 0: as linhas de páginas se sobrepõem */
@@ -131,20 +133,20 @@ int main(int argc, char **argv) {
             vram_rw(dbp, dbw, psm, tx + k % tw, ty + k / tw, 1, pixel_de(sDados, bits, k));
         }
         memcpy(sRef, sVram, sizeof(sVram));
-        for (v = 0; v < 2; v++) {
+        for (v = 0; v < 3; v++) {
             uint32_t semente = sSemente;
             memcpy(sVram, sBase, sizeof(sVram));
             sEnvioRapido = (int)v;
             envia(psm, dbp, dbw, tx, ty, tw, th, sDados, bytes, (int)(i & 1) && bits != 24);
-            if (v == 0) {
-                sSemente = semente; /* os mesmos pedaços nas duas */
+            if (v < 2) {
+                sSemente = semente; /* os mesmos pedaços nas três */
             }
             if (memcmp(sVram, sRef, sizeof(sVram)) != 0) {
                 uint32_t w = 0;
                 while (sVram[w] == sRef[w]) {
                     w++;
                 }
-                if (ruins[0] + ruins[1] < 8) {
+                if (ruins[0] + ruins[1] + ruins[2] < 8) {
                     printf("DIFERE chave %u: psm %02x dbp %x dbw %u em %u,%u %ux%u, %u bytes; a primeira palavra %x: %08x contra %08x\n",
                            (unsigned)v, (unsigned)psm, (unsigned)dbp, (unsigned)dbw, (unsigned)tx, (unsigned)ty, (unsigned)tw,
                            (unsigned)th, (unsigned)bytes, (unsigned)w, (unsigned)sVram[w], (unsigned)sRef[w]);
@@ -153,7 +155,7 @@ int main(int argc, char **argv) {
             }
         }
         porpsm[psm]++;
-        if (alinhado && (psm == 0x13 || psm == 0x14) && th >= 4) {
+        if (alinhado && psm == 0x00 && th >= 4) {
             faixas++;
         }
     }
@@ -163,7 +165,7 @@ int main(int argc, char **argv) {
             printf(" %02x:%u", (unsigned)i, (unsigned)porpsm[i]);
         }
     }
-    printf("; %u de 8 ou 4 bits alinhados às colunas\n", (unsigned)faixas);
-    printf("%u envios, %u diferentes com a chave desligada, %u com ela ligada\n", (unsigned)n, (unsigned)ruins[0], (unsigned)ruins[1]);
-    return ruins[0] + ruins[1] != 0;
+    printf("; %u de 32 bits alinhados às linhas de cache\n", (unsigned)faixas);
+    printf("%u envios, diferentes com a chave 0: %u, 1: %u, 2: %u\n", (unsigned)n, (unsigned)ruins[0], (unsigned)ruins[1], (unsigned)ruins[2]);
+    return ruins[0] + ruins[1] + ruins[2] != 0;
 }

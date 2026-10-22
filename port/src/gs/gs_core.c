@@ -93,7 +93,13 @@ static unsigned sStat[8]; /* per frame: DMA tags, VIF codes, DIRECT quadwords, G
    pixel lives depends on its format: pages of 32 blocks, blocks in a format-specific order inside the page,
    "columns" inside the block. The tables are the hardware's; the two indexed ones are generated from their first
    column (odd columns exchange the two halves of every group of eight). ---- */
+#ifdef PORT_X360
+/* (F5, etapa 8, gravação, seção 18) alinhada a 128 bytes, uma linha de cache: o envio de 32 bits zera a linha inteira
+   (dcbz128) antes de escrevê-la */
+static uint32_t sVram[1 << 20] __attribute__((aligned(128)));
+#else
 static uint32_t sVram[1 << 20];
+#endif
 static const uint8_t kBlock32[4][8] = {{0, 1, 4, 5, 16, 17, 20, 21}, {2, 3, 6, 7, 18, 19, 22, 23}, {8, 9, 12, 13, 24, 25, 28, 29}, {10, 11, 14, 15, 26, 27, 30, 31}};
 static const uint8_t kBlock16[8][4] = {{0, 2, 8, 10}, {1, 3, 9, 11}, {4, 6, 12, 14}, {5, 7, 13, 15}, {16, 18, 24, 26}, {17, 19, 25, 27}, {20, 22, 28, 30}, {21, 23, 29, 31}};
 static const uint8_t kBlock16S[8][4] = {{0, 2, 16, 18}, {1, 3, 17, 19}, {8, 10, 24, 26}, {9, 11, 25, 27}, {4, 6, 20, 22}, {5, 7, 21, 23}, {12, 14, 28, 30}, {13, 15, 29, 31}};
@@ -842,53 +848,58 @@ static void transfer_begin(void) {
 }
 
 #ifdef BT3_GS_ESPERAS
-/* (F5, etapa 8, gravação: docs/x360/plano/F5/08-gravacao.md, seção 18) O envio de 8 e de 4 bits por colunas, sob
-   BT3_ENVIO_RAPIDO=1. Uma coluna do GS são 4 linhas alinhadas a 4 (16 pixels de 8 bits ou 32 de 4 bits) em 64 bytes
-   seguidos do bloco, e cada palavra dela junta pixels de duas linhas: nos 8 bits, a palavra 4g + 2a + e (g de 0 a 3, a de
-   0 a 1, e de 0 a 1) tem nos seus 4 bytes os pixels xa e xa + 8 da linha a e xb e xb + 8 da linha a + 2, com
-   xa = (2g + e) ^ 4p e xb = xa ^ 4 (p: a coluna ímpar dentro do bloco, que troca as metades, o x ^ 4 do sCol8); nos 4
-   bits, a mesma palavra tem nos seus 8 meios bytes os pixels xa + 8j (os pares) e xb + 8j (os ímpares), j de 0 a 3 (o
-   kCol4First). Com as 4 linhas da coluna no pacote, cada palavra se monta inteira dos bytes de origem e se grava uma
-   vez: nos 8 bits uma escrita de 4 bytes no lugar de quatro de 1, nos 4 bits uma no lugar de oito leituras e oito
-   escritas de 1 byte (o meio byte relido e regravado). O começo da coluna é a tabela do envio (sIn8, sIn4) sem os 6 (7)
-   bits de dentro da coluna, e a máscara da volta dos 4 MB vale para a coluna inteira (64 bytes alinhados). Os mesmos
-   bytes nos mesmos lugares que o laço por pixel; a ordem só muda dentro de uma faixa de 4 linhas, onde nenhum par de
-   pixels cai no mesmo byte (as páginas de uma linha são distintas). */
-static int sEnvioRapido = -1; /* BT3_ENVIO_RAPIDO, lida uma vez; desligada por padrão até o console */
+/* (F5, etapa 8, gravação: docs/x360/plano/F5/08-gravacao.md, seção 18) O envio de 32 bits por linhas de cache, sob
+   BT3_ENVIO_RAPIDO. O jogo envia tudo em PSMCT32 (as texturas de 8 e de 4 bits vão como imagens de 32 bits já arrumadas,
+   o comentário do começo), uns 2,5 MB por quadro de combate, e no 360 esse envio custa uns 2,6 ns por byte contra uns
+   0,13 na x86: o tempo é da memória (a origem fria, e cada linha de destino lida antes de ser escrita), não das contas.
+   Uma linha de 128 bytes da VRAM no PSMCT32 é meio bloco: 8 pixels de largura por 4 linhas alinhadas a 4 (as colunas 0
+   e 1 ou 2 e 3 do bloco, kCol32). Numa faixa de 4 linhas inteiras do retângulo, cada grupo de 8 pixels alinhado a 8
+   enche uma linha inteira: no 360 ela é zerada antes (dcbz128: a linha fica no cache sem ser lida da memória) e escrita
+   em seguida, e a origem da faixa seguinte é pedida antes (dcbt), para as faltas dela correrem juntas. A linha r da
+   faixa vai às palavras (r / 2) * 16 + (r % 2) * 2 + {0, 1, 4, 5, 8, 9, 12, 13} da linha de cache. As cópias seguem de 4
+   bytes (a origem só é garantidamente alinhada a 4). Os mesmos bytes nos mesmos lugares que o laço por grupos; a ordem
+   só muda dentro de uma faixa, onde nenhum par de pixels cai na mesma palavra. BT3_ENVIO_RAPIDO=1: as faixas com o dcbt
+   e o dcbz128; 2: sem o dcbz128 (para separar os dois na medida); 0 ou ausente: o laço por grupos de antes. */
+static int sEnvioRapido = -1; /* lida uma vez; desligada por padrão até o console */
+#if defined(PORT_X360)
+void __dcbt(int offset, const void *base);  /* os intrínsecos do cl (os mesmos do ppcintrinsics.h), em linha */
+void __dcbz128(int offset, void *base);
+#define ENVIO_PEDE(o, b) __dcbt((int)(o), (b))
+#define ENVIO_ZERA(d) __dcbz128(0, (d))
+#elif defined(BT3_TESTE_ENVIO)
+#define ENVIO_PEDE(o, b) ((void)(o), (void)(b))
+#define ENVIO_ZERA(d) memset((d), 0, 128) /* (o teste_envio.c: a linha zerada tem de sair inteira escrita) */
+#else
+#define ENVIO_PEDE(o, b) ((void)(o), (void)(b))
+#define ENVIO_ZERA(d) ((void)(d))
+#endif
 
-static void envio_faixa8(const uint8_t *s, uint32_t tw, uint32_t dbp, uint32_t bw, uint32_t x, uint32_t y) {
-    const uint16_t *in = sIn8[y & 63];
-    uint32_t base = (dbp + (y >> 6) * 32 * (bw >> 1)) << 8, fim = x + tw, par = (y >> 2) & 1, k;
+/* s: a origem da faixa (4 linhas de tw pixels seguidas); pede: os bytes da origem a pedir antes, a partir de s (a faixa
+   seguinte, e esta também na primeira faixa de um pedaço); zera: 1 com o dcbz128 */
+static void envio_faixa32(const uint8_t *s, const uint8_t *pede_de, uint32_t pede, uint32_t tw, uint32_t dbp, uint32_t bw,
+                          uint32_t x, uint32_t y, int zera) {
+    const uint16_t *in = sIn32[y & 31];
+    uint32_t base = (dbp + (y >> 5) * 32 * bw) << 6, fim = x + tw, lin = tw * 4, o, r;
 
-    for (; x < fim; x += 16, s += 16) {
-        uint32_t *d = &sVram[((base + ((x >> 7) << 13) + (in[x & 127] & ~63u)) & 0x3FFFFF) >> 2];
-        uint32_t *lo = par ? d + 8 : d, *hi = par ? d : d + 8; /* lo: xa de 0 a 3; hi: de 4 a 7 */
-        const uint8_t *s0 = s, *s1 = s + tw, *s2 = s + 2 * tw, *s3 = s + 3 * tw;
-        for (k = 0; k < 4; k++) { /* k = 2g + e dentro da metade; a palavra 4g + e, e + 2 com a = 1 */
-            uint32_t w = (k >> 1) * 4 + (k & 1);
-            lo[w] = GS_LE32(s0[k] | s2[k + 4] << 8 | s0[k + 8] << 16 | (uint32_t)s2[k + 12] << 24);
-            lo[w + 2] = GS_LE32(s1[k] | s3[k + 4] << 8 | s1[k + 8] << 16 | (uint32_t)s3[k + 12] << 24);
-            hi[w] = GS_LE32(s0[k + 4] | s2[k] << 8 | s0[k + 12] << 16 | (uint32_t)s2[k + 8] << 24);
-            hi[w + 2] = GS_LE32(s1[k + 4] | s3[k] << 8 | s1[k + 12] << 16 | (uint32_t)s3[k + 8] << 24);
-        }
+    for (o = 0; o < pede; o += 128) {
+        ENVIO_PEDE(o, pede_de);
     }
-}
-
-static void envio_faixa4(const uint8_t *s, uint32_t tw, uint32_t dbp, uint32_t bw, uint32_t x, uint32_t y) {
-    const uint16_t *in = sIn4[y & 127];
-    uint32_t base = (dbp + (y >> 7) * 32 * (bw >> 1)) << 9, fim = x + tw, lin = tw >> 1, par2 = ((y >> 2) & 1) * 2, g, a;
-
-    for (; x < fim; x += 32, s += 16) {
-        uint32_t *d = &sVram[(((base + ((x >> 7) << 14) + (in[x & 127] & ~127u)) >> 1) & 0x3FFFFF) >> 2];
-        for (a = 0; a < 2; a++) {
-            const uint8_t *ra = s + a * lin, *rb = s + (a + 2) * lin;
-            for (g = 0; g < 4; g++) { /* os bytes de origem dos pixels xa + 8j (a linha a) e xb + 8j (a linha a + 2) */
-                uint32_t ia = g ^ par2, ib = ia ^ 2;
-                uint32_t la = ra[ia] | ra[ia + 4] << 8 | ra[ia + 8] << 16 | (uint32_t)ra[ia + 12] << 24;
-                uint32_t lb = rb[ib] | rb[ib + 4] << 8 | rb[ib + 8] << 16 | (uint32_t)rb[ib + 12] << 24;
-                d[4 * g + 2 * a] = GS_LE32((la & 0x0F0F0F0Fu) | (lb & 0x0F0F0F0Fu) << 4);    /* e = 0: os meios baixos */
-                d[4 * g + 2 * a + 1] = GS_LE32((la >> 4 & 0x0F0F0F0Fu) | (lb & 0xF0F0F0F0u)); /* e = 1: os altos */
-            }
+    for (; x < fim; x += 8, s += 32) {
+        uint32_t *d = &sVram[(base + ((x >> 6) << 11) + (in[x & 63] & ~31u)) & 0xFFFFF];
+        if (zera) {
+            ENVIO_ZERA(d);
+        }
+        for (r = 0; r < 4; r++) {
+            const uint8_t *sr = s + r * lin;
+            uint32_t *dr = d + (r >> 1) * 16 + (r & 1) * 2;
+            memcpy(dr, sr, 4);
+            memcpy(dr + 1, sr + 4, 4);
+            memcpy(dr + 4, sr + 8, 4);
+            memcpy(dr + 5, sr + 12, 4);
+            memcpy(dr + 8, sr + 16, 4);
+            memcpy(dr + 9, sr + 20, 4);
+            memcpy(dr + 12, sr + 24, 4);
+            memcpy(dr + 13, sr + 28, 4);
         }
     }
 }
@@ -899,7 +910,8 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
     uint32_t bits, total, i;
 #ifdef BT3_GS_ESPERAS
     uint64_t famT;
-    int faixas; /* o envio por colunas serve a este envio (o formato e o alinhamento do retângulo) */
+    int faixas; /* o envio por linhas de cache serve a este envio (o formato e o alinhamento do retângulo) */
+    uint32_t primeira = 1;
 #endif
 #if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
     static FILE *sEnvioConta;
@@ -918,7 +930,7 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
 #if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
     /* (F5, etapa 8, gravação, seção 18; só nas builds --gpu do WSL) BT3_ENVIO_CONTA=arquivo: uma linha por chamada (um
        pedaço IMAGE de um envio): o quadro, o formato, dbp, dbw, o retângulo, a posição no começo, os bytes, o tempo em ns
-       e os pixels que foram pelo envio por colunas. O envio_conta.py soma por formato e por alinhamento. */
+       e os pixels que foram pelo envio por linhas de cache. O envio_conta.py soma por formato e por alinhamento. */
     if (!sEnvioContaLida) {
         sEnvioContaLida = 1;
         if (getenv("BT3_ENVIO_CONTA") != NULL) {
@@ -968,10 +980,15 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
     i = 0;
 #ifdef BT3_GS_ESPERAS
     if (sEnvioRapido < 0) {
-        sEnvioRapido = getenv("BT3_ENVIO_RAPIDO") != NULL && atoi(getenv("BT3_ENVIO_RAPIDO")) != 0;
+        sEnvioRapido = getenv("BT3_ENVIO_RAPIDO") != NULL ? atoi(getenv("BT3_ENVIO_RAPIDO")) : 0;
+        if (sEnvioRapido == 1 && ((uintptr_t)sVram & 127) != 0) {
+            sEnvioRapido = 2; /* (a VRAM fora da linha: o dcbz128 zeraria o vizinho) */
+        }
+        if (sEnvioRapido != 1 && sEnvioRapido != 2) {
+            sEnvioRapido = 0;
+        }
     }
-    faixas = sEnvioRapido && ((dpsm == 0x13 && (gs.tx & 15) == 0 && (gs.tw & 15) == 0) ||
-                              (dpsm == 0x14 && (gs.tx & 31) == 0 && (gs.tw & 31) == 0));
+    faixas = sEnvioRapido != 0 && dpsm == 0x00 && (gs.tx & 7) == 0 && (gs.tw & 7) == 0;
 #endif
     if (dpsm == 0x00 || dpsm == 0x02 || dpsm == 0x0A || dpsm == 0x13 || dpsm == 0x14) {
         uint32_t bw = dbw ? dbw : 1, count = bytes * 8 / bits;
@@ -980,14 +997,17 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
         while (i < count && gs.tpos < total) {
             uint32_t col = gs.tpos % gs.tw, y = gs.ty + gs.tpos / gs.tw, x = gs.tx + col, run = gs.tw - col, j;
 #ifdef BT3_GS_ESPERAS
-            /* uma faixa de 4 linhas inteiras, começando numa linha de coluna, toda neste pedaço e no retângulo */
-            if (faixas && col == 0 && (y & 3) == 0 && count - i >= 4 * gs.tw && total - gs.tpos >= 4 * gs.tw &&
-                (dpsm == 0x13 || (i & 1) == 0)) {
-                if (dpsm == 0x13) {
-                    envio_faixa8(p + i, gs.tw, dbp, bw, x, y);
-                } else {
-                    envio_faixa4(p + (i >> 1), gs.tw, dbp, bw, x, y);
+            /* uma faixa de 4 linhas inteiras, começando numa linha alinhada a 4, toda neste pedaço e no retângulo */
+            if (faixas && col == 0 && (y & 3) == 0 && count - i >= 4 * gs.tw && total - gs.tpos >= 4 * gs.tw) {
+                uint32_t resto = (count - i) * 4, pede = 8 * gs.tw * 4; /* esta (na primeira) e a seguinte */
+                if (pede > resto) {
+                    pede = resto;
                 }
+                if (!primeira) { /* só a seguinte: esta já foi pedida */
+                    pede = pede > 4 * gs.tw * 4 ? pede - 4 * gs.tw * 4 : 0;
+                }
+                envio_faixa32(p + i * 4, p + i * 4 + (primeira ? 0 : 4 * gs.tw * 4), pede, gs.tw, dbp, bw, x, y, sEnvioRapido == 1);
+                primeira = 0;
                 i += 4 * gs.tw;
                 gs.tpos += 4 * gs.tw;
 #ifdef BT3_GPU_FALSO
