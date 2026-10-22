@@ -35,7 +35,15 @@ static struct {
     struct { uint32_t cycle, value; } clipQueue[8];
     int clipHead, clipCount;
     uint32_t pc;                        /* in instructions */
+#ifdef PORT_X360
+    /* (F5, etapa 8, (d1) da seção 12 da nota da gravação) alinhada a 128 bytes, uma linha de cache: sem isso ela caía
+       no deslocamento 668 da estrutura, em 4 módulo 8, e o memcpy do CRT, que escolhe a largura pelo alinhamento da
+       origem e do destino, copiava de 4 em 4 bytes no Unpack e na cópia dos vértices para o gsVuVerts */
+    uint8_t mem[0x4000] __attribute__((aligned(128)));
+    uint8_t micro[0x4000];
+#else
     uint8_t mem[0x4000], micro[0x4000];
+#endif
     /* VIF1 side */
     uint32_t top, tops, base, ofst, dbf, itop, itops, mode, mask, cl, wl, row[4], col[4];
 } vu;
