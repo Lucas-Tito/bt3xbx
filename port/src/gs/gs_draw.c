@@ -162,19 +162,38 @@ static void jogo_usa(int k) {
    um trecho em ordem crescente (base + i + k, com i e k crescendo), então o menor é o primeiro do trecho e o maior o último;
    quando o trecho se junta ao desenho anterior (same_state), a faixa é a união das duas. Um desenho sem índices fica com a
    faixa vazia (menor 0xFFFFFFFF, maior 0), que não muda a união. A tabela é do jogo (sJogos), como as listas: o desenho lê a
-   do retrato entregue e a gravação escreve na do outro. */
-static void vu_faixa(uint32_t n, uint32_t first, uint32_t count, int junta) {
-    uint32_t lo = 0xFFFFFFFFu, hi = 0;
-    if (count != 0) {
-        lo = gsVuIdx[first];
-        hi = gsVuIdx[first + count - 1];
-    }
+   do retrato entregue e a gravação escreve na do outro. (BT3_VU1_DIRETO) O primeiro e o último índice do trecho vêm de quem
+   os gerou (lo e hi), não relidos da lista: com a chave, ela fica em memória de escrita combinada, que a CPU lê devagar; o
+   mesmo valor (o BT3_VU_PLANO_CONFERE confere a faixa contra os índices relidos). */
+static void vu_faixa(uint32_t n, uint32_t lo, uint32_t hi, int junta) {
     if (junta) {
         if (sVuFaixa[2 * n] < lo) lo = sVuFaixa[2 * n];
         if (sVuFaixa[2 * n + 1] > hi) hi = sVuFaixa[2 * n + 1];
     }
     sVuFaixa[2 * n] = lo;
     sVuFaixa[2 * n + 1] = hi;
+}
+/* o primeiro e o último índice de um trecho cujos triângulos com a marca no terceiro vértice não saem (o GsGpu_DrawVu6 e os
+   destroços do GsGpu_DrawVu0): o primeiro triângulo sem marca começa em base + i, o último acaba em base + i + 2. Lê a marca
+   dos vértices de entrada (a memória da VU), não os índices gravados. Só se chama com algum triângulo gravado. */
+static void vu_faixa_marcas(const float *v, uint32_t passo, uint32_t count, uint32_t base, uint32_t *lo, uint32_t *hi) {
+    uint32_t i, flag;
+    *lo = 0xFFFFFFFFu;
+    *hi = 0;
+    for (i = 0; i + 2 < count; i++) {
+        memcpy(&flag, &v[(i + 2) * passo + 3], 4);
+        if (!(flag & 0xFFFF)) {
+            *lo = base + i;
+            break;
+        }
+    }
+    for (i = count - 2; i-- > 0;) {
+        memcpy(&flag, &v[(i + 2) * passo + 3], 4);
+        if (!(flag & 0xFFFF)) {
+            *hi = base + i + 2;
+            break;
+        }
+    }
 }
 #endif
 
@@ -1541,7 +1560,7 @@ static int same_state_vu(const GsDraw *a, const GsDraw *b) {
            a->misc[2] == b->misc[2] && a->misc[3] == b->misc[3] && a->blendc == b->blendc && iguais32(a->rect, b->rect, 4) &&
            iguais32(a->orig, b->orig, 4) && iguais32(a->scissor, b->scissor, 4);
 }
-static void vu_fecho(GsDraw *d, const Vu0Uniform *pu) {
+static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) {
     GsDraw *last;
     gsTargets[d->target].draws++;
     gsTargets[d->target].gen = gGsPageGen[gsTargets[d->target].fbp & 511];
@@ -1550,7 +1569,7 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu) {
     EST_CONTA_FECHO(last, d, pu);
 #endif
     if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
-        vu_faixa(gsDrawCount - 1, d->first, d->count, 1);
+        vu_faixa(gsDrawCount - 1, lo, hi, 1);
         last->count += d->count;
 #ifdef PORT_X360
         GS_VU_MARCA(GS_FAM_V_FECHO);
@@ -1558,7 +1577,7 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu) {
         return;
     }
     d->uniform = (int)gsVuUniCount++; /* (pu é a vaga gsVuUni[gsVuUniCount]) */
-    vu_faixa(gsDrawCount, d->first, d->count, 0);
+    vu_faixa(gsDrawCount, lo, hi, 0);
     gsDraws[gsDrawCount++] = *d;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
@@ -1585,7 +1604,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
 #endif
     float us, vs;
 #ifdef BT3_GS_ESPERAS
-    uint32_t i, flag; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+    uint32_t i, flag, lo, hi; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
 #else
     uint32_t i, k, flag;
 #endif
@@ -1677,7 +1696,8 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     }
 #endif
 #ifdef BT3_GS_ESPERAS
-    vu_fecho(&d, pu);
+    vu_faixa_marcas(vertices, 16, count, gsVuVertCount - count, &lo, &hi); /* (d.count > 0: voltou acima sem triângulo) */
+    vu_fecho(&d, pu, lo, hi);
 #else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
@@ -1719,7 +1739,7 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 #endif
     float us, vs;
 #ifdef BT3_GS_ESPERAS
-    uint32_t i; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+    uint32_t i, lo, hi; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
 #else
     uint32_t i, k;
 #endif
@@ -1792,7 +1812,9 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     }
 #endif
 #ifdef BT3_GS_ESPERAS
-    vu_fecho(&d, pu);
+    lo = gsVuVertCount - count; /* (todos os triângulos da tira: do primeiro vértice ao último) */
+    hi = gsVuVertCount - 1;
+    vu_fecho(&d, pu, lo, hi);
 #else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
@@ -1834,7 +1856,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
 #endif
     float us, vs;
 #ifdef BT3_GS_ESPERAS
-    uint32_t i; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+    uint32_t i, lo, hi; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
 #else
     uint32_t i, k;
 #endif
@@ -1929,7 +1951,16 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     }
 #endif
 #ifdef BT3_GS_ESPERAS
-    vu_fecho(&d, pu);
+    if (d.count == 0) { /* (os destroços todos marcados: a faixa vazia) */
+        lo = 0xFFFFFFFFu;
+        hi = 0;
+    } else if (layer == 4) {
+        vu_faixa_marcas(vertices, 12, count, gsVuVertCount - count, &lo, &hi);
+    } else {
+        lo = gsVuVertCount - count;
+        hi = gsVuVertCount - 1;
+    }
+    vu_fecho(&d, pu, lo, hi);
 #else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
