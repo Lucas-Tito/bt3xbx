@@ -699,3 +699,17 @@ As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md)
     `65143.bin`, uns 12% da escala), audível como estalo. O codificador grava o começo do laço contando com o estado de
     lá, então continuar o do fim só serve se fim e começo forem quase iguais. Ainda sem prova contra a CRI; a escuta da
     etapa 8 confere. A mudança vai no `snd_adx.c` (`plano/F6/02.md`).
+
+## 26. 16:9 ligado já, na etapa de desempenho da F5 (22/10/2026)
+
+O Lucas decidiu ligar a imagem 16:9 (o `BT3_WIDE` do port de PC, estudo em `plano/F8/16x9.md`) agora, durante a etapa 8 da
+F5, em vez de deixá-la para a F8: as otimizações de desempenho passam a ser medidas com a carga do 16:9 (a câmera mais aberta
+mostra mais objetos), e a resolução maior (o 720p adiado) vem depois. Escolhas:
+
+1. **Filmes:** esticados para 16:9, sem barras (preferência do Lucas).
+2. **Menus:** esticados, como no PC.
+3. **HUD:** estreitado como no PC; na escala 1 ele perde definição (uma coluna em quatro ou borrado), aceito por enquanto;
+   a cura (uma escala horizontal de 1,5) vem com a resolução maior.
+4. **A escolha** vem do `ambiente.txt` (`BT3_WIDE=1`) por enquanto; o ajuste de vídeo do painel do console como padrão fica
+   para depois.
+5. **As medições** de desempenho (os roteiros no console e no WSL) passam a usar `BT3_WIDE=1` dos dois lados.
