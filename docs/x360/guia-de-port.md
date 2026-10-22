@@ -1862,3 +1862,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   decodificação errada nos 4 bits mudou 141 quadros. Mesmo assim, uma conferência por textura (a decodificação nova refeita noutro
   buffer contra a de antes, `BT3_TEX_CONTA`) diz qual textura e qual formato, e vale para os quadros em que a textura errada não
   chegaria a ser desenhada.
+
+### A espera de vblank e a tela (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 18)
+
+- **Antes de ler uma global como acumulado, procure todos os que a escrevem.** O `passos.c` tirava a espera de vblank do passo
+  pela diferença do `gPortSleptNs` entre duas leituras do controle, mas o `gs_core.c` zera essa global a cada entrega da lista:
+  a espera saía 0 e o "trabalho" de todas as rodadas da F5 era o intervalo inteiro (média 33,37 ms por construção). Ninguém viu
+  porque o número parecia plausível. Um medidor que lê por diferença precisa de um contador dele, que só cresce.
+- **Meça a apresentação onde a tela troca, não na CPU depois do `Present`.** Com `D3DPRESENT_INTERVAL_ONE` a imagem entra no
+  vblank de hardware; o instante em que o `Present` volta na CPU tem a fase do relógio do jogo, não a do vídeo. A callback de
+  vblank do D3D (`SetVerticalBlankCallback`) diz por `D3DVBLANKDATA.Swap` qual troca está na tela: quantos vblanks cada imagem
+  ficou, contados ali, são o que a pessoa vê.
+- **Callback de vblank (e de troca) roda numa DPC**: só `Interlocked*`, `SetEvent` e afins com handle válido, sem float, sem
+  espera, sem o dispositivo. Guarde o `mftb`, some inteiros, sinalize um evento que nunca se fecha (assim ele segue válido numa
+  queda) e tire a callback antes de soltar o dispositivo (`SetVerticalBlankCallback(NULL)`, pela dona).

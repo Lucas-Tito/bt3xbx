@@ -59,6 +59,31 @@ unsigned gPortVBlanks; /* vertical blanks since start: the headless build's cloc
    the menus (60 frames per second) and two in a battle (30), as on the console. Headless runs do not wait. */
 extern int GsGpu_Enabled(void);
 PORT_HOST unsigned long long gPortSleptNs = 0; /* time spent waiting here (the renderer's frame timing subtracts it) */
+#ifdef PORT_X360
+/* (F5, etapa 8; docs/x360/plano/F5/08-gravacao.md, seção 18) A espera de vblank para a medida por passo
+   (port/x360/headless/passos.c), que lê por diferença: o gPortSleptNs acima o gs_core.c zera a cada entrega da lista, e
+   o passos lia nele uma espera acumulada que não existia. Estes só crescem (menos o pior atraso, que o passos zera por
+   passo):
+     gPortVBlankEsperaNs   o tempo esperado aqui desde o boot;
+     gPortVBlankEsperas    as esperas de fato (não as puladas por atraso), e delas gPortVBlankPeloHw as que acabaram no
+                           vblank de hardware (o evento da callback do gs_d3d.cpp; as outras, no Sleep);
+     gPortVBlankAtrasadas  as que acordaram 1 ms ou mais depois do momento pedido (o vblank de hardware ou, no Sleep, o
+                           da grade);
+     gPortVBlankAtrasoUs   o pior atraso ao acordar desde a última leitura do passos. */
+PORT_HOST unsigned long long gPortVBlankEsperaNs = 0;
+PORT_HOST unsigned gPortVBlankEsperas = 0, gPortVBlankPeloHw = 0, gPortVBlankAtrasadas = 0, gPortVBlankAtrasoUs = 0;
+
+static void vblank_acordou(unsigned long long esperouNs, unsigned long long atrasoNs, int peloHw) {
+    unsigned us = atrasoNs < 4000000000ull ? (unsigned)(atrasoNs / 1000ull) : 4000000u;
+    gPortVBlankEsperaNs += esperouNs;
+    gPortVBlankEsperas++;
+    gPortVBlankPeloHw += peloHw != 0;
+    gPortVBlankAtrasadas += us >= 1000u;
+    if (us > gPortVBlankAtrasoUs) {
+        gPortVBlankAtrasoUs = us;
+    }
+}
+#endif
 
 static unsigned long long now_ns(void) {
     struct timespec ts;
@@ -127,6 +152,9 @@ static void vblank_wait(void) {
 #endif
         after = now_ns();
         gPortSleptNs += after - t; /* the time really spent waiting (a sleep can return early or late) */
+#ifdef PORT_X360
+        vblank_acordou(after - t, after > next ? after - next : 0, 0);
+#endif
         next += 16683350ull;
     } else {
         after = t;

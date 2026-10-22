@@ -392,6 +392,9 @@ void __cdecl main() {
                 Diario_Escrever("o dispositivo ainda era da thread %u: tomado", (unsigned)dev->QueryThreadOwnership());
                 dev->SetThreadOwnership(GetCurrentThreadId());
             }
+            /* (F5, etapa 8) a callback de vblank do gs_d3d.cpp sai com o GsD3d_Soltar; de uma thread que caiu sem soltar,
+               sai aqui (ela só guarda o relógio e sinaliza um evento que nunca se fecha, mas não fica para o Release) */
+            dev->SetVerticalBlankCallback(NULL);
             gpu = false;
         }
         dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);

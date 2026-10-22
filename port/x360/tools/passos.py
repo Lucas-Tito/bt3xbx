@@ -4,24 +4,28 @@ saída da x86 ou da PPC sem janela, ou o bt3xbx.log do 360. O que ler no console
 
     passos.py LOG... [--carimbo C]                  a estrutura: cada log diz de que build saiu ("passos: origem C",
                                                     igual a C; mesma_origem), e cada janela tem as três linhas (tempo, apresentação,
-                                                    descartes) com números; os números sem janela são do emulador
+                                                    descartes) com números, mais a da tela quando houver (só o 360 a
+                                                    escreve); os números sem janela são do emulador
     passos.py LOG... --console [--janelas N] [--minimo P] [--carimbo C]
-                                                    o aceite proposto no escopo da F5 (seção 3, "Tempo, memória e uso
-                                                    do console"), em cada janela de pelo menos P passos (2.700), e pelo
-                                                    menos N delas (3: uma rodada fria e duas aquecidas):
+                                                    o aceite do console, em cada janela de pelo menos P passos (2.700),
+                                                    e pelo menos N delas (3: uma rodada fria e duas aquecidas). Desde a
+                                                    F5, etapa 8 (plano/F5/08-gravacao.md, seção 18), pela tela:
                                                       - parede dentro de 1% do esperado (2 vblanks de 16,6833 ms por passo);
-                                                      - trabalho (sem a espera de vblank) com p99 até 30 ms e nenhum
-                                                        passo acima de um período (33,37 ms);
-                                                      - pelo menos 99% dos intervalos entre imagens novas até um período
-                                                        mais 1 ms, nenhum acima de três vblanks (50,05 ms);
+                                                      - a tela (a linha "tela", contada no vblank de hardware): no máximo
+                                                        1% das imagens 3 vblanks ou mais na tela, nenhuma 4 ou mais;
+                                                      - pelo menos uma imagem nova por passo (os intervalos entre imagens
+                                                        novas, n - 1);
                                                       - zero descartes de VU1, nativos, direto no quadro e texturas
                                                         recusadas (as primitivas só do PS2 se listam: o escopo não exige
                                                         zero nesse contador bruto)
+                                                    O trabalho (o intervalo menos a espera de vblank) e os intervalos
+                                                    entre imagens medidos na CPU depois do Present se listam, sem
+                                                    aceite: o primeiro só vale com a espera acumulada do 360 (antes era o
+                                                    intervalo inteiro), o segundo não diz quando a tela trocou.
 Sai com 0 só com tudo certo; cada falha diz o log, a janela e o número.
 """
 import argparse, pathlib, re, sys
 
-PERIODO = 2 * 16.68335
 TEMPO = re.compile(r"passos: janela (\d+) \(vblank (\d+) a (\d+), fim (\S+)\): (\d+) passos, parede ([\d.]+) ms, "
                    r"esperado ([\d.]+) ms \(razão ([\d.]+)\); trabalho p50 ([\d.]+) p95 ([\d.]+) p99 ([\d.]+) máximo "
                    r"([\d.]+) ms; acima de 30 ms (\d+), acima de [\d.]+ ms (\d+); espera de vblank ([\d.]+) ms; Present "
@@ -33,6 +37,12 @@ SEM_IMAGEM = re.compile(r"passos: janela (\d+) apresentação: nenhuma imagem")
 DESC = re.compile(r"passos: janela (\d+) descartes: VU1 (\d+), nativos (\d+) (\d+) (\d+) (\d+) \(contorno, chave, "
                   r"tabela, ids\), direto no quadro (\d+), texturas recusadas (\d+), primitivas só do PS2 (\d+)")
 SEM_DESC = re.compile(r"passos: janela (\d+) descartes: sem backend")
+TELA = re.compile(r"passos: janela (\d+) tela: (\d+) imagens na tela, por vblanks na tela 1 (\d+), 2 (\d+), 3 (\d+), 4 ou "
+                  r"mais (\d+) \(3 ou mais ([\d.]+)%\); trocas perdidas (\d+), imagens puladas (\d+), vblanks (\d+); "
+                  r"esperas de vblank (\d+) \((\d+) pelo vblank de hardware\), atraso ao acordar por passo p50 ([\d.]+) "
+                  r"p99 ([\d.]+) máximo ([\d.]+) ms, esperas com 1 ms ou mais (\d+)")
+SEM_TELA = re.compile(r"passos: janela (\d+) tela: sem a medida")
+TELA_MAX_3 = 1.0  # % das imagens com 3 vblanks ou mais na tela (o "99% até um período mais 1 ms" de antes, pela tela)
 
 
 def mesma_origem(origem, esperado):
@@ -50,7 +60,8 @@ def ler(caminho):
         m = re.search(r"passos: origem (.*) \(tempo por passo", l)
         if m and origem is None:
             origem = m.group(1).strip()
-        for rx, chave in ((TEMPO, "tempo"), (APRES, "apres"), (SEM_IMAGEM, "apres"), (DESC, "desc"), (SEM_DESC, "desc")):
+        for rx, chave in ((TEMPO, "tempo"), (APRES, "apres"), (SEM_IMAGEM, "apres"), (DESC, "desc"), (SEM_DESC, "desc"),
+                          (TELA, "tela"), (SEM_TELA, "tela")):
             m = rx.search(l)
             if m:
                 jan.setdefault(int(m.group(1)), {})[chave] = m.groups()[1:] if m.groups()[1:] else ()
@@ -106,25 +117,37 @@ def main():
                           f"texturas {ds[6]}, só do PS2 {ds[7]}")
             else:
                 linha += "; descartes: sem backend D3D"
+            tela = d.get("tela")
+            if tela:
+                img, v1, v2, v3, v4, pct3 = int(tela[0]), int(tela[1]), int(tela[2]), int(tela[3]), int(tela[4]), \
+                    float(tela[5])
+                perd, pul, vbs, esp, hw = int(tela[6]), int(tela[7]), int(tela[8]), int(tela[9]), int(tela[10])
+                at50, at99, atmax, at1 = float(tela[11]), float(tela[12]), float(tela[13]), int(tela[14])
+                linha += (f"; tela: {img} imagens, por vblanks 1/2/3/4+ {v1}/{v2}/{v3}/{v4} (3 ou mais {pct3:.2f}%), "
+                          f"perdidas {perd}, puladas {pul}, {vbs} vblanks; {esp} esperas ({hw} pelo hardware), atraso ao "
+                          f"acordar p50 {at50:.2f} p99 {at99:.2f} máximo {atmax:.2f} ms, {at1} com 1 ms ou mais")
+            elif "tela" in d:
+                linha += "; tela: sem a medida"
             print(linha)
             if not a.console or n < a.minimo:
                 continue
             ruins = []
             if not 0.99 <= razao <= 1.01:
                 ruins.append(f"parede {razao:.4f} do esperado (fora de 1%)")
-            if p99 > 30.0:
-                ruins.append(f"p99 do trabalho {p99:.2f} ms > 30")
-            if a33:
-                ruins.append(f"{a33} passos acima de um período ({PERIODO:.2f} ms), o pior {maximo:.2f}")
+            if not tela:
+                ruins.append("sem a medida da tela (a linha \"tela\" do 360, com a callback de vblank)")
+            else:
+                if img == 0:
+                    ruins.append("nenhuma imagem contada na tela")
+                elif 100.0 * (v3 + v4) / img > TELA_MAX_3:  # (pelas contagens, não pelo % arredondado da linha)
+                    ruins.append(f"{pct3:.2f}% das imagens 3 vblanks ou mais na tela ({v3 + v4} de {img}; aceite: até "
+                                 f"{TELA_MAX_3:.0f}%)")
+                if v4:
+                    ruins.append(f"{v4} imagens 4 vblanks ou mais na tela")
             if not d["apres"]:
                 ruins.append("sem apresentação medida")
-            else:
-                if pct34 > 1.0:
-                    ruins.append(f"{pct34:.2f}% dos intervalos acima de um período mais 1 ms (aceite: até 1%)")
-                if a50:
-                    ruins.append(f"{a50} intervalos acima de três vblanks")
-                if nint < n - 1:
-                    ruins.append(f"{nint} intervalos entre imagens novas para {n} passos")
+            elif nint < n - 1:
+                ruins.append(f"{nint} intervalos entre imagens novas para {n} passos")
             if not d["desc"]:
                 ruins.append("sem descartes medidos (sem backend D3D)")
             elif any(ds[:7]):

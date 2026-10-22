@@ -1448,3 +1448,79 @@ das linhas `picos:   quadro ..., texturas` (todas as da luta, do quadro 4672 em 
 - **Com o som ligado, mais passos logo acima do período** (11,5% dos intervalos acima de 34,37 ms, contra 6,3%; p95 34,84
   contra 34,00): o custo do som na thread do jogo (RPC, início de fluxo) ou na memória, a medir à parte. Fica para o corte
   seguinte da etapa 8.
+
+## 18. A espera de vblank medida certo e a espera pelo vblank de hardware (22/10/2026)
+
+Branch `f5-vblank`, sobre a main `64353a4`. Pedido do Lucas: os passos (a) e (b) da investigação feita sobre os logs do console do
+`f5_duelo` (só leitura, o relatório abaixo), cada um com commit próprio, sem nenhum quadro a mais de atraso entre o controle e a
+tela. Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+### O que a investigação achou [lido nos fontes, medido nos logs]
+
+1. **O `passos` não descontava a espera de vblank.** O `gs_core.c` (`Port_GsVif1Chain`, `:1840-1843` na main) lê o `gPortSleptNs`
+   e o zera a cada entrega da lista; o `passos.c` (`Passos_Leitura`) o lia como um acumulado e tirava a diferença entre duas
+   leituras do controle. As janelas diziam "espera de vblank 0.0 ms", e o "trabalho" p50/p95/p99 era o intervalo inteiro entre
+   duas leituras do controle, com média 33,37 ms por construção. **Os números de "trabalho" de todas as rodadas da F5 até aqui são
+   esse intervalo**, não o trabalho.
+2. **Os intervalos acima de 34,37 ms são medidos na CPU logo depois do `Present`** (`Passos_Apresentou`, chamado pelo
+   `frame_end` do `gs_d3d.cpp`); a tela troca no vblank de hardware (`D3DPRESENT_INTERVAL_ONE`, `main360.cpp`), e o jogo marcava
+   o tempo pelo `Sleep` em milissegundos inteiros (`nanosleep` do `posix360.c` dentro do `vblank_wait` do `plat_stub.c`), sem
+   fase com o vídeo. Em 24 de 70 quadros lentos o jogo acordou 1,4 ms ou mais atrasado (até 2,5), e a entrega soma uns 0,7 ms
+   em média.
+
+### (a) A medida certa
+
+| Commit | O quê |
+|---|---|
+| (a) | **A espera acumulada própria**: `gPortVBlankEsperaNs` no `plat_stub.c` (só cresce), com as esperas de fato, quantas acabaram no vblank de hardware, quantas acordaram 1 ms ou mais depois do momento pedido e o pior atraso ao acordar desde a última leitura do `passos`. O `passos.c` desconta dela (o `gPortSleptNs` segue como era para o `gs_core.c`). **A tela**: o `gs_d3d.cpp` instala no init (pela dona do dispositivo, a thread de desenho com `BT3_GS_DESENHO=1`) uma callback de vblank (`SetVerticalBlankCallback`), que numa DPC guarda o `mftb`, conta quantos vblanks cada imagem ficou na tela (pelo `Swap` mostrado do `D3DVBLANKDATA`, que muda quando uma imagem nova entra), as trocas perdidas (`D3DVBLANK_SWAPMISSED`) e as imagens puladas, e sinaliza um evento. A callback sai no `GsD3d_Soltar` e a main a tira de novo quando toma o dispositivo de volta. A linha nova `passos: janela K tela:` e o critério do `passos.py --console` pela tela. Tudo em `PORT_X360`: a x86 e a PPC compilam o mesmo texto de antes |
+
+**A callback** [lido no XDK: `D3DVBLANKCALLBACK`, `D3DVBLANKDATA`, `SetVerticalBlankCallback` e o exemplo `AsyncSwaps.cpp:1281`]:
+roda numa DPC, onde só valem os `Interlocked*`, o `SetEvent` e afins com um handle válido, sem float e sem espera. Ela só lê o
+`mftb`, soma inteiros e sinaliza o evento, que nasce uma vez e nunca se fecha (segue válido na saída e numa queda). Os contadores
+só crescem, cada um com um escritor só (a DPC), e quem lê (o `passos`, por diferença entre o começo e o fim da janela) lê palavras
+inteiras.
+
+**A linha nova** (só no 360, entre a `apresentação` e os `descartes`):
+
+```
+passos: janela K tela: N imagens na tela, por vblanks na tela 1 a, 2 b, 3 c, 4 ou mais d (3 ou mais P%); trocas perdidas p,
+imagens puladas u, vblanks V; esperas de vblank E (H pelo vblank de hardware), atraso ao acordar por passo p50 x p99 y máximo
+z ms, esperas com 1 ms ou mais w
+```
+
+Sem a callback na janela inteira: `passos: janela K tela: sem a medida (sem a callback de vblank na janela inteira)`. O atraso ao
+acordar é o pior das esperas de cada passo: com o vblank de hardware, de o vblank (o `mftb` da DPC) até a thread do jogo acordar;
+no `Sleep`, de o momento pedido pela grade até acordar.
+
+**O critério do `passos.py --console`** passa a ser a tela: em cada janela de pelo menos 2.700 passos, **no máximo 1% das imagens
+com 3 vblanks ou mais na tela e nenhuma com 4 ou mais** (o "99% até um período mais 1 ms, nenhum acima de três vblanks" de antes,
+contado onde a imagem de fato fica); mais a parede dentro de 1%, uma imagem nova por passo e zero descartes, como antes. O trabalho
+(agora com a espera certa) e os intervalos medidos na CPU depois do `Present` se listam, sem aceite. Sem a linha `tela` a janela
+falha no `--console`; fora dele a linha é opcional (a x86 e a PPC não a escrevem).
+
+**O verificador visto falhando de propósito** [medido]: um banco de teste do `passos.c` com `PORT_X360` compilado pelo `gcc` daqui
+(o relógio trocado por um falso, três janelas de 3.001 passos, o `Passos_Tela` e os contadores do `plat_stub.c` simulados) escreve as
+linhas como o console; o `passos.py --console` diz "tudo certo" no log bom e com 30 imagens de 3 vblanks em 3.000 (1,00%), e sai
+com 1 em cada estrago: 31 de 3.000 (1,03%), uma imagem de 4 vblanks, a janela sem a medida da tela, e o formato da linha mudado
+numa cópia do `passos.c` (`4+` no lugar de `4 ou mais`, com `assert` de que a cópia mudou: a linha some para o `passos.py` e a
+janela falha por falta da medida). A mesma conta da porcentagem sai das contagens, não do número arredondado da linha. O
+`passos.c` sem `PORT_X360` (como a x86) segue sem a linha, e o `passos.py` sem `--console` aceita o log.
+
+### O critério do escopo que usa o "trabalho" (proposta, o escopo não mudou)
+
+Em `docs/x360/plano/F5/00-escopo.md`, seção "Tempo, memória e uso do console", a tabela tem a linha **"Trabalho por passo | p99
+até 30 ms; nenhum passo acima de um período de luta, aproximadamente 33,37 ms, em cada uma de três janelas de pelo menos 2.700
+passos | CPU e conclusão da GPU, sem a espera deliberada de vblank; ..."**, e a linha **"Apresentação | Em cada janela, pelo menos
+99% dos intervalos entre imagens novas dentro de um período mais 1 ms; nenhum acima de três vblanks, aproximadamente 50,05 ms |
+..."**. O número que as rodadas leram como trabalho era o intervalo inteiro (item 1 acima), e o intervalo entre imagens era o da
+CPU depois do `Present`, não o da tela. Texto proposto, para o Lucas decidir:
+
+| Medida | Aceite proposto | Como medir |
+|---|---|---|
+| Trabalho por passo | Informativo: p50, p95 e p99 do intervalo entre duas leituras do controle menos a espera de vblank do passo; acompanha a folga, sem aceite próprio (com as threads da etapa 8 o trabalho de um passo se sobrepõe ao do anterior, e o que a pessoa vê é a tela) | A espera de vblank de um acumulado próprio, que ninguém zera (`gPortVBlankEsperaNs`), descontada por passo; distinguir sobreposição para não somar tempos concorrentes como se fossem seriais |
+| Apresentação | Em cada janela, no máximo 1% das imagens novas 3 vblanks ou mais na tela; nenhuma 4 ou mais | Contado no vblank de hardware (a callback de vblank do D3D: quantos vblanks cada imagem mostrada ficou na tela, pela troca mostrada); o intervalo medido na CPU depois do `Present` fica como diagnóstico |
+
+E no parágrafo logo abaixo da tabela, "Não usar os 16,7 ms dos menus como duração do passo da luta, nem contar uma espera de vsync
+como CPU trabalhando" segue valendo; a frase "Reservar os cerca de 3,37 ms entre p99 de 30 e o período como margem proposta para
+a F6" perde a base (o p99 de 30 deixa de ser aceite) e vira: "a margem para a F6 se lê no trabalho informativo e nas imagens de 3
+vblanks com o som ligado".

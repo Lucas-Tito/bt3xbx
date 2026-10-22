@@ -457,6 +457,86 @@ extern "C" int Passos_Descartes(unsigned *v, int n) {
     return 8;
 }
 
+/* ---- o vblank de hardware (F5, etapa 8; docs/x360/plano/F5/08-gravacao.md, seção 18) ------------------------------ */
+/* A tela troca de imagem no vblank da saída de vídeo (D3DPRESENT_INTERVAL_ONE, main360.cpp); o relógio do port não sabia
+   quando ele vem. A callback de vblank do D3D (SetVerticalBlankCallback, instalada no init pela dona do dispositivo) roda
+   numa DPC a cada vblank: guarda o mftb, conta quantos vblanks cada imagem ficou na tela (pelo Swap mostrado, que muda
+   quando uma imagem nova entra) e sinaliza um evento. Na DPC só isso: sem float, sem espera, sem o dispositivo (o XDK: só
+   Interlocked*, SetEvent e afins, com um handle válido; o evento nasce uma vez e nunca se fecha, então segue válido na
+   saída e na queda). Os contadores só crescem; quem lê (o passos, por diferença) está noutra thread e lê palavras
+   inteiras. Sai no GsD3d_Soltar (o jogo devolve o dispositivo) e a main a tira de novo antes de soltar o dispositivo. */
+static HANDLE sVbEv;                        /* auto-reset: um vblank */
+static volatile DWORD sVbN;                 /* vblanks vistos desde a instalação */
+static volatile unsigned __int64 sVbTb;     /* o mftb do último */
+static volatile DWORD sVbTela[4];           /* imagens que ficaram 1, 2, 3 e 4 ou mais vblanks na tela */
+static volatile DWORD sVbPerdidas;          /* vblanks com D3DVBLANK_SWAPMISSED (uma troca pedida que não entrou) */
+static volatile DWORD sVbPuladas;           /* imagens que nunca ficaram na tela (duas trocas entre dois vblanks) */
+static DWORD sVbSwap, sVbSwapN;             /* (só a DPC) o Swap mostrado e o vblank em que entrou */
+static int sVbTemSwap;
+
+static void WINAPI vblank_cb(D3DVBLANKDATA *d) {
+    DWORD n = sVbN + 1, k;
+    sVbTb = __mftb();
+    if (d != NULL) {
+        if (!sVbTemSwap) {
+            sVbTemSwap = 1;
+            sVbSwap = d->Swap;
+            sVbSwapN = n;
+        } else if (d->Swap != sVbSwap) {
+            k = n - sVbSwapN; /* os vblanks em que a imagem anterior ficou na tela */
+            sVbTela[k >= 4 ? 3 : k == 0 ? 0 : k - 1]++;
+            sVbPuladas += d->Swap - sVbSwap - 1;
+            sVbSwap = d->Swap;
+            sVbSwapN = n;
+        }
+        if (d->Flags & D3DVBLANK_SWAPMISSED) {
+            sVbPerdidas++;
+        }
+    }
+    __lwsync();
+    sVbN = n;
+    SetEvent(sVbEv);
+}
+
+static void vblank_init(void) {
+    if (sVbEv == NULL) {
+        sVbEv = CreateEvent(NULL, FALSE, FALSE, NULL);
+    }
+    if (sVbEv == NULL) {
+        Diario_Escrever("gs_d3d: vblank: ERRO no evento; sem a medida da tela");
+        return;
+    }
+    sDev->SetVerticalBlankCallback(vblank_cb); /* (por último: o primeiro vblank pode vir já) */
+    Diario_Escrever("gs_d3d: vblank: a callback do vblank de hardware instalada (a medida da tela no passos)");
+}
+
+/* (a dona do dispositivo, antes de soltá-lo) */
+static void vblank_tira(void) {
+    if (sDev != NULL && sVbEv != NULL) {
+        sDev->SetVerticalBlankCallback(NULL);
+    }
+}
+
+/* para o passos.c: as imagens por vblanks na tela (1, 2, 3, 4 ou mais), as trocas perdidas, as imagens puladas e os
+   vblanks vistos, acumulados desde a instalação; 0 sem a callback (antes do init) */
+extern "C" int Passos_Tela(unsigned *v, int n) {
+    unsigned agora[7];
+    int i;
+    if (sVbEv == NULL) {
+        return 0;
+    }
+    for (i = 0; i < 4; i++) {
+        agora[i] = sVbTela[i];
+    }
+    agora[4] = sVbPerdidas;
+    agora[5] = sVbPuladas;
+    agora[6] = sVbN;
+    for (i = 0; i < n && i < 7; i++) {
+        v[i] = agora[i];
+    }
+    return 7;
+}
+
 /* o relógio para o gs_vu1.c (C, sem o xtl.h): o tempo da VU1 na gravação do quadro */
 extern "C" uint64_t GsD3d_Tique(void) {
     LARGE_INTEGER t;
@@ -2341,6 +2421,7 @@ static int d3d_init(void) {
         return 0;
     }
     QueryPerformanceCounter(&sUltimoFim);
+    vblank_init(); /* (F5, etapa 8: a medida da tela) */
     return 1;
 }
 
@@ -4113,6 +4194,7 @@ extern "C" void GsD3d_Ocioso(void) {
 /* O jogo terminou nesta thread (Port_Sair ou queda): o dispositivo volta para quem for usá-lo (a main). */
 extern "C" void GsD3d_Soltar(void) {
     if (sDev != NULL && sDev->QueryThreadOwnership() == GetCurrentThreadId()) {
+        vblank_tira();
         sDev->ReleaseThreadOwnership();
         sDono = 0;
     }
