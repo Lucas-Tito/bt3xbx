@@ -98,6 +98,8 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "vu0_vs.h"
 #include "vu4_vs.h"
 #include "vu6_vs.h"
+#include "gs_triv_ps.h"  /* (720p, retomada: ps_gs_triv, ps_gsz_triv; ver otim_init) */
+#include "gsz_triv_ps.h"
 
 #include "escala.h"
 /* (F5, etapa 8, 720p, etapa 2) O tamanho dos alvos, das profundidades e do par da EDRAM, em pixels de saída: a área de
@@ -275,7 +277,11 @@ static unsigned tam_real(UINT w, UINT h, D3DFORMAT f) {
     UINT t = XGSetTextureHeader(w, h, 1, 0, f, (D3DPOOL)0, 0, 0, 0, &cab, NULL, NULL);
     return (t + 4095u) & ~4095u;
 }
-static unsigned tam_tex(UINT w, UINT h) { return tam_real(w, h, D3DFMT_LIN_A8B8G8R8); }
+/* (720p, retomada: BT3_TEX_TILED=1, diagnóstico; ver otim_init) as texturas do jogo de 32 x 32 ou mais tiled no lugar de
+   lineares; as menores (as paletas, 256 x 1) seguem lineares (tiled, uma paleta ocuparia 32 linhas) */
+static int sTexTiled;
+static D3DFORMAT tex_fmt(UINT w, UINT h) { return sTexTiled && w >= 32 && h >= 32 ? D3DFMT_A8B8G8R8 : D3DFMT_LIN_A8B8G8R8; }
+static unsigned tam_tex(UINT w, UINT h) { return tam_real(w, h, tex_fmt(w, h)); }
 static unsigned tam_alvo(void) {
     if (sTamAlvo == 0) {
         sTamAlvo = tam_real(sAlvoW, sAlvoH, D3DFMT_A8R8G8B8);
@@ -320,7 +326,7 @@ static TexXg *xg_cria_n(UINT w, UINT h, D3DFORMAT f, size_t tam) {
         free(x);
         return NULL;
     }
-    sPicoXgN[f == D3DFMT_D24S8 ? 2 : f == D3DFMT_LIN_A8B8G8R8 ? 0 : 1]++;
+    sPicoXgN[f == D3DFMT_D24S8 ? 2 : f == D3DFMT_LIN_A8B8G8R8 || f == D3DFMT_A8B8G8R8 ? 0 : 1]++;
     sPicoXgKb += x->bytes >> 10;
     XGOffsetResourceAddress(&x->cab, x->dados);
     XGGetTextureDesc(&x->cab, 0, &d);
@@ -1216,6 +1222,46 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
     branca(motivo > 0 && motivo < BR_N ? motivo : BR_ESPACO, w, h);
 }
 
+/* ---- a retomada do 720p (F5, etapa 8; docs/x360/plano/F5/08-720p.md, seção 9) ------------------------------------
+
+   As chaves da investigação da GPU na escala maior, todas desligadas por padrão (sem elas, o .xex faz o de antes). Lidas
+   no init (otim_init), antes do autoteste das nativas.
+   Diagnóstico (só para medir; a imagem pode mudar):
+     BT3_PS_TRIVIAL=bits  o pixel shader trivial (a cor do vértice: ps_gs_triv, ps_gsz_triv) nos desenhos, 1 nos comuns, 2 nos
+                          da VU1: o teto do ganho de um shader mais curto, pela GPU por classe
+     BT3_TEX_TILED=1      as texturas do jogo de 32 x 32 ou mais tiled (tex_fmt; XGTileTextureLevel no envio, na gravação) no
+                          lugar de lineares: a A/B da busca de textura */
+static unsigned sPsTrivial;
+static D3DPixelShader *sPsTriv[2]; /* [0] ps_gs_triv, [1] ps_gsz_triv */
+static unsigned env_num(const char *nome, unsigned padrao);
+
+static void otim_init(void) {
+    sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
+    sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
+    if (sPsTrivial != 0 && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsTrivPs, &sPsTriv[0])) ||
+                            FAILED(sDev->CreatePixelShader((const DWORD *)kGsZTrivPs, &sPsTriv[1])))) {
+        Diario_Escrever("gs_d3d: ERRO: os shaders triviais não foram criados; BT3_PS_TRIVIAL desligada");
+        sPsTrivial = 0;
+    }
+    if (sPsTrivial != 0 || sTexTiled) {
+        Diario_Escrever("gs_d3d: retomada do 720p, diagnóstico: BT3_PS_TRIVIAL=%u (o shader trivial nos desenhos %s%s%s; a imagem "
+                        "fica errada), BT3_TEX_TILED=%d (texturas de 32 x 32 ou mais %s)", sPsTrivial,
+                        (sPsTrivial & 1) ? "comuns" : "", sPsTrivial == 3 ? " e " : "", (sPsTrivial & 2) ? "da VU1" : "",
+                        sTexTiled, sTexTiled ? "tiled" : "lineares");
+    }
+}
+
+/* O pixel shader de um desenho de primitivas (estado 1) ou da VU1 (2 a 4): o ps_gs, ou o ps_gsz com o recorte pelo w; com as
+   chaves, uma variante */
+static D3DPixelShader *ps_escolhe(const GsDraw *d, int estado) {
+    int z = estado >= 2 && sCorte;
+    (void)d;
+    if (sPsTrivial & (estado >= 2 ? 2u : 1u)) {
+        return sPsTriv[z];
+    }
+    return z ? sPsGsZ : sPsGs;
+}
+
 /* ---- texturas -------------------------------------------------------------------------------------------- */
 
 /* As texturas decodificadas: D3DFMT_LIN_A8B8G8R8, que recebe o u32 nativo R | G<<8 | B<<16 | A<<24 do gs_draw.c
@@ -1235,7 +1281,7 @@ static GsTex tex_create(uint32_t w, uint32_t h, int format, int levels) {
         sG.semTextura++;
         return 0; /* (quem chamou conta o motivo) */
     }
-    t = xg_cria(w, h, D3DFMT_LIN_A8B8G8R8);
+    t = xg_cria(w, h, tex_fmt(w, h));
     if (t == NULL) {
         sG.semTextura++;
         return 0;
@@ -1274,8 +1320,13 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
             }
         }
     }
-    for (y = 0; y < h; y++) {
-        memcpy((BYTE *)t->dados + y * t->pitch, (const uint32_t *)px + y * w, w * 4);
+    if (tex_fmt(w, h) != D3DFMT_LIN_A8B8G8R8) {
+        /* (BT3_TEX_TILED) os mesmos texels, na ordem dos tiles: o formato tiled é o mesmo A8B8G8R8, sem troca de bytes */
+        XGTileTextureLevel(w, h, 0, XGGetGpuFormat(D3DFMT_A8B8G8R8), 0, t->dados, NULL, px, w * 4, NULL);
+    } else {
+        for (y = 0; y < h; y++) {
+            memcpy((BYTE *)t->dados + y * t->pitch, (const uint32_t *)px + y * w, w * 4);
+        }
     }
     free((void *)px);
     return 1;
@@ -2327,6 +2378,7 @@ static int d3d_init(void) {
                         tam_alvo() >> 10);
     }
     prof_autoteste();
+    otim_init(); /* (720p, retomada: antes do autoteste das nativas, que passa pelos shaders da névoa) */
     nat_init(); /* (F5, etapa 7, segunda parte) */
     tempo_init(); /* (F5, etapa 8) */
     gPicos = env_num("BT3_PICOS", 0); /* (F5, etapa 8, picos) */
@@ -2509,6 +2561,7 @@ static void alvo_le_alem(const GsDraw *d) {
 }
 
 static int prepara(const GsDraw *d, int estado, Ret *area) {
+    static D3DPixelShader *sCurPs; /* (720p, retomada) o posto, que só vale com sEstadoGs == estado */
     float c[16];
     int x0 = d->scissor[0], y0 = d->scissor[1], x1 = d->scissor[0] + d->scissor[2], y1 = d->scissor[1] + d->scissor[3];
     int borda = 0;
@@ -2533,8 +2586,9 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     if (sEstadoGs != estado) {
         sDev->SetVertexDeclaration(estado >= 2 ? sDeclVu : sDeclGs);
         sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : sVsGs);
-        /* (F5, etapa 7, segunda parte) a VU1 com o recorte pelo w: a profundidade por pixel (ps_gsz, vu_pos) */
-        sDev->SetPixelShader(estado >= 2 && sCorte ? sPsGsZ : sPsGs);
+        /* (F5, etapa 7, segunda parte) a VU1 com o recorte pelo w: a profundidade por pixel (ps_gsz, vu_pos); (720p,
+           retomada) com as chaves, a variante do desenho (ps_escolhe) */
+        sDev->SetPixelShader(sCurPs = ps_escolhe(d, estado));
         if (estado >= 2) {
             float c15[4] = {sCorte ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
             sDev->SetVertexShaderConstantF(15, c15, 1);
@@ -2546,6 +2600,12 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
             sDev->SetIndices(sVuIb[sVuPar]);
         }
         sEstadoGs = estado;
+    } else if (sPsTrivial != 0) {
+        D3DPixelShader *ps = ps_escolhe(d, estado);
+        if (ps != sCurPs) {
+            sDev->SetPixelShader(ps);
+            sCurPs = ps;
+        }
     }
     aplica_pipe(d->pipeline);
     if (d->tex != sCurTex) {

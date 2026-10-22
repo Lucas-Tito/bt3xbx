@@ -121,6 +121,23 @@ GsSaidaZ ps_gsz(GsPixelZ e) {
     return s;
 }
 
+// ---- F5, etapa 8, 720p, retomada (docs/x360/plano/F5/08-720p.md, seção 9): variantes do ps_gs e do ps_gsz que o
+// prepara do gs_d3d.cpp escolhe por desenho (ps_escolhe), cada uma sob a sua chave e desligada por padrão. Os vertex
+// shaders são os mesmos; sem o VPOS, que só o DATE e a arte 2D leem.
+struct GsPixelR { float4 cor : COLOR0; float3 stq : TEXCOORD0; };
+struct GsPixelRZ { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 zw : TEXCOORD1; };
+
+// BT3_PS_TRIVIAL (diagnóstico: a imagem fica errada): a cor do vértice e nada mais, o teto do que um shader mais curto ganha.
+float4 ps_gs_triv(GsPixelR e) : COLOR0 {
+    return e.cor;
+}
+GsSaidaZ ps_gsz_triv(GsPixelRZ e) {
+    GsSaidaZ s;
+    s.cor = e.cor;
+    s.z = saturate(e.zw.x / e.zw.y);
+    return s;
+}
+
 // ---- cópia de uma textura para a tela: a volta de um alvo para a EDRAM e o present
 
 struct CopiaEntrada { float2 pos : POSITION; float2 uv : TEXCOORD0; };
