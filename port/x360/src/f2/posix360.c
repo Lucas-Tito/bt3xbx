@@ -47,6 +47,7 @@ static void definir(const char *nome, const char *valor) {
 }
 
 void Port_X360FecharSaida(void);
+static void depois_do_ambiente(void);
 
 /* As chaves do diário (diario.c, que não lê o ambiente): BT3_LOG_SINCRONO=1 (uma linha, um flush, como antes do anel) e
    BT3_LOG_FLUSH_MS=<ms> (a idade máxima de uma linha gravada sem flush). Também liga o game:\saida.txt à thread do
@@ -79,7 +80,7 @@ void Ambiente_Carregar(const char *caminho) {
     f = fopen(caminho, "r");
     if (f == NULL) {
         Diario_Escrever("ambiente: sem %s, só os padrões", caminho);
-        diario_ambiente();
+        depois_do_ambiente();
         return;
     }
     while (fgets(linha, sizeof(linha), f) != NULL) {
@@ -98,7 +99,7 @@ void Ambiente_Carregar(const char *caminho) {
         }
     }
     fclose(f);
-    diario_ambiente();
+    depois_do_ambiente();
 }
 
 char *getenv(const char *nome) {
@@ -136,6 +137,34 @@ long Iso_Posicao(void *f);
 int Iso_Fechar(void *f);
 int Iso_Caractere(void *f);
 
+/* (F6) A pasta mods/ sob a raiz, vista uma vez no boot (depois do ambiente, antes das threads): sem ela, o fopen de um
+   caminho de mods/ (o primeiro de cada Port_FilePath, a cada ADXT_Start* na thread do jogo) volta NULL sem uma busca no
+   FATX. Uma pasta mods/ criada com o jogo rodando só vale na abertura seguinte. */
+static int sSemMods;
+
+static void mods_no_boot(void) {
+    const char *raiz;
+    char m[512], c[512];
+    DWORD at;
+#pragma warning(suppress : 4996) /* (o getenv é o daqui, que lê o ambiente.txt) */
+    raiz = getenv("BT3_DATA");
+    if (raiz == NULL || raiz[0] == '\0') {
+        return;
+    }
+    _snprintf(m, sizeof(m) - 1, "%s/mods", raiz);
+    m[sizeof(m) - 1] = '\0';
+    caminho360(m, c, sizeof(c));
+    at = GetFileAttributes(c);
+    sSemMods = at == (DWORD)-1 || (at & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    Diario_Escrever("arquivos: %s %s", c, sSemMods ? "não existe: os caminhos de mods/ não vão ao FATX" : "existe");
+}
+
+/* o que se faz uma vez com o ambiente lido, nos dois fins de Ambiente_Carregar */
+static void depois_do_ambiente(void) {
+    diario_ambiente();
+    mods_no_boot();
+}
+
 /* Leitura sob a raiz de dados (BT3_DATA): da ISO, se houver uma. O resto é arquivo de verdade; sob a raiz, os dados
    estão no formato do PS2 (mods/, ou soltos sem ISO), e o que tem conversor se converte ao abrir, como a ISO. */
 FILE *Port_X360Fopen(const char *caminho, const char *modo) {
@@ -152,6 +181,9 @@ FILE *Port_X360Fopen(const char *caminho, const char *modo) {
             rel[i] = caminho[n + 1 + i] == '\\' ? '/' : caminho[n + 1 + i];
         }
         rel[i] = '\0';
+        if (sSemMods && strncmp(rel, "mods/", 5) == 0) {
+            return NULL; /* sem a pasta (vista no boot) */
+        }
         v = Iso_Abrir(rel);
         if (v != (void *)-1) {
             return (FILE *)v;

@@ -1387,6 +1387,19 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   novo só dentro de `#ifdef` muda os números das linhas, não o texto; com `-P` o md5 do antes e do depois é o mesmo, para
   cada combinação de definições do WSL (com e sem `BT3_GRAVADOR` e `PORT_BIG_ENDIAN`). A comparação dos objetos sem a
   depuração na rodada do WSL confirma. Um `#else` que repete o original evita o `{ }` a mais que mudaria o texto.
+- **Tirar a leitura da thread do jogo não basta se a trava da leitura continua no caminho dela** (F6, `05.md`, "A thread
+  do jogo sem esperar"). Com o ADX em blocos, o início de um fluxo na thread do jogo só abria e fechava a entrada da ISO,
+  mas o `afs()`, o `novo()` e o `Iso_Fechar` pegavam a trava que a thread de leitura segurava durante o `ReadFile` de um
+  bloco (até 98 ms no console): inícios de até 59 ms. Procure toda trava que a thread do jogo pega e pergunte quem a
+  segura durante E/S. A correção deu um handle próprio à thread de leitura (cada handle com a sua trava), a tabela do AFS
+  lida sem trava e a tabela dos abertos com uma trava só dela. Um handle aberto sem `FILE_FLAG_OVERLAPPED` serializa as
+  leituras no próprio objeto de arquivo no Windows [lido, não medido no 360]: tirar só a nossa trava, com um handle só,
+  não garantiria nada.
+- **O código do console com trava se testa no Linux com um `xtl.h` de teste.** O `iso360.c` compila de verdade sobre
+  `port/x360/src/som/teste/xtl/xtl.h` (as seções críticas como mutex recursivo, o `ReadFile` por `pread`), com a leitora
+  lenta dentro do `ReadFile` (50 ms dormidos com a trava de quem lê pega) e uma ISO de mentira feita pelo teste. Os
+  mutantes de trava põem de volta um `Enter`/`Leave` da trava comum no trecho, em vez de trocar a trava: trocar só o
+  `Enter` deixa um `Leave` de trava não pega e o teste trava em vez de falhar.
 
 ---
 

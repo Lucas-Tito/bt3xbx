@@ -17,20 +17,25 @@
 #ifdef _XBOX
 #include <xtl.h>
 #pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
-/* o fopen do jogo: a ISO (iso360.c) pelo shim do posix360.c */
+#else
+#include <pthread.h>
+#include <time.h>
+#endif
+#if defined(_XBOX) || defined(FLUXO_PELO_PORT)
+/* o fopen do jogo: a ISO (iso360.c) pelo shim do posix360.c (FLUXO_PELO_PORT: o teste do WSL, teste_fluxo.c, com o
+   iso360.c de verdade sobre um xtl.h de teste) */
 FILE *Port_X360Fopen(const char *caminho, const char *modo);
 size_t Port_X360Fread(void *buf, size_t tam, size_t n, FILE *f);
 int Port_X360Fseek(FILE *f, long desl, int origem);
 long Port_X360Ftell(FILE *f);
 int Port_X360Fclose(FILE *f);
+void Iso_LeitoraPropria(void);
 #define abre Port_X360Fopen
 #define le Port_X360Fread
 #define posiciona Port_X360Fseek
 #define posicao Port_X360Ftell
 #define fecha Port_X360Fclose
 #else
-#include <pthread.h>
-#include <time.h>
 #define abre fopen
 #define le fread
 #define posiciona fseek
@@ -178,6 +183,9 @@ static void *leitor(void *arg)
 #endif
 {
     (void)arg;
+#if defined(_XBOX) || defined(FLUXO_PELO_PORT)
+    Iso_LeitoraPropria(); /* a ISO pelo handle desta thread: a leitura de um bloco não segura a trava que o jogo pega */
+#endif
     trava();
     while (!sSair) {
         Fluxo *f = NULL, *solta = NULL;
