@@ -676,3 +676,17 @@ filme; Duelo, Goku contra Kuririn, estágio 5; 60 s de luta; a pausa com uns 3 s
    como "sem espaço"), e o `sem espaço` da linha da VU1 em zero, como antes.
 3. A linha `gs_d3d:   memória` com `buffers` 256 KB acima da de antes (a tabela dos dois jogos), nenhum `CHEIO`.
 4. Para ver o gancho por dentro, uma abertura a mais sem `BT3_TEMPOS=0`: na linha `por dentro`, o `plano da VU1` perto de zero.
+
+### A rodada no console do vu_plano sem reler os índices (22/10/2026) [medido]
+
+`.xex` `3b8f679dd133e4820f9e0b261be34800`, `BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`, `BT3_TEMPOS=0`, Duelo, Goku contra Kuririn,
+estágio 5 (931 passos de luta). Critério no Deck com tudo certo (21/10).
+
+| | Entrega sem cópia | Com o vu_plano sem reler |
+|---|---:|---:|
+| Luta, mediana | 34,9 ms | **33,8 ms** |
+| p95 e p99 | 45,8 e 72,5 ms | 45,5 e 66,4 ms |
+
+Sem queda, sem `CHEIO`, sem textura branca, as 32 texturas pretas de sempre, memória livre mínima 38 MB. A luta ficou a 0,4 ms
+dos 33,37: a meta ainda não fecha com margem, e o p95 (45 ms) mostra os picos. O próximo alvo é o `GsVu1_Unpack` (3 a 4 ms, a cópia
+V4-32 presa à memória, seção 9).
