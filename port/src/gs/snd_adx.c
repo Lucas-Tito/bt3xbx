@@ -11,7 +11,10 @@
  * u32 samples, u16 high-pass frequency, u8 version, u8 flags. Version 4 with a loop: flag at 0x24, loop start
  * sample at 0x28, loop end sample at 0x30. A frame is a u16 scale and 32 signed nibbles; frames of the channels
  * alternate. sample = nibble * (scale + 1) + ((c1 * previous + c2 * the one before) >> 12), clamped to 16 bits,
- * with c1, c2 from the high-pass frequency (the usual ADX formula, in adx_coefs).
+ * with c1, c2 from the high-pass frequency (the usual ADX formula, in adx_coefs). At the loop's end the decoding goes
+ * back to the loop's first frame with the filter state it had when it first got there (as vgmstream does): the
+ * encoder wrote that frame for that state. Going on with the state of the loop's end (what this file did before
+ * 22/10/2026) put a click up to 3951 of 32768 into some of the game's loops (docs/x360/decisoes.md, decision 25.10).
  *
  * Each player has its own SDL audio stream (SDL converts the rate and mixes the streams); a stream asks for data
  * through a callback on SDL's audio thread, so the player's state is only touched under the stream's lock.
@@ -42,6 +45,7 @@ typedef struct Player {
     uint32_t pos;           /* next sample */
     int c1, c2;
     int hist[2][2];
+    int loopHist[2][2];     /* hist as it was when decoding reached the loop's first frame */
     int stat, paused;
     int vol;                /* 0.1 dB, 0 = full, -960 and below = silent */
     int pan[2];             /* per input channel: -15 left .. 15 right, PAN_AUTO */
@@ -168,12 +172,16 @@ static int decode(Player *p, int16_t *out, int frames) {
                 break;
             }
             p->pos = p->loopStart & ~31u; /* loop starts are frame-aligned by the encoder */
+            memcpy(p->hist, p->loopHist, sizeof(p->hist));
             continue;
         }
         if (src + FRAME * p->channels > p->file + p->size) {
             p->loop = 0;
             p->total = p->pos;
             break;
+        }
+        if (p->loop && index == p->loopStart / 32) {
+            memcpy(p->loopHist, p->hist, sizeof(p->hist)); /* (every pass through it saves the same state) */
         }
         for (ch = 0; ch < (int)p->channels; ch++, src += FRAME) {
             int scale = (int)be16(src) + 1, h1 = p->hist[ch][0], h2 = p->hist[ch][1];
@@ -353,6 +361,7 @@ static void start(Player *p, const char *path) {
     }
     adx_coefs(highpass, p->rate, &p->c1, &p->c2);
     memset(p->hist, 0, sizeof(p->hist));
+    memset(p->loopHist, 0, sizeof(p->loopHist));
     p->pos = 0;
     spec.format = SDL_AUDIO_S16;
     spec.channels = 2;
