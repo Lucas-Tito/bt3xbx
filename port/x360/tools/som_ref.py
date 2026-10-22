@@ -103,6 +103,8 @@ class Adx:
         partes = [array.array("h", c[:n]) for c in canais]
         if self.laco and depois > 0 and not curto:
             ini = self.laco_ini
+            # um laço mais curto que a janela: uma volta só (o teste_som para na segunda volta, como aqui)
+            depois = min(depois, fim - ini)
             if laco == "restaura":
                 # o estado de quando passou pelo começo do laço: as amostras da primeira passada
                 if ini + depois > n:

@@ -15,12 +15,18 @@
       taxas, laços (alinhados ao quadro de 32 amostras ou não) e os maiores arquivos.
   som.py amostras --dados DADOS --x86 PROG [--ppc PROG] [--tmp DIR] [--n 300] [--semente 25] [--estraga QUAL]
       rede 3: o PCM dos decodificadores do port (o teste_som da build, headless.py --teste-som) contra a referência
-      independente (som_ref.py) byte a byte, nos 20 ADX maiores, em N sorteados com semente fixa (os estéreo e os
-      mono mais longos incluídos) e em todas as amostras de todos os bancos; e a x86 igual à PPC nos mesmos. Nas músicas
-      com laço, a janela de 4 quadros de cada lado da volta. As variantes da referência (escala sem +1, coeficiente
+      independente (som_ref.py) byte a byte, nos 20 ADX maiores, em N sorteados com semente fixa (os estéreo, os mono
+      mais longos e todos os com laço incluídos) e em todas as amostras de todos os bancos; e a x86 igual à PPC nos
+      mesmos. Nas músicas com laço, a janela de 4 quadros de cada lado da volta (uma volta só num laço mais curto que
+      ela). As variantes da referência (escala sem +1, coeficiente
       arredondado, laço que continua o histórico ou zera) medidas à parte, para dizer o que a comparação separa.
-      --estraga adx|vag|ppc: o controle negativo (o c1 do port mais 1; um byte da parte das amostras trocado; um byte
-      da saída da PPC trocado), num subconjunto pequeno: tem de sair com 1.
+      A exceção da decisão 25.10: depois da volta do laço o port continua o histórico do filtro do fim (como o port
+      de PC), e a referência restaura o estado do começo. A janela depois da volta passa se for igual à referência ou,
+      só ela, igual byte a byte à variante "continua" e dentro de LACO_LIMITE LSB da referência; antes da volta, e em
+      tudo o que não tem laço, a comparação continua exata.
+      --estraga adx|vag|ppc|laco: o controle negativo (o c1 do port mais 1; um byte da parte das amostras trocado; um
+      byte da saída da PPC trocado; um byte da saída da x86 trocado logo depois da volta do laço), num subconjunto
+      pequeno: tem de sair com 1.
 Saída 0 só com tudo certo.
 """
 import argparse, array, collections, hashlib, os, pathlib, random, struct, subprocess, sys
@@ -29,6 +35,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import som_ref  # noqa: E402
 
 JANELA = 4 * 32  # amostras de cada lado da volta do laço
+# LSB: a maior diferença aceita entre o port e a referência depois da volta do laço (decisão 25.10). A medida dos 72
+# ADX com laço (todos entram na amostra): 3951 no 65120.bin e no 65143.bin, 860 no 65172.bin, 240 no 65119.bin; até 75
+# nos outros (plano/F6/02.md, seção 2)
+LACO_LIMITE = 3951
 
 
 # ------------------------------------------------------------------------------------------------- rede 2: rastro
@@ -222,9 +232,10 @@ def escolhe_adx(dados, n, semente):
     estereo = [x for x in resto if x[1].canais == 2]
     mono = sorted((x for x in resto if x[1].canais == 1), key=lambda x: -x[1].amostras)
     longos = mono[:40]
+    com_laco = [x for x in mono[40:] if x[1].laco]  # todos os com laço: a exceção da decisão 25.10 vê o pior caso
     rnd = random.Random(semente)
-    sorteio = rnd.sample(mono[40:], max(0, n - len(estereo) - len(longos)))
-    return [x[0] for x in grandes], [x[0] for x in estereo + longos + sorteio]
+    sorteio = rnd.sample([x for x in mono[40:] if not x[1].laco], max(0, n - len(estereo) - len(longos) - len(com_laco)))
+    return [x[0] for x in grandes], [x[0] for x in estereo + longos + com_laco + sorteio]
 
 
 def roda(prog, qemu, linhas):
@@ -257,6 +268,7 @@ def cmd_amostras(a):
     print(f"ADX: {len(grandes)} maiores e {len(sorteados)} sorteados (semente {a.semente}); "
           f"PPC: {'sim' if a.ppc else 'não'}{'; ESTRAGO DE PROPÓSITO: ' + a.estraga if a.estraga else ''}")
     lacos, janelas_iguais, variantes = 0, 0, collections.Counter()
+    excecoes, laco_max = [], (0, "")  # a exceção do laço: os arquivos e a maior diferença (com o arquivo)
     var_dif = collections.Counter()
     for f in arquivos:
         b = f.read_bytes()
@@ -273,10 +285,16 @@ def cmd_amostras(a):
             pcm.byteswap()
         rb = pcm.tobytes()
         gx = sai["x86"].read_bytes()
-        ok, k, m, ln = compara_pcm(rb, gx)
-        if not ok:
-            falhas.append(f"{f.name}: x86 diferente da referência na amostra {k // 2} (canal {k % 2}), maior diferença {m}, "
-                          f"comprimentos {ln}; port: {lx[0]}")
+        if a.estraga == "laco" and ref.laco and len(gx) > 2 * 2 * n + 2:
+            gx = bytearray(gx)
+            gx[2 * 2 * n + 2] ^= 0x40  # a terceira palavra depois da volta: 64 LSB
+            gx = bytes(gx)
+        # antes da volta do laço (ou o arquivo inteiro, sem laço), exato; depois dela, a exceção abaixo
+        corte = 2 * 2 * n if ref.laco else len(rb)
+        ok, k, m, ln = compara_pcm(rb[:corte], gx[:corte])
+        if not ok or len(gx) != len(rb):
+            falhas.append(f"{f.name}: x86 diferente da referência na amostra {(k or 0) // 2} (canal {(k or 0) % 2}), "
+                          f"maior diferença {m}, comprimentos {(len(rb) // 2, len(gx) // 2)}; port: {lx[0]}")
         if a.ppc:
             gp = bytearray(sai["ppc"].read_bytes())
             if a.estraga == "ppc" and len(gp) > 100:
@@ -286,17 +304,32 @@ def cmd_amostras(a):
                 falhas.append(f"{f.name}: PPC diferente da x86 na amostra {k2 // 2}, maior diferença {m2}, comprimentos {ln2}")
         if ref.laco:
             lacos += 1
-            ini = 2 * 2 * (n - JANELA)  # 4 quadros antes do fim do laço e 4 depois da volta, em bytes
-            if gx[ini:ini + 2 * 2 * 2 * JANELA] == rb[ini:ini + 2 * 2 * 2 * JANELA] and len(gx) == len(rb):
+            volta = 2 * 2 * n  # bytes: a volta do laço (antes dela, a janela de 4 quadros já conferida acima)
+            if gx[volta:] == rb[volta:]:
                 janelas_iguais += 1
             for v in ("continua", "zera"):
                 pv, _ = ref.toca(JANELA, laco=v)
                 if sys.byteorder != "little":
                     pv.byteswap()
-                if pv.tobytes()[2 * 2 * n:] == gx[2 * 2 * n:]:
+                pv = pv.tobytes()
+                if pv[volta:] == gx[volta:]:
                     variantes["laço " + v + " igual ao port"] += 1
-                if pv.tobytes()[2 * 2 * n:] != rb[2 * 2 * n:]:
+                if pv[volta:] != rb[volta:]:
                     var_dif["laço " + v] += 1
+                if v == "continua":
+                    continua = pv
+            if gx[volta:] != rb[volta:]:
+                # a exceção da decisão 25.10: depois da volta, igual à variante "continua" e perto da referência
+                _, kd, md, _ = compara_pcm(rb[volta:], gx[volta:])
+                if gx[volta:] != continua[volta:]:
+                    falhas.append(f"{f.name}: depois da volta do laço, x86 diferente da referência e da variante "
+                                  f"\"continua\" (decisão 25.10) na amostra {n + (kd or 0) // 2}, maior diferença {md}")
+                elif md > LACO_LIMITE:
+                    falhas.append(f"{f.name}: depois da volta do laço, {md} LSB da referência, acima do limite "
+                                  f"{LACO_LIMITE} da exceção (decisão 25.10)")
+                else:
+                    excecoes.append(f.name)
+                laco_max = max(laco_max, (md, f.name))
         if f in sorteados[:60]:  # as variantes do formato (escala e coeficiente), num subconjunto
             for nome, kw in (("escala sem +1", {"escala_mais_um": False}), ("coeficiente arredondado", {"arredonda": True})):
                 pv, _ = ref.toca(JANELA if ref.laco else 0, **kw)
@@ -307,8 +340,8 @@ def cmd_amostras(a):
         for d in sai.values():
             d.unlink(missing_ok=True)
     print(f"ADX: {len(arquivos)} arquivos comparados; com laço {lacos}, janela da volta igual à referência em {janelas_iguais}")
-    if lacos and janelas_iguais != lacos:
-        falhas.append(f"laço: janela da volta diferente da referência em {lacos - janelas_iguais} de {lacos}")
+    print(f"   laço: a exceção da decisão 25.10 (depois da volta igual à variante \"continua\") em {len(excecoes)} de "
+          f"{lacos}; maior diferença da referência {laco_max[0]} LSB ({laco_max[1] or 'nenhum'}), limite {LACO_LIMITE}")
     print("   variantes da referência que dão outro PCM (o que a comparação separa): " +
           (", ".join(f"{k} em {v}" for k, v in sorted(var_dif.items())) or "nenhuma"))
     print("   variantes do laço iguais ao port: " + (", ".join(f"{k} em {v}" for k, v in sorted(variantes.items())) or "nenhuma"))
@@ -377,7 +410,7 @@ def main():
     p.add_argument("--tmp", default="/tmp/som_amostras")
     p.add_argument("--n", type=int, default=300)
     p.add_argument("--semente", type=int, default=25)
-    p.add_argument("--estraga", choices=["adx", "vag", "ppc"])
+    p.add_argument("--estraga", choices=["adx", "vag", "ppc", "laco"])
     a = ap.parse_args()
     if a.cmd == "rastro" and len(a.arquivos) < 2:
         sys.exit("rastro: pelo menos dois arquivos")
