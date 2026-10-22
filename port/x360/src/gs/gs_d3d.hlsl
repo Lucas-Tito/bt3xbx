@@ -138,6 +138,55 @@ GsSaidaZ ps_gsz_triv(GsPixelRZ e) {
     return s;
 }
 
+// BT3_OTIM_PS: o gs_pixel de um desenho sem DATE (misc.y 0), sem arte 2D (misc.w 0), sem teste de alfa (modo.w 0) e sem
+// alvo como textura (modo.x 0 ou 1: sem o rect, e o c6 é 1). Ali o gs_pixel lê em uv0 = stq.xy / stq.z, com os gradientes
+// do próprio uv0 (tex2Dgrad: getGradients, serialize, setGradientH e V); aqui o tex2D, com os gradientes do hardware.
+// As texturas do jogo têm um nível só, sem filtro de mip e com o mesmo filtro de perto e de longe (aplica_sampler), então
+// o gradiente não muda o texel lido: a mesma conta, sem os desvios do que o desenho não usa. Sem textura (comTex falso,
+// modo.x 0), nem a leitura. O resto é o texto do gs_pixel.
+float4 gs_rapido(float4 cor, float3 stq, uniform bool comTex) {
+    float k = 255.0f / 128.0f;
+    float3 rgb = cor.rgb;
+    float a = cor.a * k;
+    if (comTex) {
+        float4 t = tex2D(tex, stq.xy / stq.z);
+        t.a *= k; // textura da memória do GS (modo.x 1): o alfa do GS (0x80 opaco, até 0xFF)
+        if (modo.y == 0.0f) {
+            rgb = t.rgb * cor.rgb * k;
+            if (modo.z != 0.0f) a = t.a * a;
+        } else if (modo.y == 1.0f) {
+            rgb = t.rgb;
+            if (modo.z != 0.0f) a = t.a;
+        } else {
+            rgb = t.rgb * cor.rgb * k + cor.aaa;
+            if (modo.z != 0.0f) a = (modo.y == 2.0f) ? t.a + a : t.a;
+        }
+    }
+    // FBA: o GS liga o bit 7 do alfa gravado, ou seja, alfa >= 0x80, que na cor é 1
+    if (misc.z != 0.0f) {
+        a = 1.0f;
+    }
+    return float4(saturate(rgb), saturate(a));
+}
+float4 ps_gs_tex(GsPixelR e) : COLOR0 {
+    return gs_rapido(e.cor, e.stq, true);
+}
+float4 ps_gs_sem(GsPixelR e) : COLOR0 {
+    return gs_rapido(e.cor, e.stq, false);
+}
+GsSaidaZ ps_gsz_tex(GsPixelRZ e) {
+    GsSaidaZ s;
+    s.cor = gs_rapido(e.cor, e.stq, true);
+    s.z = saturate(e.zw.x / e.zw.y);
+    return s;
+}
+GsSaidaZ ps_gsz_sem(GsPixelRZ e) {
+    GsSaidaZ s;
+    s.cor = gs_rapido(e.cor, e.stq, false);
+    s.z = saturate(e.zw.x / e.zw.y);
+    return s;
+}
+
 // ---- cópia de uma textura para a tela: a volta de um alvo para a EDRAM e o present
 
 struct CopiaEntrada { float2 pos : POSITION; float2 uv : TEXCOORD0; };

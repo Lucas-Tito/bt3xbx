@@ -100,6 +100,10 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "vu6_vs.h"
 #include "gs_triv_ps.h"  /* (720p, retomada: ps_gs_triv, ps_gsz_triv; ver otim_init) */
 #include "gsz_triv_ps.h"
+#include "gs_tex_ps.h"   /* (720p, retomada, BT3_OTIM_PS: ps_gs_tex, ps_gs_sem, ps_gsz_tex, ps_gsz_sem) */
+#include "gs_sem_ps.h"
+#include "gsz_tex_ps.h"
+#include "gsz_sem_ps.h"
 
 #include "escala.h"
 /* (F5, etapa 8, 720p, etapa 2) O tamanho dos alvos, das profundidades e do par da EDRAM, em pixels de saída: a área de
@@ -1230,12 +1234,34 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
      BT3_PS_TRIVIAL=bits  o pixel shader trivial (a cor do vértice: ps_gs_triv, ps_gsz_triv) nos desenhos, 1 nos comuns, 2 nos
                           da VU1: o teto do ganho de um shader mais curto, pela GPU por classe
      BT3_TEX_TILED=1      as texturas do jogo de 32 x 32 ou mais tiled (tex_fmt; XGTileTextureLevel no envio, na gravação) no
-                          lugar de lineares: a A/B da busca de textura */
-static unsigned sPsTrivial;
-static D3DPixelShader *sPsTriv[2]; /* [0] ps_gs_triv, [1] ps_gsz_triv */
+                          lugar de lineares: a A/B da busca de textura
+   Otimizações que não mudam a imagem, cada uma com a sua chave (BT3_OTIM=1 liga todas; a de cada uma em 0 a desliga):
+     BT3_OTIM_PS=1        o pixel shader especializado (ps_gs_tex e ps_gs_sem, ps_gsz_tex e ps_gsz_sem; gs_rapido no
+                          gs_d3d.hlsl) nos desenhos sem DATE, sem arte 2D, sem teste de alfa e sem alvo como textura */
+enum { OT_PS = 1 };
+static unsigned sOtim, sPsTrivial;
+static D3DPixelShader *sPsTriv[2];    /* [0] ps_gs_triv, [1] ps_gsz_triv */
+static D3DPixelShader *sPsRap[2][2];  /* [z][com textura]: ps_gs_sem, ps_gs_tex, ps_gsz_sem, ps_gsz_tex */
 static unsigned env_num(const char *nome, unsigned padrao);
+/* (no trecho de 60 quadros, do desenho) o que as otimizações fizeram (otim_log) */
+static struct {
+    unsigned psRap, psSem, psGs;
+} sOt;
 
 static void otim_init(void) {
+    unsigned todas = env_num("BT3_OTIM", 0) != 0;
+    sOtim = (env_num("BT3_OTIM_PS", todas) != 0 ? OT_PS : 0);
+    if ((sOtim & OT_PS) && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsSemPs, &sPsRap[0][0])) ||
+                            FAILED(sDev->CreatePixelShader((const DWORD *)kGsTexPs, &sPsRap[0][1])) ||
+                            FAILED(sDev->CreatePixelShader((const DWORD *)kGsZSemPs, &sPsRap[1][0])) ||
+                            FAILED(sDev->CreatePixelShader((const DWORD *)kGsZTexPs, &sPsRap[1][1])))) {
+        Diario_Escrever("gs_d3d: ERRO: os shaders especializados não foram criados; BT3_OTIM_PS desligada");
+        sOtim &= ~OT_PS;
+    }
+    if (sOtim != 0) {
+        Diario_Escrever("gs_d3d: retomada do 720p, otimizações (BT3_OTIM=%u): shader especializado %s (BT3_OTIM_PS)", todas,
+                        (sOtim & OT_PS) ? "sim" : "não");
+    }
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
     if (sPsTrivial != 0 && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsTrivPs, &sPsTriv[0])) ||
@@ -1255,11 +1281,27 @@ static void otim_init(void) {
    chaves, uma variante */
 static D3DPixelShader *ps_escolhe(const GsDraw *d, int estado) {
     int z = estado >= 2 && sCorte;
-    (void)d;
     if (sPsTrivial & (estado >= 2 ? 2u : 1u)) {
         return sPsTriv[z];
     }
+    /* (BT3_OTIM_PS) sem DATE (misc.y), sem arte 2D (misc.w), sem teste de alfa (modo.w) e sem alvo como textura (modo.x 2:
+       o rect e o c6); o FBA (misc.z) e a função da textura (modo.y, modo.z) o especializado ainda lê das constantes */
+    if ((sOtim & OT_PS) && d->misc[1] == 0.0f && d->misc[3] == 0.0f && d->mode[3] == 0 && d->mode[0] != 2) {
+        sOt.psRap++;
+        sOt.psSem += d->mode[0] == 0;
+        return sPsRap[z][d->mode[0] != 0];
+    }
+    sOt.psGs++;
     return z ? sPsGsZ : sPsGs;
+}
+
+/* (no log do trecho) o que as otimizações fizeram, por quadro */
+static void otim_log(unsigned t) {
+    if (sOtim != 0) {
+        Diario_Escrever("gs_d3d:   retomada do 720p, por quadro: desenhos pelo shader especializado %.1f (%.1f sem textura), pelo "
+                        "geral %.1f", (double)sOt.psRap / t, (double)sOt.psSem / t, (double)sOt.psGs / t);
+    }
+    memset(&sOt, 0, sizeof(sOt));
 }
 
 /* ---- texturas -------------------------------------------------------------------------------------------- */
@@ -2600,7 +2642,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
             sDev->SetIndices(sVuIb[sVuPar]);
         }
         sEstadoGs = estado;
-    } else if (sPsTrivial != 0) {
+    } else if (sPsTrivial != 0 || (sOtim & OT_PS)) {
         D3DPixelShader *ps = ps_escolhe(d, estado);
         if (ps != sCurPs) {
             sDev->SetPixelShader(ps);
@@ -3072,6 +3114,7 @@ static void log_quadros(void) {
         log_vu1_zera();
         sTabTipoN = 0;
         tempo_zera();
+        memset(&sOt, 0, sizeof(sOt)); /* (720p, retomada) */
         return;
     }
     if (q == 0) {
@@ -3094,6 +3137,7 @@ static void log_quadros(void) {
     log_vu1_zera();
     log_prof(t);
     log_nativas(t);
+    otim_log(t); /* (720p, retomada) */
     log_tempos(sConta.msQuadro / q);
     log_memoria();
     if (sDiv) {
