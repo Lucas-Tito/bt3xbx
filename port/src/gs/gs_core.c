@@ -841,11 +841,65 @@ static void transfer_begin(void) {
     }
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação: docs/x360/plano/F5/08-gravacao.md, seção 18) O envio de 8 e de 4 bits por colunas, sob
+   BT3_ENVIO_RAPIDO=1. Uma coluna do GS são 4 linhas alinhadas a 4 (16 pixels de 8 bits ou 32 de 4 bits) em 64 bytes
+   seguidos do bloco, e cada palavra dela junta pixels de duas linhas: nos 8 bits, a palavra 4g + 2a + e (g de 0 a 3, a de
+   0 a 1, e de 0 a 1) tem nos seus 4 bytes os pixels xa e xa + 8 da linha a e xb e xb + 8 da linha a + 2, com
+   xa = (2g + e) ^ 4p e xb = xa ^ 4 (p: a coluna ímpar dentro do bloco, que troca as metades, o x ^ 4 do sCol8); nos 4
+   bits, a mesma palavra tem nos seus 8 meios bytes os pixels xa + 8j (os pares) e xb + 8j (os ímpares), j de 0 a 3 (o
+   kCol4First). Com as 4 linhas da coluna no pacote, cada palavra se monta inteira dos bytes de origem e se grava uma
+   vez: nos 8 bits uma escrita de 4 bytes no lugar de quatro de 1, nos 4 bits uma no lugar de oito leituras e oito
+   escritas de 1 byte (o meio byte relido e regravado). O começo da coluna é a tabela do envio (sIn8, sIn4) sem os 6 (7)
+   bits de dentro da coluna, e a máscara da volta dos 4 MB vale para a coluna inteira (64 bytes alinhados). Os mesmos
+   bytes nos mesmos lugares que o laço por pixel; a ordem só muda dentro de uma faixa de 4 linhas, onde nenhum par de
+   pixels cai no mesmo byte (as páginas de uma linha são distintas). */
+static int sEnvioRapido = -1; /* BT3_ENVIO_RAPIDO, lida uma vez; desligada por padrão até o console */
+
+static void envio_faixa8(const uint8_t *s, uint32_t tw, uint32_t dbp, uint32_t bw, uint32_t x, uint32_t y) {
+    const uint16_t *in = sIn8[y & 63];
+    uint32_t base = (dbp + (y >> 6) * 32 * (bw >> 1)) << 8, fim = x + tw, par = (y >> 2) & 1, k;
+
+    for (; x < fim; x += 16, s += 16) {
+        uint32_t *d = &sVram[((base + ((x >> 7) << 13) + (in[x & 127] & ~63u)) & 0x3FFFFF) >> 2];
+        uint32_t *lo = par ? d + 8 : d, *hi = par ? d : d + 8; /* lo: xa de 0 a 3; hi: de 4 a 7 */
+        const uint8_t *s0 = s, *s1 = s + tw, *s2 = s + 2 * tw, *s3 = s + 3 * tw;
+        for (k = 0; k < 4; k++) { /* k = 2g + e dentro da metade; a palavra 4g + e, e + 2 com a = 1 */
+            uint32_t w = (k >> 1) * 4 + (k & 1);
+            lo[w] = GS_LE32(s0[k] | s2[k + 4] << 8 | s0[k + 8] << 16 | (uint32_t)s2[k + 12] << 24);
+            lo[w + 2] = GS_LE32(s1[k] | s3[k + 4] << 8 | s1[k + 8] << 16 | (uint32_t)s3[k + 12] << 24);
+            hi[w] = GS_LE32(s0[k + 4] | s2[k] << 8 | s0[k + 12] << 16 | (uint32_t)s2[k + 8] << 24);
+            hi[w + 2] = GS_LE32(s1[k + 4] | s3[k] << 8 | s1[k + 12] << 16 | (uint32_t)s3[k + 8] << 24);
+        }
+    }
+}
+
+static void envio_faixa4(const uint8_t *s, uint32_t tw, uint32_t dbp, uint32_t bw, uint32_t x, uint32_t y) {
+    const uint16_t *in = sIn4[y & 127];
+    uint32_t base = (dbp + (y >> 7) * 32 * (bw >> 1)) << 9, fim = x + tw, lin = tw >> 1, par2 = ((y >> 2) & 1) * 2, g, a;
+
+    for (; x < fim; x += 32, s += 16) {
+        uint32_t *d = &sVram[(((base + ((x >> 7) << 14) + (in[x & 127] & ~127u)) >> 1) & 0x3FFFFF) >> 2];
+        for (a = 0; a < 2; a++) {
+            const uint8_t *ra = s + a * lin, *rb = s + (a + 2) * lin;
+            for (g = 0; g < 4; g++) { /* os bytes de origem dos pixels xa + 8j (a linha a) e xb + 8j (a linha a + 2) */
+                uint32_t ia = g ^ par2, ib = ia ^ 2;
+                uint32_t la = ra[ia] | ra[ia + 4] << 8 | ra[ia + 8] << 16 | (uint32_t)ra[ia + 12] << 24;
+                uint32_t lb = rb[ib] | rb[ib + 4] << 8 | rb[ib + 8] << 16 | (uint32_t)rb[ib + 12] << 24;
+                d[4 * g + 2 * a] = GS_LE32((la & 0x0F0F0F0Fu) | (lb & 0x0F0F0F0Fu) << 4);    /* e = 0: os meios baixos */
+                d[4 * g + 2 * a + 1] = GS_LE32((la >> 4 & 0x0F0F0F0Fu) | (lb & 0xF0F0F0F0u)); /* e = 1: os altos */
+            }
+        }
+    }
+}
+#endif
+
 static void transfer_data(const uint8_t *p, uint32_t bytes) {
     uint32_t dbp = (gs.bitbltbuf >> 32) & 0x3FFF, dbw = (gs.bitbltbuf >> 48) & 0x3F, dpsm = (gs.bitbltbuf >> 56) & 0x3F;
     uint32_t bits, total, i;
 #ifdef BT3_GS_ESPERAS
     uint64_t famT;
+    int faixas; /* o envio por colunas serve a este envio (o formato e o alinhamento do retângulo) */
 #endif
 #if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
     static FILE *sEnvioConta;
@@ -912,12 +966,36 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
        textures again and again in every frame: this loop was a quarter of the renderer's time). The same writes
        as vram_rw makes. */
     i = 0;
+#ifdef BT3_GS_ESPERAS
+    if (sEnvioRapido < 0) {
+        sEnvioRapido = getenv("BT3_ENVIO_RAPIDO") != NULL && atoi(getenv("BT3_ENVIO_RAPIDO")) != 0;
+    }
+    faixas = sEnvioRapido && ((dpsm == 0x13 && (gs.tx & 15) == 0 && (gs.tw & 15) == 0) ||
+                              (dpsm == 0x14 && (gs.tx & 31) == 0 && (gs.tw & 31) == 0));
+#endif
     if (dpsm == 0x00 || dpsm == 0x02 || dpsm == 0x0A || dpsm == 0x13 || dpsm == 0x14) {
         uint32_t bw = dbw ? dbw : 1, count = bytes * 8 / bits;
         uint8_t *vram8 = (uint8_t *)sVram; /* GS memory and the IMAGE data are the PS2's bytes, on any host */
         uint16_t *vram16 = (uint16_t *)sVram;
         while (i < count && gs.tpos < total) {
             uint32_t col = gs.tpos % gs.tw, y = gs.ty + gs.tpos / gs.tw, x = gs.tx + col, run = gs.tw - col, j;
+#ifdef BT3_GS_ESPERAS
+            /* uma faixa de 4 linhas inteiras, começando numa linha de coluna, toda neste pedaço e no retângulo */
+            if (faixas && col == 0 && (y & 3) == 0 && count - i >= 4 * gs.tw && total - gs.tpos >= 4 * gs.tw &&
+                (dpsm == 0x13 || (i & 1) == 0)) {
+                if (dpsm == 0x13) {
+                    envio_faixa8(p + i, gs.tw, dbp, bw, x, y);
+                } else {
+                    envio_faixa4(p + (i >> 1), gs.tw, dbp, bw, x, y);
+                }
+                i += 4 * gs.tw;
+                gs.tpos += 4 * gs.tw;
+#ifdef BT3_GPU_FALSO
+                cfaixas += 4 * gs.tw;
+#endif
+                continue;
+            }
+#endif
             if (run > count - i) {
                 run = count - i;
             }
