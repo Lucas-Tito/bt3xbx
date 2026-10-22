@@ -687,8 +687,12 @@ As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md)
 3. **Quem mistura:** um mixer do port numa voz só de 48 kHz estéreo (b), para a mistura ser provada no WSL.
 4. **Fluxos:** lidos em blocos de 64 KiB numa thread de carga, fora da thread do jogo (b); as vozes carregadas antes
    da luta (c) só se a medição pedir; sem tabela de durações na ISO (d).
-5. **Filmes:** decodificados na thread do jogo (a); outra opção só se aparecer problema.
-6. **A imagem do filme:** pela cadeia do jogo, medida (a).
+5. **Filmes:** decodificados na thread do jogo (a); outra opção só se aparecer problema. **Confirmada no console em
+   22/10/2026** ([F6/06](plano/F6/06.md), seção 5.8): com a leitura em blocos e a imagem direto à textura, a decodificação
+   fica em p50 16,7 ms e p99 18,8 ms, o período entre imagens em p50 32,9 e p99 34,9 ms; a thread própria não é precisa.
+6. **A imagem do filme:** pela cadeia do jogo, medida (a). **Revista para (b) na etapa 6** (aprovada pelo Lucas, 22/10/2026):
+   a imagem decodificada vai direto a uma textura do backend (`BT3_FILME`, ligada por padrão desde a rodada do console de
+   22/10/2026); a cadeia do jogo custava quatro cópias por imagem.
 7. **Sincronismo do filme:** livre como no PS2 (a), com a deriva medida.
 8. **Guide:** pausa os efeitos e as vozes, a música segue (a).
 9. **A prova do som:** as redes automáticas do WSL e a sessão de escuta (b); sem o ajuste fino de volume contra o

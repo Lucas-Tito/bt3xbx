@@ -62,8 +62,8 @@ static LARGE_INTEGER sAnterior;
 int Filme360_Ligado(void) {
     static int v = -1;
     if (v < 0) {
-        const char *e = getenv("BT3_FILME");
-        v = e != NULL && atoi(e) == 1;
+        const char *e = getenv("BT3_FILME"); /* ligada por padrão desde a rodada do console de 22/10; BT3_FILME=0 desliga */
+        v = e == NULL || atoi(e) == 1;
     }
     return v;
 }
