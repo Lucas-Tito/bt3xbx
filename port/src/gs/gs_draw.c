@@ -468,7 +468,15 @@ static GsTex texture_get(int ctx) {
             px[y * tw + x] = c;
         }
     }
+#ifdef PORT_X360
+    {   /* (picos: a decodificação do quadro, gs_internal.h) */
+        uint64_t d_ = gpu_now() - tex_t0;
+        gGpuTexNs += d_;
+        gPicosTexNs += d_;
+    }
+#else
     gGpuTexNs += gpu_now() - tex_t0;
+#endif
 #ifdef PORT_X360
     {
         /* o D3D recusou com o piso cumprido: descarta mais e tenta uma vez de novo (o descarte muda sTex: só depois
@@ -527,6 +535,10 @@ static GsTex texture_get(int ctx) {
     }
     gGpuNewTex++;
     gGpuNewTexPixels += tw * th;
+#ifdef PORT_X360
+    gPicosTexN++;
+    gPicosTexPx += tw * th;
+#endif
     sLast = t;
     t->tex0 = t0;
     t->texa = texa;
@@ -3999,15 +4011,22 @@ static void desenho_entrega(void) {
     uint32_t i, c[5];
     int k;
     uint64_t t0, dt, f0, f1;
+#ifdef PORT_X360
+    uint64_t pEsp; /* (picos: a espera pelo desenho, gs_internal.h) */
+#endif
 
     GS_FAM_INI(f0); /* (F5, etapa 8, gravação: a espera pelo desenho, a cópia e o gancho do backend, gs_internal.h) */
 #ifdef PORT_X360
+    pEsp = gPicos != 0 ? __mftb() : 0;
     pthread_mutex_lock(&sDesLock); /* o desenho largou o retrato anterior e não repete o último quadro até a entrega acabar */
     while (sDesTem && !sDesParado) {
         pthread_cond_wait(&sDesFeito, &sDesLock);
     }
     sEntregando = 1;
     pthread_mutex_unlock(&sDesLock);
+    if (pEsp != 0) {
+        pEsp = __mftb() - pEsp;
+    }
 #else
     GsDraw_DesenhoEspera(); /* o desenho largou o retrato anterior e soltou o que viajava com ele */
 #endif
@@ -4090,6 +4109,11 @@ static void desenho_entrega(void) {
         sCopiaPior = dt;
     }
     sEntregas++;
+#ifdef PORT_X360
+    if (gPicos != 0) { /* (antes de acordar o desenho: ele escreve a linha do quadro de dois atrás) */
+        Picos_Gravou(sRetrato.quadro, pEsp, c);
+    }
+#endif
     pthread_mutex_lock(&sDesLock);
 #ifdef PORT_X360
     sEntregando = 0;
@@ -4248,6 +4272,17 @@ void GsGpu_FrameEnd(void) {
                 interp_remember();
                 gInterpSkipped++;
             }
+#ifdef PORT_X360
+            if (gPicos != 0) { /* (sem a divisão: a gravação e o desenho na mesma thread, sem espera entre eles) */
+                uint32_t pc[5];
+                pc[0] = gsDrawCount;
+                pc[1] = gsVertCount;
+                pc[2] = gsVuVertCount;
+                pc[3] = gsVuIdxCount;
+                pc[4] = gsVuUniCount;
+                Picos_Gravou(gGsFrame, 0, pc);
+            }
+#endif
             BACKEND_FRAME_END();
             interp_present_log('S');
             scale_apply();

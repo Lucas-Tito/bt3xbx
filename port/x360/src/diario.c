@@ -50,6 +50,9 @@ static void (*volatile sGancho)(void) = NULL;
 /* as contas de tempo (microssegundos); escritas só por quem está gravando, lidas na linha de estatística */
 static LARGE_INTEGER sFreq;
 static unsigned sLotes, sDescargas, sPiorLoteUs, sPiorDescargaUs;
+/* (F5, etapa 8, picos) as linhas escritas, de qualquer thread, e o tempo da escritora no disco (lotes e flushes), em us
+   (gs_internal.h; o gs_d3d.cpp os junta no registro dos quadros lentos) */
+unsigned gPicosDiario, gPicosDiarioDiscoUs;
 
 static unsigned UsDesde(const LARGE_INTEGER *t0) {
     LARGE_INTEGER t;
@@ -151,6 +154,7 @@ static int Drenar(void) {
     }
     us = UsDesde(&t0);
     sLotes++;
+    gPicosDiarioDiscoUs += us;
     if (us > sPiorLoteUs) {
         sPiorLoteUs = us;
     }
@@ -175,6 +179,7 @@ static void Comitar(void) {
     FlushFileBuffers(sArquivo);
     us = UsDesde(&t0);
     sDescargas++;
+    gPicosDiarioDiscoUs += us;
     if (us > sPiorDescargaUs) {
         sPiorDescargaUs = us;
     }
@@ -188,6 +193,7 @@ void Diario_Escrever(const char *formato, ...) {
     if (sArquivo == INVALID_HANDLE_VALUE || !sTravaPronta) {
         return;
     }
+    gPicosDiario++;
     va_start(args, formato);
     n = _vsnprintf(linha, sizeof(linha) - 2, formato, args);
     va_end(args);

@@ -284,6 +284,9 @@ uint32_t Gs_PageHash(uint32_t page) {
 #ifdef BT3_GS_ESPERAS
     GS_FAM_INI(famT);
 #endif
+#ifdef PORT_X360
+    gPicosHash++;
+#endif
     w = &sVram[page * 2048];
     {   /* four independent 64-bit lanes (the processor runs them side by side), folded at the end */
         uint64_t l[4] = {0x9E3779B97F4A7C15ull, 0xC2B2AE3D27D4EB4Full, 0x165667B19E3779F9ull, 0x27D4EB2F165667C5ull}, q;
@@ -780,6 +783,10 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
     GS_FAM_INI(famT);
     gGsFamBytes += bytes;
 #endif
+#ifdef PORT_X360
+    gPicosEnvios++;
+    gPicosEnvioBytes += bytes;
+#endif
     /* A picture uploaded straight into a display buffer (the movies: page 0, 512 wide, the second buffer 448 lines
        down): the GPU back end has to copy it from GS memory into that buffer's texture at the end of the frame. */
     if (dbp == 0 && dbw == 8 && Gs_PsmBits(dpsm) == 32) {
@@ -1254,6 +1261,9 @@ static volatile int sParar;
 static int sParado;
 static uint32_t sJobQwc;
 static int sJobFbp; /* o gGsMainFbp na entrega do trabalho (render_post) */
+#ifdef PORT_X360
+static unsigned sJobJogo; /* (picos) o gGsFrameJogo na entrega da lista (gs_internal.h) */
+#endif
 int gGsFbpEntregue = -1;
 static void render_wait(void);
 static void gif_corpo(uint32_t addr, uint32_t qwc, int chain);
@@ -1275,6 +1285,9 @@ static void *render_thread(void *arg) {
 #endif
     pthread_mutex_lock(&sLock);
     for (;;) {
+#ifdef PORT_X360
+        uint64_t ocioso = gPicos != 0 && sJob == 0 ? __mftb() : 0; /* (picos: a gravação sem trabalho, gs_internal.h) */
+#endif
         while (sJob == 0) {
 #if defined(BT3_GS_ESPERAS) && defined(PORT_X360)
             /* o jogo que passa de 50 ms sem entregar quadro (carga) deixa o último na tela: a Guide só abre se alguém
@@ -1292,6 +1305,11 @@ static void *render_thread(void *arg) {
             pthread_cond_wait(&sWake, &sLock);
 #endif
         }
+#ifdef PORT_X360
+        if (ocioso != 0) {
+            gPicosGOcioso += __mftb() - ocioso;
+        }
+#endif
         if (sJob == 1) {
             sInitResult = GsGpu_Init();
 #ifdef BT3_GS_ESPERAS
@@ -1328,6 +1346,9 @@ static void *render_thread(void *arg) {
             gGsFbpEntregue = sJobFbp;
             gGsThreadEstado = 2;
 #endif
+#ifdef PORT_X360
+            gPicosQJogo = sJobJogo; /* (picos: o quadro do jogo desta lista, para a gravação achar a vaga dele) */
+#endif
             pthread_mutex_unlock(&sLock);
 #if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
             if (sAtrasoUs < 0) {
@@ -1358,11 +1379,27 @@ static void *render_thread(void *arg) {
 
 /* Blocks until the render thread has nothing to do. */
 static void render_wait(void) {
+#ifdef PORT_X360
+    uint64_t t0 = 0; /* (picos: o jogo esperando a gravação, gs_internal.h; só quem espera de fato lê o relógio) */
+    pthread_mutex_lock(&sLock);
+    if (gPicos != 0 && sJob != 0) {
+        t0 = __mftb();
+    }
+    while (sJob != 0) {
+        pthread_cond_wait(&sDone, &sLock);
+    }
+    pthread_mutex_unlock(&sLock);
+    if (t0 != 0) {
+        gPicosJEspera += __mftb() - t0;
+        gPicosJEsperas++;
+    }
+#else
     pthread_mutex_lock(&sLock);
     while (sJob != 0) {
         pthread_cond_wait(&sDone, &sLock);
     }
     pthread_mutex_unlock(&sLock);
+#endif
 }
 
 static void render_post(int job, uint32_t tadr, int tte) {
@@ -1670,6 +1707,9 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
     static uint64_t next, start, sum, worst, sumGame, sumList, sumTex, sumPipe, sumEnd, perMin = ~0ull, perMax;
     static unsigned n, over;
     uint64_t t, tChain;
+#ifdef PORT_X360
+    uint64_t picoVb = 0; /* (picos: a espera de vblank do quadro, gs_internal.h) */
+#endif
 
     if (!gs_on()) {
         return;
@@ -1711,6 +1751,9 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
         uint64_t waited = (uint64_t)gPortSleptNs;
         uint64_t work = t - start > waited ? t - start - waited : 0; /* without the waiting for the vertical blank */
         gPortSleptNs = 0;
+#ifdef PORT_X360
+        picoVb = waited;
+#endif
         {   /* a frame over budget: where the time went and what was created in it */
             extern unsigned gGpuNewTex, gGpuNewTexPixels, gGpuNewPipes;
             extern uint64_t gGpuTexNs, gGpuPipeNs, gGpuEndNs;
@@ -1773,6 +1816,12 @@ void Port_GsVif1Chain(uint32_t tadr, int tte) {
         if (getenv("BT3_GS_RACE") != NULL) {
             race_walk(tadr, 0);
         }
+#ifdef PORT_X360
+        if (gPicos != 0 && !gPortResim) {
+            Picos_Jogo(gGsFrameJogo, picoVb); /* (antes do render_post: o fim do período do jogo neste quadro) */
+        }
+        sJobJogo = gGsFrameJogo; /* (lido pela gravação ao pegar a lista, sob o sLock do render_post) */
+#endif
         render_post(2, tadr, tte);
 #ifdef BT3_GS_ESPERAS
         if (!gPortResim) {

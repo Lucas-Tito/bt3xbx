@@ -60,14 +60,24 @@ static double ms_desde(LARGE_INTEGER antes) {
     return (double)(agora.QuadPart - antes.QuadPart) * 1000.0 / (double)f.QuadPart;
 }
 
+/* (F5, etapa 8, picos) as leituras do disco desde a última entrega do jogo: quantas, os bytes e o tempo (o relógio do
+   QueryPerformanceCounter, com a trava); o gs_d3d.cpp as junta no registro dos quadros lentos (gs_internal.h) */
+unsigned gPicosIsoN;
+unsigned __int64 gPicosIsoBytes, gPicosIsoTiques;
+
 static int ler(__int64 pos, void *buf, unsigned long n) {
-    LARGE_INTEGER p;
+    LARGE_INTEGER p, t0, t1;
     DWORD lidos = 0;
     BOOL ok;
     p.QuadPart = pos;
+    QueryPerformanceCounter(&t0);
     EnterCriticalSection(&sTrava);
     ok = SetFilePointerEx(sIso, p, NULL, FILE_BEGIN) && ReadFile(sIso, buf, n, &lidos, NULL);
     LeaveCriticalSection(&sTrava);
+    QueryPerformanceCounter(&t1);
+    gPicosIsoN++;
+    gPicosIsoBytes += n;
+    gPicosIsoTiques += (unsigned __int64)(t1.QuadPart - t0.QuadPart);
     return ok && lidos == n;
 }
 
