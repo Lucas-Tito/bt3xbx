@@ -184,7 +184,7 @@ static void conta_unpack(int v4, const void *src, uint32_t addr, uint32_t n) {
 #endif
 
 #ifdef PORT_X360
-/* (F5, etapa 8, estudo do Unpack; protótipo, só no 360) BT3_UNPACK_PRE=N: a cópia V4-32 pede antes, com dcbt, as linhas de
+/* (F5, etapa 8, estudo do Unpack; só no 360, ligada por padrão desde 22/10) BT3_UNPACK_PRE=N: a cópia V4-32 pede antes, com dcbt, as linhas de
    128 bytes da origem inteira e mais D bytes depois dela (o começo do Unpack seguinte, que na cadeia vem logo atrás), para a
    memória atender várias faltas de uma vez em vez de uma por vez. N = 1 usa D = 1024; N >= 128 é o próprio D; sem a chave ou
    com 0, a cópia de sempre. Com a chave, o run_chain (gs_core.c) pede também as duas primeiras linhas da etiqueta seguinte
@@ -196,7 +196,9 @@ static int sPre = -1;
 int GsVu1_Pre(void) { /* a distância da pré-carga em bytes, 0 desligada */
     if (sPre < 0) {
         const char *e = getenv("BT3_UNPACK_PRE");
-        sPre = e == NULL || atoi(e) <= 0 ? 0 : atoi(e) < 128 ? 1024 : atoi(e);
+        /* (22/10) ligada por padrão com D = 1024: no console a cópia caiu de 439 para 360 ns; com 4096 subiu para 538 e
+           a VU1 piorou 3,6 ms (a pré-carga longe tira do cache o que a VU1 usa). BT3_UNPACK_PRE=0 desliga */
+        sPre = e == NULL ? 1024 : atoi(e) <= 0 ? 0 : atoi(e) < 128 ? 1024 : atoi(e);
     }
     return sPre;
 }
