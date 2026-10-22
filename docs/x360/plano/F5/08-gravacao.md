@@ -1472,7 +1472,7 @@ tela. Convenção: **[medido]**, **[lido]** e **[estimado]**.
 
 | Commit | O quê |
 |---|---|
-| (a) | **A espera acumulada própria**: `gPortVBlankEsperaNs` no `plat_stub.c` (só cresce), com as esperas de fato, quantas acabaram no vblank de hardware, quantas acordaram 1 ms ou mais depois do momento pedido e o pior atraso ao acordar desde a última leitura do `passos`. O `passos.c` desconta dela (o `gPortSleptNs` segue como era para o `gs_core.c`). **A tela**: o `gs_d3d.cpp` instala no init (pela dona do dispositivo, a thread de desenho com `BT3_GS_DESENHO=1`) uma callback de vblank (`SetVerticalBlankCallback`), que numa DPC guarda o `mftb`, conta quantos vblanks cada imagem ficou na tela (pelo `Swap` mostrado do `D3DVBLANKDATA`, que muda quando uma imagem nova entra), as trocas perdidas (`D3DVBLANK_SWAPMISSED`) e as imagens puladas, e sinaliza um evento. A callback sai no `GsD3d_Soltar` e a main a tira de novo quando toma o dispositivo de volta. A linha nova `passos: janela K tela:` e o critério do `passos.py --console` pela tela. Tudo em `PORT_X360`: a x86 e a PPC compilam o mesmo texto de antes |
+| `8bd7db3` (a) | **A espera acumulada própria**: `gPortVBlankEsperaNs` no `plat_stub.c` (só cresce), com as esperas de fato, quantas acabaram no vblank de hardware, quantas acordaram 1 ms ou mais depois do momento pedido e o pior atraso ao acordar desde a última leitura do `passos`. O `passos.c` desconta dela (o `gPortSleptNs` segue como era para o `gs_core.c`). **A tela**: o `gs_d3d.cpp` instala no init (pela dona do dispositivo, a thread de desenho com `BT3_GS_DESENHO=1`) uma callback de vblank (`SetVerticalBlankCallback`), que numa DPC guarda o `mftb`, conta quantos vblanks cada imagem ficou na tela (pelo `Swap` mostrado do `D3DVBLANKDATA`, que muda quando uma imagem nova entra), as trocas perdidas (`D3DVBLANK_SWAPMISSED`) e as imagens puladas, e sinaliza um evento. A callback sai no `GsD3d_Soltar` e a main a tira de novo quando toma o dispositivo de volta. A linha nova `passos: janela K tela:` e o critério do `passos.py --console` pela tela. Tudo em `PORT_X360`: a x86 e a PPC compilam o mesmo texto de antes |
 
 **A callback** [lido no XDK: `D3DVBLANKCALLBACK`, `D3DVBLANKDATA`, `SetVerticalBlankCallback` e o exemplo `AsyncSwaps.cpp:1281`]:
 roda numa DPC, onde só valem os `Interlocked*`, o `SetEvent` e afins com um handle válido, sem float e sem espera. Ela só lê o
@@ -1529,7 +1529,7 @@ vblanks com o som ligado".
 
 | Commit | O quê |
 |---|---|
-| (b) | No 360, o `vblank_wait` do `plat_stub.c` pergunta primeiro ao `gs_d3d.cpp` (`GsD3d_VblankEspera`): a thread do jogo espera o evento que a callback de vblank sinaliza, em vez do `Sleep`. `BT3_VBLANK_HW=1` é o padrão; `BT3_VBLANK_HW=0` volta ao `Sleep` (para comparar na mesma build). O `Sleep` fica de reserva: antes da callback (os menus antes do init do backend), depois do `GsD3d_Soltar` (a saída), sem vblank há 50 ms ou um evento que não veio em 50 ms (a Guide, o dispositivo parado); cada passagem é dita no log (`gs_d3d: vblank: a espera no Sleep (motivo; ...)` e `... de volta ao vblank de hardware`, até 20 vezes). Em `PORT_X360` |
+| `3ae20e6` (b) | No 360, o `vblank_wait` do `plat_stub.c` pergunta primeiro ao `gs_d3d.cpp` (`GsD3d_VblankEspera`): a thread do jogo espera o evento que a callback de vblank sinaliza, em vez do `Sleep`. `BT3_VBLANK_HW=1` é o padrão; `BT3_VBLANK_HW=0` volta ao `Sleep` (para comparar na mesma build). O `Sleep` fica de reserva: antes da callback (os menus antes do init do backend), depois do `GsD3d_Soltar` (a saída), sem vblank há 50 ms ou um evento que não veio em 50 ms (a Guide, o dispositivo parado); cada passagem é dita no log (`gs_d3d: vblank: a espera no Sleep (motivo; ...)` e `... de volta ao vblank de hardware`, até 20 vezes). Em `PORT_X360` |
 
 **A conta é a mesma do `vblank_wait`** [lido]: um alvo (o número do vblank de hardware que acaba a próxima espera) que anda um por
 chamada; o vblank que já passou não se espera (o passo da luta que passou de um vblank não perde a vez: a segunda espera dele acaba
@@ -1550,3 +1550,67 @@ numa fase qualquer. O que muda é só a fase: o caminho do controle à tela fica
 `GsD3d_Soltar` tira a callback e marca a espera desligada antes de soltar o dispositivo, e a main tira de novo se tomar o
 dispositivo de uma thread que caiu; numa queda o evento segue válido (nunca se fecha) e a espera que estiver em curso volta em até
 50 ms para o `Sleep`.
+
+### As provas [medido]
+
+| Prova | Resultado |
+|---|---|
+| O pré-processado (`gcc -E -P`, sem linhas em branco) do `plat_stub.c` e do `passos.c`, main contra `3ae20e6` | igual nas definições da x86 plana, da `x86gv` (`BT3_TESTE_VU1`) e da PPC (`PORT_BIG_ENDIAN`); diferente com as do 360 (`PORT_X360`): a comparação vê a mudança onde ela existe. O `gs_d3d.cpp` e o `main360.cpp` só entram na build do 360 |
+| `.text` da x86 plana (WSL, serviço `claude-vblank`, worktree `~/bt3xbx-vb`) | `43444ea4d03a6d448aa1ae74a631e35b356a7caa` na main `64353a4` e no `3ae20e6`: a referência |
+| `.text` da `x86gv` (`--gpu --vu1`), a mesma rodada | `eead10fc381957a692618088926fb09fdeda8aea` antes e depois, a mesma: as listas da `x86gv` não podem mudar |
+| Listas da `x86gv`, `f5_duelo` e `f5_treino`, sem e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, main contra `3ae20e6` (`divergencias.py`) | **pendente**: o mesmo serviço, esperando a trava do WSL atrás de uma rodada da PPC de outro agente; resumo em `~/vblank/provas.resumo` (termina em `FIM`). Com a `.text` igual e o pré-processado igual o resultado esperado é 0 nos quatro pares |
+| `ppcg` | não refeita: o pré-processado com as definições da PPC é o mesmo (acima), então os objetos são os mesmos (guia, "Uma mudança só no 360 depois das provas do WSL") |
+| O verificador do `passos.py` | visto falhando de propósito (acima, em (a)) |
+| A conta da espera | a simulação das duas contas (acima, em (b)): as mesmas 7.886 esperas e o mesmo período |
+| A callback no `dumpbin` do `.exe` (`vblank_cb`, `0x82277a10` no `default.map` do `3ae20e6`) | só inteiros (`lwz`, `stw`, `std`, `mftb`, `lwsync`) e a chamada ao `SetEvent`: nenhuma instrução de float nem de vetor na DPC |
+
+### A build do 360
+
+`build_f2.sh` em cada commit, carimbo sem diferença: 317 de 317 fontes sem erro, 985 avisos nos fontes do jogo (os mesmos da build da
+main), 0 no `gs_d3d.cpp`, no `main360.cpp`, no `plat_stub.c` e no `passos.c`, os mesmos 103 stubs (`diff` com o `stubs.txt` da main),
+`default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap` `abbd7589c8425797c4a2639068c9bf54` iguais. **`default.xex`** do
+`8bd7db3` (a): `bf6d8814210c5bd2b623357128b7d07b`; do `3ae20e6` (b): **`806fe3c1fc3bb46dfe23f2bb151c2ce3`**. No `default.map` do (b):
+`vblank_cb` em `0x82277a10`, `GsD3d_VblankEspera` em `0x82277d58`, `Passos_Tela` em `0x82277f00`.
+
+### A rodada no console proposta
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-vblank` (a build do `3ae20e6`): `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e
+`boot.txt` (cópias de `port/x360/roteiros/`), `ambiente_vb0.txt` (`BT3_VBLANK_HW=0`, o `Sleep`, saves `saves_vb0`) e
+`ambiente_vb1.txt` (`BT3_VBLANK_HW=1`, o vblank de hardware, saves `saves_vb1`), os dois como o `ambiente_sx1.txt` da última rodada
+da seção 17 (o `f5_duelo` pelo roteiro, `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_WIDE=1`, decisão 26, e `BT3_SOM=1`, o som ligado); o
+`ambiente.txt` é a cópia do `ambiente_vb0.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_vb0.txt build/x360/f2/ambiente_vb1.txt
+# abertura 1 (o Sleep); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_vb1.txt
+# abertura 2 (o vblank de hardware); baixar o log de novo
+# cada log à parte (as duas janelas do combate, 684 e 2.334 passos na referência):
+python3 port/x360/tools/passos.py bt3xbx_vb1.log --console --janelas 2 --minimo 600 --carimbo "3ae20e6 diff:da39a3ee5e"
+```
+
+**O que olhar:**
+
+1. **A linha do init** em cada abertura: `gs_d3d: vblank: a callback do vblank de hardware instalada ...; a espera de vblank pelo
+   Sleep (BT3_VBLANK_HW=0)` e `... pelo vblank de hardware, o Sleep de reserva (BT3_VBLANK_HW=1)`. Na abertura 2, nenhum
+   `gs_d3d: vblank: a espera no Sleep` durante a luta (no boot e nas cargas pode haver).
+2. **As imagens de 3 vblanks na tela**, na linha `passos: janela K tela:` das duas janelas do combate (684 e 2.334 passos na
+   referência): a porcentagem de "3 ou mais" e os "4 ou mais". Na abertura 1 deve aparecer o engasgo que a CPU via (11,5% dos
+   intervalos acima de 34,37 ms com o som); na 2, bem menos [estimado: o que sobrar é passo que de fato passou do período]. Se a
+   linha disser **0 imagens na tela** ou muito menos imagens que passos, o `Swap` do `D3DVBLANKDATA` não anda com as trocas
+   síncronas: a medida da tela precisa de outro sinal (o `QuerySwapStatus` ou o `D3DVBLANK_SWAPMISSED`, que a linha também
+   conta), e a espera do (b) não depende disso.
+3. **O atraso ao acordar**, na mesma linha: na abertura 1, p99 perto de 1,4 a 2,5 ms e muitas esperas com 1 ms ou mais (a
+   investigação viu 24 de 70 quadros lentos); na 2, p99 bem abaixo de 1 ms (a volta da DPC à thread, dezenas de microssegundos
+   [estimado]) e as esperas todas "pelo vblank de hardware".
+4. **O p95 e o p99 do intervalo**: os da `apresentação` (o intervalo na CPU depois do `Present`) e o do `trabalho`, que agora
+   desconta a espera de verdade (a `espera de vblank` da linha de tempo deixa de ser 0,0 ms; o trabalho p50 deixa de ser 33,37).
+5. A parede de cada janela dentro de 1% nas duas aberturas (a espera nova não pode mudar o ritmo), os passos por janela e o
+   resultado da luta iguais aos da referência (vencedor 0x2 KO, vida 0 27160, vblank 11478); nenhum `roteiro: FALHA`, nenhum
+   `vigia:`, nenhum `CRASH`.
+
+**Recomendação.** O padrão do branch já é `BT3_VBLANK_HW=1`. Se a abertura 2 mostrar menos imagens de 3 vblanks e o atraso ao
+acordar abaixo de 1 ms, sem nada novo, fica assim; se não, o padrão volta a 0 num commit e o `Sleep` segue como era. Depois, o
+critério do escopo pela tela (a proposta acima) é decisão do Lucas.
