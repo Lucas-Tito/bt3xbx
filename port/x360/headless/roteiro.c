@@ -1248,6 +1248,9 @@ int ADXT_GetStat(void *adxt);
 extern struct { int active; unsigned char *keys; unsigned short index, count; float time, length; } gLipSync;
 extern int gLipSyncWaiting;
 extern unsigned char *gHistResult;
+#ifdef PORT_X360
+#include <time.h> /* (o clock_gettime do posix360.c: o tempo real de cada linha, só no console) */
+#endif
 #define SOM_CANAIS 6
 #define SOM_CAMPOS 40
 #define TELA_HIST_RESULTADO 8
@@ -1327,7 +1330,19 @@ void Roteiro_SomEstado(void) {
                 som_i32(gHistResult, 0x138), (som_i32(gHistResult, 0x20) & 2) != 0, som_i32(gHistResult, 0x24) & 1);
     }
 #ifdef PORT_X360
-    Diario_Escrever("%s", s);
+    {
+        /* no console, o tempo real no fim da linha (" | ms N", desde a primeira linha): a duração de uma fala em ms
+           contra a contada em vblanks, a deriva que a decisão 25.1 manda medir. Fora da comparação com o WSL (a
+           nota tira o " | ms N" antes do diff) */
+        static struct timespec t0;
+        struct timespec agora_ts;
+        clock_gettime(CLOCK_MONOTONIC, &agora_ts);
+        if (t0.tv_sec == 0 && t0.tv_nsec == 0) {
+            t0 = agora_ts;
+        }
+        Diario_Escrever("%s | ms %ld", s,
+                        (agora_ts.tv_sec - t0.tv_sec) * 1000L + (agora_ts.tv_nsec - t0.tv_nsec) / 1000000L);
+    }
 #else
     printf("%s\n", s);
     fflush(stdout);
