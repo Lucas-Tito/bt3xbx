@@ -1,6 +1,6 @@
 /*
- * F5, etapa 8 (a resolução interna maior, etapa 2; docs/x360/plano/F5/08-720p.md): as contas da área dos alvos e da
- * escala, em C89 puro e sem o XDK. O gs_d3d.cpp as usa; port/x360/tools/teste_escala.c as testa no Linux com o gcc.
+ * F5, etapa 8 (a resolução interna maior, etapas 2 e 3; docs/x360/plano/F5/08-720p.md): as contas da área dos alvos e
+ * da escala, em C89 puro e sem o XDK. O gs_d3d.cpp as usa; port/x360/tools/teste_escala.c as testa no Linux com o gcc.
  *
  * A área é em pixels do GS (o alvo lógico do gs_draw.c é 1024 x 1024; o jogo desenha no máximo 640 x 448); a escala, em
  * meios (2 é 1, 3 é 1,5, 4 é 2); a área vezes a escala, em pixels de saída, é o tamanho dos alvos, das profundidades e
@@ -145,6 +145,49 @@ static int esc_prende(int *x0, int *y0, int *x1, int *y1, int w, int h) {
     if (*x1 > w) *x1 = w;
     if (*y1 > h) *y1 = h;
     return cortou;
+}
+
+/* (720p, etapa 3) Uma borda x em pixels do GS levada a pixels de saída na escala `meios`: floor(x * meios / 2), x >= 0. É a
+   regra do rasterizador com os centros dos pixels em .5 (HALFPIXELOFFSET ligado): o pixel de saída k fica no pixel do GS
+   floor((k + 0,5) / s), então o pixel x do GS cobre de esc_px(x) a esc_px(x + 1) - 1 (na escala 1,5, 1 e 2 pixels de
+   saída alternados; o agrupamento da arte 2D, floor(f / s) * s no gs_pixel, dá o mesmo). As tesouras, os retângulos das
+   nativas e a redução das capturas usam esta conta nas duas bordas: retângulos vizinhos do GS continuam vizinhos, sem
+   fresta nem sobreposição. (A seção 4 do plano propunha floor(x * s + 0,5): sem fresta também, mas na escala 1,5 a tesoura
+   ficaria um pixel de saída fora do que a primitiva da mesma borda cobre.) Nas escalas 1 e 2 é exata. */
+static int esc_px(int x, int meios) {
+    return x * meios / 2;
+}
+
+/* o inverso, para os logs: quantos pixels do GS cobrem v pixels de saída (arredondado para cima) */
+static int esc_gs(int v, int meios) {
+    return (v * 2 + meios - 1) / meios;
+}
+
+/* (720p, etapa 3) A captura reduzida: w x h pixels do GS em `saida` (`spitch` pixels por linha), cada um a média, canal a
+   canal e arredondada, dos pixels de saída que ele cobre (esc_px) em `lin` (`pitch` pixels por linha, pelo menos
+   esc_px(w) x esc_px(h)). Os pixels são palavras de 32 bits com 4 canais de 8 (A8R8G8B8 como u32). Na escala 1, a cópia. */
+static void esc_reduz(const unsigned *lin, int pitch, int w, int h, int meios, unsigned *saida, int spitch) {
+    int x, y, i, j, c;
+    for (y = 0; y < h; y++) {
+        int j0 = esc_px(y, meios), j1 = esc_px(y + 1, meios);
+        for (x = 0; x < w; x++) {
+            int i0 = esc_px(x, meios), i1 = esc_px(x + 1, meios);
+            unsigned n = (unsigned)((i1 - i0) * (j1 - j0)), soma[4], r = 0;
+            soma[0] = soma[1] = soma[2] = soma[3] = 0;
+            for (j = j0; j < j1; j++) {
+                for (i = i0; i < i1; i++) {
+                    unsigned p = lin[j * pitch + i];
+                    for (c = 0; c < 4; c++) {
+                        soma[c] += (p >> (8 * c)) & 255u;
+                    }
+                }
+            }
+            for (c = 0; c < 4; c++) {
+                r |= ((soma[c] + n / 2) / n) << (8 * c);
+            }
+            saida[y * spitch + x] = r;
+        }
+    }
 }
 
 #endif
