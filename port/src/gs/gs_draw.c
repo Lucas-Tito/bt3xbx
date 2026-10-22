@@ -1470,6 +1470,57 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
     }
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação, seção 15 da nota) O fecho dos três GsGpu_DrawVu*: juntar ao desenho anterior ou abrir outro. É o
+   mesmo de antes, com o bloco uniforme montado direto na vaga seguinte do gsVuUni (os 304 bytes não são mais copiados da
+   pilha para a lista a cada desenho novo; num desenho que junta, a vaga fica para o próximo, e nada lê o gsVuUni além da
+   contagem) e as comparações feitas palavra a palavra em linha no lugar das chamadas ao memcmp (o resultado é o mesmo:
+   memcmp igual a 0 é todas as palavras iguais). Num quadro de luta metade dos desenhos junta, e cada junção compara o
+   bloco inteiro. */
+#define VU_U (*pu)
+static int iguais32(const void *a, const void *b, unsigned n) {
+    const uint32_t *x = (const uint32_t *)a, *y = (const uint32_t *)b;
+    unsigned i;
+    for (i = 0; i < n; i++) {
+        if (x[i] != y[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+static int same_state_vu(const GsDraw *a, const GsDraw *b) {
+    return !a->native && a->vu == b->vu && a->target == b->target && a->tex == b->tex && a->sampler == b->sampler &&
+           a->pipeline == b->pipeline && iguais32(a->mode, b->mode, 4) && a->misc[0] == b->misc[0] && a->misc[1] == b->misc[1] &&
+           a->misc[2] == b->misc[2] && a->misc[3] == b->misc[3] && a->blendc == b->blendc && iguais32(a->rect, b->rect, 4) &&
+           iguais32(a->orig, b->orig, 4) && iguais32(a->scissor, b->scissor, 4);
+}
+static void vu_fecho(GsDraw *d, const Vu0Uniform *pu) {
+    GsDraw *last;
+    gsTargets[d->target].draws++;
+    gsTargets[d->target].gen = gGsPageGen[gsTargets[d->target].fbp & 511];
+    last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
+#if defined(BT3_GPU_FALSO)
+    EST_CONTA_FECHO(last, d, pu);
+#endif
+    if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
+        vu_faixa(gsDrawCount - 1, d->first, d->count, 1);
+        last->count += d->count;
+#ifdef PORT_X360
+        GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
+        return;
+    }
+    d->uniform = (int)gsVuUniCount++; /* (pu é a vaga gsVuUni[gsVuUniCount]) */
+    vu_faixa(gsDrawCount, d->first, d->count, 0);
+    gsDraws[gsDrawCount++] = *d;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
+}
+#else
+#define VU_U u
+#endif
+
 /* Vertex program 6 as a shader: one strip of the ground under a fighter, textured with the shadow page (see
    shaders/vu6.vert). Vertices: four quadwords each (position with an integer "no draw" flag in w, normal, colour
    as floats, a slot the original fills with s, t). A flagged vertex means: the triangle that ends here is not
@@ -1478,8 +1529,13 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     if (gPortResim) { /* a frame that is only being re-run: nothing is drawn */
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    Vu0Uniform *pu; /* (seção 15 da nota da gravação) o bloco uniforme, montado na vaga seguinte do gsVuUni (vu_fecho) */
+    GsDraw d;
+#else
     Vu0Uniform u;
     GsDraw d, *last;
+#endif
     float us, vs;
     uint32_t i, k, flag;
 
@@ -1500,15 +1556,18 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
-    memset(&u, 0, sizeof(u));
-    memcpy(u.boneA, &consts[0x0C * 4], 64);  /* world -> shadow camera */
-    u.pivotA[0] = consts[0x10 * 4];          /* texture scale */
-    u.pivotB[0] = us;
-    u.pivotB[1] = vs;
-    memcpy(u.screen, &consts[0], 64);
-    u.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
-    u.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
-    u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+#ifdef BT3_GS_ESPERAS
+    pu = &gsVuUni[gsVuUniCount];
+#endif
+    memset(&VU_U, 0, sizeof(VU_U));
+    memcpy(VU_U.boneA, &consts[0x0C * 4], 64);  /* world -> shadow camera */
+    VU_U.pivotA[0] = consts[0x10 * 4];          /* texture scale */
+    VU_U.pivotB[0] = us;
+    VU_U.pivotB[1] = vs;
+    memcpy(VU_U.screen, &consts[0], 64);
+    VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
+    VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
+    VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
@@ -1544,12 +1603,12 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
         gGsFamVuVet[c_] += count;
     }
 #endif
+#ifdef BT3_GS_ESPERAS
+    vu_fecho(&d, pu);
+#else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
-#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
-    EST_CONTA_FECHO(last, &d, &u);
-#endif
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
 #ifdef BT3_GS_ESPERAS
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
@@ -1569,6 +1628,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
+#endif
 }
 
 /* Vertex program 4 as a shader: one strip of stage geometry (see shaders/vu4.vert). Vertices: position, colour
@@ -1577,8 +1637,13 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     if (gPortResim) { /* a frame that is only being re-run: nothing is drawn */
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    Vu0Uniform *pu; /* (seção 15 da nota da gravação) o bloco uniforme, montado na vaga seguinte do gsVuUni (vu_fecho) */
+    GsDraw d;
+#else
     Vu0Uniform u;
     GsDraw d, *last;
+#endif
     float us, vs;
     uint32_t i, k;
 
@@ -1599,11 +1664,14 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
-    memset(&u, 0, sizeof(u));
-    memcpy(u.screen, &consts[0], 64);
-    u.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
-    u.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
-    u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+#ifdef BT3_GS_ESPERAS
+    pu = &gsVuUni[gsVuUniCount];
+#endif
+    memset(&VU_U, 0, sizeof(VU_U));
+    memcpy(VU_U.screen, &consts[0], 64);
+    VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
+    VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
+    VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
@@ -1628,12 +1696,12 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
         gGsFamVuVet[c_] += count;
     }
 #endif
+#ifdef BT3_GS_ESPERAS
+    vu_fecho(&d, pu);
+#else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
-#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
-    EST_CONTA_FECHO(last, &d, &u);
-#endif
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
 #ifdef BT3_GS_ESPERAS
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
@@ -1653,6 +1721,7 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
+#endif
 }
 
 /* Vertex program 0 as a shader: one strip of the fighters' models (see shaders/vu0.vert and gs_vu1.c). The strip
@@ -1661,8 +1730,13 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     if (gPortResim) { /* a frame that is only being re-run: nothing is drawn */
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    Vu0Uniform *pu; /* (seção 15 da nota da gravação) o bloco uniforme, montado na vaga seguinte do gsVuUni (vu_fecho) */
+    GsDraw d;
+#else
     Vu0Uniform u;
     GsDraw d, *last;
+#endif
     float us, vs;
     uint32_t i, k;
 
@@ -1683,19 +1757,22 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
-    memcpy(u.boneA, &consts[0], 64);
-    memcpy(u.boneB, &consts[16], 64);
-    memcpy(u.pivotA, &consts[32], 16);
-    memcpy(u.pivotB, &consts[36], 16);
-    memcpy(u.screen, &consts[56], 64);
-    u.light[0] = consts[40]; u.light[1] = consts[44]; u.light[2] = consts[48]; u.light[3] = consts[52];
-    memcpy(u.color0, &consts[88], 16);
-    memcpy(u.color1, &consts[92], 16);
-    u.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
-    u.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
-    u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
-    u.misc[3] = (float)layer;
-    u.light2[0] = consts[41]; u.light2[1] = consts[45]; u.light2[2] = consts[49]; u.light2[3] = consts[53];
+#ifdef BT3_GS_ESPERAS
+    pu = &gsVuUni[gsVuUniCount];
+#endif
+    memcpy(VU_U.boneA, &consts[0], 64);
+    memcpy(VU_U.boneB, &consts[16], 64);
+    memcpy(VU_U.pivotA, &consts[32], 16);
+    memcpy(VU_U.pivotB, &consts[36], 16);
+    memcpy(VU_U.screen, &consts[56], 64);
+    VU_U.light[0] = consts[40]; VU_U.light[1] = consts[44]; VU_U.light[2] = consts[48]; VU_U.light[3] = consts[52];
+    memcpy(VU_U.color0, &consts[88], 16);
+    memcpy(VU_U.color1, &consts[92], 16);
+    VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
+    VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
+    VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+    VU_U.misc[3] = (float)layer;
+    VU_U.light2[0] = consts[41]; VU_U.light2[1] = consts[45]; VU_U.light2[2] = consts[49]; VU_U.light2[3] = consts[53];
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
@@ -1727,12 +1804,12 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         gGsFamVuVet[c_] += count;
     }
 #endif
+#ifdef BT3_GS_ESPERAS
+    vu_fecho(&d, pu);
+#else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
-#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
-    EST_CONTA_FECHO(last, &d, &u);
-#endif
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
 #ifdef BT3_GS_ESPERAS
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
@@ -1751,6 +1828,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     gsDraws[gsDrawCount++] = d;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
 #endif
 }
 
