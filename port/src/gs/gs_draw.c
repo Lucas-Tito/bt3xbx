@@ -972,15 +972,16 @@ static void date_snapshot(const GsDraw *d) {
    Os efeitos do draw_state que deu certo (o last do alvo, da vaga lida e da textura igual ao quadro, e o sLast) já valem
    num acerto, pois o quadro está na chave; o sLast é posto de novo. Um draw_state que recusou o desenho (gsSkipped, as
    vagas marcadas, o depth_clut) nunca entra na memória. */
-static struct {
+typedef struct EstMem {
     uint64_t prim, t0, test, cl, sc, frame, zbuf, alpha, fba, tex1, texa;
     uint32_t quadro, alvos, epoch, gen;
-    int valido, ctx, vu, pack, src;
+    int valido, vu, pack, src;
     GsTex white;
     Tex *tex; /* a entrada do cache (com textura) ou NULL */
     float us, vs;
     GsDraw d;
-} sEst;
+} EstMem;
+static EstMem sEst[2]; /* uma por contexto: as duas camadas dos programas 0 e 1 se alternam entre os dois */
 #if defined(BT3_GPU_FALSO)
 /* (só nas builds --gpu) BT3_VU_ESTADO_CONFERE=1: em todo acerto o draw_state completo também roda, e é o resultado dele que
    vale; as diferenças são contadas (uma linha a cada 1.000 quadros com o acumulado e as contagens dos lotes e do fecho, e
@@ -1008,50 +1009,51 @@ static int alvo_acha(uint32_t fbp) {
     return -1;
 }
 
-#define EST_ENTRADA(ctx_, vu_) (sEst.valido && sEst.ctx == (ctx_) && sEst.vu == (vu_) && sEst.quadro == gGsFrame && \
-    sEst.alvos == sAlvosMuda && sEst.prim == gGs.prim && sEst.t0 == gGs.tex0[ctx_] && sEst.test == gGs.test[ctx_] && \
-    sEst.cl == gGs.clamp[ctx_] && sEst.sc == gGs.scissor[ctx_] && sEst.frame == gGs.frame[ctx_] && \
-    sEst.zbuf == gGs.zbuf[ctx_] && sEst.alpha == gGs.alpha[ctx_] && sEst.fba == gGs.fba[ctx_] && \
-    sEst.tex1 == gGs.tex1[ctx_] && sEst.texa == gGs.texa && sEst.white == gsWhite && sEst.pack == sTexPackOn)
+#define EST_ENTRADA(e, ctx_, vu_) ((e)->valido && (e)->vu == (vu_) && (e)->quadro == gGsFrame && \
+    (e)->alvos == sAlvosMuda && (e)->prim == gGs.prim && (e)->t0 == gGs.tex0[ctx_] && (e)->test == gGs.test[ctx_] && \
+    (e)->cl == gGs.clamp[ctx_] && (e)->sc == gGs.scissor[ctx_] && (e)->frame == gGs.frame[ctx_] && \
+    (e)->zbuf == gGs.zbuf[ctx_] && (e)->alpha == gGs.alpha[ctx_] && (e)->fba == gGs.fba[ctx_] && \
+    (e)->tex1 == gGs.tex1[ctx_] && (e)->texa == gGs.texa && (e)->white == gsWhite && (e)->pack == sTexPackOn)
 
 /* 1: o resultado da memória vale para este lote (o d já preenchido); 0: o draw_state completo tem de rodar */
 static int est_acerta(int ctx, int vu, GsDraw *d) {
+    EstMem *e = &sEst[ctx & 1];
     Tex *t;
     GsTex x;
 
-    if (!EST_ENTRADA(ctx, vu)) {
+    if (!EST_ENTRADA(e, ctx, vu)) {
 #if defined(BT3_GPU_FALSO)
         sEstN.falhaChave++;
         if (sEstConfere) {
-            int c = !sEst.valido ? 0 : sEst.ctx != ctx ? 1 : sEst.vu != vu ? 2 : sEst.quadro != gGsFrame ? 3 : sEst.alvos != sAlvosMuda ? 4 :
-                    sEst.prim != gGs.prim ? 5 : sEst.t0 != gGs.tex0[ctx] ? 6 : sEst.test != gGs.test[ctx] ? 7 : sEst.cl != gGs.clamp[ctx] ? 8 :
-                    sEst.sc != gGs.scissor[ctx] ? 9 : sEst.frame != gGs.frame[ctx] ? 10 : sEst.zbuf != gGs.zbuf[ctx] ? 11 :
-                    sEst.alpha != gGs.alpha[ctx] ? 12 : sEst.fba != gGs.fba[ctx] ? 13 : sEst.tex1 != gGs.tex1[ctx] ? 14 :
-                    sEst.texa != gGs.texa ? 15 : 16;
+            int c = !e->valido ? 0 : e->vu != vu ? 2 : e->quadro != gGsFrame ? 3 : e->alvos != sAlvosMuda ? 4 :
+                    e->prim != gGs.prim ? 5 : e->t0 != gGs.tex0[ctx] ? 6 : e->test != gGs.test[ctx] ? 7 : e->cl != gGs.clamp[ctx] ? 8 :
+                    e->sc != gGs.scissor[ctx] ? 9 : e->frame != gGs.frame[ctx] ? 10 : e->zbuf != gGs.zbuf[ctx] ? 11 :
+                    e->alpha != gGs.alpha[ctx] ? 12 : e->fba != gGs.fba[ctx] ? 13 : e->tex1 != gGs.tex1[ctx] ? 14 :
+                    e->texa != gGs.texa ? 15 : 16;
             sEstN.campo[c]++;
-            if (c == 5 && ((sEst.prim ^ gGs.prim) & 0x50) == 0) {
+            if (c == 5 && ((e->prim ^ gGs.prim) & 0x50) == 0) {
                 sEstN.campo[17]++; /* (só bits do PRIM que o draw_state não lê) */
             }
         }
 #endif
         return 0;
     }
-    if (sEst.tex == NULL) {
-        memcpy(d, &sEst.d, sizeof(*d));
+    if (e->tex == NULL) {
+        memcpy(d, &e->d, sizeof(*d));
         return 1;
     }
-    if (sEst.src >= 0 && (sEst.t0 & 0x1F) == 0 && gsTargets[sEst.src].cleared &&
-        gsTargets[sEst.src].gen == gGsPageGen[gsTargets[sEst.src].fbp & 511]) {
+    if (e->src >= 0 && (e->t0 & 0x1F) == 0 && gsTargets[e->src].cleared &&
+        gsTargets[e->src].gen == gGsPageGen[gsTargets[e->src].fbp & 511]) {
 #if defined(BT3_GPU_FALSO)
         sEstN.falhaSrc++;
 #endif
         return 0; /* o alvo em tbp / 32 viraria a textura */
     }
-    t = sEst.tex;
-    if (sEst.epoch == gGsPageEpoch && t < &sTex[gsTexCount] && t->tex == sEst.d.tex &&
-        t->tex0 == (sEst.t0 & 0x1FFFFFFFFFFFFFFFull) && t->texa == sEst.texa && t->gen == sEst.gen) {
+    t = e->tex;
+    if (e->epoch == gGsPageEpoch && t < &sTex[gsTexCount] && t->tex == e->d.tex &&
+        t->tex0 == (e->t0 & 0x1FFFFFFFFFFFFFFFull) && t->texa == e->texa && t->gen == e->gen) {
         sLast = t;
-        memcpy(d, &sEst.d, sizeof(*d));
+        memcpy(d, &e->d, sizeof(*d));
         return 1;
     }
 #if defined(BT3_GPU_FALSO)
@@ -1059,9 +1061,9 @@ static int est_acerta(int ctx, int vu, GsDraw *d) {
 #endif
     x = texture_get(ctx);
     if (x == gsWhite) { /* (sem espaço: o draw_state daria a branca; a próxima vez tenta de novo, pelo caminho completo) */
-        memcpy(d, &sEst.d, sizeof(*d));
+        memcpy(d, &e->d, sizeof(*d));
         d->tex = gsWhite;
-        sEst.valido = 0;
+        e->valido = 0;
         return 1;
     }
     if (sLast == NULL || sLast->tex != x || sLast->replaced) {
@@ -1072,56 +1074,57 @@ static int est_acerta(int ctx, int vu, GsDraw *d) {
         return 0;
     }
 #if defined(BT3_GPU_FALSO)
-    if (x != sEst.d.tex) {
+    if (x != e->d.tex) {
         sEstN.texNova++;
     }
 #endif
-    sEst.tex = sLast;
-    sEst.gen = sLast->gen;
-    sEst.epoch = gGsPageEpoch;
-    sEst.d.tex = x;
-    memcpy(d, &sEst.d, sizeof(*d));
+    e->tex = sLast;
+    e->gen = sLast->gen;
+    e->epoch = gGsPageEpoch;
+    e->d.tex = x;
+    memcpy(d, &e->d, sizeof(*d));
     return 1;
 }
 
 /* guarda o resultado de um draw_state que deu certo, se ele pode ser lembrado */
 static void est_guarda(int ctx, int vu, const GsDraw *d, float us, float vs) {
+    EstMem *e = &sEst[ctx & 1];
     uint64_t t0 = gGs.tex0[ctx];
     int tme = (int)((gGs.prim >> 4) & 1);
 
-    sEst.valido = 0;
+    e->valido = 0;
     if (d->tex_is_target || (tme && (sLast == NULL || sLast->tex != d->tex || sLast->replaced || d->tex == gsWhite))) {
         return;
     }
-    sEst.prim = gGs.prim;
-    sEst.t0 = t0;
-    sEst.test = gGs.test[ctx];
-    sEst.cl = gGs.clamp[ctx];
-    sEst.sc = gGs.scissor[ctx];
-    sEst.frame = gGs.frame[ctx];
-    sEst.zbuf = gGs.zbuf[ctx];
-    sEst.alpha = gGs.alpha[ctx];
-    sEst.fba = gGs.fba[ctx];
-    sEst.tex1 = gGs.tex1[ctx];
-    sEst.texa = gGs.texa;
-    sEst.quadro = gGsFrame;
-    sEst.alvos = sAlvosMuda;
-    sEst.epoch = gGsPageEpoch;
-    sEst.white = gsWhite;
-    sEst.pack = sTexPackOn;
-    sEst.ctx = ctx;
-    sEst.vu = vu;
-    sEst.tex = tme ? sLast : NULL;
-    sEst.gen = tme ? sLast->gen : 0;
-    sEst.src = tme ? alvo_acha((uint32_t)((t0 & 0x3FFF) / 32)) : -1;
-    sEst.us = us;
-    sEst.vs = vs;
-    memcpy(&sEst.d, d, sizeof(*d));
-    sEst.valido = 1;
+    e->prim = gGs.prim;
+    e->t0 = t0;
+    e->test = gGs.test[ctx];
+    e->cl = gGs.clamp[ctx];
+    e->sc = gGs.scissor[ctx];
+    e->frame = gGs.frame[ctx];
+    e->zbuf = gGs.zbuf[ctx];
+    e->alpha = gGs.alpha[ctx];
+    e->fba = gGs.fba[ctx];
+    e->tex1 = gGs.tex1[ctx];
+    e->texa = gGs.texa;
+    e->quadro = gGsFrame;
+    e->alvos = sAlvosMuda;
+    e->epoch = gGsPageEpoch;
+    e->white = gsWhite;
+    e->pack = sTexPackOn;
+    e->vu = vu;
+    e->tex = tme ? sLast : NULL;
+    e->gen = tme ? sLast->gen : 0;
+    e->src = tme ? alvo_acha((uint32_t)((t0 & 0x3FFF) / 32)) : -1;
+    e->us = us;
+    e->vs = vs;
+    memcpy(&e->d, d, sizeof(*d));
+    e->valido = 1;
 }
 
 /* o draw_state dos três GsGpu_DrawVu*, pela memória */
 static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
+    EstMem *e = &sEst[ctx & 1];
     int r;
 #if defined(BT3_GPU_FALSO)
     if (sEstConfere < 0) {
@@ -1135,7 +1138,7 @@ static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
         sEstAntCtx = ctx;
         sEstAntT0 = gGs.tex0[ctx];
         sEstAntTexa = gGs.texa;
-        if (EST_ENTRADA(ctx, vu)) {
+        if (EST_ENTRADA(e, ctx, vu)) {
             sEstN.igualAnterior++;
         }
     }
@@ -1153,8 +1156,8 @@ static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
             sEstN.vuAcertos[vu & 3]++;
         }
 #endif
-        *us = sEst.us;
-        *vs = sEst.vs;
+        *us = e->us;
+        *vs = e->vs;
 #if defined(BT3_GPU_FALSO)
         if (sEstConfere) {
             GsDraw c;
@@ -1162,7 +1165,7 @@ static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
             Tex *lembrado = sLast;
             sEstN.acertos++;
             r = draw_state(ctx, 0, 0, vu, &c, &cu, &cv);
-            if (r != 1 || memcmp(&c, d, sizeof(c)) != 0 || cu != *us || cv != *vs || (sEst.tex != NULL && sLast != lembrado)) {
+            if (r != 1 || memcmp(&c, d, sizeof(c)) != 0 || cu != *us || cv != *vs || (e->tex != NULL && sLast != lembrado)) {
                 if (sEstN.diferentes++ < 20) {
                     fprintf(stderr, "gs: BT3_VU_ESTADO_CONFERE: quadro %u, vu %d: completo %d tex %lx alvo %d pipeline %d sampler %d; "
                             "memória tex %lx alvo %d pipeline %d sampler %d\n", gGsFrame, vu, r, (unsigned long)c.tex, c.target,
@@ -1177,7 +1180,7 @@ static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
             if (r) {
                 est_guarda(ctx, vu, d, *us, *vs);
             } else {
-                sEst.valido = 0;
+                e->valido = 0;
             }
             return r;
         }
@@ -1188,12 +1191,12 @@ static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
     if (r) {
         est_guarda(ctx, vu, d, *us, *vs);
 #if defined(BT3_GPU_FALSO)
-        if (sEstConfere && !sEst.valido) {
+        if (sEstConfere && !e->valido) {
             sEstN.naoGuarda++;
         }
 #endif
     } else {
-        sEst.valido = 0;
+        e->valido = 0;
     }
     return r;
 }
