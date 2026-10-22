@@ -847,6 +847,12 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
 #ifdef BT3_GS_ESPERAS
     uint64_t famT;
 #endif
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+    static FILE *sEnvioConta;
+    static int sEnvioContaLida;
+    struct timespec ct0;
+    uint32_t ctpos = gs.tpos, cfaixas = 0;
+#endif
 
     if (!gs.transfer || gs.tw == 0) {
         return;
@@ -854,6 +860,20 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
 #ifdef BT3_GS_ESPERAS
     GS_FAM_INI(famT);
     gGsFamBytes += bytes;
+#endif
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+    /* (F5, etapa 8, gravação, seção 18; só nas builds --gpu do WSL) BT3_ENVIO_CONTA=arquivo: uma linha por chamada (um
+       pedaço IMAGE de um envio): o quadro, o formato, dbp, dbw, o retângulo, a posição no começo, os bytes, o tempo em ns
+       e os pixels que foram pelo envio por colunas. O envio_conta.py soma por formato e por alinhamento. */
+    if (!sEnvioContaLida) {
+        sEnvioContaLida = 1;
+        if (getenv("BT3_ENVIO_CONTA") != NULL) {
+            sEnvioConta = fopen(getenv("BT3_ENVIO_CONTA"), "w");
+        }
+    }
+    if (sEnvioConta != NULL) {
+        clock_gettime(CLOCK_MONOTONIC, &ct0);
+    }
 #endif
 #ifdef PORT_X360
     gPicosEnvios++;
@@ -985,6 +1005,16 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
         gGsPageEpoch++;
 #endif
     }
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+    if (sEnvioConta != NULL) {
+        struct timespec ct1;
+        clock_gettime(CLOCK_MONOTONIC, &ct1);
+        fprintf(sEnvioConta, "%u %x %x %u %u %u %u %u %u %u %lld %u\n", (unsigned)sFrame, (unsigned)dpsm, (unsigned)dbp,
+                (unsigned)dbw, (unsigned)gs.tx, (unsigned)gs.ty, (unsigned)gs.tw, (unsigned)gs.th, (unsigned)ctpos,
+                (unsigned)bytes, (long long)(ct1.tv_sec - ct0.tv_sec) * 1000000000LL + (ct1.tv_nsec - ct0.tv_nsec),
+                (unsigned)cfaixas);
+    }
+#endif
 #ifdef BT3_GS_ESPERAS
     GS_FAM_FIM(GS_FAM_ENVIO, famT);
 #endif
