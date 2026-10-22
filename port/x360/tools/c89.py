@@ -60,7 +60,8 @@ def grupos():
         out.append(("nl_", f, ["-std=gnu89", I("port/include"), "-I" + str(f.parent), "-include", "newlib_shim.h"], True))
     for f in sorted((ROOT / "port/src/gs").glob("*.c")):
         if f.stem in GS_SEM_JANELA:
-            out.append(("gs_", f, ["-std=gnu99", I("port/x360/headless"), I("port/src/gs")], False))
+            # (F6, etapa 3) BT3_SOM360: o áudio da SDL3/SDL.h vira a camada do 360 (port/x360/src/som), não os stubs
+            out.append(("gs_", f, ["-std=gnu99", "-DBT3_SOM360", I("port/x360/headless"), I("port/src/gs")], False))
         elif f.stem in GS_D3D:
             out.append(("gs_", f, ["-std=gnu99", I("port/x360/src/gs/sdl"), I("port/x360/headless"), I("port/src/gs")],
                         False))

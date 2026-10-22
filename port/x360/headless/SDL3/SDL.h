@@ -26,9 +26,9 @@ static inline uint64_t SDL_GetTicksNS(void) {
     return (uint64_t)t.tv_sec * 1000000000ull + (uint64_t)t.tv_nsec;
 }
 
-#ifdef BT3_GRAVADOR
-/* F6, etapa 2, rede 4 (headless.py --gravador): um dispositivo que grava, em port/x360/headless/gravador.c; um relógio de
-   teste puxa cada fluxo a cada vblank (som.c) */
+#if defined(BT3_GRAVADOR) || defined(BT3_SOM360)
+/* F6, etapa 2, rede 4 (headless.py --gravador): o dispositivo que grava (gravador.c, puxado por som.c a cada vblank);
+   etapa 3 (BT3_SOM360, só no console, pelo c89.py): a camada do 360 sobre o XAudio2 (port/x360/src/som) */
 const char *SDL_GetError(void);
 bool SDL_InitSubSystem(uint32_t flags);
 const char *SDL_GetCurrentAudioDriver(void);
