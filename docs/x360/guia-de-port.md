@@ -1314,6 +1314,20 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `BT3_SOM360` (só o `c89.py` do console o define) no mesmo número de linhas: o texto pré-processado do WSL fica igual e
   os objetos da x86 plana não mudam (nenhuma `.text` a refazer).
 
+### A medição do decodificador dos filmes (F6, etapa 6, `plano/F6/06.md`)
+
+- **Medir por diferença dos contadores que já existem, sem mexer no código do upstream.** O decodificador lê o `.PSS`
+  dentro do `Mpeg2_Next`; os contadores de leitura da ISO do `iso360.c` (`gPicosIso*`, da F5) dão a parte da leitura
+  por diferença, e a decodificação é o resto. Vale enquanto uma thread só lê a ISO (sem `BT3_SOM`).
+- **Um modo de medida no 360 entra na `Jogo()`, antes do `__real_main`, e sai por `Port_Sair(0)`:** sem estado do jogo,
+  na thread de hardware certa e com fim claro (tela verde). As linhas do vigia ("parada há ...") são esperadas: ninguém
+  conta vblank.
+- **O carimbo do `.xex` conta o que não está no commit, inclusive arquivo novo de documentação.** O `build_f2.sh` faz o
+  sha1 do `git diff HEAD` mais os arquivos não rastreados: para o `.xex` da rodada sair com `diff:da39a3ee5e`, commitar o
+  código, guardar o resto (`git stash`) durante a build e só depois escrever as notas (custou uma build).
+- **Código novo só nos fontes do 360 não desloca as tabelas:** o `mpeg_mede.c` (e os 1,75 MiB dele vindos do `malloc`,
+  não estáticos) deixou o md5 do `.dat` e do `.swap` igual, ao contrário de uma biblioteca nova.
+
 ---
 
 ## 7. Lista de passos para um port novo
