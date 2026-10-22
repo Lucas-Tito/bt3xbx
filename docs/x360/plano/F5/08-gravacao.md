@@ -1032,3 +1032,216 @@ python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.
 **Fica fora desta rodada, para a próxima:** o `GsVu1_Call` do 360 ainda chama o `QueryPerformanceCounter` duas vezes por lote (o
 `gGsVu1Ms` do log do backend, `gs_d3d.cpp`), com a medição ligada ou não, uns 10 mil por quadro de luta, fora da família da VU1 (no
 "fora delas"). Trocar pelo `mftb` em linha, ou só com `BT3_TEMPOS`, é um corte barato a medir.
+
+## 15. O estado e o fecho dos lotes da VU1 (22/10/2026)
+
+Branch `f5-estado`, sobre a main `34d07fb`. Medido no console pelo roteiro (seção 14, `f5_duelo`, 33,9 ms de mediana, p95 40,8):
+a VU1 leva 16,6 ms por quadro, e por dentro o **estado** 6,2 ms (com uns 2,1 de hash de página) e o **fecho** 4,6, contra programa
+2,1, índices 2,0, constantes 1,0 e cópias 1,0, em uns 4.500 lotes. Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+### O que as duas marcas cobrem [lido, na main]
+
+- **Estado** (do `GS_VU_MARCA(GS_FAM_V_PROG)` da entrada dos `GsGpu_DrawVu0/4/6`, `gs_draw.c:1151`, `1247`, `1328`, ao
+  `GS_FAM_V_ESTADO`): os testes de capacidade, o `draw_state` (`:762`) e o `date_snapshot` (`:936`). O `draw_state` lê uns dez
+  registradores do contexto, anda a tabela de alvos duas vezes (`GsDraw_TargetGet`, `:673`, uma busca linear em até 24 vagas, para o
+  alvo e para a vaga em `tbp / 32`), faz o `memset` dos 128 bytes do `GsDraw`, chama o `texture_get` (`:321`: a tabela `memo[16]` por
+  TEX0 e época das páginas, o `sLast`; quando a época mudou, o hash das páginas, que é o `HV` da linha da família) e o
+  `pipeline_get` (`:651`), cujo `pipeGet` do backend (`gs_d3d.cpp:1399`) é uma busca linear nos pipelines (29 numa luta), e
+  converte uns seis inteiros para float (no Xenon cada conversão passa pela memória). **Proporcional ao número de chamadas**, com o
+  hash proporcional às páginas reenviadas desde a última vez.
+- **Fecho** (do fim da cópia ao `GS_FAM_V_FECHO`, `:1398` a `:1419` no `DrawVu0`, igual nos outros dois): o `draws++` e o `gen` do
+  alvo, o `same_state` (`:923`, uns 15 campos e quatro `memcmp` de 16 bytes), e então ou o `memcmp` do bloco uniforme inteiro contra
+  o do desenho anterior (304 bytes; só quando o `same_state` passa) e a junção com a `vu_faixa`, ou a cópia do bloco de 304 bytes da
+  pilha para o `gsVuUni`, a `vu_faixa` e a cópia dos 128 bytes do `GsDraw`. **Proporcional às chamadas**, com 304 bytes lidos duas
+  vezes em cada junção e 432 bytes copiados em cada desenho novo.
+
+### O que se repete [medido na `x86gv`]
+
+A chave de teste `BT3_VU_ESTADO_CONFERE=1` (abaixo) conta, nos 4.000 quadros a partir do primeiro desenho da VU1 do `f5_duelo` (com
+a divisão), **15.416.833 chamadas** dos `DrawVu*` (uns 3.850 por quadro):
+
+| | f5_duelo | f5_treino |
+|---|---:|---:|
+| chamadas | 15.416.833 | 10.919.766 |
+| a mesma entrada da chamada anterior (uma vaga só) | 7.599.400 (49,3%) | 4.165.937 (38,2%) |
+| a mesma entrada da última chamada do mesmo contexto (uma vaga por contexto) | **13.268.076 (86,1%)** | **9.113.099 (83,5%)** |
+| desses, com a época das páginas mudada (o `texture_get` chamado de novo) | 49.392 | 19.137 |
+| o fecho: o desenho anterior é o do lote anterior | 15.390.852 (99,8%) | 10.899.229 |
+| o fecho: o mesmo estado (`same_state`) | 8.206.506 (53,2%) | 4.720.889 |
+| o fecho: junta (o bloco uniforme igual, os 304 bytes comparados) | 7.819.830 (50,7%) | 4.391.792 (40,2%) |
+| o fecho: desenho novo (bloco e desenho copiados) | 7.597.003 (49,3%) | 6.527.974 |
+
+Com uma vaga só, 88% das chaves erradas eram **só o contexto**: as duas camadas dos programas 0 e 1 se alternam entre o contexto 0
+e o 1 a cada chamada. Com uma vaga por contexto, o que sobra de erro é o TEX0 (2.120.257 das 2.148.757 no `f5_duelo`: o lote seguinte
+com outra textura). Por programa, no `f5_duelo`: o 0 (lutadores) 9.341.804 acertos de 11.358.472, o 4 (cenário) 3.926.272 de
+4.054.707, o 6 (sombra) nenhum de 3.654 (todos deram certo sem entrar na memória: a sombra lê a página da sombra, um alvo como textura).
+No fecho, a junção custa a comparação inteira (em média 304 bytes, uns 594 KB por quadro) e a diferença, quando o estado é o
+mesmo, aparece nos primeiros bytes (5 em média).
+
+### O que mudou
+
+| Commit | O quê |
+|---|---|
+| `2641cf5` | **A memória do estado** (`draw_state_vu`, `gs_draw.c`). O resultado de um `draw_state` que deu certo fica guardado com a entrada que ele leu: PRIM, TEX0, TEST, CLAMP, SCISSOR, FRAME, ZBUF, ALPHA, FBA e TEX1 do contexto, o TEXA, o contador `sAlvosMuda` (sobe a cada vaga de alvo que muda de dono e na troca de escala), o quadro, a textura branca e a chave dos pacotes de textura. Com a mesma entrada o resultado é o mesmo, fora do que depende da memória do GS: o alvo como textura nunca entra na memória, e a condição que o escolheria (o `cleared` e o `gen` da vaga em `tbp / 32`) é refeita em todo acerto; a textura vale se a época das páginas é a mesma e a entrada do cache segue no lugar com o mesmo TEX0, TEXA e `gen` (é ela que o `texture_get` acharia), senão o `texture_get` é chamado e, sendo uma entrada sem substituição de pacote (ou a branca da falta de espaço), o resultado é o da memória com a textura nova. Os efeitos do `draw_state` (o `last` do alvo, da vaga lida e da textura, todos iguais ao quadro, que está na chave) já valem num acerto; o `sLast` é posto de novo. Um `draw_state` que recusou o desenho nunca entra. **A chave de teste** `BT3_VU_ESTADO_CONFERE=1`, só nas builds `--gpu`: em todo acerto o `draw_state` completo roda também e é o resultado dele que vale; as diferenças (o `GsDraw` byte a byte, o `us`, o `vs` e o `sLast`) são contadas, com as contagens acima numa linha a cada 1.000 quadros |
+| `0ca281a` | A conferência conta por programa e pelo campo da chave que mudou (de onde saiu a vaga por contexto) |
+| `3cf2843` | **Uma vaga por contexto** |
+| `0804ac3` | **O fecho** (`vu_fecho`): o bloco uniforme é montado direto na vaga seguinte do `gsVuUni` (`pu`; o macro `VU_U` é `u` no `#else`), então o desenho novo não copia mais os 304 bytes da pilha, e a junção deixa a vaga para o próximo (nada lê o `gsVuUni` além da contagem); o `same_state` e a comparação do bloco viram comparações de palavras de 32 bits em linha (`same_state_vu`, `iguais32`), com o mesmo resultado do `memcmp` (igual a 0 é todas as palavras iguais; os `float` do `misc` e do `blendc` seguem comparados como `float`) |
+| `f1626b0` | **O `QueryPerformanceCounter` do `GsVu1_Call`** (`gs_vu1.c`, só no 360): as duas leituras por lote do `gGsVu1Ms` só com a medição ligada (`gGsFam`); com `BT3_TEMPOS=0` o tempo da VU1 do log do backend fica zero |
+
+Tudo em `BT3_GS_ESPERAS`, com o código de antes no `#else`; o pré-processado da x86 plana é o mesmo da main (`gcc -E -P`), e o
+360 só compila o `vu_fecho`, a memória e a leitura do relógio novas. Não muda a ordem de nada que o backend vê: os pedidos de
+textura e de alvo novos acontecem nos mesmos lotes e na mesma ordem.
+
+### As provas no Deck [medido]
+
+Script `~/provas-estado.sh`, resumo `~/estado/provas.resumo`, listas e logs em `~/estado/`, em série. Antes: `34d07fb` (a main).
+Depois: `f1626b0`. A pasta de dados dos dois roteiros feita pelo `roteiros.sh f5_treino f5_duelo` sem PPC (abaixo).
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `cc46fa0752f092fca305bc8bf2e2e54390763af0`, a mesma |
+| `x86gv`, `f5_treino` (7.386 quadros) e `f5_duelo` (8.380), sem chaves e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, antes contra depois | os quatro com `divergencias.py` saindo 0, hashes `f76f0f6849b64629` e `08a98b6d05b8775a` |
+| `ppcg`, os mesmos quatro casos | os quatro com 0 (hash `994627a2aecd429a` no `f5_duelo`, o de sempre); de 242 a 470 s por rodada, 5 a 10% acima das de antes (213 a 430 s): no `qemu` o tempo não diz nada do Xenon |
+| A conferência, `x86gv`, os dois roteiros sem e com a divisão, e `ppcg` no `f5_duelo` com a divisão | **0 diferentes** em todas: 13.268.076 acertos conferidos no `f5_duelo` (os mesmos na `ppcg`), 9.113.099 no `f5_treino` |
+| Sabotagem: o TEX0 fora da chave (`x86gv`, `f5_duelo` com a divisão) | com a conferência, **1.335.426 diferentes**, a primeira no quadro 4.136 (`vu 1`, textura 204 no completo, 203 na memória); sem ela, a lista diferente em 4.197 quadros (do 4.136 ao 8.379), hash `9852d2727d8a5df3`, `divergencias.py` sai 1 |
+| O git do Deck no fim | 0 alterados (a sabotagem desfeita por `git checkout`, com `assert` de que casou, e a `x86gv` refeita) |
+
+### A build do 360
+
+`build_f2.sh` no `f1626b0`: 317 de 317 fontes sem erro, os avisos por fonte iguais aos da main (985 nos fontes do jogo, 8 nos do
+360), os mesmos 103 stubs (`diff` com o `stubs.txt` da main), `default.dat` `6d30baaf87b1177fb2359a855f8befc0` e `default.swap`
+`a7cf723fbfaea860fcc3707ad288e755`, iguais; **`default.xex` `c432303484a0d6b4c0e6d260e259811e`**.
+
+### A estimativa [estimado]
+
+O estado fora do hash (uns 4,1 ms) passa a ser pago por inteiro em 14% das chamadas; um acerto custa as 17 comparações da chave, a
+conferência da textura e a cópia dos 128 bytes, perto de um décimo de um `draw_state`: de 4,1 para perto de 1 ms, **uns 3 ms a
+menos**. O hash (2,1) fica: ele é o trabalho de reconhecer as páginas reenviadas. O fecho perde as cópias do bloco nos desenhos
+novos e as chamadas ao `memcmp`: **de 0,5 a 1,5 ms**, se o custo for de instruções; se for a escrita em linhas que não estão na cache
+(os desenhos novos escrevem uns 0,8 MB por quadro no `gsDraws` e no `gsVuUni`), o ganho é menor e o próximo corte é zerar a linha antes de escrever
+(`__dcbz128`, com as listas alinhadas a 128). O `QueryPerformanceCounter` tirado (uns 9 mil por quadro) fica fora da família da VU1,
+no "fora delas". Se a gravação seguir sendo o gargalo, a luta de 33,9 para perto de 30 a 31 ms.
+
+### A rodada do critério (no Deck, disparada sem esperar)
+
+O script `~/rodada-estado.sh` do Deck traz o HEAD do `f5-estado`, refaz as três builds do critério (`headless.py --alvo x86`,
+`--alvo x86 --rastreio`, `--alvo ppc`), confere a `.text` da x86 plana e roda em série `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo
+f5_treino` e `SEMMAPA=1 IMG=1 roteiros.sh duelo`. Saída em `~/rodada-estado.log`, logs por passo em `~/rodada-estado-*.log`, resumo
+em `~/rodada-estado.resumo` (uma linha por passo com `RC=`, a `.text`, o git no fim e `FIM`). Vale com todos os `RC=0`, os dois
+`roteiros.sh` com "tudo certo", a `.text` a mesma e o git sem alterados.
+
+### A rodada no console pelo roteiro
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-e`: `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
+`port/x360/roteiros/`), `ambiente_sem.txt` (`BT3_TEMPOS=0`, saves `saves_e1`) e `ambiente_med.txt` (a medição ligada, saves
+`saves_e2`), o resto como na seção 14; o `ambiente.txt` é a cópia do `ambiente_sem.txt`. Duas pastas de saves novas, porque o roteiro
+só aceita o cartão vazio.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_sem.txt build/x360/f2/ambiente_med.txt
+# abertura 1 (sem medição); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.txt
+# abertura 2 (medição ligada); baixar o log de novo
+```
+
+**O que olhar:**
+
+1. **A mediana pelo roteiro** (abertura sem medição): o p50 das duas janelas, pesado pelos passos, contra os **33,9 ms** da seção 14;
+   o p95 contra 40,8. Os passos por janela (684 e 2.334) e o resultado iguais aos da referência.
+2. **A VU1 por dentro** (abertura com medição): o estado perto de 3 ms (o hash dentro dele, uns 2), o fecho abaixo de 4,6, e a VU1
+   inteira contra os 16,6. Se o fecho cair pouco, o custo é a escrita em linhas novas, e o próximo corte é o `__dcbz128`.
+3. O "fora delas" da linha da família contra o da seção 14: o `QueryPerformanceCounter` tirado sai dali, mas só na abertura sem
+   medição (com a medição ligada ele continua sendo lido).
+4. Nenhum `roteiro: FALHA`, nenhum `vigia:`, nenhuma textura branca nova.
+
+**Fica para a próxima:** os **índices** (2,0 ms): o laço `gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k` escreve por um
+`uint32_t *` e lê e escreve dois `uint32_t` globais; o `cl` não pode supor que não se sobrepõem e relê e regrava os contadores a
+cada índice (no Xenon, uma leitura logo depois da escrita no mesmo endereço espera a escrita). Com os contadores em variáveis locais o
+laço fica só com a escrita do índice [estimado: de 1 a 1,5 ms].
+
+## 16. Os índices da VU1 com o contador em locais (22/10/2026)
+
+Branch `f5-indices`, sobre o `f5-estado` (`646e8ca`). Medido no console pelo roteiro com o `f5-estado` (o `f5_duelo`): a luta em
+**33,2 ms de mediana** (meta 33,37), p95 34,9, p99 40,3; por dentro da VU1 os **índices** levam 1,9 ms por quadro. Convenção:
+**[medido]**, **[lido]** e **[estimado]**.
+
+### O corte
+
+| Commit | O quê |
+|---|---|
+| `e7d5307` | Nos três `GsGpu_DrawVu*` (`gs_draw.c`: `DrawVu6` na `:1585`, `DrawVu4` na `:1715`, `DrawVu0` na `:1838`) o laço dos índices passa a guardar o ponteiro (`idx`), a base (`base`, o `gsVuVertCount`) e a posição (`n`, o `gsVuIdxCount`) em locais, escreve os três índices do triângulo (`idx[n]`, `idx[n + 1]`, `idx[n + 2]`, os mesmos `base + i + k`, na mesma ordem) e grava o contador de volta uma vez, no fim do laço. O `k` some das declarações (`uint32_t i, flag;` e `uint32_t i;`) para não sobrar variável sem uso (o C4101 mudaria os avisos). Em `BT3_GS_ESPERAS`, com o laço de antes no `#else` |
+
+**Por que pesava** [lido no `link /dump /disasm` do `gs_gs_draw.obj`, `DrawVu4`]: antes, cada iteração tinha **30 instruções**,
+com as três escritas do índice (`stwx`), **nove leituras de globais** (o `gsVuIdx`, o `gsVuVertCount` e o `gsVuIdxCount`, relidos
+depois de cada escrita, porque o `uint32_t *` pode apontar para eles) e **três escritas do contador** (`stw r10,0(r31)`), cada uma
+seguida pela leitura do mesmo endereço na escrita seguinte: no Xenon, uma leitura logo depois de uma escrita no mesmo endereço
+espera a escrita chegar à cache (o *load-hit-store*). Depois, **12 instruções** por iteração: três `stw`/`stwu` em `idx` e as
+somas, nenhuma leitura nem escrita de global; o contador é gravado uma vez depois do laço (`stw r9,0(r23)` no `0x2C4`). No `DrawVu0` e
+no `DrawVu6` o laço novo é o mesmo, com o teste da marca do vértice.
+
+**O resultado é o mesmo byte a byte**: os índices são os mesmos e saem na mesma ordem; o `d.first` é lido antes, o `d.count` depois
+da gravação de volta, como antes; o `vu_faixa` lê o `gsVuIdx` já escrito.
+
+### A estimativa [estimado]
+
+Até uns 43 mil triângulos por quadro de luta (o maior quadro tem 128.907 índices, seção 8): antes, três esperas de escrita e leitura por triângulo
+(129 mil por quadro, umas dezenas de ciclos cada) mais as 30 instruções; depois, 12 instruções sem espera. De **1,9 para uns 0,3 a
+0,5 ms**: **de 1,4 a 1,6 ms a menos**, a luta de 33,2 para perto de 31,7 ms, se a gravação seguir sendo o gargalo.
+
+### As provas no WSL [medido]
+
+Serviço `claude-indices`, script `~/indices/rodada-indices.sh`, resumo `~/indices/provas.resumo`, listas e logs em `~/indices/`, num
+worktree próprio do WSL (`~/bt3xbx-i`), cada passo pesado dentro do `flock ~/wsl.lock`; o clone `~/bt3xbx` ficou em `f5-pingpong`,
+sem alterados. Antes: `646e8ca` (o `f5-estado`). Depois: `e7d5307`. A pasta de dados dos dois roteiros feita pelo `roteiros.sh
+f5_treino f5_duelo` sem PPC no `e7d5307` ("tudo certo").
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `cc46fa0752f092fca305bc8bf2e2e54390763af0` antes e depois, a mesma (a referência do `f5-estado`; a main já tem a `ee54716`, da F6) |
+| O pré-processado (`gcc -E -P`, sem espaços) do `gs_draw.c` | igual ao do `f5-estado` na x86 plana; diferente com `BT3_TESTE_VU1` e com `PORT_BIG_ENDIAN` (a comparação vê a mudança onde ela existe) |
+| `x86gv`, `f5_treino` (7.386 quadros) e `f5_duelo` (8.380), sem chaves e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, antes contra depois | os dois com `divergencias.py` saindo 0, hashes `f76f0f6849b64629` e `08a98b6d05b8775a`, contadores do jogo e do desenho iguais, 0 desenhos com textura já solta |
+| `ppcg`, os mesmos dois roteiros | os dois com 0, hashes `f76f0f6849b64629` e `994627a2aecd429a` (os de sempre) |
+| Sabotagem: o `DrawVu6` sem gravar o contador de volta (o erro que este corte poderia ter), `x86gv`, `f5_duelo` | a lista diferente em **2.186 quadros** (do 4.136 ao 8.229; contagens, desenhos, vértices e índices da VU1 e constantes), hash `e6ef73eebea0ccbc`, `divergencias.py` sai 1 |
+| O git do worktree no fim | 0 alterados (a sabotagem com `assert` de que casou, desfeita por `git checkout`, e a `x86gv` refeita) |
+
+### A build do 360
+
+`build_f2.sh` no `e7d5307`: 317 de 317 fontes sem erro, os avisos por fonte iguais aos do `f5-estado` (985 nos fontes do jogo, 8 nos
+do 360, arquivo por arquivo), os mesmos 103 stubs (`diff` com o `stubs.txt` do `f5-estado`), `default.dat`
+`6d30baaf87b1177fb2359a855f8befc0` e `default.swap` `a7cf723fbfaea860fcc3707ad288e755`, iguais; **`default.xex`
+`73b2d65ba52f291a3cbc9e613daac94f`**. O laço novo no `link /dump /disasm` do `.obj` (acima).
+
+### A rodada do critério (no WSL, disparada sem esperar)
+
+O serviço `claude-indices` (`systemd-run --uid=codex ... MemoryMax=5G`), script `~/indices/rodada-indices.sh`, num worktree próprio
+(`~/bt3xbx-i`, destacado, com os links dos dados e uma cópia do `port/build/gen`), cada passo pesado dentro do `flock ~/wsl.lock`.
+Depois das provas acima, refaz as três builds do critério no HEAD (`headless.py --alvo x86`, `--alvo x86 --rastreio`, `--alvo ppc`),
+confere a `.text` da x86 plana e roda em série `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` e `SEMMAPA=1 IMG=1 roteiros.sh
+duelo`. Logs em `~/rodada-indices-f5.log` e `~/rodada-indices-duelo.log`, resumo em `~/rodada-indices.resumo` (uma linha por passo
+com `RC=`, a `.text`, o git do worktree e do clone no fim e `FIM`). Vale com todos os `RC=0`, os dois `roteiros.sh` com "tudo certo",
+a `.text` a mesma e o git sem alterados.
+
+### A rodada no console pelo roteiro
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-i`: `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
+`port/x360/roteiros/`), `ambiente_sem.txt` (`BT3_TEMPOS=0`, saves `saves_i1`) e `ambiente_med.txt` (a medição ligada, saves
+`saves_i2`), o resto como na seção 14; o `ambiente.txt` é a cópia do `ambiente_sem.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_sem.txt build/x360/f2/ambiente_med.txt
+# abertura 1 (sem medição); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.txt
+# abertura 2 (medição ligada); baixar o log de novo
+```
+
+**O que olhar:**
+
+1. **A mediana pelo roteiro** (abertura sem medição): o p50 das duas janelas, pesado pelos passos, contra os **33,2 ms** do
+   `f5-estado` (meta 33,37); o p95 contra 34,9 e o p99 contra 40,3. Os passos por janela (684 e 2.334) e o resultado iguais aos da
+   referência.
+2. **A VU1 por dentro** (abertura com medição): os índices perto de 0,3 a 0,5 ms (eram 1,9), o resto das partes como no `f5-estado`.
+3. Nenhum `roteiro: FALHA`, nenhum `vigia:`.

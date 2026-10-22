@@ -668,6 +668,11 @@ static int pipeline_get(int ctx, int topo, int vu) {
     return sBackend->pipeGet(key);
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação, seção 15 da nota) sobe quando uma vaga da tabela de alvos muda de dono (alvo novo, vaga tomada,
+   escala nova): a memória do estado dos lotes da VU1 (draw_state_vu) só vale com a tabela que ela viu */
+static uint32_t sAlvosMuda;
+#endif
 /* The shared target table's entry for a frame-buffer address. The attachments are the back end's: a new
    slot asks it to make them (GsBackend.targetEnsure), an evicted one to release them (targetDrop). */
 int GsDraw_TargetGet(uint32_t fbp, int create) {
@@ -702,6 +707,9 @@ int GsDraw_TargetGet(uint32_t fbp, int create) {
 #endif
     }
     sBackend->targetEnsure(slot);
+#ifdef BT3_GS_ESPERAS
+    sAlvosMuda++;
+#endif
     gsTargets[slot].fbp = fbp;
     gsTargets[slot].cleared = 0;
     gsTargets[slot].draws = 0;
@@ -948,6 +956,324 @@ static void date_snapshot(const GsDraw *d) {
     }
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação, seção 15 da nota) A memória do estado dos lotes da VU1. Os uns 4.500 lotes de um quadro de luta
+   pedem o draw_state em seguida com a mesma entrada, e no 360 refazê-lo custava uns 4 ms por quadro fora do hash (a
+   tabela de alvos andada duas vezes, o pipeGet com a sua busca linear, o memset e as conversões de inteiro para float).
+   O resultado de um draw_state que deu certo fica aqui com a entrada que ele leu: os registradores do contexto, o PRIM
+   e o TEXA, a tabela de alvos (sAlvosMuda), o quadro, a textura branca e a chave dos pacotes de textura. Com a mesma
+   entrada o resultado é o mesmo, fora do que depende da memória do GS:
+     - o alvo como textura (tex_is_target) nunca entra na memória; quando o alvo em tbp / 32 existe, a condição que
+       escolheria esse caminho (cleared e gen da vaga contra a gGsPageGen) é refeita a cada acerto;
+     - a textura: se a época das páginas é a mesma e a entrada do cache que o texture_get achou segue no lugar, com o
+       mesmo TEX0, TEXA e gen, é ela que ele acharia de novo; senão o texture_get é chamado (o hash, quando as páginas
+       mudaram, segue sendo feito) e, sendo uma entrada sem substituição de pacote ou a branca da falta de espaço, o
+       resultado é o da memória com a textura nova (o draw_state só muda o sampler, o mode e o orig para a substituição).
+   Os efeitos do draw_state que deu certo (o last do alvo, da vaga lida e da textura igual ao quadro, e o sLast) já valem
+   num acerto, pois o quadro está na chave; o sLast é posto de novo. Um draw_state que recusou o desenho (gsSkipped, as
+   vagas marcadas, o depth_clut) nunca entra na memória. */
+typedef struct EstMem {
+    uint64_t prim, t0, test, cl, sc, frame, zbuf, alpha, fba, tex1, texa;
+    uint32_t quadro, alvos, epoch, gen;
+    int valido, vu, pack, src;
+    GsTex white;
+    Tex *tex; /* a entrada do cache (com textura) ou NULL */
+    float us, vs;
+    GsDraw d;
+} EstMem;
+static EstMem sEst[2]; /* uma por contexto: as duas camadas dos programas 0 e 1 se alternam entre os dois */
+#if defined(BT3_GPU_FALSO)
+/* (só nas builds --gpu) BT3_VU_ESTADO_CONFERE=1: em todo acerto o draw_state completo também roda, e é o resultado dele que
+   vale; as diferenças são contadas (uma linha a cada 1.000 quadros com o acumulado e as contagens dos lotes e do fecho, e
+   uma por diferença, até 20) */
+static int sEstConfere = -1;
+static struct {
+    uint64_t lotes, acertos, igualAnterior, mesmaTex, texChamada, texNova, diferentes, naoGuarda;
+    uint64_t fecho, mesmoEstado, junta, novos, bytesIguais, bytesDiferentes, desenhoAnterior;
+    uint64_t falhaChave, falhaSrc, falhaEntrada;
+    uint64_t campo[20], vuLotes[4], vuAcertos[4], vuJunta[4], juntaAcerto;
+} sEstN;
+static int sEstAcertou;
+static uint64_t sEstAntT0, sEstAntTexa;
+static int sEstAntCtx = -1;
+#endif
+
+/* a vaga do alvo em fbp, sem efeito (o GsDraw_TargetGet(fbp, 0) põe o last, que num acerto já vale) */
+static int alvo_acha(uint32_t fbp) {
+    int i;
+    for (i = 0; i < gsTargetCount; i++) {
+        if (gsTargets[i].fbp == fbp) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+#define EST_ENTRADA(e, ctx_, vu_) ((e)->valido && (e)->vu == (vu_) && (e)->quadro == gGsFrame && \
+    (e)->alvos == sAlvosMuda && (e)->prim == gGs.prim && (e)->t0 == gGs.tex0[ctx_] && (e)->test == gGs.test[ctx_] && \
+    (e)->cl == gGs.clamp[ctx_] && (e)->sc == gGs.scissor[ctx_] && (e)->frame == gGs.frame[ctx_] && \
+    (e)->zbuf == gGs.zbuf[ctx_] && (e)->alpha == gGs.alpha[ctx_] && (e)->fba == gGs.fba[ctx_] && \
+    (e)->tex1 == gGs.tex1[ctx_] && (e)->texa == gGs.texa && (e)->white == gsWhite && (e)->pack == sTexPackOn)
+
+/* 1: o resultado da memória vale para este lote (o d já preenchido); 0: o draw_state completo tem de rodar */
+static int est_acerta(int ctx, int vu, GsDraw *d) {
+    EstMem *e = &sEst[ctx & 1];
+    Tex *t;
+    GsTex x;
+
+    if (!EST_ENTRADA(e, ctx, vu)) {
+#if defined(BT3_GPU_FALSO)
+        sEstN.falhaChave++;
+        if (sEstConfere) {
+            int c = !e->valido ? 0 : e->vu != vu ? 2 : e->quadro != gGsFrame ? 3 : e->alvos != sAlvosMuda ? 4 :
+                    e->prim != gGs.prim ? 5 : e->t0 != gGs.tex0[ctx] ? 6 : e->test != gGs.test[ctx] ? 7 : e->cl != gGs.clamp[ctx] ? 8 :
+                    e->sc != gGs.scissor[ctx] ? 9 : e->frame != gGs.frame[ctx] ? 10 : e->zbuf != gGs.zbuf[ctx] ? 11 :
+                    e->alpha != gGs.alpha[ctx] ? 12 : e->fba != gGs.fba[ctx] ? 13 : e->tex1 != gGs.tex1[ctx] ? 14 :
+                    e->texa != gGs.texa ? 15 : 16;
+            sEstN.campo[c]++;
+            if (c == 5 && ((e->prim ^ gGs.prim) & 0x50) == 0) {
+                sEstN.campo[17]++; /* (só bits do PRIM que o draw_state não lê) */
+            }
+        }
+#endif
+        return 0;
+    }
+    if (e->tex == NULL) {
+        memcpy(d, &e->d, sizeof(*d));
+        return 1;
+    }
+    if (e->src >= 0 && (e->t0 & 0x1F) == 0 && gsTargets[e->src].cleared &&
+        gsTargets[e->src].gen == gGsPageGen[gsTargets[e->src].fbp & 511]) {
+#if defined(BT3_GPU_FALSO)
+        sEstN.falhaSrc++;
+#endif
+        return 0; /* o alvo em tbp / 32 viraria a textura */
+    }
+    t = e->tex;
+    if (e->epoch == gGsPageEpoch && t < &sTex[gsTexCount] && t->tex == e->d.tex &&
+        t->tex0 == (e->t0 & 0x1FFFFFFFFFFFFFFFull) && t->texa == e->texa && t->gen == e->gen) {
+        sLast = t;
+        memcpy(d, &e->d, sizeof(*d));
+        return 1;
+    }
+#if defined(BT3_GPU_FALSO)
+    sEstN.texChamada++;
+#endif
+    x = texture_get(ctx);
+    if (x == gsWhite) { /* (sem espaço: o draw_state daria a branca; a próxima vez tenta de novo, pelo caminho completo) */
+        memcpy(d, &e->d, sizeof(*d));
+        d->tex = gsWhite;
+        e->valido = 0;
+        return 1;
+    }
+    if (sLast == NULL || sLast->tex != x || sLast->replaced) {
+        /* (uma substituição de pacote: o draw_state completo, cujo texture_get acha a mesma entrada pelo sLast) */
+#if defined(BT3_GPU_FALSO)
+        sEstN.falhaEntrada++;
+#endif
+        return 0;
+    }
+#if defined(BT3_GPU_FALSO)
+    if (x != e->d.tex) {
+        sEstN.texNova++;
+    }
+#endif
+    e->tex = sLast;
+    e->gen = sLast->gen;
+    e->epoch = gGsPageEpoch;
+    e->d.tex = x;
+    memcpy(d, &e->d, sizeof(*d));
+    return 1;
+}
+
+/* guarda o resultado de um draw_state que deu certo, se ele pode ser lembrado */
+static void est_guarda(int ctx, int vu, const GsDraw *d, float us, float vs) {
+    EstMem *e = &sEst[ctx & 1];
+    uint64_t t0 = gGs.tex0[ctx];
+    int tme = (int)((gGs.prim >> 4) & 1);
+
+    e->valido = 0;
+    if (d->tex_is_target || (tme && (sLast == NULL || sLast->tex != d->tex || sLast->replaced || d->tex == gsWhite))) {
+        return;
+    }
+    e->prim = gGs.prim;
+    e->t0 = t0;
+    e->test = gGs.test[ctx];
+    e->cl = gGs.clamp[ctx];
+    e->sc = gGs.scissor[ctx];
+    e->frame = gGs.frame[ctx];
+    e->zbuf = gGs.zbuf[ctx];
+    e->alpha = gGs.alpha[ctx];
+    e->fba = gGs.fba[ctx];
+    e->tex1 = gGs.tex1[ctx];
+    e->texa = gGs.texa;
+    e->quadro = gGsFrame;
+    e->alvos = sAlvosMuda;
+    e->epoch = gGsPageEpoch;
+    e->white = gsWhite;
+    e->pack = sTexPackOn;
+    e->vu = vu;
+    e->tex = tme ? sLast : NULL;
+    e->gen = tme ? sLast->gen : 0;
+    e->src = tme ? alvo_acha((uint32_t)((t0 & 0x3FFF) / 32)) : -1;
+    e->us = us;
+    e->vs = vs;
+    memcpy(&e->d, d, sizeof(*d));
+    e->valido = 1;
+}
+
+/* o draw_state dos três GsGpu_DrawVu*, pela memória */
+static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
+    EstMem *e = &sEst[ctx & 1];
+    int r;
+#if defined(BT3_GPU_FALSO)
+    if (sEstConfere < 0) {
+        sEstConfere = getenv("BT3_VU_ESTADO_CONFERE") != NULL && atoi(getenv("BT3_VU_ESTADO_CONFERE")) != 0;
+    }
+    if (sEstConfere) {
+        sEstN.lotes++;
+        if (sEstAntCtx == ctx && sEstAntT0 == gGs.tex0[ctx] && sEstAntTexa == gGs.texa) {
+            sEstN.mesmaTex++;
+        }
+        sEstAntCtx = ctx;
+        sEstAntT0 = gGs.tex0[ctx];
+        sEstAntTexa = gGs.texa;
+        if (EST_ENTRADA(e, ctx, vu)) {
+            sEstN.igualAnterior++;
+        }
+    }
+#endif
+#if defined(BT3_GPU_FALSO)
+    if (sEstConfere) {
+        sEstN.vuLotes[vu & 3]++;
+    }
+    sEstAcertou = 0;
+#endif
+    if (est_acerta(ctx, vu, d)) {
+#if defined(BT3_GPU_FALSO)
+        sEstAcertou = 1;
+        if (sEstConfere) {
+            sEstN.vuAcertos[vu & 3]++;
+        }
+#endif
+        *us = e->us;
+        *vs = e->vs;
+#if defined(BT3_GPU_FALSO)
+        if (sEstConfere) {
+            GsDraw c;
+            float cu, cv;
+            Tex *lembrado = sLast;
+            sEstN.acertos++;
+            r = draw_state(ctx, 0, 0, vu, &c, &cu, &cv);
+            if (r != 1 || memcmp(&c, d, sizeof(c)) != 0 || cu != *us || cv != *vs || (e->tex != NULL && sLast != lembrado)) {
+                if (sEstN.diferentes++ < 20) {
+                    fprintf(stderr, "gs: BT3_VU_ESTADO_CONFERE: quadro %u, vu %d: completo %d tex %lx alvo %d pipeline %d sampler %d; "
+                            "memória tex %lx alvo %d pipeline %d sampler %d\n", gGsFrame, vu, r, (unsigned long)c.tex, c.target,
+                            c.pipeline, c.sampler, (unsigned long)d->tex, d->target, d->pipeline, d->sampler);
+                }
+            }
+            if (r) {
+                memcpy(d, &c, sizeof(c));
+                *us = cu;
+                *vs = cv;
+            }
+            if (r) {
+                est_guarda(ctx, vu, d, *us, *vs);
+            } else {
+                e->valido = 0;
+            }
+            return r;
+        }
+#endif
+        return 1;
+    }
+    r = draw_state(ctx, 0, 0, vu, d, us, vs);
+    if (r) {
+        est_guarda(ctx, vu, d, *us, *vs);
+#if defined(BT3_GPU_FALSO)
+        if (sEstConfere && !e->valido) {
+            sEstN.naoGuarda++;
+        }
+#endif
+    } else {
+        e->valido = 0;
+    }
+    return r;
+}
+#define DRAW_STATE_VU(ctx, vu, d, us, vs) draw_state_vu(ctx, vu, d, us, vs)
+#if defined(BT3_GPU_FALSO)
+/* (BT3_VU_ESTADO_CONFERE) o que o fecho de cada desenho da VU1 faz: o mesmo estado que o desenho anterior (same_state), o
+   bloco uniforme igual (junta) e quantos bytes o memcmp dele lê; e se o anterior é o desenho do lote anterior */
+static uint32_t sFechoUlt = 0xFFFFFFFFu, sFechoQuadro;
+static void est_conta_fecho(const GsDraw *last, const GsDraw *d, const Vu0Uniform *u) {
+    int junta = 0;
+    if (sEstConfere <= 0) {
+        return;
+    }
+    sEstN.fecho++;
+    if (last != NULL && sFechoQuadro == gGsFrame && sFechoUlt == gsDrawCount - 1) {
+        sEstN.desenhoAnterior++;
+    }
+    if (last != NULL && same_state(last, d)) {
+        const unsigned char *a = (const unsigned char *)&gsVuUni[last->uniform], *b = (const unsigned char *)u;
+        size_t k;
+        sEstN.mesmoEstado++;
+        for (k = 0; k < sizeof(*u) && a[k] == b[k]; k++) {
+        }
+        if (k == sizeof(*u)) {
+            junta = 1;
+            sEstN.junta++;
+            sEstN.vuJunta[d->vu & 3]++;
+            sEstN.juntaAcerto += sEstAcertou;
+            sEstN.bytesIguais += k;
+        } else {
+            sEstN.bytesDiferentes += k + 1;
+        }
+    }
+    if (!junta) {
+        sEstN.novos++;
+    }
+    sFechoQuadro = gGsFrame;
+    sFechoUlt = junta ? gsDrawCount - 1 : gsDrawCount;
+}
+static void est_confere_linha(void) {
+    static unsigned quadros;
+    if (sEstConfere <= 0 || ++quadros % 1000 != 0) {
+        return;
+    }
+    fprintf(stderr, "gs: BT3_VU_ESTADO_CONFERE: %u quadros, %llu lotes, %llu com a entrada do anterior, %llu acertos, %llu diferentes; "
+            "mesma textura que o anterior %llu; texture_get no acerto %llu (textura nova %llu); falhas: chave %llu, alvo como textura "
+            "%llu, substituição %llu; sem memória %llu; fecho %llu: o desenho do lote anterior %llu, mesmo estado %llu, junta %llu "
+            "(%llu bytes), novos %llu (%llu bytes até a diferença)\n",
+            quadros, (unsigned long long)sEstN.lotes, (unsigned long long)sEstN.igualAnterior, (unsigned long long)sEstN.acertos,
+            (unsigned long long)sEstN.diferentes, (unsigned long long)sEstN.mesmaTex, (unsigned long long)sEstN.texChamada,
+            (unsigned long long)sEstN.texNova, (unsigned long long)sEstN.falhaChave, (unsigned long long)sEstN.falhaSrc,
+            (unsigned long long)sEstN.falhaEntrada, (unsigned long long)sEstN.naoGuarda, (unsigned long long)sEstN.fecho,
+            (unsigned long long)sEstN.desenhoAnterior, (unsigned long long)sEstN.mesmoEstado, (unsigned long long)sEstN.junta,
+            (unsigned long long)sEstN.bytesIguais, (unsigned long long)sEstN.novos, (unsigned long long)sEstN.bytesDiferentes);
+    {
+        int c;
+        fprintf(stderr, "gs: BT3_VU_ESTADO_CONFERE: por vu (lotes acertos junta):");
+        for (c = 1; c < 4; c++) {
+            fprintf(stderr, " %d: %llu %llu %llu;", c, (unsigned long long)sEstN.vuLotes[c], (unsigned long long)sEstN.vuAcertos[c],
+                    (unsigned long long)sEstN.vuJunta[c]);
+        }
+        fprintf(stderr, " junta com acerto %llu; a chave falhou por (vazia ctx vu quadro alvos prim tex0 test clamp scissor frame zbuf alpha fba tex1 texa outro prim-só-sem-uso):",
+                (unsigned long long)sEstN.juntaAcerto);
+        for (c = 0; c < 18; c++) {
+            fprintf(stderr, " %llu", (unsigned long long)sEstN.campo[c]);
+        }
+        fprintf(stderr, "\n");
+    }
+}
+#define EST_CONTA_FECHO(last, d, u) est_conta_fecho(last, d, u)
+#else
+#define EST_CONTA_FECHO(last, d, u) ((void)0)
+#endif
+#else
+#define DRAW_STATE_VU(ctx, vu, d, us, vs) draw_state(ctx, 0, 0, vu, d, us, vs)
+#endif
+
 /* Gs_StateBack (gs_core.c) moved every page's upload generation on by `delta`, so that nothing decoded from the
    pages in between is taken for them. The buffers the game draws into keep their standing: one that was drawn
    since the last upload over it still is. */
@@ -1144,6 +1470,57 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
     }
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação, seção 15 da nota) O fecho dos três GsGpu_DrawVu*: juntar ao desenho anterior ou abrir outro. É o
+   mesmo de antes, com o bloco uniforme montado direto na vaga seguinte do gsVuUni (os 304 bytes não são mais copiados da
+   pilha para a lista a cada desenho novo; num desenho que junta, a vaga fica para o próximo, e nada lê o gsVuUni além da
+   contagem) e as comparações feitas palavra a palavra em linha no lugar das chamadas ao memcmp (o resultado é o mesmo:
+   memcmp igual a 0 é todas as palavras iguais). Num quadro de luta metade dos desenhos junta, e cada junção compara o
+   bloco inteiro. */
+#define VU_U (*pu)
+static int iguais32(const void *a, const void *b, unsigned n) {
+    const uint32_t *x = (const uint32_t *)a, *y = (const uint32_t *)b;
+    unsigned i;
+    for (i = 0; i < n; i++) {
+        if (x[i] != y[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+static int same_state_vu(const GsDraw *a, const GsDraw *b) {
+    return !a->native && a->vu == b->vu && a->target == b->target && a->tex == b->tex && a->sampler == b->sampler &&
+           a->pipeline == b->pipeline && iguais32(a->mode, b->mode, 4) && a->misc[0] == b->misc[0] && a->misc[1] == b->misc[1] &&
+           a->misc[2] == b->misc[2] && a->misc[3] == b->misc[3] && a->blendc == b->blendc && iguais32(a->rect, b->rect, 4) &&
+           iguais32(a->orig, b->orig, 4) && iguais32(a->scissor, b->scissor, 4);
+}
+static void vu_fecho(GsDraw *d, const Vu0Uniform *pu) {
+    GsDraw *last;
+    gsTargets[d->target].draws++;
+    gsTargets[d->target].gen = gGsPageGen[gsTargets[d->target].fbp & 511];
+    last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
+#if defined(BT3_GPU_FALSO)
+    EST_CONTA_FECHO(last, d, pu);
+#endif
+    if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
+        vu_faixa(gsDrawCount - 1, d->first, d->count, 1);
+        last->count += d->count;
+#ifdef PORT_X360
+        GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
+        return;
+    }
+    d->uniform = (int)gsVuUniCount++; /* (pu é a vaga gsVuUni[gsVuUniCount]) */
+    vu_faixa(gsDrawCount, d->first, d->count, 0);
+    gsDraws[gsDrawCount++] = *d;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
+}
+#else
+#define VU_U u
+#endif
+
 /* Vertex program 6 as a shader: one strip of the ground under a fighter, textured with the shadow page (see
    shaders/vu6.vert). Vertices: four quadwords each (position with an integer "no draw" flag in w, normal, colour
    as floats, a slot the original fills with s, t). A flagged vertex means: the triangle that ends here is not
@@ -1152,10 +1529,19 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     if (gPortResim) { /* a frame that is only being re-run: nothing is drawn */
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    Vu0Uniform *pu; /* (seção 15 da nota da gravação) o bloco uniforme, montado na vaga seguinte do gsVuUni (vu_fecho) */
+    GsDraw d;
+#else
     Vu0Uniform u;
     GsDraw d, *last;
+#endif
     float us, vs;
+#ifdef BT3_GS_ESPERAS
+    uint32_t i, flag; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+#else
     uint32_t i, k, flag;
+#endif
 
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_PROG);
@@ -1164,7 +1550,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
-    if (!draw_state(ctx, 0, 0, 3, &d, &us, &vs)) {
+    if (!DRAW_STATE_VU(ctx, 3, &d, &us, &vs)) {
 #ifdef PORT_X360
         GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
@@ -1174,20 +1560,44 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
-    memset(&u, 0, sizeof(u));
-    memcpy(u.boneA, &consts[0x0C * 4], 64);  /* world -> shadow camera */
-    u.pivotA[0] = consts[0x10 * 4];          /* texture scale */
-    u.pivotB[0] = us;
-    u.pivotB[1] = vs;
-    memcpy(u.screen, &consts[0], 64);
-    u.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
-    u.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
-    u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+#ifdef BT3_GS_ESPERAS
+    pu = &gsVuUni[gsVuUniCount];
+#endif
+    memset(&VU_U, 0, sizeof(VU_U));
+    memcpy(VU_U.boneA, &consts[0x0C * 4], 64);  /* world -> shadow camera */
+    VU_U.pivotA[0] = consts[0x10 * 4];          /* texture scale */
+    VU_U.pivotB[0] = us;
+    VU_U.pivotB[1] = vs;
+    memcpy(VU_U.screen, &consts[0], 64);
+    VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
+    VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
+    VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
     d.vu = 3;
     d.first = gsVuIdxCount;
+#ifdef BT3_GS_ESPERAS
+    /* (F5, etapa 8, gravação, seção 16 da nota) A posição e a base dos índices em locais, gravadas de volta uma vez: com o
+       contador global (gsVuIdxCount) escrito por um uint32_t * do mesmo tipo, o cl o relia e regravava a cada índice. Os mesmos
+       índices, na mesma ordem. */
+    {
+        uint32_t *const idx = gsVuIdx;
+        const uint32_t base = gsVuVertCount;
+        uint32_t n = gsVuIdxCount;
+        for (i = 0; i + 2 < count; i++) { /* strip -> triangles, without the flagged ones */
+            memcpy(&flag, &vertices[(i + 2) * 16 + 3], 4);
+            if (flag & 0xFFFF) {
+                continue;
+            }
+            idx[n] = base + i;
+            idx[n + 1] = base + i + 1;
+            idx[n + 2] = base + i + 2;
+            n += 3;
+        }
+        gsVuIdxCount = n;
+    }
+#else
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles, without the flagged ones */
         memcpy(&flag, &vertices[(i + 2) * 16 + 3], 4);
         if (flag & 0xFFFF) {
@@ -1197,6 +1607,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
             gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k;
         }
     }
+#endif
     d.count = gsVuIdxCount - d.first;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_IDX);
@@ -1218,6 +1629,9 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
         gGsFamVuVet[c_] += count;
     }
 #endif
+#ifdef BT3_GS_ESPERAS
+    vu_fecho(&d, pu);
+#else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
@@ -1240,6 +1654,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
+#endif
 }
 
 /* Vertex program 4 as a shader: one strip of stage geometry (see shaders/vu4.vert). Vertices: position, colour
@@ -1248,10 +1663,19 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     if (gPortResim) { /* a frame that is only being re-run: nothing is drawn */
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    Vu0Uniform *pu; /* (seção 15 da nota da gravação) o bloco uniforme, montado na vaga seguinte do gsVuUni (vu_fecho) */
+    GsDraw d;
+#else
     Vu0Uniform u;
     GsDraw d, *last;
+#endif
     float us, vs;
+#ifdef BT3_GS_ESPERAS
+    uint32_t i; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+#else
     uint32_t i, k;
+#endif
 
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_PROG);
@@ -1260,7 +1684,7 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
-    if (!draw_state(ctx, 0, 0, 2, &d, &us, &vs)) {
+    if (!DRAW_STATE_VU(ctx, 2, &d, &us, &vs)) {
 #ifdef PORT_X360
         GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
@@ -1270,21 +1694,42 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
-    memset(&u, 0, sizeof(u));
-    memcpy(u.screen, &consts[0], 64);
-    u.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
-    u.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
-    u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+#ifdef BT3_GS_ESPERAS
+    pu = &gsVuUni[gsVuUniCount];
+#endif
+    memset(&VU_U, 0, sizeof(VU_U));
+    memcpy(VU_U.screen, &consts[0], 64);
+    VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
+    VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
+    VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
     d.vu = 2;
     d.first = gsVuIdxCount;
+#ifdef BT3_GS_ESPERAS
+    /* (F5, etapa 8, gravação, seção 16 da nota) A posição e a base dos índices em locais, gravadas de volta uma vez: com o
+       contador global (gsVuIdxCount) escrito por um uint32_t * do mesmo tipo, o cl o relia e regravava a cada índice. Os mesmos
+       índices, na mesma ordem. */
+    {
+        uint32_t *const idx = gsVuIdx;
+        const uint32_t base = gsVuVertCount;
+        uint32_t n = gsVuIdxCount;
+        for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
+            idx[n] = base + i;
+            idx[n + 1] = base + i + 1;
+            idx[n + 2] = base + i + 2;
+            n += 3;
+        }
+        gsVuIdxCount = n;
+    }
+#else
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
         for (k = 0; k < 3; k++) {
             gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k;
         }
     }
+#endif
     d.count = gsVuIdxCount - d.first;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_IDX);
@@ -1299,6 +1744,9 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
         gGsFamVuVet[c_] += count;
     }
 #endif
+#ifdef BT3_GS_ESPERAS
+    vu_fecho(&d, pu);
+#else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
@@ -1321,6 +1769,7 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
+#endif
 }
 
 /* Vertex program 0 as a shader: one strip of the fighters' models (see shaders/vu0.vert and gs_vu1.c). The strip
@@ -1329,10 +1778,19 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     if (gPortResim) { /* a frame that is only being re-run: nothing is drawn */
         return;
     }
+#ifdef BT3_GS_ESPERAS
+    Vu0Uniform *pu; /* (seção 15 da nota da gravação) o bloco uniforme, montado na vaga seguinte do gsVuUni (vu_fecho) */
+    GsDraw d;
+#else
     Vu0Uniform u;
     GsDraw d, *last;
+#endif
     float us, vs;
+#ifdef BT3_GS_ESPERAS
+    uint32_t i; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+#else
     uint32_t i, k;
+#endif
 
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_PROG);
@@ -1341,7 +1799,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
-    if (!draw_state(ctx, 0, 0, 1, &d, &us, &vs)) {
+    if (!DRAW_STATE_VU(ctx, 1, &d, &us, &vs)) {
 #ifdef PORT_X360
         GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
@@ -1351,24 +1809,51 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
-    memcpy(u.boneA, &consts[0], 64);
-    memcpy(u.boneB, &consts[16], 64);
-    memcpy(u.pivotA, &consts[32], 16);
-    memcpy(u.pivotB, &consts[36], 16);
-    memcpy(u.screen, &consts[56], 64);
-    u.light[0] = consts[40]; u.light[1] = consts[44]; u.light[2] = consts[48]; u.light[3] = consts[52];
-    memcpy(u.color0, &consts[88], 16);
-    memcpy(u.color1, &consts[92], 16);
-    u.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
-    u.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
-    u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
-    u.misc[3] = (float)layer;
-    u.light2[0] = consts[41]; u.light2[1] = consts[45]; u.light2[2] = consts[49]; u.light2[3] = consts[53];
+#ifdef BT3_GS_ESPERAS
+    pu = &gsVuUni[gsVuUniCount];
+#endif
+    memcpy(VU_U.boneA, &consts[0], 64);
+    memcpy(VU_U.boneB, &consts[16], 64);
+    memcpy(VU_U.pivotA, &consts[32], 16);
+    memcpy(VU_U.pivotB, &consts[36], 16);
+    memcpy(VU_U.screen, &consts[56], 64);
+    VU_U.light[0] = consts[40]; VU_U.light[1] = consts[44]; VU_U.light[2] = consts[48]; VU_U.light[3] = consts[52];
+    memcpy(VU_U.color0, &consts[88], 16);
+    memcpy(VU_U.color1, &consts[92], 16);
+    VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
+    VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
+    VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+    VU_U.misc[3] = (float)layer;
+    VU_U.light2[0] = consts[41]; VU_U.light2[1] = consts[45]; VU_U.light2[2] = consts[49]; VU_U.light2[3] = consts[53];
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
     d.vu = 1;
     d.first = gsVuIdxCount;
+#ifdef BT3_GS_ESPERAS
+    /* (F5, etapa 8, gravação, seção 16 da nota) A posição e a base dos índices em locais, gravadas de volta uma vez: com o
+       contador global (gsVuIdxCount) escrito por um uint32_t * do mesmo tipo, o cl o relia e regravava a cada índice. Os mesmos
+       índices, na mesma ordem. */
+    {
+        uint32_t *const idx = gsVuIdx;
+        const uint32_t base = gsVuVertCount;
+        uint32_t n = gsVuIdxCount;
+        for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
+            if (layer == 4) { /* debris: a flagged vertex does not complete a triangle */
+                uint32_t flag;
+                memcpy(&flag, &vertices[(i + 2) * 12 + 3], 4);
+                if (flag & 0xFFFF) {
+                    continue;
+                }
+            }
+            idx[n] = base + i;
+            idx[n + 1] = base + i + 1;
+            idx[n + 2] = base + i + 2;
+            n += 3;
+        }
+        gsVuIdxCount = n;
+    }
+#else
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
         if (layer == 4) { /* debris: a flagged vertex does not complete a triangle */
             uint32_t flag;
@@ -1381,6 +1866,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
             gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k;
         }
     }
+#endif
     d.count = gsVuIdxCount - d.first;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_IDX);
@@ -1395,6 +1881,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         gGsFamVuVet[c_] += count;
     }
 #endif
+#ifdef BT3_GS_ESPERAS
+    vu_fecho(&d, pu);
+#else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
@@ -1416,6 +1905,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     gsDraws[gsDrawCount++] = d;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
 #endif
 }
 
@@ -1479,6 +1969,9 @@ static void scale_apply(void) {
     gsPendingScale = 0;
     sBackend->scaleChanged();
     gsTargetCount = 0;
+#ifdef BT3_GS_ESPERAS
+    sAlvosMuda++;
+#endif
     fprintf(stderr, "bt3: internal resolution %dx (%d x %d)\n", gsScale, 512 * gsScale, 448 * gsScale);
 }
 
@@ -4291,6 +4784,7 @@ void GsGpu_FrameEnd(void) {
 #endif
 #if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
     vu_faixa_confere();
+    est_confere_linha();
 #endif
     uint64_t t0 = gpu_now();
     if (sBackend != NULL) {
