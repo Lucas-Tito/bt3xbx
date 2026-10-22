@@ -43,6 +43,12 @@
 #      estado do jogo e na matriz, o resultado e a volta ao menu, a janela contínua, os pontos) e passos.py (a medida de
 #      tempo por passo) no log da x86 e no da PPC sem mapa, os dois do commit de agora
 #   Nos f5_*, a memória de cada "marca ponto" é obrigatória (F5, etapa 5).
+#   8. (F6, etapa 2) com SOM=1: a rede 2, o rastro de som (BT3_SOM, port/x360/headless/som.c) das duas rodadas da x86
+#      igual byte a byte e, com SEMMAPA=1, o da PPC sem mapa igual ao da x86 (som.py rastro; o começo dele se a PPC
+#      parou na guarda); e a rede 4, o dispositivo gravador (as builds x86a e ppca, headless.py --gravador, com
+#      BT3_SOUND=1): o rastro de telas e o de som da x86a iguais aos da x86 (abrir o dispositivo não muda o jogo) e, com
+#      SEMMAPA=1, a gravação da ppca igual à da x86a (som.py mixer: o PCM do ADX exato, a mistura dos efeitos dentro de
+#      1 LSB, as vozes ativas por bloco). As gravações são grandes: apagadas depois de comparadas, menos com GUARDA_SOM=1
 #   TP=3600     segundos da PPC no qemu
 #   MEM=menu    a memória no menu principal em vez do fim (SEMMAPA=1)
 #   REUSA=1     não roda nada do jogo: refaz as conferências sobre as saídas já guardadas em $O/NOME (para testar os
@@ -80,6 +86,7 @@ echo "x86 $(cat $B/x86/CARIMBO) | x86r $(cat $B/x86r/CARIMBO)$([ -z "${PPC:-}${S
 # achou a tabela final feita com a x86 de um estado e a PPC de outro que não estava em commit nenhum. DESENVOLVIMENTO=1
 # deixa rodar assim, e o fim diz que a rodada não vale como critério.
 CARIMBOS=(x86 x86r); [ -z "${PPC:-}${SEMMAPA:-}${IMG:-}" ] || CARIMBOS+=(ppc)
+[ -z "${SOM:-}" ] || CARIMBOS+=(x86a); [ -z "${SOM:-}" ] || [ -z "${SEMMAPA:-}" ] || CARIMBOS+=(ppca)
 AGORA=$(git rev-parse --short HEAD)
 ORIGEM=()
 for b in "${CARIMBOS[@]}"; do
@@ -110,7 +117,7 @@ for n in "${NOMES[@]}"; do
     echo "== $n"
     for v in a b; do
         if roda_x86; then
-            BT3_ROTEIRO=$R BT3_SAVES=$D/s$v BT3_HASH=$D/h$v.txt timeout 900 $B/x86/bt3_x86 > $D/x86_$v.txt 2>&1
+            BT3_SOM=${SOM:+$D/som_$v.txt} BT3_ROTEIRO=$R BT3_SAVES=$D/s$v BT3_HASH=$D/h$v.txt timeout 900 $B/x86/bt3_x86 > $D/x86_$v.txt 2>&1
             r=$?
         else
             r=$(grep -aq '^roteiro: .* fim ' $D/x86_$v.txt && echo 0 || echo "?")
@@ -122,6 +129,21 @@ for n in "${NOMES[@]}"; do
     done
     echo "   repetição: $(python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_b.txt | tr '\n' ' ')"
     python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_b.txt > /dev/null || falhou "repetição diferente"
+    if [ -n "${SOM:-}" ]; then
+        # (F6, etapa 2, rede 2) o rastro de som das duas rodadas da x86
+        python3 port/x360/tools/som.py rastro $D/som_a.txt $D/som_b.txt > $D/som_xx.txt
+        r=$?; sed 's/^/   /' $D/som_xx.txt
+        [ $r = 0 ] || falhou "som: o rastro de som das duas rodadas da x86 diferente (rede 2)"
+        # (rede 4) a x86 com o dispositivo gravador: o jogo igual (telas e rastro de som) e a gravação, para a ppca
+        roda_x86 && BT3_SOUND=1 BT3_GRAVADOR=$D/grav_x.bin BT3_SOM=$D/som_xa.txt BT3_ROTEIRO=$R BT3_SAVES=$D/sa \
+            BT3_HASH=$D/hxa.txt timeout 900 $B/x86a/bt3_x86a > $D/x86a.txt 2>&1
+        python3 port/x360/tools/roteiros.py telas $D/x86a.txt > $D/telas_xa.txt
+        python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_xa.txt > /dev/null ||
+            falhou "som: a x86 com o gravador com outro rastro de telas (abrir o dispositivo mudou o jogo)"
+        cmp -s $D/som_a.txt $D/som_xa.txt || falhou "som: a x86 com o gravador com outro rastro de som"
+        echo "   x86a (gravador): $(grep -a '^roteiro: .* fim \|FALHA' $D/x86a.txt | head -1 | cut -c1-80); $(stat -c %s $D/grav_x.bin 2>/dev/null) bytes gravados"
+        [ -n "${SEMMAPA:-}" ] || [ -n "${GUARDA_SOM:-}" ] || rm -f $D/grav_x.bin
+    fi
     if [ ! -s $REFS/$n.telas ] || [ -n "${REF:-}" ]; then
         cp $D/telas_a.txt $REFS/$n.telas
         echo "   referência gravada: $REFS/$n.telas ($(grep -c '^tela ' $REFS/$n.telas) trocas de tela)"
@@ -217,8 +239,9 @@ for n in "${NOMES[@]}"; do
         fi
         if roda_ppc; then
             rm -rf $D/hm.txt* $D/hq.txt* $D/sq $D/sm
-            BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_LEU=1 BT3_ROTEIRO=$R BT3_SAVES=$D/sq \
-                BT3_HASH=$D/hq.txt BT3_HASH_AT=$V timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $D/ppcsm.txt 2>&1
+            BT3_SOM=${SOM:+$D/som_p.txt} BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_LEU=1 \
+                BT3_ROTEIRO=$R BT3_SAVES=$D/sq BT3_HASH=$D/hq.txt BT3_HASH_AT=$V timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc \
+                > $D/ppcsm.txt 2>&1
             BT3_ROTEIRO=$R BT3_SAVES=$D/sm BT3_HASH=$D/hm.txt BT3_HASH_AT=$V timeout 900 $B/x86/bt3_x86 > /dev/null 2>&1
         fi
         # quem alocou cada bloco vivo nesse vblank e o tipo que pediu (Heap_Alloc(sizeof(T))): o memdiff compara esses
@@ -247,6 +270,25 @@ for n in "${NOMES[@]}"; do
         r=$?
         sed 's/^/   /' $D/semmapa.txt
         [ $r = 0 ] || falhou "PPC sem mapa diferente da x86 (ou parou sem nome)"
+        if [ -n "${SOM:-}" ]; then
+            # (F6, etapa 2, rede 2) o rastro de som da PPC sem mapa igual ao da x86 (o começo dele se ela parou na guarda)
+            python3 port/x360/tools/som.py rastro $D/som_a.txt $D/som_p.txt --prefixo > $D/som_xp.txt
+            r=$?; sed 's/^/   /' $D/som_xp.txt
+            [ $r = 0 ] || falhou "som: o rastro de som da PPC sem mapa diferente do da x86 (rede 2)"
+            # (rede 4) a ppca com o gravador, nos mesmos arquivos convertidos, contra a x86a
+            if roda_ppc; then
+                rm -rf $D/sqa
+                BT3_SOUND=1 BT3_GRAVADOR=$D/grav_p.bin BT3_SOM=$D/som_pa.txt BT3_DATA=$D/dados \
+                    BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_ROTEIRO=$R BT3_SAVES=$D/sqa BT3_HASH=$D/hqa.txt \
+                    timeout ${TP:-3600} qemu-ppc $B/ppca/bt3_ppca > $D/ppca.txt 2>&1
+            fi
+            echo "   ppca (gravador): $(grep -a '^roteiro: .* fim \|FALHA\|guarda' $D/ppca.txt | head -1 | cut -c1-80)"
+            cmp -s $D/som_p.txt $D/som_pa.txt || falhou "som: a PPC com o gravador com outro rastro de som"
+            python3 port/x360/tools/som.py mixer $D/grav_x.bin $D/grav_p.bin > $D/som_mixer.txt
+            r=$?; sed 's/^/   /' $D/som_mixer.txt
+            [ $r = 0 ] || falhou "som: a gravação do mixer da PPC diferente da x86 (rede 4)"
+            [ -n "${GUARDA_SOM:-}" ] || rm -f $D/grav_x.bin $D/grav_p.bin
+        fi
         # (F5, etapa 3) o mesmo que a F5 exige, no log da PPC sem mapa (o rastro igual ao da x86 já está no semmapa;
         # aqui, a origem dela e a medida de tempo)
         if [[ $n == f5_* ]]; then
