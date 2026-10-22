@@ -1192,7 +1192,19 @@ Até uns 43 mil triângulos por quadro de luta (o maior quadro tem 128.907 índi
 
 ### As provas no WSL [medido]
 
-PROVAS_AQUI
+Serviço `claude-indices`, script `~/indices/rodada-indices.sh`, resumo `~/indices/provas.resumo`, listas e logs em `~/indices/`, num
+worktree próprio do WSL (`~/bt3xbx-i`), cada passo pesado dentro do `flock ~/wsl.lock`; o clone `~/bt3xbx` ficou em `f5-pingpong`,
+sem alterados. Antes: `646e8ca` (o `f5-estado`). Depois: `e7d5307`. A pasta de dados dos dois roteiros feita pelo `roteiros.sh
+f5_treino f5_duelo` sem PPC no `e7d5307` ("tudo certo").
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `cc46fa0752f092fca305bc8bf2e2e54390763af0` antes e depois, a mesma (a referência do `f5-estado`; a main já tem a `ee54716`, da F6) |
+| O pré-processado (`gcc -E -P`, sem espaços) do `gs_draw.c` | igual ao do `f5-estado` na x86 plana; diferente com `BT3_TESTE_VU1` e com `PORT_BIG_ENDIAN` (a comparação vê a mudança onde ela existe) |
+| `x86gv`, `f5_treino` (7.386 quadros) e `f5_duelo` (8.380), sem chaves e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, antes contra depois | os dois com `divergencias.py` saindo 0, hashes `f76f0f6849b64629` e `08a98b6d05b8775a`, contadores do jogo e do desenho iguais, 0 desenhos com textura já solta |
+| `ppcg`, os mesmos dois roteiros | os dois com 0, hashes `f76f0f6849b64629` e `994627a2aecd429a` (os de sempre) |
+| Sabotagem: o `DrawVu6` sem gravar o contador de volta (o erro que este corte poderia ter), `x86gv`, `f5_duelo` | a lista diferente em **2.186 quadros** (do 4.136 ao 8.229; contagens, desenhos, vértices e índices da VU1 e constantes), hash `e6ef73eebea0ccbc`, `divergencias.py` sai 1 |
+| O git do worktree no fim | 0 alterados (a sabotagem com `assert` de que casou, desfeita por `git checkout`, e a `x86gv` refeita) |
 
 ### A build do 360
 
