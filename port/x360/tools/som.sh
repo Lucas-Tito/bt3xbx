@@ -3,9 +3,15 @@
 # (plano/F6/02.md). Um ciclo de emulador por vez: rodar dentro da trava do WSL.
 #   som.sh amostras        rede 3: constrói o teste_som da x86 e da PPC (headless.py --teste-som), faz o censo dos
 #                          cabeçalhos e compara o PCM do port com a referência independente (som.py amostras); depois
-#                          os quatro controles negativos (o c1 mais 1, um byte da amostra do banco, um byte da saída da
-#                          PPC, um byte da saída da x86 logo depois da volta do laço, onde vale a exceção da decisão
-#                          25.10), cada um tem de sair com 1 e dizer o porquê
+#                          os cinco controles negativos (o c1 mais 1, um byte da amostra do banco, um byte da saída da
+#                          PPC, um byte da saída da x86 logo depois da volta do laço, e a saída da x86 depois da volta
+#                          trocada pela variante "continua", o port de antes da decisão 25.10), cada um tem de sair com 1
+#                          e dizer o porquê
+#   som.sh fluxo           (F6, etapa 5) rede 3 pelo caminho do 360: o teste_som --fluxo da x86 e da PPC (o ADX lido em
+#                          blocos pela thread de port/x360/src/som/fluxo.c, de BT3_FLUXO_BLOCO bytes, 4096 por padrão aqui
+#                          para cruzar muitos blocos e voltas de laço) contra a referência, a x86 contra a PPC, e a
+#                          vista que o jogo vê; depois três controles: um byte trocado em todo bloco depois do primeiro
+#                          (dentro da leitura), a vista esperada mais 1, e o c1 mais 1
 #   som.sh controles NOME  redes 2 e 4: sobre as saídas do roteiros.sh SOM=1 em $O/NOME (o som_a.txt; a x86a refeita
 #                          aqui), o rastro estragado numa cópia (um volume trocado, uma linha a menos) tem de falhar no
 #                          som.py rastro, e a x86a com cada estrago de propósito (BT3_SABOTA=pitch, pan, banco) e uma
@@ -40,11 +46,29 @@ amostras)
     r=$?; sed 's/^/   /' $T/amostras.txt
     [ $r = 0 ] || falhou "rede 3: amostras diferentes (som.py amostras)"
     echo "== rede 3: controles negativos"
-    for e in adx vag ppc laco; do
+    for e in adx vag ppc laco continua; do
         case $e in adx) t="x86 diferente da referência";; vag) t="amostras do banco diferentes";; ppc) t="PPC diferente da x86";;
-            laco) t="depois da volta do laço, x86 diferente";; esac
+            laco|continua) t="depois da volta do laço, x86 diferente";; esac
         deve_falhar "estraga $e" "$t" python3 port/x360/tools/som.py amostras --dados gamedata --x86 $B/x86t/teste_som \
             --ppc $B/ppct/teste_som --tmp $T/controle --estraga $e
+    done
+    ;;
+fluxo)
+    for a in x86 ppc; do
+        python3 port/x360/tools/headless.py --alvo $a --teste-som --fluxo | tail -1
+        [ -x $B/${a}tf/teste_som ] || { echo "sem $B/${a}tf/teste_som"; exit 1; }
+    done
+    export BT3_FLUXO_BLOCO=${BT3_FLUXO_BLOCO:-4096}
+    echo "== rede 3 pelo caminho do 360 (blocos de $BT3_FLUXO_BLOCO bytes): o port contra a referência, a x86 contra a PPC, a vista"
+    python3 port/x360/tools/som.py amostras --fluxo --dados gamedata --x86 $B/x86tf/teste_som --ppc $B/ppctf/teste_som \
+        --tmp $T/fluxo > $T/fluxo.txt
+    r=$?; sed 's/^/   /' $T/fluxo.txt
+    [ $r = 0 ] || falhou "rede 3 pelo caminho em blocos: diferente (som.py amostras --fluxo)"
+    echo "== caminho em blocos: controles negativos"
+    for e in fluxo estado adx; do
+        case $e in fluxo|adx) t="x86 diferente da referência";; estado) t="vista diferente";; esac
+        deve_falhar "estraga $e (blocos)" "$t" python3 port/x360/tools/som.py amostras --fluxo --dados gamedata \
+            --x86 $B/x86tf/teste_som --ppc $B/ppctf/teste_som --tmp $T/controle_fluxo --estraga $e
     done
     ;;
 controles)
@@ -89,7 +113,7 @@ P
     rm -f $T/grav_ok.bin $T/grav_hash.bin
     ;;
 *)
-    sed -n '2,13p' "$0"; exit 2;;
+    sed -n '2,18p' "$0"; exit 2;;
 esac
 if [ ${#FALHAS[@]} -gt 0 ]; then
     echo "== ${#FALHAS[@]} falha(s):"; printf '   %s\n' "${FALHAS[@]}"; exit 1

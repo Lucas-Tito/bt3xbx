@@ -31,4 +31,10 @@ void Port_AdxTick(void) {
             v->stat = 5;
         }
     }
+#ifdef PORT_X360
+    {   /* (F6, etapa 5) the streams whose header came from the reading thread since the last blank (gs/snd_adx.c) */
+        extern void Port_AdxFluxos(void);
+        Port_AdxFluxos();
+    }
+#endif
 }

@@ -11,7 +11,10 @@
  * u32 samples, u16 high-pass frequency, u8 version, u8 flags. Version 4 with a loop: flag at 0x24, loop start
  * sample at 0x28, loop end sample at 0x30. A frame is a u16 scale and 32 signed nibbles; frames of the channels
  * alternate. sample = nibble * (scale + 1) + ((c1 * previous + c2 * the one before) >> 12), clamped to 16 bits,
- * with c1, c2 from the high-pass frequency (the usual ADX formula, in adx_coefs).
+ * with c1, c2 from the high-pass frequency (the usual ADX formula, in adx_coefs). At the loop's end the decoding goes
+ * back to the loop's first frame with the filter state it had when it first got there (as vgmstream does): the
+ * encoder wrote that frame for that state. Going on with the state of the loop's end (what this file did before
+ * 22/10/2026) put a click up to 3951 of 32768 into some of the game's loops (docs/x360/decisoes.md, decision 25.10).
  *
  * Each player has its own SDL audio stream (SDL converts the rate and mixes the streams); a stream asks for data
  * through a callback on SDL's audio thread, so the player's state is only touched under the stream's lock.
@@ -25,6 +28,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include "gs_internal.h"
+
+/* (F6, etapa 5) On the Xbox 360 a stream is read in blocks by a thread of its own (port/x360/src/som/fluxo.c), never on
+   the game's thread: no read when a stream starts (the file, nor its header for the length), none while it plays. The
+   tests of the WSL build the same path with -DPORT_FLUXO_BLOCOS (port/x360/tools/headless.py --teste-som --fluxo). */
+#if defined(PORT_X360) && !defined(PORT_FLUXO_BLOCOS)
+#define PORT_FLUXO_BLOCOS 1
+#endif
+#ifdef PORT_FLUXO_BLOCOS
+typedef struct Fluxo Fluxo; /* port/x360/src/som/fluxo.h */
+enum { FLUXO_PENDENTE = 0, FLUXO_PRONTO = 1, FLUXO_ERRO = 2 };
+extern Fluxo *Fluxo_Abrir(const char *caminho, long primeiro);
+extern int Fluxo_Estado(Fluxo *f, long *tamanho);
+extern const unsigned char *Fluxo_Pegar(Fluxo *f, long pos, int n, int adianta);
+extern void Fluxo_Laco(Fluxo *f, long ini, long fim);
+extern void Fluxo_Fechar(Fluxo *f);
+/* the view of a stream whose header has not come yet: counted down from here, so the blanks gone by are known */
+#define VISTA_PENDENTE 0x40000000
+#endif
+#ifdef PORT_X360
+extern unsigned Som360_Agora(void);                  /* port/x360/src/som/som360.cpp: microseconds */
+extern void Som360_Latencia(int tipo, unsigned us);  /* 1: from the start of a stream to its first sound */
+extern void Som360_CustoJogo(int tipo, unsigned us); /* time spent on the game's thread */
+#endif
 
 enum { ADXT_STAT_STOP = 0, ADXT_STAT_PLAYING = 3, ADXT_STAT_PLAYEND = 5 };
 #define MAX_PLAYERS 16
@@ -42,9 +68,19 @@ typedef struct Player {
     uint32_t pos;           /* next sample */
     int c1, c2;
     int hist[2][2];
+    int loopHist[2][2];     /* hist as it was when decoding reached the loop's first frame */
     int stat, paused;
     int vol;                /* 0.1 dB, 0 = full, -960 and below = silent */
     int pan[2];             /* per input channel: -15 left .. 15 right, PAN_AUTO */
+#ifdef PORT_FLUXO_BLOCOS
+    Fluxo *fluxo;           /* the file, read in blocks off the game's thread (NULL: the whole file, as on PC) */
+    int pendente;           /* the header has not been seen yet: the stream and the view wait for it */
+    int vista;              /* the view's length waits for the header (view_fluxo) */
+    int comSom;             /* the device was open at the start: the stream plays */
+    int falta;              /* the last decode stopped for want of data (silence, not the end) */
+    int novo;               /* (360) the first sound not out yet */
+    unsigned t0;            /* (360) when it was started */
+#endif
 } Player;
 
 static Player sPlayers[MAX_PLAYERS];
@@ -168,12 +204,31 @@ static int decode(Player *p, int16_t *out, int frames) {
                 break;
             }
             p->pos = p->loopStart & ~31u; /* loop starts are frame-aligned by the encoder */
+            memcpy(p->hist, p->loopHist, sizeof(p->hist));
             continue;
         }
+#ifdef PORT_FLUXO_BLOCOS
+        if (p->fluxo != NULL) {
+            long off = (long)p->data + (long)index * FRAME * (long)p->channels;
+            if (off + FRAME * (long)p->channels > (long)p->size) {
+                p->loop = 0;
+                p->total = p->pos;
+                break;
+            }
+            src = Fluxo_Pegar(p->fluxo, off, FRAME * (int)p->channels, 1);
+            if (src == NULL) {
+                p->falta = 1; /* not read yet: what was decoded goes out, the rest waits */
+                break;
+            }
+        } else
+#endif
         if (src + FRAME * p->channels > p->file + p->size) {
             p->loop = 0;
             p->total = p->pos;
             break;
+        }
+        if (p->loop && index == p->loopStart / 32) {
+            memcpy(p->loopHist, p->hist, sizeof(p->hist)); /* (every pass through it saves the same state) */
         }
         for (ch = 0; ch < (int)p->channels; ch++, src += FRAME) {
             int scale = (int)be16(src) + 1, h1 = p->hist[ch][0], h2 = p->hist[ch][1];
@@ -219,12 +274,30 @@ static void SDLCALL feed(void *user, SDL_AudioStream *stream, int additional, in
     (void)total;
     while (additional > 0 && p->stat == ADXT_STAT_PLAYING && !p->paused) {
         int n = decode(p, buf, 16);
+#ifdef PORT_FLUXO_BLOCOS
+        if (n == 0 && p->falta) {
+            p->falta = 0;
+            break;
+        }
+#endif
         if (n == 0) {
             p->stat = ADXT_STAT_PLAYEND;
             break;
         }
         SDL_PutAudioStreamData(stream, buf, n * 4);
         additional -= n * 4;
+#ifdef PORT_FLUXO_BLOCOS
+#ifdef PORT_X360
+        if (p->novo) {
+            p->novo = 0;
+            Som360_Latencia(1, Som360_Agora() - p->t0);
+        }
+#endif
+        if (p->falta) {
+            p->falta = 0;
+            break;
+        }
+#endif
     }
 }
 
@@ -247,6 +320,11 @@ static void stop(Player *p) {
     free(p->file);
     p->file = NULL;
     p->stat = ADXT_STAT_STOP;
+#ifdef PORT_FLUXO_BLOCOS
+    Fluxo_Fechar(p->fluxo); /* (after the stream: the mixer no longer reads it) */
+    p->fluxo = NULL;
+    p->pendente = p->vista = p->falta = 0;
+#endif
 }
 
 /* An online match computes with the default voice set on both sides (net.c). A player who chose the other one hears
@@ -353,6 +431,7 @@ static void start(Player *p, const char *path) {
     }
     adx_coefs(highpass, p->rate, &p->c1, &p->c2);
     memset(p->hist, 0, sizeof(p->hist));
+    memset(p->loopHist, 0, sizeof(p->loopHist));
     p->pos = 0;
     spec.format = SDL_AUDIO_S16;
     spec.channels = 2;
@@ -373,6 +452,196 @@ static void start(Player *p, const char *path) {
         fprintf(stderr, "bt3: sound stream: %s\n", SDL_GetError());
     }
 }
+
+#ifdef PORT_FLUXO_BLOCOS
+/* (F6, etapa 5) The stream read in blocks: start_fluxo asks for the file and returns at once; the header is looked at
+   when its block has come (fluxo_resolve, on the game's thread: every vertical blank, Port_AdxFluxos, and when the game
+   asks for the state). Until then the view says "playing", counting its blanks down from VISTA_PENDENTE; the header
+   then gives the length, less the blanks gone by: the state the game sees is the one it would have seen with the
+   header read at the start (adx_blanks), only it can come late if the read takes longer than the whole stream. */
+static unsigned sFluxoTarde; /* views settled after the stream should have ended already */
+
+/* adx_blanks from the first 0x40 bytes in memory */
+static int blanks_of(const uint8_t *h, const char *path) {
+    uint32_t header, rate, total;
+
+    if (be16(h) != 0x8000) {
+        return 0;
+    }
+    header = be16(h + 2) + 4;
+    rate = be32(h + 8);
+    total = be32(h + 12);
+    if (h[0x12] == 4 && header >= 0x38 && (h[0x24] | h[0x25] | h[0x26] | h[0x27]) != 0) {
+        return -1;
+    }
+    {
+        extern int PortSongs_IsFile(const char *path); /* plat_songs.c */
+        if (PortSongs_IsFile(path)) {
+            return -1;
+        }
+    }
+    return rate == 0 ? 0 : (int)(((uint64_t)total * 60000 + (uint64_t)rate * 1001 - 1) / ((uint64_t)rate * 1001)) + 1;
+}
+
+/* start() without reading: 0 if the blocks cannot be had (then start() as on PC) */
+static int start_fluxo(Player *p, const char *path) {
+    char own[512];
+
+    if (gPortResim) {
+        return 0;
+    }
+    path = voice_own_path(path, own, sizeof(own));
+    stop(p);
+    snprintf(p->path, sizeof(p->path), "%s", path);
+    p->comSom = device();
+    p->fluxo = Fluxo_Abrir(path, p->comSom ? 0 : 0x800); /* (without sound only the header is wanted) */
+    if (p->fluxo == NULL) {
+        return 0;
+    }
+    p->pendente = 1;
+#ifdef PORT_X360
+    p->t0 = Som360_Agora();
+    p->novo = p->comSom;
+#endif
+    return 1;
+}
+
+/* The header has come: the view's length and, with sound, what start() sets up from the file. */
+static void fluxo_resolve(Player *p) {
+    PortAdxView *v = &gPortAdxView[p - sPlayers];
+    const uint8_t *h = NULL;
+    SDL_AudioSpec spec;
+    uint32_t header, highpass;
+    long tam;
+    int e, blanks = 0;
+
+    if (!p->pendente || p->fluxo == NULL || (e = Fluxo_Estado(p->fluxo, &tam)) == FLUXO_PENDENTE) {
+        return;
+    }
+    p->pendente = 0;
+    if (e == FLUXO_PRONTO && tam >= 0x40) {
+        h = Fluxo_Pegar(p->fluxo, 0, 0x40, 0);
+    }
+    if (h != NULL) {
+        blanks = blanks_of(h, p->path);
+    }
+    if (p->vista) { /* what view_start would have said, the blanks gone by later */
+        int gone = VISTA_PENDENTE - v->left;
+        p->vista = 0;
+        if (blanks == 0) {
+            v->stat = ADXT_STAT_STOP;
+            v->left = 0;
+        } else if (blanks < 0) {
+            v->left = -1;
+        } else if (blanks - gone > 0) {
+            v->left = blanks - gone;
+        } else {
+            v->left = 0;
+            v->stat = ADXT_STAT_PLAYEND;
+            sFluxoTarde++;
+        }
+    }
+    if (!p->comSom || h == NULL) {
+        if (p->comSom) {
+            fprintf(stderr, "bt3: sound file not found: %s\n", p->path);
+        }
+        Fluxo_Fechar(p->fluxo);
+        p->fluxo = NULL;
+        return;
+    }
+    if (be16(h) != 0x8000 || h[4] != 3 || h[5] != FRAME || h[6] != 4 || h[7] < 1 || h[7] > 2 || (h[0x13] & 8)) {
+        fprintf(stderr, "bt3: %s is not an ADX file of the kind the game uses\n", p->path);
+        Fluxo_Fechar(p->fluxo);
+        p->fluxo = NULL;
+        return;
+    }
+    p->size = (uint32_t)tam;
+    header = be16(h + 2) + 4;
+    p->data = header;
+    p->channels = h[7];
+    p->rate = be32(h + 8);
+    p->total = be32(h + 12);
+    highpass = be16(h + 16);
+    p->loop = 0;
+    if (h[0x12] == 4 && header >= 0x38 && be32(h + 0x24) != 0) {
+        p->loopStart = be32(h + 0x28);
+        p->loopEnd = be32(h + 0x30);
+        p->loop = p->loopEnd > p->loopStart && p->loopEnd <= p->total;
+    }
+    if (!p->loop && p->total >= 64) {
+        extern int PortSongs_IsFile(const char *path); /* plat_songs.c (start()) */
+        if (PortSongs_IsFile(p->path)) {
+            p->loopStart = 0;
+            p->loopEnd = p->total & ~31u;
+            p->loop = 1;
+        }
+    }
+    if (p->loop) { /* the block after the loop's end is the one of its start */
+        Fluxo_Laco(p->fluxo, (long)p->data + (long)(p->loopStart / 32) * FRAME * (long)p->channels,
+                   (long)p->data + (long)((p->loopEnd + 31) / 32) * FRAME * (long)p->channels);
+    }
+    adx_coefs(highpass, p->rate, &p->c1, &p->c2);
+    memset(p->hist, 0, sizeof(p->hist));
+    memset(p->loopHist, 0, sizeof(p->loopHist));
+    p->pos = 0;
+    spec.format = SDL_AUDIO_S16;
+    spec.channels = 2;
+    spec.freq = (int)p->rate;
+    p->stream = SDL_CreateAudioStream(&spec, NULL);
+    if (p->stream == NULL) {
+        fprintf(stderr, "bt3: sound stream: %s\n", SDL_GetError());
+        Fluxo_Fechar(p->fluxo);
+        p->fluxo = NULL;
+        return;
+    }
+    if (getenv("BT3_SND_VERBOSE") != NULL) {
+        fprintf(stderr, "adx: start %s: %u ch, %u Hz, %.1f s, loop %d, volume %d (0.1 dB), paused %d (in blocks)\n", p->path,
+                p->channels, p->rate, (double)p->total / (double)p->rate, p->loop, p->vol, p->paused);
+    }
+    p->stat = ADXT_STAT_PLAYING;
+    apply_volume(p);
+    SDL_SetAudioStreamGetCallback(p->stream, feed, p);
+    if (!SDL_BindAudioStream(sDevice, p->stream)) {
+        fprintf(stderr, "bt3: sound stream: %s\n", SDL_GetError());
+    }
+}
+
+/* view_start without reading: "playing" until the header says how long */
+static void view_fluxo(Player *p, const char *path) {
+    PortAdxView *v = &gPortAdxView[p - sPlayers];
+    v->stat = ADXT_STAT_PLAYING;
+    v->left = VISTA_PENDENTE;
+    snprintf(v->path, sizeof(v->path), "%s", path);
+    p->vista = 1;
+    fluxo_resolve(p); /* (the header may be there already) */
+}
+
+/* Every vertical blank, on the game's thread (plat_sndstate.c, Port_AdxTick): the headers that have come. */
+void Port_AdxFluxos(void) {
+    int i;
+#ifdef PORT_X360
+    unsigned t0 = Som360_Agora(), quantos = 0;
+#endif
+    for (i = 0; i < gPortAdxCount && i < MAX_PLAYERS; i++) {
+        if (sPlayers[i].pendente) {
+            fluxo_resolve(&sPlayers[i]);
+#ifdef PORT_X360
+            quantos++;
+#endif
+        }
+    }
+#ifdef PORT_X360
+    if (quantos > 0) {
+        Som360_CustoJogo(3, Som360_Agora() - t0);
+    }
+#endif
+}
+
+/* views that came late (diário) */
+unsigned Port_AdxFluxosTarde(void) {
+    return sFluxoTarde;
+}
+#endif
 
 /* ------------------------------------------------------------------------------- the library's functions */
 
@@ -395,20 +664,50 @@ void ADXT_SetSvrFreq(void *adxt, int freq) { (void)adxt; (void)freq; }
 
 void ADXT_StartAfs(void *adxt, int patid, int fid) {
     char path[512];
+#ifdef PORT_X360
+    unsigned t0 = Som360_Agora();
+#endif
 
     if (adxt != NULL && Port_FilePath(patid, fid, NULL, path, sizeof(path))) {
+#ifdef PORT_FLUXO_BLOCOS
+        if (start_fluxo(adxt, path)) {
+            view_fluxo(adxt, path);
+        } else {
+            start(adxt, path);
+            view_start(adxt, path);
+        }
+#else
         start(adxt, path);
         view_start(adxt, path);
+#endif
     }
+#ifdef PORT_X360
+    Som360_CustoJogo(2, Som360_Agora() - t0);
+#endif
 }
 
 void ADXT_StartFname(void *adxt, char *fname) {
     char path[512];
+#ifdef PORT_X360
+    unsigned t0 = Som360_Agora();
+#endif
 
     if (adxt != NULL && Port_FilePath(0, 0, fname, path, sizeof(path))) {
+#ifdef PORT_FLUXO_BLOCOS
+        if (start_fluxo(adxt, path)) {
+            view_fluxo(adxt, path);
+        } else {
+            start(adxt, path);
+            view_start(adxt, path);
+        }
+#else
         start(adxt, path);
         view_start(adxt, path);
+#endif
     }
+#ifdef PORT_X360
+    Som360_CustoJogo(2, Som360_Agora() - t0);
+#endif
 }
 
 void ADXT_Stop(void *adxt) {
@@ -475,6 +774,11 @@ void ADXT_SetOutputMono(int flag) {
 }
 
 int ADXT_GetStat(void *adxt) {
+#ifdef PORT_FLUXO_BLOCOS
+    if (adxt != NULL && ((Player *)adxt)->pendente) {
+        fluxo_resolve(adxt); /* (the header may have come since the last blank) */
+    }
+#endif
     if (adxt != NULL && by_ticks()) {
         return gPortAdxView[(Player *)adxt - sPlayers].stat; /* counted in vertical blanks, the same on every machine */
     }

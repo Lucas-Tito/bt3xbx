@@ -268,6 +268,75 @@ uint32_t Gs_VramRead(uint32_t bp, uint32_t bw, uint32_t psm, uint32_t x, uint32_
     return vram_rw(bp, bw, psm, x, y, 0, 0);
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, texturas: docs/x360/plano/F5/08-gravacao.md, seção 17) A decodificação de uma textura inteira, uma linha
+   por vez, com as tabelas do envio (sIn32, sIn16, sIn8, sIn4: as mesmas contas do vram_rw, em páginas) e a paleta lida e
+   expandida uma vez (256 ou 16 entradas) em vez de uma vez por pixel. No 360 o laço de antes, um vram_rw (e mais um da
+   paleta) e um Gs_Expand por pixel, levava uns 110 ns por pixel. Os mesmos números, pixel a pixel, para os formatos que o
+   jogo usa nas texturas (32, 16, 8 e 4 bits); os outros (24 bits, os de dentro de um pixel de 32, a profundidade) devolvem
+   0 e ficam com o laço de antes. 1: px tem os tw x th pixels. */
+int Gs_TexDecode(uint32_t *px, uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uint32_t th, uint32_t cbp, uint32_t cpsm) {
+    const uint8_t *v8 = (const uint8_t *)sVram;
+    uint32_t bw = tbw ? tbw : 1, x, y, i, pal[256];
+
+    if (psm == 0x13 || psm == 0x14) {
+        uint32_t n = psm == 0x13 ? 256 : 16;
+        for (i = 0; i < n; i++) {
+            uint32_t j = psm == 0x13 ? (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1) : i;
+            pal[i] = psm == 0x13 ? Gs_Expand(vram_rw(cbp, 1, cpsm, j & 15, j >> 4, 0, 0), cpsm)
+                                 : Gs_Expand(vram_rw(cbp, 1, cpsm, j & 7, j >> 3, 0, 0), cpsm);
+        }
+    }
+    switch (psm) {
+    case 0x13:
+        for (y = 0; y < th; y++) {
+            const uint16_t *in = sIn8[y & 63];
+            uint32_t base = (tbp + (y >> 6) * 32 * (bw >> 1)) << 8, *o = px + y * tw;
+            for (x = 0; x < tw; x++) {
+                o[x] = pal[v8[(base + ((x >> 7) << 13) + in[x & 127]) & 0x3FFFFF]];
+            }
+        }
+        return 1;
+    case 0x14:
+        for (y = 0; y < th; y++) {
+            const uint16_t *in = sIn4[y & 127];
+            uint32_t base = (tbp + (y >> 7) * 32 * (bw >> 1)) << 9, *o = px + y * tw;
+            for (x = 0; x < tw; x++) {
+                uint32_t a = base + ((x >> 7) << 14) + in[x & 127], b = v8[(a >> 1) & 0x3FFFFF];
+                o[x] = pal[(a & 1) ? b >> 4 : b & 15];
+            }
+        }
+        return 1;
+    case 0x00:
+        for (y = 0; y < th; y++) {
+            const uint16_t *in = sIn32[y & 31];
+            uint32_t base = (tbp + (y >> 5) * 32 * bw) << 6, *o = px + y * tw;
+            for (x = 0; x < tw; x++) {
+                o[x] = GS_LE32(sVram[(base + ((x >> 6) << 11) + in[x & 63]) & 0xFFFFF]);
+            }
+        }
+        return 1;
+    case 0x02:
+    case 0x0A: {
+        /* o Gs_Expand dos 16 bits, com o TEXA lido uma vez */
+        uint32_t ta0 = gs.texa & 0xFF, ta1 = (gs.texa >> 32) & 0xFF, aem = (gs.texa >> 15) & 1;
+        for (y = 0; y < th; y++) {
+            const uint16_t *in = sIn16[psm == 0x0A][y & 63];
+            uint32_t base = (tbp + (y >> 6) * 32 * bw) << 7, *o = px + y * tw;
+            for (x = 0; x < tw; x++) {
+                uint32_t a = base + ((x >> 6) << 12) + in[x & 63], c = (GS_LE32(sVram[(a >> 1) & 0xFFFFF]) >> ((a & 1) * 16)) & 0xFFFF;
+                uint32_t al = (c & 0x8000) ? ta1 : (aem && (c & 0x7FFF) == 0 ? 0 : ta0);
+                o[x] = (c & 31) << 3 | ((c >> 5) & 31) << 11 | ((c >> 10) & 31) << 19 | al << 24;
+            }
+        }
+        return 1;
+    }
+    default:
+        return 0;
+    }
+}
+#endif
+
 /* A hash of one 8 KB page of GS memory, recomputed only after an upload touched the page. The GPU back end keys
    its texture cache on these, so a texture the game uploads again unchanged (it streams the stage's textures to
    one address many times per frame) is recognised instead of decoded again. */

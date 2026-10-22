@@ -1257,6 +1257,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   teste do `headless/` (o rastro de som `som.c` por `--wrap` e o `BT3_SOM_ESTADO` do `roteiro.c`); a etapa 2 comparou os
   objetos um a um (só o `x360_som.o` novo e o `x360_passos.o` do carimbo). Daqui em diante, a prova de que um corte não
   muda a x86 plana compara com a referência nova.
+- **E mudou de novo em 22/10/2026, pela volta do laço do ADX** (decisão 25.10 revista, `plano/F6/02.md`, seção 7): de
+  `ee54716ba7d86744152b9b71e6ac8e500f985d97` para `43444ea4d03a6d448aa1ae74a631e35b356a7caa`. Esta muda o jogo de
+  propósito (o `snd_adx.c`); dos 326 objetos sem a depuração só diferem o `gs_snd_adx.o` e o `x360_passos.o` (carimbo).
+  Uma build da x86 plana que der a `ee54716...` não tem a volta que restaura.
 
 - **Endereço que vem de `malloc` do host não se compara entre builds.** O rastro de som gravava os endereços das tabelas
   do banco na memória do IOP; o `IopHeap_Alloc` do port é um `malloc`, e o rastro da x86 com o gravador saiu diferente do
@@ -1288,6 +1292,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   medida numa música (10 LSB) e virou decisão; com os 72 ADX com laço na amostra deu 3951 LSB. E um verificador que
   pede uma janela fixa precisa do caso menor que a janela (laços de 36 amostras): o `som.py` parou com uma exceção do
   Python, que a rodada contou como "amostras diferentes".
+- **Uma exceção no verificador esconde a variante que ela aceita.** Com a exceção do laço, o `som.py` passava o port que
+  continuava o histórico, e passaria um que o fizesse por engano. Corrigido o port, a exceção sai no mesmo commit e entra um
+  controle com a variante antiga (`--estraga continua`), para o verificador não voltar a aceitá-la calado. E o controle de
+  um caso raro (laço) escolhe arquivos que têm o caso: os quatro primeiros da amostra podiam não ter laço nenhum.
+- **O teste das amostras compila aqui, sem o WSL.** Os cinco fontes do `headless.py --teste-som` saem com o `gcc` do Linux
+  (`-std=gnu99 -DBT3_GRAVADOR -Iport/x360/headless`, sem o `gen/gs`), e o `som.py amostras` roda sobre uma pasta
+  `pzs3us2` de ADX sintéticos (`--n 0`): dá para provar o decodificador e o verificador, inclusive falhando com a versão
+  da `main`, antes da rodada com os dados do jogo.
 
 ### A camada de áudio do 360 (F6, etapa 3, `plano/F6/03.md`)
 
@@ -1352,6 +1364,29 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Teste leve no WSL fora do `flock`.** O `teste_blocos.sh` pôs o `flock ~/wsl.lock` na frente e ficou na fila atrás de um
   `roteiros.sh` de outro agente, para uns minutos de CPU de um núcleo sem emulador. Como o `teste_som360.sh`: cópia
   temporária por tar em base64, sem trava; a trava é do emulador.
+
+### Efeitos e fluxos no 360 (F6, etapas 4 e 5, `plano/F6/04.md` e `05.md`)
+
+- **O estado que o jogo vê pode esperar uma leitura sem deixar de ser determinístico.** A duração de um fluxo vinha do
+  cabeçalho lido na thread do jogo no início. Para tirar a leitura dali sem mudar o que o jogo vê, a vista começa com um
+  valor grande conhecido (`VISTA_PENDENTE`) que o tique de sempre desconta; quando o cabeçalho chega, a duração menos o
+  que já foi descontado é o mesmo estado da leitura no começo. Só o caso "chegou depois do fim" difere, e ele se conta.
+  Serve para qualquer dado assíncrono que o estado do jogo consulta.
+- **Leitura assíncrona que se autocorrige esconde o adiantado errado.** Uma falta pede o bloco certo e o dado chega certo:
+  um teste só de bytes passa com o adiantado quebrado (o do começo do laço, a sobra do bloco). O teste do `fluxo.c` conta
+  as faltas numa leitura em sequência com folga e exige zero; os mutantes desses dois só foram acusados assim.
+- **Uma espera fixa num teste de tempo é falha intermitente.** A folga de 1,5 ms antes de cada bloco deu uma falta em
+  uma de três rodadas (o escalonador); com 5 ms, quinze seguidas sem falta. Asserção de "chegou antes" pede folga larga,
+  e o teste roda três vezes no `teste_som360.sh`.
+- **Uma tabela de fluxos precisa de lugar para os que estão fechando.** O fechar é da thread de leitura (o arquivo se
+  fecha lá); com 20 abertos e a tabela de 24, os fechamentos pendentes a enchiam no teste. 32 lugares para 16 players.
+- **Comparar avisos do `cl` entre duas builds: tirar as linhas do `wine`.** A primeira build num prefixo novo escreve
+  `wine: created the configuration directory '/root/.wine'` nos `.txt` de alguns fontes (os que compilaram primeiro);
+  sete "avisos diferentes" eram isso. `grep -v '^wine: '` dos dois lados.
+- **Provar que a build plana do WSL não muda pelo texto pré-processado (`gcc -E -P`), sem as marcas de linha.** Código
+  novo só dentro de `#ifdef` muda os números das linhas, não o texto; com `-P` o md5 do antes e do depois é o mesmo, para
+  cada combinação de definições do WSL (com e sem `BT3_GRAVADOR` e `PORT_BIG_ENDIAN`). A comparação dos objetos sem a
+  depuração na rodada do WSL confirma. Um `#else` que repete o original evita o `{ }` a mais que mudaria o texto.
 
 ---
 
@@ -1803,3 +1838,27 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Capturas comparáveis entre escalas:** reduzir para o tamanho da escala 1 pela média dos pixels de saída de cada pixel do GS, e
   pedir os buffers maiores só quando a escala os usa: um buffer estático novo mudaria a memória livre da build sem a chave.
 
+
+### As texturas novas (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 17)
+
+- **Antes de montar um cache para não redecodificar, classifique as redecodificações pelo conteúdo decodificado.** Um hash dos
+  pixels por textura, com a chave do cache ao lado, separa a primeira vez, o descarte, a página que mudou sem mudar a textura e a
+  mesma imagem noutro endereço. A hipótese de partida (o descarte por uso do 360) deu zero; quatro quintos dos pixels da luta eram
+  imagens já vistas com outra chave (a página de 8 KB mudou por causa de outra textura, ou o jogo reenviou o conjunto a outro
+  endereço). O cache certo é pela origem, não um que sobreviva ao descarte.
+- **Um acessor genérico por pixel custa no Xenon umas 9 vezes o que custa na x86** (110 contra 12 ns por pixel na decodificação das
+  texturas): duas chamadas, um `switch` e leituras de globais por pixel. Um laço por linha com as tabelas por página e a paleta
+  expandida uma vez fez 10 vezes menos na x86, com 12 instruções por pixel no `cl`. Procure o mesmo padrão onde o custo é por pixel
+  ou por vértice.
+- **Depois de tirar uma causa de pico, olhe o que sobrou antes de atacar a seguinte** (F5, etapa 8, 22/10): com as texturas a
+  10 ns por pixel, os piores passos da luta que restaram não tinham textura nenhuma e tinham uma leitura de disco de 40 a 98 ms
+  na thread do jogo, que outra frente (o ADX em blocos da F6) já resolvia. Medir as duas juntas numa abertura só poupou uma
+  rodada.
+- **Um teste de unidade da ordem dos bytes tem de rodar na PPC de verdade** (`powerpc-linux-gnu-gcc -static` no `qemu-ppc`, um
+  arquivo de teste que inclui o `.c` e liga com `-Wl,--unresolved-symbols=ignore-all`). Na x86 com `-DPORT_BIG_ENDIAN` o `GS_LE32`
+  troca os bytes mas a memória segue little-endian: o acesso por byte à VRAM saiu "errado" em 1.179 de 1.500 casos que na PPC
+  estavam certos.
+- **As listas do `gpu_falso` veem o conteúdo das texturas** (a seção 0: o `fake_tex_upload` hasheia os pixels enviados): uma
+  decodificação errada nos 4 bits mudou 141 quadros. Mesmo assim, uma conferência por textura (a decodificação nova refeita noutro
+  buffer contra a de antes, `BT3_TEX_CONTA`) diz qual textura e qual formato, e vale para os quadros em que a textura errada não
+  chegaria a ser desenhada.
