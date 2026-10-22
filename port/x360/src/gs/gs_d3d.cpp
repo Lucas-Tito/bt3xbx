@@ -770,15 +770,17 @@ static void picos_desenho(const GsQuadro *q, double msFim, double msPresent, int
    marcas seguidas (o trecho vazio, a classe medição), e o log desconta esse custo de cada trecho. As marcas de um
    quadro são lidas dois quadros depois (dois buffers, com uma cerca depois da última marca). A CPU do fim do quadro é
    dividida nas mesmas classes (mais a cópia da VU1 e o Present) pelo mesmo relógio, a cada troca. Sem efeito na
-   imagem: só callbacks e cercas. Ver docs/x360/plano/F5/08.md, "Tempo por passada no log". */
+   imagem: só callbacks e cercas. Ver docs/x360/plano/F5/08.md, "Tempo por passada no log". Desde a etapa 2 do 720p as
+   "entradas na EDRAM" são a troca e a limpeza, e a "volta da cor" o desenho do conteúdo do alvo de volta por cima. */
 enum {
     T_OUTROS, T_COMUM, T_VU0, T_VU4, T_VU6, T_PROF, T_CONTORNO, T_TAB_IDS, T_TAB_PROF, T_IDS, T_FBA, T_DATE, T_COR_RES,
-    T_COR_ENTRA, T_TELA, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
+    T_COR_ENTRA, T_COR_VOLTA, T_TELA, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
     T_VU_COPIA = T_GPU_N, T_PRESENT, T_N
 };
 static const char *const kTempoNome[T_N] = {"outros", "comum", "vu0", "vu4", "vu6", "profundidade", "contorno",
                                             "tabela pelos ids", "tabela pela profundidade", "cópia dos ids", "FBA",
-                                            "DATE", "resolves de cor", "entradas na EDRAM", "tela", "medição",
+                                            "DATE", "resolves de cor", "entradas na EDRAM", "volta da cor", "tela",
+                                            "medição",
                                             "cópia da VU1", "Present"};
 #define T_MARCAS 4096 /* por quadro; um quadro com mais é descartado (contado); 136 KB nos dois buffers */
 static volatile unsigned __int64 sMarcaGpu[2 * T_MARCAS]; /* o relógio quando a GPU chegou à marca (tempo_cb) */
@@ -1777,6 +1779,7 @@ static void entra_na_edram(int i, int usaZ) {
     } else {
         if (a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
             Ret r = a->conteudo;
+            tempo_poe(T_COR_VOLTA); /* (720p, etapa 2: a volta da cor separada da limpeza na medição) */
             copia(a->tex, sAlvoW, sAlvoH, (float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1, (float)r.x0 / sAlvoW,
                   (float)r.y0 / sAlvoH, (float)r.x1 / sAlvoW, (float)r.y1 / sAlvoH, 0);
             sConta.restauros++;
