@@ -264,15 +264,16 @@ def main():
             erros.append(f"{n}: muda o som e está {'só no WSL' if n in wsl else 'só no 360'}")
 
     # 3. os caminhos
-    cen = {
-        "360 sem desenho": caminhos(s360, gpu_de(s360, "360"), "360"),
-        "360 com desenho": caminhos(c360, gpu_de(c360, "360"), "360"),
-    }
+    # (um ambiente.txt com BT3_GS=gpu já é o cenário com desenho: aí o sem desenho não se roda e sai da conta)
+    cen = {}
+    for amb in (s360, c360):
+        cen["360 com desenho" if gpu_de(amb, "360") else "360 sem desenho"] = caminhos(amb, gpu_de(amb, "360"), "360")
     cw = caminhos(wsl, gpu_de(wsl, "wsl"), "wsl")
     cp = caminhos(pc, gpu_de(pc, "pc"), "pc")
     print("\n== caminhos: 360 sem desenho | 360 com desenho | WSL roteiros | PC")
     for k in cw:
-        print(f"{k:62} {str(cen['360 sem desenho'][k]):9} {str(cen['360 com desenho'][k]):9} {str(cw[k]):9} {cp[k]}")
+        sem = cen["360 sem desenho"][k] if "360 sem desenho" in cen else "-"
+        print(f"{k:62} {str(sem):9} {str(cen['360 com desenho'][k]):9} {str(cw[k]):9} {cp[k]}")
     print()
     for nome, c in cen.items():
         for k in cw:
@@ -283,7 +284,10 @@ def main():
                 else:
                     print(f"esperada ({nome}): '{k}' {c[k]} contra {cw[k]}: {motivo}")
             elif (nome, k) in ESPERADAS:
-                erros.append(f"{nome}: '{k}' deixou de divergir; tire-o de ESPERADAS")
+                if a.ambiente:  # (um ambiente.txt pode desligar a diferença: BT3_NOMOVIE=1 no console)
+                    print(f"esperada ({nome}): '{k}' igual com este ambiente.txt")
+                else:
+                    erros.append(f"{nome}: '{k}' deixou de divergir nos padrões; tire-o de ESPERADAS")
     if erros:
         print("\n>> FALHA")
         for e in erros:
