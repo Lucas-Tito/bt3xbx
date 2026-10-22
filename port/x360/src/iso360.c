@@ -18,7 +18,8 @@
  * aberto é um IsoArq do vetor sAbertos, e as funções de stdio do shim (Port_X360Fread...) reconhecem um IsoArq
  * pelo endereço e mandam o resto para a CRT. Caminho sob a raiz que não é do disco (fases e músicas de fora,
  * port/src/plat_stages.c, plat_songs.c) vai para o arquivo de verdade.
- * Só leitura. Mais de uma thread lê: Iso_Iniciar roda na main antes das threads. A ISO tem dois handles, cada um
+ * Só leitura. Mais de uma thread lê: Iso_Iniciar roda na main antes das threads e já lê as tabelas dos três AFS.
+ * A ISO tem dois handles, cada um
  * com a sua trava: o comum (o jogo, o filme, o boot) e o da thread de leitura dos fluxos de som (som/fluxo.c,
  * Iso_LeitoraPropria), para que a leitura de um bloco de som não segure a trava que a thread do jogo pega. Abrir uma
  * entrada do AFS na thread do jogo (o Port_FilePath de cada ADXT_Start*) não espera leitura de outra thread: a tabela
@@ -142,6 +143,8 @@ static int tem_marca(const char *caminho) {
     return 1;
 }
 
+static Afs *afs(int n);
+
 /* A primeira .iso da pasta do .xex (ou BT3_ISO). Nome no FATX: até 42 caracteres. Chamada pela main antes de criar
    threads (main360.cpp), depois do ambiente. */
 void Iso_Iniciar(void) {
@@ -151,6 +154,8 @@ void Iso_Iniciar(void) {
     char caminho[512];
     const char *escolhido = getenv("BT3_ISO");
     int pedida = escolhido != NULL && escolhido[0] != '\0';
+    int i;
+    LARGE_INTEGER t0;
 
     if (sIniciado) {
         return;
@@ -203,6 +208,13 @@ void Iso_Iniciar(void) {
         return;
     }
     Diario_Escrever("iso: os arquivos com conversor já vêm convertidos: a carga só lê (sem Conv_Arquivo)");
+    /* (F6) as três tabelas aqui, antes das threads: a do PZS3US2.AFS (65.201 entradas, 509 KiB) era lida no primeiro
+       ADX da partição 2, dentro do afs(), na thread do jogo e com a trava comum */
+    QueryPerformanceCounter(&t0);
+    for (i = 0; i < 3; i++) {
+        afs(i);
+    }
+    Diario_Escrever("iso: as tabelas dos três AFS lidas no boot em %.1f ms", ms_desde(t0));
     sIsoLeitora = CreateFile(caminho, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (sIsoLeitora == INVALID_HANDLE_VALUE) {
         Diario_Escrever("iso: o segundo handle (o da leitura dos fluxos de som) não abriu (erro %u): ela lê pelo comum",
@@ -311,7 +323,8 @@ static int achar(const char *caminho, __int64 *ini, long *tam) {
     }
 }
 
-/* A tabela do AFS DATA/PZS3USn.AFS ("AFS\0", n, depois deslocamento e tamanho de cada entrada). Depois de lida, sem
+/* A tabela do AFS DATA/PZS3USn.AFS ("AFS\0", n, depois deslocamento e tamanho de cada entrada), lida no boot
+   (Iso_Iniciar). Depois de lida, sem
    trava (a thread do jogo abre uma entrada a cada ADXT_Start* e não pode esperar a leitura de outra thread). A carga é
    sob a trava (duas threads podem pedir a primeira entrada ao mesmo tempo), e a tabela só aparece já na ordem do host,
    antes do `lido`. A trava é recursiva (seção crítica): ler() a toma de novo. */

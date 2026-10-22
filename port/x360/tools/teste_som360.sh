@@ -13,8 +13,9 @@
 # 4. (F6, a thread do jogo sem esperar) o teste da leitura em blocos roda pelo caminho do console: o fluxo.c com
 #    -DFLUXO_PELO_PORT e o port/x360/src/iso360.c de verdade sobre o xtl.h do teste (teste/xtl), numa ISO feita pelo
 #    teste, com a leitura lenta (50 ms dentro do ReadFile); o fluxo.c sem a chave (o do WSL) também compila em C89. E
-#    quatro mutantes do iso360.c que fazem a thread do jogo esperar a leitura de outra thread (a leitura dos fluxos pela
-#    trava comum, o controle negativo pedido; o afs(), o novo() e o Iso_Fechar com a trava comum), cada um acusado.
+#    cinco mutantes do iso360.c que fazem a thread do jogo esperar a leitura de outra thread (a leitura dos fluxos pela
+#    trava comum, o controle negativo pedido; o afs(), o novo() e o Iso_Fechar com a trava comum; a tabela do
+#    PZS3US2.AFS lida na primeira abertura, não no boot), cada um acusado.
 # Sai com 0 só se os testes passaram e todos os mutantes foram acusados.
 set -uo pipefail
 RAIZ=${RAIZ:-$(cd "$(dirname "$0")/../../.." && pwd)}
@@ -113,6 +114,7 @@ MUTI=(
   '    if (a->lido) { /* já lida: sem trava */'          "    ${TRAVA}if (a->lido) { /* já lida: sem trava */"
   'EnterCriticalSection(&sTravaTabela); /* um lugar'     "${TRAVA}EnterCriticalSection(&sTravaTabela); /* um lugar"
   'EnterCriticalSection(&sTravaTabela); /* o lugar volta' "${TRAVA}EnterCriticalSection(&sTravaTabela); /* o lugar volta"
+  'for (i = 0; i < 3; i++) {'                            'for (i = 0; i < 2; i++) {'
 )
 for ((i = 0; i < ${#MUTI[@]}; i += 2)); do
   de=${MUTI[i]}; para=${MUTI[i+1]}; d=$T/i$i
@@ -130,7 +132,7 @@ for ((i = 0; i < ${#MUTI[@]}; i += 2)); do
   fi
 done
 if [ $falhas -eq 0 ]; then
-  echo "teste_som360: núcleo certo e os 6 mutantes acusados; leitura em blocos certa e os 5 mutantes acusados; a thread do jogo sem esperar e os 4 mutantes do iso360.c acusados"
+  echo "teste_som360: núcleo certo e os 6 mutantes acusados; leitura em blocos certa e os 5 mutantes acusados; a thread do jogo sem esperar e os 5 mutantes do iso360.c acusados"
 else
   echo ">> FALHA: teste_som360 com $falhas falha(s)"
 fi

@@ -13,9 +13,9 @@
  *      (50 ms dormidos dentro do ReadFile, com a trava de quem lê pega, como o disco do console) e a thread do jogo
  *      tem de abrir abaixo de 1 ms: (a) com a thread de leitura dos fluxos no meio de uma leitura, a abertura de um
  *      ADX (o Port_FilePath, que abre e fecha a entrada da ISO, e o Fluxo_Abrir) e uma carga do jogo pelo handle
- *      comum; (b) com outra thread lendo pelo handle comum (como o filme), a abertura de um ADX. O teste_som360.sh
- *      estraga cópias do iso360.c (a leitura dos fluxos pela trava comum, o afs() e a tabela dos abertos com ela)
- *      e confere que o teste acusa cada uma.
+ *      comum; (b) com outra thread lendo pelo handle comum (como o filme), a abertura de um ADX, a primeira daquele
+ *      AFS. O teste_som360.sh estraga cópias do iso360.c (a leitura dos fluxos pela trava comum, o afs() e a tabela
+ *      dos abertos com ela, a tabela do AFS que não se lê no boot) e confere que o teste acusa cada uma.
  */
 #define _POSIX_C_SOURCE 200112L
 #include <stdio.h>
@@ -395,11 +395,8 @@ static void teste_iso(void) {
     int i, ok, juntas = 0, juntasB = 0, cargaOk = 1;
     long tam;
 
-    /* (b) outra thread lendo pelo handle comum (a trava comum pega 50 ms de cada vez); a tabela do PZS3US2.AFS lida
-       antes (a carga dela no boot é outra correção) */
-    f = NULL;
-    abertura(2, 1, &f);
-    Fluxo_Fechar(f);
+    /* (b) outra thread lendo pelo handle comum (a trava comum pega 50 ms de cada vez); a primeira entrada do
+       PZS3US2.AFS aberta aqui: a tabela tem de ter vindo do Iso_Iniciar (o boot), não da thread do jogo */
     gTesteLentaIni = sIni1;
     gTesteLentaFim = sIni1 + sTam1;
     gTesteLentaUs = LENTA_US;
