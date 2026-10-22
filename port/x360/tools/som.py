@@ -25,6 +25,12 @@
       trocado; um byte da saída da PPC trocado; um byte da saída da x86 trocado logo depois da volta do laço; a saída
       da x86 depois da volta trocada pela variante "continua", o port de antes da decisão 25.10), num subconjunto
       pequeno (nos dois últimos, os 12 menores com laço): tem de sair com 1.
+      --fluxo (F6, etapa 5): o teste_som é o do caminho do 360 (headless.py --teste-som --fluxo, o ADX lido em blocos;
+      rodar com BT3_FLUXO_BLOCO pequeno para cruzar muitos blocos e voltas de laço entre blocos). Além do PCM, a vista
+      que o jogo vê: o teste conta K vblanks antes de olhar o cabeçalho, e o stat e o left depois dele têm de ser os que a
+      x86 teria com o cabeçalho lido no começo (a duração calculada aqui, do cabeçalho, de novo). Com --fluxo, mais dois
+      controles: --estraga fluxo (BT3_FLUXO_SABOTA=1: um byte trocado em todo bloco depois do primeiro, dentro da
+      leitura) e --estraga estado (o left esperado mais 1).
 Saída 0 só com tudo certo.
 """
 import argparse, array, collections, hashlib, os, pathlib, random, struct, subprocess, sys
@@ -250,7 +256,28 @@ def compara_pcm(ref, got):
     return False, k, m, (len(a), len(b))
 
 
+def vista_esperada(b, k):
+    """(F6, etapa 5) o stat e o left da vista de um fluxo depois de K vblanks, como a x86 os teria (view_start e
+    Port_AdxTick): a duração em vblanks de 59,94 Hz arredondada para cima, mais 1; com laço (versão 4, palavra em 0x24),
+    -1; ilegível, parado."""
+    if len(b) < 0x40 or b[0:2] != b"\x80\x00":
+        return 0, 0
+    cab = int.from_bytes(b[2:4], "big") + 4
+    taxa, total = int.from_bytes(b[8:12], "big"), int.from_bytes(b[12:16], "big")
+    if b[0x12] == 4 and cab >= 0x38 and any(b[0x24:0x28]):
+        return 3, -1
+    if taxa == 0:
+        return 0, 0
+    vb = -(-total * 60000 // (taxa * 1001)) + 1
+    return (3, vb - k) if vb - k > 0 else (5, 0)
+
+
 def cmd_amostras(a):
+    if a.estraga in ("fluxo", "estado") and not a.fluxo:
+        raise SystemExit(f"--estraga {a.estraga} só com --fluxo")
+    if a.estraga == "fluxo":
+        os.environ["BT3_FLUXO_SABOTA"] = "1"  # (o teste_som herda: a leitura troca um byte em todo bloco depois do primeiro)
+    vistas, vistas_fim = 0, 0
     tmp = pathlib.Path(a.tmp)
     for d in ("x86", "ppc"):
         (tmp / d).mkdir(parents=True, exist_ok=True)
@@ -276,6 +303,24 @@ def cmd_amostras(a):
         if "recusado" in lx[0]:
             falhas.append(f"{f.name}: o port recusou o arquivo")
             continue
+        if a.fluxo:  # a vista que o jogo vê (K vblanks antes do cabeçalho)
+            for nome, linha in (("x86", lx), ("PPC", lp)):
+                if linha is None:
+                    continue
+                tk = linha[0].split()
+                if len(tk) != 15:
+                    falhas.append(f"{f.name}: o teste_som da {nome} não é o do caminho em blocos (sem K, stat e left)")
+                    continue
+                k, st, left = int(tk[12]), int(tk[13]), int(tk[14])
+                esp = vista_esperada(b, k)
+                if a.estraga == "estado":
+                    esp = (esp[0], esp[1] + 1)
+                if (st, left) != esp:
+                    falhas.append(f"{f.name}: vista diferente na {nome} depois de {k} vblanks: stat {st} left {left}, "
+                                  f"esperado stat {esp[0]} left {esp[1]}")
+                elif nome == "x86":
+                    vistas += 1
+                    vistas_fim += st == 5
         pcm, n = ref.toca(JANELA if ref.laco else 0)
         if sys.byteorder != "little":
             pcm.byteswap()
@@ -330,6 +375,9 @@ def cmd_amostras(a):
         for d in sai.values():
             d.unlink(missing_ok=True)
     print(f"ADX: {len(arquivos)} arquivos comparados; com laço {lacos}, janela da volta igual à referência em {janelas_iguais}")
+    if a.fluxo:
+        print(f"   caminho em blocos (BT3_FLUXO_BLOCO={os.environ.get('BT3_FLUXO_BLOCO', '65536')}): vista certa em {vistas} "
+              f"(em {vistas_fim} o cabeçalho chegou depois do fim, e a vista foi direto ao 5)")
     if a.estraga in ("laco", "continua"):
         print(f"   ESTRAGO DE PROPÓSITO: {a.estraga} em {estragados} de {lacos} com laço")
         if not estragados:
@@ -402,7 +450,8 @@ def main():
     p.add_argument("--tmp", default="/tmp/som_amostras")
     p.add_argument("--n", type=int, default=300)
     p.add_argument("--semente", type=int, default=25)
-    p.add_argument("--estraga", choices=["adx", "vag", "ppc", "laco", "continua"])
+    p.add_argument("--estraga", choices=["adx", "vag", "ppc", "laco", "continua", "fluxo", "estado"])
+    p.add_argument("--fluxo", action="store_true", help="(F6, etapa 5) o teste_som do caminho em blocos: confere a vista")
     a = ap.parse_args()
     if a.cmd == "rastro" and len(a.arquivos) < 2:
         sys.exit("rastro: pelo menos dois arquivos")
