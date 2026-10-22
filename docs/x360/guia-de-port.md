@@ -1764,3 +1764,23 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Capturas comparáveis entre escalas:** reduzir para o tamanho da escala 1 pela média dos pixels de saída de cada pixel do GS, e
   pedir os buffers maiores só quando a escala os usa: um buffer estático novo mudaria a memória livre da build sem a chave.
 
+
+### As texturas novas (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 17)
+
+- **Antes de montar um cache para não redecodificar, classifique as redecodificações pelo conteúdo decodificado.** Um hash dos
+  pixels por textura, com a chave do cache ao lado, separa a primeira vez, o descarte, a página que mudou sem mudar a textura e a
+  mesma imagem noutro endereço. A hipótese de partida (o descarte por uso do 360) deu zero; quatro quintos dos pixels da luta eram
+  imagens já vistas com outra chave (a página de 8 KB mudou por causa de outra textura, ou o jogo reenviou o conjunto a outro
+  endereço). O cache certo é pela origem, não um que sobreviva ao descarte.
+- **Um acessor genérico por pixel custa no Xenon umas 9 vezes o que custa na x86** (110 contra 12 ns por pixel na decodificação das
+  texturas): duas chamadas, um `switch` e leituras de globais por pixel. Um laço por linha com as tabelas por página e a paleta
+  expandida uma vez fez 10 vezes menos na x86, com 12 instruções por pixel no `cl`. Procure o mesmo padrão onde o custo é por pixel
+  ou por vértice.
+- **Um teste de unidade da ordem dos bytes tem de rodar na PPC de verdade** (`powerpc-linux-gnu-gcc -static` no `qemu-ppc`, um
+  arquivo de teste que inclui o `.c` e liga com `-Wl,--unresolved-symbols=ignore-all`). Na x86 com `-DPORT_BIG_ENDIAN` o `GS_LE32`
+  troca os bytes mas a memória segue little-endian: o acesso por byte à VRAM saiu "errado" em 1.179 de 1.500 casos que na PPC
+  estavam certos.
+- **As listas do `gpu_falso` veem o conteúdo das texturas** (a seção 0: o `fake_tex_upload` hasheia os pixels enviados): uma
+  decodificação errada nos 4 bits mudou 141 quadros. Mesmo assim, uma conferência por textura (a decodificação nova refeita noutro
+  buffer contra a de antes, `BT3_TEX_CONTA`) diz qual textura e qual formato, e vale para os quadros em que a textura errada não
+  chegaria a ser desenhada.
