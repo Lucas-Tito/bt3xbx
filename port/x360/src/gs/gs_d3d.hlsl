@@ -7,13 +7,18 @@
 struct GsEntrada { float3 pos : POSITION; float4 cor : COLOR0; float3 stq : TEXCOORD0; };
 struct GsSaida { float4 pos : POSITION; float4 cor : COLOR0; float3 stq : TEXCOORD0; };
 
+// (F5, etapa 8, 720p, etapa 2) xy: 2 / largura e 2 / altura do alvo em pixels do GS (recorte_poe no gs_d3d.cpp; 1 / 512
+// com o alvo de 1024, o de antes). Dos vs_gs e vs_vu* (vu_pos).
+float4 recorte : register(c14);
+
 GsSaida vs_gs(GsEntrada e) {
     GsSaida s;
-    // 0..1024 pixels do GS cobrem o alvo inteiro; +Y do recorte é o alto da imagem, como na SDL GPU
+    // a área do alvo em pixels do GS (0..1024 sem BT3_ALVO_AREA) cobre o recorte; +Y do recorte é o alto da imagem, como
+    // na SDL GPU
     // A profundidade presa em 0..1: o GS aceita z além do formato do buffer (os glifos do texto do cartão vêm com
     // 0x0FFFFFF0 num Z24, z / zmax perto de 16), o PC liga GL_DEPTH_CLAMP (e a SDL GPU desliga o corte), e o D3D9 do
     // 360 cortaria a primitiva inteira.
-    s.pos = float4(e.pos.x / 512.0f - 1.0f, 1.0f - e.pos.y / 512.0f, saturate(e.pos.z), 1.0f);
+    s.pos = float4(e.pos.x * recorte.x - 1.0f, 1.0f - e.pos.y * recorte.y, saturate(e.pos.z), 1.0f);
     // UBYTE4N no Xenos: os bytes r, g, b, a da memória chegam como (a, b, g, r) (medido na etapa 6)
     s.cor = e.cor.wzyx;
     s.stq = e.stq;
@@ -24,6 +29,9 @@ float4 modo : register(c0); // x: textura (0 nenhuma, 1 da memória do GS, 2 um 
 float4 misc : register(c1); // x: AREF (0..255); y: DATE (0, 1 passa com o bit 7 zerado, 2 com ele ligado); z: FBA; w: pixels de saída por pixel do GS na arte 2D (0: não)
 float4 rect : register(c2); // modo.x == 2: a faixa de uv que pode ser lida
 float4 alvo : register(c3); // xy: 1 / tamanho do alvo em pixels (a cópia para o DATE); zw: tamanho da textura em texels
+// (o de um alvo como textura: o alvo lógico, 1024 x 1024)
+float4 esc : register(c6);  // (720p, etapa 2) xy: o uv de um alvo como textura levado à textura de verdade (1024 / o
+                            // tamanho dela; 1 nas outras texturas e com a área de 1024 x 1024)
 
 sampler2D tex : register(s0);
 sampler2D dateTex : register(s1); // cópia da cor do alvo, para o teste de alfa do destino
@@ -65,7 +73,7 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos) {
     if (modo.x == 2.0f) {
         uv = clamp(uv, rect.xy, rect.zw);
     }
-    float4 t = tex2Dgrad(tex, uv, dx, dy);
+    float4 t = tex2Dgrad(tex, uv * esc.xy, dx * esc.xy, dy * esc.xy);
     if (modo.x != 0.0f) {
         if (modo.x != 2.0f) {
             t.a *= k; // textura da memória do GS: o alfa do GS (0x80 opaco, até 0xFF)
@@ -129,16 +137,17 @@ float4 ps_copia(float2 uv : TEXCOORD0) : COLOR0 {
 }
 
 // ---- F5, etapa 7: a profundidade de um alvo de volta para a EDRAM (os dois restauros do exemplo FastDepthRestore
-// do XDK). O vs_copia leva o retângulo; uv é o pixel sobre 1024 (o lado do alvo, TAM), no centro do pixel.
+// do XDK). O vs_copia leva o retângulo; uv é o pixel sobre a largura da textura (zcor.x), no centro do pixel.
 
 // Como cor (modo 1, exato em todos os bits): a superfície de cor posta na mesma base da profundidade da EDRAM recebe os
 // bits da textura D24S8 lida como A8B8G8R8. Dentro de cada tile de 80 pixels, as metades de 40 colunas da
 // profundidade e da cor estão trocadas: o pixel x da cor é o x + 40 da profundidade na metade esquerda e o x - 40 na
 // direita. A amostragem é no ponto, presa na borda.
+float4 zcor : register(c7); // x: a largura da textura de profundidade (a do alvo; 1024 sem BT3_ALVO_AREA), y: 1 / x
 float4 ps_zcor(float2 uv : TEXCOORD0) : COLOR0 {
-    float x = uv.x * 1024.0f;
+    float x = uv.x * zcor.x;
     x += frac(x / 80.0f) < 0.5f ? 40.0f : -40.0f;
-    return tex2D(tex, float2(x / 1024.0f, uv.y));
+    return tex2D(tex, float2(x * zcor.y, uv.y));
 }
 
 // Pelo oDepth (modo 2): a textura D24S8 lida como profundidade (no .x) e escrita como profundidade; o stencil não
@@ -232,7 +241,7 @@ float4 corte : register(c15); // x: 1 o recorte pelo w com a profundidade por pi
 #define CORTE_W (1.0f / 1024.0f)
 void vu_pos(inout VuSaida s, float4 sc, float4 misc) {
     float zr = sc.z / misc.z;
-    s.pos = float4((sc.x - misc.x * sc.w) / 512.0f - sc.w, sc.w - (sc.y - misc.y * sc.w) / 512.0f,
+    s.pos = float4((sc.x - misc.x * sc.w) * recorte.x - sc.w, sc.w - (sc.y - misc.y * sc.w) * recorte.y,
                    corte.x != 0.0f ? sc.w - CORTE_W : clamp(zr, 0.0f, sc.w), sc.w);
     s.zw = float2(zr, sc.w);
 }
