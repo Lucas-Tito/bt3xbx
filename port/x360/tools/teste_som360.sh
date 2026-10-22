@@ -5,8 +5,12 @@
 # 1. o núcleo em C89 estrito (-std=c89 -pedantic -Werror, o que o cl.exe do XDK aceita) e o teste
 #    (port/x360/src/som/teste/teste_nucleo.c) com gcc; o teste tem de passar;
 # 2. os mutantes: cópias do núcleo estragadas de seis jeitos (corte, interpolação, canal direito, arredondamento do
-#    ganho, fase inicial, tamanho do pedido ao retorno); cada troca tem de casar uma vez só e o teste tem de falhar.
-# Sai com 0 só se o teste passou e todos os mutantes foram acusados.
+#    ganho, fase inicial, tamanho do pedido ao retorno); cada troca tem de casar uma vez só e o teste tem de falhar;
+# 3. (F6, etapa 5) a leitura em blocos (port/x360/src/som/fluxo.c) em C89 estrito e o teste dela
+#    (port/x360/src/som/teste/teste_fluxo.c, com pthreads) três vezes seguidas; e cinco mutantes do fluxo.c (sem o
+#    adiantado do começo do laço, sem a sobra do bloco, um byte deslocado, a tabela que não se esvazia, o arquivo que não
+#    existe dado como pronto), cada um acusado.
+# Sai com 0 só se os testes passaram e todos os mutantes foram acusados.
 set -uo pipefail
 RAIZ=${RAIZ:-$(cd "$(dirname "$0")/../../.." && pwd)}
 SOM=$RAIZ/port/x360/src/som
@@ -15,7 +19,8 @@ T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/teste"
 cp "$SOM/som_nucleo.h" "$SOM/som_nucleo.c" "$T/"
-cp "$SOM/teste/teste_nucleo.c" "$T/teste/"
+cp "$SOM/teste/teste_nucleo.c" "$SOM/teste/teste_fluxo.c" "$T/teste/"
+cp "$SOM/fluxo.h" "$SOM/fluxo.c" "$T/"
 falhas=0
 
 compila() { # $1 = o diretório com som_nucleo.c
@@ -55,8 +60,44 @@ for ((i = 0; i < ${#MUT[@]}; i += 2)); do
     echo "mutante $((i / 2)) ($para): acusado; $(grep -m1 '^FALHA' "$d/saida.txt" 2>/dev/null || echo 'não compilou')"
   fi
 done
+# 3. a leitura em blocos
+compila_fluxo() { # $1 = o diretório com fluxo.c
+  $CC -std=c89 -pedantic -Wall -Wextra -Werror -O2 -c "$1/fluxo.c" -o "$1/fluxo.o" &&
+  $CC -std=c99 -Wall -O2 -I"$1" "$T/teste/teste_fluxo.c" "$1/fluxo.o" -lpthread -o "$1/prog_fluxo"
+}
+if compila_fluxo "$T"; then
+  for i in 1 2 3; do
+    "$T/prog_fluxo" "$T" > "$T/fluxo_$i.txt"; r=$?
+    [ $i = 1 ] && grep -v '^teste_fluxo' "$T/fluxo_1.txt"
+    [ $r -eq 0 ] || { echo ">> FALHA: o teste da leitura em blocos saiu com $r (vez $i): $(grep -m1 FALHA "$T/fluxo_$i.txt")"; falhas=$((falhas + 1)); }
+  done
+else
+  echo ">> FALHA: o fluxo.c não compila em C89 estrito"; falhas=$((falhas + 1))
+fi
+MUTF=(
+  'return f->lacoIni >= b->ini ? -1 : f->lacoIni;'  'return -1;'
+  'b->n = sBloco + FLUXO_SOBRA;'                     'b->n = sBloco;'
+  'r = b->dados + (pos - b->ini);'                   'r = b->dados + (pos - b->ini) + 1;'
+  'solta->usado = 0;'                                'solta->usado = 1;'
+  'f->estado = ok ? FLUXO_PRONTO : FLUXO_ERRO;'      'f->estado = FLUXO_PRONTO;'
+)
+for ((i = 0; i < ${#MUTF[@]}; i += 2)); do
+  de=${MUTF[i]}; para=${MUTF[i+1]}; d=$T/f$i
+  mkdir -p "$d"; cp "$T/fluxo.h" "$d/"
+  n=$(grep -cF -- "$de" "$T/fluxo.c")
+  if [ "$n" != 1 ]; then
+    echo "mutante do fluxo $((i / 2)): '$de' aparece $n vez(es) (tem de ser 1)"; falhas=$((falhas + 1)); continue
+  fi
+  python3 -c 'import sys; t=open(sys.argv[1]).read(); open(sys.argv[2],"w").write(t.replace(sys.argv[3], sys.argv[4]))' \
+    "$T/fluxo.c" "$d/fluxo.c" "$de" "$para"
+  if compila_fluxo "$d" >/dev/null 2>&1 && timeout 120 "$d/prog_fluxo" "$d" > "$d/saida.txt"; then
+    echo "mutante do fluxo $((i / 2)) ($para): NÃO acusado"; falhas=$((falhas + 1))
+  else
+    echo "mutante do fluxo $((i / 2)) ($para): acusado; $(grep -m1 '^FALHA' "$d/saida.txt" 2>/dev/null || echo 'não compilou ou não terminou')"
+  fi
+done
 if [ $falhas -eq 0 ]; then
-  echo "teste_som360: núcleo certo e os 6 mutantes acusados"
+  echo "teste_som360: núcleo certo e os 6 mutantes acusados; leitura em blocos certa e os 5 mutantes acusados"
 else
   echo ">> FALHA: teste_som360 com $falhas falha(s)"
 fi
