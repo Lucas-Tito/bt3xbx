@@ -86,6 +86,7 @@ int Port_PadConnected(int socket) {
 /* 18 bytes no formato do scePad2Read (botões ativos em 0, analógicos direito e esquerdo, pressões zeradas como na
    build de PC); 0 sem controle naquela porta (plat_stub.c preenche o controle parado) */
 extern void Passos_Leitura(void); /* (F5, etapa 3) a fronteira de passo da medida de tempo: port/x360/headless/passos.c */
+extern void Roteiro_SomEstado(void); /* (F6, etapa 1) BT3_SOM_ESTADO: o estado do som no log (port/x360/headless/roteiro.c) */
 
 int Port_PadRead(int socket, unsigned char *data) {
     const XINPUT_STATE *e;
@@ -93,6 +94,7 @@ int Port_PadRead(int socket, unsigned char *data) {
 
     if (socket == 0) {
         Passos_Leitura();
+        Roteiro_SomEstado();
     }
     if (Roteiro_Ativo()) {
         return Roteiro_Pad(socket, data);

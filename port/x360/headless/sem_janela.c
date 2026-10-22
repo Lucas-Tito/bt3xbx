@@ -39,9 +39,11 @@ extern int Port_Setting(const char *name, int def);
 #ifndef PORT_X360
 extern int Roteiro_Pad(int socket, unsigned char *data);
 extern void Passos_Leitura(void); /* (F5, etapa 3) a fronteira de passo da medida de tempo: passos.c */
+extern void Roteiro_SomEstado(void); /* (F6, etapa 1) BT3_SOM_ESTADO: o estado do som no log (roteiro.c) */
 int Port_PadRead(int socket, unsigned char *data) {
     if (socket == 0) {
         Passos_Leitura();
+        Roteiro_SomEstado();
     }
     return Roteiro_Pad(socket, data);
 }
