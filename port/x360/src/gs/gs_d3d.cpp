@@ -1237,20 +1237,22 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
                           lugar de lineares: a A/B da busca de textura
    Otimizações que não mudam a imagem, cada uma com a sua chave (BT3_OTIM=1 liga todas; a de cada uma em 0 a desliga):
      BT3_OTIM_PS=1        o pixel shader especializado (ps_gs_tex e ps_gs_sem, ps_gsz_tex e ps_gsz_sem; gs_rapido no
-                          gs_d3d.hlsl) nos desenhos sem DATE, sem arte 2D, sem teste de alfa e sem alvo como textura */
-enum { OT_PS = 1 };
+                          gs_d3d.hlsl) nos desenhos sem DATE, sem arte 2D, sem teste de alfa e sem alvo como textura
+     BT3_OTIM_LIMPA=1     ao entrar na EDRAM, a cor limpa só fora do conteúdo que a volta do alvo vai cobrir (limpa_fora) */
+enum { OT_PS = 1, OT_LIMPA = 2 };
 static unsigned sOtim, sPsTrivial;
 static D3DPixelShader *sPsTriv[2];    /* [0] ps_gs_triv, [1] ps_gsz_triv */
 static D3DPixelShader *sPsRap[2][2];  /* [z][com textura]: ps_gs_sem, ps_gs_tex, ps_gsz_sem, ps_gsz_tex */
 static unsigned env_num(const char *nome, unsigned padrao);
 /* (no trecho de 60 quadros, do desenho) o que as otimizações fizeram (otim_log) */
 static struct {
-    unsigned psRap, psSem, psGs;
+    unsigned psRap, psSem, psGs, limpaN, limpaRets;
+    double limpaPx;
 } sOt;
 
 static void otim_init(void) {
     unsigned todas = env_num("BT3_OTIM", 0) != 0;
-    sOtim = (env_num("BT3_OTIM_PS", todas) != 0 ? OT_PS : 0);
+    sOtim = (env_num("BT3_OTIM_PS", todas) != 0 ? OT_PS : 0) | (env_num("BT3_OTIM_LIMPA", todas) != 0 ? OT_LIMPA : 0);
     if ((sOtim & OT_PS) && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsSemPs, &sPsRap[0][0])) ||
                             FAILED(sDev->CreatePixelShader((const DWORD *)kGsTexPs, &sPsRap[0][1])) ||
                             FAILED(sDev->CreatePixelShader((const DWORD *)kGsZSemPs, &sPsRap[1][0])) ||
@@ -1259,8 +1261,9 @@ static void otim_init(void) {
         sOtim &= ~OT_PS;
     }
     if (sOtim != 0) {
-        Diario_Escrever("gs_d3d: retomada do 720p, otimizações (BT3_OTIM=%u): shader especializado %s (BT3_OTIM_PS)", todas,
-                        (sOtim & OT_PS) ? "sim" : "não");
+        Diario_Escrever("gs_d3d: retomada do 720p, otimizações (BT3_OTIM=%u): shader especializado %s (BT3_OTIM_PS), limpeza "
+                        "só fora da volta %s (BT3_OTIM_LIMPA)", todas, (sOtim & OT_PS) ? "sim" : "não",
+                        (sOtim & OT_LIMPA) ? "sim" : "não");
     }
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
@@ -1295,11 +1298,49 @@ static D3DPixelShader *ps_escolhe(const GsDraw *d, int estado) {
     return z ? sPsGsZ : sPsGs;
 }
 
+/* (BT3_OTIM_LIMPA) A limpeza da EDRAM ao entrar o alvo `a` (entra_na_edram), com o alvo posto: limpa recebe os bits do Clear
+   (a cor e, se for o caso, a profundidade). Quando o conteúdo do alvo volta por cima (o alvo já desenhado e com textura), a
+   cópia escreve cada pixel do conteúdo sem mistura nem teste: limpar a cor ali é trabalho jogado fora. A profundidade, se
+   pedida, limpa inteira; a cor, só nos até quatro retângulos em volta do conteúdo (nenhum quando ele cobre o alvo). O
+   resultado na EDRAM é o mesmo. 0: o alvo não tem volta (quem chamou limpa tudo, como antes). */
+static int limpa_fora(const Alvo *a, int volta, DWORD limpa) {
+    D3DRECT r[4];
+    const Ret *c = &a->conteudo;
+    DWORD n = 0;
+    if (!volta || c->x1 <= c->x0 || c->y1 <= c->y0 || a->tex == NULL) {
+        return 0;
+    }
+    if (limpa & ~(DWORD)D3DCLEAR_TARGET) {
+        sDev->Clear(0, NULL, limpa & ~(DWORD)D3DCLEAR_TARGET, 0x00000000, 0.0f, 0);
+    }
+    if (c->y0 > 0) {
+        r[n].x1 = 0; r[n].y1 = 0; r[n].x2 = sAlvoW; r[n].y2 = c->y0; n++;
+    }
+    if (c->y1 < sAlvoH) {
+        r[n].x1 = 0; r[n].y1 = c->y1; r[n].x2 = sAlvoW; r[n].y2 = sAlvoH; n++;
+    }
+    if (c->x0 > 0) {
+        r[n].x1 = 0; r[n].y1 = c->y0; r[n].x2 = c->x0; r[n].y2 = c->y1; n++;
+    }
+    if (c->x1 < sAlvoW) {
+        r[n].x1 = c->x1; r[n].y1 = c->y0; r[n].x2 = sAlvoW; r[n].y2 = c->y1; n++;
+    }
+    if (n > 0) {
+        sDev->Clear(n, r, D3DCLEAR_TARGET, 0x00000000, 0.0f, 0);
+    }
+    sOt.limpaN++;
+    sOt.limpaRets += n;
+    sOt.limpaPx += (double)(c->x1 - c->x0) * (c->y1 - c->y0);
+    return 1;
+}
+
 /* (no log do trecho) o que as otimizações fizeram, por quadro */
 static void otim_log(unsigned t) {
     if (sOtim != 0) {
         Diario_Escrever("gs_d3d:   retomada do 720p, por quadro: desenhos pelo shader especializado %.1f (%.1f sem textura), pelo "
-                        "geral %.1f", (double)sOt.psRap / t, (double)sOt.psSem / t, (double)sOt.psGs / t);
+                        "geral %.1f; entradas com a cor limpa só fora da volta %.1f (%.1f retângulos, %.0f mil pixels poupados)",
+                        (double)sOt.psRap / t, (double)sOt.psSem / t, (double)sOt.psGs / t, (double)sOt.limpaN / t,
+                        (double)sOt.limpaRets / t, sOt.limpaPx / t / 1000.0);
     }
     memset(&sOt, 0, sizeof(sOt));
 }
@@ -1877,7 +1918,9 @@ static void entra_na_edram(int i, int usaZ) {
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
-    sDev->Clear(0, NULL, limpa, 0x00000000, 0.0f, 0);
+    if (!(sOtim & OT_LIMPA) || !limpa_fora(a, sQ->targets[i].cleared, limpa)) { /* (720p, retomada) */
+        sDev->Clear(0, NULL, limpa, 0x00000000, 0.0f, 0);
+    }
     if (!sQ->targets[i].cleared) {
         a->conteudo.x0 = a->conteudo.x1 = 0; /* novo para o jogo: começa limpo */
         sProfD[i].conteudo.x0 = sProfD[i].conteudo.x1 = 0;
