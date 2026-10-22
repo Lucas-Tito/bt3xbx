@@ -2688,6 +2688,15 @@ static void captura(int alvo, D3DTexture *tex) {
         WriteFile(h, ppm, (DWORD)(o - ppm), &n, NULL);
         CloseHandle(h);
     }
+    {   /* (720p, retomada) o FNV-1a do arquivo no log: duas aberturas com as mesmas imagens se conferem pelo log, sem trazer
+           as imagens (são do jogo: o compara_quadros.py roda no WSL) */
+        unsigned fnv = 2166136261u;
+        const unsigned char *b;
+        for (b = ppm; b < o; b++) {
+            fnv = (fnv ^ *b) * 16777619u;
+        }
+        Diario_Escrever("gs_d3d: captura gpu_%05u.ppm: fnv %08x", sQ->quadro, fnv);
+    }
     sConta.capturas++;
     sConta.msCaptura += ms_desde(&t0);
 }
