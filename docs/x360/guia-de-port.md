@@ -1328,6 +1328,31 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Código novo só nos fontes do 360 não desloca as tabelas:** o `mpeg_mede.c` (e os 1,75 MiB dele vindos do `malloc`,
   não estáticos) deixou o md5 do `.dat` e do `.swap` igual, ao contrário de uma biblioteca nova.
 
+### O filme direto à textura (F6, etapa 6, `plano/F6/06.md`, seção 5)
+
+- **Um sinal "por quadro" do PC que nenhum backend do 360 limpa vale uma vez só.** O `gGsFbUploads` é zerado pelo `gs_gl.c`
+  e pelo `gs_gpu.c` no fim do quadro; o `gs_d3d.cpp` nunca o zerava, então a marca do desenho do filme pelo bit do PC só
+  sairia no primeiro quadro. Visto na leitura, antes do console: a marca vai pelo número da imagem, que só cresce.
+- **O mesmo arquivo chega ao `Iso_Abrir` por dois caminhos.** O `.PSS` é aberto pelo `ADXF_Open` do jogo (pelo
+  `plat_fcache.c`) e pelo `fopen` do decodificador, com o mesmo caminho. O que se liga pelo nome na abertura pega os dois
+  (duas threads de leitura, o contador do filme trocado): o recurso caro se abre na primeira leitura, que o handle do jogo
+  não faz com a leitura dupla cortada.
+- **Conta inteira em 16.16 num shader, exata:** cada constante como 65536 vezes um inteiro mais o resto deixa as partes que
+  vão ao `floor` abaixo de 2^24, inteiras num float, e a divisão por 65536 é exata. Prova sem console: refazer a conta do
+  shader em float de 32 bits no teste, pixel a pixel contra a inteira, com um mutante de uma constante que tem de falhar.
+- **`IsBusy` e `IsFencePending` só na dona do dispositivo.** A outra thread (a do jogo, que escreve a vaga) espera uma marca
+  que a dona limpa no fim do quadro pela cerca, com teto (100 ms) e contagem: nunca trava, e uma imagem pulada (o desenho
+  nunca chega) se solta quando uma mais nova é desenhada.
+- **O controle do `gcc -E` tem de trocar um token fora do `#ifdef` novo.** O primeiro controle trocou o primeiro
+  `STAT_READEND;` do `plat_file.c`, que agora é o da cópia nova sob `PORT_X360`, e a plana saiu "igual"; o `0x14` do
+  `sceCdGetDiskTypeSafe` é de todas as builds.
+- **Medir a leitura do disco por imagem com outra thread lendo:** os contadores do `iso360.c` somam todas as threads; com
+  os blocos, a parte da leitura na thread do jogo é a espera dela no `Blocos_Ler` (os contadores do `blocos.c`), e só sem
+  os blocos vale a diferença do `gPicosIsoTiques`.
+- **Teste leve no WSL fora do `flock`.** O `teste_blocos.sh` pôs o `flock ~/wsl.lock` na frente e ficou na fila atrás de um
+  `roteiros.sh` de outro agente, para uns minutos de CPU de um núcleo sem emulador. Como o `teste_som360.sh`: cópia
+  temporária por tar em base64, sem trava; a trava é do emulador.
+
 ---
 
 ## 7. Lista de passos para um port novo
