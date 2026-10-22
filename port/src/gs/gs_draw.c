@@ -1537,7 +1537,11 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     GsDraw d, *last;
 #endif
     float us, vs;
+#ifdef BT3_GS_ESPERAS
+    uint32_t i, flag; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+#else
     uint32_t i, k, flag;
+#endif
 
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_PROG);
@@ -1573,6 +1577,27 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
 #endif
     d.vu = 3;
     d.first = gsVuIdxCount;
+#ifdef BT3_GS_ESPERAS
+    /* (F5, etapa 8, gravação, seção 16 da nota) A posição e a base dos índices em locais, gravadas de volta uma vez: com o
+       contador global (gsVuIdxCount) escrito por um uint32_t * do mesmo tipo, o cl o relia e regravava a cada índice. Os mesmos
+       índices, na mesma ordem. */
+    {
+        uint32_t *const idx = gsVuIdx;
+        const uint32_t base = gsVuVertCount;
+        uint32_t n = gsVuIdxCount;
+        for (i = 0; i + 2 < count; i++) { /* strip -> triangles, without the flagged ones */
+            memcpy(&flag, &vertices[(i + 2) * 16 + 3], 4);
+            if (flag & 0xFFFF) {
+                continue;
+            }
+            idx[n] = base + i;
+            idx[n + 1] = base + i + 1;
+            idx[n + 2] = base + i + 2;
+            n += 3;
+        }
+        gsVuIdxCount = n;
+    }
+#else
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles, without the flagged ones */
         memcpy(&flag, &vertices[(i + 2) * 16 + 3], 4);
         if (flag & 0xFFFF) {
@@ -1582,6 +1607,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
             gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k;
         }
     }
+#endif
     d.count = gsVuIdxCount - d.first;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_IDX);
@@ -1645,7 +1671,11 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     GsDraw d, *last;
 #endif
     float us, vs;
+#ifdef BT3_GS_ESPERAS
+    uint32_t i; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+#else
     uint32_t i, k;
+#endif
 
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_PROG);
@@ -1677,11 +1707,29 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 #endif
     d.vu = 2;
     d.first = gsVuIdxCount;
+#ifdef BT3_GS_ESPERAS
+    /* (F5, etapa 8, gravação, seção 16 da nota) A posição e a base dos índices em locais, gravadas de volta uma vez: com o
+       contador global (gsVuIdxCount) escrito por um uint32_t * do mesmo tipo, o cl o relia e regravava a cada índice. Os mesmos
+       índices, na mesma ordem. */
+    {
+        uint32_t *const idx = gsVuIdx;
+        const uint32_t base = gsVuVertCount;
+        uint32_t n = gsVuIdxCount;
+        for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
+            idx[n] = base + i;
+            idx[n + 1] = base + i + 1;
+            idx[n + 2] = base + i + 2;
+            n += 3;
+        }
+        gsVuIdxCount = n;
+    }
+#else
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
         for (k = 0; k < 3; k++) {
             gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k;
         }
     }
+#endif
     d.count = gsVuIdxCount - d.first;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_IDX);
@@ -1738,7 +1786,11 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     GsDraw d, *last;
 #endif
     float us, vs;
+#ifdef BT3_GS_ESPERAS
+    uint32_t i; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+#else
     uint32_t i, k;
+#endif
 
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_PROG);
@@ -1778,6 +1830,30 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
 #endif
     d.vu = 1;
     d.first = gsVuIdxCount;
+#ifdef BT3_GS_ESPERAS
+    /* (F5, etapa 8, gravação, seção 16 da nota) A posição e a base dos índices em locais, gravadas de volta uma vez: com o
+       contador global (gsVuIdxCount) escrito por um uint32_t * do mesmo tipo, o cl o relia e regravava a cada índice. Os mesmos
+       índices, na mesma ordem. */
+    {
+        uint32_t *const idx = gsVuIdx;
+        const uint32_t base = gsVuVertCount;
+        uint32_t n = gsVuIdxCount;
+        for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
+            if (layer == 4) { /* debris: a flagged vertex does not complete a triangle */
+                uint32_t flag;
+                memcpy(&flag, &vertices[(i + 2) * 12 + 3], 4);
+                if (flag & 0xFFFF) {
+                    continue;
+                }
+            }
+            idx[n] = base + i;
+            idx[n + 1] = base + i + 1;
+            idx[n + 2] = base + i + 2;
+            n += 3;
+        }
+        gsVuIdxCount = n;
+    }
+#else
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
         if (layer == 4) { /* debris: a flagged vertex does not complete a triangle */
             uint32_t flag;
@@ -1790,6 +1866,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
             gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k;
         }
     }
+#endif
     d.count = gsVuIdxCount - d.first;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_IDX);
