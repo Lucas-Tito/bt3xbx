@@ -37,6 +37,7 @@
 
 extern unsigned gGsFrame;
 extern uint32_t gGsBytes[8]; /* gs_core.c (BT3_GPU_FALSO): os bytes que a cadeia do quadro leva */
+extern uint32_t gGsPivos[7]; /* gs_draw.c (BT3_GPU_FALSO): a arte 2D do quadro por pivô do 16:9 */
 extern void __real_GsVu1_Call(int addr);
 extern void __real_GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data);
 struct GsVertex;
@@ -325,6 +326,11 @@ static void fake_frame_end(void) {
     if (getenv("BT3_GPU_BYTES") != NULL) { /* (F5, degrau 1) o que a cadeia leva por quadro: gs_core.c, bytes_walk */
         fprintf(stderr, "gpu_falso: bytes quadro %u tags %u lista %u externa %u ref %u refunico %u imagem %u vu %u/%u/%u\n", q.quadro,
                 bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], q.vuVertCount, q.vuIdxCount, q.vuUniCount);
+    }
+    if (getenv("BT3_GPU_PIVOS") != NULL) { /* (F8, 16:9, etapa 1) a arte 2D estreitada por pivô (gs_draw.c, gGsPivos) */
+        fprintf(stderr, "gpu_falso: pivos quadro %u tela %u largo %u esquerda %u direita %u meio %u posicao %u centro %u\n", q.quadro,
+                gGsPivos[0], gGsPivos[1], gGsPivos[2], gGsPivos[3], gGsPivos[4], gGsPivos[5], gGsPivos[6]);
+        memset(gGsPivos, 0, sizeof(gGsPivos));
     }
     if (getenv("BT3_GPU_NORMAL") != NULL) { /* (F5, degrau 1) o quadro sem o que depende de quantas texturas se decodificaram */
         uint64_t n = 1469598103934665603ull, d = q.dividido ? sEntregue.normal : normal_desenhos(q.draws, q.drawCount);

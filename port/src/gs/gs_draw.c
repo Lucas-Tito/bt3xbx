@@ -983,6 +983,10 @@ typedef struct EstMem {
 } EstMem;
 static EstMem sEst[2]; /* uma por contexto: as duas camadas dos programas 0 e 1 se alternam entre os dois */
 #if defined(BT3_GPU_FALSO)
+/* (F8, 16:9, etapa 1; só nas builds --gpu) os desenhos 2D do buffer da imagem que o bloco do 16:9 do GsGpu_Draw viu no
+   quadro, por pivô: 0 tela inteira e 1 largura da tela (deixados), 2 a 5 pelas marcas do HUD (esquerda, direita, meio, pela
+   posição), 6 o meio da tela sem marca. O gpu_falso.c escreve e zera a cada quadro (BT3_GPU_PIVOS; exato sem a divisão) */
+uint32_t gGsPivos[7];
 /* (só nas builds --gpu) BT3_VU_ESTADO_CONFERE=1: em todo acerto o draw_state completo também roda, e é o resultado dele que
    vale; as diferenças são contadas (uma linha a cada 1.000 quadros com o acumulado e as contagens dos lotes e do fecho, e
    uma por diferença, até 20) */
@@ -1452,6 +1456,9 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
                Sprites as wide as the screen (flashes, speed lines) are left alone. */
             pivot = 256.0f;
         }
+#if defined(BT3_GPU_FALSO)
+        gGsPivos[pivot < 0.0f ? (type == 6 && !d.mode[0] && y1 - y0 >= 400.0f ? 0 : 1) : gsAnchor >= 1 && gsAnchor <= 4 ? gsAnchor + 1 : 6]++;
+#endif
         if (pivot >= 0.0f) {
             float narrow = 1333.333f / (float)Port_AspectMilli(); /* 3/4 at 16:9, 9/16 at 21:9 */
             for (k = d.first; k < gsVertCount; k++) {
