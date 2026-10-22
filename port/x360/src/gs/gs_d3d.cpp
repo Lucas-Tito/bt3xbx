@@ -5,7 +5,8 @@
  *
  * O que muda em relação ao PC, por causa do Xenos:
  *   - Os alvos de desenho moram na EDRAM (10 MB), não em texturas. Há UM par de superfícies na EDRAM, 1024 x 1024
- *     (o tamanho de um alvo do GS com SCALE = 1; com BT3_ALVO_AREA, a área dada, ver sAlvoW e escala.h): cor em
+ *     (o tamanho de um alvo do GS com SCALE = 1; com BT3_ALVO_AREA, a área dada, e BT3_ESCALA, vezes 1,5 ou 2, ver sAlvoW,
+ *     sAreaW e escala.h): cor em
  *     A8R8G8B8 na base 0 e profundidade D24S8 logo depois, cerca de 8 MB. Cada alvo do GS tem uma textura (tiled, A8R8G8B8) com o conteúdo dele. Desenhar num alvo: o que está
  *     na EDRAM volta para a textura do dono (Resolve, só o retângulo sujo), a EDRAM é limpa e recebe a textura do
  *     novo alvo (um retângulo desenhado). A profundidade (F5, etapa 7) faz o mesmo caminho: o que os desenhos com
@@ -41,6 +42,8 @@
  *                     número do quadro do GS dele; BT3_SHOT_FROM / BT3_SHOT_TO limitam a faixa;
  *   BT3_SHOT_LISTA=G,G...  só esses quadros do GS (até 32), com ou sem o BT3_SHOT: os das imagens da etapa 6 da F4
  *                     (a linha "imagem: ... gs G" da build sem janela), para medir os menus contra elas;
+ *   BT3_SHOT_CHEIA=1  (720p, etapa 3) com BT3_ESCALA maior que 1, as capturas na resolução interna; sem ela, reduzidas a
+ *                     640 x 448 (a média dos pixels de saída de cada pixel do GS), comparáveis às da escala 1;
  *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado, e a
  *                     memória por classe (F5, etapa 1);
  *   BT3_TEMPOS=1      (o padrão; 0 desliga) o tempo de GPU e de CPU de cada passada do fim do quadro no mesmo log
@@ -102,6 +105,12 @@ int Port_AspectMilli(void);  /* plat_stub.c */
    EDRAM. O restauro como cor troca as metades de 40 colunas de cada tile, então com 1024 a profundidade das colunas 984 a
    999 mora nas colunas 1024 a 1039 da cor, que uma superfície de 1024 não alcança (com 640, múltiplo de 80, nada sobra). */
 static int sAlvoW = GS_W, sAlvoH = GS_H, sAlvoWZ = (GS_W + 79) / 80 * 80;
+/* (720p, etapa 3) A área em pixels do GS e a escala em meios (2 é 1, 3 é 1,5, 4 é 2; BT3_ESCALA): sAlvoW é esc_px(sAreaW).
+   O gs_draw.c continua gravando em pixels do GS (o gsScale do 360 fica 1) e o backend leva à escala: a posição no recorte
+   (c14, recorte_poe), as tesouras e os retângulos das nativas (esc_px, prepara e nat_ret), o uv de um alvo lido como
+   textura (c6), a arte 2D (misc.w), a cópia dos ids e o passo do contorno, a cópia para a tela e as capturas. Os
+   retângulos guardados (sSujo, sSujoZ, conteudo) e os Resolves já são em pixels de saída. */
+static int sAreaW = GS_W, sAreaH = GS_H, sMeios = 2;
 static unsigned sTamAlvo; /* bytes de uma textura de alvo (tam_alvo) */
 #define TELA_W 1280
 #define TELA_H 720
@@ -151,7 +160,8 @@ static D3DTexture *sDateFonte; /* o que os desenhos com DATE leem: sDate, ou a t
 #define IDS_W 640 /* a cópia dos ids: a imagem do jogo (FBW 10, 448 linhas); fora dali a leitura fica presa na borda */
 #define IDS_H 448
 static D3DPixelShader *sPsGsZ, *sPsTabela, *sPsContorno;
-static D3DTexture *sIds;       /* a cópia do alfa do alvo (os ids), tiled A8R8G8B8, IDS_W x IDS_H */
+static D3DTexture *sIds;       /* a cópia do alfa do alvo (os ids), tiled A8R8G8B8, sIdsW x sIdsH */
+static int sIdsW = IDS_W, sIdsH = IDS_H; /* (720p, etapa 3) IDS_W x IDS_H na escala, em pixels de saída (area_init) */
 static unsigned sIdsQuadro;    /* o quadro da última cópia (+1; 0: nenhuma) */
 static unsigned sNativos = 7, sFba = 1, sCorte = 1;
 
@@ -1984,57 +1994,73 @@ static unsigned env_num(const char *nome, unsigned padrao) {
     return v != NULL && *v != '\0' ? (unsigned)strtoul(v, NULL, 0) : padrao;
 }
 
-/* (F5, etapa 8, 720p, etapa 2) A área dos alvos (BT3_ALVO_AREA=LxA, pixels do GS) e a escala (BT3_ESCALA, só lida: a
-   etapa 3 a liga), pelas regras do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma
-   chave recusada diz o motivo e fica no padrão. Um desenho além da área é cortado e contado (corte_conta), nunca
-   desenhado num alvo maior: o par da EDRAM e as texturas têm um tamanho só. No começo do init, antes de qualquer alvo. */
+/* (F5, etapa 8, 720p, etapas 2 e 3) A área dos alvos (BT3_ALVO_AREA=LxA, pixels do GS) e a escala (BT3_ESCALA: 1, 1.5 ou
+   2), pelas regras do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
+   diz o motivo e fica no padrão (a escala em 1: uma área que não cabe na EDRAM na escala pedida, e a de 1024 x 1024 com
+   qualquer escala maior que 1). Um desenho além da área é cortado e contado (corte_conta), nunca desenhado num alvo
+   maior: o par da EDRAM e as texturas têm um tamanho só. No começo do init, antes de qualquer alvo. */
 static void area_init(void) {
-    const char *a = getenv("BT3_ALVO_AREA"), *e = getenv("BT3_ESCALA"), *erro = NULL;
+    const char *a = getenv("BT3_ALVO_AREA"), *e = getenv("BT3_ESCALA"), *erroA = NULL, *erroE = NULL;
     int w = GS_W, h = GS_H, meios = 2;
     EscArea ar;
     if (e != NULL && *e != '\0') {
         meios = esc_le_escala(e);
-        if (meios != 2) {
-            Diario_Escrever("gs_d3d: BT3_ESCALA=%s %s; fica 1", e,
-                            meios == 0 ? "recusada (1, 1.5 ou 2)" : "ainda não existe (a etapa 3 do plano do 720p)");
+        if (meios == 0) {
+            Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.5 ou 2); fica 1", e);
             meios = 2;
         }
     }
     if (a != NULL && *a != '\0') {
         if (!esc_le_area(a, &w, &h)) {
-            erro = "não é LxA";
-        } else {
-            erro = esc_monta(&ar, w, h, meios);
+            erroA = "não é LxA";
+        } else if ((erroA = esc_monta(&ar, w, h, meios)) != NULL && meios != 2 && esc_monta(&ar, w, h, 2) == NULL) {
+            erroE = erroA; /* (a área vale na escala 1: quem não cabe é a escala) */
+            erroA = NULL;
         }
-        if (erro != NULL) {
-            Diario_Escrever("gs_d3d: BT3_ALVO_AREA=%s recusada: %s; fica %dx%d", a, erro, GS_W, GS_H);
+        if (erroA != NULL) {
+            Diario_Escrever("gs_d3d: BT3_ALVO_AREA=%s recusada: %s; fica %dx%d", a, erroA, GS_W, GS_H);
             w = GS_W;
             h = GS_H;
         }
     }
+    if (erroE == NULL && meios != 2) {
+        erroE = esc_monta(&ar, w, h, meios); /* (sem a área, ou com ela recusada: 1024 x 1024, que nenhuma escala maior cabe) */
+    }
+    if (erroE != NULL) {
+        Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada com a área de %dx%d: %s; fica 1", e, w, h, erroE);
+        meios = 2;
+    }
     if (esc_monta(&ar, w, h, meios) != NULL) { /* (o padrão sempre passa: o teste_escala.c prova) */
-        ar.sw = GS_W;
-        ar.sh = GS_H;
+        ar.w = ar.sw = GS_W;
+        ar.h = ar.sh = GS_H;
+        ar.meios = 2;
         ar.swz = (GS_W + 79) / 80 * 80;
     }
+    sAreaW = ar.w;
+    sAreaH = ar.h;
+    sMeios = ar.meios;
     sAlvoW = ar.sw;
     sAlvoH = ar.sh;
     sAlvoWZ = ar.swz;
+    sIdsW = esc_px(IDS_W, sMeios);
+    sIdsH = esc_px(IDS_H, sMeios);
     sTamAlvo = 0;
     sInteiro.x0 = sInteiro.y0 = 0;
     sInteiro.x1 = sAlvoW;
     sInteiro.y1 = sAlvoH;
-    if (a != NULL && *a != '\0' && erro == NULL) {
-        Diario_Escrever("gs_d3d: área dos alvos %dx%d do GS (BT3_ALVO_AREA), escala 1: alvos e profundidades de %dx%d, a "
-                        "profundidade vista como cor com %d de largura; o que passar dela é cortado e contado", w, h, sAlvoW,
-                        sAlvoH, sAlvoWZ);
+    if (a != NULL && *a != '\0' && erroA == NULL) {
+        Diario_Escrever("gs_d3d: área dos alvos %dx%d do GS (BT3_ALVO_AREA), escala %s: alvos e profundidades de %dx%d, a "
+                        "profundidade vista como cor com %d de largura, a cópia dos ids de %dx%d; o que passar da área é "
+                        "cortado e contado", sAreaW, sAreaH, sMeios == 2 ? "1" : sMeios == 3 ? "1,5" : "2", sAlvoW, sAlvoH,
+                        sAlvoWZ, sIdsW, sIdsH);
     }
 }
 
 /* (720p, etapa 2) a posição no recorte dos vs_gs e vs_vu* (o c14 de gs_d3d.hlsl): 2 / largura e 2 / altura do alvo em pixels
-   do GS. Só ela escreve o c14 dos vertex shaders; posta no init e no começo de cada quadro. */
+   do GS. Só ela escreve o c14 dos vertex shaders; posta no init e no começo de cada quadro. (etapa 3) A área em pixels do
+   GS, não o alvo em pixels de saída: a viewport (o alvo inteiro, sAlvoW x sAlvoH) leva a posição à escala. */
 static void recorte_poe(void) {
-    float c[4] = {2.0f / sAlvoW, 2.0f / sAlvoH, 0.0f, 0.0f};
+    float c[4] = {2.0f / sAreaW, 2.0f / sAreaH, 0.0f, 0.0f};
     sDev->SetVertexShaderConstantF(14, c, 1);
 }
 
@@ -2350,19 +2376,22 @@ static int na_lista(unsigned quadro) {
 /* A cor do alvo mostrado, já resolvida na textura dele, no formato do rasterizador de software (gs_core.c,
    screenshot): P6 640 x 448, as colunas além da largura do quadro (FRAME.FBW * 64) em preto. A textura sai do tiling
    de uma vez (XGUntileSurface) e o arquivo vai num WriteFile só: pixel a pixel, com uma escrita por linha, cada
-   captura levava 260 ms (a primeira rodada no console). */
+   captura levava 260 ms (a primeira rodada no console).
+   (720p, etapa 3) Na escala maior que 1, a captura sai reduzida a 640 x 448 (cada pixel do GS a média dos pixels de
+   saída dele, esc_reduz), para o compara_quadros.py seguir comparando com a escala 1; BT3_SHOT_CHEIA=1 grava a imagem na
+   resolução interna (960 x 672 ou 1280 x 896). Os buffers maiores são pedidos na primeira captura, só nessas escalas. */
 static void captura(int alvo, D3DTexture *tex) {
-    static int criou;
-    static DWORD linear[640 * 448];
-    static unsigned char ppm[16 + 640 * 448 * 3];
-    static const char cab[] = "P6\n640 448\n255\n";
-    char nome[64];
+    static int criou, cheia = -1, sw, sh;
+    static unsigned linear1[640 * 448], *linear, *red;
+    static unsigned char ppm1[16 + 640 * 448 * 3], *ppm;
+    char cab[32], nome[64];
     HANDLE h;
     DWORD n;
     RECT ret;
     uint64_t fr = (sQ->frame[0] & 0x1FF) == sQ->targets[alvo].fbp ? sQ->frame[0] :
                   (sQ->frame[1] & 0x1FF) == sQ->targets[alvo].fbp ? sQ->frame[1] : (8ull << 16);
-    int fbw = (int)((fr >> 16) & 0x3F), x, y;
+    int fbw = (int)((fr >> 16) & 0x3F), x, y, iw, ih, ifbw, k;
+    const unsigned *fonte;
     unsigned char *o;
     LARGE_INTEGER t0;
 
@@ -2370,6 +2399,25 @@ static void captura(int alvo, D3DTexture *tex) {
     if (!criou) {
         CreateDirectory("game:\\shots", NULL);
         criou = 1;
+    }
+    if (cheia < 0) {
+        cheia = sMeios != 2 && env_num("BT3_SHOT_CHEIA", 0) != 0;
+        sw = esc_px(640, sMeios);
+        sh = esc_px(448, sMeios);
+        linear = linear1;
+        ppm = ppm1;
+        if (sMeios != 2) {
+            linear = (unsigned *)malloc((size_t)sw * sh * 4);
+            ppm = cheia ? (unsigned char *)malloc(16 + (size_t)sw * sh * 3) : ppm1;
+            red = cheia ? linear : (unsigned *)malloc(640 * 448 * 4);
+            if (linear == NULL || ppm == NULL || red == NULL) {
+                linear = NULL;
+                Diario_Escrever("gs_d3d: ERRO: sem memória para as capturas na escala (%dx%d); nenhuma captura", sw, sh);
+            }
+        }
+    }
+    if (linear == NULL || ppm == NULL) {
+        return;
     }
     fbw = (fbw ? fbw : 10) * 64;
     if (fbw > 640) fbw = 640;
@@ -2379,13 +2427,28 @@ static void captura(int alvo, D3DTexture *tex) {
     esquece_estado();
     sDev->BlockUntilIdle();
     /* (a textura do alvo é do XG: lida direto no endereço, com a GPU parada) */
-    ret.left = 0; ret.top = 0; ret.right = fbw; ret.bottom = 448;
-    XGUntileSurface(linear, 640 * 4, NULL, ((const TexXg *)tex)->dados, sAlvoW, sAlvoH, &ret, 4);
-    memcpy(ppm, cab, sizeof(cab) - 1);
-    o = ppm + sizeof(cab) - 1;
-    for (y = 0; y < 448; y++) {
-        for (x = 0; x < 640; x++, o += 3) {
-            DWORD c = x < fbw ? linear[y * 640 + x] : 0; /* A8R8G8B8 como u32 nativo */
+    ret.left = 0; ret.top = 0; ret.right = esc_px(fbw, sMeios); ret.bottom = sh;
+    XGUntileSurface(linear, sw * 4, NULL, ((const TexXg *)tex)->dados, sAlvoW, sAlvoH, &ret, 4);
+    if (cheia) {
+        fonte = linear;
+        iw = sw;
+        ih = sh;
+        ifbw = esc_px(fbw, sMeios);
+    } else {
+        if (sMeios != 2) {
+            esc_reduz(linear, sw, fbw, 448, sMeios, red, 640);
+        }
+        fonte = sMeios != 2 ? red : linear;
+        iw = 640;
+        ih = 448;
+        ifbw = fbw;
+    }
+    k = _snprintf(cab, sizeof(cab), "P6\n%d %d\n255\n", iw, ih);
+    memcpy(ppm, cab, k);
+    o = ppm + k;
+    for (y = 0; y < ih; y++) {
+        for (x = 0; x < iw; x++, o += 3) {
+            unsigned c = x < ifbw ? fonte[y * iw + x] : 0; /* A8R8G8B8 como u32 nativo */
             o[0] = (unsigned char)(c >> 16);
             o[1] = (unsigned char)(c >> 8);
             o[2] = (unsigned char)c;
@@ -2416,7 +2479,7 @@ static void corte_conta(const GsDraw *d, int nat) {
     if (!(sAvisado & 1)) {
         sAvisado |= 1;
         Diario_Escrever("gs_d3d: um desenho passa da área dos alvos (%dx%d) e foi cortado: alvo %d, tesoura %dx%d+%d+%d%s (os "
-                        "seguintes só contados)", sAlvoW, sAlvoH, d->target, d->scissor[2], d->scissor[3], d->scissor[0],
+                        "seguintes só contados)", sAreaW, sAreaH, d->target, d->scissor[2], d->scissor[3], d->scissor[0],
                         d->scissor[1], nat ? ", uma nativa" : "");
     }
 }
@@ -2437,7 +2500,7 @@ static void alvo_le_alem(const GsDraw *d) {
     }
     mu = mu < d->rect[2] ? mu : d->rect[2]; /* (o gs_pixel prende o uv no rect antes de ler) */
     mv = mv < d->rect[3] ? mv : d->rect[3];
-    if (mu * GS_W > sAlvoW + 0.5f || mv * GS_H > sAlvoH + 0.5f) {
+    if (mu * GS_W > sAreaW + 0.5f || mv * GS_H > sAreaH + 0.5f) {
         sConta.lidosAlem++;
     }
 }
@@ -2447,15 +2510,20 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     int x0 = d->scissor[0], y0 = d->scissor[1], x1 = d->scissor[0] + d->scissor[2], y1 = d->scissor[1] + d->scissor[3];
     int borda = 0;
 
-    if (esc_prende(&x0, &y0, &x1, &y1, sAlvoW, sAlvoH) && d->count != 0) {
+    if (esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH) && d->count != 0) {
         corte_conta(d, 0);
     }
     if (x1 <= x0 || y1 <= y0 || d->count == 0) {
         return 0;
     }
+    /* (720p, etapa 3) a tesoura em pixels de saída: a mesma regra nas duas bordas (esc_px) */
+    x0 = esc_px(x0, sMeios);
+    y0 = esc_px(y0, sMeios);
+    x1 = esc_px(x1, sMeios);
+    y1 = esc_px(y1, sMeios);
     /* (720p, etapa 2) um alvo lido como textura com a área menor que o alvo lógico: o que passar da área sai preto (a
        borda, o que antes era a parte limpa) e é contado */
-    if (d->mode[0] == 2 && (sAlvoW < GS_W || sAlvoH < GS_H)) {
+    if (d->mode[0] == 2 && (sAreaW < GS_W || sAreaH < GS_H)) {
         borda = 0x100;
         alvo_le_alem(d);
     }
@@ -2503,6 +2571,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     c[0] = (float)d->mode[0]; c[1] = (float)d->mode[1]; c[2] = (float)d->mode[2]; c[3] = (float)d->mode[3];
     memcpy(c + 4, d->misc, sizeof(d->misc));
     memcpy(c + 8, d->rect, sizeof(d->rect));
+    c[7] *= sMeios * 0.5f; /* (720p, etapa 3) misc.w da arte 2D: pixels de saída por pixel do GS (0 fica 0) */
     c[12] = 1.0f / sAlvoW; c[13] = 1.0f / sAlvoH; c[14] = sCurTexW; c[15] = sCurTexH;
     if (d->mode[0] == 2) {
         /* (720p, etapa 2) um alvo como textura: o uv do gs_draw.c é normalizado pelo alvo lógico (1024 x 1024), então
@@ -2518,8 +2587,8 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     {
         float e[4] = {1.0f, 1.0f, 0.0f, 0.0f};
         if (d->mode[0] == 2) {
-            e[0] = (float)GS_W / sAlvoW;
-            e[1] = (float)GS_H / sAlvoH;
+            e[0] = (float)GS_W / sAreaW; /* (etapa 3: a textura cobre a área do GS, em qualquer escala) */
+            e[1] = (float)GS_H / sAreaH;
         }
         if (e[0] != sCurEsc[0] || e[1] != sCurEsc[1]) {
             sDev->SetPixelShaderConstantF(6, e, 1); /* (só o gs_pixel lê o c6; ninguém mais o escreve) */
@@ -2812,8 +2881,9 @@ static void log_nativas(unsigned t) {
         if (c->x1 <= c->x0) {
             continue;
         }
-        k = _snprintf(ext + m, sizeof(ext) - m - 1, "%s%d: %dx%d+%d+%d", m ? ", " : "", i, c->x1 - c->x0, c->y1 - c->y0,
-                      c->x0, c->y0);
+        /* (720p, etapa 3) em pixels do GS, para comparar as escalas */
+        k = _snprintf(ext + m, sizeof(ext) - m - 1, "%s%d: %dx%d+%d+%d", m ? ", " : "", i, esc_gs(c->x1 - c->x0, sMeios),
+                      esc_gs(c->y1 - c->y0, sMeios), c->x0 * 2 / sMeios, c->y0 * 2 / sMeios);
         if (k < 0) {
             ext[sizeof(ext) - 1] = '\0';
             break;
@@ -2834,7 +2904,7 @@ static void log_nativas(unsigned t) {
                     "escrevem alfa (um quadro)", sConta.dateMarc, sConta.dateRes, sConta.dateTex, sConta.dateDes, sConta.fbaDes,
                     sConta.fbaDuas, sConta.fbaSemA, sConta.alfaAlto, sConta.alfaAltoDes);
     Diario_Escrever("gs_d3d:   extensão desenhada por alvo (largura x altura + x + y): %s; além da área de %dx%d: %u desenhos "
-                    "e %u nativas cortados, %u leituras de alvo", ext[0] ? ext : "nenhum", sAlvoW, sAlvoH, sConta.cortados,
+                    "e %u nativas cortados, %u leituras de alvo", ext[0] ? ext : "nenhum", sAreaW, sAreaH, sConta.cortados,
                     sConta.cortadosNat, sConta.lidosAlem);
     sTabTipoN = 0;
 }
@@ -3004,9 +3074,13 @@ static int nat_ret(const GsDraw *d, Ret *r) {
     r->y0 = d->scissor[1];
     r->x1 = d->scissor[0] + d->scissor[2];
     r->y1 = d->scissor[1] + d->scissor[3];
-    if (esc_prende(&r->x0, &r->y0, &r->x1, &r->y1, sAlvoW, sAlvoH)) {
+    if (esc_prende(&r->x0, &r->y0, &r->x1, &r->y1, sAreaW, sAreaH)) {
         corte_conta(d, 1);
     }
+    r->x0 = esc_px(r->x0, sMeios); /* (720p, etapa 3: em pixels de saída, a regra do prepara) */
+    r->y0 = esc_px(r->y0, sMeios);
+    r->x1 = esc_px(r->x1, sMeios);
+    r->y1 = esc_px(r->y1, sMeios);
     return r->x1 > r->x0 && r->y1 > r->y0;
 }
 
@@ -3044,7 +3118,7 @@ static void passada(D3DPixelShader *ps, const Ret *r) {
 
 /* a passada de tabela em si: estágio 2 a profundidade (src 0), 3 a cópia dos ids, 4 a tabela */
 static void nat_tabela_passa(int src, float zmax, D3DTexture *z, D3DTexture *clut, const Ret *r) {
-    float c[8] = {(float)src, zmax, 0.0f, 0.0f, 1.0f / IDS_W, 1.0f / IDS_H, 1.0f / sAlvoW, 1.0f / sAlvoH};
+    float c[8] = {(float)src, zmax, 0.0f, 0.0f, 1.0f / sIdsW, 1.0f / sIdsH, 1.0f / sAlvoW, 1.0f / sAlvoH};
     nat_textura(2, z != NULL ? z : sBranco);
     nat_textura(3, sIds);
     nat_textura(4, clut);
@@ -3052,9 +3126,11 @@ static void nat_tabela_passa(int src, float zmax, D3DTexture *z, D3DTexture *clu
     passada(sPsTabela, r);
 }
 
-/* o contorno em si: tira 0x64 da cor (REVSUBTRACT, ONE, ONE) nas arestas dos ids, o alfa intocado */
-static void nat_contorno_passa(const Ret *r) {
-    float c[8] = {0.0f, 0.0f, 100.0f / 255.0f, 0.0f, 1.0f / IDS_W, 1.0f / IDS_H, 1.0f / sAlvoW, 1.0f / sAlvoH};
+/* o contorno em si: tira 0x64 da cor (REVSUBTRACT, ONE, ONE) nas arestas dos ids, o alfa intocado. (720p, etapa 3) passo:
+   o vizinho em texels da cópia dos ids, um pixel do GS (a escala; o outline.frag do PC anda em pixels do PS2, e a linha
+   fica com a grossura do PS2); o autoteste passa 1, o pixel ao lado do padrão dele */
+static void nat_contorno_passa(const Ret *r, float passo) {
+    float c[8] = {0.0f, 0.0f, 100.0f / 255.0f, passo, 1.0f / sIdsW, 1.0f / sIdsH, 1.0f / sAlvoW, 1.0f / sAlvoH};
     sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     sDev->SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
     sDev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_ONE);
@@ -3077,7 +3153,7 @@ static void nat_entra(int t, uint32_t n, int *cur) {
 /* native 4 (GfxPost_CopyAlphaToDepth): o alfa do alvo agora, para o contorno e as tabelas pelos ids. A imagem do jogo
    inteira (fora do que já foi desenhado, a EDRAM está limpa: zero, como no PC) */
 static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
-    D3DRECT fonte = {0, 0, IDS_W, IDS_H};
+    D3DRECT fonte = {0, 0, sIdsW, sIdsH};
     D3DPOINT destino = {0, 0};
     if (!(sNativos & 3) || sIds == NULL) {
         sConta.semNativo[4]++;
@@ -3149,7 +3225,7 @@ static void nat_contorno(const GsDraw *d, uint32_t n, int *cur) {
     }
     nat_entra(d->target, n, cur);
     tempo_poe(T_CONTORNO);
-    nat_contorno_passa(&r);
+    nat_contorno_passa(&r, sMeios * 0.5f);
     sConta.natCont++;
 }
 
@@ -3337,7 +3413,7 @@ static void nat_autoteste(int forcado) {
     copia(tp, sAlvoW, sAlvoH, 0.0f, 0.0f, 256.0f, 256.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0);
     sDev->SetTexture(0, NULL);
     {
-        D3DRECT fonte = {0, 0, IDS_W, IDS_H};
+        D3DRECT fonte = {0, 0, sIdsW, sIdsH};
         D3DPOINT destino = {0, 0};
         sDev->SetTexture(3, NULL);
         sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
@@ -3362,7 +3438,7 @@ static void nat_autoteste(int forcado) {
     /* o contorno sobre um cinza 0x80; o controle é a imagem sem a passada (bate só onde não há aresta) */
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF808080, 0.0f, 0);
-    nat_contorno_passa(&r);
+    nat_contorno_passa(&r, 1.0f);
     at_resolve(res);
     if (at_le(res, 256, 256, lin)) {
         unsigned y, xx;
@@ -3458,13 +3534,13 @@ static void nat_autoteste(int forcado) {
 static void nat_init(void) {
     const char *e = getenv("BT3_NATIVOS");
     int forcado = e != NULL && *e != '\0';
-    unsigned bytes = tam_real(IDS_W, IDS_H, D3DFMT_A8R8G8B8);
+    unsigned bytes = tam_real(sIdsW, sIdsH, D3DFMT_A8R8G8B8);
     sNativos = env_num("BT3_NATIVOS", 7) & 7;
     sFba = env_num("BT3_FBA", 1) != 0;
     sCorte = env_num("BT3_CORTE", 1) != 0;
     if (sNativos != 0) {
         if (mem_livres(bytes) < sMem.pisoMb * MB + bytes ||
-            FAILED(sDev->CreateTexture(IDS_W, IDS_H, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &sIds, NULL)) || sIds == NULL) {
+            FAILED(sDev->CreateTexture(sIdsW, sIdsH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &sIds, NULL)) || sIds == NULL) {
             Diario_Escrever("gs_d3d: ERRO: nativas: a cópia dos ids não foi criada (%u MB livres); as nativas ficam desligadas", mb_livres());
             sIds = NULL;
             sNativos = 0;
@@ -3476,7 +3552,7 @@ static void nat_init(void) {
     Diario_Escrever("gs_d3d: nativas: BT3_NATIVOS=%u (contorno %s, tabelas pelos ids %s, tabelas pela profundidade %s%s); "
                     "cópia dos ids %ux%u (%u KB, contada com os alvos); BT3_FBA=%u (%s); BT3_CORTE=%u (%s)",
                     sNativos, (sNativos & 1) ? "sim" : "não", (sNativos & 2) ? "sim" : "não", (sNativos & 4) ? "sim" : "não",
-                    (sNativos & 4) && sModoZ == 0 ? ", mas sem a profundidade persistente: puladas" : "", IDS_W, IDS_H,
+                    (sNativos & 4) && sModoZ == 0 ? ", mas sem a profundidade persistente: puladas" : "", sIdsW, sIdsH,
                     sIds != NULL ? bytes >> 10 : 0, sFba, sFba ? "duas passadas com mistura pelo alfa da fonte" : "o alfa da mistura vira 1",
                     sCorte, sCorte ? "a VU1 recortada pelo w, profundidade por pixel" : "z da VU1 preso em 0..w por vértice");
 }
@@ -3492,11 +3568,12 @@ static void tela_copia(D3DTexture *t) {
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->Clear(0, NULL, D3DCLEAR_TARGET, sCorFundo, 1.0f, 0);
     if (t != NULL) {
-        /* 512 x 448 do GS na forma da imagem (4:3: 960 x 720 no meio da tela de 1280 x 720) */
+        /* 512 x 448 do GS na forma da imagem (4:3: 960 x 720 no meio da tela de 1280 x 720); (720p, etapa 3) a textura cobre
+           a área do GS em qualquer escala: na 2, 1024 x 896 reduzidos a 960 x 720 */
         int w = (int)((float)TELA_H * (float)Port_AspectMilli() / 1000.0f + 0.5f), x;
         w = w > TELA_W ? TELA_W : w;
         x = (TELA_W - w) / 2;
-        copia(t, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f, 512.0f / sAlvoW, 448.0f / sAlvoH, 1);
+        copia(t, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f, 512.0f / sAreaW, 448.0f / sAreaH, 1);
     }
 }
 

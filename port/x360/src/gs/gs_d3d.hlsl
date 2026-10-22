@@ -8,7 +8,8 @@ struct GsEntrada { float3 pos : POSITION; float4 cor : COLOR0; float3 stq : TEXC
 struct GsSaida { float4 pos : POSITION; float4 cor : COLOR0; float3 stq : TEXCOORD0; };
 
 // (F5, etapa 8, 720p, etapa 2) xy: 2 / largura e 2 / altura do alvo em pixels do GS (recorte_poe no gs_d3d.cpp; 1 / 512
-// com o alvo de 1024, o de antes). Dos vs_gs e vs_vu* (vu_pos).
+// com o alvo de 1024, o de antes). Dos vs_gs e vs_vu* (vu_pos). (etapa 3) A área em pixels do GS em qualquer escala: a
+// viewport, do tamanho do alvo em pixels de saída, faz a escala.
 float4 recorte : register(c14);
 
 GsSaida vs_gs(GsEntrada e) {
@@ -26,12 +27,12 @@ GsSaida vs_gs(GsEntrada e) {
 }
 
 float4 modo : register(c0); // x: textura (0 nenhuma, 1 da memória do GS, 2 um alvo, 3 pacote), y: TFX, z: TCC, w: teste de alfa (0 desligado, senão ATST + 1)
-float4 misc : register(c1); // x: AREF (0..255); y: DATE (0, 1 passa com o bit 7 zerado, 2 com ele ligado); z: FBA; w: pixels de saída por pixel do GS na arte 2D (0: não)
+float4 misc : register(c1); // x: AREF (0..255); y: DATE (0, 1 passa com o bit 7 zerado, 2 com ele ligado); z: FBA; w: pixels de saída por pixel do GS na arte 2D (0: não; a escala, 720p, etapa 3)
 float4 rect : register(c2); // modo.x == 2: a faixa de uv que pode ser lida
 float4 alvo : register(c3); // xy: 1 / tamanho do alvo em pixels (a cópia para o DATE); zw: tamanho da textura em texels
 // (o de um alvo como textura: o alvo lógico, 1024 x 1024)
-float4 esc : register(c6);  // (720p, etapa 2) xy: o uv de um alvo como textura levado à textura de verdade (1024 / o
-                            // tamanho dela; 1 nas outras texturas e com a área de 1024 x 1024)
+float4 esc : register(c6);  // (720p, etapa 2) xy: o uv de um alvo como textura levado à textura de verdade (1024 / a área
+                            // do GS que ela cobre; 1 nas outras texturas e com a área de 1024 x 1024)
 
 sampler2D tex : register(s0);
 sampler2D dateTex : register(s1); // cópia da cor do alvo, para o teste de alfa do destino
@@ -165,8 +166,9 @@ ZSaida ps_zprof(float2 uv : TEXCOORD0) {
 // outline.frag do PC. O vs_copia leva o retângulo; as leituras são pelo pixel (VPOS), no ponto e presas na borda.
 // Os ids vêm da cópia do alfa do alvo (sIds): o alvo guarda min(A / 0x80, 1), exato de 0 a 0x80 na volta; o que passa
 // de 0x7F vira 255, o "nada" (docs/x360/formatos/gs-nativos.md, seção 4).
-float4 nat : register(c4);    // tabela: x a fonte (0 a névoa pela profundidade, 1 os ids), y o máximo do z; contorno: z o escuro
-float4 natEsc : register(c5); // xy: 1 / tamanho da cópia dos ids; zw: 1 / tamanho da textura de profundidade
+float4 nat : register(c4);    // tabela: x a fonte (0 a névoa pela profundidade, 1 os ids), y o máximo do z; contorno: z o escuro,
+                              // w (720p, etapa 3) o passo ao vizinho em texels da cópia dos ids: um pixel do GS, a escala
+float4 natEsc : register(c5); // xy: 1 / tamanho da cópia dos ids (em pixels de saída); zw: 1 / tamanho da textura de profundidade
 sampler2D natZ : register(s2);    // a profundidade do alvo (D24S8, a da primeira parte), lida no .x
 sampler2D natIds : register(s3);  // a cópia dos ids
 sampler2D natClut : register(s4); // a tabela do jogo, 256 x 1, o alfa como gravado (0x80 opaco)
@@ -185,11 +187,16 @@ float nat_contorno_tab(float2 uv) {
 
 // O contorno (native 1): a aresta onde o valor da tabela daqui passa o de um vizinho; a mistura (REVSUBTRACT, ONE,
 // ONE, só RGB) tira o escuro da cor.
+// (720p, etapa 3) O pixel daqui é o texel daqui (a cópia dos ids tem o tamanho da imagem na escala); os vizinhos ficam a
+// um pixel do GS (nat.w texels) e cada leitura cai no centro de um texel (o floor): na escala 1,5 o vizinho é o texel 2 à
+// frente e o 1 atrás, nunca a borda entre dois. Na escala 1, os texels ao lado, como antes.
 float4 ps_contorno(float2 vpos : VPOS) : COLOR0 {
-    float2 uv = (floor(vpos) + 0.5f) * natEsc.xy;
-    float q = nat_contorno_tab(uv);
-    bool aresta = q > nat_contorno_tab(uv + float2(natEsc.x, 0.0f)) || q > nat_contorno_tab(uv + float2(0.0f, natEsc.y)) ||
-                  q > nat_contorno_tab(uv - float2(natEsc.x, 0.0f)) || q > nat_contorno_tab(uv - float2(0.0f, natEsc.y));
+    float2 p = floor(vpos) + 0.5f;
+    float q = nat_contorno_tab(p * natEsc.xy);
+    bool aresta = q > nat_contorno_tab((floor(p + float2(nat.w, 0.0f)) + 0.5f) * natEsc.xy) ||
+                  q > nat_contorno_tab((floor(p + float2(0.0f, nat.w)) + 0.5f) * natEsc.xy) ||
+                  q > nat_contorno_tab((floor(p - float2(nat.w, 0.0f)) + 0.5f) * natEsc.xy) ||
+                  q > nat_contorno_tab((floor(p - float2(0.0f, nat.w)) + 0.5f) * natEsc.xy);
     return float4(aresta ? nat.zzz : 0.0f, 0.0f);
 }
 
