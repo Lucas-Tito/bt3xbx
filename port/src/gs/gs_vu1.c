@@ -817,9 +817,7 @@ static int hle_program78(int layer) {
     }
     CONTA_LE(top, 3 + count * 3);
     CONTA_LE(0, layer == 3 ? 14 : 8);
-    if (layer != 3) {
-        CONTA_LE(12, 1);
-    }
+    CONTA_LE(12, layer == 3 ? 0 : 1);
     memset(consts, 0, sizeof(consts));
     if (layer == 3) {
         memcpy(&consts[0], &vu.mem[0], 10 * 16);        /* matrices A, B and their pivots */
