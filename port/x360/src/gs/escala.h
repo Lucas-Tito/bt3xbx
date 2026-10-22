@@ -2,9 +2,10 @@
  * F5, etapa 8 (a resolução interna maior, etapas 2 e 3; docs/x360/plano/F5/08-720p.md): as contas da área dos alvos e
  * da escala, em C89 puro e sem o XDK. O gs_d3d.cpp as usa; port/x360/tools/teste_escala.c as testa no Linux com o gcc.
  *
- * A área é em pixels do GS (o alvo lógico do gs_draw.c é 1024 x 1024; o jogo desenha no máximo 640 x 448); a escala, em
- * meios (2 é 1, 3 é 1,5, 4 é 2); a área vezes a escala, em pixels de saída, é o tamanho dos alvos, das profundidades e
- * do par na EDRAM. As regras de uma área aceita:
+ * A área é em pixels do GS (o alvo lógico do gs_draw.c é 1024 x 1024; o jogo desenha no máximo 640 x 448); a escala, uma
+ * fração num / den (720p, retomada: 1, 1,25 = 5/4, 1,33 = 4/3, 1,5 = 3/2, 1,6 = 8/5 e 2; antes, em meios); a área vezes a
+ * escala, em pixels de saída e inteira, é o tamanho dos alvos, das profundidades e do par na EDRAM. As regras de uma área
+ * aceita:
  *   - de 640 x 448 (a imagem do jogo: a cópia dos ids e as capturas a leem inteira) até 1024 x 1024 (o alvo lógico);
  *   - largura e altura em pixels de saída múltiplas de 32: o pitch da textura tiled é a largura exata (o autoteste da
  *     profundidade compara pitch / 4 x altura palavras com largura x altura) e as linhas de 0 a altura - 1 são as
@@ -23,7 +24,7 @@
 
 typedef struct EscArea {
     int w, h;       /* a área, em pixels do GS */
-    int meios;      /* a escala em meios */
+    int num, den;   /* a escala, num / den */
     int sw, sh;     /* em pixels de saída: os alvos, as profundidades e o par da EDRAM */
     int swz;        /* sw arredondada a 80: a profundidade da EDRAM vista como cor (as metades de 40 colunas trocadas) */
     unsigned tilesCor, tilesProf;
@@ -66,29 +67,56 @@ static int esc_le_area(const char *s, int *w, int *h) {
     return 1;
 }
 
-/* "1", "1.5" (ou "1,5") e "2" em meios; 0: outro valor */
-static int esc_le_escala(const char *s) {
-    if (s == NULL) {
+/* (720p, retomada) As escalas aceitas: 1, 1,25, 1,33, 1,5, 1,6 e 2, com o texto do log ("1,33" é 4/3). k: 0 a 5 (a
+   escala k em *num / *den); NULL depois da última. */
+static const char *esc_lista(int k, int *num, int *den) {
+    static const char *const nome[6] = {"1", "1,25", "1,33", "1,5", "1,6", "2"};
+    static const int fr[6][2] = {{1, 1}, {5, 4}, {4, 3}, {3, 2}, {8, 5}, {2, 1}};
+    if (k < 0 || k >= 6) {
         return 0;
     }
-    if (s[0] == '1' && s[1] == '\0') {
-        return 2;
-    }
-    if (s[0] == '1' && (s[1] == '.' || s[1] == ',') && s[2] == '5' && s[3] == '\0') {
-        return 3;
-    }
-    if (s[0] == '2' && s[1] == '\0') {
-        return 4;
+    *num = fr[k][0];
+    *den = fr[k][1];
+    return nome[k];
+}
+
+/* o texto da escala num / den ("1,5"); NULL: não é uma das aceitas */
+static const char *esc_nome(int num, int den) {
+    int k, n, d;
+    const char *t;
+    for (k = 0; (t = esc_lista(k, &n, &d)) != 0; k++) {
+        if (n == num && d == den) {
+            return t;
+        }
     }
     return 0;
 }
 
-/* Monta a área w x h (pixels do GS) na escala `meios`. NULL: aceita (a preenchida); senão o motivo da recusa (a fica
+/* BT3_ESCALA: "1", "1.25", "1.33", "1.5", "1.6" ou "2" (com ponto ou vírgula) em *num / *den; 0: outro valor */
+static int esc_le_escala(const char *s, int *num, int *den) {
+    int k, i, n, d;
+    const char *t;
+    if (s == NULL) {
+        return 0;
+    }
+    for (k = 0; (t = esc_lista(k, &n, &d)) != 0; k++) {
+        for (i = 0; t[i] != '\0' && (s[i] == t[i] || (s[i] == '.' && t[i] == ',')); i++) {
+        }
+        if (t[i] == '\0' && s[i] == '\0') {
+            *num = n;
+            *den = d;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Monta a área w x h (pixels do GS) na escala num / den. NULL: aceita (a preenchida); senão o motivo da recusa (a fica
    como estava). */
-static const char *esc_monta(EscArea *a, int w, int h, int meios) {
+static const char *esc_monta(EscArea *a, int w, int h, int num, int den) {
     EscArea n;
-    if (meios < 2 || meios > 4) {
-        return "escala fora de 1, 1,5 e 2";
+    if (esc_nome(num, den) == 0) {
+        return "escala fora de 1, 1,25, 1,33, 1,5, 1,6 e 2";
     }
     if (w < ESC_IMG_W || h < ESC_IMG_H) {
         return "menor que a imagem do jogo (640 x 448)";
@@ -96,14 +124,15 @@ static const char *esc_monta(EscArea *a, int w, int h, int meios) {
     if (w > ESC_GS_LADO || h > ESC_GS_LADO) {
         return "maior que o alvo do GS (1024 x 1024)";
     }
-    if ((w * meios) % 2 != 0 || (h * meios) % 2 != 0) {
+    if ((w * num) % den != 0 || (h * num) % den != 0) {
         return "não inteira na escala";
     }
     n.w = w;
     n.h = h;
-    n.meios = meios;
-    n.sw = w * meios / 2;
-    n.sh = h * meios / 2;
+    n.num = num;
+    n.den = den;
+    n.sw = w * num / den;
+    n.sh = h * num / den;
     if (n.sw % 32 != 0 || n.sh % 32 != 0) {
         return "largura ou altura (na escala) não múltipla de 32";
     }
@@ -147,31 +176,34 @@ static int esc_prende(int *x0, int *y0, int *x1, int *y1, int w, int h) {
     return cortou;
 }
 
-/* (720p, etapa 3) Uma borda x em pixels do GS levada a pixels de saída na escala `meios`: floor(x * meios / 2), x >= 0. É a
-   regra do rasterizador com os centros dos pixels em .5 (HALFPIXELOFFSET ligado): o pixel de saída k fica no pixel do GS
-   floor((k + 0,5) / s), então o pixel x do GS cobre de esc_px(x) a esc_px(x + 1) - 1 (na escala 1,5, 1 e 2 pixels de
-   saída alternados; o agrupamento da arte 2D, floor(f / s) * s no gs_pixel, dá o mesmo). As tesouras, os retângulos das
-   nativas e a redução das capturas usam esta conta nas duas bordas: retângulos vizinhos do GS continuam vizinhos, sem
-   fresta nem sobreposição. (A seção 4 do plano propunha floor(x * s + 0,5): sem fresta também, mas na escala 1,5 a tesoura
-   ficaria um pixel de saída fora do que a primitiva da mesma borda cobre.) Nas escalas 1 e 2 é exata. */
-static int esc_px(int x, int meios) {
-    return x * meios / 2;
+/* (720p, etapa 3; retomada) Uma borda x em pixels do GS levada a pixels de saída na escala s = num / den, x >= 0:
+   ceil(x * s - 0,5), em inteiros (2 x num + den - 1) / (2 den). É a regra do rasterizador com os centros dos pixels em .5
+   (HALFPIXELOFFSET ligado): o pixel de saída k fica no pixel do GS floor((k + 0,5) / s), ou seja, no x com
+   x * s - 0,5 <= k < (x + 1) * s - 0,5, então o pixel x do GS cobre de esc_px(x) a esc_px(x + 1) - 1 (na escala 1,5, 1 e 2
+   pixels de saída alternados; o agrupamento da arte 2D, floor(f / s) * s no gs_pixel, dá o mesmo). As tesouras, os
+   retângulos das nativas e a redução das capturas usam esta conta nas duas bordas: retângulos vizinhos do GS continuam
+   vizinhos, sem fresta nem sobreposição. A etapa 3 usava floor(x * s), que só é a mesma conta enquanto a fração de x * s
+   não passa de 0,5: vale nas escalas 1, 1,5 e 2 (os mesmos números de antes), mas na 1,6 o pixel 1 do GS começaria no
+   pixel de saída 1, cujo centro (1,5 / 1,6 = 0,94) é do pixel 0. (A seção 4 do plano propunha floor(x * s + 0,5): na 1,5
+   a tesoura ficaria um pixel de saída fora do que a primitiva da mesma borda cobre.) */
+static int esc_px(int x, int num, int den) {
+    return (2 * x * num + den - 1) / (2 * den);
 }
 
-/* o inverso, para os logs: quantos pixels do GS cobrem v pixels de saída (arredondado para cima) */
-static int esc_gs(int v, int meios) {
-    return (v * 2 + meios - 1) / meios;
+/* o inverso, para os logs: quantos pixels do GS cobrem v pixels de saída (v / s arredondado para cima) */
+static int esc_gs(int v, int num, int den) {
+    return (v * den + num - 1) / num;
 }
 
 /* (720p, etapa 3) A captura reduzida: w x h pixels do GS em `saida` (`spitch` pixels por linha), cada um a média, canal a
    canal e arredondada, dos pixels de saída que ele cobre (esc_px) em `lin` (`pitch` pixels por linha, pelo menos
    esc_px(w) x esc_px(h)). Os pixels são palavras de 32 bits com 4 canais de 8 (A8R8G8B8 como u32). Na escala 1, a cópia. */
-static void esc_reduz(const unsigned *lin, int pitch, int w, int h, int meios, unsigned *saida, int spitch) {
+static void esc_reduz(const unsigned *lin, int pitch, int w, int h, int num, int den, unsigned *saida, int spitch) {
     int x, y, i, j, c;
     for (y = 0; y < h; y++) {
-        int j0 = esc_px(y, meios), j1 = esc_px(y + 1, meios);
+        int j0 = esc_px(y, num, den), j1 = esc_px(y + 1, num, den);
         for (x = 0; x < w; x++) {
-            int i0 = esc_px(x, meios), i1 = esc_px(x + 1, meios);
+            int i0 = esc_px(x, num, den), i1 = esc_px(x + 1, num, den);
             unsigned n = (unsigned)((i1 - i0) * (j1 - j0)), soma[4], r = 0;
             soma[0] = soma[1] = soma[2] = soma[3] = 0;
             for (j = j0; j < j1; j++) {

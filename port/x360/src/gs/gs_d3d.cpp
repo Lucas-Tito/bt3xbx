@@ -5,7 +5,7 @@
  *
  * O que muda em relação ao PC, por causa do Xenos:
  *   - Os alvos de desenho moram na EDRAM (10 MB), não em texturas. Há UM par de superfícies na EDRAM, 1024 x 1024
- *     (o tamanho de um alvo do GS com SCALE = 1; com BT3_ALVO_AREA, a área dada, e BT3_ESCALA, vezes 1,5 ou 2, ver sAlvoW,
+ *     (o tamanho de um alvo do GS com SCALE = 1; com BT3_ALVO_AREA, a área dada, e BT3_ESCALA, vezes 1,25 a 2, ver sAlvoW,
  *     sAreaW e escala.h): cor em
  *     A8R8G8B8 na base 0 e profundidade D24S8 logo depois, cerca de 8 MB. Cada alvo do GS tem uma textura (tiled, A8R8G8B8) com o conteúdo dele. Desenhar num alvo: o que está
  *     na EDRAM volta para a textura do dono (Resolve, só o retângulo sujo), a EDRAM é limpa e recebe a textura do
@@ -115,12 +115,14 @@ int Port_AspectMilli(void);  /* plat_stub.c */
    EDRAM. O restauro como cor troca as metades de 40 colunas de cada tile, então com 1024 a profundidade das colunas 984 a
    999 mora nas colunas 1024 a 1039 da cor, que uma superfície de 1024 não alcança (com 640, múltiplo de 80, nada sobra). */
 static int sAlvoW = GS_W, sAlvoH = GS_H, sAlvoWZ = (GS_W + 79) / 80 * 80;
-/* (720p, etapa 3) A área em pixels do GS e a escala em meios (2 é 1, 3 é 1,5, 4 é 2; BT3_ESCALA): sAlvoW é esc_px(sAreaW).
+/* (720p, etapa 3) A área em pixels do GS e a escala, sEscN / sEscD (BT3_ESCALA; 720p, retomada: antes em meios), e a mesma
+   em float (sEscF, as constantes dos shaders): sAlvoW é esc_px(sAreaW).
    O gs_draw.c continua gravando em pixels do GS (o gsScale do 360 fica 1) e o backend leva à escala: a posição no recorte
    (c14, recorte_poe), as tesouras e os retângulos das nativas (esc_px, prepara e nat_ret), o uv de um alvo lido como
    textura (c6), a arte 2D (misc.w), a cópia dos ids e o passo do contorno, a cópia para a tela e as capturas. Os
    retângulos guardados (sSujo, sSujoZ, conteudo) e os Resolves já são em pixels de saída. */
-static int sAreaW = GS_W, sAreaH = GS_H, sMeios = 2;
+static int sAreaW = GS_W, sAreaH = GS_H, sEscN = 1, sEscD = 1;
+static float sEscF = 1.0f;
 static unsigned sTamAlvo; /* bytes de uma textura de alvo (tam_alvo) */
 #define TELA_W 1280
 #define TELA_H 720
@@ -1356,7 +1358,7 @@ static int limpa_fora(const Alvo *a, int volta, DWORD limpa) {
    deixou, com ou sem a chave, e só ali a imagem pode mudar. */
 static int date_area(uint32_t n, Ret *r) {
     Ret u = {0, 0, 0, 0}, ra = *r, ua;
-    float s = sMeios * 0.5f;
+    float s = sEscF;
     uint32_t k, v;
     esc_alinha8(&ra.x0, &ra.y0, &ra.x1, &ra.y1, sAlvoW, sAlvoH);
     sOt.dateN++;
@@ -1374,10 +1376,10 @@ static int date_area(uint32_t n, Ret *r) {
         if (x1 <= x0 || y1 <= y0) {
             continue;
         }
-        x0 = esc_px(x0, sMeios);
-        y0 = esc_px(y0, sMeios);
-        x1 = esc_px(x1, sMeios);
-        y1 = esc_px(y1, sMeios);
+        x0 = esc_px(x0, sEscN, sEscD);
+        y0 = esc_px(y0, sEscN, sEscD);
+        x1 = esc_px(x1, sEscN, sEscD);
+        y1 = esc_px(y1, sEscN, sEscD);
         if (!e->vu) {
             float mx = 4096.0f, my = 4096.0f, Mx = -4096.0f, My = -4096.0f;
             for (v = 0; v < e->count; v++) {
@@ -2218,25 +2220,23 @@ static unsigned env_num(const char *nome, unsigned padrao) {
 }
 
 /* (F5, etapa 8, 720p, etapas 2 e 3) A área dos alvos (BT3_ALVO_AREA=LxA, pixels do GS) e a escala (BT3_ESCALA: 1, 1.5 ou
-   2), pelas regras do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
+   2; na retomada também 1.25, 1.33 e 1.6, com a área em que a escala dá inteiro: 640x512, 648x456 e 640x460), pelas regras
+   do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
    diz o motivo e fica no padrão (a escala em 1: uma área que não cabe na EDRAM na escala pedida, e a de 1024 x 1024 com
    qualquer escala maior que 1). Um desenho além da área é cortado e contado (corte_conta), nunca desenhado num alvo
    maior: o par da EDRAM e as texturas têm um tamanho só. No começo do init, antes de qualquer alvo. */
 static void area_init(void) {
     const char *a = getenv("BT3_ALVO_AREA"), *e = getenv("BT3_ESCALA"), *erroA = NULL, *erroE = NULL;
-    int w = GS_W, h = GS_H, meios = 2;
+    int w = GS_W, h = GS_H, num = 1, den = 1;
     EscArea ar;
-    if (e != NULL && *e != '\0') {
-        meios = esc_le_escala(e);
-        if (meios == 0) {
-            Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.5 ou 2); fica 1", e);
-            meios = 2;
-        }
+    if (e != NULL && *e != '\0' && !esc_le_escala(e, &num, &den)) {
+        Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.5, 1.6 ou 2); fica 1", e);
+        num = den = 1;
     }
     if (a != NULL && *a != '\0') {
         if (!esc_le_area(a, &w, &h)) {
             erroA = "não é LxA";
-        } else if ((erroA = esc_monta(&ar, w, h, meios)) != NULL && meios != 2 && esc_monta(&ar, w, h, 2) == NULL) {
+        } else if ((erroA = esc_monta(&ar, w, h, num, den)) != NULL && num != den && esc_monta(&ar, w, h, 1, 1) == NULL) {
             erroE = erroA; /* (a área vale na escala 1: quem não cabe é a escala) */
             erroA = NULL;
         }
@@ -2246,27 +2246,31 @@ static void area_init(void) {
             h = GS_H;
         }
     }
-    if (erroE == NULL && meios != 2) {
-        erroE = esc_monta(&ar, w, h, meios); /* (sem a área, ou com ela recusada: 1024 x 1024, que nenhuma escala maior cabe) */
+    if (erroE == NULL && num != den) {
+        erroE = esc_monta(&ar, w, h, num, den); /* (sem a área, ou com ela recusada: 1024 x 1024, que nenhuma escala maior cabe) */
     }
     if (erroE != NULL) {
         Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada com a área de %dx%d: %s; fica 1", e, w, h, erroE);
-        meios = 2;
+        num = den = 1;
     }
-    if (esc_monta(&ar, w, h, meios) != NULL) { /* (o padrão sempre passa: o teste_escala.c prova) */
+    if (esc_monta(&ar, w, h, num, den) != NULL) { /* (o padrão sempre passa: o teste_escala.c prova) */
         ar.w = ar.sw = GS_W;
         ar.h = ar.sh = GS_H;
-        ar.meios = 2;
+        ar.num = ar.den = 1;
         ar.swz = (GS_W + 79) / 80 * 80;
     }
     sAreaW = ar.w;
     sAreaH = ar.h;
-    sMeios = ar.meios;
+    sEscN = ar.num;
+    sEscD = ar.den;
+    sEscF = (float)sEscN / (float)sEscD; /* (1, 1,5 e 2 exatos, como o meios * 0,5 de antes) */
     sAlvoW = ar.sw;
     sAlvoH = ar.sh;
     sAlvoWZ = ar.swz;
-    sIdsW = esc_px(IDS_W, sMeios);
-    sIdsH = esc_px(IDS_H, sMeios);
+    /* (retomada) a cópia dos ids em múltiplos de 8, a exigência do Resolve: 640 x 448 na escala 1,6 é 1024 x 717 (720), na
+       1,33 853 x 597 (856 x 600); nas escalas 1, 1,5 e 2 já são múltiplos de 8 (os tamanhos de antes) */
+    sIdsW = (esc_px(IDS_W, sEscN, sEscD) + 7) & ~7;
+    sIdsH = (esc_px(IDS_H, sEscN, sEscD) + 7) & ~7;
     sTamAlvo = 0;
     sInteiro.x0 = sInteiro.y0 = 0;
     sInteiro.x1 = sAlvoW;
@@ -2274,8 +2278,7 @@ static void area_init(void) {
     if (a != NULL && *a != '\0' && erroA == NULL) {
         Diario_Escrever("gs_d3d: área dos alvos %dx%d do GS (BT3_ALVO_AREA), escala %s: alvos e profundidades de %dx%d, a "
                         "profundidade vista como cor com %d de largura, a cópia dos ids de %dx%d; o que passar da área é "
-                        "cortado e contado", sAreaW, sAreaH, sMeios == 2 ? "1" : sMeios == 3 ? "1,5" : "2", sAlvoW, sAlvoH,
-                        sAlvoWZ, sIdsW, sIdsH);
+                        "cortado e contado", sAreaW, sAreaH, esc_nome(sEscN, sEscD), sAlvoW, sAlvoH, sAlvoWZ, sIdsW, sIdsH);
     }
 }
 
@@ -2626,12 +2629,12 @@ static void captura(int alvo, D3DTexture *tex) {
         criou = 1;
     }
     if (cheia < 0) {
-        cheia = sMeios != 2 && env_num("BT3_SHOT_CHEIA", 0) != 0;
-        sw = esc_px(640, sMeios);
-        sh = esc_px(448, sMeios);
+        cheia = sEscN != sEscD && env_num("BT3_SHOT_CHEIA", 0) != 0;
+        sw = esc_px(640, sEscN, sEscD);
+        sh = esc_px(448, sEscN, sEscD);
         linear = linear1;
         ppm = ppm1;
-        if (sMeios != 2) {
+        if (sEscN != sEscD) {
             linear = (unsigned *)malloc((size_t)sw * sh * 4);
             ppm = cheia ? (unsigned char *)malloc(16 + (size_t)sw * sh * 3) : ppm1;
             red = cheia ? linear : (unsigned *)malloc(640 * 448 * 4);
@@ -2652,18 +2655,18 @@ static void captura(int alvo, D3DTexture *tex) {
     esquece_estado();
     sDev->BlockUntilIdle();
     /* (a textura do alvo é do XG: lida direto no endereço, com a GPU parada) */
-    ret.left = 0; ret.top = 0; ret.right = esc_px(fbw, sMeios); ret.bottom = sh;
+    ret.left = 0; ret.top = 0; ret.right = esc_px(fbw, sEscN, sEscD); ret.bottom = sh;
     XGUntileSurface(linear, sw * 4, NULL, ((const TexXg *)tex)->dados, sAlvoW, sAlvoH, &ret, 4);
     if (cheia) {
         fonte = linear;
         iw = sw;
         ih = sh;
-        ifbw = esc_px(fbw, sMeios);
+        ifbw = esc_px(fbw, sEscN, sEscD);
     } else {
-        if (sMeios != 2) {
-            esc_reduz(linear, sw, fbw, 448, sMeios, red, 640);
+        if (sEscN != sEscD) {
+            esc_reduz(linear, sw, fbw, 448, sEscN, sEscD, red, 640);
         }
-        fonte = sMeios != 2 ? red : linear;
+        fonte = sEscN != sEscD ? red : linear;
         iw = 640;
         ih = 448;
         ifbw = fbw;
@@ -2743,10 +2746,10 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         return 0;
     }
     /* (720p, etapa 3) a tesoura em pixels de saída: a mesma regra nas duas bordas (esc_px) */
-    x0 = esc_px(x0, sMeios);
-    y0 = esc_px(y0, sMeios);
-    x1 = esc_px(x1, sMeios);
-    y1 = esc_px(y1, sMeios);
+    x0 = esc_px(x0, sEscN, sEscD);
+    y0 = esc_px(y0, sEscN, sEscD);
+    x1 = esc_px(x1, sEscN, sEscD);
+    y1 = esc_px(y1, sEscN, sEscD);
     /* (720p, etapa 2) um alvo lido como textura com a área menor que o alvo lógico: o que passar da área sai preto (a
        borda, o que antes era a parte limpa) e é contado */
     if (d->mode[0] == 2 && (sAreaW < GS_W || sAreaH < GS_H)) {
@@ -2804,7 +2807,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     c[0] = (float)d->mode[0]; c[1] = (float)d->mode[1]; c[2] = (float)d->mode[2]; c[3] = (float)d->mode[3];
     memcpy(c + 4, d->misc, sizeof(d->misc));
     memcpy(c + 8, d->rect, sizeof(d->rect));
-    c[7] *= sMeios * 0.5f; /* (720p, etapa 3) misc.w da arte 2D: pixels de saída por pixel do GS (0 fica 0) */
+    c[7] *= sEscF; /* (720p, etapa 3) misc.w da arte 2D: pixels de saída por pixel do GS (0 fica 0) */
     c[12] = 1.0f / sAlvoW; c[13] = 1.0f / sAlvoH; c[14] = sCurTexW; c[15] = sCurTexH;
     if (d->mode[0] == 2) {
         /* (720p, etapa 2) um alvo como textura: o uv do gs_draw.c é normalizado pelo alvo lógico (1024 x 1024), então
@@ -3115,8 +3118,8 @@ static void log_nativas(unsigned t) {
             continue;
         }
         /* (720p, etapa 3) em pixels do GS, para comparar as escalas */
-        k = _snprintf(ext + m, sizeof(ext) - m - 1, "%s%d: %dx%d+%d+%d", m ? ", " : "", i, esc_gs(c->x1 - c->x0, sMeios),
-                      esc_gs(c->y1 - c->y0, sMeios), c->x0 * 2 / sMeios, c->y0 * 2 / sMeios);
+        k = _snprintf(ext + m, sizeof(ext) - m - 1, "%s%d: %dx%d+%d+%d", m ? ", " : "", i, esc_gs(c->x1 - c->x0, sEscN, sEscD),
+                      esc_gs(c->y1 - c->y0, sEscN, sEscD), c->x0 * sEscD / sEscN, c->y0 * sEscD / sEscN);
         if (k < 0) {
             ext[sizeof(ext) - 1] = '\0';
             break;
@@ -3312,10 +3315,10 @@ static int nat_ret(const GsDraw *d, Ret *r) {
     if (esc_prende(&r->x0, &r->y0, &r->x1, &r->y1, sAreaW, sAreaH)) {
         corte_conta(d, 1);
     }
-    r->x0 = esc_px(r->x0, sMeios); /* (720p, etapa 3: em pixels de saída, a regra do prepara) */
-    r->y0 = esc_px(r->y0, sMeios);
-    r->x1 = esc_px(r->x1, sMeios);
-    r->y1 = esc_px(r->y1, sMeios);
+    r->x0 = esc_px(r->x0, sEscN, sEscD); /* (720p, etapa 3: em pixels de saída, a regra do prepara) */
+    r->y0 = esc_px(r->y0, sEscN, sEscD);
+    r->x1 = esc_px(r->x1, sEscN, sEscD);
+    r->y1 = esc_px(r->y1, sEscN, sEscD);
     return r->x1 > r->x0 && r->y1 > r->y0;
 }
 
@@ -3495,7 +3498,7 @@ extern "C" void GsD3d_FilmeFim(void) {
    copia a memória de vídeo (depois da limpeza, antes do fade). Sem mistura, sem profundidade, alfa 1 (0x80 ou mais). */
 static void filme_desenha(const GsDraw *d, uint32_t n, int *cur) {
     unsigned im = d->first;
-    int k = (int)(im % FILME_VAGAS), w = esc_px(FILME_W, sMeios), h = esc_px(FILME_H, sMeios);
+    int k = (int)(im % FILME_VAGAS), w = esc_px(FILME_W, sEscN, sEscD), h = esc_px(FILME_H, sEscN, sEscD);
     TexXg *x = sFilmeTex[k];
     if (x == NULL) {
         sConta.semFb++;
@@ -3644,7 +3647,7 @@ static void nat_contorno(const GsDraw *d, uint32_t n, int *cur) {
     }
     nat_entra(d->target, n, cur);
     tempo_poe(T_CONTORNO);
-    nat_contorno_passa(&r, sMeios * 0.5f);
+    nat_contorno_passa(&r, sEscF);
     sConta.natCont++;
 }
 
@@ -3683,6 +3686,7 @@ static void desenha_fba(const GsDraw *d, uint32_t ini) {
     float m[4];
     memcpy(m, d->misc, sizeof(m));
     m[2] = 0.0f;
+    m[3] *= sEscF; /* (720p, retomada) a arte 2D em pixels de saída, como o c[7] do prepara (faltava aqui nas escalas maiores) */
     sDev->SetPixelShaderConstantF(1, m, 1);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, mascara(p->wmask & ~GS_CC_A));
     chamadas(d, ini);
