@@ -298,6 +298,22 @@ float4 ps_tabela(float2 vpos : VPOS) : COLOR0 {
     return float4(c.rgb, saturate(c.a * 255.0f / 128.0f));
 }
 
+// (F5, etapa 8, 720p, retomada: BT3_OTIM_NEVOA) A passada de tabela com uma fonte só: o ps_tabela lê a profundidade e os
+// ids e escolhe pelo nat.x; estes leem só a fonte do desenho (nat_tabela_passa escolhe), com as mesmas contas.
+float4 tabela_cor(float idx) {
+    float4 c = tex2Dlod(natClut, float4((idx + 0.5f) / 256.0f, 0.5f, 0.0f, 0.0f));
+    return float4(c.rgb, saturate(c.a * 255.0f / 128.0f));
+}
+float4 ps_tabela_z(float2 vpos : VPOS) : COLOR0 {
+    float2 f = floor(vpos) + 0.5f;
+    float z = tex2Dlod(natZ, float4(f * natEsc.zw, 0.0f, 0.0f)).x * nat.y;
+    return tabela_cor(z >= 65448.0f ? 0.0f : clamp(255.0f - floor(z / 256.0f), 0.0f, 255.0f));
+}
+float4 ps_tabela_ids(float2 vpos : VPOS) : COLOR0 {
+    float2 f = floor(vpos) + 0.5f;
+    return tabela_cor(nat_id(f * natEsc.xy));
+}
+
 // ---- programas de vértice da VU1, família vu0 (F5, etapa 6): tradução de port/src/gs/shaders/vu0.vert
 // Usada pelos programas 0, 1, 2a/2b, 7 e 8 (camadas 0 a 5 em misc.w). O pixel shader é o ps_gsz acima (ps_gs com
 // BT3_CORTE=0).

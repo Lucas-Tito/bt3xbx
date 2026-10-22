@@ -104,6 +104,8 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "gs_sem_ps.h"
 #include "gsz_tex_ps.h"
 #include "gsz_sem_ps.h"
+#include "tabela_z_ps.h" /* (720p, retomada, BT3_OTIM_NEVOA: ps_tabela_z, ps_tabela_ids) */
+#include "tabela_ids_ps.h"
 
 #include "escala.h"
 /* (F5, etapa 8, 720p, etapa 2) O tamanho dos alvos, das profundidades e do par da EDRAM, em pixels de saída: a área de
@@ -1239,11 +1241,13 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
      BT3_OTIM_PS=1        o pixel shader especializado (ps_gs_tex e ps_gs_sem, ps_gsz_tex e ps_gsz_sem; gs_rapido no
                           gs_d3d.hlsl) nos desenhos sem DATE, sem arte 2D, sem teste de alfa e sem alvo como textura
      BT3_OTIM_LIMPA=1     ao entrar na EDRAM, a cor limpa só fora do conteúdo que a volta do alvo vai cobrir (limpa_fora)
-     BT3_OTIM_DATE=1      o Resolve da cópia do DATE só na área que os desenhos com DATE seguintes leem (date_area) */
-enum { OT_PS = 1, OT_LIMPA = 2, OT_DATE = 4 };
+     BT3_OTIM_DATE=1      o Resolve da cópia do DATE só na área que os desenhos com DATE seguintes leem (date_area)
+     BT3_OTIM_NEVOA=1     a passada de tabela com um shader por fonte (ps_tabela_z, ps_tabela_ids; nat_tabela_passa) */
+enum { OT_PS = 1, OT_LIMPA = 2, OT_DATE = 4, OT_NEVOA = 8 };
 static unsigned sOtim, sPsTrivial;
 static D3DPixelShader *sPsTriv[2];    /* [0] ps_gs_triv, [1] ps_gsz_triv */
 static D3DPixelShader *sPsRap[2][2];  /* [z][com textura]: ps_gs_sem, ps_gs_tex, ps_gsz_sem, ps_gsz_tex */
+static D3DPixelShader *sPsTabFonte[2]; /* [0] ps_tabela_z (a névoa pela profundidade), [1] ps_tabela_ids */
 static unsigned env_num(const char *nome, unsigned padrao);
 /* (no trecho de 60 quadros, do desenho) o que as otimizações fizeram (otim_log) */
 static struct {
@@ -1254,7 +1258,7 @@ static struct {
 static void otim_init(void) {
     unsigned todas = env_num("BT3_OTIM", 0) != 0;
     sOtim = (env_num("BT3_OTIM_PS", todas) != 0 ? OT_PS : 0) | (env_num("BT3_OTIM_LIMPA", todas) != 0 ? OT_LIMPA : 0) |
-            (env_num("BT3_OTIM_DATE", todas) != 0 ? OT_DATE : 0);
+            (env_num("BT3_OTIM_DATE", todas) != 0 ? OT_DATE : 0) | (env_num("BT3_OTIM_NEVOA", todas) != 0 ? OT_NEVOA : 0);
     if ((sOtim & OT_PS) && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsSemPs, &sPsRap[0][0])) ||
                             FAILED(sDev->CreatePixelShader((const DWORD *)kGsTexPs, &sPsRap[0][1])) ||
                             FAILED(sDev->CreatePixelShader((const DWORD *)kGsZSemPs, &sPsRap[1][0])) ||
@@ -1262,10 +1266,17 @@ static void otim_init(void) {
         Diario_Escrever("gs_d3d: ERRO: os shaders especializados não foram criados; BT3_OTIM_PS desligada");
         sOtim &= ~OT_PS;
     }
+    if ((sOtim & OT_NEVOA) && (FAILED(sDev->CreatePixelShader((const DWORD *)kTabelaZPs, &sPsTabFonte[0])) ||
+                               FAILED(sDev->CreatePixelShader((const DWORD *)kTabelaIdsPs, &sPsTabFonte[1])))) {
+        Diario_Escrever("gs_d3d: ERRO: os shaders da tabela por fonte não foram criados; BT3_OTIM_NEVOA desligada");
+        sOtim &= ~OT_NEVOA;
+    }
     if (sOtim != 0) {
         Diario_Escrever("gs_d3d: retomada do 720p, otimizações (BT3_OTIM=%u): shader especializado %s (BT3_OTIM_PS), limpeza "
-                        "só fora da volta %s (BT3_OTIM_LIMPA), DATE só na área dos desenhos %s (BT3_OTIM_DATE)", todas,
-                        (sOtim & OT_PS) ? "sim" : "não", (sOtim & OT_LIMPA) ? "sim" : "não", (sOtim & OT_DATE) ? "sim" : "não");
+                        "só fora da volta %s (BT3_OTIM_LIMPA), DATE só na área dos desenhos %s (BT3_OTIM_DATE), tabela com "
+                        "um shader por fonte %s (BT3_OTIM_NEVOA; o autoteste das nativas passa por eles)", todas,
+                        (sOtim & OT_PS) ? "sim" : "não", (sOtim & OT_LIMPA) ? "sim" : "não", (sOtim & OT_DATE) ? "sim" : "não",
+                        (sOtim & OT_NEVOA) ? "sim" : "não");
     }
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
@@ -3347,7 +3358,7 @@ static void nat_tabela_passa(int src, float zmax, D3DTexture *z, D3DTexture *clu
     nat_textura(3, sIds);
     nat_textura(4, clut);
     sDev->SetPixelShaderConstantF(4, c, 2);
-    passada(sPsTabela, r);
+    passada((sOtim & OT_NEVOA) ? sPsTabFonte[src != 0] : sPsTabela, r); /* (720p, retomada) */
 }
 
 /* o contorno em si: tira 0x64 da cor (REVSUBTRACT, ONE, ONE) nas arestas dos ids, o alfa intocado. (720p, etapa 3) passo:
