@@ -19,6 +19,12 @@
  *   BT3_SOM_TESTE=1    o tom de teste no começo, pelo mesmo caminho (fluxos do núcleo), em cinco fases
  *   BT3_SOM_TESTE_HZ   a frequência do tom (440)
  *   BT3_SOM_TESTE_S    a duração da primeira fase, em segundos (3; 600 para a prova de 10 min do escopo)
+ *
+ * (F6, etapas 4 e 5) As medidas que o vigia escreve a cada 60 s e na saída (linhas "som (medidas)" e "som (leitura)"):
+ * a latência do pedido do jogo ao primeiro bloco misturado (efeitos: do comando da fila; fluxos: do ADXT_Start*, com a
+ * leitura do primeiro bloco), o tempo do som na thread do jogo (os RPCs do SOUNDS.IRX, o envio de um banco, o início de
+ * um fluxo, o cabeçalho visto no vblank), a espera da trava no misturador, os blocos lentos, a memória livre e a leitura
+ * dos fluxos em blocos (fluxo.c, thread de hardware 1). Fluxo_Parar na saída.
  */
 #include <xtl.h>
 #include <xaudio2.h>
@@ -30,6 +36,9 @@
 #include "diario.h"
 #include "som360.h"
 #include "som_nucleo.h"
+#include "fluxo.h"
+
+extern "C" unsigned Port_AdxFluxosTarde(void); /* gs/snd_adx.c: vistas que o cabeçalho acertou depois do fim */
 
 #pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
 
@@ -55,6 +64,13 @@ static int sProx;                    /* o próximo buffer a encher (só o mistur
 static volatile DWORD sThreadXa;    /* a thread do retorno do XAudio2 (a última vista) */
 static volatile unsigned sBlocos, sFaltas, sFilaMin = NBUF, sPiorUs, sTravasPerdidas, sSilencios;
 static volatile HRESULT sErroVoz, sErroMotor;
+/* (etapas 4 e 5) as medidas: o misturador e o retorno escrevem, o vigia lê (sem trava: são só números) */
+#define LAT_N 201 /* histograma da latência em ms: 0 a 199, e 200 ou mais */
+static volatile unsigned sLat[2][LAT_N], sLatN[2], sLatPiorUs[2];
+static volatile unsigned sCustoN[4], sCustoPiorUs[4];
+static volatile unsigned __int64 sCustoSomaUs[4];
+static volatile unsigned sTravaPiorUs, sTravaLonga, sBlocosLentos;
+static volatile DWORD sMemMin = 0xFFFFFFFF;
 /* a falha pega na mistura */
 static volatile unsigned sQuedaCodigo, sQuedaIar, sQuedaLr, sQuedaEnd, sQuedaVista;
 
@@ -111,6 +127,84 @@ static unsigned Microssegundos(LONGLONG t) {
     return sFreq.QuadPart > 0 ? (unsigned)(t * 1000000 / sFreq.QuadPart) : 0;
 }
 
+/* ------------------------------------------------------------------------- as medidas das etapas 4 e 5 */
+
+/* microssegundos de um relógio que só anda (diferenças em unsigned atravessam a volta) */
+extern "C" unsigned Som360_Agora(void) {
+    LARGE_INTEGER t;
+    if (sFreq.QuadPart == 0) {
+        QueryPerformanceFrequency(&sFreq);
+    }
+    QueryPerformanceCounter(&t);
+    return (unsigned)(t.QuadPart * 1000000 / sFreq.QuadPart);
+}
+
+/* tipo 0: do comando de efeito ao primeiro bloco misturado; 1: do início de um fluxo ao primeiro som dele */
+extern "C" void Som360_Latencia(int tipo, unsigned us) {
+    unsigned ms = us / 1000;
+    if (tipo < 0 || tipo > 1) {
+        return;
+    }
+    sLat[tipo][ms < LAT_N - 1 ? ms : LAT_N - 1]++;
+    sLatN[tipo]++;
+    if (us > sLatPiorUs[tipo]) {
+        sLatPiorUs[tipo] = us;
+    }
+}
+
+/* o som na thread do jogo: 0 RPC do SOUNDS.IRX, 1 envio de banco, 2 início de fluxo, 3 cabeçalhos vistos no vblank */
+extern "C" void Som360_CustoJogo(int tipo, unsigned us) {
+    if (tipo < 0 || tipo > 3) {
+        return;
+    }
+    sCustoN[tipo]++;
+    sCustoSomaUs[tipo] += us;
+    if (us > sCustoPiorUs[tipo]) {
+        sCustoPiorUs[tipo] = us;
+    }
+}
+
+/* o percentil p (0 a 100) do histograma, em ms ("200+" no último) */
+static unsigned Percentil(int tipo, unsigned p) {
+    unsigned n = sLatN[tipo], alvo = (n * p + 99) / 100, soma = 0;
+    for (unsigned k = 0; k < LAT_N; k++) {
+        soma += sLat[tipo][k];
+        if (soma >= alvo && alvo > 0) {
+            return k;
+        }
+    }
+    return 0;
+}
+
+static void Medidas(const char *quando) {
+    static const char *nomes[4] = {"RPC", "banco", "início de fluxo", "cabeçalhos no vblank"};
+    char custo[4][96];
+    for (int k = 0; k < 4; k++) {
+        unsigned n = sCustoN[k];
+        _snprintf(custo[k], sizeof(custo[k]), "%s %u (pior %u us, média %u us)", nomes[k], n, sCustoPiorUs[k],
+                  n ? (unsigned)(sCustoSomaUs[k] / n) : 0);
+        custo[k][sizeof(custo[k]) - 1] = '\0';
+    }
+    Diario_Escrever("som (medidas, %s): latência dos efeitos %u (p50 %u ms, p99 %u ms, pior %u us); início de fluxo %u (p50 %u "
+                    "ms, p99 %u ms, pior %u us); misturador: pior espera da trava %u us, %u acima de 1 ms, %u blocos acima de "
+                    "5 ms; thread do jogo: %s, %s, %s, %s; memória livre mínima %u KiB",
+                    quando, sLatN[0], Percentil(0, 50), Percentil(0, 99), sLatPiorUs[0], sLatN[1], Percentil(1, 50),
+                    Percentil(1, 99), sLatPiorUs[1], sTravaPiorUs, sTravaLonga, sBlocosLentos, custo[0], custo[1], custo[2],
+                    custo[3], sMemMin == 0xFFFFFFFF ? 0 : (unsigned)(sMemMin >> 10));
+}
+
+/* a leitura dos fluxos em blocos (fluxo.c): vale também com o som desligado (a duração vem do cabeçalho lido lá) */
+static void Leitura(const char *quando) {
+    FluxoContadores c;
+    Fluxo_Contadores(&c);
+    Diario_Escrever("som (leitura, %s): %u fluxos abertos (no máximo %u juntos), %u blocos lidos, %u KiB, leitura pior %u ms, "
+                    "média %u ms, por tempo <2/<5/<10/<20/<50/<100/<250/mais ms: %u/%u/%u/%u/%u/%u/%u/%u; %u adiantados, %u "
+                    "pedidos sem o dado, %u erros, %u KiB de buffers; %u estados acertados depois do fim",
+                    quando, c.aberturas, c.abertosMax, c.leituras, c.kib, c.msPior, c.leituras ? c.msSoma / c.leituras : 0,
+                    c.hist[0], c.hist[1], c.hist[2], c.hist[3], c.hist[4], c.hist[5], c.hist[6], c.hist[7], c.adiantados,
+                    c.faltas, c.erros, c.memoria >> 10, Port_AdxFluxosTarde());
+}
+
 static int FiltroQueda(LPEXCEPTION_POINTERS p) {
     if (p != NULL && p->ExceptionRecord != NULL && p->ContextRecord != NULL) {
         sQuedaCodigo = (unsigned)p->ExceptionRecord->ExceptionCode;
@@ -156,7 +250,16 @@ static void Encher(int i) {
         for (;;) { /* (o jogo pode ter caído com a trava pega: nunca esperar para sempre) */
             LARGE_INTEGER t;
             if (TryEnterCriticalSection(&sTrava)) {
+                unsigned espera;
                 pegou = 1;
+                QueryPerformanceCounter(&t);
+                espera = Microssegundos(t.QuadPart - t0.QuadPart);
+                if (espera > sTravaPiorUs) {
+                    sTravaPiorUs = espera;
+                }
+                if (espera > 1000) {
+                    sTravaLonga++;
+                }
                 break;
             }
             QueryPerformanceCounter(&t);
@@ -180,6 +283,9 @@ static void Encher(int i) {
     us = Microssegundos(t1.QuadPart - t0.QuadPart);
     if (us > sPiorUs) {
         sPiorUs = us;
+    }
+    if (us > 5000) {
+        sBlocosLentos++;
     }
     ZeroMemory(&b, sizeof(b));
     b.AudioBytes = sizeof(sBuf[i]);
@@ -371,12 +477,21 @@ static DWORD WINAPI Vigia(LPVOID arg) {
     }
     /* depois do tom: uma linha quando aparecer falta, trava perdida ou queda, e a cada 60 s com o som do jogo */
     while (!Esperar(1000)) {
+        MEMORYSTATUS m;
+        GlobalMemoryStatus(&m);
+        if (m.dwAvailPhys < sMemMin) {
+            sMemMin = m.dwAvailPhys;
+        }
         segundos++;
         if (sFaltas != faltas || sTravasPerdidas != travas || (sQuedaCodigo != 0 && !sQuedaVista) ||
             (sJogo && segundos % 60 == 0)) {
             faltas = sFaltas;
             travas = sTravasPerdidas;
             Contadores("vigia");
+            if (sJogo && segundos % 60 == 0) {
+                Medidas("vigia");
+                Leitura("vigia");
+            }
         }
     }
     return 0;
@@ -467,6 +582,12 @@ extern "C" void Som360_Iniciar(void) {
 }
 
 extern "C" void Som360_Parar(void) {
+    static volatile LONG leituraParada;
+    if (!InterlockedExchange(&leituraParada, 1)) { /* (a thread de leitura existe também com o som desligado) */
+        Medidas("saída");
+        Leitura("saída");
+        Fluxo_Parar();
+    }
     if (!InterlockedExchange(&sLigado, 0)) {
         return;
     }

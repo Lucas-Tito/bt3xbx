@@ -35,6 +35,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "gs_internal.h"
+#ifdef PORT_X360
+extern unsigned Som360_Agora(void);                  /* port/x360/src/som/som360.cpp: microseconds */
+extern void Som360_Latencia(int tipo, unsigned us);  /* 0: from the command to the effect's first mix */
+extern void Som360_CustoJogo(int tipo, unsigned us); /* time spent on the game's thread */
+#endif
 
 #define SPU_SIZE 0x200000
 #define VOICES 48
@@ -73,13 +78,24 @@ typedef struct Voice {
     float gl, gr;
     float fade;                /* 1 = playing; goes down to 0 after a stop */
     int stopping;
+#ifdef PORT_X360
+    int novo;                  /* not mixed yet */
+    unsigned t0;               /* when the game asked for it */
+#endif
 } Voice;
 
+#ifdef PORT_X360
+/* (F6, etapa 4) The Xbox 360 plays no online match, so it never plays the other voice set's clip banks
+   (voice_own_bank): the sound chip's memory alone, without the 8 MiB beside it that only those banks use. */
+#define SPU_TOTAL SPU_SIZE
+static uint8_t sSpu[SPU_TOTAL];
+#else
 /* Beside the sound chip's memory: room for the clip banks this copy plays in the place of the game's (voice_own_bank). */
 #define OWN_SLOT 0x100000 /* a megabyte each; the largest voice bank file of the disc has 591,104 bytes */
 #define SPU_TOTAL (SPU_SIZE + 8 * OWN_SLOT)
 static uint8_t sSpu[SPU_TOTAL];
 static uint8_t *sOwnTables[8]; /* the two tables of such a bank (one allocation) */
+#endif
 static Bank sBanks[8];
 static Voice sVoices[VOICES];
 static SDL_AudioStream *sStream;
@@ -204,6 +220,12 @@ static void SDLCALL mix(void *user, SDL_AudioStream *stream, int additional, int
             if (!v->on || sBanks[v->bank].paused) {
                 continue;
             }
+#ifdef PORT_X360
+            if (v->novo) {
+                v->novo = 0;
+                Som360_Latencia(0, Som360_Agora() - v->t0);
+            }
+#endif
             for (i = 0; i < n; i++) {
                 float s, a, b;
                 int ip;
@@ -314,6 +336,10 @@ static void play(int mask, int id, int volume, int pan, int pitch, int handle) {
     v->gl = (float)(cos(theta) * 1.41421356) * ((float)volume / 127.0f) * sBanks[slot].volume * SE_GAIN;
     v->gr = (float)(sin(theta) * 1.41421356) * ((float)volume / 127.0f) * sBanks[slot].volume * SE_GAIN;
     v->on = 1;
+#ifdef PORT_X360
+    v->t0 = Som360_Agora();
+    v->novo = 1;
+#endif
     if (getenv("BT3_SND_VERBOSE") != NULL) {
         fprintf(stderr, "se: play bank %d effect %d: %u Hz, volume %d, pan %d, pitch %d, handle %d\n", slot, id, rate, volume, pan, pitch, handle);
     }
@@ -332,6 +358,7 @@ static void stop(int mask, int id, int handle) {
 }
 
 /* ------------------------------------------------------------ what the game calls (Sony's library functions) */
+#ifndef PORT_X360
 
 /* The fighters' voices in an online match, for a player who chose the second voice set (see snd_adx.c: the match
    itself computes with the default set). The game loads the default set's bank of a fighter (file 0xC7B + fighter
@@ -440,6 +467,7 @@ static void voice_own_bank(int slot) {
     }
     free(b);
 }
+#endif
 
 /* the game's structure: its two pointers are 4 bytes wide in every build (PS2 layout) */
 typedef struct SifDmaData { uint32_t data, addr; int32_t size, mode; } SifDmaData;
@@ -461,11 +489,17 @@ uint32_t sceSifSetDma(SifDmaData *d, int count) {
 int func_002967C0(int block, int cmd, int core, int mode, void *iopAddr, uint32_t spuAddr, uint32_t size) {
     (void)block; (void)core; (void)mode;
     if (cmd == 0x80D0) {
+#ifdef PORT_X360
+        unsigned t0 = Som360_Agora();
+#endif
         if (iopAddr != NULL && spuAddr < SPU_SIZE && size <= SPU_SIZE - spuAddr) {
             if (sStream != NULL) { SDL_LockAudioStream(sStream); }
             memcpy(&sSpu[spuAddr], iopAddr, size);
             if (sStream != NULL) { SDL_UnlockAudioStream(sStream); }
         }
+#ifdef PORT_X360
+        Som360_CustoJogo(1, Som360_Agora() - t0);
+#endif
         return 0;
     }
     return cmd == 0x80F0 ? 1 : 0;
@@ -474,6 +508,9 @@ int func_002967C0(int block, int cmd, int core, int mode, void *iopAddr, uint32_
 /* sceSifCallRpc to SOUNDS.IRX (the only server the game calls this way): one command, answered at once. */
 int sceSifCallRpc(void *client, int fno, int mode, void *send, int sendSize, void *recv, int recvSize, void *cb, void *arg) {
     const int32_t *w = send;
+#ifdef PORT_X360
+    unsigned t0 = Som360_Agora();
+#endif
     int ready = stream_ready(), i;
 
     (void)client; (void)mode; (void)sendSize; (void)cb; (void)arg;
@@ -495,7 +532,9 @@ int sceSifCallRpc(void *client, int fno, int mode, void *send, int sendSize, voi
             sBanks[slot].sq = (const uint8_t *)(uintptr_t)(uint32_t)w[3];
             sBanks[slot].paused = 0;
             if (sBanks[slot].volume == 0.0f) { sBanks[slot].volume = 1.0f; }
+#ifndef PORT_X360
             voice_own_bank(slot);
+#endif
         }
         break;
     }
@@ -539,5 +578,8 @@ int sceSifCallRpc(void *client, int fno, int mode, void *send, int sendSize, voi
     default: break; /* TICK, FIGHTERS and the commands the game never sends */
     }
     if (sStream != NULL) { SDL_UnlockAudioStream(sStream); }
+#ifdef PORT_X360
+    Som360_CustoJogo(0, Som360_Agora() - t0);
+#endif
     return 0;
 }
