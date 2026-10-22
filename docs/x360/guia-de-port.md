@@ -1246,6 +1246,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 
 ### O som no WSL (F6, etapa 2, `plano/F6/02.md`)
 
+- **As referências do `.dat` e do `.swap` do 360 mudaram em 22/10/2026** (main `a14c59a`, a etapa 3 da F6): de
+  `6d30baaf87b1177fb2359a855f8befc0` e `a7cf723fbfaea860fcc3707ad288e755` para `fb489b2f6e00d0e4de7e394f7037540c` e
+  `abbd7589c8425797c4a2639068c9bf54`. A `xaudio2.lib` entra em toda build do 360 (mesmo com o som desligado) e põe 0x90020
+  bytes antes das tabelas do jogo; o `tools/dat_compara.py` confere que as 2.388 posições do `.dat` e as 7.062 do `.swap`
+  andaram exatamente esse deslocamento. Uma build que der o md5 antigo não tem o som; uma que der outro precisa do
+  `dat_compara.py` contra estes.
 - **A referência da `.text` da x86 plana mudou em 22/10/2026** (main `a768ad2`, o merge das etapas 1 e 2 da F6): de
   `cc46fa0752f092fca305bc8bf2e2e54390763af0` para `ee54716ba7d86744152b9b71e6ac8e500f985d97`. A mudança é só de código de
   teste do `headless/` (o rastro de som `som.c` por `--wrap` e o `BT3_SOM_ESTADO` do `roteiro.c`); a etapa 2 comparou os
