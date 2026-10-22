@@ -19,7 +19,8 @@
 #include "gs_core.c"
 
 static uint32_t sBase[1 << 20], sRef[1 << 20];
-static uint8_t sDados[1 << 21];
+static uint32_t sDados32[1 << 19]; /* (em palavras: o IMAGE do jogo vem em quadwords, e o envio por linhas lê palavras) */
+#define sDados ((uint8_t *)sDados32)
 static uint32_t sSemente = 1;
 
 static uint32_t sorteia(void) {
@@ -93,7 +94,7 @@ int main(int argc, char **argv) {
     for (i = 0; i < (1u << 20); i++) {
         sBase[i] = sorteia() * 2654435761u ^ sorteia();
     }
-    for (i = 0; i < sizeof(sDados); i++) {
+    for (i = 0; i < sizeof(sDados32); i++) {
         sDados[i] = (uint8_t)sorteia();
     }
     if (argc > 1 && strcmp(argv[1], "--mede") == 0) {
@@ -123,8 +124,8 @@ int main(int argc, char **argv) {
         }
         bytes = (tw * th * bits + 7) / 8;
         bytes = (bytes + 15) & ~15u; /* em quadwords, como o IMAGE */
-        if (bytes > sizeof(sDados)) {
-            th = (uint32_t)(sizeof(sDados) * 8 / (tw * bits));
+        if (bytes > sizeof(sDados32)) {
+            th = (uint32_t)(sizeof(sDados32) * 8 / (tw * bits));
             bytes = ((tw * th * bits + 7) / 8 + 15) & ~15u;
         }
         /* a referência: o vram_rw por pixel, na ordem do envio */

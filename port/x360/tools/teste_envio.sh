@@ -22,7 +22,7 @@ python3 - "$T" <<'PY' || falha "um mutante não casou"
 import sys
 t = sys.argv[1]
 for nome, a, b in (("linhas", "*dr = d + (r >> 1) * 16 + (r & 1) * 2;", "*dr = d + (r & 1) * 16 + (r >> 1) * 2;"),
-                   ("zera", "for (r = 0; r < 4; r++) {\n            const uint8_t *sr", "for (r = 0; r < 3; r++) {\n            const uint8_t *sr")):
+                   ("zera", "for (r = 0; r < 4; r++) {\n            const uint32_t *sr", "for (r = 0; r < 3; r++) {\n            const uint32_t *sr")):
     p = f"{t}/{nome}/gs_core.c"
     s = open(p, encoding="utf-8").read()
     assert s.count(a) == 1, f"o mutante {nome} não casou"

@@ -856,8 +856,10 @@ static void transfer_begin(void) {
    e 1 ou 2 e 3 do bloco, kCol32). Numa faixa de 4 linhas inteiras do retângulo, cada grupo de 8 pixels alinhado a 8
    enche uma linha inteira: no 360 ela é zerada antes (dcbz128: a linha fica no cache sem ser lida da memória) e escrita
    em seguida, e a origem da faixa seguinte é pedida antes (dcbt), para as faltas dela correrem juntas. A linha r da
-   faixa vai às palavras (r / 2) * 16 + (r % 2) * 2 + {0, 1, 4, 5, 8, 9, 12, 13} da linha de cache. As cópias seguem de 4
-   bytes (a origem só é garantidamente alinhada a 4). Os mesmos bytes nos mesmos lugares que o laço por grupos; a ordem
+   faixa vai às palavras (r / 2) * 16 + (r % 2) * 2 + {0, 1, 4, 5, 8, 9, 12, 13} da linha de cache. As cópias são de uma
+   palavra, lida e gravada como uint32_t: a origem é o IMAGE de um pacote da GIF, em quadwords (o Gs_Gif passa um ponteiro
+   de uint32_t), e a faixa começa num pixel inteiro, então é alinhada a 4; o memcpy de 4 bytes de um uint8_t * o cl faz
+   byte a byte (quatro lbz e quatro stb), sem saber o alinhamento. Os mesmos bytes nos mesmos lugares que o laço por grupos; a ordem
    só muda dentro de uma faixa, onde nenhum par de pixels cai na mesma palavra. BT3_ENVIO_RAPIDO=1: as faixas com o dcbt
    e o dcbz128; 2: sem o dcbz128 (para separar os dois na medida); 0 ou ausente: o laço por grupos de antes. */
 static int sEnvioRapido = -1; /* lida uma vez; desligada por padrão até o console */
@@ -876,30 +878,30 @@ void __dcbz128(int offset, void *base);
 
 /* s: a origem da faixa (4 linhas de tw pixels seguidas); pede: os bytes da origem a pedir antes, a partir de s (a faixa
    seguinte, e esta também na primeira faixa de um pedaço); zera: 1 com o dcbz128 */
-static void envio_faixa32(const uint8_t *s, const uint8_t *pede_de, uint32_t pede, uint32_t tw, uint32_t dbp, uint32_t bw,
+static void envio_faixa32(const uint32_t *s, const uint8_t *pede_de, uint32_t pede, uint32_t tw, uint32_t dbp, uint32_t bw,
                           uint32_t x, uint32_t y, int zera) {
     const uint16_t *in = sIn32[y & 31];
-    uint32_t base = (dbp + (y >> 5) * 32 * bw) << 6, fim = x + tw, lin = tw * 4, o, r;
+    uint32_t base = (dbp + (y >> 5) * 32 * bw) << 6, fim = x + tw, o, r;
 
     for (o = 0; o < pede; o += 128) {
         ENVIO_PEDE(o, pede_de);
     }
-    for (; x < fim; x += 8, s += 32) {
+    for (; x < fim; x += 8, s += 8) {
         uint32_t *d = &sVram[(base + ((x >> 6) << 11) + (in[x & 63] & ~31u)) & 0xFFFFF];
         if (zera) {
             ENVIO_ZERA(d);
         }
         for (r = 0; r < 4; r++) {
-            const uint8_t *sr = s + r * lin;
+            const uint32_t *sr = s + r * tw;
             uint32_t *dr = d + (r >> 1) * 16 + (r & 1) * 2;
-            memcpy(dr, sr, 4);
-            memcpy(dr + 1, sr + 4, 4);
-            memcpy(dr + 4, sr + 8, 4);
-            memcpy(dr + 5, sr + 12, 4);
-            memcpy(dr + 8, sr + 16, 4);
-            memcpy(dr + 9, sr + 20, 4);
-            memcpy(dr + 12, sr + 24, 4);
-            memcpy(dr + 13, sr + 28, 4);
+            dr[0] = sr[0];
+            dr[1] = sr[1];
+            dr[4] = sr[2];
+            dr[5] = sr[3];
+            dr[8] = sr[4];
+            dr[9] = sr[5];
+            dr[12] = sr[6];
+            dr[13] = sr[7];
         }
     }
 }
@@ -1006,7 +1008,7 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
                 if (!primeira) { /* só a seguinte: esta já foi pedida */
                     pede = pede > 4 * gs.tw * 4 ? pede - 4 * gs.tw * 4 : 0;
                 }
-                envio_faixa32(p + i * 4, p + i * 4 + (primeira ? 0 : 4 * gs.tw * 4), pede, gs.tw, dbp, bw, x, y, sEnvioRapido == 1);
+                envio_faixa32((const uint32_t *)(p + i * 4), p + i * 4 + (primeira ? 0 : 4 * gs.tw * 4), pede, gs.tw, dbp, bw, x, y, sEnvioRapido == 1);
                 primeira = 0;
                 i += 4 * gs.tw;
                 gs.tpos += 4 * gs.tw;
