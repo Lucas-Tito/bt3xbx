@@ -12,8 +12,9 @@
  *
  * BT3_SOM=arquivo liga. Uma linha por evento, "V evento", na ordem das chamadas; as leituras de estado seguidas viram
  * uma linha só ("V stat p0=3 p1=0 ..."), e vblanks seguidos que só leram os mesmos estados viram "V-W stat ...".
- * Os players são numerados pela ordem do ADXT_Create (o ponteiro não se compara entre builds). Os endereços que
- * aparecem (tabelas do banco, memória do chip) são os do PS2, iguais nas duas builds. Sem a variável, nada se grava.
+ * Os players são numerados pela ordem do ADXT_Create (o ponteiro não se compara entre builds). Os endereços da memória
+ * do jogo e os da memória do chip são os do PS2, iguais nas duas builds; os da memória do IOP (o IopHeap_Alloc do port
+ * é um malloc do host) não: viram "iopN", pela ordem em que aparecem. Sem a variável, nada se grava.
  *
  * Com -DBT3_GRAVADOR (a build --gravador, rede 4) passa por aqui também o relógio do dispositivo gravador
  * (gravador.c, a cada vblank) e os estragos de propósito do controle negativo (BT3_SABOTA): pitch (+100 cents em todo
@@ -279,6 +280,25 @@ static uint32_t crc32(const uint8_t *p, uint32_t n) {
     return ~c;
 }
 
+/* os endereços da memória do IOP, pela ordem em que aparecem */
+#define MAXIOP 256
+static uint32_t sIop[MAXIOP];
+static int sNIop;
+
+static void iop(char *t, uint32_t a) {
+    int i;
+    for (i = 0; i < sNIop && sIop[i] != a; i++) {
+    }
+    if (i == sNIop && sNIop < MAXIOP) {
+        sIop[sNIop++] = a;
+    }
+    if (i < MAXIOP) {
+        sprintf(t, "iop%d", i);
+    } else {
+        sprintf(t, "iop?");
+    }
+}
+
 #ifdef BT3_GRAVADOR
 extern void Gravador_Vblank(void);                  /* gravador.c */
 extern void Som_SabotaBanco(int mask, int id);      /* grava_se.c */
@@ -322,7 +342,13 @@ int __wrap_sceSifCallRpc(void *client, int fno, int mode, void *send, int sendSi
             int k, n = send != NULL ? sendSize / 4 : 0;
             int len = sprintf(t, "rpc 0x%x tam %d", fno, sendSize);
             for (k = 0; k < n && k < 6; k++) {
-                len += sprintf(t + len, " 0x%x", (unsigned)w[k]);
+                if (fno == 0x3 && k >= 2) { /* SET_BANK: as duas tabelas na memória do IOP */
+                    char a[16];
+                    iop(a, (uint32_t)w[k]);
+                    len += sprintf(t + len, " %s", a);
+                } else {
+                    len += sprintf(t + len, " 0x%x", (unsigned)w[k]);
+                }
             }
             evento(t);
         }
@@ -359,8 +385,9 @@ uint32_t __wrap_sceSifSetDma(void *d, int count) {
         const uint32_t *r = d;
         int i;
         for (i = 0; i < count && i < 8; i++) {
-            char t[96];
-            sprintf(t, "dma 0x%x -> 0x%x tam %d modo %d", r[i * 4], r[i * 4 + 1], (int)r[i * 4 + 2], (int)r[i * 4 + 3]);
+            char t[96], a[16];
+            iop(a, r[i * 4 + 1]);
+            sprintf(t, "dma 0x%x -> %s tam %d modo %d", r[i * 4], a, (int)r[i * 4 + 2], (int)r[i * 4 + 3]);
             evento(t);
         }
     }

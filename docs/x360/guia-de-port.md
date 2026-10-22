@@ -158,6 +158,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `headless.py --alvo x86\|ppc [--rastreio\|--chamadas]` | builds sem janela do port de PC: x86 de 32 bits (clang `-m32`, a referência little-endian com ponteiros de 32 bits como o 360) e PowerPC 32 bits big-endian (GCC cross, roda no `qemu-ppc`). As duas usam float por software (o do PS2), então uma diferença entre elas só pode vir da ordem dos bytes. Na x86r, `SEM_RASTREIO` diz o que compila sem a instrumentação (o checksum de estado e as letras dos nomes, `namefont.c`) |
 | `headless.py --alvo x86\|ppc --gpu [--vu1]` | (F5, etapa 8) o GS em modo gpu com um backend falso (`headless/gpu_falso.c`): o `gs_draw.c` de verdade e os lotes da VU1 pelo caminho dos shaders (`hle_program*`, `GsGpu_DrawVu*`), como no 360, sem desenhar; hash da lista de cada quadro por seção. `--vu1` (só x86) liga na x86 as otimizações que a PPC tem em `PORT_BIG_ENDIAN`. Pastas `x86g`, `x86gv`, `ppcg` |
 | `vu1_perfil.sh` / `vu1_perfil.py` | (F5, etapa 8) o perfil da gravação da VU1 e a prova de que uma mudança nela deixou a lista igual: `x86` (tiques por família, amostras por função e linha), `lista` + `compara` (hash por quadro; `SECOES=2,4,5,6` só a VU1), `ppc` (instruções e acessos à memória de uma janela de quadros no qemu) |
+| `som.sh` / `som.py` / `som_ref.py` | (F6, etapa 2) a rede de testes do som: o rastro de som (`headless/som.c`, `BT3_SOM`, em todas as builds sem janela), o dispositivo gravador (`headless.py --gravador`, `BT3_SOUND=1 BT3_GRAVADOR=arquivo`), o teste das amostras (`--teste-som`) contra a referência independente em Python; `roteiros.sh` com `SOM=1` liga as redes 2 e 4, `som.sh amostras` a 3, `som.sh controles NOME` os controles negativos (`plano/F6/02.md`) |
 | `f1.sh` | o ciclo inteiro: builds, rastreio, mapa, luta na PPC, comparações. `F1_SEM_RASTREIO=1` reaproveita o rastreio (que leva cerca de 1 h) |
 | `menus.sh` | o ciclo dos menus (F3, etapa 3): boot até as demos sem `BT3_DEMO`, PPC sem mapa com os arquivos que a x86 lê, lutas das demos e memória num quadro comparadas |
 | `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X num ciclo de 90 leituras) entra no menu principal pelo New Game, sem criar o save (responde "não" ao "criar o save?"); a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Os testes novos usam os roteiros de controle (abaixo) |
@@ -1225,6 +1226,24 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Custou uma rodada (o script em série seguiu para a PPC com as listas vazias). O `vu1_perfil.sh` agora faz `mkdir -p` da
   pasta; numa máquina nova, confira as pastas fora do repositório que os scripts pressupõem (`~/perfil`, `~/referencias`)
   e olhe o fim do log da primeira rodada antes de deixar a série correr.
+
+### O som no WSL (F6, etapa 2, `plano/F6/02.md`)
+
+- **Endereço que vem de `malloc` do host não se compara entre builds.** O rastro de som gravava os endereços das tabelas
+  do banco na memória do IOP; o `IopHeap_Alloc` do port é um `malloc`, e o rastro da x86 com o gravador saiu diferente do
+  da x86 sem ele só por isso (custou uma rodada). Num rastro que se compara, endereço do PS2 (memória do jogo, do chip)
+  fica como está; o do host vira um número pela ordem em que aparece.
+- **Os stubs `static inline` não se desviam por `--wrap`.** O áudio da SDL de teste (`headless/SDL3/SDL.h`) é `static
+  inline`: o compilador põe a resposta dentro do `snd_adx.o`. Para gravar o som sem mudar os objetos da build plana, o
+  gravador é outra build (`--gravador`, `-DBT3_GRAVADOR` troca os stubs por declarações), e o rastro, que só olha as
+  chamadas do jogo, fica na plana.
+- **O `getenv` dos arquivos do `port/src/gs/` é o `Port_GetEnv`, guardado por ponto de chamada** (`gs_internal.h`): um
+  teste que inclui esses arquivos precisa definir o `Port_GetEnv` e pôr a variável antes da primeira chamada, que a
+  resposta não muda depois.
+- **Dois agentes no mesmo clone do WSL: um worktree para cada.** `git worktree add --detach` com links para `asm`,
+  `assets`, `disc`, `gamedata` e uma cópia de `port/build/gen/{data,gs}`: as builds de um não apagam as do outro (o
+  `roteiros.sh` exige a build do HEAD), e o branch do clone principal não muda. A trava (`flock ~/wsl.lock`) continua
+  para o emulador.
 
 ---
 
