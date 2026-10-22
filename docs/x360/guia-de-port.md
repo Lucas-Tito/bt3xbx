@@ -1611,3 +1611,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Um bundle para o WSL vai dentro do script, em base64** (`base64 -d > ~/x.bundle <<'FIM'` ... `FIM`, e o script pelo stdin do
   `wsl -- bash -s`): no `ssh bt3win "wsl ... bash -c 'cat > ~/x.bundle'"` o `>` é do `cmd` do Windows, que responde "The system cannot
   find the path specified".
+
+### O estado e o fecho da VU1 (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 15)
+
+- **Antes de desenhar uma memória de resultado, conte por qual campo a chave falha.** A memória de uma vaga do `draw_state` acertava
+  49% das chamadas; a contagem por campo mostrou que 88% dos erros eram só o contexto do GS (as duas camadas dos programas 0 e 1
+  alternam entre o 0 e o 1 a cada chamada). Uma vaga por contexto passou a 86%. Sem a contagem, o caminho óbvio era alargar a chave
+  ou desistir.
+- **Uma memória de resultado se prova com uma chave que roda o caminho completo em todo acerto e compara** (o
+  `BT3_VU_ESTADO_CONFERE`): a lista igual só diz que nada mudou nos roteiros de prova, a conferência diz que todo acerto daria o
+  mesmo. Sabote tirando um campo da chave (o TEX0 tirou 1,3 milhão de acertos certos para errados).
+- **No Deck, o `pkill -f PADRÃO` dentro do mesmo `ssh` cujo comando contém o PADRÃO mata a própria sessão** (sai com 255): use a
+  classe de um caractere (`pkill -f "provas-estad[o].sh"`) ou os PIDs.
+- **O `git fetch REPO RAMO:RAMO` recusa o ramo que está em uso** ("refusing to fetch into branch ... checked out"): o script faz
+  `git checkout -q --detach` antes. E envie os commits ao remoto `deck` antes de disparar, ou o script roda o HEAD velho.
+- **A `ppcg` pede a x86 plana do mesmo commit** (o mapa das tabelas sai dos `.i` dela; sem isso o `headless.py --alvo ppc --gpu` sai
+  com 1 dizendo "a build x86 é de outra origem"): nas provas de antes e depois, `--alvo x86` antes do `--alvo ppc --gpu` de cada lado.
+- **A pasta de dados dos roteiros para as listas da PPC sai do `roteiros.sh f5_treino f5_duelo` sem `PPC`, `SEMMAPA` nem `IMG`** (as
+  duas x86, o `gdb`, o rastreio, o mapa e o `conv_tool`), com as builds `x86` e `x86r` do HEAD: uns 10 minutos no Deck.
