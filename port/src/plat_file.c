@@ -208,6 +208,20 @@ int ADXF_ReadNw(void *h, int nsct, void *buf) {
     if (nsct > f->sizeSct - f->posSct) {
         nsct = f->sizeSct - f->posSct;
     }
+#ifdef PORT_X360
+    {
+        /* (F6, etapa 6) The movie's own reads: the decoder reads the file itself (plat_movie.c) and the bytes the game
+           reads here go only to sceMpegDemuxPss, which ignores them. With the movie drawn on the 360 (BT3_FILME=1,
+           port/x360/src/f2/filme360.c) they no longer go to the disc: the same sectors counted and the same position. */
+        extern int Filme360_Ligado(void);
+        size_t n = strlen(f->rel);
+        if (n > 4 && strcmp(&f->rel[n - 4], ".PSS") == 0 && Filme360_Ligado()) {
+            f->posSct += nsct;
+            f->stat = STAT_READEND;
+            return nsct;
+        }
+    }
+#endif
     got = Port_FileReadAt(f->rel, (long)f->posSct * SECTOR, buf, (size_t)nsct * SECTOR);
     memset((uint8_t *)buf + got, 0, (size_t)nsct * SECTOR - got);
     f->posSct += nsct;

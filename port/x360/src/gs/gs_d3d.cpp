@@ -18,7 +18,8 @@
  *     própria cor, que guarda min(A / 0x80, 1) e chega a 1 exatamente com o bit 7 ligado. Os efeitos nativos (F5,
  *     etapa 7, segunda parte; nat_* abaixo e docs/x360/formatos/gs-nativos.md) leem os ids do mesmo alfa, exatos de 0
  *     a 0x80: a cópia dos ids é um Resolve da cor, a passada de tabela lê os ids ou a profundidade do alvo, o contorno
- *     lê os ids. As imagens copiadas direto para a memória de vídeo (filmes) ficam para a F6: contadas, não desenhadas.
+ *     lê os ids. As imagens copiadas direto para a memória de vídeo (filmes) são contadas, não desenhadas; com BT3_FILME=1
+ *     (F6, etapa 6; filme_* abaixo e port/x360/src/f2/filme360.c) o filme vem pronto numa textura e é desenhado no lugar.
  *   - Os programas de vértice (VU1, F5, etapa 6): as três famílias, vu0 (os lutadores), vu4 (o estágio) e vu6 (a
  *     sombra no chão) (vs_vu0, vs_vu4 e vs_vu6 em gs_d3d.hlsl), são desenhadas com os vértices e os índices do quadro
  *     copiados para um par de buffers da GPU (dois pares, alternados por quadro). BT3_VU_VERTS=65536 vértices por par
@@ -93,6 +94,7 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "gsz_ps.h"     /* (F5, etapa 7, segunda parte) ps_gsz, ps_tabela, ps_contorno */
 #include "tabela_ps.h"
 #include "contorno_ps.h"
+#include "filme_ps.h"   /* (F6, etapa 6) ps_filme */
 #include "vu0_vs.h"
 #include "vu4_vs.h"
 #include "vu6_vs.h"
@@ -125,7 +127,7 @@ static unsigned sTamAlvo; /* bytes de uma textura de alvo (tam_alvo) */
 
 static D3DDevice *sDev;
 static D3DVertexShader *sVsGs, *sVsCopia;
-static D3DPixelShader *sPsGs, *sPsCopia;
+static D3DPixelShader *sPsGs, *sPsCopia, *sPsFilme;
 static D3DVertexDeclaration *sDeclGs, *sDeclCopia;
 /* F5, etapa 6: as três famílias da VU1 (GsDraw.vu 1 vu0, os lutadores; 2 vu4, o estágio; 3 vu6, a sombra no chão): os
    shaders, a declaração comum (três FLOAT4, 48 bytes) e os pares de buffers da GPU com os vértices e os índices de um
@@ -784,13 +786,13 @@ static void picos_desenho(const GsQuadro *q, double msFim, double msPresent, int
    "entradas na EDRAM" são a troca e a limpeza, e a "volta da cor" o desenho do conteúdo do alvo de volta por cima. */
 enum {
     T_OUTROS, T_COMUM, T_VU0, T_VU4, T_VU6, T_PROF, T_CONTORNO, T_TAB_IDS, T_TAB_PROF, T_IDS, T_FBA, T_DATE, T_COR_RES,
-    T_COR_ENTRA, T_COR_VOLTA, T_TELA, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
+    T_COR_ENTRA, T_COR_VOLTA, T_TELA, T_FILME, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
     T_VU_COPIA = T_GPU_N, T_PRESENT, T_N
 };
 static const char *const kTempoNome[T_N] = {"outros", "comum", "vu0", "vu4", "vu6", "profundidade", "contorno",
                                             "tabela pelos ids", "tabela pela profundidade", "cópia dos ids", "FBA",
                                             "DATE", "resolves de cor", "entradas na EDRAM", "volta da cor", "tela",
-                                            "medição",
+                                            "filme", "medição",
                                             "cópia da VU1", "Present"};
 #define T_MARCAS 4096 /* por quadro; um quadro com mais é descartado (contado); 136 KB nos dois buffers */
 static volatile unsigned __int64 sMarcaGpu[2 * T_MARCAS]; /* o relógio quando a GPU chegou à marca (tempo_cb) */
@@ -2262,6 +2264,7 @@ static int d3d_init(void) {
         FAILED(sDev->CreatePixelShader((const DWORD *)kGsZPs, &sPsGsZ)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kTabelaPs, &sPsTabela)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kContornoPs, &sPsContorno)) ||
+        FAILED(sDev->CreatePixelShader((const DWORD *)kFilmePs, &sPsFilme)) ||
         FAILED(sDev->CreateVertexDeclaration(elemCopia, &sDeclCopia)) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kVu0Vs, &sVsVu[0])) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kVu4Vs, &sVsVu[1])) ||
@@ -3150,6 +3153,190 @@ static void nat_entra(int t, uint32_t n, int *cur) {
     }
 }
 
+/* ---- o filme direto (F6, etapa 6, BT3_FILME=1; port/x360/src/f2/filme360.c, docs/x360/plano/F6/06.md, seção 5) ------
+
+   Quatro vagas, cada uma uma textura D3DFMT_LIN_L8 de 512 x 672 pelo XG (Y nas linhas 0 a 447; Cb nas colunas 0 a 255 e
+   Cr nas 256 a 511 das linhas 448 a 671), 336 KB, criadas na primeira imagem de um filme e soltas depois do fim dele.
+   A imagem n vai para a vaga n % 4. A thread do jogo (GsD3d_FilmeVaga) espera a vaga ficar livre, escreve o número, a
+   marca ocupada e copia os planos; a gravação leva o número no desenho do quadro (GsGpu_FbUpload, `first`); esta
+   thread (a dona do dispositivo) desenha a vaga no alvo pelo ps_filme e, no fim do quadro, guarda a cerca dela. A vaga
+   fica livre quando a cerca passou (a GPU leu), ou quando uma imagem mais nova já foi desenhada e ela não (uma imagem
+   pulada nunca vai ser desenhada: a lista anda em ordem). O jogo nunca pergunta à GPU (IsBusy é da dona). Quatro vagas
+   são quatro imagens de folga, oito campos: o desenho anda no máximo dois quadros atrás do jogo. Uma vaga ainda ocupada
+   depois de 100 ms é escrita assim mesmo (contada: a imagem pode sair trocada, nunca trava). */
+#define FILME_VAGAS 4
+#define FILME_W 512
+#define FILME_H 448
+static TexXg *sFilmeTex[FILME_VAGAS];
+static volatile unsigned sFilmeImagemDa[FILME_VAGAS]; /* (jogo) o número da imagem na vaga */
+static volatile LONG sFilmeOcupada[FILME_VAGAS];      /* (jogo põe 1, desenho põe 0) escrita e a GPU ainda não a leu */
+static unsigned sFilmeDesenhadaDa[FILME_VAGAS];       /* (desenho) o número que ele desenhou dela */
+static DWORD sFilmeCerca[FILME_VAGAS];                /* (desenho) a cerca do quadro que a desenhou */
+static int sFilmeNoQuadro[FILME_VAGAS];               /* (desenho) desenhada no quadro atual: recebe a cerca do fim */
+static unsigned sFilmeUltima;                         /* (desenho) o maior número desenhado */
+/* 0 sem vagas; 1 vivas; 2 o filme fechou (o jogo pediu para soltar); 3 o desenho está soltando */
+static volatile LONG sFilmeEstado;
+static unsigned sFilmeSoltarQuadros, sFilmeDes, sFilmeTrocadas, sFilmePuladas; /* (desenho) */
+static unsigned sFilmeEsperas, sFilmeForcadas, sFilmeFalhou;                    /* (jogo) */
+
+/* (thread do jogo) a vaga da imagem `imagem`, livre, para os planos; 0 sem memória (a imagem não aparece) */
+extern "C" int GsD3d_FilmeVaga(unsigned imagem, unsigned char **dados, unsigned *pitch, double *msEspera) {
+    int k;
+    *msEspera = 0.0;
+    if (sDev == NULL) {
+        return 0; /* (sem o backend da GPU ninguém desenharia nem soltaria as vagas) */
+    }
+    for (;;) {
+        LONG e = sFilmeEstado;
+        if (e == 1) {
+            break;
+        }
+        if (e == 2) {
+            if (InterlockedCompareExchange(&sFilmeEstado, 1, 2) == 2) {
+                break; /* (outro filme antes de o desenho soltar: as vagas ficam) */
+            }
+            continue;
+        }
+        if (e == 3) {
+            Sleep(1); /* (o desenho está soltando as do filme anterior) */
+            continue;
+        }
+        if (sFilmeFalhou) {
+            return 0;
+        }
+        for (k = 0; k < FILME_VAGAS; k++) {
+            sFilmeTex[k] = xg_cria(FILME_W, FILME_H * 3 / 2, D3DFMT_LIN_L8);
+            if (sFilmeTex[k] == NULL) {
+                while (k-- > 0) {
+                    xg_libera(&sFilmeTex[k]->cab);
+                    sFilmeTex[k] = NULL;
+                }
+                sFilmeFalhou = 1;
+                Diario_Escrever("gs_d3d: filme: SEM MEMÓRIA para as %d vagas: o filme segue sem imagem", FILME_VAGAS);
+                return 0;
+            }
+            sFilmeImagemDa[k] = 0;
+            sFilmeOcupada[k] = 0;
+            sFilmeDesenhadaDa[k] = 0;
+            sFilmeNoQuadro[k] = 0;
+        }
+        {
+            MEMORYSTATUS m;
+            GlobalMemoryStatus(&m);
+            Diario_Escrever("gs_d3d: filme: %d vagas L8 de %u x %u (pitch %u, %u KB cada); %u KB livres", FILME_VAGAS, FILME_W,
+                            FILME_H * 3 / 2, sFilmeTex[0]->pitch, sFilmeTex[0]->bytes >> 10, (unsigned)(m.dwAvailPhys >> 10));
+        }
+        sFilmeEsperas = sFilmeForcadas = 0;
+        InterlockedExchange(&sFilmeEstado, 1);
+        break;
+    }
+    k = (int)(imagem % FILME_VAGAS);
+    if (sFilmeOcupada[k]) {
+        LARGE_INTEGER t0;
+        QueryPerformanceCounter(&t0);
+        sFilmeEsperas++;
+        while (sFilmeOcupada[k]) {
+            if (ms_desde(&t0) > 100.0) {
+                sFilmeForcadas++;
+                break;
+            }
+            Sleep(1);
+        }
+        *msEspera = ms_desde(&t0);
+    }
+    sFilmeImagemDa[k] = imagem;
+    __lwsync(); /* (o número antes da marca: quem vê a vaga ocupada vê o número novo) */
+    sFilmeOcupada[k] = 1;
+    *dados = (unsigned char *)sFilmeTex[k]->dados;
+    *pitch = sFilmeTex[k]->pitch;
+    return 1;
+}
+
+/* (thread do jogo) o filme fechou: o desenho solta as vagas quando a GPU terminar com elas */
+extern "C" void GsD3d_FilmeFim(void) {
+    sFilmeFalhou = 0;
+    sFilmeSoltarQuadros = 0;
+    InterlockedCompareExchange(&sFilmeEstado, 2, 1);
+}
+
+/* native 100/101 com o número de uma imagem do filme: a vaga no alvo, de (0, 0) a (512, 448) do GS, no lugar em que o PC
+   copia a memória de vídeo (depois da limpeza, antes do fade). Sem mistura, sem profundidade, alfa 1 (0x80 ou mais). */
+static void filme_desenha(const GsDraw *d, uint32_t n, int *cur) {
+    unsigned im = d->first;
+    int k = (int)(im % FILME_VAGAS), w = esc_px(FILME_W, sMeios), h = esc_px(FILME_H, sMeios);
+    TexXg *x = sFilmeTex[k];
+    if (x == NULL) {
+        sConta.semFb++;
+        return;
+    }
+    if (sFilmeImagemDa[k] != im) {
+        sFilmeTrocadas++; /* (o jogo já pôs outra: a vaga voltou cedo demais; desenhada assim mesmo) */
+    }
+    nat_entra(d->target, n, cur);
+    sQ->targets[d->target].cleared = 1;
+    tempo_poe(T_FILME);
+    sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    quad(&x->cab, sPsFilme, sAlvoW, sAlvoH, 0.0f, 0.0f, (float)w, (float)h, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+    sDev->SetTexture(0, NULL);
+    sCurTex = (GsTex)-1;
+    ret_une(&sSujo, 0, 0, w, h);
+    sFilmeDesenhadaDa[k] = im;
+    sFilmeNoQuadro[k] = 1;
+    if (im > sFilmeUltima) {
+        sFilmeUltima = im;
+    }
+    sFilmeDes++;
+}
+
+/* (desenho, no fim do quadro, com a cerca dele) as vagas desenhadas recebem a cerca; as que a GPU já leu e as puladas
+   ficam livres; depois do fim do filme, todas soltas quando livres (ou oito quadros depois, esperando a GPU) */
+static void filme_varre(DWORD cerca) {
+    int k, livres = 0;
+    LONG e = sFilmeEstado;
+    if (e != 1 && e != 2) {
+        return;
+    }
+    for (k = 0; k < FILME_VAGAS; k++) {
+        if (sFilmeNoQuadro[k]) {
+            sFilmeCerca[k] = cerca;
+            sFilmeNoQuadro[k] = 0;
+        }
+        if (sFilmeOcupada[k]) {
+            unsigned im;
+            __lwsync(); /* (a marca antes do número: ver GsD3d_FilmeVaga) */
+            im = sFilmeImagemDa[k];
+            if (sFilmeDesenhadaDa[k] == im) {
+                if (!sDev->IsFencePending(sFilmeCerca[k])) {
+                    sFilmeOcupada[k] = 0;
+                }
+            } else if (im < sFilmeUltima) {
+                sFilmePuladas++;
+                sFilmeOcupada[k] = 0;
+            }
+        }
+        livres += !sFilmeOcupada[k];
+    }
+    if (e == 2 && (livres == FILME_VAGAS || ++sFilmeSoltarQuadros >= 8) &&
+        InterlockedCompareExchange(&sFilmeEstado, 3, 2) == 2) {
+        sDev->SetTexture(0, NULL);
+        esquece_estado();
+        for (k = 0; k < FILME_VAGAS; k++) {
+            if (sFilmeTex[k] != NULL) {
+                xg_espera(&sFilmeTex[k]->cab);
+                xg_libera(&sFilmeTex[k]->cab);
+                sFilmeTex[k] = NULL;
+            }
+        }
+        Diario_Escrever("gs_d3d: filme: %u imagens desenhadas, %u trocadas, %u puladas; o jogo esperou a vaga %u vezes (%u "
+                        "forçadas); as vagas soltas (%s)", sFilmeDes, sFilmeTrocadas, sFilmePuladas, sFilmeEsperas,
+                        sFilmeForcadas, livres == FILME_VAGAS ? "todas livres" : "oito quadros depois do fim");
+        sFilmeDes = sFilmeTrocadas = sFilmePuladas = 0;
+        InterlockedExchange(&sFilmeEstado, 0);
+    }
+}
+
 /* native 4 (GfxPost_CopyAlphaToDepth): o alfa do alvo agora, para o contorno e as tabelas pelos ids. A imagem do jogo
    inteira (fora do que já foi desenhado, a EDRAM está limpa: zero, como no PC) */
 static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
@@ -3674,7 +3861,14 @@ static void frame_end(void) {
     for (n = 0; n < q->drawCount; n++) {
         const GsDraw *d = &q->draws[n];
         if (d->native >= 100) {
-            sConta.semFb++;
+            /* (F6, etapa 6) a imagem do filme: com BT3_FILME=1, a vaga com o número dela; senão contada, como antes */
+            if (d->first != 0 && (sFilmeEstado == 1 || sFilmeEstado == 2)) {
+                gGsD3dEtapa = "fim do quadro: filme";
+                filme_desenha(d, n, &cur);
+                gGsD3dEtapa = "fim do quadro: refazendo a lista";
+            } else {
+                sConta.semFb++;
+            }
             continue;
         }
         if (d->native == 5) {
@@ -3813,7 +4007,7 @@ static void frame_end(void) {
     sDev->SetStreamSource(0, NULL, 0, 0);
     sDev->SetIndices(NULL);
     esquece_estado();
-    sDev->InsertFence();
+    filme_varre(sDev->InsertFence()); /* (F6, etapa 6) as vagas do filme que a GPU já soltou */
     if (q->dividido && sProfFilaD >= 0) {
         /* (degrau 2, etapa 4) as profundidades das vagas que a gravação deste quadro reaproveitou (a cor e as texturas vêm
            pelo solta, do gs_draw.c, logo depois deste frame_end) */
