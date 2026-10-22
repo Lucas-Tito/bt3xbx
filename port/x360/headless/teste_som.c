@@ -10,7 +10,8 @@
  *   vag ARQUIVO PARTE TAM SAIDA ESTRAGA INI...   as amostras do banco (a parte das amostras em PARTE, TAM bytes), cada
  *                                      uma de INI (deslocamento na parte) até a bandeira de fim, todas seguidas em SAIDA;
  *                                      ESTRAGA >= 0 troca esse byte da parte antes (controle negativo)
- * Responde uma linha por trabalho: "adx ARQUIVO c TAXA AMOSTRAS LACO INI FIM C1 C2 ANTES DEPOIS" (ou "recusado") e
+ * Responde uma linha por trabalho: "adx ARQUIVO c TAXA AMOSTRAS LACO INI FIM C1 C2 ANTES DEPOIS" (ou "recusado"; com
+ * -DPORT_FLUXO_BLOCOS, mais "K STAT LEFT": a vista depois de K vblanks e do cabeçalho, F6 etapa 5) e
  * "vag ARQUIVO N1 N2 ..." (amostras de cada uma; -1 se o port recusou).
  */
 #include <stdint.h>
@@ -35,7 +36,7 @@ int Port_FilePath(int ptid, int flid, const char *fname, char *out, int size) {
     return 1;
 }
 
-extern int Som_DecodificaAdx(const char *path, long depois, FILE *saida, int estraga_coef, long info[10]);
+extern int Som_DecodificaAdx(const char *path, long depois, FILE *saida, int estraga_coef, long info[13]);
 extern long Som_DecodificaVag(const uint8_t *smp, uint32_t tam, uint32_t ini, FILE *saida, long estraga);
 
 static char sLinha[1 << 20];
@@ -51,7 +52,7 @@ int main(void) {
             s = strtok(NULL, " \t\r\n");
         }
         if (n == 5 && strcmp(tok[0], "adx") == 0) {
-            long info[10];
+            long info[13];
             FILE *o = fopen(tok[2], "wb");
             int r;
             if (o == NULL) {
@@ -63,8 +64,12 @@ int main(void) {
             if (r != 0) {
                 printf("adx %s recusado\n", tok[1]);
             } else {
-                printf("adx %s %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld\n", tok[1], info[0], info[1], info[2], info[3], info[4],
+                printf("adx %s %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld", tok[1], info[0], info[1], info[2], info[3], info[4],
                        info[5], info[6], info[7], info[8], info[9]);
+#ifdef PORT_FLUXO_BLOCOS
+                printf(" %ld %ld %ld", info[10], info[11], info[12]); /* (o caminho do 360: K, stat e left da vista) */
+#endif
+                printf("\n");
             }
         } else if (n >= 6 && strcmp(tok[0], "vag") == 0) {
             FILE *f = fopen(tok[1], "rb"), *o = fopen(tok[4], "wb");

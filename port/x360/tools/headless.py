@@ -24,6 +24,8 @@
                                                                       -> port/build/<alvo>a/bt3_<alvo>a
     --teste-som  (F6, etapa 2, rede 3) só o teste das amostras (port/x360/headless/teste_som.c), sem o jogo: os
                  decodificadores do port como o gravador os compila    -> port/build/<alvo>t/teste_som
+    --fluxo      (F6, etapa 5, com --teste-som) o snd_adx.c com -DPORT_FLUXO_BLOCOS, o caminho do 360: o arquivo lido em
+                 blocos pela thread de port/x360/src/som/fluxo.c       -> port/build/<alvo>tf/teste_som
 O rastro de som (port/x360/headless/som.c, F6 rede 2: BT3_SOM=arquivo) entra em todas as builds, por --wrap.
 
 As duas usam a aritmética em software da build de PC (-msoft-float chama port/src/softfloat_ps2.c): uma
@@ -56,15 +58,15 @@ SEM_RASTREIO = {"state", "namefont"}
 
 
 class Alvo:
-    def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False, gravador=False, teste_som=False):
+    def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False, gravador=False, teste_som=False, fluxo=False):
         self.nome, self.rastreio, self.chamadas, self.gpu, self.vu1 = nome, rastreio, chamadas, gpu, vu1
-        self.gravador, self.teste_som = gravador, teste_som
+        self.gravador, self.teste_som, self.fluxo = gravador, teste_som, fluxo
         self.be = nome == "ppc"  # big-endian: campos de bits na ordem do PS2 (bitfields.py)
         # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
         # diverge no quadro 2755).
         self.opt = "-O2"
         pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
-            ("a" if gravador else "") + ("t" if teste_som else "")
+            ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "")
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
         self.exe = self.b / f"bt3_{pasta}"
@@ -146,7 +148,8 @@ def flags_som(alvo):
     """As do som do port nesta build (as do laço do port/src/gs abaixo), com o gravador."""
     fma = ["-ffp-contract=off"] if alvo.be else []
     return alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w", "-DBT3_GRAVADOR"] + \
-        alvo.hard + fma + ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"]
+        alvo.hard + fma + ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"] + \
+        (["-DPORT_FLUXO_BLOCOS"] if alvo.fluxo else [])
 
 
 def construir_teste_som(alvo):
@@ -156,7 +159,8 @@ def construir_teste_som(alvo):
     objs, falhas = [], []
     for nome, src in [("gs_snd_adx", GRAVA["snd_adx"]), ("gs_snd_se", GRAVA["snd_se"]),
                       ("x360_gravador", "port/x360/headless/gravador.c"), ("pc_plat_sndstate", "port/src/plat_sndstate.c"),
-                      ("x360_teste_som", "port/x360/headless/teste_som.c")]:
+                      ("x360_teste_som", "port/x360/headless/teste_som.c")] + \
+            ([("x360_fluxo", "port/x360/src/som/fluxo.c")] if alvo.fluxo else []):
         o = alvo.obj / f"{nome}.o"
         r = compile_ee(flags_som(alvo), src, o, ee=False, be=alvo.be)
         (falhas.append((src, r)) if r.returncode else objs.append(o))
@@ -165,7 +169,7 @@ def construir_teste_som(alvo):
     if falhas:
         sys.exit(1)
     exe = alvo.b / "teste_som"
-    r = run(alvo.ld + ["-no-pie", "-o", exe] + objs + ["-lm"])
+    r = run(alvo.ld + ["-no-pie", "-o", exe] + objs + ["-lm"] + (["-lpthread"] if alvo.fluxo else []))
     if r.returncode:
         print("link FALHOU:", r.stderr.strip()[-400:])
         sys.exit(1)
@@ -492,7 +496,10 @@ def main():
     ap.add_argument("--vu1", action="store_true", help="(x86 com --gpu) liga na x86 a otimização da gravação da VU1 que a PPC já tem (BT3_TESTE_VU1)")
     ap.add_argument("--gravador", action="store_true", help="(F6, rede 4) o som com o dispositivo gravador")
     ap.add_argument("--teste-som", action="store_true", help="(F6, rede 3) só o teste das amostras dos decodificadores")
+    ap.add_argument("--fluxo", action="store_true", help="(F6, etapa 5, com --teste-som) o ADX lido em blocos, como no 360")
     a = ap.parse_args()
+    if a.fluxo and not a.teste_som:
+        sys.exit("--fluxo só vale com --teste-som")
     if (a.gravador or a.teste_som) and (a.rastreio or a.chamadas or a.gpu):
         sys.exit("--gravador e --teste-som não se combinam com --rastreio, --chamadas nem --gpu")
     if a.rastreio and a.alvo != "x86":
@@ -501,7 +508,7 @@ def main():
         sys.exit("--gpu não se combina com --rastreio nem com --chamadas")
     if a.vu1 and not (a.gpu and a.alvo == "x86"):
         sys.exit("--vu1 só vale com --alvo x86 --gpu (na PPC a otimização já vem com o PORT_BIG_ENDIAN)")
-    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1, a.gravador, a.teste_som))
+    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1, a.gravador, a.teste_som, a.fluxo))
 
 
 main()

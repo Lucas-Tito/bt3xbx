@@ -1326,6 +1326,29 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `BT3_SOM360` (só o `c89.py` do console o define) no mesmo número de linhas: o texto pré-processado do WSL fica igual e
   os objetos da x86 plana não mudam (nenhuma `.text` a refazer).
 
+### Efeitos e fluxos no 360 (F6, etapas 4 e 5, `plano/F6/04.md` e `05.md`)
+
+- **O estado que o jogo vê pode esperar uma leitura sem deixar de ser determinístico.** A duração de um fluxo vinha do
+  cabeçalho lido na thread do jogo no início. Para tirar a leitura dali sem mudar o que o jogo vê, a vista começa com um
+  valor grande conhecido (`VISTA_PENDENTE`) que o tique de sempre desconta; quando o cabeçalho chega, a duração menos o
+  que já foi descontado é o mesmo estado da leitura no começo. Só o caso "chegou depois do fim" difere, e ele se conta.
+  Serve para qualquer dado assíncrono que o estado do jogo consulta.
+- **Leitura assíncrona que se autocorrige esconde o adiantado errado.** Uma falta pede o bloco certo e o dado chega certo:
+  um teste só de bytes passa com o adiantado quebrado (o do começo do laço, a sobra do bloco). O teste do `fluxo.c` conta
+  as faltas numa leitura em sequência com folga e exige zero; os mutantes desses dois só foram acusados assim.
+- **Uma espera fixa num teste de tempo é falha intermitente.** A folga de 1,5 ms antes de cada bloco deu uma falta em
+  uma de três rodadas (o escalonador); com 5 ms, quinze seguidas sem falta. Asserção de "chegou antes" pede folga larga,
+  e o teste roda três vezes no `teste_som360.sh`.
+- **Uma tabela de fluxos precisa de lugar para os que estão fechando.** O fechar é da thread de leitura (o arquivo se
+  fecha lá); com 20 abertos e a tabela de 24, os fechamentos pendentes a enchiam no teste. 32 lugares para 16 players.
+- **Comparar avisos do `cl` entre duas builds: tirar as linhas do `wine`.** A primeira build num prefixo novo escreve
+  `wine: created the configuration directory '/root/.wine'` nos `.txt` de alguns fontes (os que compilaram primeiro);
+  sete "avisos diferentes" eram isso. `grep -v '^wine: '` dos dois lados.
+- **Provar que a build plana do WSL não muda pelo texto pré-processado (`gcc -E -P`), sem as marcas de linha.** Código
+  novo só dentro de `#ifdef` muda os números das linhas, não o texto; com `-P` o md5 do antes e do depois é o mesmo, para
+  cada combinação de definições do WSL (com e sem `BT3_GRAVADOR` e `PORT_BIG_ENDIAN`). A comparação dos objetos sem a
+  depuração na rodada do WSL confirma. Um `#else` que repete o original evita o `{ }` a mais que mudaria o texto.
+
 ---
 
 ## 7. Lista de passos para um port novo
