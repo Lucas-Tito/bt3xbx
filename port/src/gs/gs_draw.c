@@ -1157,14 +1157,23 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     float us, vs;
     uint32_t i, k, flag;
 
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_PROG);
+#endif
     if (count < 3 || gsVuVertCount + count > CAP_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > CAP_VU_IDX || gsDrawCount == CAP_DRAWS ||
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
     if (!draw_state(ctx, 0, 0, 3, &d, &us, &vs)) {
+#ifdef PORT_X360
+        GS_VU_MARCA(GS_FAM_V_ESTADO);
+#endif
         return;
     }
     date_snapshot(&d);
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_ESTADO);
+#endif
     memset(&u, 0, sizeof(u));
     memcpy(u.boneA, &consts[0x0C * 4], 64);  /* world -> shadow camera */
     u.pivotA[0] = consts[0x10 * 4];          /* texture scale */
@@ -1174,6 +1183,9 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     u.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
     u.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
     u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_CONST);
+#endif
     d.vu = 3;
     d.first = gsVuIdxCount;
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles, without the flagged ones */
@@ -1186,6 +1198,9 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
         }
     }
     d.count = gsVuIdxCount - d.first;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_IDX);
+#endif
     if (d.count == 0) {
         return;
     }
@@ -1195,6 +1210,14 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
         memcpy(o + 4, &vertices[i * 16 + 8], 16);  /* colour */
         memset(o + 8, 0, 16);
     }
+#ifdef PORT_X360
+    if (gGsVuMede) {
+        int c_ = 0;
+        GS_VU_MARCA(GS_FAM_V_COPIA + c_);
+        gGsFamVezes[GS_FAM_V_COPIA + c_]++;
+        gGsFamVuVet[c_] += count;
+    }
+#endif
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
@@ -1203,6 +1226,9 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
 #endif
         last->count += d.count;
+#ifdef PORT_X360
+        GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
         return;
     }
     d.uniform = (int)gsVuUniCount;
@@ -1211,6 +1237,9 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
 }
 
 /* Vertex program 4 as a shader: one strip of stage geometry (see shaders/vu4.vert). Vertices: position, colour
@@ -1224,19 +1253,31 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     float us, vs;
     uint32_t i, k;
 
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_PROG);
+#endif
     if (count < 3 || gsVuVertCount + count > CAP_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > CAP_VU_IDX || gsDrawCount == CAP_DRAWS ||
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
     if (!draw_state(ctx, 0, 0, 2, &d, &us, &vs)) {
+#ifdef PORT_X360
+        GS_VU_MARCA(GS_FAM_V_ESTADO);
+#endif
         return;
     }
     date_snapshot(&d);
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_ESTADO);
+#endif
     memset(&u, 0, sizeof(u));
     memcpy(u.screen, &consts[0], 64);
     u.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
     u.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
     u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_CONST);
+#endif
     d.vu = 2;
     d.first = gsVuIdxCount;
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
@@ -1245,8 +1286,19 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
         }
     }
     d.count = gsVuIdxCount - d.first;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_IDX);
+#endif
     memcpy(&gsVuVerts[gsVuVertCount * 12], vertices, count * 48);
     gsVuVertCount += count;
+#ifdef PORT_X360
+    if (gGsVuMede) {
+        int c_ = 0;
+        GS_VU_MARCA(GS_FAM_V_COPIA + c_);
+        gGsFamVezes[GS_FAM_V_COPIA + c_]++;
+        gGsFamVuVet[c_] += count;
+    }
+#endif
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
@@ -1255,6 +1307,9 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
 #endif
         last->count += d.count;
+#ifdef PORT_X360
+        GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
         return;
     }
     d.uniform = (int)gsVuUniCount;
@@ -1263,6 +1318,9 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
 }
 
 /* Vertex program 0 as a shader: one strip of the fighters' models (see shaders/vu0.vert and gs_vu1.c). The strip
@@ -1276,14 +1334,23 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     float us, vs;
     uint32_t i, k;
 
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_PROG);
+#endif
     if (count < 3 || gsVuVertCount + count > CAP_VU_VERTS || gsVuIdxCount + (count - 2) * 3 > CAP_VU_IDX || gsDrawCount == CAP_DRAWS ||
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
     if (!draw_state(ctx, 0, 0, 1, &d, &us, &vs)) {
+#ifdef PORT_X360
+        GS_VU_MARCA(GS_FAM_V_ESTADO);
+#endif
         return;
     }
     date_snapshot(&d);
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_ESTADO);
+#endif
     memcpy(u.boneA, &consts[0], 64);
     memcpy(u.boneB, &consts[16], 64);
     memcpy(u.pivotA, &consts[32], 16);
@@ -1297,6 +1364,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     u.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
     u.misc[3] = (float)layer;
     u.light2[0] = consts[41]; u.light2[1] = consts[45]; u.light2[2] = consts[49]; u.light2[3] = consts[53];
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_CONST);
+#endif
     d.vu = 1;
     d.first = gsVuIdxCount;
     for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
@@ -1312,8 +1382,19 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         }
     }
     d.count = gsVuIdxCount - d.first;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_IDX);
+#endif
     memcpy(&gsVuVerts[gsVuVertCount * 12], vertices, count * 48);
     gsVuVertCount += count;
+#ifdef PORT_X360
+    if (gGsVuMede) {
+        int c_ = layer == 1 || layer == 5;
+        GS_VU_MARCA(GS_FAM_V_COPIA + c_);
+        gGsFamVezes[GS_FAM_V_COPIA + c_]++;
+        gGsFamVuVet[c_] += count;
+    }
+#endif
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
@@ -1322,6 +1403,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
 #endif
         last->count += d.count;
+#ifdef PORT_X360
+        GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
         return;
     }
     d.uniform = (int)gsVuUniCount;
@@ -1330,6 +1414,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#ifdef PORT_X360
+    GS_VU_MARCA(GS_FAM_V_FECHO);
+#endif
 }
 
 /* The game uploaded pixels straight into a display buffer (a movie frame). Remembers the place in the frame's
@@ -3996,6 +4083,32 @@ static void Gs_FamTrecho(void) {
              ms[GS_FAM_UNP_RAPIDO], (double)gGsFamVezes[GS_FAM_UNP_RAPIDO] / quadros, (double)gGsFamUnpVet[1] / quadros,
              ms[GS_FAM_UNP_GERAL], (double)gGsFamVezes[GS_FAM_UNP_GERAL] / quadros, (double)gGsFamUnpVet[2] / quadros);
     divisao_log(linha);
+#ifdef PORT_X360
+    /* (a VU1 por dentro, gs_internal.h, só no 360) as partes medidas nos lotes da amostra, levadas à VU1 inteira pela
+       proporção (a soma das partes é o tempo dos lotes da amostra); as vezes e os vértices das cópias, também levados ao
+       total de lotes; e quanto custou, em média, um lote da amostra */
+    {
+        double sv = 0.0, f, fl;
+        for (k = GS_FAM_V_PROG; k <= GS_FAM_V_INTERP; k++) {
+            sv += ms[k];
+        }
+        f = sv > 0.0 ? ms[GS_FAM_VU1] / sv : 0.0;
+        fl = gGsFamVezes[GS_FAM_V_PROG] ? (double)gGsFamVezes[GS_FAM_VU1] / gGsFamVezes[GS_FAM_V_PROG] : 0.0;
+        snprintf(linha, sizeof(linha),
+                 "grava\303\247\303\243o por fam\303\255lia, VU1 por dentro, quadro %u: VU1 %.2f (%.0f lotes; amostra de %.0f, "
+                 "%.2f us por lote): programa %.2f, estado %.2f, constantes %.2f, \303\255ndices %.2f, c\303\263pia %.2f (%.0f vezes, "
+                 "%.0f v\303\251rtices), c\303\263pia da segunda camada %.2f (%.0f vezes, %.0f v\303\251rtices), fecho %.2f, "
+                 "interpretador %.2f",
+                 gGsFrame, ms[GS_FAM_VU1], (double)gGsFamVezes[GS_FAM_VU1] / quadros, (double)gGsFamVezes[GS_FAM_V_PROG] / quadros,
+                 gGsFamVezes[GS_FAM_V_PROG] ? sv * 1000.0 * quadros / gGsFamVezes[GS_FAM_V_PROG] : 0.0, ms[GS_FAM_V_PROG] * f,
+                 ms[GS_FAM_V_ESTADO] * f, ms[GS_FAM_V_CONST] * f, ms[GS_FAM_V_IDX] * f, ms[GS_FAM_V_COPIA] * f,
+                 (double)gGsFamVezes[GS_FAM_V_COPIA] * fl / quadros, (double)gGsFamVuVet[0] * fl / quadros, ms[GS_FAM_V_COPIA2] * f,
+                 (double)gGsFamVezes[GS_FAM_V_COPIA2] * fl / quadros, (double)gGsFamVuVet[1] * fl / quadros, ms[GS_FAM_V_FECHO] * f,
+                 ms[GS_FAM_V_INTERP] * f);
+        divisao_log(linha);
+        memset(gGsFamVuVet, 0, sizeof(gGsFamVuVet));
+    }
+#endif
     memset(gGsFamTiques, 0, sizeof(gGsFamTiques));
     memset(gGsFamVezes, 0, sizeof(gGsFamVezes));
     memset(gGsFamUnpVet, 0, sizeof(gGsFamUnpVet));
