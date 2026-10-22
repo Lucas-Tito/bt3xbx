@@ -32,6 +32,7 @@ ARQUIVOS = [
     "port/src/plat_movie.c", "port/src/plat_songs.c", "port/src/plat_extras.c", "port/src/plat_stub.c",
     "src/sys/adx.c", "src/sys/movie.c", "src/sys/file.c",
     "port/x360/src/som/som360.cpp",  # (F6, etapa 3) a camada de áudio do console
+    "port/x360/src/som/fluxo.c",  # (F6, etapa 5) a leitura dos fluxos em blocos
 ]
 
 # Cada variável lida nesses arquivos: (classe, o que faz). Classe "estado" muda o que o jogo vê (e por isso o
@@ -65,6 +66,10 @@ INVENTARIO = {
     "BT3_SOM_TESTE": ("saida", "som360.cpp: =1 o tom de teste no começo"),
     "BT3_SOM_TESTE_HZ": ("saida", "som360.cpp: a frequência do tom de teste"),
     "BT3_SOM_TESTE_S": ("saida", "som360.cpp: a duração da primeira fase do tom de teste"),
+    "BT3_FLUXO_BLOCO": ("tempo", "fluxo.c (o caminho em blocos do 360 e o teste_som --fluxo): o tamanho do bloco lido; "
+                        "muda quando os dados chegam, não o que o jogo vê (a vista conta os vblanks até o cabeçalho)"),
+    "BT3_FLUXO_SABOTA": ("saida", "fluxo.c, só fora do 360 (#ifndef _XBOX): =1 troca um byte de cada bloco depois do "
+                         "primeiro, o controle negativo do som.sh fluxo"),
 }
 # getenv com o nome numa variável: arquivo -> nomes que chegam a ele
 INDIRETOS = {"port/src/plat_extras.c": ["BT3_SONGS", "BT3_STAGES"]}
