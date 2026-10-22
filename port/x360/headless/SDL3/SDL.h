@@ -26,6 +26,24 @@ static inline uint64_t SDL_GetTicksNS(void) {
     return (uint64_t)t.tv_sec * 1000000000ull + (uint64_t)t.tv_nsec;
 }
 
+#ifdef BT3_GRAVADOR
+/* F6, etapa 2, rede 4 (headless.py --gravador): um dispositivo que grava, em port/x360/headless/gravador.c; um relógio de
+   teste puxa cada fluxo a cada vblank (som.c) */
+const char *SDL_GetError(void);
+bool SDL_InitSubSystem(uint32_t flags);
+const char *SDL_GetCurrentAudioDriver(void);
+SDL_AudioDeviceID SDL_OpenAudioDevice(SDL_AudioDeviceID d, const SDL_AudioSpec *s);
+bool SDL_ResumeAudioDevice(SDL_AudioDeviceID d);
+SDL_AudioStream *SDL_CreateAudioStream(const SDL_AudioSpec *a, const SDL_AudioSpec *b);
+void SDL_DestroyAudioStream(SDL_AudioStream *s);
+bool SDL_BindAudioStream(SDL_AudioDeviceID d, SDL_AudioStream *s);
+bool SDL_SetAudioStreamGetCallback(SDL_AudioStream *s, SDL_AudioStreamCallback cb, void *u);
+bool SDL_PutAudioStreamData(SDL_AudioStream *s, const void *b, int n);
+bool SDL_ClearAudioStream(SDL_AudioStream *s);
+bool SDL_LockAudioStream(SDL_AudioStream *s);
+bool SDL_UnlockAudioStream(SDL_AudioStream *s);
+bool SDL_SetAudioStreamGain(SDL_AudioStream *s, float g);
+#else
 static inline const char *SDL_GetError(void) { return "sem SDL (build PowerPC da F1)"; }
 static inline bool SDL_InitSubSystem(uint32_t flags) { (void)flags; return false; }
 static inline const char *SDL_GetCurrentAudioDriver(void) { return NULL; }
@@ -40,5 +58,6 @@ static inline bool SDL_ClearAudioStream(SDL_AudioStream *s) { (void)s; return fa
 static inline bool SDL_LockAudioStream(SDL_AudioStream *s) { (void)s; return false; }
 static inline bool SDL_UnlockAudioStream(SDL_AudioStream *s) { (void)s; return false; }
 static inline bool SDL_SetAudioStreamGain(SDL_AudioStream *s, float g) { (void)s; (void)g; return false; }
+#endif
 
 #endif

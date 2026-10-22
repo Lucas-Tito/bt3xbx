@@ -18,6 +18,13 @@
                                                                       -> port/build/<alvo>g/bt3_<alvo>g
     --vu1        (x86 com --gpu) compila também com -DBT3_TESTE_VU1: a otimização da gravação da VU1, que na PPC vem
                  com o PORT_BIG_ENDIAN, para medir e provar a mesma mudança na x86 -> port/build/x86gv/bt3_x86gv
+    --gravador   (F6, etapa 2, rede 4) o som com o dispositivo gravador (port/x360/headless/gravador.c) no lugar dos stubs
+                 da SDL: o snd_adx.c e o snd_se.c do port dentro de grava_adx.c e grava_se.c, com -DBT3_GRAVADOR; com
+                 BT3_SOUND=1 o dispositivo abre e BT3_GRAVADOR=arquivo grava o PCM de cada fluxo por vblank
+                                                                      -> port/build/<alvo>a/bt3_<alvo>a
+    --teste-som  (F6, etapa 2, rede 3) só o teste das amostras (port/x360/headless/teste_som.c), sem o jogo: os
+                 decodificadores do port como o gravador os compila    -> port/build/<alvo>t/teste_som
+O rastro de som (port/x360/headless/som.c, F6 rede 2: BT3_SOM=arquivo) entra em todas as builds, por --wrap.
 
 As duas usam a aritmética em software da build de PC (-msoft-float chama port/src/softfloat_ps2.c): uma
 diferença entre elas só pode vir da ordem dos bytes. Reaproveita portsrc e eeconst do upstream sem mudá-los;
@@ -49,13 +56,15 @@ SEM_RASTREIO = {"state", "namefont"}
 
 
 class Alvo:
-    def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False):
+    def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False, gravador=False, teste_som=False):
         self.nome, self.rastreio, self.chamadas, self.gpu, self.vu1 = nome, rastreio, chamadas, gpu, vu1
+        self.gravador, self.teste_som = gravador, teste_som
         self.be = nome == "ppc"  # big-endian: campos de bits na ordem do PS2 (bitfields.py)
         # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
         # diverge no quadro 2755).
         self.opt = "-O2"
-        pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "")
+        pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
+            ("a" if gravador else "") + ("t" if teste_som else "")
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
         self.exe = self.b / f"bt3_{pasta}"
@@ -129,7 +138,44 @@ def jogo(args):
     return o, f, compile_ee(cmd, src, o, be=alvo.be)
 
 
+# (F6, etapa 2) o som do port com o dispositivo gravador: os dois arquivos dentro dos que os expõem aos testes
+GRAVA = {"snd_adx": "port/x360/headless/grava_adx.c", "snd_se": "port/x360/headless/grava_se.c"}
+
+
+def flags_som(alvo):
+    """As do som do port nesta build (as do laço do port/src/gs abaixo), com o gravador."""
+    fma = ["-ffp-contract=off"] if alvo.be else []
+    return alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w", "-DBT3_GRAVADOR"] + \
+        alvo.hard + fma + ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"]
+
+
+def construir_teste_som(alvo):
+    """(F6, etapa 2, rede 3) port/build/<alvo>t/teste_som: o snd_adx.c e o snd_se.c como a build --gravador os compila,
+    o gravador, o estado dos players (plat_sndstate.c) e o teste, sem o jogo."""
+    alvo.obj.mkdir(parents=True, exist_ok=True)
+    objs, falhas = [], []
+    for nome, src in [("gs_snd_adx", GRAVA["snd_adx"]), ("gs_snd_se", GRAVA["snd_se"]),
+                      ("x360_gravador", "port/x360/headless/gravador.c"), ("pc_plat_sndstate", "port/src/plat_sndstate.c"),
+                      ("x360_teste_som", "port/x360/headless/teste_som.c")]:
+        o = alvo.obj / f"{nome}.o"
+        r = compile_ee(flags_som(alvo), src, o, ee=False, be=alvo.be)
+        (falhas.append((src, r)) if r.returncode else objs.append(o))
+    for f, r in falhas:
+        print("FALHOU", f, next((l for l in r.stderr.splitlines() if "rror" in l), r.stderr.strip()[:200])[:220])
+    if falhas:
+        sys.exit(1)
+    exe = alvo.b / "teste_som"
+    r = run(alvo.ld + ["-no-pie", "-o", exe] + objs + ["-lm"])
+    if r.returncode:
+        print("link FALHOU:", r.stderr.strip()[-400:])
+        sys.exit(1)
+    (alvo.b / "CARIMBO").write_text(carimbo())
+    print(f"teste_som: {len(objs)} objetos; link OK -> {exe.relative_to(ROOT)}")
+
+
 def construir(alvo):
+    if alvo.teste_som:
+        return construir_teste_som(alvo)
     alvo.obj.mkdir(parents=True, exist_ok=True)
     with concurrent.futures.ProcessPoolExecutor(os.cpu_count()) as ex:
         res = list(ex.map(jogo, [(alvo, f) for f in portsrc.sources()]))
@@ -173,6 +219,9 @@ def construir(alvo):
             sdl360 = ["-Iport/x360/src/gs/sdl"] if f.stem == "gs_draw" else []
             # (--gpu: -DBT3_GPU_FALSO no gs_core.c, a medida dos bytes da cadeia por quadro, e no gs_draw.c, as chaves de teste
             # da divisão do degrau 2; as builds sem --gpu não a têm)
+            if alvo.gravador and f.stem in GRAVA:  # (F6, rede 4: o mesmo arquivo, dentro do que o expõe ao gravador)
+                junta(f, o, compile_ee(flags_som(alvo) + alvo.instr, GRAVA[f.stem], o, ee=False, be=alvo.be))
+                continue
             junta(f, o, compile_ee(alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w"] +
                                    (["-DBT3_GPU_FALSO"] if alvo.gpu and f.stem in ("gs_core", "gs_draw") else []) + alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) + sdl360 +
                                    ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], f, o, ee=False, be=alvo.be))
@@ -190,8 +239,8 @@ def construir(alvo):
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
-    extras = ["sem_janela", "roteiro", "imagens", "ponte_pow", "passos", "memoria"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
-        (["chamadas"] if alvo.chamadas else []) + (["gpu_falso"] if alvo.gpu else [])
+    extras = ["sem_janela", "roteiro", "imagens", "ponte_pow", "passos", "memoria", "som"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
+        (["chamadas"] if alvo.chamadas else []) + (["gpu_falso"] if alvo.gpu else []) + (["gravador"] if alvo.gravador else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
         # (o roteiro lê o save do jogo pela estrutura dele, include/sys/save.h, com os tipos do jogo: port_compat.h)
@@ -201,6 +250,9 @@ def construir(alvo):
             tipos_jogo = [f'-DBT3_CARIMBO="{carimbo().strip()}"']
         # (--gpu: o sem_janela.c sem as entradas GsGpu_* vazias, que vêm do gs_draw.c, como na build do 360)
         gpu_def = ["-DX360_GS_D3D"] if alvo.gpu and nome == "sem_janela" else []
+        # (F6, rede 4: o rastro de som com o relógio do gravador e os estragos de propósito; o gravador com a SDL de teste)
+        if alvo.gravador and nome in ("som", "gravador"):
+            gpu_def = ["-DBT3_GRAVADOR", "-Iport/x360/headless"]
         junta(nome, o, run(alvo.cc + ["-std=gnu99", "-c", "-O2", "-g", "-fno-pic", "-w"] + alvo.hard + gpu_def + tipos_jogo +
                            [f"port/x360/headless/{nome}.c", "-o", o]))
     # big-endian: a conversão por formato (port/x360/conv), que o jogo chama em tempo de jogo (Port_ConvertAnim)
@@ -250,6 +302,11 @@ def ligar(alvo, objs):
              # as ações do roteiro de evento da luta que começam, no rastro dos roteiros (roteiro.c, F4 etapa 9b): os
              # gatilhos do btl_script.c, a ação principal do battle_work.c e a da carga do battle_load.c
              "-Wl,--wrap=Gsc_StartAction", "-Wl,--wrap=Gsc_StartMain", "-Wl,--wrap=Gsc_RunAction"]
+    # o rastro de som (port/x360/headless/som.c, F6 etapa 2, rede 2): as chamadas do jogo à CRI e ao SOUNDS.IRX que o
+    # snd_adx.c e o snd_se.c atendem, e o fim de cada vblank
+    resto += [f"-Wl,--wrap={s}" for s in ("ADXT_Create", "ADXT_StartAfs", "ADXT_StartFname", "ADXT_Stop", "ADXT_Pause",
+                                          "ADXT_SetOutVol", "ADXT_SetOutPan", "ADXT_SetOutputMono", "ADXT_GetStat",
+                                          "sceSifCallRpc", "sceSifSetDma", "func_002967C0", "Port_AdxTick")]
     if alvo.gpu:  # a medida da VU1 (gpu_falso.c, BT3_PERFIL): passam por lá o GsVu1_Call, o Unpack, os três desenhos e o Gs_PageHash
         resto += [f"-Wl,--wrap={s}" for s in ("GsVu1_Call", "GsVu1_Unpack", "GsGpu_Draw", "GsGpu_DrawVu0", "GsGpu_DrawVu4", "GsGpu_DrawVu6", "Gs_PageHash")]
     if alvo.rastreio:
@@ -432,14 +489,18 @@ def main():
     ap.add_argument("--chamadas", action="store_true", help="registra a sequência de funções do jogo (BT3_CHAMADAS)")
     ap.add_argument("--gpu", action="store_true", help="GS em modo gpu com backend falso (F5, etapa 8: custo da VU1)")
     ap.add_argument("--vu1", action="store_true", help="(x86 com --gpu) liga na x86 a otimização da gravação da VU1 que a PPC já tem (BT3_TESTE_VU1)")
+    ap.add_argument("--gravador", action="store_true", help="(F6, rede 4) o som com o dispositivo gravador")
+    ap.add_argument("--teste-som", action="store_true", help="(F6, rede 3) só o teste das amostras dos decodificadores")
     a = ap.parse_args()
+    if (a.gravador or a.teste_som) and (a.rastreio or a.chamadas or a.gpu):
+        sys.exit("--gravador e --teste-som não se combinam com --rastreio, --chamadas nem --gpu")
     if a.rastreio and a.alvo != "x86":
         sys.exit("o rastreio roda na x86 (é a build em que o jogo já funciona)")
     if a.gpu and (a.rastreio or a.chamadas):
         sys.exit("--gpu não se combina com --rastreio nem com --chamadas")
     if a.vu1 and not (a.gpu and a.alvo == "x86"):
         sys.exit("--vu1 só vale com --alvo x86 --gpu (na PPC a otimização já vem com o PORT_BIG_ENDIAN)")
-    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1))
+    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1, a.gravador, a.teste_som))
 
 
 main()
