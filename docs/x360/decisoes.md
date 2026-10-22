@@ -693,3 +693,8 @@ As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md)
 8. **Guide:** pausa os efeitos e as vozes, a música segue (a).
 9. **A prova do som:** as redes automáticas do WSL e a sessão de escuta (b); sem o ajuste fino de volume contra o
    PCSX2.
+10. **A volta do laço do ADX (22/10/2026):** fica como no port de PC (a). O `snd_adx.c` continua o histórico do filtro
+    do fim do laço; a referência independente da rede 3 (como o vgmstream) restaura o estado do começo, e as 128 amostras
+    depois da volta diferem em até 10 LSB (achado da etapa 2, `plano/F6/02.md`). Nenhuma das duas está provada contra a
+    CRI. A rede 3 aceita essa diferença no laço como exceção documentada; se a escuta da etapa 8 ouvir um estalo na
+    volta da música, muda-se para a restauração do começo (b).
