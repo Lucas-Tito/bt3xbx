@@ -1422,3 +1422,29 @@ python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_t1.t
 **Recomendação.** Ligar a decodificação por linha por padrão se a rodada confirmar o custo por pixel (o que se espera: o mesmo
 resultado em menos instruções, sem nada novo entre as threads). Depois, se o Blast 2 e os quadros de página mudada ainda passarem
 de 5 ms, o cache pelo conteúdo da origem (a). A thread auxiliar (b) só se as duas não bastarem.
+
+### A rodada no console (22/10/2026) [medido]
+
+Três aberturas do `f5_duelo` pelo roteiro, `BT3_PICOS=36`, `BT3_TEMPOS=0`, `BT3_WIDE=1`, saves novos em cada uma; as duas
+primeiras com a build da `main` `db768f7` (`9fb6d6b9…`), a terceira com a do `f6-e45` juntado à main (`24413b34…`, o ADX lido em
+blocos e `BT3_SOM=1`). O resultado da luta igual nas três (vencedor 0x2 KO, vida 0 27160, vblank 11478). A conta por pixel saiu
+das linhas `picos:   quadro ..., texturas` (todas as da luta, do quadro 4672 em diante).
+
+| | t0: `BT3_TEX_RAPIDA=0` | t1: `=1` | t1 com o som das etapas 4 e 5 |
+|---|---|---|---|
+| Custo por pixel na luta | 112,9 ns | **10,4 ns** | 10,7 ns |
+| Tempo convertendo texturas na luta | 1.596 ms | 85 ms | 95 ms |
+| Quadros com mais de 10 ms de texturas | 19 (pior 370,7 ms) | 3 (pior 33,3 ms) | 3 (pior 33,8 ms) |
+| Combate, trabalho p50 / p95 / p99 / máximo | 33,24 / 34,90 / 39,11 / 159,6 ms | 33,25 / 34,00 / 35,00 / 116,0 | 33,12 / 34,84 / 35,11 / **38,3** |
+| Combate, intervalos acima de 34,37 / de 50,05 ms | 6,98% / 6 | 6,26% / 2 | 11,53% / 2 (máximo 58,3) |
+| Abertura da luta, trabalho p99 / máximo | 66,6 / 433,0 ms | 36,2 / 80,6 | 36,3 / 85,3 |
+| Abertura da luta, intervalos acima de 50,05 ms | 11 | 1 | 1 |
+
+- **Os 10,4 ns por pixel ficaram dentro dos 8 a 15 estimados:** a decodificação ligada por padrão no commit seguinte
+  (`BT3_TEX_RAPIDA=0` volta ao laço). O Blast 2 caiu de uns 350 ms para 33 ms; o cache pela origem (a) não é preciso agora.
+- **O que sobrou na t1 era leitura de disco na thread do jogo:** os três piores passos do combate (quadros 5825, 6359 e 7864,
+  98, 65 e 40 ms) não tinham textura nenhuma e tinham `disco 1 leituras` com esse tempo, o ADX lido inteiro no início do fluxo.
+  Com o ADX em blocos (F6, etapa 5, `F6/05.md`) o pior passo do combate foi a 38,3 ms.
+- **Com o som ligado, mais passos logo acima do período** (11,5% dos intervalos acima de 34,37 ms, contra 6,3%; p95 34,84
+  contra 34,00): o custo do som na thread do jogo (RPC, início de fluxo) ou na memória, a medir à parte. Fica para o corte
+  seguinte da etapa 8.

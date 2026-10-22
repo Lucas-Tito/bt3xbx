@@ -1811,6 +1811,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   texturas): duas chamadas, um `switch` e leituras de globais por pixel. Um laço por linha com as tabelas por página e a paleta
   expandida uma vez fez 10 vezes menos na x86, com 12 instruções por pixel no `cl`. Procure o mesmo padrão onde o custo é por pixel
   ou por vértice.
+- **Depois de tirar uma causa de pico, olhe o que sobrou antes de atacar a seguinte** (F5, etapa 8, 22/10): com as texturas a
+  10 ns por pixel, os piores passos da luta que restaram não tinham textura nenhuma e tinham uma leitura de disco de 40 a 98 ms
+  na thread do jogo, que outra frente (o ADX em blocos da F6) já resolvia. Medir as duas juntas numa abertura só poupou uma
+  rodada.
 - **Um teste de unidade da ordem dos bytes tem de rodar na PPC de verdade** (`powerpc-linux-gnu-gcc -static` no `qemu-ppc`, um
   arquivo de teste que inclui o `.c` e liga com `-Wl,--unresolved-symbols=ignore-all`). Na x86 com `-DPORT_BIG_ENDIAN` o `GS_LE32`
   troca os bytes mas a memória segue little-endian: o acesso por byte à VRAM saiu "errado" em 1.179 de 1.500 casos que na PPC

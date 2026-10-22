@@ -459,10 +459,11 @@ static GsTex texture_get(int ctx) {
     }
     px = replaced ? NULL : malloc((size_t)tw * th * 4);
 #ifdef BT3_GS_ESPERAS
-    /* (F5, etapa 8, texturas: 08-gravacao.md, seção 17) BT3_TEX_RAPIDA=1: a decodificação por linha do gs_core.c
-       (Gs_TexDecode), os mesmos pixels; desligada por padrão, ou num formato que ela não faz, o laço abaixo */
+    /* (F5, etapa 8, texturas: 08-gravacao.md, seção 17) a decodificação por linha do gs_core.c (Gs_TexDecode), os
+       mesmos pixels, ligada por padrão desde a rodada do console de 22/10; BT3_TEX_RAPIDA=0, ou num formato que ela
+       não faz, o laço abaixo */
     if (sTexRapida < 0) {
-        sTexRapida = getenv("BT3_TEX_RAPIDA") != NULL && atoi(getenv("BT3_TEX_RAPIDA")) != 0;
+        sTexRapida = getenv("BT3_TEX_RAPIDA") == NULL || atoi(getenv("BT3_TEX_RAPIDA")) != 0;
     }
     feito = replaced || (sTexRapida && px != NULL && Gs_TexDecode(px, tbp, tbw, psm, tw, th, cbp, cpsm));
 #define TEX_LACO !feito
