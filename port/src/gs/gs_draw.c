@@ -1969,6 +1969,9 @@ void GsGpu_FbUpload(int second) {
     }
     memset(&d, 0, sizeof(d));
     d.native = 100 + (second != 0);
+#ifdef PORT_X360
+    d.first = gFilme360Imagem; /* (F6, etapa 6) the movie picture drawn from its texture (0: none, counted) */
+#endif
     d.target = GsDraw_TargetGet(second ? 0x70 : 0, 1);
     if (d.target >= 0) {
         gsDraws[gsDrawCount++] = d;

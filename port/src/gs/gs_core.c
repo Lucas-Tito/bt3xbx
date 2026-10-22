@@ -863,6 +863,24 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
        down): the GPU back end has to copy it from GS memory into that buffer's texture at the end of the frame. */
     if (dbp == 0 && dbw == 8 && Gs_PsmBits(dpsm) == 32) {
         unsigned bit = gs.ty < 448 ? 1u : 2u;
+#ifdef PORT_X360
+        /* (F6, etapa 6) The movie drawn on the 360 (port/x360/src/f2/filme360.c): the picture is already in a texture
+           of the back end. Its draw, carrying its number, at the first of its 896 uploads (the numbers only grow, and
+           the 360's back end never clears gGsFbUploads); GS memory is not written. */
+        if (gFilme360Imagem != 0) {
+            static unsigned sGravada;
+            uint32_t px = bytes * 8 / (uint32_t)Gs_PsmBits(dpsm), total0 = gs.tw * gs.th;
+            if (sGravada != gFilme360Imagem && sGpu) {
+                sGravada = gFilme360Imagem;
+                GsGpu_FbUpload(bit == 2);
+            }
+            gs.tpos = gs.tpos + px > total0 ? total0 : gs.tpos + px;
+#ifdef BT3_GS_ESPERAS
+            GS_FAM_FIM(GS_FAM_ENVIO, famT);
+#endif
+            return;
+        }
+#endif
         if (!(gGsFbUploads & bit) && sGpu) {
             GsGpu_FbUpload(bit == 2); /* its place among the frame's draws: after the clear, before a fade */
         }

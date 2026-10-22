@@ -631,6 +631,22 @@ int Mpeg2_Next(Mpeg2 *m, uint8_t *rgba) {
     return 1;
 }
 
+#ifdef PORT_X360
+/* (F6, etapa 6, port/x360/src/f2/filme360.c) The next picture as its planes, without the conversion to RGBA: the 360
+   copies them into a texture and converts on the GPU. Y is width x height, Cb and Cr half of each, `stride` bytes
+   per Y line and stride / 2 per chroma line; valid until the next call. 0 at the end of the stream. */
+int Mpeg2_NextPlanes(Mpeg2 *m, const uint8_t **y, const uint8_t **cb, const uint8_t **cr, int *stride) {
+    if (!next_planes(m)) {
+        return 0;
+    }
+    *y = m->y;
+    *cb = m->cb;
+    *cr = m->cr;
+    *stride = m->mbw * 16;
+    return 1;
+}
+#endif
+
 #ifdef MPEG2_TEST
 int main(int argc, char **argv) {
     Mpeg2 *m = argc > 2 ? Mpeg2_Open(argv[1]) : NULL;

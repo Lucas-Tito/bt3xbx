@@ -27,8 +27,10 @@
 #include <string.h>
 #include "diario.h"
 #include "conv.h"
+#include "f2/blocos.h"
 
 void Port_Abortar(void);
+int Filme360_BlocoKb(void); /* f2/filme360.c: BT3_FILME e BT3_FILME_BLOCO_KB */
 
 #define SETOR 2048
 #define MAX_ABERTOS 64
@@ -40,6 +42,9 @@ typedef struct IsoArq {
     __int64 ini;            /* posição na ISO */
     long tam, pos;
     unsigned char *dados;   /* convertido (lido inteiro), ou NULL: lido da ISO a cada fread */
+    Blocos *blocos;         /* (F6, etapa 6) um filme com BT3_FILME=1: lido em blocos, o seguinte adiantado (f2/blocos.c) */
+    int filme;              /* 1: um .PSS com BT3_FILME=1 (os blocos se abrem na primeira leitura; 2: não abriram) */
+    char nome[16];
 } IsoArq;
 
 typedef struct Afs { int lido; __int64 ini; unsigned n; unsigned *tab; } Afs; /* tab: deslocamento e tamanho */
@@ -353,7 +358,38 @@ static IsoArq *novo(__int64 ini, long tam) {
     r->tam = tam;
     r->pos = 0;
     r->dados = NULL;
+    r->blocos = NULL;
+    r->filme = 0;
+    r->nome[0] = '\0';
     return r;
+}
+
+/* (F6, etapa 6) Um filme do disco (disc/DATA/<nome>.PSS): com BT3_FILME=1, lido em blocos de BT3_FILME_BLOCO_KB (256) pela
+   thread de leitura do blocos.c, na thread de hardware 1 (a irmã da main, que só vigia; a 4 e a 5 são do áudio e não
+   fazem E/S). Cada pedaço de 64 KB de um bloco é um ler(), com a trava: as outras leituras da ISO esperam no máximo
+   um pedaço. Quem lê (o decodificador, na thread do jogo) só copia da memória, e espera só se o bloco não chegou. */
+#define FILME_HW 1
+static int eh_filme(const char *rel) {
+    size_t n = strlen(rel);
+    return strncmp(rel, "disc/", 5) == 0 && n > 4 && _stricmp(rel + n - 4, ".PSS") == 0 && strrchr(rel, '/') != NULL;
+}
+static int ler_blocos(void *ctx, long pos, void *buf, long n) {
+    IsoArq *r = (IsoArq *)ctx;
+    return ler(r->ini + pos, buf, (unsigned long)n);
+}
+
+/* a espera da thread do jogo pelos blocos do filme aberto, somada (Filme360: a parte "leitura" de cada imagem); 0 sem
+   filme em blocos. Da thread que lê (os contadores da espera são dela). */
+static IsoArq *sFilmeBlocos;
+int Iso_FilmeEspera(double *ms, unsigned *esperas) {
+    BlocosConta c;
+    if (sFilmeBlocos == NULL || sFilmeBlocos->blocos == NULL) {
+        return 0;
+    }
+    Blocos_Conta(sFilmeBlocos->blocos, &c);
+    *ms = c.msEspera;
+    *esperas = c.esperas;
+    return 1;
 }
 
 /* rel: o caminho sob a raiz de dados, com '/' ("pzs3us1/00042.bin", "disc/SLUS_216.78"). NULL se não há, e
@@ -403,6 +439,9 @@ void *Iso_Abrir(const char *rel) {
         }
         Diario_Escrever("iso: %s, %ld bytes: leitura %.1f ms (da ISO convertida, sem conversão)", rel, tam,
                         ms_desde(t0));
+    } else if (eh_filme(rel) && Filme360_BlocoKb() > 0) {
+        r->filme = 1; /* (os blocos na primeira leitura: o handle do jogo, aberto pelo ADXF, não lê com BT3_FILME) */
+        _snprintf(r->nome, sizeof(r->nome) - 1, "%s", strrchr(rel, '/') + 1);
     }
     return r;
 }
@@ -447,8 +486,21 @@ size_t Iso_Ler(void *buf, size_t tam, size_t n, void *f) {
     if (quer > tem) {
         quer = tem - tem % tam; /* só itens inteiros */
     }
+    if (r->filme == 1 && r->blocos == NULL) {
+        r->blocos = Blocos_Abrir(ler_blocos, r, r->tam, (long)Filme360_BlocoKb() * 1024, FILME_HW);
+        r->filme = r->blocos != NULL ? 1 : 2;
+        sFilmeBlocos = r->blocos != NULL ? r : sFilmeBlocos;
+        Diario_Escrever("iso: %s, %ld bytes: em blocos de %d KB, o seguinte adiantado na thread de hardware %d%s", r->nome,
+                        r->tam, Filme360_BlocoKb(), FILME_HW, r->blocos == NULL ? " (SEM MEMÓRIA: lido a cada fread)" : "");
+    }
     if (r->dados != NULL) {
         memcpy(buf, r->dados + r->pos, quer);
+    } else if (r->blocos != NULL) {
+        long g = Blocos_Ler(r->blocos, r->pos, buf, (long)quer);
+        if (g < 0) {
+            return 0;
+        }
+        quer = (size_t)g - (size_t)g % tam;
     } else if (quer > 0 && !ler(r->ini + r->pos, buf, (unsigned long)quer)) {
         return 0;
     }
@@ -472,6 +524,19 @@ long Iso_Posicao(void *f) {
 
 int Iso_Fechar(void *f) {
     IsoArq *r = (IsoArq *)f;
+    if (r->blocos != NULL) {
+        BlocosConta c;
+        Blocos_Conta(r->blocos, &c);
+        Diario_Escrever("iso: %s em blocos: %u blocos lidos na thread de leitura (%.1f ms por bloco, pior %.1f), %u faltas; a "
+                        "thread do jogo esperou %u vezes, %.1f ms ao todo (pior %.1f)", r->nome, c.blocos,
+                        c.blocos ? c.msLeitura / c.blocos : 0.0, c.msLeituraPior, c.faltas, c.esperas, c.msEspera,
+                        c.msEsperaPior);
+        Blocos_Fechar(r->blocos);
+        r->blocos = NULL;
+        if (sFilmeBlocos == r) {
+            sFilmeBlocos = NULL;
+        }
+    }
     free(r->dados);
     r->dados = NULL;
     EnterCriticalSection(&sTrava);

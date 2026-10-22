@@ -29,11 +29,21 @@ extern int Mpeg2_Width(const Mpeg2 *m);
 extern int Mpeg2_Height(const Mpeg2 *m);
 extern void Mpeg2_Close(Mpeg2 *m);
 
+#ifdef PORT_X360
+/* (F6, etapa 6) the picture straight into a texture of the 360's back end (port/x360/src/f2/filme360.c, BT3_FILME=1) */
+extern int Filme360_Ligado(void);
+extern int Filme360_Imagem(Mpeg2 *m);
+extern void Filme360_Fechou(void);
+#endif
+
 static Mpeg2 *sMovie;
 static int sStarted, sEnd;
 static uint8_t sFrame[MOVIE_W * MOVIE_H * 4];
 
 static void movie_close(void) {
+#ifdef PORT_X360
+    Filme360_Fechou();
+#endif
     if (sMovie != NULL) {
         Mpeg2_Close(sMovie);
         sMovie = NULL;
@@ -79,6 +89,15 @@ int sceMpegGetPicture(void *mp, void *rgb, int blocks) {
     if (!sStarted) {
         movie_start();
     }
+#ifdef PORT_X360
+    if (Filme360_Ligado()) { /* the blocks in `rgb` are not written: the game's upload of them is cut in gs_core.c */
+        if (sMovie == NULL || !Filme360_Imagem(sMovie)) {
+            sEnd = 1;
+            return -1;
+        }
+        return 0;
+    }
+#endif
     if (sMovie == NULL || !Mpeg2_Next(sMovie, sFrame) || Mpeg2_Width(sMovie) != MOVIE_W || Mpeg2_Height(sMovie) != MOVIE_H) {
         sEnd = 1;
         return -1;

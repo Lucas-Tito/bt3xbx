@@ -137,6 +137,25 @@ float4 ps_copia(float2 uv : TEXCOORD0) : COLOR0 {
     return tex2D(tex, uv);
 }
 
+// ---- F6, etapa 6: o filme direto (filme_desenha no gs_d3d.cpp, port/x360/src/f2/filme360.c). A vaga é uma textura L8
+// de 512 x 672: Y nas linhas 0 a 447, Cb nas colunas 0 a 255 e Cr nas 256 a 511 das linhas 448 a 671. O vs_copia leva o
+// retângulo do filme no alvo com uv de 0 a 1; o pixel do filme sai do uv, a cor é a do pixel (x / 2, y / 2), lidas no
+// ponto, no centro do texel. A conta é a do Mpeg2_Next (plat_mpeg2.c: BT.601, 16 a 235 para 0 a 255, em 16.16 com
+// deslocamento aritmético), com cada constante separada em 65536 vezes um inteiro mais o resto: as partes que sobram para
+// o floor cabem inteiras num float (abaixo de 2^24) e a divisão por 65536 é exata, então o byte é o da CPU (refeito em
+// float de 32 bits no teste_blocos.c, 0 pixels diferentes nos dois filmes).
+float4 ps_filme(float2 uv : TEXCOORD0) : COLOR0 {
+    float2 p = floor(uv * float2(512.0, 448.0));
+    float2 c = floor(p * 0.5);
+    float y = floor(tex2D(tex, float2((p.x + 0.5) / 512.0, (p.y + 0.5) / 672.0)).x * 255.0 + 0.5) - 16.0;
+    float d = floor(tex2D(tex, float2((c.x + 0.5) / 512.0, (448.5 + c.y) / 672.0)).x * 255.0 + 0.5) - 128.0;
+    float e = floor(tex2D(tex, float2((256.5 + c.x) / 512.0, (448.5 + c.y) / 672.0)).x * 255.0 + 0.5) - 128.0;
+    float r = y + e + floor((10773.0 * y + 39061.0 * e + 32768.0) / 65536.0);
+    float g = y + floor((10773.0 * y - 25675.0 * d - 53279.0 * e + 32768.0) / 65536.0);
+    float b = y + 2.0 * d + floor((10773.0 * y + 1129.0 * d + 32768.0) / 65536.0);
+    return float4(saturate(float3(r, g, b) / 255.0), 1.0);
+}
+
 // ---- F5, etapa 7: a profundidade de um alvo de volta para a EDRAM (os dois restauros do exemplo FastDepthRestore
 // do XDK). O vs_copia leva o retângulo; uv é o pixel sobre a largura da textura (zcor.x), no centro do pixel.
 

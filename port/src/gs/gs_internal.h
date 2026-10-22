@@ -131,6 +131,10 @@ extern uint64_t gPicosTexNs, gPicosEnvioBytes;                     /* a decodifi
 extern uint64_t gPicosJEspera, gPicosGOcioso; /* mftb: o jogo esperando a gravação; a gravação sem trabalho */
 extern unsigned gPicosJEsperas;
 extern unsigned gPicosQJogo; /* o quadro do jogo (gGsFrameJogo) da lista que a gravação grava agora (gs_core.c) */
+/* (F6, etapa 6) o filme direto à textura (port/x360/src/f2/filme360.c, BT3_FILME=1): o número da imagem na vaga mais
+   nova (só cresce, de um filme ao outro), 0 sem filme; o transfer_data não escreve a imagem na memória do GS e o
+   GsGpu_FbUpload a leva no `first` */
+extern volatile unsigned gFilme360Imagem;
 void Picos_Jogo(unsigned quadro, uint64_t vblankNs); /* o jogo entregou a lista do quadro (gs_core.c) */
 void Picos_Gravou(unsigned quadro, uint64_t esperaTiques, const uint32_t *c); /* a gravação entregou (gs_draw.c) */
 #endif
