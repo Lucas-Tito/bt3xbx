@@ -1387,6 +1387,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   novo só dentro de `#ifdef` muda os números das linhas, não o texto; com `-P` o md5 do antes e do depois é o mesmo, para
   cada combinação de definições do WSL (com e sem `BT3_GRAVADOR` e `PORT_BIG_ENDIAN`). A comparação dos objetos sem a
   depuração na rodada do WSL confirma. Um `#else` que repete o original evita o `{ }` a mais que mudaria o texto.
+### O 16:9 no WSL (F8, etapa 1, `plano/F8/16x9.md`, seção 9)
+
+- **Medir o custo de uma chave de imagem na x86gv antes do console.** O mesmo roteiro com a chave desligada e ligada, sem
+  limite de quadros (`BT3_UNCAPPED=1`), leva uns 30 s por rodada; cada linha do rastro do roteiro traz o vblank e o quadro, e
+  o rastro igual linha a linha prova que os quadros dos dois logs se correspondem um a um (o hash do estado não serve entre
+  4:3 e 16:9). `custo169.sh` é o modelo.
+- **A coluna `texturas` da linha `gpu_falso: quadro` é o acumulado**, não as do quadro: por quadro é a diferença com a linha
+  anterior (a medida estaria errada por milhares sem isso).
+- **Um contador de teste no `gs_draw.c` atrás do `BT3_GPU_FALSO` não toca na x86 plana** (ela nem compila o `gs_draw.c`) nem
+  no 360: a `.text` confere igual sem rodada a mais.
+- **Uma chave de ambiente só de um lado, sem mexer no `roteiros.sh`:** o `qemu-ppc` passa o ambiente inteiro ao programa e
+  lê `QEMU_UNSET_ENV` (e `QEMU_SET_ENV`) antes; `BT3_WIDE=1 QEMU_UNSET_ENV=BT3_WIDE` deixa a chave só na x86. É o controle
+  negativo de uma comparação entre a x86 e a PPC numa forma.
+- **Worktree no Deck:** o clone do Deck não tem `port/build/gen/gs`; o worktree leva links para `asm`, `assets`, `disc` e
+  `gamedata` e cópias de `port/build/gen/data` e `port/build/gen/src`.
 
 ---
 
