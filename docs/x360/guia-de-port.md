@@ -1244,6 +1244,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `assets`, `disc`, `gamedata` e uma cópia de `port/build/gen/{data,gs}`: as builds de um não apagam as do outro (o
   `roteiros.sh` exige a build do HEAD), e o branch do clone principal não muda. A trava (`flock ~/wsl.lock`) continua
   para o emulador.
+- **Num buffer de envio compartilhado, o rastro grava só o que o chamador escreveu.** O jogo manda todos os RPCs do som
+  pelo mesmo buffer; o RPC 0xF escreve uma meia palavra de contagem e manda 0x18 bytes, e os RPCs sem argumento mandam 4.
+  O resto é sobra do RPC anterior: ponteiros do host (outros a cada rodada) e palavras gravadas com 32 bits e lidas com 16
+  (outras na PPC). Gravar o buffer inteiro deu 6 falhas de rede 2 numa rodada longa de 45 minutos que não eram nada. Pelo
+  formato de cada mensagem (quem escreve o quê), nunca pelo tamanho enviado.
+- **Numerar endereços do host pela ordem em que aparecem pede esquecer o endereço no `free`.** O `malloc` devolve de
+  novo o endereço de um bloco liberado, e um bloco novo herdava o número do velho só numa das builds (a com mais
+  alocações): `--wrap` da função que libera e a tabela marca o número como morto.
+- **Toda rodada que passa pelo `boot.txt` precisa de uma pasta de saves só dela, vazia.** O New Game só existe com o
+  cartão vazio; uma rodada nova que reaproveitou a pasta da rodada (a) carregou o save e ficou 4000 quadros sem o
+  `mcflow 10`, em todos os roteiros, e tudo o que se comparava com ela (o mixer) falhou por tabela.
+- **O limite de uma exceção se mede em todos os casos dela, não no primeiro.** A diferença da volta do laço do ADX foi
+  medida numa música (10 LSB) e virou decisão; com os 72 ADX com laço na amostra deu 3951 LSB. E um verificador que
+  pede uma janela fixa precisa do caso menor que a janela (laços de 36 amostras): o `som.py` parou com uma exceção do
+  Python, que a rodada contou como "amostras diferentes".
 
 ---
 
