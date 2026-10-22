@@ -197,6 +197,9 @@ typedef struct Tex {
 static Tex sTex[MAX_TEX];
 static uint16_t sTexBucket[TEX_BUCKETS]; /* index + 1 of a cache entry, 0 = empty (open addressing) */
 static Tex *sLast; /* the entry the previous lookup returned */
+#ifdef BT3_GS_ESPERAS
+static int sTexRapida = -1; /* BT3_TEX_RAPIDA (texture_get), lida uma vez */
+#endif
 
 /* The 256-colour tables as textures, by hash of the palette entries they use (64 slots). */
 static struct { uint32_t hash, last; GsTex tex; } sCluts[MAX_CLUTS];
@@ -328,6 +331,9 @@ static GsTex texture_get(int ctx) {
     TexPackImage pack;
     uint32_t packMaxAlpha = 255, rw = tw, rh = th;
     int packFormat = GS_TEXFMT_RGBA8, replaced = 0;
+#ifdef BT3_GS_ESPERAS
+    int feito;
+#endif
 
     if (tw > 1024) { tw = 1024; }
     if (th > 1024) { th = 1024; }
@@ -452,7 +458,18 @@ static GsTex texture_get(int ctx) {
         }
     }
     px = replaced ? NULL : malloc((size_t)tw * th * 4);
-    for (y = 0; !replaced && y < th; y++) {
+#ifdef BT3_GS_ESPERAS
+    /* (F5, etapa 8, texturas: 08-gravacao.md, seção 17) BT3_TEX_RAPIDA=1: a decodificação por linha do gs_core.c
+       (Gs_TexDecode), os mesmos pixels; desligada por padrão, ou num formato que ela não faz, o laço abaixo */
+    if (sTexRapida < 0) {
+        sTexRapida = getenv("BT3_TEX_RAPIDA") != NULL && atoi(getenv("BT3_TEX_RAPIDA")) != 0;
+    }
+    feito = replaced || (sTexRapida && px != NULL && Gs_TexDecode(px, tbp, tbw, psm, tw, th, cbp, cpsm));
+#define TEX_LACO !feito
+#else
+#define TEX_LACO !replaced
+#endif
+    for (y = 0; TEX_LACO && y < th; y++) {
         for (x = 0; x < tw; x++) {
             uint32_t c = Gs_VramRead(tbp, tbw, psm, x, y), a;
             if (bits > 8) {
@@ -468,6 +485,7 @@ static GsTex texture_get(int ctx) {
             px[y * tw + x] = c;
         }
     }
+#undef TEX_LACO
 #ifdef PORT_X360
     {   /* (picos: a decodificação do quadro, gs_internal.h) */
         uint64_t d_ = gpu_now() - tex_t0;
