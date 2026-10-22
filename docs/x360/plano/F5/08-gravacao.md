@@ -1524,3 +1524,29 @@ E no parágrafo logo abaixo da tabela, "Não usar os 16,7 ms dos menus como dura
 como CPU trabalhando" segue valendo; a frase "Reservar os cerca de 3,37 ms entre p99 de 30 e o período como margem proposta para
 a F6" perde a base (o p99 de 30 deixa de ser aceite) e vira: "a margem para a F6 se lê no trabalho informativo e nas imagens de 3
 vblanks com o som ligado".
+
+### (b) A espera pelo vblank de hardware
+
+| Commit | O quê |
+|---|---|
+| (b) | No 360, o `vblank_wait` do `plat_stub.c` pergunta primeiro ao `gs_d3d.cpp` (`GsD3d_VblankEspera`): a thread do jogo espera o evento que a callback de vblank sinaliza, em vez do `Sleep`. `BT3_VBLANK_HW=1` é o padrão; `BT3_VBLANK_HW=0` volta ao `Sleep` (para comparar na mesma build). O `Sleep` fica de reserva: antes da callback (os menus antes do init do backend), depois do `GsD3d_Soltar` (a saída), sem vblank há 50 ms ou um evento que não veio em 50 ms (a Guide, o dispositivo parado); cada passagem é dita no log (`gs_d3d: vblank: a espera no Sleep (motivo; ...)` e `... de volta ao vblank de hardware`, até 20 vezes). Em `PORT_X360` |
+
+**A conta é a mesma do `vblank_wait`** [lido]: um alvo (o número do vblank de hardware que acaba a próxima espera) que anda um por
+chamada; o vblank que já passou não se espera (o passo da luta que passou de um vblank não perde a vez: a segunda espera dele acaba
+no tempo); mais de seis vblanks atrás (100 ms), um alvo novo a partir de agora, sem esperar, como a grade nova do `Sleep`. O
+evento é de reinício automático e pode ser de um vblank já contado: a volta confere pelo número, não pelo evento. O tempo esperado
+entra no `gPortSleptNs` (o `gs_core.c` o desconta do quadro, como antes) e no acumulado do `passos`; o `sPaceNext` passa a ser o
+próximo vblank de hardware (o `Port_VBlankUsLeft` e a reserva continuam com a grade certa).
+
+**Nenhum quadro a mais de atraso** [lido e simulado]: o número de esperas por passo é o mesmo, e cada uma acaba no vblank de
+hardware (mais a volta da DPC à thread, dezenas de microssegundos [estimado]) em vez de num momento da grade do `Sleep`, que não
+tinha fase com o vídeo e acordava até 2,5 ms tarde. Uma simulação das duas contas (`scratchpad`, fora do repositório: 20 mil passos
+de luta com trabalho de 20 a 60 ms, três fases do vídeo) deu o mesmo número de esperas de fato (7.886 nas duas) e o mesmo período
+médio (33,369 contra 33,368 ms); no modo de hardware todo passo que começa depois de uma espera começa no vblank (fase 0), no `Sleep`
+numa fase qualquer. O que muda é só a fase: o caminho do controle à tela fica igual em média e deixa de variar de um passo a outro.
+
+**Os cuidados** [lido]: a callback só sinaliza (DPC); quem espera é a thread do jogo, que nunca toca o dispositivo (a dona, com
+`BT3_GS_DESENHO=1`, é a de desenho, que instala e tira a callback); antes do init não há evento e a espera é o `Sleep`; na saída o
+`GsD3d_Soltar` tira a callback e marca a espera desligada antes de soltar o dispositivo, e a main tira de novo se tomar o
+dispositivo de uma thread que caiu; numa queda o evento segue válido (nunca se fecha) e a espera que estiver em curso volta em até
+50 ms para o `Sleep`.

@@ -473,6 +473,10 @@ static volatile DWORD sVbPerdidas;          /* vblanks com D3DVBLANK_SWAPMISSED 
 static volatile DWORD sVbPuladas;           /* imagens que nunca ficaram na tela (duas trocas entre dois vblanks) */
 static DWORD sVbSwap, sVbSwapN;             /* (só a DPC) o Swap mostrado e o vblank em que entrou */
 static int sVbTemSwap;
+static volatile int sVbLigada;              /* a callback instalada (entre o init e o Soltar) */
+static unsigned __int64 sVbTb0;             /* o mftb e o QueryPerformanceCounter da instalação (a conversão do mftb) */
+static LARGE_INTEGER sVbQ0;
+static int sVbHw;                           /* BT3_VBLANK_HW: 1 (o padrão) a espera é pelo vblank de hardware; 0, o Sleep */
 
 static void WINAPI vblank_cb(D3DVBLANKDATA *d) {
     DWORD n = sVbN + 1, k;
@@ -506,15 +510,103 @@ static void vblank_init(void) {
         Diario_Escrever("gs_d3d: vblank: ERRO no evento; sem a medida da tela");
         return;
     }
+    sVbTb0 = __mftb();
+    QueryPerformanceCounter(&sVbQ0);
     sDev->SetVerticalBlankCallback(vblank_cb); /* (por último: o primeiro vblank pode vir já) */
-    Diario_Escrever("gs_d3d: vblank: a callback do vblank de hardware instalada (a medida da tela no passos)");
+    sVbLigada = 1;
+    Diario_Escrever("gs_d3d: vblank: a callback do vblank de hardware instalada (a medida da tela no passos); a espera de "
+                    "vblank %s (BT3_VBLANK_HW=%d)", sVbHw ? "pelo vblank de hardware, o Sleep de reserva" : "pelo Sleep", sVbHw);
 }
 
 /* (a dona do dispositivo, antes de soltá-lo) */
 static void vblank_tira(void) {
     if (sDev != NULL && sVbEv != NULL) {
+        sVbLigada = 0; /* (a espera volta ao Sleep já, sem esperar os 50 ms sem vblank) */
         sDev->SetVerticalBlankCallback(NULL);
     }
+}
+
+/* (b) A espera pelo vblank de hardware: o vblank_wait do plat_stub.c (a thread do jogo) espera o evento da callback em vez do
+   Sleep. A mesma conta do vblank_wait: um alvo (o vblank que acaba a próxima espera) que anda um por chamada; o vblank que já
+   passou não se espera (o passo da luta que passou de um vblank não perde a vez: a segunda espera dele acaba no tempo); mais
+   de seis vblanks atrás (100 ms), um alvo novo a partir de agora, sem esperar (a primeira chamada também). Nenhuma espera a
+   mais que no Sleep: o número de esperas por passo é o mesmo, e cada uma acaba no vblank de hardware em vez de num momento
+   da grade do Sleep, sem fase com o vídeo. O Sleep fica de reserva: sem a callback (antes do init, depois do Soltar), com
+   BT3_VBLANK_HW=0, sem vblank há 50 ms ou um evento que não veio em 50 ms (a Guide, o dispositivo parado). Devolve 2 se
+   esperou, 1 se o vblank já tinha passado (sem espera), 0 para o Sleep; *desdeNs: de o último vblank até agora. */
+static DWORD sVbAlvo;
+static int sVbTemAlvo, sVbNaReserva;
+static unsigned sVbReservas, sVbDitas;
+
+/* os ns de um tique do mftb (contra o QueryPerformanceCounter desde a instalação; no primeiro segundo, o do contador) */
+static double vblank_ns_por_tique(void) {
+    LARGE_INTEGER q;
+    unsigned __int64 tb = __mftb();
+    QueryPerformanceCounter(&q);
+    if (tb - sVbTb0 > 50000000ull && q.QuadPart > sVbQ0.QuadPart && sFreq.QuadPart != 0) {
+        return (double)(q.QuadPart - sVbQ0.QuadPart) * 1e9 / (double)sFreq.QuadPart / (double)(tb - sVbTb0);
+    }
+    return sFreq.QuadPart != 0 ? 1e9 / (double)sFreq.QuadPart : 20.0;
+}
+
+static int vblank_reserva(const char *motivo) {
+    sVbTemAlvo = 0;
+    sVbReservas++;
+    if (!sVbNaReserva && sVbDitas < 20) { /* (a passagem, não cada espera; poucas vezes: a Guide pode ir e vir) */
+        sVbDitas++;
+        Diario_Escrever("gs_d3d: vblank: a espera no Sleep (%s; %u esperas no Sleep até aqui)", motivo, sVbReservas);
+    }
+    sVbNaReserva = 1;
+    return 0;
+}
+
+extern "C" int GsD3d_VblankEspera(unsigned long long *desdeNs) {
+    DWORD n;
+    unsigned __int64 tb, t;
+    double f;
+    int r = 1;
+    *desdeNs = 0;
+    if (sVbEv == NULL || !sVbHw || !sVbLigada) {
+        return 0;
+    }
+    f = vblank_ns_por_tique();
+    n = sVbN;
+    __lwsync();
+    tb = sVbTb;
+    t = __mftb();
+    if (n == 0) {
+        return 0; /* (instalada há menos de um vblank) */
+    }
+    if ((double)(t - tb) * f > 50e6) {
+        return vblank_reserva("sem vblank de hardware há 50 ms");
+    }
+    if (sVbNaReserva) {
+        sVbNaReserva = 0;
+        if (sVbDitas < 20) {
+            sVbDitas++;
+            Diario_Escrever("gs_d3d: vblank: a espera de volta ao vblank de hardware");
+        }
+    }
+    if (!sVbTemAlvo || (int)(n - sVbAlvo) >= 6) {
+        sVbAlvo = n + 1; /* (a primeira, ou 100 ms atrás: o próximo vblank é o alvo da espera seguinte) */
+        sVbTemAlvo = 1;
+    } else if ((int)(n - sVbAlvo) >= 0) {
+        sVbAlvo++; /* (atrasado: este vblank já passou, sem esperar) */
+    } else {
+        do {
+            if (WaitForSingleObject(sVbEv, 50) != WAIT_OBJECT_0) {
+                return vblank_reserva("o evento do vblank não veio em 50 ms");
+            }
+            n = sVbN; /* (o evento pode ser de um vblank já contado: confere pelo número) */
+        } while ((int)(n - sVbAlvo) < 0);
+        __lwsync();
+        tb = sVbTb;
+        t = __mftb();
+        sVbAlvo++;
+        r = 2;
+    }
+    *desdeNs = (unsigned long long)((double)(t - tb) * f);
+    return r;
 }
 
 /* para o passos.c: as imagens por vblanks na tela (1, 2, 3, 4 ou mais), as trocas perdidas, as imagens puladas e os
@@ -2421,7 +2513,8 @@ static int d3d_init(void) {
         return 0;
     }
     QueryPerformanceCounter(&sUltimoFim);
-    vblank_init(); /* (F5, etapa 8: a medida da tela) */
+    sVbHw = env_num("BT3_VBLANK_HW", 1) != 0; /* (F5, etapa 8, seção 18: a espera pelo vblank de hardware) */
+    vblank_init(); /* (F5, etapa 8: a medida da tela e o vblank de hardware) */
     return 1;
 }
 

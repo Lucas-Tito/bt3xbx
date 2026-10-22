@@ -1876,3 +1876,8 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Callback de vblank (e de troca) roda numa DPC**: só `Interlocked*`, `SetEvent` e afins com handle válido, sem float, sem
   espera, sem o dispositivo. Guarde o `mftb`, some inteiros, sinalize um evento que nunca se fecha (assim ele segue válido numa
   queda) e tire a callback antes de soltar o dispositivo (`SetVerticalBlankCallback(NULL)`, pela dona).
+- **Marcar o tempo do jogo pelo vblank de hardware, não pelo `Sleep`.** O `Sleep` do 360 é em milissegundos inteiros e não tem
+  fase com o vídeo: o jogo acordava até 2,5 ms tarde e a imagem às vezes perdia o vblank. A espera por um evento sinalizado pela
+  callback de vblank, com a mesma conta de antes (um alvo por chamada; o vblank que já passou não se espera; muito atrás,
+  recomeça) não soma espera nenhuma e deixa a fase fixa. Deixe o `Sleep` de reserva para antes do dispositivo, para a Guide (um
+  evento que não vem em 50 ms) e para a saída, e uma chave que volta a ele para medir um contra o outro na mesma build.
