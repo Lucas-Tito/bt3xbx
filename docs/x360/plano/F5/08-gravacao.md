@@ -690,3 +690,115 @@ estágio 5 (931 passos de luta). Critério no Deck com tudo certo (21/10).
 Sem queda, sem `CHEIO`, sem textura branca, as 32 texturas pretas de sempre, memória livre mínima 38 MB. A luta ficou a 0,4 ms
 dos 33,37: a meta ainda não fecha com margem, e o p95 (45 ms) mostra os picos. O próximo alvo é o `GsVu1_Unpack` (3 a 4 ms, a cópia
 V4-32 presa à memória, seção 9).
+
+## 11. O custo do `GsVu1_Unpack`: o estudo e o protótipo da pré-carga (22/10/2026)
+
+Branch `f5-unpack`, sobre a main `1ac0a42`. Depois do `vu_plano` (seção 10) a luta está em 33,8 ms; o `GsVu1_Unpack` leva de
+3,4 a 4,1 ms por quadro de luta pesado, todo no caminho da cópia `V4-32`. Convenção: **[medido]**, **[lido]** (no código ou no
+binário) e **[estimado]**.
+
+### O caminho, ponta a ponta [lido]
+
+- **De onde vêm os dados.** O `run_chain` (`gs_core.c`) anda a cadeia do quadro e passa os dados de cada etiqueta ao `vif`, que
+  chama o `GsVu1_Unpack` com o ponteiro no próprio pacote quando os dados do comando estão todos na etiqueta (o caso comum; senão
+  junta no `buf`). Os vértices vêm das cadeias dos modelos, fora dos dois buffers de lista: são as `CNT`/`CALL` externas da
+  parte 1a do degrau 1 (`08-threads.md`), uns 1,8 MB por quadro de luta no `f5_duelo` (máximo 2,4), **dados persistentes dos
+  modelos**, não montados por quadro. A gravação os lê uma vez por quadro; com os 2,2 MB de textura que passam pelos `REF` no mesmo
+  quadro, não cabem na L2 de 1 MB (compartilhada pelos três núcleos): chegam frios. Ficam no heap do jogo, abaixo de `0x40000000`,
+  em **páginas de 4 KB** (decisões: leitura aleatória a 345 ns, contra 120 com páginas de 64 KB).
+- **Para onde vão.** `vu.mem`, os 16 KB da memória de dados da VU1, no `static struct vu` do `gs_vu1.c`. O endereço é `imm` mais o
+  `tops` quando o bit 15 está ligado: o double buffer do `BASE`/`OFFSET` (o `tops` alterna a cada `MSCAL`/`MSCNT`, `vu1_call`).
+- **Quem lê.** No caminho do shader (os `hle_program0`, `1`, `2`, `4`, `6`, `78`), o cabeçalho do lote em `top`, os vértices de
+  `top + 3` ou `top + 5` e as constantes do começo da memória; os `GsGpu_DrawVu0/4` copiam os vértices inteiros (48 bytes cada)
+  para o `gsVuVerts`, e os programas 0 e 1 fazem isso duas vezes, uma por camada; o `GsGpu_DrawVu6` lê dois dos quatro vetores de
+  cada vértice. O interpretador (`run`, `kick`) lê o que o programa pedir e é o único que **escreve** na `vu.mem`; o caminho do shader
+  nunca escreve nela. O `GsVu1_StateKeep` copia a estrutura inteira.
+- **Quantas vezes, de que tamanho** [medido, log do console da seção 9]: de 7,6 a 9,3 mil cópias `V4-32` por quadro de luta pesado,
+  de 133 a 153 mil vetores, uns **16,5 vetores (264 bytes, duas ou três linhas de 128) por chamada**, e de 3,4 a 4,1 ms: **uns 440 ns
+  por chamada**, 27 ns por vetor. É perto de uma falta de memória com página de 4 KB por chamada (345 ns): o custo é **a primeira
+  linha de cada cópia esperando a memória**, não o volume.
+- **O `memcpy` do CRT do XDK** [lido, `dumpbin /disasm` do `default.exe`]: alinha o destino a 8 copiando de 1 a 7 bytes, e escolhe
+  pelo alinhamento da origem: `ld`/`std` de 8 bytes se ela também ficou alinhada a 8, `lwz`/`stw` de 4 se ficou a 4, byte a byte
+  nos outros casos. A partir de 128 bytes ele já pede com `dcbt` até 8 linhas adiante, mas só dentro da própria cópia: a primeira
+  linha sempre espera, e uma cópia de 264 bytes quase não tem o que adiantar. Este XDK não tem `XMemCpy` (o `memcpy` é o que faz
+  esse papel). **A `vu.mem` está desalinhada:** ela fica no deslocamento 668 da estrutura, e a estrutura começa em `0x82973770`
+  (alinhada a 16; lido no `addi r26` do `vu1_unpack`), então a `vu.mem` cai em 12 módulo 16, 4 módulo 8. Com a origem alinhada a
+  16 (os dados de um `UNPACK` começam numa palavra de quatro), o `memcpy` copia 4 bytes, fica com a origem em 4 módulo 8 e anda de 4
+  em 4 bytes. O mesmo vale para a cópia dos vértices da `vu.mem` para o `gsVuVerts` nos `DrawVu*`.
+
+### As opções
+
+| | O que muda | Ganho no Xenon | Risco | Como se prova |
+|---|---|---|---|---|
+| **(b) pré-carga** (recomendada) | `dcbt` na origem inteira do `Unpack` e D bytes depois dela (o `Unpack` seguinte vem logo atrás na mesma cadeia), e as duas primeiras linhas da etiqueta seguinte no `run_chain` antes de passar a atual ao `vif` (o `CALL` para a cadeia de outro modelo cai longe). Só no 360 | **1,5 a 3 ms** [estimado]: a espera por chamada sai do caminho se a memória atender as faltas em paralelo; o que sobra é a cópia com os dados na cache. Incerto: se o `dcbt` sobrevive a uma falta de TLB com páginas de 4 KB (se o Xenon o descarta, a primeira linha de cada página nova ainda espera: uma espera a cada 4 KB, não a cada 264 bytes) | Nenhum para a lista: o `dcbt` é um aviso, não falha nem muda o que se copia. O custo de emitir: uns 16 mil `dcbt` por quadro, a maioria de linhas já pedidas | A cópia `V4-32` da linha `por dentro`, em ns por chamada, com a chave ligada e desligada, na mesma build; a mediana depois |
+| (d1) `vu.mem` alinhada a 128 | No 360, a `vu.mem` no começo da estrutura, com a estrutura alinhada a 128 (`__declspec(align(128))`): o `memcpy` passa a `ld`/`std` no `Unpack` e na cópia dos vértices dos `DrawVu*` | 0,1 a 0,4 ms [estimado]: metade das cargas e gravações da cópia, com os dados já na cache; soma com a (b) | Nenhum para a lista (só a disposição na memória; o `StateKeep` copia a estrutura inteira). Não cabe numa chave de partida: é de compilação | Duas builds, a cópia `V4-32` e a `VU1` da linha por família |
+| (a) sem cópia | Os `hle_program*` leem os vértices direto do pacote (um ponteiro por região da `vu.mem`) | Pequeno, uns 0,3 a 0,5 ms [estimado]: a leitura fria **não some, muda de lugar** (para o `memcpy` do `DrawVu*`, que espera a mesma memória); some só a passagem quente pela `vu.mem` | Médio a alto (seção 5, candidato 7): o interpretador, o `kick`, as constantes do `MSCAL`, o `tops` do double buffer e o `StateKeep` leem a `vu.mem`; cada região teria de virar ponteiro ou ser materializada antes de qualquer leitura fora do caminho do shader | Seções da VU1 iguais quadro a quadro na `x86gv` e na `ppcg` |
+| (c) pular o não lido | Copiar só o que o caminho do shader lê | Quase nada [estimado]: o shader lê os vértices inteiros nos programas 0, 1, 2, 4, 7 e 8; o que sobra (dois vetores de cada quatro no programa 6, o cabeçalho de objeto do programa 4, o leque do 6) cai nas **mesmas linhas de 128 bytes** do que se lê, e a espera é por linha | Médio: a mesma regra de quando a cópia pode faltar da (a) | A contagem abaixo |
+
+**Outra, fora do `Unpack` (d2):** no 360 o `getenv` do `gs_internal.h` é o `Port_GetEnv`, que procura o nome numa tabela por
+comparação de ponteiros a cada chamada, e o `vu1_call` faz três por chamada (`BT3_VU_DUMP`, `BT3_VU_CALLS` e o `BT3_VU_INTERP` do
+programa), com uns 5 mil lotes por quadro de luta [medido, seção 9]. Guardar as três respostas em variáveis estáticas, como o
+`BT3_VU1` já faz, tira de 0,2 a 0,8 ms da família da VU1 [estimado, depende do tamanho da tabela]. Barato, e a mesma prova da (d1).
+
+### A contagem no WSL (pendente)
+
+`BT3_UNPACK_CONTA=1`, só na `x86gv` (`headless.py --alvo x86 --gpu --vu1`, condição `BT3_TESTE_VU1`; nem a x86 plana nem o 360 a
+têm), escreve por quadro `vu1 unpack: quadro Q: v4 V em C chamadas, lidos L, perdidos P, pendentes no fim E, origem repetida R,
+outros caminhos O`: cada vetor que a cópia `V4-32` põe na `vu.mem` fica pendente até uma leitura do caminho do shader (as regiões
+dos `hle_program*` e dos `DrawVu*`) ou até um lote que roda o interpretador (que conta a memória toda como lida: o limite de cima);
+um pendente que outro `Unpack` sobrescreve não foi lido nunca; as origens (ponteiro, vetores) repetidas no quadro dizem se valeria
+lembrar uma cópia entre lotes. A rodada (`X86=x86gv BT3_UNPACK_CONTA=1 vu1_perfil.sh lista x86 f5_duelo LOG`, mais a `.text` da x86
+plana) não rodou: o WSL estava fora da rede (`No route to host`) durante todo o estudo. O que ela decide é pouco: a (c) já perde
+pela linha de cache e a (a) pela leitura fria que muda de lugar; o que o WSL não mostra de jeito nenhum é a espera de memória do
+Xenon (a x86 tem pré-carga em hardware e cache grande), e é isso que decide a (b).
+
+### O protótipo (só no 360, sob chave)
+
+| Commit | O quê |
+|---|---|
+| `fb1075d` | A contagem acima (`BT3_TESTE_VU1`) e **`BT3_UNPACK_PRE=N`** no `vu1_unpack`: antes da cópia `V4-32`, um `dcbt` por linha de 128 bytes da origem inteira e de mais D bytes depois dela. N = 1 dá D = 1024; N >= 128 é o próprio D; sem a chave ou com 0, a cópia de sempre |
+| `e21e93f` | Com a chave, o `run_chain` pede também as duas primeiras linhas da etiqueta seguinte antes de passar ao `vif` os dados da atual |
+| `a320928` | O `if` vazio que sobrava da contagem no `hle_program78` sai: o pré-processado da x86 plana do `gs_vu1.c` e do `gs_core.c` fica igual ao da main token a token (`gcc -E -P`, sem espaços) |
+
+O `__dcbt` é declarado como no `ppcintrinsics.h` (o `cl` o emite em linha; o `default.map` não tem o símbolo). Nenhuma linha nova
+fora de `PORT_X360` e `BT3_TESTE_VU1`: a `.text` da x86 plana tem de seguir `cc46fa0752f092fca305bc8bf2e2e54390763af0` (a
+conferir no WSL com o resto do critério), e as listas da `x86gv` e da `ppcg` não podem mudar porque nenhuma das duas compila a
+pré-carga (a `ppcg` não tem `PORT_X360`).
+
+**A build do 360** (`build_f2.sh` no `a320928`, `trocas.tsv` do `bt3xbx-d1`): 317 de 317 fontes sem erro, os mesmos avisos por
+fonte que a build da seção 10, os mesmos 103 stubs, `default.dat` `6d30baaf87b1177fb2359a855f8befc0` e `default.swap`
+`a7cf723fbfaea860fcc3707ad288e755` iguais; `default.xex` `f824d2ed29df866443b6b18869a1b200`. Três ambientes na pasta da build,
+todos com a medição ligada (sem `BT3_TEMPOS=0`) e o resto igual ao da seção 10: `ambiente.txt` com `BT3_UNPACK_PRE=1`,
+`ambiente-sem.txt` com `BT3_UNPACK_PRE=0` e `ambiente-4k.txt` com `BT3_UNPACK_PRE=4096`.
+
+### A rodada no console: o que olhar
+
+O roteiro de sempre (START pula o filme; Duelo, Goku contra Kuririn, estágio 5; 60 s de luta), uma abertura por ambiente, na
+ordem sem, 1, 4k (o `ambiente.txt` de cada vez renomeado no console). Em cada uma, as linhas `gs: gravação por família, por dentro`
+dos trechos de luta:
+
+1. **A cópia `V4-32` em ns por chamada** (ms vezes 10^6 dividido pelas vezes): uns 440 sem a chave. A aposta: com a chave, abaixo
+   de 250. Se não cair, o `dcbt` está sendo descartado (a suspeita é a falta de TLB das páginas de 4 KB) e a (b) não rende sem mudar
+   a página do heap, o que é outra decisão.
+2. A linha `gravação por família` de cima: a `VU1` não pode subir (a cópia dos vértices do `DrawVu*` passa a achar as linhas na
+   cache, se subir é concorrência pela L1 da thread vizinha), nem o resto.
+3. As capturas `BT3_SHOT=600` iguais às de antes, nenhum `CHEIO`, sem queda.
+4. Com o vencedor, uma abertura com `BT3_TEMPOS=0` para a mediana (`passos: janela`) contra os 33,8 ms da seção 10 e o p95 contra
+   45,5.
+
+### A recomendação, em ordem
+
+1. **(b), a pré-carga**, se o console confirmar o item 1: a chave vira o padrão no 360 (`BT3_UNPACK_PRE=0` desliga), com a
+   distância que der melhor entre 1 KB e 4 KB.
+2. **(d2), o `getenv` por lote guardado** e **(d1), a `vu.mem` alinhada a 128**: baratos e sem risco para a lista; uma build com os
+   dois, comparada pela linha por família.
+3. **(a), sem cópia**, só se depois disso o `Unpack` ainda pesar: rende pouco, porque a leitura fria só muda de lugar, e custa a
+   regra de quando a cópia pode faltar.
+4. **(c)** não vale: o que não se lê divide as linhas de cache com o que se lê.
+
+**O plano da (b) depois do console:** um commit que tira a chave de teste (a distância vencedora fixa, a chave só para desligar),
+no `gs_vu1.c` e no `gs_core.c`, tudo em `PORT_X360`. Provas: o pré-processado da x86 plana igual e a `.text`
+`cc46fa0752f092fca305bc8bf2e2e54390763af0` no WSL; as listas da `x86gv` e da `ppcg` com o `divergencias.py` saindo 0 no
+`f5_duelo` e no `f5_treino`, com e sem `BT3_GS_THREAD=1 BT3_GS_DESENHO=1` (a prova de que nada fora do 360 mudou, como na seção
+10); o critério dos roteiros (`REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` e `SEMMAPA=1 IMG=1 roteiros.sh duelo`, com
+tudo certo e o git sem alterados); e a rodada do console com a mediana, o p95, as capturas e a linha `por dentro`.
