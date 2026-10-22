@@ -1838,6 +1838,30 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Capturas comparáveis entre escalas:** reduzir para o tamanho da escala 1 pela média dos pixels de saída de cada pixel do GS, e
   pedir os buffers maiores só quando a escala os usa: um buffer estático novo mudaria a memória livre da build sem a chave.
 
+### A retomada do 720p (F5, etapa 8, `plano/F5/08-720p.md`, seção 9)
+
+- **A borda `floor(x * s)` só serve enquanto a fração de `x * s` não passa de 0,5.** A regra do rasterizador com os centros em .5 é
+  `ceil(x * s - 0,5)`, em inteiros `(2 x num + den - 1) / (2 den)` com a escala em fração; nas escalas 1, 1,5 e 2 as duas dão os
+  mesmos números, e na 1,6 a `floor` põe o pixel de saída 1 no pixel 1 do GS, quando o centro dele é do 0. Ao trocar a conta, um
+  programa que imprime tudo o que o header antigo calcula e o mesmo pelo novo (`diff` das duas saídas) prova que as escalas de antes
+  não mudaram; uma cópia do header com a regra velha tem de falhar só nas escalas novas.
+- **O `fxc` do XDK estima o custo de cada shader:** a listagem `/Fc` termina com os ciclos por vetor de 64 pixels, as instruções,
+  os registradores e as threads. Compare as variantes de um shader por ela antes de gastar uma rodada (o `ps_gs` 74 a 80 ciclos, o
+  especializado 16, limitado pelo interpolador). A mesma listagem mostra a ordem das multiplicações: duas variantes que têm de dar o
+  mesmo byte precisam da mesma ordem, porque o `fxc` reassocia (o `t * cor * k` sai `(t * k) * cor`).
+- **O `tex2Dgrad` custa no Xenos:** sai `getGradients`, `serialize` e `setGradientH`/`V` antes da leitura. Com um nível de textura,
+  sem filtro de mip e o mesmo filtro de perto e de longe, o gradiente não escolhe nada, e o `tex2D` lê o mesmo texel; o que só o
+  console prova fica dito como tal no plano.
+- **Variante de shader por desenho sem mexer no resto:** o `prepara` só trocava o pixel shader quando mudava a família do desenho;
+  o shader escolhido fica guardado ao lado (valendo só enquanto a família não muda) e, com a chave, é comparado a cada desenho.
+- **O Resolve exige retângulos em múltiplos de 8 também nas cópias "inteiras":** a cópia dos ids de 640 x 448 na escala 1,6 tem
+  717 linhas e vai a 720.
+- **Imagem do jogo não vem para cá, mas a comparação pode:** com o FNV-1a de cada captura no log do console, duas aberturas que
+  têm de dar as mesmas imagens se conferem pelo `grep` do log; o `compara_quadros.py` no WSL só entra se algum número diferir.
+- **O `git stash` é um só para todos os worktrees do repositório:** apareceu na lista um stash de outro agente (`f5-envio-rapido`).
+  Um `stash pop` no momento errado aplicaria o trabalho dele no seu worktree. Para tirar um pedaço de um commit, guarde a cópia do
+  arquivo no scratchpad e volte com ela.
+
 
 ### As texturas novas (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 17)
 
