@@ -1448,3 +1448,161 @@ das linhas `picos:   quadro ..., texturas` (todas as da luta, do quadro 4672 em 
 - **Com o som ligado, mais passos logo acima do período** (11,5% dos intervalos acima de 34,37 ms, contra 6,3%; p95 34,84
   contra 34,00): o custo do som na thread do jogo (RPC, início de fluxo) ou na memória, a medir à parte. Fica para o corte
   seguinte da etapa 8.
+
+## 18. A VU1 gravada direto nos buffers da GPU, `BT3_VU1_DIRETO` (22/10/2026)
+
+Branch `f5-vu1copia`, sobre a main `64353a4`. O passo (e) da investigação de hoje: a thread de desenho (hardware 3, dona do D3D)
+gasta no `frame_end` uns **3,2 a 3,7 ms por quadro pesado na cópia da VU1** [medido fora da janela], e o caminho da imagem é em
+série (entrega do jogo, gravação ocupada, `frame_end`, GPU): o que estoura o intervalo é a variação dessa soma. Convenção:
+**[medido]**, **[lido]** e **[estimado]**.
+
+### O caminho de hoje [lido]
+
+1. **A gravação** (`gs_draw.c`, os três `GsGpu_DrawVu*`) grava, por lote, os vértices (48 bytes cada, `memcpy` da memória da VU)
+   em `gsVuVerts`, os índices da tira (`base + i`, três por triângulo) em `gsVuIdx`, um bloco de constantes (`Vu0Uniform`, 304
+   bytes) em `gsVuUni` e a faixa de índices do desenho (`vu_faixa`). As listas são do jogo da gravação (`sJogos`, dois que se
+   alternam na entrega, seção 8), em memória com cache (`malloc`).
+2. **A entrega** (`entrega` do `gs_d3d.cpp`, na gravação, com o desenho parado) faz o `vu_plano`: para cada desenho da VU1, a
+   faixa de vértices que os índices tocam e a posição no par de buffers da GPU (`sVuIni`, `sVuLo`, `sVuNv`).
+3. **O `frame_end`** (desenho) faz o `vu_copia`: troca de par (dois, `VU_PARES`), `IsBusy`/`BlockUntilNotBusy` do par (o do quadro
+   de dois atrás), `Lock` dos dois buffers (memória de escrita combinada, a do D3D sem `D3DUSAGE_CPU_CACHED_MEMORY`) e copia, por
+   desenho, a faixa de vértices (`memcpy`) e cada índice rebaseado (`ib[ini + k] = idx[first + k] - lo + nv`): uns 54 mil
+   vértices (2,5 MB) e 129 mil índices (0,5 MB) num quadro de luta (seção 8). É a "cópia da VU1".
+4. **As constantes não se copiam**: o `desenha_vu` passa o `Vu0Uniform` da lista direto ao `SetVertexShaderConstantF`, que o põe
+   no buffer de comandos. Já estão em memória com cache, como a proposta pede.
+
+Como os desenhos da VU1 recebem vértices novos a cada lote, as faixas não se sobrepõem e saem em ordem: o par recebe a mesma
+lista, na mesma posição. A cópia só move os bytes de um lugar para o outro.
+
+### A proposta vale, com três jogos e não dois
+
+**Vale**: a gravação já escreve esses mesmos bytes, uma vez, numa lista; escrevendo-os no buffer da GPU, a cópia some do desenho
+inteira, e a gravação não escreve nada a mais (escreve em memória de escrita combinada em vez de memória com cache, sem a leitura
+da linha antes de escrever). O desenho certo:
+
+- **Três jogos de buffers, não o par das listas.** Os dois jogos de listas se alternam entre a gravação e o desenho, mas a GPU
+  anda atrás do desenho: o quadro N é desenhado (a CPU) no `frame_end` N, e a GPU o lê depois, até uns 17 a 20 ms (`08-threads.md`, seção 2.1,
+  a linha 7), enquanto o `frame_end` leva uns 12,5. A gravação começa o quadro N+2 no jogo de N logo que o `frame_end` N
+  acaba (a entrega N+1 espera só isso): a GPU pode ainda estar lendo N. Com três jogos em rodízio (o quadro s no jogo s % 3), o
+  jogo que a gravação começa é o de três quadros atrás, e o `frame_end` do de dois atrás já acabou: a GPU teve esse `frame_end`
+  inteiro para acabar o de três atrás. É o mesmo instante e o mesmo quadro que o `vu_copia` de hoje espera com dois pares no
+  começo do `frame_end` (`IsBusy`), que não esperou nenhuma vez na etapa 6 (`0 esperas pelo par`, `06.md`).
+- **A gravação não chama o dispositivo** ("o jogo nunca pergunta à GPU, `IsBusy` é da dona", seção do filme no `gs_d3d.cpp`). O
+  desenho põe, antes do `Present`, uma marca da GPU (`InsertCallback(D3DCALLBACK_IDLE | D3DCALLBACK_CPU1)`, a mesma dos picos e dos
+  tempos) com o número do quadro; o callback roda quando a GPU acabou tudo o que veio antes e grava o número (`sVdFeito`). A
+  gravação compara antes de regravar um jogo e, se a GPU não largou, espera ela mesma (100 µs por volta), **nunca o desenho**;
+  passados 100 ms grava assim mesmo, contado (como as vagas do filme). Uma cerca comum (`InsertFence`) pediria o `IsFencePending`
+  da thread da gravação; a marca custa à GPU um esvaziamento por quadro no fim dele, onde ela já está acabando.
+- **Nada de reler a memória de escrita combinada.** A gravação lia dois índices por desenho de volta da lista (`vu_faixa`, o
+  primeiro e o último índice, uns 5 mil desenhos por quadro). Em escrita combinada cada leitura vai à memória. A faixa passou a vir
+  de quem gera os índices (commit `0109293`): a tira inteira nos programas 4 e 0, e nos que pulam triângulos marcados (o 6 e os
+  destroços do 0) o primeiro e o último triângulo sem marca, lidos dos vértices de entrada (a memória da VU, com cache). Nenhum
+  outro ponto da gravação lê `gsVuVerts` ou `gsVuIdx` (o `memcpy` e as escritas dos índices só escrevem).
+- **A escrita sai do núcleo antes de a GPU ler.** A escrita combinada fica nos buffers de junção do núcleo da gravação; o `lwsync`
+  da trava da entrega não a ordena. A entrega do backend faz um `__sync` quando o retrato é direto (o mesmo do filme, `filme360.c`).
+- **Os buffers pelo XG**, como as texturas (`xg_cria`): cabeçalhos `XGSetVertexBufferHeader`/`XGSetIndexBufferHeader` sobre
+  `XPhysicalAlloc` de escrita combinada, sem `Lock`. A ordem dos bytes dos vértices é a da declaração (`D3DDECLTYPE_FLOAT4`, 8 em
+  32), a dos índices a do formato (`D3DFMT_INDEX32`), as mesmas de antes.
+- **As constantes ficam onde estão**, nas listas (com cache).
+
+### O que mudou
+
+| Commit | O quê |
+|---|---|
+| `0109293` | A faixa de cada desenho da VU1 (`vu_faixa`) de quem gera os índices, sem reler a lista (`vu_faixa_marcas` para os triângulos marcados). O mesmo valor, nos dois modos; o `BT3_VU_PLANO_CONFERE` confere |
+| `e562d0c` | `BT3_VU1_DIRETO=1` (desligado por padrão, só com a divisão): os ganchos `vuJogo` e `vuFeito` do `GsBackend`; no fim do `GsGpu_Init`, `vu_direto_liga` pega os três jogos, põe as capacidades da VU1 nas deles (se menores) e solta as listas da VU1 dos dois jogos; a cada entrega, depois de acordar o desenho, `vu_direto_proximo` passa ao jogo seguinte (esperando a GPU, se preciso); o retrato leva `vuJogo` e `vuSeq`. A espera conta na família `espera` da entrega. O falso (`gpu_falso.c`) com o mesmo arranjo e uma GPU falsa atrasada (abaixo) |
+| `df50afc` | O 360: os três jogos no `vu_init` no lugar dos dois pares (sem memória, os pares), o `frame_end` desenha do jogo do retrato sem o `vu_copia`, a marca antes do `Present`, o `__sync` na entrega; o tempo da cópia no log de 60 quadros (`VU1, buffers: ...; gravados direto em 3 jogos de buffers ...`, `cópia X ms por quadro (pior Y)`) e na linha dos picos (`frame_end F (cópia da VU1 c)`) |
+
+**A memória (360, `BT3_VU_VERTS=98304`).** Sem a chave: as listas da VU1 nos dois jogos (2 x 14,5 MB) e dois pares (11,8 MB),
+40,8 MB. Com ela: três jogos de 5,9 MB, 17,7 MB: **uns 23 MB a mais livres**. A capacidade da VU1 na gravação passa de 260.000
+vértices e 524.288 índices para 98.304 e 294.912, as do par de hoje (o maior quadro medido: 53.618 e 128.907). O que não cabe
+passa a ser pulado na gravação (como os outros caminhos cheios, seção 8), não no `vu_plano`.
+
+**A GPU falsa do WSL.** No falso, os três jogos são `malloc` com a capacidade das listas (a lista sai a mesma) e uma GPU falsa os
+lê com atraso: o quadro desenhado agora é relido (o hash dos vértices e dos índices refeito sobre o jogo) `BT3_GPU_FALSO_ATRASO`
+quadros depois (padrão 1; 0 a 2), e só então o `vuFeito` o dá por lido. Um jogo regravado antes da hora sai como `gpu_falso: VU1
+direto: o jogo J do quadro de ordem S relido diferente` e no resumo (`N quadros relidos pela GPU falsa (atraso A), D
+diferentes`). Com o atraso 2 a gravação precisa esperar a cada quadro (o jogo de três atrás é lido no fim do quadro seguinte ao
+que ela acabou de entregar): é o que exercita a espera.
+
+### A estimativa [estimado]
+
+- **Desenho:** os 3,2 a 3,7 ms da cópia nos quadros pesados saem inteiros (fica a troca de ponteiro); o `frame_end` deles cai
+  nisso. No caminho em série, uns 3 ms a menos onde a cópia pesava.
+- **Gravação:** os mesmos bytes, uma vez, agora em escrita combinada (sem a leitura de cada linha de 128 bytes antes de escrever,
+  e sem sujar o L2 com 3 MB por quadro): igual ou um pouco menos. A espera pela GPU deve ser zero (o mesmo instante em que o
+  `vu_copia` não esperava). O risco é a junção da escrita combinada com três fluxos intercalados (vértices, índices, e as listas
+  com cache no meio): o `ocupada` dos picos diz.
+- **GPU:** uma marca por quadro (um esvaziamento no fim, como a dos picos, que a rodada já liga).
+
+### As provas
+
+**Feitas aqui [medido]:**
+
+- **Fora das builds de teste e do 360 nada muda.** O `gcc -E -P` de cada `port/src/gs/*.c` na configuração da x86 plana (sem
+  definições, com `-Iport/x360/headless -Iport/x360/src/gs/sdl`) sai igual na main (`64353a4`) e no branch; nas da `x86gv`
+  (`-DBT3_TESTE_VU1 -DBT3_GPU_FALSO`) e da `ppcg` (`-DPORT_BIG_ENDIAN -DBT3_GPU_FALSO`) o `gs_draw.c` sai diferente, como deve. O
+  `gs_draw.c` da x86 plana pré-processa inteiro (4.242 linhas, sem erro), e o controle (`gsScale = 2` trocado por `3` numa cópia)
+  sai diferente. (O `gs_gpu.c` e o `gs_gl.c` param no `shaders.h` gerado, iguais dos dois lados; não entram nas builds sem
+  janela.) Logo a `.text` da x86 plana é a da main, `43444ea4d03a6d448aa1ae74a631e35b356a7caa`; a rodada abaixo a mede.
+- **A sintaxe** do `gs_draw.c` (as três configurações) e do `gpu_falso.c` no `gcc -fsyntax-only -Wall`: sem aviso.
+- **A build do 360** (`build_f2.sh` no `df50afc`): 317 de 317 fontes sem erro, os avisos por fonte iguais aos da build da main
+  (347 arquivos de saída do `cl`, nenhum diferente; o `gs_d3d.cpp` sem aviso), os mesmos 103 stubs (`stubs.txt` igual),
+  `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap` `abbd7589c8425797c4a2639068c9bf54`, iguais. No `default.map`:
+  `vu_faixa_marcas`, `vu_direto_proximo`, `vu_direto_liga`, `vu_jogo`, `vu_feito`, `vu_cb`, e o `XGSetVertexBufferHeader` e o
+  `XGSetIndexBufferHeader` do `xgraphics.lib`. O `.c` preparado pelo `c89.py` conferido no `vu_direto_proximo`.
+
+**A rodada do WSL (serviço `claude-vu1copia`, disparado sem esperar).** O script `~/vu1copia/rodada.sh` (usuário `codex`, worktree
+`~/bt3xbx-vu1copia` do `vu1copia.bundle`, cada passo pesado em `flock ~/wsl.lock`), resumo em `~/vu1copia/provas.resumo`, uma linha
+por passo terminando em `FIM`. Todas as listas com as duas threads (`BT3_GS_THREAD=1 BT3_GS_DESENHO=1`) e `BT3_VU_PLANO_CONFERE=1`:
+
+1. A `.text` da x86 plana na main e no branch (vale com `43444ea4…` nas duas).
+2. `x86gv`, `f5_duelo` e `f5_treino`: a chave 0 contra 1; a chave 1 com o desenho atrasado 20 ms e a GPU falsa atrasada 2 quadros
+   (a espera da gravação exercitada); a chave 1 com a gravação atrasada 20 ms; e a chave 1 sem a divisão (ignorada). Vale com o
+   `divergencias.py` saindo 0 em todos contra a chave 0, os hashes de sempre (`08a98b6d05b8775a` e `f76f0f6849b64629`), `0
+   diferentes` na linha `gpu_falso: VU1 direto: N quadros relidos` e no `BT3_VU_PLANO_CONFERE`, nenhuma espera além do limite
+   (`passaram do limite` 0) e, com a GPU atrasada 2, esperas acima de zero.
+3. **As sabotagens** (`x86gv`, `f5_duelo`, o desenho atrasado 20 ms; aplicadas por `python` com `assert` de que casaram, desfeitas
+   por `git checkout` e a `x86gv` refeita): (1) **o par trocado**, a gravação regrava o jogo do retrato que o desenho ainda desenha,
+   sem esperar: tem de sair `divergencias.py` 1 e linhas `relido diferente`; (2) **a cerca ignorada**, o rodízio certo sem esperar a
+   GPU falsa atrasada 2: tem de sair `relido diferente` (a lista pode sair igual: o fim do quadro já tinha lido o jogo; é o que a
+   releitura atrasada acrescenta à prova).
+4. A `x86r`, a pasta de dados dos roteiros (`roteiros.sh f5_treino f5_duelo`), a `ppcg` e a chave 0 contra 1 nos dois roteiros
+   (hashes `994627a2aecd429a` e `f76f0f6849b64629`).
+5. O git do worktree e do clone sem alterados no fim.
+
+Quando foi disparado, a trava estava com as rodadas de outras frentes (`bt3-f6trava`, `claude-vblank`, `claude-shen3`) e o
+serviço ficou na fila: as provas da lista ficam para quem ler o resumo. Sem elas a chave não liga por padrão.
+
+### A rodada no console: o que olhar
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-vu1copia`: `default.xex`/`.dat`/`.swap` (o `.xex` da build refeita no commit
+desta nota; o md5 está no relatório da etapa), `f5_duelo.txt` e `boot.txt` (cópias de `port/x360/roteiros/`), `ambiente_d0.txt`
+(`BT3_VU1_DIRETO=0`, saves `saves_vd0`) e `ambiente_d1.txt` (`=1`, saves `saves_vd1`), os dois como o `ambiente_picos.txt` da main
+(`-BT3_DEMO`, o `f5_duelo` pelo roteiro, `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_WIDE=1`, decisão 26, as duas threads); o
+`ambiente.txt` é a cópia do `ambiente_d0.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_d0.txt build/x360/f2/ambiente_d1.txt
+# abertura 1 (chave desligada); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_d1.txt
+# abertura 2 (chave ligada); baixar o log de novo
+```
+
+1. **A chave pegou** (abertura 2): `gs_d3d: VU1: 3 jogos de buffers em que a gravação grava direto (BT3_VU1_DIRETO=1), 98304
+   vértices e 294912 índices cada (17280 KB ao todo ...)` e `gs: BT3_VU1_DIRETO=1: a VU1 gravada direto em 3 jogos de buffers do
+   backend, 98304 vértices e 294912 índices ...`. Na abertura 1, a linha de sempre (`2 pares de buffers`).
+2. **A cópia e o `frame_end` nos quadros pesados**: nas linhas `picos: quadro ...`, o `desenho: frame_end F (cópia da VU1 c)`. Na
+   abertura 1, `c` de uns 3,2 a 3,7 nos quadros de luta pesados; na 2, perto de 0,0, e o `F` uns 3 ms menor nos mesmos tipos de
+   quadro. Fora da janela, a linha `gs_d3d:   VU1, buffers: ... cópia X ms por quadro (pior Y)` dá a média de 60 quadros.
+3. **A gravação não piorou**: o `gravação G (ocupada O ...)` das mesmas linhas, e a espera pela GPU: `gs: VU1 direto
+   (BT3_VU1_DIRETO): N quadros em 3 jogos de buffers; a gravação esperou a GPU largar o jogo E vezes (0 passaram do limite de 100
+   ms) ...` (esperado E perto de 0; um `passaram do limite` acima de 0 é um quadro que pode ter saído com vértices errados).
+4. **O que se vê**: os lutadores, o estágio e as sombras no lugar (nada de vértice esticado, triângulo solto ou modelo piscando),
+   sobretudo nos especiais e nas trocas de câmera. Um erro na ordem dos bytes dos buffers do XG daria a luta inteira quebrada logo
+   no primeiro quadro.
+5. **O resultado**: a mediana, o p95 e o p99 do `passos: janela` da luta e os intervalos acima de 34,37 ms contra a abertura 1; os
+   passos por janela e o resultado iguais aos da referência (`vencedor 0x2 KO`); nenhum `roteiro: FALHA`, `vigia:` nem `CRASH`. A
+   memória livre mínima (`gs_d3d:   memória`) uns 23 MB maior na 2.

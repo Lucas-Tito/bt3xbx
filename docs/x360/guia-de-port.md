@@ -1862,3 +1862,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   decodificação errada nos 4 bits mudou 141 quadros. Mesmo assim, uma conferência por textura (a decodificação nova refeita noutro
   buffer contra a de antes, `BT3_TEX_CONTA`) diz qual textura e qual formato, e vale para os quadros em que a textura errada não
   chegaria a ser desenhada.
+
+### A VU1 gravada direto nos buffers da GPU (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 18)
+
+- **Escrever direto onde a GPU lê pede um jogo de buffers a mais que a troca entre as threads.** Os dois jogos de listas bastam
+  entre a gravação e o desenho (a entrega espera o desenho), mas a GPU lê o quadro depois do `frame_end` dele, e a gravação começa o
+  quadro N+2 no jogo de N logo que o `frame_end` N acaba. Com três em rodízio, o jogo regravado é o de três quadros atrás.
+- **Uma thread que não é dona do dispositivo sabe que a GPU largou um recurso por uma marca, não por `IsBusy`/`IsFencePending`:**
+  o desenho põe `InsertCallback(D3DCALLBACK_IDLE | D3DCALLBACK_CPU1)` com o número do quadro antes do `Present`, o callback o grava
+  num volátil, e a outra thread compara. A espera fica com quem vai escrever, nunca com o desenho.
+- **Antes de mudar uma lista para escrita combinada, procure quem a relê.** A gravação lia dois índices por desenho de volta (a
+  faixa do `vu_plano`), uns 10 mil acessos por quadro que iriam à memória; o valor saiu de quem gera os índices. E a escrita
+  combinada de uma thread só chega à GPU depois de um `__sync` no núcleo dela (o `lwsync` das travas não a ordena).
+- **Uma GPU falsa com atraso prova o rodízio no WSL:** o falso relê cada jogo uns quadros depois de desenhá-lo e compara com o
+  hash do fim do quadro. A lista quadro a quadro (`divergencias.py`) só vê o que foi regravado antes de o fim do quadro lê-la;
+  um jogo regravado enquanto a GPU ainda o lê só a releitura atrasada vê.
