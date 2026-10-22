@@ -8,7 +8,7 @@ nela devolve NULL em silêncio (a lição da F6, 00-escopo.md seção 1.1). O WS
 port/x360/tools/roteiros.sh. O PC (o programa de release) começa sem nenhuma variável e com a janela.
 
     som_ambiente.py [--raiz DIR] [--ambiente ARQ]...
-    som_ambiente.py --mutantes     (o controle negativo: estraga cópias de cinco jeitos e exige a falha de cada um)
+    som_ambiente.py --mutantes     (o controle negativo: estraga cópias de seis jeitos e exige a falha de cada um)
 
 Sai com 1 quando:
   - um arquivo da lista tem um getenv, um GsGpu_Enabled() ou uma chamada de rede que o inventário (INVENTARIO,
@@ -31,6 +31,7 @@ ARQUIVOS = [
     "port/src/gs/snd_adx.c", "port/src/gs/snd_se.c", "port/src/plat_sndstate.c", "port/src/plat_file.c",
     "port/src/plat_movie.c", "port/src/plat_songs.c", "port/src/plat_extras.c", "port/src/plat_stub.c",
     "src/sys/adx.c", "src/sys/movie.c", "src/sys/file.c",
+    "port/x360/src/som/som360.cpp",  # (F6, etapa 3) a camada de áudio do console
 ]
 
 # Cada variável lida nesses arquivos: (classe, o que faz). Classe "estado" muda o que o jogo vê (e por isso o
@@ -59,6 +60,11 @@ INVENTARIO = {
     "BT3_ASPECT": ("fora", "plat_stub.c: proporção da tela"),
     "BT3_WIDE": ("fora", "plat_stub.c: tela larga"),
     "BT3_WINDOW": ("fora", "plat_stub.c: tamanho da janela"),
+    "BT3_SOM": ("saida", "som360.cpp (só no 360; no WSL é o arquivo do rastro, headless/som.c, fora desta lista): =1 o "
+                "SDL_InitSubSystem aceita e o jogo toca pelo XAudio2"),
+    "BT3_SOM_TESTE": ("saida", "som360.cpp: =1 o tom de teste no começo"),
+    "BT3_SOM_TESTE_HZ": ("saida", "som360.cpp: a frequência do tom de teste"),
+    "BT3_SOM_TESTE_S": ("saida", "som360.cpp: a duração da primeira fase do tom de teste"),
 }
 # getenv com o nome numa variável: arquivo -> nomes que chegam a ele
 INDIRETOS = {"port/src/plat_extras.c": ["BT3_SONGS", "BT3_STAGES"]}
@@ -77,10 +83,11 @@ def tem(amb, nome):
 
 
 # Os caminhos do som, como o código os decide (arquivo e função de cada um no texto). p: "360", "wsl" ou "pc";
-# gpu: GsGpu_Enabled(). As builds do 360 e do WSL têm a SDL de mentira (port/x360/headless/SDL3/SDL.h: o
-# SDL_InitSubSystem devolve false) e a rede de mentira (port/x360/headless/sem_janela.c: Port_NetSession 0).
+# gpu: GsGpu_Enabled(). O WSL tem a SDL de mentira (port/x360/headless/SDL3/SDL.h: o SDL_InitSubSystem devolve
+# false); o 360, desde a F6 etapa 3, a camada do XAudio2 (port/x360/src/som/som360.cpp), que só aceita com BT3_SOM=1.
+# Os dois têm a rede de mentira (port/x360/headless/sem_janela.c: Port_NetSession 0).
 def caminhos(amb, gpu, p):
-    sdl = p == "pc"
+    sdl = p == "pc" or (p == "360" and amb.get("BT3_SOM") == "1")
     tenta = gpu or tem(amb, "BT3_SOUND")
     disp = sdl and tenta and not tem(amb, "BT3_NOSOUND")
     ticks = tem(amb, "BT3_SYNCTEST") or tem(amb, "BT3_SOUND_TICKS")
@@ -109,7 +116,18 @@ ESPERADAS = {
     ("360 com desenho", "plat_stub.c Port_VBlank imagens intermediárias (InterpPump)"):
         "o backend D3D9 do console; não toca no som",
     ("360 com desenho", "snd_adx.c device (tenta abrir)"):
-        "GsGpu_Enabled() no console: o device() tenta, e a SDL de mentira recusa (abre: não, igual ao WSL)",
+        "GsGpu_Enabled() no console: o device() tenta, e a camada do 360 recusa sem BT3_SOM=1 (abre: não, igual "
+        "ao WSL)",
+}
+
+
+# As que só valem com o som do console ligado (BT3_SOM=1 no ambiente.txt, F6 etapa 3): sem ela não divergem, e nem
+# precisam (ao contrário das ESPERADAS, que têm de divergir nos padrões).
+ESPERADAS_SOM360 = {
+    ("360 com desenho", "snd_adx.c device (abre)"):
+        "BT3_SOM=1: o XAudio2 do console abre o dispositivo; os roteiros do WSL nunca abrem (o estado segue em vblanks)",
+    ("360 com desenho", "snd_se.c mistura ligada (Port_AudioDevice)"):
+        "BT3_SOM=1: a mistura dos efeitos toca no console",
 }
 
 
@@ -178,6 +196,8 @@ MUTANTES = [
      "extern int GsGpu_Enabled(void);\nstatic int novo(void) { return GsGpu_Enabled(); }", None),
     ("port/x360/tools/roteiros.sh", "BT3_SOUND_TICKS=1 ", "", None),
     (None, None, None, "-BT3_SOUND_TICKS\n"),
+    # (F6, etapa 3) uma chave nova da camada do console fora do inventário
+    ("port/x360/src/som/som360.cpp", 'getenv("BT3_SOM_TESTE_HZ")', 'getenv("BT3_SOM_TESTE_KHZ")', None),
 ]
 
 
@@ -266,6 +286,7 @@ def main():
     # 3. os caminhos
     # (um ambiente.txt com BT3_GS=gpu já é o cenário com desenho: aí o sem desenho não se roda e sai da conta)
     cen = {}
+    som360 = s360.get("BT3_SOM") == "1"
     for amb in (s360, c360):
         cen["360 com desenho" if gpu_de(amb, "360") else "360 sem desenho"] = caminhos(amb, gpu_de(amb, "360"), "360")
     cw = caminhos(wsl, gpu_de(wsl, "wsl"), "wsl")
@@ -278,7 +299,7 @@ def main():
     for nome, c in cen.items():
         for k in cw:
             if c[k] != cw[k]:
-                motivo = ESPERADAS.get((nome, k))
+                motivo = ESPERADAS.get((nome, k)) or (ESPERADAS_SOM360.get((nome, k)) if som360 else None)
                 if motivo is None:
                     erros.append(f"{nome}: '{k}' é {c[k]} no 360 e {cw[k]} no WSL")
                 else:

@@ -54,7 +54,7 @@ docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app 
       '"$CLFLAGS"' -TP -EHsc -GR- -Iport/x360/src -Iport/src/gs -Iport/x360/src/gs/cl -I'"$OUT"'/shaders \
       -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
   done
-  for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do
+  for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp port/x360/src/som/*.c port/x360/src/som/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do
     n=$(basename ${f%.*}); t=-TC; case $f in *.cpp) t="-TP -EHsc -GR-";; esac
     INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX '"$CLFLAGS"' $t \
       -Iport/x360/src -Iport/x360/conv -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
@@ -67,7 +67,7 @@ python3 port/x360/tools/coff.py --absoluto D_3BE71C=0x3BE71C --saida $OUT/dados 
 
 echo "== 4. ligação (link.exe)"
 rm -f $OUT/x360/stubs.* $OUT/default.exe
-LIBS="d3d9.lib xgraphics.lib xboxkrnl.lib xapilib.lib"
+LIBS="d3d9.lib xgraphics.lib xboxkrnl.lib xapilib.lib xaudio2.lib xmcore.lib" # (o xaudio2 exige o xmcore: F6, etapa 3)
 LDFLAGS="-NOLOGO -DEBUG -PDB:$OUT/default.pdb -STACK:262144,262144 -RELEASE -XEX:NO -MAP:$OUT/default.map -OPT:REF,NOICF"
 ligar() {
   docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app -e WINEDEBUG=-all "$IMAGEM" bash -c "

@@ -149,7 +149,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `subir_f2.sh` | envia o `.xex` sempre junto com o `.dat` e o `.swap` da mesma build: os dois dependem dos endereços do `.map`, e um par de outra build copia as tabelas para o lugar errado sem erro nenhum |
 | `teste_diario.sh` | o `diario.c` (anel e thread escritora) no Linux, com uma API do Xbox de brinquedo e um disco de 40 ms por flush: ordem, integridade, que quem escreve não espera, a queda, o anel cheio; `--mutantes` estraga o `diario.c` de quatro jeitos e exige que o teste acuse cada um |
 | `picos_log.py` | de um `bt3xbx.log` do console, a média, o pior quadro e a média sem o pior de cada trecho de 60 quadros, e o custo por linha gravada do relatório anterior (`F5/08.md`, "Os logs e os engasgos") |
-| `som_ambiente.py` | (F6, etapa 1, rede 1) todo `getenv` e todo ramo de janela e de rede dos arquivos do som e dos filmes, com o valor no 360 (padrões do `posix360.c` e `--ambiente ambiente.txt`), nos roteiros do WSL e no PC, e o caminho que cada um dá; sai com 1 numa variável ou ramo sem classe ou num caminho que diverge entre o 360 e o WSL fora das divergências esperadas; `--mutantes` estraga cópias de cinco jeitos |
+| `som_ambiente.py` | (F6, etapa 1, rede 1) todo `getenv` e todo ramo de janela e de rede dos arquivos do som e dos filmes, com o valor no 360 (padrões do `posix360.c` e `--ambiente ambiente.txt`), nos roteiros do WSL e no PC, e o caminho que cada um dá; sai com 1 numa variável ou ramo sem classe ou num caminho que diverge entre o 360 e o WSL fora das divergências esperadas; `--mutantes` estraga cópias de seis jeitos (o sexto, F6 etapa 3: uma chave nova da camada do console) |
 | `som_estado.py` | (F6, etapa 1) as linhas `som:` do `BT3_SOM_ESTADO=N` (o estado dos seis players, a boca, as bandeiras dos menus e a tela de resultado da História, por mudança e a cada N leituras do controle; no console com o tempo real): `compara` (console contra x86, vblank a vblank), `falas` (cada fala em vblanks e em ms), `parada` (a porta fechada da tela de resultado) |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
@@ -161,6 +161,8 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `headless.py --alvo x86\|ppc --gpu [--vu1]` | (F5, etapa 8) o GS em modo gpu com um backend falso (`headless/gpu_falso.c`): o `gs_draw.c` de verdade e os lotes da VU1 pelo caminho dos shaders (`hle_program*`, `GsGpu_DrawVu*`), como no 360, sem desenhar; hash da lista de cada quadro por seção. `--vu1` (só x86) liga na x86 as otimizações que a PPC tem em `PORT_BIG_ENDIAN`. Pastas `x86g`, `x86gv`, `ppcg` |
 | `vu1_perfil.sh` / `vu1_perfil.py` | (F5, etapa 8) o perfil da gravação da VU1 e a prova de que uma mudança nela deixou a lista igual: `x86` (tiques por família, amostras por função e linha), `lista` + `compara` (hash por quadro; `SECOES=2,4,5,6` só a VU1), `ppc` (instruções e acessos à memória de uma janela de quadros no qemu) |
 | `som.sh` / `som.py` / `som_ref.py` | (F6, etapa 2) a rede de testes do som: o rastro de som (`headless/som.c`, `BT3_SOM`, em todas as builds sem janela), o dispositivo gravador (`headless.py --gravador`, `BT3_SOUND=1 BT3_GRAVADOR=arquivo`), o teste das amostras (`--teste-som`) contra a referência independente em Python; `roteiros.sh` com `SOM=1` liga as redes 2 e 4, `som.sh amostras` a 3, `som.sh controles NOME` os controles negativos (`plano/F6/02.md`) |
+| `teste_som360.sh` | (F6, etapa 3) o núcleo portátil da camada de áudio do 360 (`port/x360/src/som/som_nucleo.c`: a fila de cada fluxo, o ganho, a conversão de taxa e de canais, a soma) em C89 estrito com o gcc e o teste dele (`src/som/teste/teste_nucleo.c`, contra a forma fechada da conversão), num diretório temporário; seis mutantes do núcleo têm de ser acusados. Roda aqui e no WSL (sem clone nem emulador: `RAIZ=` numa cópia) |
+| `dat_compara.py` | (F6, etapa 3) o `default.dat` e o `default.swap` de duas builds do 360: mesmo conteúdo se toda palavra que difere difere pelo mesmo deslocamento (o executável cresceu antes das tabelas); sai com 1 em qualquer outra diferença |
 | `f1.sh` | o ciclo inteiro: builds, rastreio, mapa, luta na PPC, comparações. `F1_SEM_RASTREIO=1` reaproveita o rastreio (que leva cerca de 1 h) |
 | `menus.sh` | o ciclo dos menus (F3, etapa 3): boot até as demos sem `BT3_DEMO`, PPC sem mapa com os arquivos que a x86 lê, lutas das demos e memória num quadro comparadas |
 | `guarda_menu.sh` | a guarda do `Sprite_Unpack` na PPC sem mapa (F4): um controle sintético (`BT3_PAD_PLAY`: START, ESQUERDA, X num ciclo de 90 leituras) entra no menu principal pelo New Game, sem criar o save (responde "não" ao "criar o save?"); a PPC tem de parar com "Sprite_Unpack sem conversor em MainMenu_Init", conferido pelo `addr2line`. Os testes novos usam os roteiros de controle (abaixo) |
@@ -1280,6 +1282,31 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   medida numa música (10 LSB) e virou decisão; com os 72 ADX com laço na amostra deu 3951 LSB. E um verificador que
   pede uma janela fixa precisa do caso menor que a janela (laços de 36 amostras): o `som.py` parou com uma exceção do
   Python, que a rodada contou como "amostras diferentes".
+
+### A camada de áudio do 360 (F6, etapa 3, `plano/F6/03.md`)
+
+- **A `xaudio2.lib` traz `sqrtf`, `cosf`, `floorf` e mais quatro** (as versões C++ da `crt/math.h`, `inline`: COMDAT
+  "qualquer uma"), e o `math360.c` as define como função comum: 23 LNK2005 no primeiro link com o XAudio2 (custou uma
+  build). Com `__inline` nas definições do `math360.c` e uma tabela global com o endereço de cada uma (sem ela o `cl` não
+  emite as que ninguém chama no objeto), as dele também viram COMDAT "qualquer uma" e o link fica com a primeira que vê,
+  a do objeto, antes das bibliotecas. Conferir no `.map`: cada uma com `math360.obj` (o corpo é o mesmo da `crt/math.h`,
+  mas o jogo não pode depender de qual cópia o link escolheu). Mesma causa do comentário antigo sobre `fabsf`, `ceilf` e
+  `powf`, que vêm da `d3d9.lib`.
+- **Uma biblioteca nova desloca as tabelas: o md5 do `.dat` e do `.swap` muda sem nada ter mudado.** A `xaudio2.lib`
+  pôs 0x90020 bytes antes dos dados do jogo, e toda palavra de endereço dos dois arquivos andou o mesmo tanto. O md5 de
+  referência só vale entre builds com o mesmo lugar; quando o executável cresce, `dat_compara.py` confere o deslocamento
+  único (e acusa um byte estragado numa cópia).
+- **O retorno do XAudio2 não mistura.** A documentação do XDK ("XAudio2 Callbacks") pede que o retorno volte em menos
+  de 1 ms, sem trava do programa, sem E/S e sem CPU pesada: o `OnBufferEnd` só conta (`BuffersQueued`) e dá `SetEvent`, e
+  um misturador em thread própria (na 5, prioridade alta) enche o buffer e o devolve. A primeira versão misturava no
+  retorno com a trava do jogo; a leitura da documentação antes do console a derrubou.
+- **No C89 do `cl` o `long` tem 32 bits; no gcc do WSL, 64.** Um núcleo testado no WSL e usado no console faz as contas
+  em `int` (32 nos dois), senão o teste prova outra aritmética. O `gcc -m32` não existe no WSL nem aqui (sem multilib).
+- **O teste leve não precisa do clone do WSL.** O `teste_som360.sh` roda numa cópia temporária (`RAIZ=`), mandada por
+  `ssh` num tar em base64: nada de `flock`, nada de build, nada de emulador, e o outro agente segue com o clone.
+- **Mudar um header que a build plana do WSL também lê sem mudar as linhas dele.** O `headless/SDL3/SDL.h` ganhou o
+  `BT3_SOM360` (só o `c89.py` do console o define) no mesmo número de linhas: o texto pré-processado do WSL fica igual e
+  os objetos da x86 plana não mudam (nenhuma `.text` a refazer).
 
 ---
 

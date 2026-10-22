@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "diario.h"
+#include "som/som360.h"
 
 extern "C" {
 void Port_MapMemory(void);              /* port/src/plat_mem.c, ramo PORT_X360 */
@@ -133,6 +134,7 @@ extern "C" void Port_GsDesenhoPartida(void) {
 extern "C" void Port_Sair(int codigo) {
     Diario_Escrever("saída do jogo com código %d (%s)", codigo, gPortStage);
     Estado_Resumo();
+    Som360_Parar(); /* (F6, etapa 3) StopEngine e as vozes soltas antes de a thread do jogo acabar */
     Port_X360FecharSaida();
     _flushall();
     Diario_Descarregar(); /* o que o anel ainda tem, no disco antes de a thread do jogo acabar */
@@ -169,6 +171,7 @@ static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
         Diario_Escrever("CRASH sem contexto (fase: %s)", gPortStage);
     }
     Diario_Descarregar(); /* a linha CRASH no disco já: o que vem a seguir (Port_UnpackPendenteNaQueda) pode falhar de novo */
+    Som360_Queda();       /* (F6, etapa 3) StopEngine já: o som não fica repetindo o último buffer */
     {   /* um Sprite_Unpack ainda sem gancho é a causa provável (dados de menu little-endian): diz quem chamou */
         static char linha[256]; /* (fora da pilha, que pode ser o problema) */
         if (Port_UnpackPendenteNaQueda(linha, sizeof(linha))) {
@@ -358,6 +361,7 @@ void __cdecl main() {
 
     /* o jogo no núcleo 1 (thread de hardware 2), sozinho; pilha de 16 MB como a build de PC de 64 bits */
     if (!gTerminou) {
+        Som360_Iniciar(); /* (F6, etapa 3) com BT3_SOM=1 ou BT3_SOM_TESTE=1: o XAudio2 nas threads 4 e 5 e o vigia na 1 */
         t = CreateThread(NULL, 16 * 1024 * 1024, Jogo, NULL, CREATE_SUSPENDED, &gThreadJogo);
         XSetThreadProcessor(t, 2);
         ResumeThread(t);
@@ -410,6 +414,7 @@ void __cdecl main() {
         WaitForSingleObject(t, gThreadGravacao != 0 ? 3000 : INFINITE);
         CloseHandle(t);
     }
+    Som360_Parar(); /* (F6, etapa 3) se o jogo não passou pelo Port_Sair; antes do XLaunchNewImage */
     dev->BlockUntilIdle();
     dev->Release();
     d3d->Release();
