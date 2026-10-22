@@ -1160,3 +1160,76 @@ python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.
 `uint32_t *` e lê e escreve dois `uint32_t` globais; o `cl` não pode supor que não se sobrepõem e relê e regrava os contadores a
 cada índice (no Xenon, uma leitura logo depois da escrita no mesmo endereço espera a escrita). Com os contadores em variáveis locais o
 laço fica só com a escrita do índice [estimado: de 1 a 1,5 ms].
+
+## 16. Os índices da VU1 com o contador em locais (22/10/2026)
+
+Branch `f5-indices`, sobre o `f5-estado` (`646e8ca`). Medido no console pelo roteiro com o `f5-estado` (o `f5_duelo`): a luta em
+**33,2 ms de mediana** (meta 33,37), p95 34,9, p99 40,3; por dentro da VU1 os **índices** levam 1,9 ms por quadro. Convenção:
+**[medido]**, **[lido]** e **[estimado]**.
+
+### O corte
+
+| Commit | O quê |
+|---|---|
+| `e7d5307` | Nos três `GsGpu_DrawVu*` (`gs_draw.c`: `DrawVu6` na `:1585`, `DrawVu4` na `:1715`, `DrawVu0` na `:1838`) o laço dos índices passa a guardar o ponteiro (`idx`), a base (`base`, o `gsVuVertCount`) e a posição (`n`, o `gsVuIdxCount`) em locais, escreve os três índices do triângulo (`idx[n]`, `idx[n + 1]`, `idx[n + 2]`, os mesmos `base + i + k`, na mesma ordem) e grava o contador de volta uma vez, no fim do laço. O `k` some das declarações (`uint32_t i, flag;` e `uint32_t i;`) para não sobrar variável sem uso (o C4101 mudaria os avisos). Em `BT3_GS_ESPERAS`, com o laço de antes no `#else` |
+
+**Por que pesava** [lido no `link /dump /disasm` do `gs_gs_draw.obj`, `DrawVu4`]: antes, cada iteração tinha **30 instruções**,
+com as três escritas do índice (`stwx`), **nove leituras de globais** (o `gsVuIdx`, o `gsVuVertCount` e o `gsVuIdxCount`, relidos
+depois de cada escrita, porque o `uint32_t *` pode apontar para eles) e **três escritas do contador** (`stw r10,0(r31)`), cada uma
+seguida pela leitura do mesmo endereço na escrita seguinte: no Xenon, uma leitura logo depois de uma escrita no mesmo endereço
+espera a escrita chegar à cache (o *load-hit-store*). Depois, **12 instruções** por iteração: três `stw`/`stwu` em `idx` e as
+somas, nenhuma leitura nem escrita de global; o contador é gravado uma vez depois do laço (`stw r9,0(r23)` no `0x2C4`). No `DrawVu0` e
+no `DrawVu6` o laço novo é o mesmo, com o teste da marca do vértice.
+
+**O resultado é o mesmo byte a byte**: os índices são os mesmos e saem na mesma ordem; o `d.first` é lido antes, o `d.count` depois
+da gravação de volta, como antes; o `vu_faixa` lê o `gsVuIdx` já escrito.
+
+### A estimativa [estimado]
+
+Até uns 43 mil triângulos por quadro de luta (o maior quadro tem 128.907 índices, seção 8): antes, três esperas de escrita e leitura por triângulo
+(129 mil por quadro, umas dezenas de ciclos cada) mais as 30 instruções; depois, 12 instruções sem espera. De **1,9 para uns 0,3 a
+0,5 ms**: **de 1,4 a 1,6 ms a menos**, a luta de 33,2 para perto de 31,7 ms, se a gravação seguir sendo o gargalo.
+
+### As provas no WSL [medido]
+
+PROVAS_AQUI
+
+### A build do 360
+
+`build_f2.sh` no `e7d5307`: 317 de 317 fontes sem erro, os avisos por fonte iguais aos do `f5-estado` (985 nos fontes do jogo, 8 nos
+do 360, arquivo por arquivo), os mesmos 103 stubs (`diff` com o `stubs.txt` do `f5-estado`), `default.dat`
+`6d30baaf87b1177fb2359a855f8befc0` e `default.swap` `a7cf723fbfaea860fcc3707ad288e755`, iguais; **`default.xex`
+`73b2d65ba52f291a3cbc9e613daac94f`**. O laço novo no `link /dump /disasm` do `.obj` (acima).
+
+### A rodada do critério (no WSL, disparada sem esperar)
+
+O serviço `claude-indices` (`systemd-run --uid=codex ... MemoryMax=5G`), script `~/indices/rodada-indices.sh`, num worktree próprio
+(`~/bt3xbx-i`, destacado, com os links dos dados e uma cópia do `port/build/gen`), cada passo pesado dentro do `flock ~/wsl.lock`.
+Depois das provas acima, refaz as três builds do critério no HEAD (`headless.py --alvo x86`, `--alvo x86 --rastreio`, `--alvo ppc`),
+confere a `.text` da x86 plana e roda em série `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` e `SEMMAPA=1 IMG=1 roteiros.sh
+duelo`. Logs em `~/rodada-indices-f5.log` e `~/rodada-indices-duelo.log`, resumo em `~/rodada-indices.resumo` (uma linha por passo
+com `RC=`, a `.text`, o git do worktree e do clone no fim e `FIM`). Vale com todos os `RC=0`, os dois `roteiros.sh` com "tudo certo",
+a `.text` a mesma e o git sem alterados.
+
+### A rodada no console pelo roteiro
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-i`: `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
+`port/x360/roteiros/`), `ambiente_sem.txt` (`BT3_TEMPOS=0`, saves `saves_i1`) e `ambiente_med.txt` (a medição ligada, saves
+`saves_i2`), o resto como na seção 14; o `ambiente.txt` é a cópia do `ambiente_sem.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_sem.txt build/x360/f2/ambiente_med.txt
+# abertura 1 (sem medição); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.txt
+# abertura 2 (medição ligada); baixar o log de novo
+```
+
+**O que olhar:**
+
+1. **A mediana pelo roteiro** (abertura sem medição): o p50 das duas janelas, pesado pelos passos, contra os **33,2 ms** do
+   `f5-estado` (meta 33,37); o p95 contra 34,9 e o p99 contra 40,3. Os passos por janela (684 e 2.334) e o resultado iguais aos da
+   referência.
+2. **A VU1 por dentro** (abertura com medição): os índices perto de 0,3 a 0,5 ms (eram 1,9), o resto das partes como no `f5-estado`.
+3. Nenhum `roteiro: FALHA`, nenhum `vigia:`.

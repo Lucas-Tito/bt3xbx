@@ -1629,3 +1629,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   com 1 dizendo "a build x86 é de outra origem"): nas provas de antes e depois, `--alvo x86` antes do `--alvo ppc --gpu` de cada lado.
 - **A pasta de dados dos roteiros para as listas da PPC sai do `roteiros.sh f5_treino f5_duelo` sem `PPC`, `SEMMAPA` nem `IMG`** (as
   duas x86, o `gdb`, o rastreio, o mapa e o `conv_tool`), com as builds `x86` e `x86r` do HEAD: uns 10 minutos no Deck.
+
+### Os índices da VU1 (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 16)
+
+- **No `cl` do 360, um laço que escreve por um `uint32_t *` e conta num global do mesmo tipo relê e regrava o global a cada
+  escrita** (o ponteiro pode apontar para ele): o `gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k` tinha 30 instruções por
+  triângulo, nove leituras de globais e três escritas do contador, cada escrita seguida da leitura do mesmo endereço (no Xenon, a
+  leitura espera a escrita). Com o ponteiro, a base e a posição em locais e o contador gravado uma vez no fim, 12 instruções e
+  nenhum acesso a global. Procure o padrão em todo laço quente que escreve numa lista global e conta num global.
+- **O `dumpbin` não está na imagem do XDK: `wine /xdk/bin/win32/link.exe /dump /nologo /disasm OBJ`** é o mesmo. No `.obj` os
+  endereços dos globais aparecem como `lis rN,0` (a relocação não é mostrada): ache o global pela constante com que o código o
+  compara (o `lis r9,8` do teste de capacidade dos índices, 0x80000, marcou o registrador do `gsVuIdxCount`).
+- **Ao tirar uma variável do laço novo, tire-a da declaração dentro do mesmo `#ifdef`** (a linha de antes no `#else`): uma local sem
+  uso é o C4101 do `cl`, e os avisos por fonte deixariam de bater com os da base.
