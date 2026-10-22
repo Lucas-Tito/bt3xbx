@@ -1589,3 +1589,25 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   (os de outra build não servem). Assim se viu que o `memcpy` do CRT escolhe o caminho pelo alinhamento (8 bytes, 4 bytes ou
   byte a byte), já faz `dcbt` até 8 linhas adiante só dentro da própria cópia, e que a `vu.mem` está em 4 módulo 8 (o endereço
   da estrutura sai do `lis`/`addi` do começo da função; variáveis `static` não aparecem no `.map`).
+
+### A VU1 por dentro e a rodada pelo roteiro (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 14)
+
+- **Para medir por dentro de algo que roda milhares de vezes por quadro, meça uma amostra e encadeie as marcas.** A VU1 tem uns 5
+  mil lotes por quadro de luta; seis leituras do relógio por desenho dariam uns 60 mil `mftb` a mais por quadro, e a medida mexeria
+  no que mede. Um lote em cada quatro, e cada marca fecha uma parte e abre a seguinte com a mesma leitura (nenhuma leitura de
+  "início" à parte): a soma das partes é o tempo dos lotes da amostra, e cada parte vai ao total pela proporção. Sobram umas 3
+  leituras por lote em média.
+- **Alinhar um campo de uma estrutura `static` no 360:** o `__attribute__((aligned(N)))` no campo, num `#ifdef PORT_X360` com a
+  declaração de antes no `#else` (o pré-processado de fora do 360 fica o mesmo); o `c89.py` o passa a `__declspec(align(N))`. Como a
+  variável não aparece no `.map`, confira no `dumpbin` pelo `lis`/`addi` do endereço da estrutura e pelo deslocamento de um campo
+  vizinho (o `ori` com o deslocamento do `tops` mostrou a `vu.mem` passando de 668 para 768).
+- **A rodada de desempenho pelo roteiro no console** (`BT3_ROTEIRO`): o `boot.txt` faz o New Game e o `desbloqueia`, que só aceita o
+  cartão vazio, então **cada abertura precisa de uma pasta de saves nova** (`BT3_SAVES=game:\saves_rsem`; a segunda abertura com a
+  mesma pasta para em vermelho no boot: troque o nome, não apague no console), mais `BT3_DESBLOQUEIO=1`, `-BT3_DEMO` e
+  `BT3_NOMOVIE=1` (sem janela os filmes não tocam, e o roteiro foi feito assim). O `subir_f2.sh` põe os extras na raiz, então o
+  roteiro e o `boot.txt` vão juntos para `game:\` (o `inclui` é relativo à pasta). **Os passos por janela e o resultado iguais aos
+  da referência do WSL** (`roteiro: janela K passos N`, `roteiro: resultado`) provam que o console jogou a mesma luta; os vblanks
+  não precisam bater.
+- **Um bundle para o WSL vai dentro do script, em base64** (`base64 -d > ~/x.bundle <<'FIM'` ... `FIM`, e o script pelo stdin do
+  `wsl -- bash -s`): no `ssh bt3win "wsl ... bash -c 'cat > ~/x.bundle'"` o `>` é do `cmd` do Windows, que responde "The system cannot
+  find the path specified".

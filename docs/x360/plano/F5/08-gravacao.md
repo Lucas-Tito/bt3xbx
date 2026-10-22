@@ -915,3 +915,120 @@ a abertura final, sem medição, deu 33,9 ms de mediana numa luta de 2,5 min at�
 fica abaixo da variação entre lutas jogadas à mão. **Daqui em diante as rodadas de desempenho no console usam o roteiro de controle
 (`BT3_ROTEIRO`, o `f5_duelo`), a mesma luta toda vez** (decisão do Lucas, 22/10).
 
+
+## 14. Os cortes (d1) e (d2), a VU1 por dentro e a rodada pelo roteiro (22/10/2026)
+
+Branch `f5-vu1-dentro`, sobre a main `9cbe3dc`. Tudo em `PORT_X360`: nem a x86 plana, nem a `x86gv`, nem a `ppcg` compilam uma
+linha nova. Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+| Commit | O quê |
+|---|---|
+| `514cb02` | **(d1)** No 360 o campo `mem` da `static struct vu` (`gs_vu1.c`) leva `__attribute__((aligned(128)))` (o `c89.py` o passa a `__declspec(align(128))`). [lido no `dumpbin`] A estrutura passou de `0x82973790` para `0x82973880` (0 módulo 128) e a `vu.mem` do deslocamento 668 para o 768 (o `tops` do `ori` do `vu1_unpack` foi de 33440 para 33540): a `vu.mem` fica numa linha de 128 bytes, e o `memcpy` do CRT, que escolhe a largura pelo alinhamento, passa de 4 para 8 bytes no `Unpack` e na cópia dos vértices para o `gsVuVerts` |
+| `0170b97` | **(d2)** Os três `getenv` por lote do `vu1_call` (`BT3_VU_DUMP`, `BT3_VU_CALLS`, `BT3_VU_INTERP`; no 360 cada um é uma busca do `Port_GetEnv`) lidos uma vez, junto com o `BT3_VU1`. Fora do 360 os macros `VU_ENV_*` expandem no `getenv` de antes (que lá já se lembra da resposta em cada lugar) |
+| `ae55fa7` | **A VU1 por dentro** (abaixo) |
+
+### A VU1 por dentro
+
+Num lote em cada quatro (`GS_VU_AMOSTRA`, `gs_internal.h`), com a medição por família ligada, o `GsVu1_Call` se divide em partes
+**encadeadas**: cada marca (`GS_VU_MARCA`, o `mftb` em linha) fecha a parte anterior e abre a seguinte, e a última, no fim do lote,
+fecha o programa. A soma das partes é o tempo dos lotes da amostra; a linha leva cada parte à VU1 inteira pela proporção.
+
+| Parte | O que leva |
+|---|---|
+| programa | o `hle_program*` (o cabeçalho, as etiquetas, o `Gs_Gif` dos programas 2, 4, 7 e 8, as constantes do programa 2 e do 78), o `vu1_call` fora do resto, e o que nenhuma outra parte leva |
+| estado | o `draw_state` e o `date_snapshot` dos `GsGpu_DrawVu0/4/6` (`gs_draw.c`): a textura, o alvo e o hash de página de dentro da VU1 (o `HV` da linha de cima) |
+| constantes | o bloco uniforme (`Vu0Uniform`) |
+| índices | a faixa virando triângulos (`gsVuIdx`) |
+| cópia | os vértices para o `gsVuVerts`, a primeira cópia do lote (a camada 0, ou a única) |
+| cópia da segunda camada | a cópia repetida dos programas 0 e 1 (camadas 1 e 5): os mesmos vértices outra vez |
+| fecho | juntar ao desenho anterior (`same_state` e o `memcmp` do uniforme) ou abrir outro, e o `vu_faixa` |
+| interpretador | o `run` (os lotes que o caminho do shader não toma, e o `run(0)` de preparação) |
+
+```
+gs: gravação por família, VU1 por dentro, quadro Q: VU1 V (L lotes; amostra de A, U us por lote): programa P, estado E,
+constantes K, índices I, cópia C (n vezes, v vértices), cópia da segunda camada C2 (n vezes, v vértices), fecho F, interpretador T
+```
+
+Em ms por quadro (as vezes e os vértices também levados ao total de lotes); `U` é o custo médio de um lote da amostra, com as
+marcas. Escrita logo depois da `por dentro`, também dentro da janela do `passos`. O custo: um lote do programa 0 tem duas chamadas
+ao `DrawVu0`, seis marcas cada, mais a do fim: 13 leituras do relógio por lote medido, umas **3 por lote em média** com a amostra
+de 1 em 4 (uns 16 mil `mftb` a mais por quadro de luta) [estimado]. Os lotes fora da amostra pagam um teste de `gGsVuMede` por
+marca.
+
+### As provas [medido]
+
+- **Build do 360** (`build_f2.sh` no `ae55fa7`, carimbo sem diferença): 317 de 317 fontes sem erro, os avisos por fonte iguais aos da
+  main (985 nos fontes do jogo, 8 nos do 360), os mesmos 103 stubs (`diff` com o `stubs.txt` da main), `default.dat`
+  `6d30baaf87b1177fb2359a855f8befc0` e `default.swap` `a7cf723fbfaea860fcc3707ad288e755` iguais; **`default.xex`
+  `4560d2c731fb902f08300bd07450518d`**. O alinhamento, no `dumpbin` (acima).
+- **O pré-processado** (`gcc -E -P`, sem espaços) do `gs_vu1.c`, `gs_draw.c` e `gs_core.c` igual ao da main nas três configurações de
+  fora do 360 (a x86 plana, `BT3_TESTE_VU1` da `x86gv`, `PORT_BIG_ENDIAN` da `ppcg`); com `PORT_X360` os três diferem (a comparação
+  vê a mudança onde ela existe).
+- **WSL**: a `.text` da x86 plana no `ae55fa7` é `cc46fa0752f092fca305bc8bf2e2e54390763af0`, a mesma.
+- **A rodada do critério no WSL fica dispensada:** nenhuma das três builds do critério compila uma linha nova (o pré-processado é o
+  mesmo), então as listas da `x86gv` e da `ppcg` e os roteiros não podem mudar; o `roteiro.c` e o `passos.c` não foram tocados.
+
+### A rodada no console pelo roteiro de controle
+
+**O que o `f5_duelo` precisa no console** [lido]:
+
+- **O roteiro e o `boot.txt`** na mesma pasta (o `inclui` é relativo à pasta do arquivo que inclui, com `\` ou `/`). O
+  `subir_f2.sh` põe os extras na raiz do jogo, então `BT3_ROTEIRO=game:\f5_duelo.txt` e o `game:\boot.txt`.
+- **Uma pasta de saves vazia a cada abertura.** O `boot.txt` faz o New Game, responde "sim" ao "criar o save?" e roda o `desbloqueia`,
+  que só aceita o cartão vazio no começo (o `roteiro.c` procura `<BT3_SAVES>\card1\BASLUS-21678DBZT3\BASLUS-21678DBZT3`) e o
+  `BT3_DESBLOQUEIO=1`. O `plat_mc.c` cria a pasta. Com o `saves19`, ou numa segunda abertura com a mesma pasta, o roteiro para em
+  vermelho no boot. Por isso cada ambiente tem a sua pasta (`saves_rsem`, `saves_rmed`); para repetir uma abertura, troque o nome
+  da pasta no ambiente (`saves_rsem2`), em vez de apagar no console.
+- **`-BT3_DEMO`** (sem ela, a luta de demonstração no lugar dos menus) e **`BT3_NOMOVIE=1`**: as builds sem janela não tocam os
+  filmes (o `plat_movie.c` só toca com a GPU), e o `boot.txt` foi feito assim; no console o filme de abertura tocaria antes do título.
+- Com o roteiro ligado o `pad360.c` não lê o XInput (os dois controles contam como ligados); depois do `fim` o controle fica parado no
+  menu principal, e a saída é pela Guide.
+
+**Com as threads** [lido]: o roteiro anda na leitura do controle do jogador 1 (`Port_PadRead`, na thread do jogo), conta quadros
+por essas leituras (`sQuadro`) e lê só o estado do jogo (`gProgress`, `gMcFlow`, `gBtlSeq`, os lutadores); o `passos.c` fecha um
+passo na mesma leitura. Nenhum dos dois lê o `gGsFrame` da thread de gravação: com `BT3_GS_THREAD=1` e `BT3_GS_DESENHO=1` o
+roteiro vê o mesmo jogo, e o lado do jogo tem o seu contador (`gGsFrameJogo`, do degrau 1) para o que precisar do quadro dele (os
+picos). Na `x86gv` o `f5_duelo` já rodou com as duas threads (seção 7). O `Passos_Apresentou` vem da thread de desenho, como nas
+rodadas das seções 7 a 13.
+
+**O que o log dá no fim** (`game:\bt3xbx.log`, refeito a cada abertura: baixar entre uma e outra): com o `rastreia luta`, `roteiro:
+janela K passos N vblanks V ... fecha MOTIVO`, o `roteiro: resultado ...` e `roteiro: f5_duelo.txt:99 fim vblank V quadro Q`; e para
+cada janela a linha `passos: janela K (...): N passos, parede, esperado ...; trabalho p50 p95 p99 máximo ...`. A luta tem **duas
+janelas**: a 1 até a pausa do roteiro e a 2 da volta da pausa ao fim do combate. Na referência do WSL (`~/referencias/f5_duelo.telas`)
+são **684 e 2.334 passos**, o resultado `vencedor 0x2 razao 0x1 vida 0 27160` (o COM vence por KO) no quadro 7.757 e o `fim` no
+quadro 8.378. **Os passos por janela e o resultado iguais aos do WSL provam que o console jogou a mesma luta**; os vblanks não
+precisam bater. Com o `ambiente_med.txt`, uns 50 trechos de `gravação por família` com `60 na janela`, cada um com a linha `VU1 por
+dentro`.
+
+**Os arquivos** (em `build/x360/f2/` do worktree `bt3xbx-w`): `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
+`port/x360/roteiros/`), `ambiente_sem.txt` (`BT3_TEMPOS=0`, a mediana) e `ambiente_med.txt` (a medição ligada), os dois com
+`-BT3_DEMO`, a ISO convertida, `BT3_GS=gpu`, piso de 32 MB, teto de textura de 128 MB, `BT3_VU1=1`, `BT3_VU_VERTS=98304`,
+`BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`, `BT3_NOMOVIE=1`, `BT3_ROTEIRO=game:\f5_duelo.txt`, `BT3_DESBLOQUEIO=1` e a sua pasta de
+saves; sem `BT3_SHOT` (as capturas são picos artificiais) e sem `BT3_PICOS`. O `ambiente.txt` é a cópia do `ambiente_sem.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_sem.txt build/x360/f2/ambiente_med.txt
+# abertura 1 (sem medição); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.txt
+# abertura 2 (medição ligada); baixar o log de novo
+```
+
+**O que olhar:**
+
+1. **A mediana pelo roteiro** (abertura sem medição): o p50 das duas janelas, pesado pelos passos (a 2 domina), contra os 33,9 ms da
+   seção 13 (luta à mão, com a pré-carga e sem (d1) e (d2)). É a primeira medida com a mesma luta: ela vira a referência das
+   próximas. O ganho esperado de (d1) e (d2) juntos é de 0,3 a 1,2 ms [estimado, seção 12]: some na variação entre lutas à mão, e
+   é para isso que a luta passa a ser sempre a mesma.
+2. **A VU1 por dentro** (abertura com medição), as medianas dos trechos com `60 na janela`: onde estão os 16 a 25 ms. A aposta antes
+   de medir: o estado (a textura e o hash de dentro, uns 2 ms só do hash) e o programa levam a maior parte; as duas cópias, já com
+   a `vu.mem` alinhada e os dados recém-desempacotados na cache, ficam abaixo de 1 ms cada; o interpretador só pesa se algum programa
+   cair nele (os lotes `[1]` do backend). Se a cópia da segunda camada pesar, o candidato é os programas 0 e 1 escreverem os vértices
+   uma vez e as duas camadas os indexarem (o mesmo `first`, outro uniforme).
+3. A `VU1` e o `Unpack` da linha de cima contra a seção 13 (16,8 e 1,94 ms com a pré-carga): (d1) mexe nas duas, (d2) só na VU1.
+4. Nenhum `roteiro: FALHA` (tela vermelha), nenhum `vigia:`, os passos por janela iguais aos do WSL.
+
+**Fica fora desta rodada, para a próxima:** o `GsVu1_Call` do 360 ainda chama o `QueryPerformanceCounter` duas vezes por lote (o
+`gGsVu1Ms` do log do backend, `gs_d3d.cpp`), com a medição ligada ou não, uns 10 mil por quadro de luta, fora da família da VU1 (no
+"fora delas"). Trocar pelo `mftb` em linha, ou só com `BT3_TEMPOS`, é um corte barato a medir.
