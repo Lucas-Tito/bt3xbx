@@ -1228,7 +1228,8 @@ static unsigned quadro(void) {
    e a tela de resultado da História, numa linha "som: ..." a cada mudança e, com N > 0, também a cada N leituras do
    controle do jogador 1 (para uma tela parada dizer como parou). Com ou sem roteiro; sem a variável, nada. Fora do
    rastro: a linha não passa pelo diz() (nem pelas âncoras das imagens), e o roteiros.py só lê "tela", "mcflow" e
-   "roteiro:". Só lê memória, sem chamar código do jogo além do ADXT_GetStat do port, como a luta acima.
+   "roteiro:". Também as bandeiras do gerenciador de menus (gProgress->flags; 0x100, MPROG_FREEZE, para as telas).
+   Só lê memória, sem chamar código do jogo além do ADXT_GetStat do port, como a luta acima.
      players: gAdxPlayerTbl (include/sys/file.h: o handle em +0x10), criados na ordem BGM, MAP, SE0, SE1, VOICE0,
      VOICE1 (File_InitAdx, src/sys/file.c), então o player i do port é o canal i; o estado contado em vblanks é o
      gPortAdxView[i] de port/src/plat_sndstate.c (stat 0 parado, 3 tocando, 5 fim; "p" pausado; l, os vblanks até o
@@ -1291,6 +1292,7 @@ void Roteiro_SomEstado(void) {
     }
     agora[n++] = gLipSyncWaiting;
     agora[n++] = gLipSync.active;
+    agora[n++] = gProgress != NULL ? gProgress->flags : -1;
     if (t == TELA_HIST_RESULTADO && gHistResult != NULL) {
         agora[n++] = som_i32(gHistResult, 0x80);
         agora[n++] = som_i32(gHistResult, 0x90);
@@ -1317,7 +1319,8 @@ void Roteiro_SomEstado(void) {
             p += sprintf(p, " lido%d", g);
         }
     }
-    p += sprintf(p, " | boca espera %d ativa %d t %d", gLipSyncWaiting, gLipSync.active, (int)gLipSync.time);
+    p += sprintf(p, " | boca espera %d ativa %d t %d | menus 0x%x", gLipSyncWaiting, gLipSync.active, (int)gLipSync.time,
+                 gProgress != NULL ? gProgress->flags : -1);
     if (t == TELA_HIST_RESULTADO && gHistResult != NULL) {
         sprintf(p, " | resultado flags 0x%x state %d se %d premio %d/%d pad %d trig %d", som_i32(gHistResult, 0x80),
                 som_i32(gHistResult, 0x90), som_i32(gHistResult, 0x9C), som_i32(gHistResult, 0x13C),
