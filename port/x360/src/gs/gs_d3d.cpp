@@ -1238,21 +1238,23 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
    Otimizações que não mudam a imagem, cada uma com a sua chave (BT3_OTIM=1 liga todas; a de cada uma em 0 a desliga):
      BT3_OTIM_PS=1        o pixel shader especializado (ps_gs_tex e ps_gs_sem, ps_gsz_tex e ps_gsz_sem; gs_rapido no
                           gs_d3d.hlsl) nos desenhos sem DATE, sem arte 2D, sem teste de alfa e sem alvo como textura
-     BT3_OTIM_LIMPA=1     ao entrar na EDRAM, a cor limpa só fora do conteúdo que a volta do alvo vai cobrir (limpa_fora) */
-enum { OT_PS = 1, OT_LIMPA = 2 };
+     BT3_OTIM_LIMPA=1     ao entrar na EDRAM, a cor limpa só fora do conteúdo que a volta do alvo vai cobrir (limpa_fora)
+     BT3_OTIM_DATE=1      o Resolve da cópia do DATE só na área que os desenhos com DATE seguintes leem (date_area) */
+enum { OT_PS = 1, OT_LIMPA = 2, OT_DATE = 4 };
 static unsigned sOtim, sPsTrivial;
 static D3DPixelShader *sPsTriv[2];    /* [0] ps_gs_triv, [1] ps_gsz_triv */
 static D3DPixelShader *sPsRap[2][2];  /* [z][com textura]: ps_gs_sem, ps_gs_tex, ps_gsz_sem, ps_gsz_tex */
 static unsigned env_num(const char *nome, unsigned padrao);
 /* (no trecho de 60 quadros, do desenho) o que as otimizações fizeram (otim_log) */
 static struct {
-    unsigned psRap, psSem, psGs, limpaN, limpaRets;
-    double limpaPx;
+    unsigned psRap, psSem, psGs, limpaN, limpaRets, dateN, dateVazio, dateFora;
+    double limpaPx, datePx, datePxAntes;
 } sOt;
 
 static void otim_init(void) {
     unsigned todas = env_num("BT3_OTIM", 0) != 0;
-    sOtim = (env_num("BT3_OTIM_PS", todas) != 0 ? OT_PS : 0) | (env_num("BT3_OTIM_LIMPA", todas) != 0 ? OT_LIMPA : 0);
+    sOtim = (env_num("BT3_OTIM_PS", todas) != 0 ? OT_PS : 0) | (env_num("BT3_OTIM_LIMPA", todas) != 0 ? OT_LIMPA : 0) |
+            (env_num("BT3_OTIM_DATE", todas) != 0 ? OT_DATE : 0);
     if ((sOtim & OT_PS) && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsSemPs, &sPsRap[0][0])) ||
                             FAILED(sDev->CreatePixelShader((const DWORD *)kGsTexPs, &sPsRap[0][1])) ||
                             FAILED(sDev->CreatePixelShader((const DWORD *)kGsZSemPs, &sPsRap[1][0])) ||
@@ -1262,8 +1264,8 @@ static void otim_init(void) {
     }
     if (sOtim != 0) {
         Diario_Escrever("gs_d3d: retomada do 720p, otimizações (BT3_OTIM=%u): shader especializado %s (BT3_OTIM_PS), limpeza "
-                        "só fora da volta %s (BT3_OTIM_LIMPA)", todas, (sOtim & OT_PS) ? "sim" : "não",
-                        (sOtim & OT_LIMPA) ? "sim" : "não");
+                        "só fora da volta %s (BT3_OTIM_LIMPA), DATE só na área dos desenhos %s (BT3_OTIM_DATE)", todas,
+                        (sOtim & OT_PS) ? "sim" : "não", (sOtim & OT_LIMPA) ? "sim" : "não", (sOtim & OT_DATE) ? "sim" : "não");
     }
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
@@ -1334,13 +1336,85 @@ static int limpa_fora(const Alvo *a, int volta, DWORD limpa) {
     return 1;
 }
 
+/* (BT3_OTIM_DATE) O marcador de DATE n (native 5) com o alvo na EDRAM: r chega com o que o Resolve copiaria para o sDate (o
+   desenhado e o conteúdo; a imagem inteira na luta) e sai com a parte que algum desenho com DATE até o próximo marcador lê.
+   Um desenho com DATE lê o sDate no próprio pixel (gs_pixel, f * alvo.xy), então só dentro da tesoura dele e, nas
+   primitivas do GS, do retângulo dos vértices (com um pixel de folga, para pontos e linhas); os da VU1, pela tesoura. Os dois
+   em múltiplos de 8 e a interseção: cada pixel que um desenho lê e o Resolve inteiro copiaria é copiado igual. 0: nada a
+   copiar. Os desenhos que leem fora do r de antes são contados (dateFora): ali o sDate guarda o que um Resolve anterior
+   deixou, com ou sem a chave, e só ali a imagem pode mudar. */
+static int date_area(uint32_t n, Ret *r) {
+    Ret u = {0, 0, 0, 0}, ra = *r, ua;
+    float s = sMeios * 0.5f;
+    uint32_t k, v;
+    esc_alinha8(&ra.x0, &ra.y0, &ra.x1, &ra.y1, sAlvoW, sAlvoH);
+    sOt.dateN++;
+    sOt.datePxAntes += (double)(ra.x1 - ra.x0) * (ra.y1 - ra.y0);
+    for (k = n + 1; k < sQ->drawCount; k++) {
+        const GsDraw *e = &sQ->draws[k];
+        int x0 = e->scissor[0], y0 = e->scissor[1], x1 = e->scissor[0] + e->scissor[2], y1 = e->scissor[1] + e->scissor[3];
+        if (e->native == 5) {
+            break;
+        }
+        if (e->native != 0 || e->count == 0 || e->misc[1] == 0.0f || (e->vu && sVuIni[k] == ~0u)) {
+            continue;
+        }
+        esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH);
+        if (x1 <= x0 || y1 <= y0) {
+            continue;
+        }
+        x0 = esc_px(x0, sMeios);
+        y0 = esc_px(y0, sMeios);
+        x1 = esc_px(x1, sMeios);
+        y1 = esc_px(y1, sMeios);
+        if (!e->vu) {
+            float mx = 4096.0f, my = 4096.0f, Mx = -4096.0f, My = -4096.0f;
+            for (v = 0; v < e->count; v++) {
+                const Vtx *p = &sQ->verts[e->first + v];
+                mx = p->x < mx ? p->x : mx;
+                Mx = p->x > Mx ? p->x : Mx;
+                my = p->y < my ? p->y : my;
+                My = p->y > My ? p->y : My;
+            }
+            mx = mx < -4096.0f ? -4096.0f : mx; /* (pixels do GS; o retângulo é preso na tesoura logo abaixo) */
+            my = my < -4096.0f ? -4096.0f : my;
+            Mx = Mx > 4096.0f ? 4096.0f : Mx;
+            My = My > 4096.0f ? 4096.0f : My;
+            if ((int)floorf(mx * s) - 1 > x0) x0 = (int)floorf(mx * s) - 1;
+            if ((int)floorf(my * s) - 1 > y0) y0 = (int)floorf(my * s) - 1;
+            if ((int)ceilf(Mx * s) + 1 < x1) x1 = (int)ceilf(Mx * s) + 1;
+            if ((int)ceilf(My * s) + 1 < y1) y1 = (int)ceilf(My * s) + 1;
+        }
+        ret_une(&u, x0, y0, x1, y1);
+    }
+    if (u.x1 <= u.x0) {
+        sOt.dateVazio++; /* (nenhum desenho com DATE até o próximo marcador) */
+        return 0;
+    }
+    ua = u;
+    esc_alinha8(&ua.x0, &ua.y0, &ua.x1, &ua.y1, sAlvoW, sAlvoH);
+    sOt.dateFora += u.x0 < ra.x0 || u.y0 < ra.y0 || u.x1 > ra.x1 || u.y1 > ra.y1;
+    r->x0 = ra.x0 > ua.x0 ? ra.x0 : ua.x0;
+    r->y0 = ra.y0 > ua.y0 ? ra.y0 : ua.y0;
+    r->x1 = ra.x1 < ua.x1 ? ra.x1 : ua.x1;
+    r->y1 = ra.y1 < ua.y1 ? ra.y1 : ua.y1;
+    if (r->x1 <= r->x0 || r->y1 <= r->y0) {
+        return 0;
+    }
+    sOt.datePx += (double)(r->x1 - r->x0) * (r->y1 - r->y0);
+    return 1;
+}
+
 /* (no log do trecho) o que as otimizações fizeram, por quadro */
 static void otim_log(unsigned t) {
     if (sOtim != 0) {
         Diario_Escrever("gs_d3d:   retomada do 720p, por quadro: desenhos pelo shader especializado %.1f (%.1f sem textura), pelo "
-                        "geral %.1f; entradas com a cor limpa só fora da volta %.1f (%.1f retângulos, %.0f mil pixels poupados)",
+                        "geral %.1f; entradas com a cor limpa só fora da volta %.1f (%.1f retângulos, %.0f mil pixels poupados); "
+                        "DATE: %.1f marcadores na EDRAM, copiados %.0f mil pixels de %.0f mil, %u sem desenho com DATE depois, "
+                        "%u com desenho lendo fora do que o alvo tinha (no trecho)",
                         (double)sOt.psRap / t, (double)sOt.psSem / t, (double)sOt.psGs / t, (double)sOt.limpaN / t,
-                        (double)sOt.limpaRets / t, sOt.limpaPx / t / 1000.0);
+                        (double)sOt.limpaRets / t, sOt.limpaPx / t / 1000.0, (double)sOt.dateN / t, sOt.datePx / t / 1000.0,
+                        sOt.datePxAntes / t / 1000.0, sOt.dateVazio, sOt.dateFora);
     }
     memset(&sOt, 0, sizeof(sOt));
 }
@@ -4029,7 +4103,7 @@ static void frame_end(void) {
                 Ret r = sSujo;
                 ret_une(&r, sAlvoD[d->target].conteudo.x0, sAlvoD[d->target].conteudo.y0, sAlvoD[d->target].conteudo.x1,
                         sAlvoD[d->target].conteudo.y1);
-                if (r.x1 > r.x0 && sDate != NULL) {
+                if (r.x1 > r.x0 && sDate != NULL && (!(sOtim & OT_DATE) || date_area(n, &r))) { /* (720p, retomada) */
                     D3DRECT fonte;
                     D3DPOINT destino;
                     tempo_poe(T_DATE);
