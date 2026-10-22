@@ -149,6 +149,8 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `subir_f2.sh` | envia o `.xex` sempre junto com o `.dat` e o `.swap` da mesma build: os dois dependem dos endereços do `.map`, e um par de outra build copia as tabelas para o lugar errado sem erro nenhum |
 | `teste_diario.sh` | o `diario.c` (anel e thread escritora) no Linux, com uma API do Xbox de brinquedo e um disco de 40 ms por flush: ordem, integridade, que quem escreve não espera, a queda, o anel cheio; `--mutantes` estraga o `diario.c` de quatro jeitos e exige que o teste acuse cada um |
 | `picos_log.py` | de um `bt3xbx.log` do console, a média, o pior quadro e a média sem o pior de cada trecho de 60 quadros, e o custo por linha gravada do relatório anterior (`F5/08.md`, "Os logs e os engasgos") |
+| `som_ambiente.py` | (F6, etapa 1, rede 1) todo `getenv` e todo ramo de janela e de rede dos arquivos do som e dos filmes, com o valor no 360 (padrões do `posix360.c` e `--ambiente ambiente.txt`), nos roteiros do WSL e no PC, e o caminho que cada um dá; sai com 1 numa variável ou ramo sem classe ou num caminho que diverge entre o 360 e o WSL fora das divergências esperadas; `--mutantes` estraga cópias de cinco jeitos |
+| `som_estado.py` | (F6, etapa 1) as linhas `som:` do `BT3_SOM_ESTADO=N` (o estado dos seis players, a boca, as bandeiras dos menus e a tela de resultado da História, por mudança e a cada N leituras do controle; no console com o tempo real): `compara` (console contra x86, vblank a vblank), `falas` (cada fala em vblanks e em ms), `parada` (a porta fechada da tela de resultado) |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
 ### Builds de teste da ordem de bytes (F1, rodam no WSL)
@@ -1225,6 +1227,19 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Custou uma rodada (o script em série seguiu para a PPC com as listas vazias). O `vu1_perfil.sh` agora faz `mkdir -p` da
   pasta; numa máquina nova, confira as pastas fora do repositório que os scripts pressupõem (`~/perfil`, `~/referencias`)
   e olhe o fim do log da primeira rodada antes de deixar a série correr.
+
+- **Uma tela que para só no console, com o rastro igual até ela: ponha no log o que a tela espera antes de supor tempo
+  real** (F6, etapa 1, `plano/F6/01.md`). A tela de resultado da História parou no console sem desenho e a F4 a deu
+  como "espera em tempo real"; a F6 a deu como "estado do som ausente" porque leu o `getenv` errado (seção 1.3). As
+  duas hipóteses caíram pelo código: o jogo conta tudo em vblanks e quadros, e o rastro do console era igual ao da x86
+  até o vblank da entrada da tela. Quando o rastro é igual até uma tela, a diferença está dentro dela, e o que a tela
+  espera se lê no código (aqui, quatro portas: o jingle no SE0 chegar a 5, o "pad true" da animação, o fim do
+  `fl_out`, o `MPROG_FREEZE`). O `BT3_SOM_ESTADO=N` põe essas portas e o estado dos seis players numa linha por
+  mudança, nas três builds, fora do rastro; o `som_estado.py parada` diz qual ficou fechada. Duas regras que saíram
+  daí: um `getenv` do som que vira NULL no console muda o jogo em silêncio, então todo `getenv` e todo ramo de janela
+  dos arquivos do som está no inventário do `som_ambiente.py` (rede 1, `--mutantes` com cinco estragos); e o início de
+  um fluxo que não abre (`ADXT_StartAfs` com o `Port_FilePath` falhando) não deixa linha e deixa o player com o
+  estado anterior, então um player "parado" numa tela que espera o fim pode ser um arquivo que não abriu.
 
 ---
 
