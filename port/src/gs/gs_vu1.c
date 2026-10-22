@@ -187,9 +187,19 @@ static void conta_unpack(int v4, const void *src, uint32_t addr, uint32_t n) {
 /* (F5, etapa 8, estudo do Unpack; protótipo, só no 360) BT3_UNPACK_PRE=N: a cópia V4-32 pede antes, com dcbt, as linhas de
    128 bytes da origem inteira e mais D bytes depois dela (o começo do Unpack seguinte, que na cadeia vem logo atrás), para a
    memória atender várias faltas de uma vez em vez de uma por vez. N = 1 usa D = 1024; N >= 128 é o próprio D; sem a chave ou
-   com 0, a cópia de sempre. O dcbt é só um aviso: não falha nem muda o que se copia. */
+   com 0, a cópia de sempre. Com a chave, o run_chain (gs_core.c) pede também as duas primeiras linhas da etiqueta seguinte
+   antes de passar os dados da atual ao VIF (o CALL para a cadeia de um modelo cai longe). O dcbt é só um aviso: não falha
+   nem muda o que se copia. No console, uns 9 mil Unpack por quadro de luta de uns 16 vetores cada (264 bytes, 2 ou 3
+   linhas) a uns 440 ns cada: perto de uma falta de memória por chamada, que o dcbt de dentro do memcpy não esconde. */
 void __dcbt(int offset, const void *base); /* o intrínseco do cl (o mesmo do ppcintrinsics.h), em linha */
 static int sPre = -1;
+int GsVu1_Pre(void) { /* a distância da pré-carga em bytes, 0 desligada */
+    if (sPre < 0) {
+        const char *e = getenv("BT3_UNPACK_PRE");
+        sPre = e == NULL || atoi(e) <= 0 ? 0 : atoi(e) < 128 ? 1024 : atoi(e);
+    }
+    return sPre;
+}
 #endif
 
 #ifdef BT3_GS_ESPERAS
@@ -238,8 +248,7 @@ void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data
 #endif
 #ifdef PORT_X360
             if (sPre < 0) {
-                const char *e = getenv("BT3_UNPACK_PRE");
-                sPre = e == NULL || atoi(e) <= 0 ? 0 : atoi(e) < 128 ? 1024 : atoi(e);
+                GsVu1_Pre();
             }
             if (sPre > 0) {
                 uint32_t o, fim = n * 16 + (uint32_t)sPre + (uint32_t)((uintptr_t)src & 127);
