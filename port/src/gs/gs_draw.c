@@ -668,6 +668,11 @@ static int pipeline_get(int ctx, int topo, int vu) {
     return sBackend->pipeGet(key);
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação, seção 15 da nota) sobe quando uma vaga da tabela de alvos muda de dono (alvo novo, vaga tomada,
+   escala nova): a memória do estado dos lotes da VU1 (draw_state_vu) só vale com a tabela que ela viu */
+static uint32_t sAlvosMuda;
+#endif
 /* The shared target table's entry for a frame-buffer address. The attachments are the back end's: a new
    slot asks it to make them (GsBackend.targetEnsure), an evicted one to release them (targetDrop). */
 int GsDraw_TargetGet(uint32_t fbp, int create) {
@@ -702,6 +707,9 @@ int GsDraw_TargetGet(uint32_t fbp, int create) {
 #endif
     }
     sBackend->targetEnsure(slot);
+#ifdef BT3_GS_ESPERAS
+    sAlvosMuda++;
+#endif
     gsTargets[slot].fbp = fbp;
     gsTargets[slot].cleared = 0;
     gsTargets[slot].draws = 0;
@@ -948,6 +956,280 @@ static void date_snapshot(const GsDraw *d) {
     }
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, gravação, seção 15 da nota) A memória do estado dos lotes da VU1. Os uns 4.500 lotes de um quadro de luta
+   pedem o draw_state em seguida com a mesma entrada, e no 360 refazê-lo custava uns 4 ms por quadro fora do hash (a
+   tabela de alvos andada duas vezes, o pipeGet com a sua busca linear, o memset e as conversões de inteiro para float).
+   O resultado de um draw_state que deu certo fica aqui com a entrada que ele leu: os registradores do contexto, o PRIM
+   e o TEXA, a tabela de alvos (sAlvosMuda), o quadro, a textura branca e a chave dos pacotes de textura. Com a mesma
+   entrada o resultado é o mesmo, fora do que depende da memória do GS:
+     - o alvo como textura (tex_is_target) nunca entra na memória; quando o alvo em tbp / 32 existe, a condição que
+       escolheria esse caminho (cleared e gen da vaga contra a gGsPageGen) é refeita a cada acerto;
+     - a textura: se a época das páginas é a mesma e a entrada do cache que o texture_get achou segue no lugar, com o
+       mesmo TEX0, TEXA e gen, é ela que ele acharia de novo; senão o texture_get é chamado (o hash, quando as páginas
+       mudaram, segue sendo feito) e, sendo uma entrada sem substituição de pacote ou a branca da falta de espaço, o
+       resultado é o da memória com a textura nova (o draw_state só muda o sampler, o mode e o orig para a substituição).
+   Os efeitos do draw_state que deu certo (o last do alvo, da vaga lida e da textura igual ao quadro, e o sLast) já valem
+   num acerto, pois o quadro está na chave; o sLast é posto de novo. Um draw_state que recusou o desenho (gsSkipped, as
+   vagas marcadas, o depth_clut) nunca entra na memória. */
+static struct {
+    uint64_t prim, t0, test, cl, sc, frame, zbuf, alpha, fba, tex1, texa;
+    uint32_t quadro, alvos, epoch, gen;
+    int valido, ctx, vu, pack, src;
+    GsTex white;
+    Tex *tex; /* a entrada do cache (com textura) ou NULL */
+    float us, vs;
+    GsDraw d;
+} sEst;
+#if defined(BT3_GPU_FALSO)
+/* (só nas builds --gpu) BT3_VU_ESTADO_CONFERE=1: em todo acerto o draw_state completo também roda, e é o resultado dele que
+   vale; as diferenças são contadas (uma linha a cada 1.000 quadros com o acumulado e as contagens dos lotes e do fecho, e
+   uma por diferença, até 20) */
+static int sEstConfere = -1;
+static struct {
+    uint64_t lotes, acertos, igualAnterior, mesmaTex, texChamada, texNova, diferentes, naoGuarda;
+    uint64_t fecho, mesmoEstado, junta, novos, bytesIguais, bytesDiferentes, desenhoAnterior;
+    uint64_t falhaChave, falhaSrc, falhaEntrada;
+} sEstN;
+static uint64_t sEstAntT0, sEstAntTexa;
+static int sEstAntCtx = -1;
+#endif
+
+/* a vaga do alvo em fbp, sem efeito (o GsDraw_TargetGet(fbp, 0) põe o last, que num acerto já vale) */
+static int alvo_acha(uint32_t fbp) {
+    int i;
+    for (i = 0; i < gsTargetCount; i++) {
+        if (gsTargets[i].fbp == fbp) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+#define EST_ENTRADA(ctx_, vu_) (sEst.valido && sEst.ctx == (ctx_) && sEst.vu == (vu_) && sEst.quadro == gGsFrame && \
+    sEst.alvos == sAlvosMuda && sEst.prim == gGs.prim && sEst.t0 == gGs.tex0[ctx_] && sEst.test == gGs.test[ctx_] && \
+    sEst.cl == gGs.clamp[ctx_] && sEst.sc == gGs.scissor[ctx_] && sEst.frame == gGs.frame[ctx_] && \
+    sEst.zbuf == gGs.zbuf[ctx_] && sEst.alpha == gGs.alpha[ctx_] && sEst.fba == gGs.fba[ctx_] && \
+    sEst.tex1 == gGs.tex1[ctx_] && sEst.texa == gGs.texa && sEst.white == gsWhite && sEst.pack == sTexPackOn)
+
+/* 1: o resultado da memória vale para este lote (o d já preenchido); 0: o draw_state completo tem de rodar */
+static int est_acerta(int ctx, int vu, GsDraw *d) {
+    Tex *t;
+    GsTex x;
+
+    if (!EST_ENTRADA(ctx, vu)) {
+#if defined(BT3_GPU_FALSO)
+        sEstN.falhaChave++;
+#endif
+        return 0;
+    }
+    if (sEst.tex == NULL) {
+        memcpy(d, &sEst.d, sizeof(*d));
+        return 1;
+    }
+    if (sEst.src >= 0 && (sEst.t0 & 0x1F) == 0 && gsTargets[sEst.src].cleared &&
+        gsTargets[sEst.src].gen == gGsPageGen[gsTargets[sEst.src].fbp & 511]) {
+#if defined(BT3_GPU_FALSO)
+        sEstN.falhaSrc++;
+#endif
+        return 0; /* o alvo em tbp / 32 viraria a textura */
+    }
+    t = sEst.tex;
+    if (sEst.epoch == gGsPageEpoch && t < &sTex[gsTexCount] && t->tex == sEst.d.tex &&
+        t->tex0 == (sEst.t0 & 0x1FFFFFFFFFFFFFFFull) && t->texa == sEst.texa && t->gen == sEst.gen) {
+        sLast = t;
+        memcpy(d, &sEst.d, sizeof(*d));
+        return 1;
+    }
+#if defined(BT3_GPU_FALSO)
+    sEstN.texChamada++;
+#endif
+    x = texture_get(ctx);
+    if (x == gsWhite) { /* (sem espaço: o draw_state daria a branca; a próxima vez tenta de novo, pelo caminho completo) */
+        memcpy(d, &sEst.d, sizeof(*d));
+        d->tex = gsWhite;
+        sEst.valido = 0;
+        return 1;
+    }
+    if (sLast == NULL || sLast->tex != x || sLast->replaced) {
+        /* (uma substituição de pacote: o draw_state completo, cujo texture_get acha a mesma entrada pelo sLast) */
+#if defined(BT3_GPU_FALSO)
+        sEstN.falhaEntrada++;
+#endif
+        return 0;
+    }
+#if defined(BT3_GPU_FALSO)
+    if (x != sEst.d.tex) {
+        sEstN.texNova++;
+    }
+#endif
+    sEst.tex = sLast;
+    sEst.gen = sLast->gen;
+    sEst.epoch = gGsPageEpoch;
+    sEst.d.tex = x;
+    memcpy(d, &sEst.d, sizeof(*d));
+    return 1;
+}
+
+/* guarda o resultado de um draw_state que deu certo, se ele pode ser lembrado */
+static void est_guarda(int ctx, int vu, const GsDraw *d, float us, float vs) {
+    uint64_t t0 = gGs.tex0[ctx];
+    int tme = (int)((gGs.prim >> 4) & 1);
+
+    sEst.valido = 0;
+    if (d->tex_is_target || (tme && (sLast == NULL || sLast->tex != d->tex || sLast->replaced || d->tex == gsWhite))) {
+        return;
+    }
+    sEst.prim = gGs.prim;
+    sEst.t0 = t0;
+    sEst.test = gGs.test[ctx];
+    sEst.cl = gGs.clamp[ctx];
+    sEst.sc = gGs.scissor[ctx];
+    sEst.frame = gGs.frame[ctx];
+    sEst.zbuf = gGs.zbuf[ctx];
+    sEst.alpha = gGs.alpha[ctx];
+    sEst.fba = gGs.fba[ctx];
+    sEst.tex1 = gGs.tex1[ctx];
+    sEst.texa = gGs.texa;
+    sEst.quadro = gGsFrame;
+    sEst.alvos = sAlvosMuda;
+    sEst.epoch = gGsPageEpoch;
+    sEst.white = gsWhite;
+    sEst.pack = sTexPackOn;
+    sEst.ctx = ctx;
+    sEst.vu = vu;
+    sEst.tex = tme ? sLast : NULL;
+    sEst.gen = tme ? sLast->gen : 0;
+    sEst.src = tme ? alvo_acha((uint32_t)((t0 & 0x3FFF) / 32)) : -1;
+    sEst.us = us;
+    sEst.vs = vs;
+    memcpy(&sEst.d, d, sizeof(*d));
+    sEst.valido = 1;
+}
+
+/* o draw_state dos três GsGpu_DrawVu*, pela memória */
+static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
+    int r;
+#if defined(BT3_GPU_FALSO)
+    if (sEstConfere < 0) {
+        sEstConfere = getenv("BT3_VU_ESTADO_CONFERE") != NULL && atoi(getenv("BT3_VU_ESTADO_CONFERE")) != 0;
+    }
+    if (sEstConfere) {
+        sEstN.lotes++;
+        if (sEstAntCtx == ctx && sEstAntT0 == gGs.tex0[ctx] && sEstAntTexa == gGs.texa) {
+            sEstN.mesmaTex++;
+        }
+        sEstAntCtx = ctx;
+        sEstAntT0 = gGs.tex0[ctx];
+        sEstAntTexa = gGs.texa;
+        if (EST_ENTRADA(ctx, vu)) {
+            sEstN.igualAnterior++;
+        }
+    }
+#endif
+    if (est_acerta(ctx, vu, d)) {
+        *us = sEst.us;
+        *vs = sEst.vs;
+#if defined(BT3_GPU_FALSO)
+        if (sEstConfere) {
+            GsDraw c;
+            float cu, cv;
+            Tex *lembrado = sLast;
+            sEstN.acertos++;
+            r = draw_state(ctx, 0, 0, vu, &c, &cu, &cv);
+            if (r != 1 || memcmp(&c, d, sizeof(c)) != 0 || cu != *us || cv != *vs || (sEst.tex != NULL && sLast != lembrado)) {
+                if (sEstN.diferentes++ < 20) {
+                    fprintf(stderr, "gs: BT3_VU_ESTADO_CONFERE: quadro %u, vu %d: completo %d tex %lx alvo %d pipeline %d sampler %d; "
+                            "memória tex %lx alvo %d pipeline %d sampler %d\n", gGsFrame, vu, r, (unsigned long)c.tex, c.target,
+                            c.pipeline, c.sampler, (unsigned long)d->tex, d->target, d->pipeline, d->sampler);
+                }
+            }
+            if (r) {
+                memcpy(d, &c, sizeof(c));
+                *us = cu;
+                *vs = cv;
+            }
+            if (r) {
+                est_guarda(ctx, vu, d, *us, *vs);
+            } else {
+                sEst.valido = 0;
+            }
+            return r;
+        }
+#endif
+        return 1;
+    }
+    r = draw_state(ctx, 0, 0, vu, d, us, vs);
+    if (r) {
+        est_guarda(ctx, vu, d, *us, *vs);
+#if defined(BT3_GPU_FALSO)
+        if (sEstConfere && !sEst.valido) {
+            sEstN.naoGuarda++;
+        }
+#endif
+    } else {
+        sEst.valido = 0;
+    }
+    return r;
+}
+#define DRAW_STATE_VU(ctx, vu, d, us, vs) draw_state_vu(ctx, vu, d, us, vs)
+#if defined(BT3_GPU_FALSO)
+/* (BT3_VU_ESTADO_CONFERE) o que o fecho de cada desenho da VU1 faz: o mesmo estado que o desenho anterior (same_state), o
+   bloco uniforme igual (junta) e quantos bytes o memcmp dele lê; e se o anterior é o desenho do lote anterior */
+static uint32_t sFechoUlt = 0xFFFFFFFFu, sFechoQuadro;
+static void est_conta_fecho(const GsDraw *last, const GsDraw *d, const Vu0Uniform *u) {
+    int junta = 0;
+    if (sEstConfere <= 0) {
+        return;
+    }
+    sEstN.fecho++;
+    if (last != NULL && sFechoQuadro == gGsFrame && sFechoUlt == gsDrawCount - 1) {
+        sEstN.desenhoAnterior++;
+    }
+    if (last != NULL && same_state(last, d)) {
+        const unsigned char *a = (const unsigned char *)&gsVuUni[last->uniform], *b = (const unsigned char *)u;
+        size_t k;
+        sEstN.mesmoEstado++;
+        for (k = 0; k < sizeof(*u) && a[k] == b[k]; k++) {
+        }
+        if (k == sizeof(*u)) {
+            junta = 1;
+            sEstN.junta++;
+            sEstN.bytesIguais += k;
+        } else {
+            sEstN.bytesDiferentes += k + 1;
+        }
+    }
+    if (!junta) {
+        sEstN.novos++;
+    }
+    sFechoQuadro = gGsFrame;
+    sFechoUlt = junta ? gsDrawCount - 1 : gsDrawCount;
+}
+static void est_confere_linha(void) {
+    static unsigned quadros;
+    if (sEstConfere <= 0 || ++quadros % 1000 != 0) {
+        return;
+    }
+    fprintf(stderr, "gs: BT3_VU_ESTADO_CONFERE: %u quadros, %llu lotes, %llu com a entrada do anterior, %llu acertos, %llu diferentes; "
+            "mesma textura que o anterior %llu; texture_get no acerto %llu (textura nova %llu); falhas: chave %llu, alvo como textura "
+            "%llu, substituição %llu; sem memória %llu; fecho %llu: o desenho do lote anterior %llu, mesmo estado %llu, junta %llu "
+            "(%llu bytes), novos %llu (%llu bytes até a diferença)\n",
+            quadros, (unsigned long long)sEstN.lotes, (unsigned long long)sEstN.igualAnterior, (unsigned long long)sEstN.acertos,
+            (unsigned long long)sEstN.diferentes, (unsigned long long)sEstN.mesmaTex, (unsigned long long)sEstN.texChamada,
+            (unsigned long long)sEstN.texNova, (unsigned long long)sEstN.falhaChave, (unsigned long long)sEstN.falhaSrc,
+            (unsigned long long)sEstN.falhaEntrada, (unsigned long long)sEstN.naoGuarda, (unsigned long long)sEstN.fecho,
+            (unsigned long long)sEstN.desenhoAnterior, (unsigned long long)sEstN.mesmoEstado, (unsigned long long)sEstN.junta,
+            (unsigned long long)sEstN.bytesIguais, (unsigned long long)sEstN.novos, (unsigned long long)sEstN.bytesDiferentes);
+}
+#define EST_CONTA_FECHO(last, d, u) est_conta_fecho(last, d, u)
+#else
+#define EST_CONTA_FECHO(last, d, u) ((void)0)
+#endif
+#else
+#define DRAW_STATE_VU(ctx, vu, d, us, vs) draw_state(ctx, 0, 0, vu, d, us, vs)
+#endif
+
 /* Gs_StateBack (gs_core.c) moved every page's upload generation on by `delta`, so that nothing decoded from the
    pages in between is taken for them. The buffers the game draws into keep their standing: one that was drawn
    since the last upload over it still is. */
@@ -1164,7 +1446,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
-    if (!draw_state(ctx, 0, 0, 3, &d, &us, &vs)) {
+    if (!DRAW_STATE_VU(ctx, 3, &d, &us, &vs)) {
 #ifdef PORT_X360
         GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
@@ -1221,6 +1503,9 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+    EST_CONTA_FECHO(last, &d, &u);
+#endif
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
 #ifdef BT3_GS_ESPERAS
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
@@ -1260,7 +1545,7 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
-    if (!draw_state(ctx, 0, 0, 2, &d, &us, &vs)) {
+    if (!DRAW_STATE_VU(ctx, 2, &d, &us, &vs)) {
 #ifdef PORT_X360
         GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
@@ -1302,6 +1587,9 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+    EST_CONTA_FECHO(last, &d, &u);
+#endif
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
 #ifdef BT3_GS_ESPERAS
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
@@ -1341,7 +1629,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         gsVuUniCount == CAP_VU_UNIFORMS) {
         return;
     }
-    if (!draw_state(ctx, 0, 0, 1, &d, &us, &vs)) {
+    if (!DRAW_STATE_VU(ctx, 1, &d, &us, &vs)) {
 #ifdef PORT_X360
         GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
@@ -1398,6 +1686,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+    EST_CONTA_FECHO(last, &d, &u);
+#endif
     if (last != NULL && same_state(last, &d) && memcmp(&gsVuUni[last->uniform], &u, sizeof(u)) == 0) {
 #ifdef BT3_GS_ESPERAS
         vu_faixa(gsDrawCount - 1, d.first, d.count, 1);
@@ -1479,6 +1770,9 @@ static void scale_apply(void) {
     gsPendingScale = 0;
     sBackend->scaleChanged();
     gsTargetCount = 0;
+#ifdef BT3_GS_ESPERAS
+    sAlvosMuda++;
+#endif
     fprintf(stderr, "bt3: internal resolution %dx (%d x %d)\n", gsScale, 512 * gsScale, 448 * gsScale);
 }
 
@@ -4291,6 +4585,7 @@ void GsGpu_FrameEnd(void) {
 #endif
 #if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
     vu_faixa_confere();
+    est_confere_linha();
 #endif
     uint64_t t0 = gpu_now();
     if (sBackend != NULL) {
