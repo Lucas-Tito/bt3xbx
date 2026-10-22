@@ -990,7 +990,9 @@ static struct {
     uint64_t lotes, acertos, igualAnterior, mesmaTex, texChamada, texNova, diferentes, naoGuarda;
     uint64_t fecho, mesmoEstado, junta, novos, bytesIguais, bytesDiferentes, desenhoAnterior;
     uint64_t falhaChave, falhaSrc, falhaEntrada;
+    uint64_t campo[20], vuLotes[4], vuAcertos[4], vuJunta[4], juntaAcerto;
 } sEstN;
+static int sEstAcertou;
 static uint64_t sEstAntT0, sEstAntTexa;
 static int sEstAntCtx = -1;
 #endif
@@ -1020,6 +1022,17 @@ static int est_acerta(int ctx, int vu, GsDraw *d) {
     if (!EST_ENTRADA(ctx, vu)) {
 #if defined(BT3_GPU_FALSO)
         sEstN.falhaChave++;
+        if (sEstConfere) {
+            int c = !sEst.valido ? 0 : sEst.ctx != ctx ? 1 : sEst.vu != vu ? 2 : sEst.quadro != gGsFrame ? 3 : sEst.alvos != sAlvosMuda ? 4 :
+                    sEst.prim != gGs.prim ? 5 : sEst.t0 != gGs.tex0[ctx] ? 6 : sEst.test != gGs.test[ctx] ? 7 : sEst.cl != gGs.clamp[ctx] ? 8 :
+                    sEst.sc != gGs.scissor[ctx] ? 9 : sEst.frame != gGs.frame[ctx] ? 10 : sEst.zbuf != gGs.zbuf[ctx] ? 11 :
+                    sEst.alpha != gGs.alpha[ctx] ? 12 : sEst.fba != gGs.fba[ctx] ? 13 : sEst.tex1 != gGs.tex1[ctx] ? 14 :
+                    sEst.texa != gGs.texa ? 15 : 16;
+            sEstN.campo[c]++;
+            if (c == 5 && ((sEst.prim ^ gGs.prim) & 0x50) == 0) {
+                sEstN.campo[17]++; /* (só bits do PRIM que o draw_state não lê) */
+            }
+        }
 #endif
         return 0;
     }
@@ -1127,7 +1140,19 @@ static int draw_state_vu(int ctx, int vu, GsDraw *d, float *us, float *vs) {
         }
     }
 #endif
+#if defined(BT3_GPU_FALSO)
+    if (sEstConfere) {
+        sEstN.vuLotes[vu & 3]++;
+    }
+    sEstAcertou = 0;
+#endif
     if (est_acerta(ctx, vu, d)) {
+#if defined(BT3_GPU_FALSO)
+        sEstAcertou = 1;
+        if (sEstConfere) {
+            sEstN.vuAcertos[vu & 3]++;
+        }
+#endif
         *us = sEst.us;
         *vs = sEst.vs;
 #if defined(BT3_GPU_FALSO)
@@ -1195,6 +1220,8 @@ static void est_conta_fecho(const GsDraw *last, const GsDraw *d, const Vu0Unifor
         if (k == sizeof(*u)) {
             junta = 1;
             sEstN.junta++;
+            sEstN.vuJunta[d->vu & 3]++;
+            sEstN.juntaAcerto += sEstAcertou;
             sEstN.bytesIguais += k;
         } else {
             sEstN.bytesDiferentes += k + 1;
@@ -1221,6 +1248,20 @@ static void est_confere_linha(void) {
             (unsigned long long)sEstN.falhaEntrada, (unsigned long long)sEstN.naoGuarda, (unsigned long long)sEstN.fecho,
             (unsigned long long)sEstN.desenhoAnterior, (unsigned long long)sEstN.mesmoEstado, (unsigned long long)sEstN.junta,
             (unsigned long long)sEstN.bytesIguais, (unsigned long long)sEstN.novos, (unsigned long long)sEstN.bytesDiferentes);
+    {
+        int c;
+        fprintf(stderr, "gs: BT3_VU_ESTADO_CONFERE: por vu (lotes acertos junta):");
+        for (c = 1; c < 4; c++) {
+            fprintf(stderr, " %d: %llu %llu %llu;", c, (unsigned long long)sEstN.vuLotes[c], (unsigned long long)sEstN.vuAcertos[c],
+                    (unsigned long long)sEstN.vuJunta[c]);
+        }
+        fprintf(stderr, " junta com acerto %llu; a chave falhou por (vazia ctx vu quadro alvos prim tex0 test clamp scissor frame zbuf alpha fba tex1 texa outro prim-só-sem-uso):",
+                (unsigned long long)sEstN.juntaAcerto);
+        for (c = 0; c < 18; c++) {
+            fprintf(stderr, " %llu", (unsigned long long)sEstN.campo[c]);
+        }
+        fprintf(stderr, "\n");
+    }
 }
 #define EST_CONTA_FECHO(last, d, u) est_conta_fecho(last, d, u)
 #else
