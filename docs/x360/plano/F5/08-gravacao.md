@@ -1677,3 +1677,90 @@ vblanks" separaria as duas aberturas (vb0 1,41%, falha; vb1 0,43%, passa). Fica 
 **Recomendação.** Levar à main com `BT3_VBLANK_HW=1` por padrão: a tela melhora, o atraso ao acordar some, nada novo no log, o
 resultado da luta é o mesmo. Antes ou junto: a correção da dívida do item 4 (com uma rodada curta do console), e a conferência da
 prova do WSL quando a máquina voltar.
+
+## 20. A dívida parada: o alvo recomeça e a espera é já (23/10/2026)
+
+O item 4 da seção 19: na janela 1 do vb1 a espera pelo vblank de hardware sumiu (0 esperas) porque o alvo ficou atrás numa cena
+lenta e a fila da gravação e do desenho segurou cada passo em exatamente dois vblanks. Pedido: recomeçar o alvo quando o atraso
+persiste por alguns passos e contar no log as chamadas com o vblank já passado.
+
+| Commit | O quê |
+|---|---|
+| `67f97a0` | **A conta no `vblank_alvo.h`** (C89, sem o XDK, como o `escala.h`): o `GsD3d_VblankEspera` chama `vb_decide` e `vb_esperou` em vez da conta em linha. O mesmo de antes (um alvo por chamada; o vblank já passado não se espera; 6 vblanks atrás, alvo novo) mais **a dívida parada**: numa sequência de chamadas com o alvo já passado, a soma dos atrasos de cada bloco de 8 chamadas (4 passos) se compara com a menor de um bloco anterior da sequência; dois blocos seguidos sem ficar abaixo dela (24 chamadas, 12 passos, 0,4 s) recomeçam o alvo no próximo vblank **e esperam por ele já**. A linha `passos: janela K tela:` ganha no fim `; vblank já passado em P chamadas, alvo recomeçado R vezes pela dívida parada e L por estar 100 ms atrás`; o `passos.py` a lê (opcional: os logs de antes seguem valendo) e, no `--console`, recusa um fim de linha que não conhece. **`port/x360/tools/teste_vblank.c`**: a simulação |
+
+**Por que a soma e por que esperar já** [simulado]. O atraso anda em vblanks inteiros: um passo de 1,9 vblank paga um vblank a
+cada dez passos, e o maior atraso de um bloco fica igual por vários blocos enquanto a dívida está sendo paga; a soma cai, e os
+três blocos que o recomeço pede deixam essa dívida se pagar como antes (cena C abaixo). Recomeçar o alvo sem esperar não basta:
+na trava o jogo está um passo à frente da tela, parado na entrega à gravação, e volta à fila na chamada seguinte (a variante
+"sem esperar já" teve 52 a 61 recomeços e 7 esperas na janela). Esperando o próximo vblank já, a parada na entrega vira uma espera
+no vblank, a fila esvazia um passo (a imagem que já estava nela cobre a vez) e o controle passa a ser lido um passo mais perto
+da tela.
+
+**A simulação** (`teste_vblank.c`, só tempo simulado): o vblank de 16,635 ms (o medido na seção 19); o jogo trabalha, entrega à
+gravação (espera se ela ainda não tomou a anterior) e espera dois vblanks pela conta; a gravação entrega ao desenho; o Present
+põe a imagem no primeiro vblank seguinte e **segura o desenho até ela entrar na tela** (sem isso o modelo nunca reproduz a trava:
+o desenho adianta a seguinte, sai uma imagem de 1 vblank e ela paga a dívida). A conta nova vem do próprio `vblank_alvo.h`; a de
+antes (`3ae20e6`) está copiada no teste. `gcc -std=c89 -pedantic -Wall -Wextra -Werror`, 69 conferências, 0 falhas:
+
+| Cena | Conta de antes | Conta nova |
+|---|---|---|
+| A. A janela 1 do vb1 (dez fases do vídeo): 20 passos de ~45 ms pela gravação, a fila do desenho em dois vblanks (o desenho de 16,8 a 18,5 ms), um pico da gravação de 60 a 87 ms no passo 120; 684 passos | **0 esperas** depois do pico nas 10 fases; tela 0/682/1/0; o controle à tela p50 99,81 ms (6 vblanks) | 652 de 654 passos com espera depois do pico, 2 recomeços; **a mesma tela**; o controle à tela p50 83,12 ms (5 vblanks), p99 e máximo iguais ou menores; parede igual até um passo |
+| B. O passo comum, 20 mil passos (70% de 15 a 30 ms, 25% de 30 a 33, 5% de picos de 34 a 60), três fases | 18.853 a 18.929 esperas; período 33,2698 ms | as mesmas esperas até 0,08%; período até 0,02% maior; 1 a 5 recomeços; até 5 imagens de 3 vblanks a mais em 20 mil (0,025%); o controle à tela igual |
+| C. A dívida paga devagar: um pico de 90 ms e 200 passos de 1,9 vblank, três fases | 199 esperas | **igual**, 0 recomeços |
+
+**Os mutantes** [medido]: cada um é uma cópia do `vblank_alvo.h` mudada numa pasta à parte, posta antes no `-I`, e **todos saem
+com 1**: sem o recomeço (`0 &&`; 20 falhas: A sem espera), recomeço sem esperar já (`return 1`; 20 falhas: A com 7 esperas),
+recomeço dois vblanks à frente (`n + 2`; 4 falhas: uma imagem de 3 vblanks vira de 4 na tela e a parede passa de um passo), recomeço no primeiro bloco
+parado (`VB_PARADOS 0`; 18 falhas, entre elas C recomeçando e B mudando o período), e "abaixo ou igual" no lugar de "abaixo"
+(3 falhas: em três fases de A, só 528 de 654 passos com espera depois do pico).
+
+**A linha do `passos`** [medido]: um banco de teste do `passos.c` com `PORT_X360` no `gcc` (o relógio trocado por um falso, três
+janelas de 3.001 passos, os contadores do `gs_d3d.cpp` simulados) escreve a linha com o fim novo, e o `passos.py --console` diz
+"tudo certo"; com uma cópia do `passos.c` em que o fim mudou (`divida` sem acento, conferido que a cópia mudou) sai com 1 ("a
+linha tela com um fim que este leitor não conhece"). Os logs da seção 19 (sem o fim novo) seguem com "tudo certo".
+
+### As provas
+
+| Prova | Resultado |
+|---|---|
+| Pré-processado (`gcc -E -P`) do `passos.c` e do `plat_stub.c`, main (`75e99f5`) contra `67f97a0` | iguais nas definições da x86 plana, da `x86gv` (`BT3_TESTE_VU1`) e da PPC (`PORT_BIG_ENDIAN`); o `passos.c` muda com `PORT_X360`, onde a mudança está. O `plat_stub.c` não mudou neste commit; o `vblank_alvo.h` e o `gs_d3d.cpp` só entram na build do 360. Então os objetos da x86, da `x86gv` e da PPC são os mesmos e as listas não mudam (guia, "Uma mudança só no 360 depois das provas do WSL") |
+| A prova do WSL da seção 18 (`~/vblank/provas.resumo`) | **pendente de conferência**: o WSL e o Deck estavam fora do ar |
+| `teste_vblank.c` e os cinco mutantes | 0 falhas na conta do commit; os cinco mutantes saem com 1 (acima) |
+| O banco do `passos.c` e o `passos.py` | a linha nova lida; o fim mudado recusado (acima) |
+
+### A build do 360
+
+`build_f2.sh` no `67f97a0`, carimbo `67f97a0 diff:da39a3ee5e`: 317 de 317 fontes sem erro, 985 avisos nos fontes do jogo (os
+mesmos), 0 no `hl_passos` e no `gs_d3d`, os avisos dos outros fontes do 360 iguais aos da build do `3ae20e6`, os mesmos 103
+stubs (`diff` com o `stubs.txt` anterior), `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap`
+`abbd7589c8425797c4a2639068c9bf54` iguais aos de referência. **`default.xex` `26591a584263234c079e8e65f784f00f`**. No
+`default.map`: `vblank_cb` em `0x82277ba0` (a callback não mudou), `GsD3d_VblankEspera` em `0x82277f08`, `Passos_Tela` em
+`0x82278088`.
+
+### A rodada curta no console proposta
+
+Uma abertura só, `BT3_VBLANK_HW=1` (o padrão), com saves novos. Os arquivos em `build/x360/f2/` do worktree `bt3xbx-vblank`:
+`default.xex`/`.dat`/`.swap` do `67f97a0`, `f5_duelo.txt` e `boot.txt` (iguais aos de `port/x360/roteiros/`) e
+`ambiente_vb2.txt` (o `ambiente_vb1.txt` com `BT3_SAVES=game:\saves_vb2`), do qual o `ambiente.txt` é a cópia.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt
+# a abertura; depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "67f97a0 diff:da39a3ee5e"
+```
+
+**O que olhar**, contra o vb1 da seção 19:
+
+1. **A janela 1** (684 passos, fim pausa): esperas de vblank bem acima de 0 (no vb1, 0), `alvo recomeçado R vezes pela dívida
+   parada` com R pequeno (1 ou 2 [estimado pela cena A]), a espera de vblank da linha de tempo deixando de ser 0,0 e o trabalho
+   p50 deixando de ser 33,27.
+2. **A tela igual ou melhor**: 3 ou mais vblanks 0,00% e 0,13% no vb1, nenhuma de 4 ou mais; trocas perdidas e imagens puladas 0.
+3. **A janela 2**: os recomeços pela dívida parada poucos (0 a uns 5 [estimado pela cena B]); o atraso ao acordar como no vb1
+   (p99 0,06 ms); o `vblank já passado` dá a ideia de quantas vezes o passo passou de um vblank.
+4. A parede dentro de 1% (no vb1, 0,9988 e 0,9968), o resultado da luta igual (vencedor 0x2, vida 0 27160, vblank 11478), nenhum
+   `roteiro: FALHA`, `vigia:`, `CRASH` ou `gs_d3d: vblank: a espera no Sleep` durante a luta, e o `passos.py --console` com
+   "tudo certo".
+
+O caminho do controle à tela não se mede no console (não há marca do controle na imagem): a melhora de um vblank é da simulação
+[simulado]. Se a janela 1 voltar a ficar sem espera, ou a tela piorar, o recomeço sai num commit e o padrão fica como no vb1.

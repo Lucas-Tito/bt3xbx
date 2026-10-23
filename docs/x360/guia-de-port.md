@@ -1890,3 +1890,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **A apresentação medida na CPU exagera o tranco que a tela mostra.** No mesmo log, 10,33% dos intervalos acima de 34,37 ms na
   CPU depois do `Present` contra 0,86% de imagens com 3 vblanks na tela. Aceite pela tela (a callback de vblank), a CPU só como
   diagnóstico.
+- **Para destravar uma espera presa atrás de outra fila, recomeçar o alvo não basta: espere já.** Na trava da seção 19 o jogo
+  fica um passo à frente da tela, parado na entrega à gravação; um alvo novo sem espera nesta chamada devolve o jogo à mesma
+  fila, e ele trava de novo (a simulação: 52 a 61 recomeços, 7 esperas em 684 passos). Esperando o próximo vblank na hora, a fila
+  esvazia um passo sem mudar a tela, e o controle passa a ser lido um vblank mais perto dela (seção 20).
+- **Um modelo de fila do 360 tem de segurar o desenho no `Present` até a imagem entrar na tela.** Sem isso o desenho adianta a
+  imagem seguinte, sai uma de 1 vblank que paga a dívida, e a simulação nunca reproduz o que o console mostrou (685 imagens de
+  exatamente 2 vblanks com o desenho de ~17 ms). Antes de provar uma correção numa simulação, ela tem de reproduzir o defeito com
+  a conta de antes (a cena A do `teste_vblank.c` confere isso: a conta de antes sem espera em pelo menos metade das fases).
