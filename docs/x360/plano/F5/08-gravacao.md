@@ -2156,3 +2156,130 @@ análise o Deck e o WSL estavam fora da rede e nenhum ssh foi feito. Os itens 1 
 de antes). Ligar por padrão pede a prova do Deck conferida (sobretudo as sabotagens e a GPU falsa atrasada 2 sem `relido diferente`)
 e a imagem vista nos especiais; o ganho que justifica ligar é a memória (22 MB) e a folga do desenho, não o tempo de quadro. O
 próximo corte de tempo tem de vir da gravação ou do jogo (`ocupada` e a espera do jogo nos picos), não do desenho.
+
+## 25. Rumo a nenhuma imagem longa na luta: o que os logs dizem e a tela por imagem (23/10/2026)
+
+Branch `f5-zero`, sobre a main `5021312`. A meta do Lucas: **nenhum pico na luta** (fora dela não importa). Pedido: ligar cada
+imagem que ficou 3 vblanks no combate ao quadro e à causa, com as aberturas de 23/10, e propor o caminho para zero; se o log não
+bastar, uma chave barata que registre isso. Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+### O que os logs de 23/10 dizem [medido]
+
+Dez aberturas do `f5_duelo` pelo roteiro, todas a 1,33 (logs fora do git): `build/sessao_2310d/` `kbase`, `kenv` (envio por linhas),
+`kvu` (VU1 direto), `kambos` (os dois), as quatro com `BT3_PICOS=36`; `x0`, `x1` (FXAA 0 e 1) e `x1m` (FXAA com `BT3_TEMPOS=1`);
+`build/sessao_2310c/` `m133e0` e `m133e1`; `build/sessao_2310b/vb2` (com som e `BT3_PICOS=36`). As outras sem som.
+
+| Janela (passos) | Imagens de 3 vblanks, nas 10 | De 1 vblank | De 4 ou mais | Maior intervalo na CPU depois do `Present` |
+|---|---|---|---|---|
+| 1, a abertura da luta (684) | 11 (de 0 a 3 por abertura) | 0 | 1 (só na `kambos`) | 64 a 75 ms em **todas** |
+| 2, o combate (2.334) | 41 (de 2 a 7) | 44 (de 3 a 7) | 0 | 44 a 52 ms |
+
+1. **As imagens de 3 e as de 1 vêm aos pares**, e os vblanks da janela 2 são exatamente 2 por passo nas 10 (4.668): cada imagem
+   longa é um quadro que perdeu o vblank, e o seguinte entrou no tempo (a de 1). O ritmo não se perde; o tranco é de um quadro.
+2. **A contagem da tela não vê as repetições.** No quadro 5338 (logo depois da ação 0x10f do roteiro, o Blast 2: 65 texturas
+   novas, 3,2 M pixels, 33 ms de decodificação e 7 ms do XG, a gravação ocupada 77 a 80 ms) a tela ficou parada 64 a 75 ms em
+   todas as aberturas. Em 4 das 5 com `picos` a linha diz `1 repetidas`: o `GsD3d_Repete` (50 ms sem quadro) apresentou a mesma
+   imagem de novo, e a callback de vblank contou duas imagens de 2. Só na `kambos` (64 ms, sem repetição) ela aparece como "4 ou
+   mais 1". **Há uma imagem de 4 vblanks por abertura, na luta, que o critério da seção 19 não vê.**
+3. **O jogo não é a causa no combate**: nas linhas `picos` da janela 2 das quatro aberturas, o período do jogo fica entre 33,1 e
+   33,5 ms, e os resumos dizem `0 pelo jogo`; o trabalho p99 é 30,4 a 33,3 ms.
+4. **Dois quadros se repetem nas quatro aberturas com `picos`**, com o período da GPU (do fim de um quadro ao do anterior) de 44 a
+   50 ms, que não cabe em 2 vblanks: **6960** (os desenhos caem de uns 2.400 para 1.400, uma troca de cena; o `frame_end` dura só
+   6 a 9 ms, mas a gravação entregou uns 6,5 ms depois do período e a GPU acabou 16 ms depois da CPU, contra 10 a 14 nos outros)
+   e **7017** (15 texturas novas, 1 M pixels, 10,6 ms na gravação: ocupada 30 a 32 ms, contra 17 a 19 nos vizinhos). Na `kenv` e
+   na `kambos`, que tiveram 2 imagens de 3 no combate, são essas duas [estimado: o log não liga a imagem ao quadro].
+5. **O resto varia de abertura a abertura com o mesmo roteiro** (de 0 a 5): quadros com o período da GPU de 36 a 39 ms (6087,
+   6995, 7063, 6930, 6990) entram ou não no prazo conforme a folga de fase daquela abertura. Os cortes de CPU da etapa 8 (envio por
+   linhas, VU1 direto) não separam do ruído: 5, 2, 3 e 2 com um cada.
+6. **O sistema não aparece**: o quadro 4807 teve o mesmo intervalo (36,5 ms) nas quatro com `picos`, com a escritora do diário
+   gravando 109 a 130 ms nele em três e parada na `kbase`; as aberturas sem som (`kbase` 5, `x0` 7) têm tantas quanto a com som
+   (`vb2` 5).
+7. **A GPU a 1,33** (`x1m`, as linhas de 60 quadros fora das janelas): 20 a 26 ms por quadro no combate (com uns 4 ms das marcas
+   da medição) e 32,7 ms (pior 33,0) no trecho do Blast 2 e da pausa (quadros 5340 a 5399).
+
+### Por que o log não liga a imagem ao quadro [lido]
+
+- A callback de vblank (`vblank_cb`) só soma: quantas imagens ficaram 1, 2, 3 ou 4 vblanks, sem o número da troca nem o quadro.
+- As linhas `picos` saem pelo intervalo na CPU depois do `Present` acima do limiar (36 ms); uma imagem que entrou um vblank tarde
+  com o intervalo na CPU abaixo dele não tem linha, e um quadro com linha pode ter entrado no tempo.
+- Os carimbos do `picos` são períodos (de uma entrega à anterior), não momentos: não dá para saber a que distância do vblank cada
+  lado entregou.
+- A repetição é uma troca nova com a mesma imagem.
+
+O que falta registrar: **o número da troca de cada `Present`** (o `QuerySwapStatus` logo depois dele, que a amostra
+`DualFrameAsyncSwaps` do XDK usa assim) e **o vblank em que cada troca entrou**, com o `mftb` dele (o `D3DVBLANKDATA.Swap` na
+callback); **o `mftb` de cada lado do quadro** (a entrega do jogo, a da gravação, o `Present`, a GPU acabando); e, para cada
+troca, **o prazo**: o segundo vblank depois de a imagem anterior entrar.
+
+### A chave `BT3_PICOS_TELA=1` (commit `dac2466`)
+
+Só no `gs_d3d.cpp` (360), desligada por padrão; nada portável muda.
+
+- **A DPC** guarda, por troca, o vblank e o `mftb` em que ela entrou (um anel de 64, só inteiros: no `dumpbin` do `vblank_cb`,
+  `lwz`, `stw`, `std`, `mftb`, `lwsync` e as chamadas, nenhuma instrução de float nem de vetor).
+- **O desenho**, logo depois de cada `Present` (o do quadro e o do `GsD3d_Repete`), guarda por troca o quadro do GS, se é uma
+  repetição e o `mftb`; e lê as trocas que entraram desde a última vez. Os carimbos dos três lados são os do `picos` (`PicoJ` e
+  `PicoG` ganham o `mftb` da entrega); sem `BT3_PICOS`, a chave liga o `picos` com limiar de 100.000 ms (os carimbos sem as linhas).
+- **Na janela do passos**, uma linha por imagem de fato (as repetições somadas à imagem que repetem) que não ficou 2 vblanks:
+
+```
+picos: tela: a imagem do quadro A ficou N vblanks na tela (K na última troca); a seguinte, do quadro B (troca S), entrou no
+vblank V; até o prazo (+ antes, - depois): a entrega do jogo J, a da gravação G, o Present P, a GPU acabou U ms; o quadro: jogo
+..., gravação ocupada ... (sem trabalho ...; texturas ..., ... ms), frame_end ...; a troca anterior: Present ..., GPU ... ms antes
+do prazo dela
+```
+
+- **No fim de cada janela**, `picos: tela, janela:` com as trocas, as repetições, as trocas sem o quadro, as puladas, as imagens de
+  fato por vblanks e a folga até o prazo de todas as trocas (mínimo, p1, p10 e mediana, da GPU acabando e do `Present`).
+- **O teste** `port/x360/tools/teste_tela.sh` recorta do `gs_d3d.cpp` os anéis e o `tela_*` e os compila com o `teste_tela.cpp`
+  (g++ daqui; o relógio, a DPC, o `QuerySwapStatus` e os carimbos simulados): uma cena com uma imagem de 3, uma de 1 e um engasgo
+  de 4 escondido por uma repetição; "tudo certo" [medido]. **Os cinco mutantes saem com 1**: a repetição ignorada (`rep = 0`, 3
+  falhas), a soma trocada por atribuição (1), o prazo a 1 vblank (1), só as imagens acima de 2 (1) e a repetição contada como
+  imagem (2).
+- **A build** (`build_f2.sh` no `dac2466`, carimbo `dac2466 diff:da39a3ee5e`): 317 de 317 fontes sem erro, 0 avisos no `gs_d3d`,
+  os mesmos 103 stubs, `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap` `abbd7589c8425797c4a2639068c9bf54`,
+  **`default.xex` `7cbc25ea06341cbafc2b4e55417b4bd0`**.
+
+### O caminho para zero (proposta) [estimado]
+
+| Ordem | Correção | O que tira, por abertura | Custo |
+|---|---|---|---|
+| 1 | **A medida**: a linha `tela` do passos somando as repetições à imagem que repetem (o desenho passa à DPC o número das trocas repetidas) e, na luta, sem `GsD3d_Repete` enquanto a gravação trabalha num quadro | nada na tela; o critério passa a ver a imagem de 4 do Blast 2 | pequeno, só no 360 |
+| 2 | **As texturas novas fora da gravação**: o cache pela origem (seção 17, (a): na luta, 81% dos pixels decodificados são conteúdo já visto) e, para a primeira vez (o Blast 2), a decodificação numa thread auxiliar (seção 17, (b)) | a imagem de 4 da janela 1 e a de 3 do 7017 (umas 1 + 1) | médio; a lista do WSL prova a imagem |
+| 3a | **A folga de fase pela cadeia**: cortar a gravação, o desenho e a GPU do quadro (a GPU a 1,33 é a maior parcela) | as de 3 que passam do prazo por poucos ms (de 0 a 5) | depende do que a chave mostrar |
+| 3b | **Um vblank de folga na luta**: `D3DRS_PRESENTINTERVAL` em `D3DPRESENT_INTERVAL_TWO` só na luta (o 360 muda por quadro; a amostra `MultiRateRender` do XDK faz isso) e o primeiro quadro da luta um vblank mais tarde | as de fase (6960 e as variáveis): todas as que atrasam menos de 16,6 ms | **16,6 ms a mais do controle à tela na luta**, contra o "nenhum quadro a mais de atraso" da seção 19: decisão do Lucas |
+
+Com 1 e 2 sobram as de fase (de 1 a 5 por abertura); 3a ou 3b decide-se pela folga que a chave medir: se o p1 da folga da GPU for
+de poucos ms e as imagens longas passarem do prazo por poucos ms, cortar a cadeia rende; se as longas passarem por 6 a 16 ms
+(o 6960), só a folga de um vblank zera.
+
+### A rodada no console proposta
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-zero`: `default.xex`/`.dat`/`.swap` do `dac2466`, `f5_duelo.txt` e `boot.txt`
+(iguais aos de `port/x360/roteiros/`), `ambiente_z1.txt` e `ambiente_z2.txt` (o jogo como ele roda, com os padrões da main e o
+som, mais `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_PICOS_TELA=1`; saves novos `saves_zero_z1` e `saves_zero_z2`); o `ambiente.txt` é a
+cópia do `ambiente_z1.txt`. As duas aberturas iguais: o dobro de casos.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_z1.txt build/x360/f2/ambiente_z2.txt
+# abertura 1; depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_z2.txt
+# abertura 2; baixar o log de novo
+python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "dac2466 diff:da39a3ee5e"
+grep 'picos: tela' bt3xbx.log
+```
+
+**O que olhar:**
+
+1. A linha do init `gs_d3d: picos: a tela por imagem ligada`. No resumo `picos: tela, janela:` de cada janela, **as trocas sem o
+   quadro perto de 0** (se forem quase todas, o `Swap` do `QuerySwapStatus` não é o do `D3DVBLANKDATA`: a ligação está errada e
+   as linhas não valem) e as repetições: na janela 1, 1 (o Blast 2) [estimado].
+2. **As imagens de fato** do resumo contra a linha `passos: janela K tela:`: as mesmas, menos a repetição (na janela 1, a de 4).
+3. **Cada linha `picos: tela:`** da janela 2: o quadro, e qual lado passou do prazo (a GPU acabou depois dele com o `Present`
+   antes: a GPU; o `Present` depois dele: a gravação ou o desenho, pelo `ocupada`, `texturas` e `frame_end`). Esperado: o 6960 e o
+   7017 nas duas aberturas.
+4. **A folga da GPU até o prazo** (mínimo, p1, p10, mediana): decide entre 3a e 3b.
+5. O resultado da luta igual (vencedor 0x2 razão 0x1 vida 0 27160), os passos por janela (684 e 2.334), nenhum `roteiro: FALHA`,
+   `vigia:` ou `CRASH`, e as imagens longas da linha `tela` na faixa das aberturas de 23/10 (a chave não deve mudar o ritmo).
