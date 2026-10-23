@@ -1936,3 +1936,31 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   decodificação errada nos 4 bits mudou 141 quadros. Mesmo assim, uma conferência por textura (a decodificação nova refeita noutro
   buffer contra a de antes, `BT3_TEX_CONTA`) diz qual textura e qual formato, e vale para os quadros em que a textura errada não
   chegaria a ser desenhada.
+
+### O envio de imagens para a VRAM (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 18)
+
+- **Conte o que passa por um caminho antes de otimizá-lo.** O pedido partiu da leitura do `transfer_data`: os envios de 8 e de 4
+  bits iam pixel a pixel. Feito, provado na x86 e na PPC, e a contagem por formato (`BT3_ENVIO_CONTA`, `envio_conta.py`) deu 0 bytes
+  nesses formatos: o jogo envia tudo em PSMCT32, com as texturas indexadas já arrumadas em imagens de 32 bits. Uma rodada de
+  implementação perdida; a contagem leva um minuto na `x86gv`.
+- **Uma sabotagem que as listas não veem pode ser um caminho que não roda.** Os meios bytes trocados no envio de 4 bits deram
+  `divergencias.py` 0 nos dois roteiros: nenhum pixel passava por ali. Ponha na contagem quantos itens foram pelo caminho novo
+  (a última coluna do `BT3_ENVIO_CONTA`) e confira que não é zero antes de ler a prova negativa.
+- **A razão console sobre x86 diz se o custo é conta ou memória.** A decodificação das texturas, presa às instruções, custava 9
+  vezes a x86 no Xenon; o envio custa 20 vezes (2,6 contra 0,13 ns por byte) com 4 instruções por pixel no `dumpbin`. Acima da
+  razão das contas, o remédio é a memória (`dcbt` na origem, `dcbz128` no destino escrito inteiro), não menos instruções.
+- **O `cl` faz um `memcpy` de 4 bytes de um `uint8_t *` byte a byte** (quatro `lbz` e quatro `stb`): ele não sabe o alinhamento. Onde
+  a origem é garantidamente alinhada a 4 (os dados de um pacote da GIF, em quadwords), leia e grave como `uint32_t`. Confira no
+  `dumpbin` toda cópia pequena de um laço quente.
+- **`dcbz128` só numa linha escrita inteira e numa memória alinhada a 128**: a variável com `__attribute__((aligned(128)))` no
+  `#ifdef PORT_X360`, o endereço conferido no `dumpbin` (o `lis`/`addi`), uma guarda em tempo de execução, e no teste de unidade o
+  `dcbz128` trocado por um `memset` da linha, para uma linha zerada e não escrita aparecer como diferença.
+- **Compare um corte da gravação entre aberturas por pares de quadros, não pela mediana de cada uma** (seção 19). O `BT3_PICOS`
+  só registra os quadros acima do limiar, e as linhas de 60 quadros do `gs_d3d` não saem dentro das janelas do roteiro: os quadros
+  que aparecem mudam de uma abertura para a outra (14 contra 30 no combate), e a mediana de cada conjunto deu 3,6 ms de ganho
+  onde o par dava 2,2. Como o roteiro é determinístico, junte o mesmo quadro nas duas, com os mesmos KB de envios e sem texturas
+  nem disco: 103 pares deram 1,8 ms, de 1,3 a 3,1. Para medir o quadro típico do combate, que fica abaixo do limiar, a abertura
+  precisa de um limiar menor ou do `BT3_TEMPOS=1`.
+- **Antes de estimar o ganho na apresentação, classifique os quadros lentos pelo que esperava** (seção 19). O envio tirou 1,8 ms
+  da gravação e a apresentação do combate não mudou: os quadros acima de 36 ms já eram o jogo esperando o vblank com a gravação
+  parada (80 de 89), não a gravação ocupada (4). A conta "menos trabalho, menos picos" só vale para os quadros presos ao trabalho.

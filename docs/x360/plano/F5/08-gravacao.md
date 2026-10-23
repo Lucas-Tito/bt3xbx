@@ -1448,3 +1448,183 @@ das linhas `picos:   quadro ..., texturas` (todas as da luta, do quadro 4672 em 
 - **Com o som ligado, mais passos logo acima do período** (11,5% dos intervalos acima de 34,37 ms, contra 6,3%; p95 34,84
   contra 34,00): o custo do som na thread do jogo (RPC, início de fluxo) ou na memória, a medir à parte. Fica para o corte
   seguinte da etapa 8.
+
+## 18. O envio de imagens para a VRAM: a contagem por formato e o PSMCT32 por linhas de cache (22/10/2026)
+
+Branch `f5-envio-rapido` (o nome `f5-envio` já era o da seção 7, juntado à main), sobre a main `64353a4`. O passo (c) da
+investigação de hoje: nos quadros pesados da luta o envio de imagens para a VRAM custa uns 6,5 ms da gravação (298 envios,
+2,5 MB) [medido no console], e a gravação ocupada fica em 29 a 30 ms contra o período de 33,37. A hipótese de partida era que
+os envios de 8 e de 4 bits iam pixel a pixel (o de 4 bits relendo e regravando um byte por pixel). Convenção: **[medido]**,
+**[lido]** e **[estimado]**.
+
+| Commit | O quê |
+|---|---|
+| `6315fd0` | A contagem `BT3_ENVIO_CONTA=arquivo` (só nas builds `--gpu` do WSL): uma linha por chamada do `transfer_data` (quadro, formato, `dbp`, `dbw`, retângulo, posição, bytes, ns, pixels pelo caminho novo) e o `port/x360/tools/envio_conta.py`, que soma por formato no roteiro e no combate (de `roteiro: seq 3` a `seq 4`) e nos 10% de quadros com mais bytes |
+| `b9c1896` | O envio de 8 e de 4 bits por colunas do GS (cada palavra da coluna montada das 4 linhas e gravada uma vez), sob `BT3_ENVIO_RAPIDO`, com o `teste_envio.c` e o `teste_envio.sh`. Certo (0 diferenças na x86 e na PPC de verdade, os dois mutantes acusados), mas **o jogo não envia nada nesses formatos** (abaixo): trocado no commit seguinte |
+| `e49c962` | O envio de 32 bits por linhas de cache (`envio_faixa32`), sob `BT3_ENVIO_RAPIDO`: 1 com `dcbt` e `dcbz128`, 2 só com `dcbt`, 0 ou ausente o laço por grupos de antes (o padrão). A `sVram` alinhada a 128 no 360 |
+| `b2e1629` | As cópias do caminho novo como `uint32_t`, não `memcpy` de 4 bytes (o `cl` fazia byte a byte) |
+
+### A contagem [medido]
+
+`x86gv`, chave desligada, sem as threads (`BT3_ENVIO_CONTA`, `envio_conta.py`), no `b9c1896` (o envio é o mesmo da main):
+
+| | `f5_duelo`, combate (quadros 4.673 a 7.757) | `f5_treino`, combate (4.153 a 7.385) |
+|---|---:|---:|
+| Envios por quadro | 260,8 | 246,8 |
+| KB por quadro | 2.209 | 2.097 |
+| PSMCT32 (dos bytes) | **100%** | **100%** |
+| PSMT8, PSMT4, PSMCT16, PSMCT16S, PSMT8H, PSMT4HL, PSMT4HH | 0 | 0 |
+| ns por byte na x86 | 0,128 | 0,129 |
+| Os 10% de quadros com mais bytes | 363,8 envios, 2.648 KB, 0,350 ms | 253,8 envios, 2.849 KB, 0,341 ms |
+
+- **O jogo envia tudo em PSMCT32**: as texturas de 8 e de 4 bits vão como imagens de 32 bits com os bytes já arrumados para os
+  formatos indexados (o comentário do começo do `gs_core.c` já dizia). Os caminhos por pixel de 8 e de 4 bits do `transfer_data`
+  não rodam nos roteiros; a hipótese de partida veio da leitura do código, não da contagem.
+- Fora do combate, no `f5_duelo`, há 348 envios **PSMCT24** de 512 x 224 (`dbp` 0x1C00 e 0x2300, `dbw` 8), dois por quadro nos
+  quadros 4.235 a 4.344, antes do combate: 0,9% dos bytes do roteiro e 16,6% do tempo de envio na x86 (2,8 ns por byte, 1 ms por
+  envio na x86), porque o 24 bits vai pelo `vram_rw` por pixel. No console seriam uns 10 a 20 ms por envio [estimado, pela razão
+  de 9 a 20 vezes]: um candidato para os picos da abertura da luta, fora desta etapa.
+- **O alinhamento** (`f5_duelo`, combate): 99,8% dos bytes PSMCT32 em retângulos alinhados a blocos de 8 x 8 pixels, todos em
+  0,0; os tamanhos 128 x 64 (20,3% dos bytes), 128 x 128 (19,6%), 256 x 256 e 512 x 128 (11,6% cada), 256 x 128 (9,9%), 64 x 32
+  (9,7%); `dbw` 2 (44,8%), 4 (21,9%), 1 (14,2%), 8 (11,6%), 0 (7,5%).
+
+**Leitura.** O formato que pesa é o PSMCT32, que já ia em grupos de 8 pixels (seção 7). No console ele custa uns 2,6 ns por byte
+(6,5 ms por 2,5 MB), umas **20 vezes** a x86; a decodificação das texturas, presa às contas, custava 9 vezes. No `dumpbin` do laço
+por grupos [lido]: umas 34 instruções por 8 pixels (4,3 por pixel), contra uns 33 ciclos por pixel medidos (10,4 ns a 3,2 GHz).
+O tempo é da memória: a origem (as texturas do jogo, frias) e o destino (a VRAM de 4 MB, maior que os 1 MB do L2; o L1 do Xenon
+grava direto no L2, que lê a linha antes de escrevê-la), umas 20 mil linhas de 128 bytes de cada lado por quadro pesado.
+
+### O envio por linhas de cache (`e49c962`, `b2e1629`)
+
+Uma linha de cache de 128 bytes da VRAM no PSMCT32 é meio bloco: 8 pixels de largura por 4 linhas alinhadas a 4 (as colunas 0 e
+1, ou 2 e 3, do bloco). Numa faixa de 4 linhas inteiras do retângulo (o retângulo com `tx` e `tw` múltiplos de 8, a faixa
+começando numa linha múltipla de 4, inteira no pedaço IMAGE), cada grupo de 8 pixels enche uma linha inteira: a linha r da faixa
+vai às palavras `(r / 2) * 16 + (r % 2) * 2 + {0, 1, 4, 5, 8, 9, 12, 13}` (o `kCol32`). Com `BT3_ENVIO_RAPIDO=1`, no 360:
+
+- a linha de destino é zerada com `dcbz128` antes de ser escrita: o L2 a cria sem lê-la da memória;
+- a origem da faixa seguinte (4 linhas de `tw` pixels, seguidas no pacote) é pedida com `dcbt` antes de copiar a atual (na
+  primeira faixa de um pedaço, a atual também), para as faltas correrem juntas;
+- as cópias são de uma palavra (`uint32_t`): a origem é o IMAGE de um pacote da GIF, em quadwords, e a faixa começa num pixel
+  inteiro. No `cl`, o `memcpy` de 4 bytes de um `uint8_t *` saía como quatro `lbz` e quatro `stb` (no `e49c962`; também na
+  primeira cópia de cada grupo do laço da seção 7).
+
+Com `=2`, o mesmo sem o `dcbz128` (para separar os dois efeitos no console). Fora do 360 o `dcbt` e o `dcbz128` não existem: o
+caminho é o mesmo, sem eles (no teste de unidade, com `-DBT3_TESTE_ENVIO`, o `dcbz128` vira um `memset` da linha, para uma linha
+zerada e não escrita inteira aparecer como diferença). A `sVram` é `__attribute__((aligned(128)))` só no 360 (o `c89.py` a passa a
+`__declspec(align(128))`), e o `transfer_data` cai para `=2` se ela não estiver alinhada.
+
+**No `dumpbin` do `default.exe` (`b2e1629`)** [lido]: o `envio_faixa32` em `0x8217e868`; por grupo, a consulta da tabela, um
+`dcbz128` e quatro vezes 8 `lwz` e 8 `stw` (umas 115 instruções por 8 pixels com o laço das 4 linhas, contra umas 34 do laço
+por grupos: a aposta é que as instruções não são o gargalo); o `dcbt` num laço de uma instrução por linha de 128 bytes. A `sVram` em `0x823ADA00` (o `lis`/`addi` do começo da
+função), múltiplo de 128.
+
+### As provas
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `43444ea4d03a6d448aa1ae74a631e35b356a7caa` na main e no `b9c1896` (WSL) [medido]; no `b2e1629`, o `gcc -E -P` do `gs_core.c` na configuração da x86 plana é byte a byte o da main [medido] (o caminho novo e a contagem só existem com `BT3_GS_ESPERAS`) |
+| Teste de unidade do `b9c1896` (as colunas de 8 e 4 bits): 1.500 envios sorteados contra o `vram_rw` | 0 diferentes na x86 e na PPC de verdade (`qemu-ppc`); os mutantes (os meios bytes trocados; as metades da coluna ímpar trocadas) acusados nas duas, só com a chave (205 e 189) [medido] |
+| Listas do `b9c1896`, `x86gv`, chave 0 contra 1, `f5_duelo` e `f5_treino`, sem e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1` | os 4 pares com `divergencias.py` saindo 0 (hashes `08a98b6d05b8775a` e `f76f0f6849b64629`) [medido], **e a sabotagem dos meios bytes também 0 nos dois roteiros**: o caminho não rodava (0 pixels pelas colunas na contagem). Foi o que levou à troca |
+| Teste de unidade do `b2e1629` (o PSMCT32 por linhas), x86 | 0 diferentes com a chave em 0, 1 e 2; os mutantes acusados só com a chave: as linhas 1 e 2 da faixa trocadas (356 com 1, 356 com 2) e a linha 3 da faixa não escrita (356 e 356) [medido, aqui] |
+| Build do 360 (`build_f2.sh` no `b2e1629`) | 317 de 317 fontes sem erro, os avisos por fonte iguais aos da main (993, arquivo por arquivo), os mesmos 103 stubs, `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap` `abbd7589c8425797c4a2639068c9bf54` iguais; **`default.xex` `419e94aafcad52b1b88f632528b3ec98`** [medido] |
+| No WSL, o `b2e1629` (serviço `claude-envio-rapido`, `~/envio-rapido/servico.sh`, resumo `~/envio-rapido/provas.resumo`, worktree `~/bt3xbx-envio-rapido`) | **pendente** (disparado às 19:53 e parado na fila da `~/wsl.lock` atrás de quatro rodadas de outros agentes): a `.text`, o teste na PPC, as listas da `x86gv` com a chave 0 contra 1 nos dois roteiros, sem e com as threads, a contagem com a chave ligada (os ns por byte no jogo e os pixels pelo caminho novo), a sabotagem das linhas 1 e 2 trocadas nos dois roteiros (tem de dar `divergencias.py` 1), e as listas da `ppcg` |
+
+**A medida na x86** [medido, `teste_envio --mede`, gcc `-O2` x86-64 daqui, PSMCT32 em 0,0 nos tamanhos do jogo]: de 0,63 a 0,73 ns
+por byte com a chave 0, de 0,14 a 0,16 com a 1 (com o `memset` no lugar do `dcbz128`) e uns 0,06 com a 2. Dentro do jogo
+(`x86gv`, clang `-m32`) o laço de antes já fazia 0,128 ns por byte: o número do jogo com a chave ligada sai da contagem do serviço.
+Na x86 o ganho é de instruções; no 360 o que se espera é o de memória.
+
+### A estimativa [estimado]
+
+Se os 6,5 ms forem a memória (as duas metades acima), o `dcbz128` tira a leitura das umas 20 mil linhas de destino por quadro
+pesado e o `dcbt` sobrepõe as faltas da origem: o envio de 6,5 para uns 2,5 a 4 ms, **2,5 a 4 ms a menos de gravação ocupada**
+nos quadros pesados (de 29 a 30 para uns 26). Se for só a origem, o `=2` dá quase o mesmo que o `=1`; se for só o destino, o
+`=2` fica perto do `=0`. Risco: um `dcbz128` numa linha não escrita inteira zeraria a VRAM (o teste de unidade com o `memset`
+prova a cobertura; o alinhamento está no `dumpbin` e tem a guarda).
+
+### A rodada no console proposta
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-envio`: `default.xex`/`.dat`/`.swap` do `b2e1629`, `f5_duelo.txt` e
+`boot.txt` (cópias de `port/x360/roteiros/`), `ambiente_e0.txt`, `ambiente_e1.txt` e `ambiente_e2.txt` (`BT3_ENVIO_RAPIDO` 0, 1
+e 2, saves `saves_ev0`, `saves_ev1` e `saves_ev2`), os três como o `ambiente_t1.txt` da seção 17 (o `f5_duelo` pelo roteiro,
+`BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_WIDE=1`, decisão 26); o `ambiente.txt` é a cópia do `ambiente_e0.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_e0.txt build/x360/f2/ambiente_e1.txt build/x360/f2/ambiente_e2.txt
+# abertura 1 (chave 0); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_e1.txt
+# abertura 2 (chave 1); baixar o log de novo
+# (opcional) abertura 3 com o ambiente_e2.txt: separa o dcbt do dcbz128
+```
+
+**O que olhar:**
+
+1. **A gravação ocupada nos quadros pesados**: nas linhas `picos: quadro ... gravação G (ocupada O, ...)` do combate (do quadro
+   4.672 em diante), a mediana do `ocupada` dos quadros com `envios` acima de 2.400 KB na linha seguinte, abertura 1 contra 2:
+   uns 2,5 a 4 ms a menos [estimado]. Os quadros com texturas, disco ou descarte à parte (a linha `o que teve` diz).
+2. O p50, o p95 e o p99 do `passos: janela` do combate, e os intervalos acima de 34,37 ms, contra a abertura 1.
+3. Os passos por janela e o `roteiro: resultado` iguais aos da referência (vencedor 0x2 KO, vida 0 27160); nenhum
+   `roteiro: FALHA`, nenhum `vigia:`; a imagem sem lixo nas texturas (um `dcbz128` errado apareceria como blocos pretos).
+4. Se a abertura 2 não mudar o `ocupada`, o envio não é memória: uma abertura com `BT3_TEMPOS=1` dá a linha por família (o `envio`
+   direto, em ms por quadro) para conferir os 6,5 ms antes de outro corte.
+
+## 19. A rodada do console (22/10/2026) [medido]
+
+Duas aberturas do `f5_duelo` pelo roteiro com o `.xex` do `b2e1629` (o log diz a build de "Oct 22 2026 22:52:32", a do
+`default.xex` `419e94aa…` da seção 18), `BT3_PICOS=36`, `BT3_TEMPOS=0`, `BT3_WIDE=1`, sem som: e0 com `BT3_ENVIO_RAPIDO=0`
+(`saves_ev0`), e1 com `=1` (`saves_ev1`). A abertura com `=2` não foi feita. Logs em `build/sessao_2210/e0` e `e1` (fora do git).
+
+**O que o log deixa medir.** Com o `BT3_PICOS=36`, só os quadros com apresentação acima de 36 ms têm a linha `ocupada`, e as
+linhas de 60 quadros do `gs_d3d` não saem dentro das janelas do roteiro (no combate, só a da pausa, quadro 5399): o quadro típico
+do combate (abaixo de 36 ms) não tem medida de gravação. A comparação que vale é **por pares**: o mesmo quadro nas duas aberturas
+(o roteiro é determinístico), com os mesmos KB de envios e sem texturas novas nem disco nos dois. A mediana de cada abertura em
+separado engana: no combate, os quadros com mais de 2.400 KB que passaram de 36 ms foram 14 na e0 (`ocupada` mediana 28,6) e 30 na
+e1 (25,0), conjuntos diferentes; o par dá 2,2. O tempo de envio por byte não sai do log (`BT3_TEMPOS=0`): sai da diferença por
+par, dividida pelos bytes.
+
+| | e0 (chave 0) | e1 (chave 1) |
+|---|---:|---:|
+| Pares (mesmo quadro, mesmos KB, sem texturas nem disco), todos | 103 quadros, 2.814 KB em média | |
+| `ocupada` da gravação, mediana dos pares | 38,1 ms | **36,3 ms** |
+| Diferença por par (e0 menos e1): mediana, média, faixa | **1,8 ms**, 1,87, de 1,3 a 3,1 | |
+| Só os pares com mais de 2.400 KB (91): diferença mediana | 1,8 ms (0,61 ns por byte) | |
+| Na abertura da luta (quadros 4136 a 4671, 58 pares de 2.991 KB) | 42,7 ms | 41,1 (1,8 a menos) |
+| No combate (4672 a 7757, só 6 pares acima de 2.400 KB, 2.546 KB) | 28,4 ms | 26,3 (2,2 a menos) |
+| Combate (janela 2): trabalho p50 / p95 / p99 / máximo | 33,26 / 34,79 / 34,93 / 38,24 | 33,25 / 34,84 / 34,94 / 36,28 |
+| Combate: apresentação p99 / máximo | 36,94 / 47,41 | 37,31 / 54,88 |
+| Combate: intervalos acima de 34,37 / de 50,05 ms | 218 (9,34%) / 0 | 223 (9,55%) / 1 |
+| Abertura da luta (janela 1): trabalho p99 / máximo | 36,94 / 85,64 | 35,51 / 83,59 |
+| Abertura da luta: apresentação p99 / intervalos acima de 34,37 / de 50,05 ms | 35,94 / 21 (3,07%) / 1 | **38,09 / 94 (13,76%)** / 1 |
+| Quadros no `picos` entre 4672 e 7757 | 66 | 89 |
+| Deles, gravação ocupada acima de 33,4 ms | 7 | 4 |
+| Deles, o jogo esperando o vblank (mais de 5 ms) com a gravação parada (mais de 5 ms sem trabalho) | 42 (0 na janela 1) | 80 (27 na janela 1) |
+| `roteiro: resultado` | vencedor 0x2 razão 0x1 vida 0 27160, vblank 11478 | igual |
+| Passos por janela (684 e 2.334), `FALHA`, `vigia:`, `CRASH` | 684 e 2.334; 0, 0, 0 | iguais; 0, 0, 0 |
+| `textura preta` (RGB zero na textura inteira) | 32 linhas | as mesmas 32 (mesmos quadros e tamanhos) |
+
+**Leitura.**
+
+- **O envio por linhas de cache tira 1,8 ms da gravação ocupada nos quadros pesados** [medido, por pares], com pouca dispersão (de
+  1,3 a 3,1 ms em 103 pares): uns 0,6 ns por byte. É menos que os 2,5 a 4 ms estimados. Se o envio custava os 2,6 ns por byte da
+  seção 18, agora custa uns 2,0 [estimado]: a memória pesa, mas não é tudo, ou o `dcbt` e o `dcbz128` só tiram uma parte das faltas.
+  A abertura com `=2` diria qual das duas metades rendeu.
+- **A apresentação do combate não melhorou**: o p99 e os intervalos acima de 34,37 ms ficaram onde estavam (9,34% e 9,55%). Os quadros
+  lentos do combate já não são da gravação: na e1, 77 de 89 têm `ocupada` até 30 ms, e 80 são o jogo esperando o vblank (uns 10
+  ms) enquanto a gravação fica parada (uns 10 ms sem trabalho), com a apresentação em 36 a 38 ms. O que segura esses quadros é o
+  acerto de fase entre o jogo, a gravação e o vblank, não o trabalho de nenhuma das threads.
+- **Na abertura da luta (janela 1) a e1 teve mais intervalos acima de 34,37 ms** (94 contra 21); dos 32 quadros dela acima de 36
+  ms na e1, 27 são desse tipo (nenhum na e0). Com uma abertura de cada, não dá para separar efeito de variação: entre as aberturas da seção 17 o mesmo
+  número do combate variou de 6,3% a 11,5%. Não há sinal de defeito (o resultado, os passos e a lista de texturas pretas iguais).
+- **Nenhum bloco preto pelo log**: as 32 texturas inteiramente pretas são as mesmas, nos mesmos quadros, nas duas aberturas. O log
+  não vê um bloco preto dentro de uma textura com outros texels; isso fica com as listas do WSL (a sabotagem das linhas) e com o
+  olho na imagem.
+- **A prova do WSL (`~/envio-rapido/provas.resumo` e `parte-a.resumo`) não foi conferida**: o WSL e o Deck estavam fora do ar
+  (23/10). Pendente: a `.text`, o teste na PPC, as listas da `x86gv` com a chave 0 contra 1 nos dois roteiros, sem e com as
+  threads, a contagem com a chave ligada, a sabotagem acusada nos dois roteiros e as listas da `ppcg`.
+
+**Conclusão.** O corte é certo pelo console (nenhuma diferença visível no log) e rende 1,8 ms de gravação nos quadros pesados, sem
+ganho visível na apresentação do combate, que agora é presa ao acerto de fase. Ligar por padrão depende de duas coisas: a prova do
+WSL conferida e uma segunda dupla de aberturas (na ordem e1, e0, e de preferência a e2) para ver se os 94 intervalos da janela 1
+se repetem. A frente seguinte da etapa 8 é a fase entre o jogo e a gravação nos quadros de 36 a 38 ms, não mais o envio.
