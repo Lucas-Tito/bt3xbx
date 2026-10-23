@@ -3319,6 +3319,7 @@ static void log_quadros(void) {
         sTabTipoN = 0;
         tempo_zera();
         memset(&sOt, 0, sizeof(sOt)); /* (720p, retomada) */
+        sAfDes = 0; /* (720p, BT3_AFIADO) */
         return;
     }
     if (q == 0) {
