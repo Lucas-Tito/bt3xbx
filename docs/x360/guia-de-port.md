@@ -1881,3 +1881,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   callback de vblank, com a mesma conta de antes (um alvo por chamada; o vblank que já passou não se espera; muito atrás,
   recomeça) não soma espera nenhuma e deixa a fase fixa. Deixe o `Sleep` de reserva para antes do dispositivo, para a Guide (um
   evento que não vem em 50 ms) e para a saída, e uma chave que volta a ele para medir um contra o outro na mesma build.
+- **Uma espera que deixa passar o alvo atrasado guarda a dívida, e outra fila pode travá-la para sempre.** Na rodada do console
+  (seção 19), o alvo da espera pelo vblank de hardware ficou de 1 a 5 vblanks atrás numa cena lenta, abaixo dos 6 que o
+  recomeçam; depois, a fila da gravação e do `Present` segurou cada passo em exatamente 2 vblanks, o alvo andou junto com o vídeo
+  e a janela inteira teve 0 esperas (a espera de vblank 0,0 ms e o "trabalho" igual ao intervalo de novo). Com o `Sleep` isso se
+  desfazia sozinho porque a grade (16,683 ms) é mais lenta que o vblank do console (~16,64 ms). Um contador "chamadas com o alvo já
+  passado" na linha da janela teria mostrado na hora; ponha um em toda espera com recuperação de atraso.
+- **A apresentação medida na CPU exagera o tranco que a tela mostra.** No mesmo log, 10,33% dos intervalos acima de 34,37 ms na
+  CPU depois do `Present` contra 0,86% de imagens com 3 vblanks na tela. Aceite pela tela (a callback de vblank), a CPU só como
+  diagnóstico.

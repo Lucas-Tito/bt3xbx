@@ -1614,3 +1614,66 @@ python3 port/x360/tools/passos.py bt3xbx_vb1.log --console --janelas 2 --minimo 
 **Recomendação.** O padrão do branch já é `BT3_VBLANK_HW=1`. Se a abertura 2 mostrar menos imagens de 3 vblanks e o atraso ao
 acordar abaixo de 1 ms, sem nada novo, fica assim; se não, o padrão volta a 0 num commit e o `Sleep` segue como era. Depois, o
 critério do escopo pela tela (a proposta acima) é decisão do Lucas.
+
+## 19. A rodada do console (22/10/2026) [medido]
+
+A build do `3ae20e6` (`default.xex` `806fe3c1...`, `passos: origem 3ae20e6 diff:da39a3ee5e` nos dois logs), `f5_duelo` pelo
+roteiro, `BT3_SOM=1`, `BT3_PICOS=36`, `BT3_WIDE=1`; o ambiente das duas aberturas difere só no `BT3_VBLANK_HW` (e na pasta dos
+saves). Logs em `build/sessao_2210/vb0/` (`=0`, o `Sleep`) e `vb1/` (`=1`, o vblank de hardware), fora do repositório. A prova do
+WSL (`~/vblank/provas.resumo`) fica **pendente de conferência** por esta análise: o WSL e o Deck estavam fora do ar; a tabela "As
+provas" da seção 18 é a do agente que a rodou.
+
+| Medida (janela 1: 684 passos, fim pausa; janela 2: 2.334, fim combate) | `Sleep` (vb0) | vblank de hardware (vb1) |
+|---|---|---|
+| Linha do init | `... pelo Sleep (BT3_VBLANK_HW=0)` | `... pelo vblank de hardware, o Sleep de reserva (BT3_VBLANK_HW=1)`; nenhum `a espera no Sleep` no log inteiro |
+| Tela: imagens, por vblanks na tela 1/2/3/4+ (3 ou mais) | j1 685: 0/683/2/0 (0,29%); j2 2.335: 13/2.302/20/0 (0,86%) | j1 685: 0/685/0/0 (0,00%); j2 2.335: 7/2.325/3/0 (0,13%) |
+| Trocas perdidas, imagens puladas | 0, 0 | 0, 0 |
+| Esperas de vblank (pelo hardware) | j1 431 (0); j2 1.797 (0) | j1 **0** (0); j2 1.761 (1.761) |
+| Atraso ao acordar por passo p99, máximo; esperas com 1 ms ou mais | j1 1,00, 1,73 ms, 4; j2 0,95, 1,50 ms, 13 | j1 sem esperas; j2 **0,06, 0,07 ms, 0** |
+| Espera de vblank na linha de tempo | j1 1.830,5 ms; j2 16.123,5 ms | j1 **0,0 ms**; j2 15.776,4 ms |
+| "Trabalho" p50 / p95 / p99 / máximo | j1 30,10 / 33,38 / 36,07 / 81,27; j2 28,02 / 33,34 / 33,52 / 39,08 | j1 33,27 / 33,49 / 36,09 / 84,06; j2 27,86 / 33,34 / 33,54 / 39,28 |
+| Apresentação na CPU: p99, máximo; acima de 34,37 ms; acima de 50,05 ms | j1 36,20, 82,24, 21 (3,07%), 1; j2 37,02, 48,64, 241 (10,33%), 0 | j1 33,74, 69,20, 4 (0,59%), 1; j2 36,18, 52,26, 67 (2,87%), 1 |
+| Parede (razão) | j1 1,0004; j2 0,9991 | j1 0,9988; j2 0,9968 |
+| Menus depois da luta (`picos_log.py`, trechos de 60 quadros) | 16,64 a 16,76 ms, pior por trecho até ~20 ms | 16,64 ms, pior 16,65 em quase todos os trechos |
+| Resultado da luta | estado 4 vencedor 0x2 razão 0x1 vida 0 27160 vblank 11478 quadro 7757 | o mesmo |
+| `FALHA`, `vigia:`, `CRASH`, `ERRO` | 0 | 0 |
+| `passos.py --console --janelas 2 --minimo 600` | "tudo certo", sai 0 | "tudo certo", sai 0 |
+
+**O que os números dizem.**
+
+1. **A medida da tela funciona**: 685 e 2.335 imagens para 684 e 2.334 passos (uma por passo, mais a que já estava), 0 trocas
+   perdidas e 0 puladas; o `Swap` do `D3DVBLANKDATA` anda com as trocas síncronas. Não precisa de outro sinal.
+2. **A CPU depois do `Present` exagerava o engasgo**: no `Sleep`, 10,33% dos intervalos acima de 34,37 ms na CPU contra 0,86% de
+   imagens com 3 vblanks na tela (janela 2). O que a pessoa via já era quase todo de 2 vblanks.
+3. **O vblank de hardware melhora a tela e acaba o atraso ao acordar**: 3 ou mais vblanks de 0,29%/0,86% para 0,00%/0,13%,
+   imagens de 1 vblank de 13 para 7, atraso ao acordar p99 de ~1 ms para 0,06 ms (todas as 1.761 esperas da janela 2 pelo
+   hardware), os menus exatamente em um vblank. O intervalo na CPU acima de 34,37 ms cai de 10,33% para 2,87%. O p99 do
+   "trabalho" não muda (33,5 ms): a mudança é de fase, não de custo, como a seção 18 previa.
+4. **A janela 1 do vb1 não teve espera nenhuma** (0 esperas, espera 0,0 ms, "trabalho" p50 33,27 = o intervalo), sem nenhuma
+   passagem ao `Sleep` no log. [lido no código, deduzido dos contadores] Toda chamada do `GsD3d_VblankEspera` achou o alvo já
+   passado (devolveu 1): na cena anterior à janela (quadros 4.600 a 4.617, passos de ~45 ms pela gravação) o alvo ficou de 1 a 5
+   vblanks atrás do atual, menos que os 6 que o recomeçam, e na janela cada passo durou exatamente 2 vblanks pela fila da gravação
+   (`picos`: espera da gravação 21,8 ms em média, vblank 0,0), então o alvo andou 2 por passo como o vblank e a dívida nunca
+   se pagou. A tela ficou perfeita (685 imagens de 2 vblanks), mas o ritmo ali veio da fila da gravação e do `Present`, não da
+   espera, e a medida do trabalho ficou cega na janela. A conta do `Sleep` tem a mesma regra, mas a grade de 16,683 ms anda
+   mais devagar que o vblank de 16,64 e a dívida se desfaz sozinha (o vb0 teve 431 esperas na janela 1).
+   [estimado] Com o jogo adiantado na fila, a leitura do controle pode vir até um passo antes do que viria com a espera: o
+   "nenhum quadro a mais de atraso" da seção 18 não se prova nessa janela. Correção a estudar (não feita): um teto na dívida não
+   basta (um vblank de dívida já trava assim, com o passo de exatamente 2 vblanks); o que resolve é recomeçar o alvo quando a
+   dívida não se paga em alguns passos seguidos (todas as chamadas com o vblank já passado), como os 6 vblanks já fazem, o que
+   não custa ritmo onde a fila da gravação é que manda. Antes, contar na linha `tela` as chamadas com o vblank já passado.
+5. **O vblank de hardware do console dura ~16,64 ms** pelo `QueryPerformanceCounter` (4.667 vblanks em 77.628 ms; apresentação
+   p50 33,27 nas duas aberturas), não os 16,683 da grade de 59,94 Hz. Com o vblank de hardware o jogo segue a frequência
+   efetiva do vídeo (o "usar 2 / frequência como período" do escopo): a parede fica ~0,3% abaixo da conta de 33,37 ms
+   (razão 0,9968), dentro de 1%.
+
+**O critério proposto para o escopo (seção 18) se sustenta**, com uma ressalva. Pela tela, as duas aberturas passam (0,86% e
+0,13% no pior, nenhuma de 4 vblanks), enquanto pelo critério de antes (99% dos intervalos na CPU até 34,37 ms) as duas falhariam
+na janela 2 (10,33% e 2,87%) por um engasgo que a tela não mostrou. O "trabalho" como informativo se confirma: na janela 1 do vb1
+ele virou o intervalo inteiro sem que nada estivesse errado na tela. A ressalva: o vb0 passa a 0,86%, perto do limite, e o
+critério não vê as imagens de 1 vblank (13 no vb0), que também são um tranco na luta; "no máximo 1% das imagens fora de 2
+vblanks" separaria as duas aberturas (vb0 1,41%, falha; vb1 0,43%, passa). Fica para o Lucas.
+
+**Recomendação.** Levar à main com `BT3_VBLANK_HW=1` por padrão: a tela melhora, o atraso ao acordar some, nada novo no log, o
+resultado da luta é o mesmo. Antes ou junto: a correção da dívida do item 4 (com uma rodada curta do console), e a conferência da
+prova do WSL quando a máquina voltar.
