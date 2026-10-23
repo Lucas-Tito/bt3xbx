@@ -181,20 +181,65 @@ static void fecha(int k) {
 }
 
 /* o hash "normal" dos desenhos (BT3_GPU_NORMAL): cada textura vale pelo conteúdo. Lê o sConteudo, que a gravação aumenta
-   (realloc): com a divisão é feito na entrega, na gravação */
+   (realloc): com a divisão é feito na entrega, na gravação.
+   (F5, etapa 8, seção 26) BT3_GPU_NORMAL=2: também as junções pelo conteúdo. Com o cache pela origem (BT3_TEX_ORIGEM), duas
+   texturas de mesmo conteúdo viram o mesmo recurso, e dois desenhos seguidos que antes só diferiam no número da textura
+   passam a ser um desenho só (o same_state do gs_draw.c compara o número). Aqui dois desenhos seguidos de primitivas com
+   tudo igual depois da troca da textura pelo conteúdo (fora a faixa) e a faixa do segundo começando onde a do primeiro
+   acaba contam como um só, com a soma das faixas: o mesmo que a junção do gs_draw.c faria. Assim a rodada que junta e a
+   que não junta dão o mesmo hash quando a única diferença é essa. */
+static int sNormalJunta = -1;
+static void normal_mistura(uint64_t *d, const GsDraw *g) {
+    const uint32_t *w = (const uint32_t *)g;
+    uint32_t k;
+    for (k = 0; k < (uint32_t)(sizeof(GsDraw) / 4); k++) {
+        *d = (*d ^ w[k]) * 1099511628211ull;
+    }
+}
+static int normal_junta(const GsDraw *a, const GsDraw *b) {
+    GsDraw x = *a, y = *b;
+    if (a->native || b->native || b->first != a->first + a->count) {
+        return 0;
+    }
+    x.first = y.first = 0;
+    x.count = y.count = 0;
+    if (a->vu == 0) { /* (o same_state não olha o bloco uniforme nem o src de um desenho de primitivas) */
+        x.uniform = y.uniform = 0;
+        x.src = y.src = 0;
+    } else if (a->uniform != b->uniform) {
+        return 0; /* (da VU1: a junção do gs_draw.c não abre bloco uniforme; com blocos diferentes as constantes já diferem) */
+    }
+    return memcmp(&x, &y, sizeof(x)) == 0;
+}
 static uint64_t normal_desenhos(const GsDraw *draws, uint32_t n) {
     uint64_t d = 1469598103934665603ull;
-    uint32_t i, k;
+    uint32_t i;
+    GsDraw ant;
+    int tem = 0;
+    if (sNormalJunta < 0) {
+        sNormalJunta = getenv("BT3_GPU_NORMAL") != NULL && atoi(getenv("BT3_GPU_NORMAL")) == 2;
+    }
     for (i = 0; i < n; i++) {
         GsDraw g = draws[i];
-        const uint32_t *w;
         if (!g.tex_is_target && g.tex >= 16 && g.tex - 16 < sConteudoN) {
             g.tex = (GsTex)(sConteudo[g.tex - 16] ^ sConteudo[g.tex - 16] >> 32); /* o conteúdo no lugar do número */
         }
-        w = (const uint32_t *)&g;
-        for (k = 0; k < (uint32_t)(sizeof(GsDraw) / 4); k++) {
-            d = (d ^ w[k]) * 1099511628211ull;
+        if (!sNormalJunta) {
+            normal_mistura(&d, &g);
+            continue;
         }
+        if (tem && normal_junta(&ant, &g)) {
+            ant.count += g.count;
+            continue;
+        }
+        if (tem) {
+            normal_mistura(&d, &ant);
+        }
+        ant = g;
+        tem = 1;
+    }
+    if (tem) {
+        normal_mistura(&d, &ant);
     }
     return d;
 }
