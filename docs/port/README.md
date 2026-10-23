@@ -1363,3 +1363,23 @@ Windows program through the session on Vulkan under Wine (fight values as always
 Not done, in the order of what is left in the profile (Vulkan): the per-pixel loop that writes an uploaded
 texture into GS memory (`Gs_Gif`, 7%); `draw_state` (4%); `feclearexcept` in libm, 2%, caller not found; the copy
 of the vertices into the transfer buffer could be saved by recording straight into it.
+
+## The 256-colour table cache confirms the content (bt3xbx, 2026-10-23)
+
+`clut_texture` (gs_draw.c) found a table's texture by a hash alone: FNV-1a over 32-bit words, where a multiplication only
+carries a difference upwards. Tables that differ only in alpha (the top byte of every word) got hashes that differed only
+in the top 8 bits, one pair in 256 collided, and the cache returned another frame's table. Seen in the Shenlong scene: its
+glow table is animated in alpha only, and 4,336 table passes in 271 frames drew with a stale table (the glow jumped). Both
+GPU paths (the PC renderers and the Xbox 360 one) share this code; the software rasterizer reads GS memory and never had it.
+
+- Each of the 64 slots now keeps its 256 colours (1 KB) and a lookup needs the same hash and the same colours (`memcmp`).
+  The per-page memo (builds with `BT3_GS_ESPERAS`) remembers the slot and a serial of its texture instead of the hash, so
+  the common case still neither reads GS memory nor compares.
+- The hash step of tables and palettes (`COR_MISTURA`) adds `h ^= h >> 15` after the multiplication, which brings a
+  difference back to the low bits; each step stays one-to-one. Palettes (`clut_hash`) have no cache of their own (the
+  hash goes into the texture cache key), so they only get the better hash.
+- Checked on the headless builds of the Xbox 360 port (`docs/x360/plano/F5/09.md`, "A correção da colisão das tabelas"):
+  the draw lists of two fight sessions are unchanged, and in the Shenlong session they change in exactly the 271 frames,
+  only in the table's content. Cost with the memo: about 2.6 comparisons of 1 KB per frame (0.1 to 0.25 microseconds).
+  Not measured on the PC build, which has no memo: it already read and hashed the 256 colours on every call (about 40 a
+  frame in a fight) and now also compares them on a hit, some 80 ns each.

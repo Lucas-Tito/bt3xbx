@@ -201,8 +201,19 @@ static Tex *sLast; /* the entry the previous lookup returned */
 static int sTexRapida = -1; /* BT3_TEX_RAPIDA (texture_get), lida uma vez */
 #endif
 
-/* The 256-colour tables as textures, by hash of the palette entries they use (64 slots). */
-static struct { uint32_t hash, last; GsTex tex; } sCluts[MAX_CLUTS];
+/* The 256-colour tables as textures, by hash of the palette entries they use (64 slots). (F5, docs/x360/plano/F5/09.md,
+   "A correção da colisão das tabelas") Cada vaga guarda também as 256 cores (cor): a busca confere o conteúdo e não só o
+   hash, porque duas tabelas podem ter o mesmo hash, e a busca só pelo hash devolvia a tabela de outro quadro (o brilho do
+   Shenlong, 271 quadros de uma cena). serie muda a cada textura criada numa vaga (a memória do clut_texture). */
+static struct { uint32_t hash, last, serie; GsTex tex; uint32_t cor[256]; } sCluts[MAX_CLUTS];
+static uint32_t sClutSerie;
+
+/* (F5, 09.md, "A correção da colisão das tabelas") Um passo do hash das cores das paletas e das tabelas: o FNV-1a de
+   palavras de 32 bits seguido de um deslocamento. O FNV sozinho só leva uma diferença para os bits de cima, e as tabelas
+   que mudam só no alfa (o byte de cima de cada palavra) davam hashes diferentes só nos 8 bits de cima: um par em 256
+   colidia. O deslocamento traz a diferença de volta para os bits de baixo a cada passo; cada passo segue uma bijeção (duas
+   tabelas que diferem numa palavra só nunca colidem). */
+#define COR_MISTURA(h, c) ((h) = ((h) ^ (c)) * 16777619u, (h) ^= (h) >> 15)
 
 static uint32_t tex_bucket(uint64_t t0, uint64_t texa, uint32_t gen) {
     uint64_t h = (t0 ^ (texa * 0x9E3779B97F4A7C15ull) ^ ((uint64_t)gen << 17)) * 0xD6E8FEB86659FD93ull;
@@ -222,7 +233,7 @@ static uint32_t clut_hash(uint32_t cbp, uint32_t cpsm, uint32_t count) {
         return memo[slot].hash;
     }
     for (i = 0; i < count; i++) {
-        h = (h ^ Gs_VramRead(cbp, 1, cpsm, i & 15, i >> 4)) * 16777619u;
+        COR_MISTURA(h, Gs_VramRead(cbp, 1, cpsm, i & 15, i >> 4));
     }
     memo[slot].key = key + 1;
     memo[slot].gen0 = g0;
@@ -607,39 +618,34 @@ static GsTex clut_texture(uint32_t cbp) {
     uint32_t *upload;
     int k, old = 0;
 #ifdef BT3_GS_ESPERAS
-    /* (F5, etapa 8, gravação) O hash da tabela lembrado por cbp e pela geração das duas páginas que ela ocupa (a mesma
+    /* (F5, etapa 8, gravação) A vaga achada, lembrada por cbp e pela geração das duas páginas que a tabela ocupa (a mesma
        regra do clut_hash: 16 x 16 pixels de 32 bits com largura 1 são os blocos cbp a cbp + 3). As passadas de tabela
-       pela névoa e pelos ids pedem a mesma tabela a cada primitiva, e o hash dela era refeito toda vez, 256 leituras da
-       VRAM, para achar a mesma textura no sCluts. As 256 cores só se leem quando a memória não vale, ou para criar a
-       textura. O sCluts e a escolha da vaga seguem iguais: a mesma textura volta, com o mesmo last. */
-    static struct { uint32_t key, gen0, gen1, hash; } memo[64];
+       pela névoa e pelos ids pedem a mesma tabela a cada primitiva: enquanto as páginas não mudam e a vaga guarda a mesma
+       textura (a serie), as cores são as que foram conferidas com as da vaga quando a memória foi feita, e a textura
+       volta sem ler a VRAM. As 256 cores só se leem quando a memória não vale. */
+    static struct { uint32_t key, gen0, gen1, slot, serie; } memo[64];
     uint32_t m = (cbp * 2654435761u) >> 26, g0 = gGsPageGen[(cbp / 32) & 511], g1 = gGsPageGen[(cbp / 32 + 1) & 511];
-    int lido = 0;
 
-    if (memo[m].key == cbp + 1 && memo[m].gen0 == g0 && memo[m].gen1 == g1) {
-        hash = memo[m].hash;
-    } else {
-        for (i = 0; i < 256; i++) {
-            uint32_t n = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
-            px[i] = Gs_VramRead(cbp, 1, 0, n & 15, n >> 4);
-            hash = (hash ^ px[i]) * 16777619u;
-        }
-        lido = 1;
-        memo[m].key = cbp + 1;
-        memo[m].gen0 = g0;
-        memo[m].gen1 = g1;
-        memo[m].hash = hash;
+    if (memo[m].key == cbp + 1 && memo[m].gen0 == g0 && memo[m].gen1 == g1 && sCluts[memo[m].slot].tex != 0 &&
+        sCluts[memo[m].slot].serie == memo[m].serie) {
+        sCluts[memo[m].slot].last = gGsFrame;
+        return sCluts[memo[m].slot].tex;
     }
+#define CLUT_LEMBRA(v) (memo[m].key = cbp + 1, memo[m].gen0 = g0, memo[m].gen1 = g1, memo[m].slot = (uint32_t)(v), \
+                        memo[m].serie = sCluts[v].serie)
 #else
+#define CLUT_LEMBRA(v) ((void)0)
+#endif
     for (i = 0; i < 256; i++) {
         uint32_t n = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
         px[i] = Gs_VramRead(cbp, 1, 0, n & 15, n >> 4);
-        hash = (hash ^ px[i]) * 16777619u;
+        COR_MISTURA(hash, px[i]);
     }
-#endif
     for (k = 0; k < MAX_CLUTS; k++) {
-        if (sCluts[k].tex != 0 && sCluts[k].hash == hash) {
+        /* (F5, 09.md) o hash igual não basta: as cores também */
+        if (sCluts[k].tex != 0 && sCluts[k].hash == hash && memcmp(sCluts[k].cor, px, sizeof(px)) == 0) {
             sCluts[k].last = gGsFrame;
+            CLUT_LEMBRA(k);
             return sCluts[k].tex;
         }
         if (sCluts[k].tex == 0 || sCluts[k].last < sCluts[old].last) {
@@ -651,15 +657,8 @@ static GsTex clut_texture(uint32_t cbp) {
     }
     if (sCluts[old].tex != 0) {
         TEX_DESTROY(sCluts[old].tex);
+        sCluts[old].tex = 0; /* (a vaga fica vazia se a criação abaixo falhar) */
     }
-#ifdef BT3_GS_ESPERAS
-    if (!lido) { /* (as páginas não mudaram desde o hash lembrado: as cores são as que deram esse hash) */
-        for (i = 0; i < 256; i++) {
-            uint32_t n = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
-            px[i] = Gs_VramRead(cbp, 1, 0, n & 15, n >> 4);
-        }
-    }
-#endif
     upload = malloc(sizeof(px));
     memcpy(upload, px, sizeof(px));
     tex = sBackend->texCreate(256, 1, GS_TEXFMT_RGBA8, 1);
@@ -671,8 +670,12 @@ static GsTex clut_texture(uint32_t cbp) {
     sCluts[old].tex = tex;
     sCluts[old].hash = hash;
     sCluts[old].last = gGsFrame;
+    sCluts[old].serie = ++sClutSerie;
+    memcpy(sCluts[old].cor, px, sizeof(px));
+    CLUT_LEMBRA(old);
     return tex;
 }
+#undef CLUT_LEMBRA
 
 /* ((A - B) * C >> 7) + D as the pipeline key's blend bits: ks * Cs + kd * Cd with ks, kd from
    {0, 1, C, -C, 1 - C, 1 + C}. Each of A, B, D is source, destination or zero, so bit i of A/B decides

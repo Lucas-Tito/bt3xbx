@@ -2027,3 +2027,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   imagem seguinte, sai uma de 1 vblank que paga a dívida, e a simulação nunca reproduz o que o console mostrou (685 imagens de
   exatamente 2 vblanks com o desenho de ~17 ms). Antes de provar uma correção numa simulação, ela tem de reproduzir o defeito com
   a conta de antes (a cena A do `teste_vblank.c` confere isso: a conta de antes sem espera em pelo menos metade das fases).
+
+### A correção da colisão das tabelas (F5, etapa 9, `plano/F5/09.md`, "A correção da colisão das tabelas")
+
+- **Uma correção em duas camadas pede uma sabotagem por camada.** A correção confere o conteúdo e também melhora o hash. A
+  sabotagem óbvia (a busca de volta só pelo hash) não foi acusada: o hash novo sozinho já evitava as colisões do roteiro.
+  Valeram três: as duas camadas tiradas juntas (acusada, e igual à main), e a conferência sozinha com o hash antigo e com um
+  hash de 4 bits (iguais ao branch: é ela que corrige).
+- **Desfazer um patch de diagnóstico pelo que ele toca, não pelo que se lembra.** O `diag_tabela.patch` mexe no `gs_core.c`
+  além do `gs_draw.c`, e o `git checkout` só do segundo deixou o primeiro alterado e dois `.orig`: a ppcg da main recusou a
+  x86 "de outra origem" e as listas dela foram refeitas num segundo serviço. Use `git checkout -- .` e apague os `.orig` (ou
+  `git stash -u`), e confira `git status --porcelain` vazio antes de cada build de referência.
+- **Uma correção que cria texturas onde a main reaproveitava muda a lista crua desde a primeira.** Os números das texturas
+  andam: no `shenlong`, 2.337 quadros diferentes na crua contra os 271 da colisão na normal (`--normal`). Para dizer onde
+  está a diferença, um hash normal com a textura suspeita mascarada (`clut_mascara.py`, 0 quadros diferentes) e a lista dos
+  quadros diferentes igual à dos quadros com colisão do diagnóstico.
