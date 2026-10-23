@@ -1877,6 +1877,41 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Capturas comparáveis entre escalas:** reduzir para o tamanho da escala 1 pela média dos pixels de saída de cada pixel do GS, e
   pedir os buffers maiores só quando a escala os usa: um buffer estático novo mudaria a memória livre da build sem a chave.
 
+### A retomada do 720p (F5, etapa 8, `plano/F5/08-720p.md`, seção 9)
+
+- **A borda `floor(x * s)` só serve enquanto a fração de `x * s` não passa de 0,5.** A regra do rasterizador com os centros em .5 é
+  `ceil(x * s - 0,5)`, em inteiros `(2 x num + den - 1) / (2 den)` com a escala em fração; nas escalas 1, 1,5 e 2 as duas dão os
+  mesmos números, e na 1,6 a `floor` põe o pixel de saída 1 no pixel 1 do GS, quando o centro dele é do 0. Ao trocar a conta, um
+  programa que imprime tudo o que o header antigo calcula e o mesmo pelo novo (`diff` das duas saídas) prova que as escalas de antes
+  não mudaram; uma cópia do header com a regra velha tem de falhar só nas escalas novas.
+- **O `fxc` do XDK estima o custo de cada shader:** a listagem `/Fc` termina com os ciclos por vetor de 64 pixels, as instruções,
+  os registradores e as threads. Compare as variantes de um shader por ela antes de gastar uma rodada (o `ps_gs` 74 a 80 ciclos, o
+  especializado 16, limitado pelo interpolador). A mesma listagem mostra a ordem das multiplicações: duas variantes que têm de dar o
+  mesmo byte precisam da mesma ordem, porque o `fxc` reassocia (o `t * cor * k` sai `(t * k) * cor`).
+- **O `tex2Dgrad` custa no Xenos:** sai `getGradients`, `serialize` e `setGradientH`/`V` antes da leitura. Com um nível de textura,
+  sem filtro de mip e o mesmo filtro de perto e de longe, o gradiente não escolhe nada, e o `tex2D` lê o mesmo texel; o que só o
+  console prova fica dito como tal no plano.
+- **Variante de shader por desenho sem mexer no resto:** o `prepara` só trocava o pixel shader quando mudava a família do desenho;
+  o shader escolhido fica guardado ao lado (valendo só enquanto a família não muda) e, com a chave, é comparado a cada desenho.
+- **O Resolve exige retângulos em múltiplos de 8 também nas cópias "inteiras":** a cópia dos ids de 640 x 448 na escala 1,6 tem
+  717 linhas e vai a 720.
+- **Imagem do jogo não vem para cá, mas a comparação pode:** com o FNV-1a de cada captura no log do console, duas aberturas que
+  têm de dar as mesmas imagens se conferem pelo `grep` do log; o `compara_quadros.py` no WSL só entra se algum número diferir.
+- **O `git stash` é um só para todos os worktrees do repositório:** apareceu na lista um stash de outro agente (`f5-envio-rapido`).
+  Um `stash pop` no momento errado aplicaria o trabalho dele no seu worktree. Para tirar um pedaço de um commit, guarde a cópia do
+  arquivo no scratchpad e volte com ela.
+- **A estimativa de ciclos do `fxc` não prevê o ganho no console** (a rodada de 23/10): o especializado de 16 ciclos contra 74 a 80
+  tirou 2,3 a 3,5 ms na 1,5, um quinto do que o shader trivial tira (11 a 16 ms), e nada no `vu4`, onde o trivial tira dois terços.
+  O que pesa é a leitura da textura, que o trivial não faz. Rode o diagnóstico do teto (o trivial) antes de investir numa variante, e
+  uma variante "só a leitura" separa a leitura da conta.
+- **Na luta, a GPU por classe só existe em três trechos:** o relatório de 60 quadros do `gs_d3d` não sai dentro das janelas do
+  `passos` (o começo, a pausa e o fim do combate, quadros 4.619, 5.399 e 7.799 no `f5_duelo`). Compare as aberturas trecho a trecho
+  (os desenhos por quadro iguais confirmam o mesmo conteúdo), não pela mediana de muitos trechos.
+- **O número de capturas do `BT3_SHOT` depende de quanto o console ficou ligado depois do `fim` do roteiro:** uma a cada 600
+  quadros até o jogo sair. Compare só os quadros que as duas aberturas têm.
+- **Logs de rodada não moram no scratchpad:** um reinício da máquina o limpa (os logs da 1 e da 1,5 de 22/10 se perderam). Guarde
+  em `build/sessao_<data>/<nome>` e escreva na nota os números que a próxima comparação vai usar.
+
 
 ### As texturas novas (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 17)
 
