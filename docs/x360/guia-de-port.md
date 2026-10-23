@@ -2037,6 +2037,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   imagem seguinte, sai uma de 1 vblank que paga a dívida, e a simulação nunca reproduz o que o console mostrou (685 imagens de
   exatamente 2 vblanks com o desenho de ~17 ms). Antes de provar uma correção numa simulação, ela tem de reproduzir o defeito com
   a conta de antes (a cena A do `teste_vblank.c` confere isso: a conta de antes sem espera em pelo menos metade das fases).
+- **A troca que a callback de vblank conta não é a imagem que a pessoa vê.** O `GsD3d_Repete` apresenta a mesma imagem de novo
+  depois de 50 ms sem quadro; a callback vê uma troca nova e conta duas imagens de 2 vblanks onde a tela ficou parada 4. Assim o
+  engasgo de 64 a 75 ms do Blast 2 passou como "nenhuma imagem de 4" em 9 de 10 aberturas (seção 25). Some as repetições à imagem
+  que repetem antes de aceitar pela tela.
+- **Para chegar a zero, conte por imagem e ligue a imagem ao quadro.** A porcentagem de imagens longas não diz qual quadro nem
+  que lado atrasou, e o filtro do `picos` (o intervalo na CPU) não é o da tela. O `QuerySwapStatus` logo depois do `Present` dá
+  o número da troca, o `D3DVBLANKDATA.Swap` na callback diz quando ela entrou: com os `mftb` dos três lados, cada imagem longa
+  sai com o quadro e a distância de cada lado ao prazo (`BT3_PICOS_TELA`, seção 25).
+- **Imagens de 3 e de 1 aos pares, com os vblanks da janela exatamente 2 por passo, são quadros isolados que perderam o vblank**,
+  não um passo lento: o seguinte entrou no tempo. Procure o quadro, não o passo.
 
 ### A correção da colisão das tabelas (F5, etapa 9, `plano/F5/09.md`, "A correção da colisão das tabelas")
 
