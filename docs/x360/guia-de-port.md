@@ -1877,3 +1877,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Uma GPU falsa com atraso prova o rodízio no WSL:** o falso relê cada jogo uns quadros depois de desenhá-lo e compara com o
   hash do fim do quadro. A lista quadro a quadro (`divergencias.py`) só vê o que foi regravado antes de o fim do quadro lê-la;
   um jogo regravado enquanto a GPU ainda o lê só a releitura atrasada vê.
+- **Um corte no desenho só encurta o intervalo se a gravação esperava o desenho.** A cópia da VU1 (3,8 ms por quadro nas cenas
+  pesadas) saiu inteira e o `frame_end` caiu 4,8 ms, mas o `quadro inteiro` ficou igual ao centésimo e os intervalos da luta não
+  mudaram: nos picos, a gravação esperou o desenho em 3 de 72 quadros; o que estoura é o jogo mais a gravação. Antes de gastar uma
+  rodada num corte de uma thread, contar nos `picos:` da rodada anterior quantas vezes a thread seguinte esperou por ela
+  (`esperando o desenho`, `espera da gravação`); perto de zero, o corte só dá folga. Num trecho limitado pela GPU, tirar trabalho
+  da CPU do desenho só vira espera no anel de comandos (o trecho da pausa: 24 ms com e sem a cópia).
+- **A prova que roda noutra máquina tem de voltar para a principal no fim.** A rodada do Deck deixou o resumo só lá, e a análise
+  do console encontrou o Deck fora da rede: a prova ficou sem leitura. O script da rodada copia o resumo e as saídas que ele cita
+  para a máquina principal (ou o resumo vai no relatório de quem disparou) antes de o branch ir à análise.

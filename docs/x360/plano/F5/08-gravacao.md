@@ -1606,3 +1606,61 @@ python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_d1.t
 5. **O resultado**: a mediana, o p95 e o p99 do `passos: janela` da luta e os intervalos acima de 34,37 ms contra a abertura 1; os
    passos por janela e o resultado iguais aos da referência (`vencedor 0x2 KO`); nenhum `roteiro: FALHA`, `vigia:` nem `CRASH`. A
    memória livre mínima (`gs_d3d:   memória`) uns 23 MB maior na 2.
+
+## 19. A rodada do console (22/10/2026) [medido]
+
+O `.xex` do commit `0fa201a` (`passos: origem 0fa201a`), duas aberturas do `f5_duelo` pelo roteiro, sem som, `BT3_PICOS=36`,
+`BT3_TEMPOS=0`: a abertura 1 com `BT3_VU1_DIRETO=0` (`build/sessao_2210/d0/bt3xbx.log` do clone principal) e a 2 com `=1`
+(`d1/bt3xbx.log`). Lidos com o `passos.py --console`, a linha de 60 quadros do `gs_d3d` e as linhas `picos:` (scripts de uma vez no
+scratchpad, só texto).
+
+**A chave pegou.** Na 1, `2 pares de buffers ... (11520 KB)` e `copiados para 2 pares`; na 2, `3 jogos de buffers em que a gravação
+grava direto (BT3_VU1_DIRETO=1) ... (17280 KB ao todo ...)`, `gs: BT3_VU1_DIRETO=1: ... (as listas da VU1 dos dois jogos soltas, 28471
+KB)` e `gravados direto em 3 jogos de buffers`. O maior quadro coube nas duas (53.797 de 98.304 vértices), nenhum desenho da VU1
+pulado.
+
+| | chave 0 | chave 1 |
+|---|---|---|
+| cópia da VU1, média dos 13 trechos de 60 quadros com cópia de 3 ms ou mais (as cenas da luta antes e depois da janela) | 3,82 ms | 0,00 |
+| fim do quadro, os mesmos 13 trechos | 11,05 ms | 6,22 ms (de 3,0 a 8,1 a menos em cada um) |
+| desenho da VU1 sem a cópia, os mesmos trechos | 5,42 ms | 4,42 ms |
+| quadro inteiro, os mesmos trechos | 34,24 ms | 34,24 ms |
+| o trecho da pausa (quadro 5399): fim do quadro, cópia, desenho da VU1 com a cópia | 24,06; 6,40; 22,02 ms | 24,17; 0,00; 22,18 ms |
+| picos na janela da luta (linhas `picos: ..., na janela`) | 72 | 96 |
+| neles: `frame_end` mediana (p90) e a cópia mediana | 16,75 (20,50) e 5,30 ms | 9,90 (16,30) e 0,00 ms |
+| neles: gravação `ocupada` mediana (p90, máximo) | 27,75 (33,10; 84,90) ms | 27,65 (31,80; 79,30) ms |
+| neles: a gravação `esperando o desenho` acima de 1 ms | 3 quadros | 0 |
+| neles: o jogo esperando a gravação, mediana | 8,10 ms | 9,45 ms |
+| a gravação esperou a GPU largar o jogo | (não se aplica) | 0 vezes em 8.641 quadros, 0 além do limite |
+| entrega média (linha `gs: divisão`, a sessão inteira) | 0,207 ms | 0,293 ms |
+| memória livre: no começo; mínimo visto | 248; 53 MB | 270; 75 MB |
+| janela 1 (684 passos), apresentação: p99, máximo, acima de 34,37, acima de 50,05 | 36,01; 85,73; 26 (3,81%); 1 | 37,24; 80,73; 33 (4,83%); 1 |
+| janela 2 (2.334 passos), apresentação: p99, máximo, acima de 34,37, acima de 50,05 | 37,11; 52,21; 227 (9,73%); 1 | 38,92; 51,12; 256 (10,97%); 1 |
+| janela 2, trabalho: p95, p99, máximo | 34,78; 34,96; 38,22 | 34,89; 34,94; 37,75 |
+| resultado | `vencedor 0x2 razao 0x1 vida 0 27160` | o mesmo |
+
+Nenhum `roteiro: FALHA`, `vigia:` nem `CRASH` nas duas; os passos por janela (684 e 2.334) e as matrizes de ações iguais. A
+abertura 2 foi encerrada mais cedo depois do roteiro (8.640 retratos contra 13.920), o que não toca a janela. O que se vê na tela
+não está no log: fica com quem abriu.
+
+**A referência do ruído.** As outras aberturas de 22/10 do `f5_duelo` com `BT3_PICOS=36`, com ou sem som, com a chave da sua
+rodada desligada ou sem mudança no caminho da luta (`e0`, `e1`, `trava`, `sx1`, `vb0` e a `d0`) deram na janela 2 de 218 a 269 intervalos acima de 34,37 ms e p99 da apresentação de 36,94 a 37,73.
+A chave 1 (256; 38,92) fica dentro da faixa no primeiro número e um pouco acima no segundo: com uma abertura de cada lado, não
+há ganho nem perda que se separe do ruído.
+
+**Conclusão.** A cópia saiu inteira do desenho e o `frame_end` caiu uns 4,8 ms por quadro nas cenas pesadas, um pouco mais que a
+cópia (o desenho da VU1 em si ficou 1 ms mais rápido, o que bate com o L2 sem os 3 MB por quadro) [medido]; a gravação não piorou,
+nunca esperou a GPU, e sobraram 22 MB. Mas **o intervalo entre imagens não mudou**: o `quadro inteiro` dos mesmos trechos é igual
+ao centésimo, e na janela da luta o que estoura é a soma do jogo e da gravação (`ocupada` perto de 28, o jogo esperando a gravação
+uns 8 a 9 ms e o vblank uns 6,6), não o desenho, que nos picos só segurou a gravação em 3 de 72 quadros. Cortar o desenho tira a
+folga dele, não o pico. No trecho da pausa o `frame_end` ficou igual (24 ms) com a cópia ou sem ela: o desenho da VU1 cresceu
+exatamente o que a cópia deixou de custar, o que aponta para um trecho limitado pela GPU, em que a CPU do desenho só troca a
+cópia por espera no anel de comandos [estimado].
+
+**A prova do Deck** (`~/vu1copia/provas.resumo` no Deck, a rodada da seção 18 adaptada) **está pendente de conferência**: nesta
+análise o Deck e o WSL estavam fora da rede e nenhum ssh foi feito. Os itens 1 a 5 da lista da seção 18 seguem sem leitura.
+
+**Recomendação.** Pode ir à main desligada por padrão (fora das builds de teste e do 360 nada muda, e no 360 a chave 0 é o caminho
+de antes). Ligar por padrão pede a prova do Deck conferida (sobretudo as sabotagens e a GPU falsa atrasada 2 sem `relido diferente`)
+e a imagem vista nos especiais; o ganho que justifica ligar é a memória (22 MB) e a folga do desenho, não o tempo de quadro. O
+próximo corte de tempo tem de vir da gravação ou do jogo (`ocupada` e a espera do jogo nos picos), não do desenho.
