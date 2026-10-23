@@ -1973,6 +1973,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   decodificação errada nos 4 bits mudou 141 quadros. Mesmo assim, uma conferência por textura (a decodificação nova refeita noutro
   buffer contra a de antes, `BT3_TEX_CONTA`) diz qual textura e qual formato, e vale para os quadros em que a textura errada não
   chegaria a ser desenhada.
+- **A chave de um cache pelo conteúdo tem de ter exatamente o que a decodificação lê, nem mais** (seção 26). A primeira versão do
+  cache pela origem hasheava 1 KB a partir da paleta e o `TEXA` sempre: reusou 1.549 texturas no `f5_duelo` e deixou de fora
+  justo o alvo, o Blast 2 (65 texturas que voltam com outro `TEXA`, que as cores de 32 bits não leem) e os quadros de página (as
+  16 cores dividem o bloco com paletas que o jogo reescreve). Confira o alvo na contagem por quadro (`tex_conta.py --quadro`)
+  antes da rodada longa; uma chave a mais não erra a imagem, só não pega, e as provas de igualdade passam do mesmo jeito.
+- **Um reuso que funde recursos muda a contagem de desenhos sem mudar a imagem** (seção 26): o `same_state` junta dois desenhos
+  pelo número da textura, e com o recurso partilhado 21 quadros do duelo saíram com desenhos a menos. A lista normal só via a
+  diferença na seção das contagens (o `drawCount`), que ela inclui. O `BT3_GPU_NORMAL=2` junta pelo conteúdo antes de contar.
+  Ao trocar a identidade de qualquer recurso, pergunte quem compara a identidade (junções, memórias de estado) antes de rodar
+  as listas: custou duas largadas da rodada do WSL.
 
 ### O envio de imagens para a VRAM (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 18)
 

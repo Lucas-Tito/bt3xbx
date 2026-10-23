@@ -2283,3 +2283,152 @@ grep 'picos: tela' bt3xbx.log
 4. **A folga da GPU até o prazo** (mínimo, p1, p10, mediana): decide entre 3a e 3b.
 5. O resultado da luta igual (vencedor 0x2 razão 0x1 vida 0 27160), os passos por janela (684 e 2.334), nenhum `roteiro: FALHA`,
    `vigia:` ou `CRASH`, e as imagens longas da linha `tela` na faixa das aberturas de 23/10 (a chave não deve mudar o ritmo).
+
+## 26. O cache de texturas pela origem, `BT3_TEX_ORIGEM` (23/10/2026)
+
+Branch `f5-texcache`, sobre a main `5021312`, com o `f5-zero` juntado (a linha por imagem longa, `BT3_PICOS_TELA`, seção 25).
+Pedido: o caminho 2 da seção 25, a opção (a) da seção 17. Os picos que se repetem na luta são de texturas novas na gravação: o
+Blast 2 (quadro 5338, 65 texturas, 3,2 M pixels, 33 ms de decodificação e 7 ms do XG; a tela parada 64 a 75 ms em todas as
+aberturas) e o 7017 (10,6 ms na gravação). Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+### O que foi feito
+
+| Commit | O quê |
+|---|---|
+| `f84354a` | O cache pela origem no `texture_get` (`gs_draw.c`) e o `Gs_TexOrigem` (`gs_core.c`), sob `BT3_TEX_ORIGEM=1` (lida uma vez), **desligado por padrão**; a linha "R" da contagem e o `tex_conta.py` com `--quadros` e `--quadro` |
+| `a6c39b2` | Junta o `f5-zero` (só o `gs_d3d.cpp` do 360, o teste da tela e a nota) |
+| `3a9256b`, `bbd4200` | `BT3_GPU_NORMAL=2` no `gpu_falso.c`: a lista normal com as junções pelo conteúdo (abaixo) |
+| `bf7f96c` | A chave só com o que a decodificação lê da paleta e do `TEXA` (a primeira versão não pegava o Blast 2, abaixo) |
+
+**A chave [lido].** O endereço de cada pixel no `vram_rw` é `tbp * 256` bytes mais uma conta que só depende de `tbw`, do formato,
+de x e de y (o bloco é `tbp` mais um número da grade, com a volta nos 4 MB). O `Gs_TexOrigem` hasheia, em ordem de grade a partir
+de `tbp`, os blocos de 256 bytes em que caem os pixels: a mesma imagem enviada a outro endereço dá o mesmo hash, e uma página
+mudada fora dos blocos da textura não o muda. A paleta entra pelo que a decodificação lê: as 256 cores de 32 bits são os blocos
+`cbp` a `cbp + 3` inteiros, as de 16 bits `cbp` e `cbp + 1`; as 16 cores (8 x 2) dividem o bloco com outras paletas e entram cor
+a cor, pelo `vram_rw`. A chave completa: o hash, o formato, o `tbw`, o tamanho, o formato da paleta e o `TEXA` só quando o
+`Gs_Expand` o lê (cores que não são de 32 bits). Quatro faixas de 64 bits, o laço sem `__int128` do `Gs_PageHash`.
+
+**O reuso [lido].** Uma vaga por recurso decodificado (`sOrig`, até `MAX_TEX`), com a chave e quantas entradas do `sTex`
+apontam para o recurso. No erro do `texture_get` (depois do descarte e da varredura do cache cheio, que podem soltar vagas), o hash
+é feito; se a chave tem vaga, a entrada nova aponta para o mesmo recurso, sem decodificar nem criar (sem `malloc`, sem XG); o tempo
+do hash conta como o da decodificação (`gPicosTexNs`), e só as decodificações contam em `texturas t` dos `picos`. O recurso só é
+solto quando a última entrada sai (`tex_solta`, nas duas varreduras); o descarte do 360 (`GsDraw_X360Abre`) só soma os bytes de
+um recurso de que saem todas as entradas. Com um pacote de texturas carregado, o cache fica de fora. Desligado, nenhuma entrada
+tem vaga e o caminho é o de antes; tudo dentro de `BT3_GS_ESPERAS` (a x86 plana não muda).
+
+**Por que a primeira versão não pegava o Blast 2 [medido].** Ela hasheava 1 KB a partir de `cbp` e o `TEXA` sempre. Na x86gv o
+`f5_duelo` reusou 1.549 texturas, mas o 5338 seguiu com as 65 e os 7015 a 7017 com as suas. Pela contagem, as 65 do Blast 2 eram
+o mesmo `TEX0` (o mesmo `tbp`, `tbw` e paleta) de texturas do quadro 4136, com o `TEXA` `8000008080` contra `8000000000`: a
+expansão das cores de 32 bits não lê o `TEXA`. E nos 7015 a 7017 (4 bits) as 16 cores dividem os blocos com outras paletas que o
+jogo reescreve. Com a chave exata (`bf7f96c`), os quatro quadros saem inteiros do cache.
+
+**Achado lateral, sem correção [lido].** O `clut_hash` do `gen` (a chave de sempre) lê as 16 cores de 4 bits como `(i & 15, 0)`,
+e a decodificação as lê como `(i & 7, i >> 3)`: as cores 8 a 15 (a segunda linha) não entram no `gen`. Uma mudança só nelas
+deixaria a textura velha no cache. Corrigir muda as listas de sempre; fica anotado.
+
+### A medida na x86gv [medido]
+
+`BT3_TEX_CONTA` com a chave 0 e 1, sem as threads; o custo pela estimativa no console a 10,4 ns por pixel (seção 17, a rodada de
+22/10). "Reusadas": as linhas "R", cada uma conferida pixel a pixel (abaixo).
+
+| | `f5_duelo`, chave 0 | chave 1 | `f5_treino`, chave 0 | chave 1 |
+|---|---:|---:|---:|---:|
+| Texturas decodificadas | 2.424 | **687** | 1.242 | **564** |
+| Pixels decodificados | 37,8 M | 20,9 M | 28,4 M | 17,7 M |
+| Quadros com decodificação | 546 | 157 | 257 | 115 |
+| Reusadas sem decodificar | | 1.737 (16,9 M pixels) | | 678 (10,7 M pixels) |
+| Primeira vez, dos pixels decodificados | 55,1% | 99,7% | 62,1% | 99,6% |
+
+**A luta** (`--quadros 4673:7758`, 4:3):
+
+| | Chave 0 | Chave 1 |
+|---|---:|---:|
+| Texturas decodificadas | 1.805 (19,2 M pixels) | **217 (3,7 M pixels)**, todas de primeira vez |
+| Reusadas | | 1.588 (15,5 M pixels) |
+| Quadros com decodificação | 404 | 59 |
+| Quadros de 5 ms ou mais (estimado) | 3: 5338 (33,4 ms), 7015 (5,8), 7017 (5,2) | **0** |
+| O maior | 5338, 65 texturas, 3,2 M pixels | 4905, 15 texturas, 300 mil pixels, 3,1 ms |
+| Quadro 5338 (Blast 2) | 65 decodificadas | **0**; 65 reusadas |
+| Quadros 7015, 7016, 7017 | 5, 14 e 11 decodificadas | **0**; todas reusadas |
+
+O que sobra na luta é a primeira vez: o efeito dos quadros 4976 a 4980 (291 mil pixels por quadro, uns 3 ms) e a entrada dos
+lutadores (4767 a 4770). Fora da luta, os 3 quadros de 5 a 10 ms são da carga.
+
+### As provas no WSL [medido]
+
+Serviço `claude-texcache` (`systemd-run` de sistema, `--uid=codex`, `MemoryMax=5G`), script `~/texcache/rodada.sh`, resumo
+`~/texcache/provas.resumo` (termina em `FIM`), worktree `~/bt3xbx-texcache` do pacote `tc.bundle`, cada passo pesado dentro do
+`flock ~/wsl.lock`; o clone ficou em `f5-pingpong`, sem alterados.
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `43444ea4d03a6d448aa1ae74a631e35b356a7caa` na main `5021312` e no `bf7f96c` |
+| Teste de unidade do `Gs_TexOrigem` (VRAM aleatória, 3.000 texturas, os 13 formatos com os de profundidade, `tbw` 0 a 16): (1) um pixel ou uma cor mudada que muda a decodificação muda o hash; (2) a VRAM girada de `d` blocos, a textura em `tbp + d`: a mesma decodificação e o mesmo hash; (3) blocos de fora mudados: o mesmo hash; (4) o resto do bloco de uma paleta de 16 cores mudado: o mesmo hash | "tudo certo" na x86 e na **PPC de verdade** (`qemu-ppc`): 0 falhas em 2.911 e 2.902 decodificações mudadas, 3.000 giradas, 3.000 e 1.400 de fora. Visto falhando aqui: sem a paleta (290 hashes iguais com a decodificação diferente), o bloco de 4 bits errado (54), o bloco sem `tbp` (2.108 e 2.899 giradas), sem as 16 cores e sem as 256 |
+| A conferência de cada reuso (a decodificação refeita no reuso contra a cópia guardada dos pixels da vaga) | **1.737 de 1.737** iguais no `f5_duelo` e **678 de 678** no `f5_treino`, na `x86gv` e na `ppcg`, sem e com as duas threads; a conferência da decodificação por linha, 2.424 e 1.242 (chave 0), 687 e 564 (chave 1) iguais |
+| Listas normais (`BT3_GPU_NORMAL=2`), chave 0 contra 1, `x86gv` e `ppcg`, `f5_duelo` (8.380 quadros) e `f5_treino` (7.386), sem e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1` | os **8 pares** com `divergencias.py --normal` saindo 0; 0 desenhos com textura já solta; o resultado do roteiro igual (vencedor 0x2 razão 0x1 vida 0 27160 no duelo); os hashes de sempre com a chave 0 (`08a98b6d05b8775a` e `f76f0f6849b64629` na `x86gv`, `994627a2aecd429a` e `f76f0f6849b64629` na `ppcg`) |
+| As listas cruas, chave 0 contra 1 | diferentes (6.285 quadros no duelo, desde o 2095), como deve: o `gpu_falso` numera as texturas pela criação e hasheia cada envio; com 687 em vez de 2.424, os números e a seção 0 mudam |
+| O cache cheio (`BT3_GS_TEX_MAX=256`, a varredura a cada poucos quadros: 5.144 decodificações com a chave 0), chave 0 contra 1, sem e com as threads | normais iguais, e iguais às do cache livre; 2.576 reusos, todos conferidos iguais; 0 desenhos com textura já solta: a contagem de referências solta o recurso só com a última entrada |
+| **Sabotagem 1**: a chave sem a paleta (nem as 16 nem as 256 cores) | a conferência acusa **190 reusos diferentes** no duelo e **79** no treino; as listas normais diferem em 4.133 e 3.330 quadros; `divergencias.py` sai 1 |
+| **Sabotagem 2**: a contagem de referências ignorada (o recurso solto na saída de qualquer entrada), cache cheio, threads | **760.046 desenhos com textura já solta**, `divergencias.py` sai 1 |
+| O git do worktree no fim | 0 alterados (as sabotagens desfeitas e a `x86gv` refeita) |
+
+**Por que a lista normal precisou de `=2`.** Com a chave ligada, duas texturas de mesmo conteúdo viram o mesmo recurso, e dois
+desenhos seguidos que só diferiam no número da textura viram um (o `same_state` compara o número): com a primeira versão da chave,
+21 quadros do duelo (240 desenhos a menos) e 12 do treino com a lista normal diferente, todos só pelo `drawCount`. É a mesma
+imagem: o mesmo estado e os mesmos pixels num desenho só. O `BT3_GPU_NORMAL=2` conta como um só dois desenhos de primitivas
+seguidos, com a faixa contígua, que a junção do `gs_draw.c` juntaria se a textura valesse pelo conteúdo, e refaz a seção das
+contagens com esse número; com a chave 0 dá o mesmo que `=1` (o resultado das listas da chave 0 não mudou). A sabotagem 1 mostra
+que ela continua vendo uma textura errada.
+
+### A estimativa depois de (a) [estimado]
+
+No Blast 2 não sobra decodificação (0 de 65), nem o XG (o reuso não cria recurso): saem uns 33 ms de decodificação e uns 7 ms do
+XG, e entra o hash dos blocos, uns 2,5 MB (as 65 texturas em 8 e 4 bits), na faixa de 0,2 a 1 ns por byte no Xenon: de 0,5 a
+2,5 ms. Pela estimativa do pedido (as decodificações que sobram vezes 10,4 ns por pixel), o Blast 2 fica em 0 ms de textura e
+**a opção (b), a decodificação adiantada numa thread, não é precisa**: o maior quadro de textura da luta passa a ser o 4905, com
+3,1 ms. O que sobra no 5338 não é textura: a gravação ocupada tinha 77 a 80 ms com 33 + 7 de textura (seção 25), então uns 37 a
+40 ms são outro trabalho no mesmo quadro (o envio dos 3,2 MB ao novo endereço e os hashes das páginas, a cena da técnica). Se a
+rodada mostrar o 5338 ainda acima do período, o próximo passo é medir esse resto, não a thread.
+
+### A build do 360
+
+`build_f2.sh` no `bf7f96c` (carimbo `bf7f96c diff:da39a3ee5e`): 317 de 317 fontes sem erro, 985 avisos no total (os mesmos do
+`f5-zero`; 2 no `gs_draw`, 0 no `gs_core`), os mesmos **103 stubs**, `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e
+`default.swap` `abbd7589c8425797c4a2639068c9bf54` iguais, **`default.xex` `9e480e206afd114d140cf5ded4630f82`**. O `Gs_TexOrigem` em
+`0x8217ce78` no `default.map`; o `tex_solta` entrou em linha. A memória a mais: o `sOrig` (8.192 vagas de 32 bytes) e o balde
+(64 KB), uns 320 KB.
+
+### A rodada no console proposta
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-texcache`: `default.xex`/`.dat`/`.swap` do `bf7f96c`, `f5_duelo.txt` e
+`boot.txt` (iguais aos de `port/x360/roteiros/`), `ambiente_o0.txt` e `ambiente_o1.txt` (os `ambiente_z1.txt` da seção 25, o jogo
+como ele roda com `BT3_TEMPOS=0`, `BT3_PICOS=36` e `BT3_PICOS_TELA=1`, mais `BT3_TEX_ORIGEM=0` e `=1`; saves novos `saves_tc_o0` e
+`saves_tc_o1`); o `ambiente.txt` é a cópia do `ambiente_o0.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_o0.txt build/x360/f2/ambiente_o1.txt
+# abertura 1 (chave 0); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_o1.txt
+# abertura 2 (chave 1); baixar o log de novo
+python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "bf7f96c diff:da39a3ee5e"
+grep 'picos: tela' bt3xbx.log
+```
+
+**O que olhar:**
+
+1. **O quadro 5338 (Blast 2)**: na abertura 2, sem linha `picos: tela:` (nenhuma imagem longa nele) e sem a repetição na janela 1
+   (`picos: tela, janela:`); na linha `picos:   quadro 5338`, `texturas 0` e o tempo de textura só do hash (de 0,5 a 2,5 ms
+   [estimado]), contra 65 texturas e uns 33 ms na abertura 1. E a **gravação ocupada** nele: de 77 a 80 ms para uns 37 a 42
+   [estimado]; se ficar acima de 33,4 ms, o resto do quadro é a próxima medida (acima).
+2. **O quadro 7017** (e os 7015, 7016): `texturas 0`, a gravação ocupada perto dos vizinhos (17 a 19 ms), e sem linha `tela`.
+3. **O quadro 6960**, que não é de textura (seção 25): deve seguir igual nas duas; ele separa o que o cache tira do que é de fase.
+4. As imagens de 3 vblanks do combate (`passos: janela 2 tela:` e as linhas `tela`) contra a abertura 1 e as de 23/10; o tempo de
+   textura da luta inteira (uns 85 ms na rodada de 22/10) deve cair para uns 20%, mais o hash (3,7 M pixels contra 19,2 M).
+5. O resultado da luta igual (vencedor 0x2 razão 0x1 vida 0 27160), os passos por janela (684 e 2.334), nenhum `roteiro: FALHA`,
+   `vigia:` ou `CRASH`, e nenhuma linha `gs_d3d: branca` a mais (o descarte com recursos partilhados).
+
+**Recomendação.** Se a rodada confirmar o 5338 e o 7017 sem imagem longa e nada pior no resto, ligar `BT3_TEX_ORIGEM` por padrão
+(o mesmo conteúdo provado textura a textura no WSL; o risco que sobra é o descarte por memória do 360, que o WSL não exercita, e
+um recurso que só sai com a última entrada fica mais tempo na memória).
