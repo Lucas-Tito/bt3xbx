@@ -2691,7 +2691,7 @@ static void ed_fim(void) {
    em que cada entrada zera a profundidade) ou quando A, a profundidade e B não cabem (a escala 2) */
 static void ed_init(UINT tilesCor) {
     D3DSURFACE_PARAMETERS sp;
-    if (env_num("BT3_EDRAM_RESIDENTE", 0) == 0) {
+    if (env_num("BT3_EDRAM_RESIDENTE", 1) == 0) { /* ligada por padrão desde a rodada de 23/10 (a imagem igual, 3,35 ms) */
         return;
     }
     if (sModoZ == 0) {
@@ -3026,6 +3026,14 @@ static void area_init(void) {
     const char *a = getenv("BT3_ALVO_AREA"), *e = getenv("BT3_ESCALA"), *erroA = NULL, *erroE = NULL;
     int w = GS_W, h = GS_H, num = 1, den = 1;
     EscArea ar;
+    /* o padrão desde 23/10 (08-720p.md, decisão do Lucas): a 1,33 na área de 648 x 456 (864 x 608 na EDRAM), que coube no
+       ritmo da luta com o afiado e os alvos residentes; BT3_ESCALA=1 e BT3_ALVO_AREA=1024x1024 voltam ao de antes */
+    if (a == NULL) {
+        a = "648x456";
+    }
+    if (e == NULL) {
+        e = "1.33";
+    }
     if (e != NULL && *e != '\0' && !esc_le_escala(e, &num, &den)) {
         Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.5, 1.6 ou 2); fica 1", e);
         num = den = 1;

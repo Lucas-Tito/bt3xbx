@@ -491,6 +491,11 @@ Padrões que o Lucas deixou e que podem ser revertidos:
   tiling predicado, cabe na EDRAM se cada alvo tiver o tamanho da área usada (1280 x 896 com profundidade: 1.792 dos 2.048
   tiles), não os 1024 x 1024 fixos de hoje. A GPU da luta estava em 11 a 13 ms; a estimativa a 720p é de 25 a 35 ms (escala 2)
   ou 18 a 25 (perto de 1,6): medir antes de decidir a escala.
+  **Decidido em 23/10/2026:** a escala padrão é **1,33** (área de 648 x 456, 864 x 608 na EDRAM), uniforme, com o afiado
+  da arte 2D (`BT3_AFIADO=1`) e os alvos residentes na EDRAM (`BT3_EDRAM_RESIDENTE=1`), todos ligados por padrão. Medida no
+  console pelo roteiro `f5_duelo` em 16:9: a GPU da pausa em 26,6 ms sem as marcas, a luta com 0,30% das imagens em 3
+  vblanks e nenhuma em 4. A 1,5 e a 1,6 não cabem (35,6 e 40,5 ms com as otimizações) e o Lucas desistiu delas: o próximo
+  passo de imagem é o FXAA com a interface protegida ([F5/08-720p](plano/F5/08-720p.md), seções 9 a 11).
 - **Saída 1280 x 720**, a imagem 4:3 (512 x 448 do GS) em 960 x 720 no meio da tela, filtro linear.
 - **O desenho na thread do jogo,** com present a cada quadro do GS. A main cria o dispositivo e o solta
   (`ReleaseThreadOwnership`); o backend o pega no init; `GsD3d_Soltar` o devolve no fim do jogo ou numa queda, e a main
