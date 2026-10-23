@@ -1861,6 +1861,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **O `git stash` é um só para todos os worktrees do repositório:** apareceu na lista um stash de outro agente (`f5-envio-rapido`).
   Um `stash pop` no momento errado aplicaria o trabalho dele no seu worktree. Para tirar um pedaço de um commit, guarde a cópia do
   arquivo no scratchpad e volte com ela.
+- **A estimativa de ciclos do `fxc` não prevê o ganho no console** (a rodada de 23/10): o especializado de 16 ciclos contra 74 a 80
+  tirou 2,3 a 3,5 ms na 1,5, um quinto do que o shader trivial tira (11 a 16 ms), e nada no `vu4`, onde o trivial tira dois terços.
+  O que pesa é a leitura da textura, que o trivial não faz. Rode o diagnóstico do teto (o trivial) antes de investir numa variante, e
+  uma variante "só a leitura" separa a leitura da conta.
+- **Na luta, a GPU por classe só existe em três trechos:** o relatório de 60 quadros do `gs_d3d` não sai dentro das janelas do
+  `passos` (o começo, a pausa e o fim do combate, quadros 4.619, 5.399 e 7.799 no `f5_duelo`). Compare as aberturas trecho a trecho
+  (os desenhos por quadro iguais confirmam o mesmo conteúdo), não pela mediana de muitos trechos.
+- **O número de capturas do `BT3_SHOT` depende de quanto o console ficou ligado depois do `fim` do roteiro:** uma a cada 600
+  quadros até o jogo sair. Compare só os quadros que as duas aberturas têm.
+- **Logs de rodada não moram no scratchpad:** um reinício da máquina o limpa (os logs da 1 e da 1,5 de 22/10 se perderam). Guarde
+  em `build/sessao_<data>/<nome>` e escreva na nota os números que a próxima comparação vai usar.
 
 
 ### As texturas novas (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 17)
