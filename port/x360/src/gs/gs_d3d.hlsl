@@ -39,8 +39,48 @@ sampler2D dateTex : register(s1); // cópia da cor do alvo, para o teste de alfa
 
 struct GsPixel { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 vpos : VPOS; };
 
-// O corpo do pixel shader das primitivas do GS e dos programas da VU1 (ps_gs e ps_gsz abaixo).
-float4 gs_pixel(float4 cor, float3 stq, float2 vpos) {
+// (F5, etapa 8, 720p, BT3_AFIADO; docs/x360/plano/F5/08-720p.md, seção 10) A arte 2D lida por pixel de saída com o
+// bilinear afiado, nas escalas maiores que 1 (o ps_gs_af, que o prepara do gs_d3d.cpp escolhe só para a arte 2D com
+// textura da memória do GS). O sampler fica no ponto e as quatro leituras caem nos centros dos texels: a mistura é a conta
+// daqui, igual com o filtro do jogo linear ou no ponto. Por eixo, com p texels por pixel de saída:
+//   - p perto de 1: o texel do centro do pixel (cada coluna uma vez, nítida; o HUD estreitado do 16:9 na 1,33);
+//   - p < 1 (ampliada) e a arte nítida (o jogo pediu o ponto, ou um texel por pixel do GS): o texel inteiro no miolo e a
+//     mistura com o vizinho só a menos de meio pixel de saída da borda, com o peso da parte do pixel que cai nele (a
+//     média do pixel de saída sobre os texels): no máximo um pixel misturado por borda;
+//   - senão, o filtro do jogo no centro do pixel (o ponto: o texel do centro; o linear: o bilinear de sempre).
+float4 afiadoJogo : register(c8); // x: 1 se o jogo pediu o filtro linear (o sampler fica no ponto)
+void afiado_eixo(float t, float p, float pGs, out float a, out float b, out float w) {
+    float i = floor(t);
+    float c = t - i - 0.5f;                        // do centro do texel: -0,5 a 0,5
+    float r = 0.5f - 0.5f * p;                     // a meia largura do miolo, em texels
+    float g = (c - clamp(c, -r, r)) / max(p, 1.0f / 4096.0f); // o peso do vizinho, com o lado: -0,5 a 0,5
+    bool um = abs(p - 1.0f) < 0.02f;
+    bool nitido = afiadoJogo.x == 0.0f || abs(pGs - 1.0f) < 0.02f;
+    bool afia = !um && nitido && p < 1.0f;
+    bool lin = !um && !nitido;
+    float il = floor(t - 0.5f);
+    a = lin ? il + 0.5f : i + 0.5f;
+    b = lin ? il + 1.5f : afia ? i + 0.5f + sign(g) : a;
+    w = lin ? t - 0.5f - il : afia ? abs(g) : 0.0f;
+}
+float4 afiado_le(float2 uv0, float2 dx, float2 dy) {
+    float2 tam = alvo.zw;
+    float2 p = float2(abs(dx.x) + abs(dy.x), abs(dx.y) + abs(dy.y)) * tam; // texels por pixel de saída
+    float2 t = uv0 * tam;
+    float s = abs(misc.w); // pixels de saída por pixel do GS
+    float2 a, b, w;
+    afiado_eixo(t.x, p.x, p.x * s, a.x, b.x, w.x);
+    afiado_eixo(t.y, p.y, p.y * s, a.y, b.y, w.y);
+    a /= tam;
+    b /= tam;
+    float4 t00 = tex2Dlod(tex, float4(a.x, a.y, 0.0f, 0.0f)), t10 = tex2Dlod(tex, float4(b.x, a.y, 0.0f, 0.0f));
+    float4 t01 = tex2Dlod(tex, float4(a.x, b.y, 0.0f, 0.0f)), t11 = tex2Dlod(tex, float4(b.x, b.y, 0.0f, 0.0f));
+    return lerp(lerp(t00, t10, w.x), lerp(t01, t11, w.x), w.y);
+}
+
+// O corpo do pixel shader das primitivas do GS e dos programas da VU1 (ps_gs e ps_gsz abaixo). (BT3_AFIADO) afiado, só no
+// ps_gs_af: a leitura da arte 2D pelo afiado_le; falso nos outros, que saem como antes.
+float4 gs_pixel(float4 cor, float3 stq, float2 vpos, uniform bool afiado) {
     float k = 255.0f / 128.0f;
     // o centro do pixel em qualquer convenção do VPOS (inteiro ou com o meio pixel): o gl_FragCoord do GL
     float2 f = floor(vpos) + 0.5f;
@@ -57,24 +97,29 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos) {
     float2 uv0 = stq.xy / stq.z;
     float2 dx = ddx(uv0), dy = ddy(uv0);
     float2 uv = uv0;
-    if (misc.w != 0.0f) {
-        // arte 2D: a coordenada onde o GS a toma, no canto do pixel do GS a que este pixel pertence (gs.frag).
-        // (o caminho do pacote de texturas, misc.w < 0, não existe no 360: sem pacote, ver TexPack_Count)
-        float s = abs(misc.w);
-        float2 g = floor(f / s) * s;
-        uv = uv0 - (dx * (f.x - g.x) + dy * (f.y - g.y));
-        // Desenhada texel por pixel do GS, a arte 2D é lida no ponto, como o rasterizador de referência faz (o texel
-        // u >> 4 do pixel inteiro): a coordenada do GS cai na borda do texel, e o filtro linear ali faz a média de
-        // quatro (o título saía macio). Ampliada ou reduzida, segue com o filtro que o jogo pediu.
-        float2 passo = float2(abs(dx.x) + abs(dy.x), abs(dx.y) + abs(dy.y)) * s * alvo.zw; // texels por pixel do GS
-        if (abs(passo.x - 1.0f) < 0.02f && abs(passo.y - 1.0f) < 0.02f) {
-            uv = (floor(uv * alvo.zw + 1.0f / 64.0f) + 0.5f) / alvo.zw;
+    float4 t;
+    if (afiado) {
+        t = afiado_le(uv0, dx, dy);
+    } else {
+        if (misc.w != 0.0f) {
+            // arte 2D: a coordenada onde o GS a toma, no canto do pixel do GS a que este pixel pertence (gs.frag).
+            // (o caminho do pacote de texturas, misc.w < 0, não existe no 360: sem pacote, ver TexPack_Count)
+            float s = abs(misc.w);
+            float2 g = floor(f / s) * s;
+            uv = uv0 - (dx * (f.x - g.x) + dy * (f.y - g.y));
+            // Desenhada texel por pixel do GS, a arte 2D é lida no ponto, como o rasterizador de referência faz (o texel
+            // u >> 4 do pixel inteiro): a coordenada do GS cai na borda do texel, e o filtro linear ali faz a média de
+            // quatro (o título saía macio). Ampliada ou reduzida, segue com o filtro que o jogo pediu.
+            float2 passo = float2(abs(dx.x) + abs(dy.x), abs(dx.y) + abs(dy.y)) * s * alvo.zw; // texels por pixel do GS
+            if (abs(passo.x - 1.0f) < 0.02f && abs(passo.y - 1.0f) < 0.02f) {
+                uv = (floor(uv * alvo.zw + 1.0f / 64.0f) + 0.5f) / alvo.zw;
+            }
         }
+        if (modo.x == 2.0f) {
+            uv = clamp(uv, rect.xy, rect.zw);
+        }
+        t = tex2Dgrad(tex, uv * esc.xy, dx * esc.xy, dy * esc.xy);
     }
-    if (modo.x == 2.0f) {
-        uv = clamp(uv, rect.xy, rect.zw);
-    }
-    float4 t = tex2Dgrad(tex, uv * esc.xy, dx * esc.xy, dy * esc.xy);
     if (modo.x != 0.0f) {
         if (modo.x != 2.0f) {
             t.a *= k; // textura da memória do GS: o alfa do GS (0x80 opaco, até 0xFF)
@@ -106,7 +151,10 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos) {
 }
 
 float4 ps_gs(GsPixel e) : COLOR0 {
-    return gs_pixel(e.cor, e.stq, e.vpos);
+    return gs_pixel(e.cor, e.stq, e.vpos, false);
+}
+float4 ps_gs_af(GsPixel e) : COLOR0 {
+    return gs_pixel(e.cor, e.stq, e.vpos, true);
 }
 
 // F5, etapa 7 (segunda parte): o pixel shader dos programas da VU1 com o recorte pelo w (ver vu_pos abaixo). A
@@ -116,7 +164,7 @@ struct GsPixelZ { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 zw : TEXCO
 struct GsSaidaZ { float4 cor : COLOR0; float z : DEPTH; };
 GsSaidaZ ps_gsz(GsPixelZ e) {
     GsSaidaZ s;
-    s.cor = gs_pixel(e.cor, e.stq, e.vpos);
+    s.cor = gs_pixel(e.cor, e.stq, e.vpos, false);
     s.z = saturate(e.zw.x / e.zw.y);
     return s;
 }
@@ -201,6 +249,23 @@ CopiaSaida vs_copia(CopiaEntrada e) {
 
 float4 ps_copia(float2 uv : TEXCOORD0) : COLOR0 {
     return tex2D(tex, uv);
+}
+
+// (BT3_AFIADO, bit 2) A cópia para a tela com o bilinear afiado: a imagem do GS ampliada (na 1,33 com o 16:9, 1,875 x
+// 1,205) com cada pixel inteiro no miolo e a mistura só a menos de meio pixel da tela da borda; reduzida (a escala 2),
+// o bilinear de sempre. O sampler é o linear da cópia: uma leitura, no ponto que dá o peso certo aos dois texels.
+float4 copiaTam : register(c9); // xy: o tamanho da textura em texels; zw: 1 / xy
+float afiado_copia_eixo(float t, float p) {
+    float i = floor(t);
+    float c = t - i - 0.5f;
+    float r = max(0.5f - 0.5f * p, 0.0f);
+    return i + 0.5f + (c - clamp(c, -r, r)) / clamp(p, 1.0f / 4096.0f, 1.0f);
+}
+float4 ps_copia_af(float2 uv : TEXCOORD0) : COLOR0 {
+    float2 t = uv * copiaTam.xy;
+    float2 p = float2(abs(ddx(t.x)) + abs(ddy(t.x)), abs(ddx(t.y)) + abs(ddy(t.y)));
+    float2 q = float2(afiado_copia_eixo(t.x, p.x), afiado_copia_eixo(t.y, p.y)) * copiaTam.zw;
+    return tex2Dlod(tex, float4(q, 0.0f, 0.0f));
 }
 
 // ---- F6, etapa 6: o filme direto (filme_desenha no gs_d3d.cpp, port/x360/src/f2/filme360.c). A vaga é uma textura L8
