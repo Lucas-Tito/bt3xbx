@@ -26,6 +26,26 @@ GsSaida vs_gs(GsEntrada e) {
     return s;
 }
 
+// (720p, BT3_AFIADO, bit 1) O vs_gs da arte 2D afiada: o mesmo, mais a caixa da peça (TEXCOORD1: o menor e o maior uv dos
+// vértices da primitiva, que o gs_d3d.cpp põe em cada um; ver chamadas_af). Igual nos três vértices, a interpolação a
+// entrega igual em todos os pixels.
+struct GsEntradaAf { float3 pos : POSITION; float4 cor : COLOR0; float3 stq : TEXCOORD0; float4 caixa : TEXCOORD1; };
+struct GsSaidaAf { float4 pos : POSITION; float4 cor : COLOR0; float3 stq : TEXCOORD0; float4 caixa : TEXCOORD1; };
+GsSaidaAf vs_gs_af(GsEntradaAf e) {
+    GsEntrada g;
+    GsSaida o;
+    GsSaidaAf s;
+    g.pos = e.pos;
+    g.cor = e.cor;
+    g.stq = e.stq;
+    o = vs_gs(g);
+    s.pos = o.pos;
+    s.cor = o.cor;
+    s.stq = o.stq;
+    s.caixa = e.caixa;
+    return s;
+}
+
 float4 modo : register(c0); // x: textura (0 nenhuma, 1 da memória do GS, 2 um alvo, 3 pacote), y: TFX, z: TCC, w: teste de alfa (0 desligado, senão ATST + 1)
 float4 misc : register(c1); // x: AREF (0..255); y: DATE (0, 1 passa com o bit 7 zerado, 2 com ele ligado); z: FBA; w: pixels de saída por pixel do GS na arte 2D (0: não; a escala, 720p, etapa 3)
 float4 rect : register(c2); // modo.x == 2: a faixa de uv que pode ser lida
@@ -48,29 +68,44 @@ struct GsPixel { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 vpos : VPOS
 //     mistura com o vizinho só a menos de meio pixel de saída da borda, com o peso da parte do pixel que cai nele (a
 //     média do pixel de saída sobre os texels): no máximo um pixel misturado por borda;
 //   - senão, o filtro do jogo no centro do pixel (o ponto: o texel do centro; o linear: o bilinear de sempre).
+// A peça (a caixa: o menor e o maior uv dos vértices da primitiva, em texels, lo e hi por eixo). O GS lê a arte 2D no
+// canto de cada pixel dele e fica com o texel inteiro: a fração da coordenada no canto da peça some (o HUD manda o uv no
+// centro do texel, u * 16 + 8: 0,5). A arte da peça ocupa então os texels de lo - fr a hi - fr, a grade que o GS mostra;
+// a leitura por pixel de saída fica nessa grade (sem isso, meio texel deslocada: a última linha da peça puxava a linha
+// de baixo da folha, e o HUD estreitado na 1,33, com p = 1 e a borda da peça em pixel inteiro, lia na fronteira entre
+// dois texels) e as duas leituras, presas aos centros dos texels da peça: nada de fora dela entra na mistura. O linear
+// do jogo (lin) fica como antes: no centro do pixel ele não passa do que o GS lê no canto. Com um texel por pixel e a
+// borda da peça bem no centro de um pixel, a leitura cai na fronteira entre dois texels: 1/64 de texel no sentido do
+// eixo da tela (sentido: a derivada do t nele) decide pelo texel da metade de baixo ou da direita do pixel, o mesmo com a
+// peça espelhada (sem isso, um texel em dois pixels e o da ponta perdido).
 float4 afiadoJogo : register(c8); // x: 1 se o jogo pediu o filtro linear (o sampler fica no ponto)
-void afiado_eixo(float t, float p, float pGs, out float a, out float b, out float w) {
-    float i = floor(t);
-    float c = t - i - 0.5f;                        // do centro do texel: -0,5 a 0,5
-    float r = 0.5f - 0.5f * p;                     // a meia largura do miolo, em texels
-    float g = (c - clamp(c, -r, r)) / max(p, 1.0f / 4096.0f); // o peso do vizinho, com o lado: -0,5 a 0,5
+void afiado_eixo(float t, float p, float pGs, float lo, float hi, float sentido, out float a, out float b, out float w) {
     bool um = abs(p - 1.0f) < 0.02f;
     bool nitido = afiadoJogo.x == 0.0f || abs(pGs - 1.0f) < 0.02f;
     bool afia = !um && nitido && p < 1.0f;
     bool lin = !um && !nitido;
+    float fr = lo - floor(lo + 1.0f / 64.0f);      // a fração que o canto do GS joga fora (0 ou 0,5 na prática)
+    float e0 = lo - fr + 0.5f;                     // o centro do primeiro texel da peça
+    float e1 = max(hi - fr - 0.5f, e0);            // o do último (ao menos um texel: uma linha ou um ponto)
+    float te = lin ? t : t - fr + (um ? sign(sentido) / 64.0f : 0.0f);
+    float i = floor(te);
+    float c = te - i - 0.5f;                       // do centro do texel: -0,5 a 0,5
+    float r = 0.5f - 0.5f * p;                     // a meia largura do miolo, em texels
+    float g = (c - clamp(c, -r, r)) / max(p, 1.0f / 4096.0f); // o peso do vizinho, com o lado: -0,5 a 0,5
     float il = floor(t - 0.5f);
-    a = lin ? il + 0.5f : i + 0.5f;
-    b = lin ? il + 1.5f : afia ? i + 0.5f + sign(g) : a;
+    a = lin ? il + 0.5f : clamp(i + 0.5f, e0, e1);
+    b = lin ? il + 1.5f : afia ? clamp(i + 0.5f + sign(g), e0, e1) : a;
     w = lin ? t - 0.5f - il : afia ? abs(g) : 0.0f;
 }
-float4 afiado_le(float2 uv0, float2 dx, float2 dy) {
+float4 afiado_le(float2 uv0, float2 dx, float2 dy, float4 caixa) {
     float2 tam = alvo.zw;
     float2 p = float2(abs(dx.x) + abs(dy.x), abs(dx.y) + abs(dy.y)) * tam; // texels por pixel de saída
     float2 t = uv0 * tam;
     float s = abs(misc.w); // pixels de saída por pixel do GS
     float2 a, b, w;
-    afiado_eixo(t.x, p.x, p.x * s, a.x, b.x, w.x);
-    afiado_eixo(t.y, p.y, p.y * s, a.y, b.y, w.y);
+    float4 cx = caixa * tam.xyxy; // a caixa da peça em texels
+    afiado_eixo(t.x, p.x, p.x * s, cx.x, cx.z, dx.x, a.x, b.x, w.x);
+    afiado_eixo(t.y, p.y, p.y * s, cx.y, cx.w, dy.y, a.y, b.y, w.y);
     a /= tam;
     b /= tam;
     float4 t00 = tex2Dlod(tex, float4(a.x, a.y, 0.0f, 0.0f)), t10 = tex2Dlod(tex, float4(b.x, a.y, 0.0f, 0.0f));
@@ -79,8 +114,9 @@ float4 afiado_le(float2 uv0, float2 dx, float2 dy) {
 }
 
 // O corpo do pixel shader das primitivas do GS e dos programas da VU1 (ps_gs e ps_gsz abaixo). (BT3_AFIADO) afiado, só no
-// ps_gs_af: a leitura da arte 2D pelo afiado_le; falso nos outros, que saem como antes.
-float4 gs_pixel(float4 cor, float3 stq, float2 vpos, uniform bool afiado) {
+// ps_gs_af: a leitura da arte 2D pelo afiado_le, com a caixa da peça; falso nos outros, que saem como antes (a caixa
+// não é lida).
+float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool afiado) {
     float k = 255.0f / 128.0f;
     // o centro do pixel em qualquer convenção do VPOS (inteiro ou com o meio pixel): o gl_FragCoord do GL
     float2 f = floor(vpos) + 0.5f;
@@ -99,7 +135,7 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, uniform bool afiado) {
     float2 uv = uv0;
     float4 t;
     if (afiado) {
-        t = afiado_le(uv0, dx, dy);
+        t = afiado_le(uv0, dx, dy, caixa);
     } else {
         if (misc.w != 0.0f) {
             // arte 2D: a coordenada onde o GS a toma, no canto do pixel do GS a que este pixel pertence (gs.frag).
@@ -151,10 +187,11 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, uniform bool afiado) {
 }
 
 float4 ps_gs(GsPixel e) : COLOR0 {
-    return gs_pixel(e.cor, e.stq, e.vpos, false);
+    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false);
 }
-float4 ps_gs_af(GsPixel e) : COLOR0 {
-    return gs_pixel(e.cor, e.stq, e.vpos, true);
+struct GsPixelAf { float4 cor : COLOR0; float3 stq : TEXCOORD0; float4 caixa : TEXCOORD1; float2 vpos : VPOS; };
+float4 ps_gs_af(GsPixelAf e) : COLOR0 {
+    return gs_pixel(e.cor, e.stq, e.vpos, e.caixa, true);
 }
 
 // F5, etapa 7 (segunda parte): o pixel shader dos programas da VU1 com o recorte pelo w (ver vu_pos abaixo). A
@@ -164,7 +201,7 @@ struct GsPixelZ { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 zw : TEXCO
 struct GsSaidaZ { float4 cor : COLOR0; float z : DEPTH; };
 GsSaidaZ ps_gsz(GsPixelZ e) {
     GsSaidaZ s;
-    s.cor = gs_pixel(e.cor, e.stq, e.vpos, false);
+    s.cor = gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false);
     s.z = saturate(e.zw.x / e.zw.y);
     return s;
 }

@@ -17,9 +17,16 @@
  *     certo; reduzida, o bilinear de sempre.
  * E imprime, contra o caminho de hoje (a leitura por pixel do GS), as colunas perdidas e as larguras dos texels.
  *
+ * A peça numa folha (a correção depois da rodada de 23/10): a mesma linha de N texels no meio de uma folha cujos texels de
+ * fora são de outra cor (a peça vizinha), com o uv dos vértices na borda do texel (fração 0) ou no centro (0,5: o HUD manda
+ * u * 16 + 8), espelhada ou não, nas escalas maiores que 1, estreitada ou não, nas 16 frações e com o jogo no ponto e no
+ * linear. Na arte nítida e com um texel por pixel: nenhum pixel com peso de um texel de fora; nenhum texel da peça perdido;
+ * um texel por pixel com cada texel em exatamente um pixel; ampliada, cada texel de dentro com o peso 1 / p.
+ *
  *   gcc -std=c89 -pedantic -Wall -Wextra -Werror port/x360/tools/teste_afiado.c -lm -o /tmp/teste_afiado
  *   /tmp/teste_afiado            # 0: tudo bate
  *   /tmp/teste_afiado --estraga  # o controle: o bilinear comum no lugar do afiado; TEM de sair com 1
+ *   /tmp/teste_afiado --sem-caixa  # o controle da peça: o afiado de antes (sem a caixa nem a fração); TEM de sair com 1
  */
 #include <math.h>
 #include <stdio.h>
@@ -31,7 +38,7 @@
    conta (o centro do pixel a exatamente meio pixel da borda dá peso 0 na conta exata e uns 1e-4 em float) */
 #define MISTURA (1.0f / 512.0f)
 
-static int sFalhas, sCasos, sEstraga, sVerboso;
+static int sFalhas, sCasos, sEstraga, sSemCaixa, sVerboso;
 
 static void confere(int ok, const char *o_que) {
     sCasos++;
@@ -47,22 +54,33 @@ static float fl(float x) { return (float)floor(x); }
 static float cl(float x, float a, float b) { return x < a ? a : x > b ? b : x; }
 static float sg(float x) { return x > 0.0f ? 1.0f : x < 0.0f ? -1.0f : 0.0f; }
 
-/* o afiado_eixo do gs_d3d.hlsl (jogo: o afiadoJogo.x, 1 com o filtro linear); com --estraga, o bilinear comum */
-static void afiado_eixo(float t, float p, float pGs, int jogo, float *a, float *b, float *w) {
-    float i = fl(t);
-    float c = t - i - 0.5f;
-    float r = 0.5f - 0.5f * p;
-    float g = (c - cl(c, -r, r)) / (p > 1.0f / 4096.0f ? p : 1.0f / 4096.0f);
+/* o afiado_eixo do gs_d3d.hlsl (jogo: o afiadoJogo.x, 1 com o filtro linear; lo e hi: a caixa da peça, o menor e o maior
+   uv dos vértices em texels; sentido: a derivada do t no eixo da tela); com --estraga, o bilinear comum; com --sem-caixa, o de antes da correção (sem a fração do
+   canto e sem prender as leituras à peça) */
+static void afiado_eixo(float t, float p, float pGs, int jogo, float lo, float hi, float sentido, float *a, float *b,
+                        float *w) {
     int um = fabs(p - 1.0f) < 0.02f;
     int nitido = jogo == 0 || fabs(pGs - 1.0f) < 0.02f;
     int afia = !um && nitido && p < 1.0f;
     int lin = !um && !nitido;
-    float il = fl(t - 0.5f);
+    float fr = lo - fl(lo + 1.0f / 64.0f);
+    float e0 = lo - fr + 0.5f, e1 = hi - fr - 0.5f > e0 ? hi - fr - 0.5f : e0;
+    float te, i, c, r, g, il = fl(t - 0.5f);
+    if (sSemCaixa) {
+        fr = 0.0f;
+        e0 = -1e9f;
+        e1 = 1e9f;
+    }
+    te = lin ? t : t - fr + (um && !sSemCaixa ? sg(sentido) / 64.0f : 0.0f);
+    i = fl(te);
+    c = te - i - 0.5f;
+    r = 0.5f - 0.5f * p;
+    g = (c - cl(c, -r, r)) / (p > 1.0f / 4096.0f ? p : 1.0f / 4096.0f);
     if (sEstraga) {
         lin = 1;
     }
-    *a = lin ? il + 0.5f : i + 0.5f;
-    *b = lin ? il + 1.5f : afia ? i + 0.5f + sg(g) : *a;
+    *a = lin ? il + 0.5f : cl(i + 0.5f, e0, e1);
+    *b = lin ? il + 1.5f : afia ? cl(i + 0.5f + sg(g), e0, e1) : *a;
     *w = lin ? t - 0.5f - il : afia ? (float)fabs(g) : 0.0f;
 }
 
@@ -100,7 +118,7 @@ static int desenha(double s, double x0, double gsPorTexel, int jogo, int hoje, P
             b = a;
             w = 0.0f;
         } else {
-            afiado_eixo(t, p, p * sf, jogo, &a, &b, &w);
+            afiado_eixo(t, p, p * sf, jogo, 0.0f, (float)N, 1.0f, &a, &b, &w);
         }
         o[n].px = i;
         o[n].ta = (int)floor(a);
@@ -248,6 +266,105 @@ static void arte(void) {
     }
 }
 
+/* A peça numa folha: a linha de N texels começa no texel P0 de uma folha; os texels fora de [P0, P0 + N) são da peça
+   vizinha. Os vértices levam o uv P0 + fr e P0 + N + fr (espelhada: ao contrário), como o gs_draw.c os grava; a GPU
+   interpola o uv no centro do pixel, e o afiado_eixo recebe a caixa dos vértices. */
+#define P0 64
+static void folha(void) {
+    static const double kFr[3] = {0.0, 0.5, 0.25};
+    int ie, larg, ifr, esp, jogo, k, i, j, n;
+    int vizinho = 0, perdidos = 0, dobrados = 0, pesoErr = 0, casosNit = 0, casosLin = 0, linFora = 0;
+    char txt[240];
+    for (ie = 1; ie < 4; ie++) {
+        double s = kEsc[ie];
+        for (larg = 0; larg < 2; larg++) {
+            double gpt = larg ? 0.75 : 1.0;
+            float p = (float)(1.0 / (gpt * s)), pGs = p * (float)s;
+            int um = fabs(p - 1.0f) < 0.02f;
+            for (ifr = 0; ifr < 3; ifr++) {
+                float lo = (float)(P0 + kFr[ifr]), hi = (float)(P0 + N + kFr[ifr]);
+                for (esp = 0; esp < 2; esp++) {
+                    for (jogo = 0; jogo < 2; jogo++) {
+                        int nitido = jogo == 0 || fabs(pGs - 1.0f) < 0.02f;
+                        for (k = 0; k < 16; k++) {
+                            double x0 = 100.0 + k / 16.0, e0 = x0 * s, e1 = (x0 + N * gpt) * s;
+                            int cont[N], fora = 0;
+                            double peso[N];
+                            const char *nome;
+                            for (j = 0; j < N; j++) {
+                                cont[j] = 0;
+                                peso[j] = 0.0;
+                            }
+                            n = 0;
+                            for (i = (int)floor(e0) - 1; i <= (int)ceil(e1) + 1; i++) {
+                                double c = i + 0.5, d;
+                                float t, a, b, w;
+                                int ta, tb, mist;
+                                if (c < e0 || c >= e1) {
+                                    continue;
+                                }
+                                d = (c / s - x0) / gpt; /* texels desde a borda esquerda da peça na tela */
+                                t = (float)(esp ? hi - d : lo + d);
+                                afiado_eixo(t, p, pGs, jogo, lo, hi, esp ? -1.0f : 1.0f, &a, &b, &w);
+                                ta = (int)floor(a);
+                                tb = (int)floor(b);
+                                mist = w > MISTURA && ta != tb;
+                                n++;
+                                if ((ta < P0 || ta >= P0 + N) && (1.0f - w > MISTURA || !mist)) {
+                                    fora = 1;
+                                }
+                                if ((tb < P0 || tb >= P0 + N) && mist) {
+                                    fora = 1;
+                                }
+                                if (ta >= P0 && ta < P0 + N) {
+                                    peso[ta - P0] += mist ? 1.0 - w : 1.0;
+                                    cont[ta - P0] += !mist;
+                                }
+                                if (tb >= P0 && tb < P0 + N && mist) {
+                                    peso[tb - P0] += w;
+                                }
+                            }
+                            nome = larg ? "estreitada" : "1 por pixel do GS";
+                            if (!nitido && !um) {
+                                /* o linear do jogo: o bilinear de sempre no centro do pixel (fora da correção): só contado */
+                                casosLin++;
+                                linFora += fora;
+                                continue;
+                            }
+                            casosNit++;
+                            sprintf(txt, "folha: escala %s, %s, fração %.2f%s, jogo %s, X0 %.4f: um pixel com a cor da peça "
+                                         "vizinha", kEscNome[ie], nome, kFr[ifr], esp ? ", espelhada" : "",
+                                    jogo ? "linear" : "ponto", x0);
+                            confere(!fora, txt);
+                            vizinho += fora;
+                            for (j = 0; j < N; j++) {
+                                sprintf(txt, "folha: escala %s, %s, fração %.2f%s, jogo %s, X0 %.4f: texel %d da peça com "
+                                             "peso %.4f em %d pixels sem mistura", kEscNome[ie], nome, kFr[ifr],
+                                        esp ? ", espelhada" : "", jogo ? "linear" : "ponto", x0, j, peso[j], cont[j]);
+                                confere(peso[j] > 1e-6, txt);
+                                perdidos += peso[j] <= 1e-6;
+                                if (um) {
+                                    confere(cont[j] == 1 && peso[j] > 0.999 && peso[j] < 1.001, txt);
+                                    dobrados += cont[j] > 1;
+                                } else if (j > 0 && j < N - 1) {
+                                    confere(fabs(peso[j] - 1.0 / p) < 2e-3, txt);
+                                    pesoErr += fabs(peso[j] - 1.0 / p) >= 2e-3;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    printf("A peça numa folha (N = %d texels a partir do %d, os de fora de outra cor; uv dos vértices com a fração 0, 0,5 "
+           "e 0,25, espelhada ou não, escalas 1,33, 1,5 e 1,6, estreitada ou não, 16 posições):\n", N, P0);
+    printf("  arte nítida e um texel por pixel: %d casos; com a cor da vizinha %d, com texel da peça perdido %d, com texel "
+           "em dois pixels %d, com peso fora de 1 / p %d\n", casosNit, vizinho, perdidos, dobrados, pesoErr);
+    printf("  o linear do jogo (o bilinear de sempre, fora da correção): %d casos, %d com a cor da vizinha\n", casosLin,
+           linFora);
+}
+
 /* A cópia para a tela: src texels da imagem do GS para dst pixels; o bilinear do hardware no ponto do afiado_copia_eixo */
 static void copia(const char *nome, double src, int dst) {
     float p = (float)(src / dst);
@@ -304,9 +421,11 @@ int main(int argc, char **argv) {
     int i;
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--estraga") == 0) sEstraga = 1;
+        if (strcmp(argv[i], "--sem-caixa") == 0) sSemCaixa = 1;
         if (strcmp(argv[i], "-v") == 0) sVerboso = 1;
     }
     arte();
+    folha();
     printf("A cópia para a tela (a área de 512 x 448 do GS na escala, para 1280 x 720 no 16:9 ou 960 x 720 no 4:3):\n");
     copia("escala 1, 16:9, horizontal", 512.0, 1280);
     copia("escala 1, 16:9 e 4:3, vertical", 448.0, 720);
@@ -319,6 +438,7 @@ int main(int argc, char **argv) {
     copia("escala 1,6, vertical", 716.8, 720);
     copia("escala 2, 16:9, horizontal", 1024.0, 1280);
     copia("escala 2, vertical", 896.0, 720);
-    printf("%d casos, %d falhas%s\n", sCasos, sFalhas, sEstraga ? " (com --estraga: o bilinear comum)" : "");
+    printf("%d casos, %d falhas%s%s\n", sCasos, sFalhas, sEstraga ? " (com --estraga: o bilinear comum)" : "",
+           sSemCaixa ? " (com --sem-caixa: o afiado de antes da correção)" : "");
     return sFalhas != 0;
 }
