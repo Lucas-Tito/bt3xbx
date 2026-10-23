@@ -305,6 +305,54 @@ float4 ps_copia_af(float2 uv : TEXCOORD0) : COLOR0 {
     return tex2Dlod(tex, float4(q, 0.0f, 0.0f));
 }
 
+// (720p, BT3_FXAA; docs/x360/plano/F5/08-720p.md, seção 12) O FXAA de console numa passada, na resolução interna: a parte
+// usada da textura do quadro, pixel a pixel (o vs_copia leva o retângulo; uv no centro do texel), antes da cópia para a tela.
+// Escrito a partir do algoritmo publicado do FXAA 3.11 (a variante de console). A luma é calculada: o alfa é o do GS. O
+// sampler é o linear da cópia, preso na borda; tex2Dlod porque as leituras depois do teste estão num ramo. copiaTam (c9): zw
+// é um texel em uv. Sai com o alfa do centro. O modelo das mesmas contas: port/x360/tools/teste_fxaa.c.
+#define FXAA_LIMIAR 0.125f    // o contraste mínimo, relativo ao máximo dos cantos
+#define FXAA_LIMIAR_MIN 0.05f // e o absoluto (o escuro)
+#define FXAA_NITIDEZ 8.0f     // quanto as leituras longe se afastam ao longo da borda (até 2 x 2 texels)
+float fxaa_luma(float3 c) {
+    return dot(c, float3(0.299f, 0.587f, 0.114f));
+}
+float4 fxaa_le(float2 uv) {
+    return tex2Dlod(tex, float4(uv, 0.0f, 0.0f));
+}
+float4 ps_fxaa(float2 uv : TEXCOORD0) : COLOR0 {
+    float2 t = copiaTam.zw;
+    float4 m = fxaa_le(uv);
+    // os quatro cantos, meio texel na diagonal: cada um a média de 2 x 2
+    float nw = fxaa_luma(fxaa_le(uv + float2(-0.5f, -0.5f) * t).rgb);
+    float ne = fxaa_luma(fxaa_le(uv + float2(0.5f, -0.5f) * t).rgb);
+    float sw = fxaa_luma(fxaa_le(uv + float2(-0.5f, 0.5f) * t).rgb);
+    float se = fxaa_luma(fxaa_le(uv + float2(0.5f, 0.5f) * t).rgb);
+    float lm = fxaa_luma(m.rgb);
+    float maxC = max(max(nw, ne), max(sw, se));
+    float minC = min(min(nw, ne), min(sw, se));
+    float2 dir, dir1, dir2;
+    float4 perto, longe;
+    float d, lb;
+    if (max(maxC, lm) - min(minC, lm) < max(FXAA_LIMIAR_MIN, maxC * FXAA_LIMIAR)) {
+        return m; // sem borda: o caso da maior parte da tela
+    }
+    // a direção ao longo da borda (perpendicular ao gradiente dos cantos); zero num ponto isolado (as leituras caem no centro)
+    d = sw - ne;
+    lb = se - nw;
+    dir = float2(d + lb, d - lb);
+    dir1 = dir * rsqrt(max(dot(dir, dir), 1.0e-8f));
+    perto = fxaa_le(uv - dir1 * (0.5f * t)) + fxaa_le(uv + dir1 * (0.5f * t));
+    // as de longe: a direção esticada pelo menor componente, presa em 2, vezes 2 texels
+    dir2 = clamp(dir1 / max(min(abs(dir1.x), abs(dir1.y)) * FXAA_NITIDEZ, 1.0f / 1024.0f), -2.0f, 2.0f);
+    longe = (fxaa_le(uv - dir2 * (2.0f * t)) + fxaa_le(uv + dir2 * (2.0f * t))) * 0.25f + perto * 0.25f;
+    // a média de quatro, ou a de duas se a de quatro sai do intervalo dos cantos (a leitura longe passou de outra borda)
+    lb = fxaa_luma(longe.rgb);
+    if (lb < minC || lb > maxC) {
+        longe = perto * 0.5f;
+    }
+    return float4(longe.rgb, m.a);
+}
+
 // ---- F6, etapa 6: o filme direto (filme_desenha no gs_d3d.cpp, port/x360/src/f2/filme360.c). A vaga é uma textura L8
 // de 512 x 672: Y nas linhas 0 a 447, Cb nas colunas 0 a 255 e Cr nas 256 a 511 das linhas 448 a 671. O vs_copia leva o
 // retângulo do filme no alvo com uv de 0 a 1; o pixel do filme sai do uv, a cor é a do pixel (x / 2, y / 2), lidas no
