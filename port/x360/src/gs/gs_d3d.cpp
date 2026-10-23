@@ -106,6 +106,9 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "gsz_sem_ps.h"
 #include "tabela_z_ps.h" /* (720p, retomada, BT3_OTIM_NEVOA: ps_tabela_z, ps_tabela_ids) */
 #include "tabela_ids_ps.h"
+#include "gs_af_ps.h"     /* (720p, BT3_AFIADO: ps_gs_af, vs_gs_af e ps_copia_af; ver afiado_init) */
+#include "gs_af_vs.h"
+#include "copia_af_ps.h"
 
 #include "escala.h"
 /* (F5, etapa 8, 720p, etapa 2) O tamanho dos alvos, das profundidades e do par da EDRAM, em pixels de saída: a área de
@@ -1296,12 +1299,87 @@ static void otim_init(void) {
     }
 }
 
+/* (F5, etapa 8, 720p; docs/x360/plano/F5/08-720p.md, seção 10) BT3_AFIADO, desligada por padrão (0: o .xex faz o de antes):
+     bit 1  a arte 2D (os sprites e os triângulos com coordenadas inteiras de texel que o gs_draw.c marca no misc.w: texto,
+            HUD, menus) com textura da memória do GS, no buffer do quadro, lida por pixel de saída com o bilinear afiado
+            (ps_gs_af; afiado_le no gs_d3d.hlsl), no lugar da leitura por pixel do GS; o sampler desses desenhos fica no
+            ponto e a mistura é do shader (o filtro do jogo vai no c8). Só nas escalas maiores que 1: na 1 a arte já sai
+            como antes, nada muda;
+     bit 2  a cópia para a tela (tela_copia) com o bilinear afiado (ps_copia_af) no lugar do bilinear comum, em qualquer
+            escala. As capturas do BT3_SHOT são do alvo, antes da cópia: este bit não as muda.
+   Lida no init, depois da escala (area_init). */
+enum { AF_ARTE = 1, AF_TELA = 2 };
+static unsigned sAfiado, sAfDes; /* sAfDes: os desenhos pelo ps_gs_af no trecho (afiado_log) */
+static D3DPixelShader *sPsGsAf, *sPsCopiaAf;
+/* (bit 1) os vértices da arte 2D afiada levam a caixa da peça: o Vtx e mais o menor e o maior uv dos vértices da
+   primitiva (TEXCOORD1 do vs_gs_af), montados por chamadas_af num vetor daqui */
+typedef struct VtxAf {
+    Vtx v;
+    float caixa[4]; /* u mínimo, v mínimo, u máximo, v máximo */
+} VtxAf;
+#define AF_UP 3072 /* (múltiplo de 2 e de 3: as primitivas inteiras) */
+static VtxAf sVtxAf[AF_UP];
+static D3DVertexShader *sVsGsAf;
+static D3DVertexDeclaration *sDeclGsAf;
+static float sCurAfJogo = -1.0f; /* o c8 posto (só o ps_gs_af o lê) */
+
+static const D3DVERTEXELEMENT9 kElemGsAf[] = { /* o elemGs do d3d_init e a caixa */
+    {0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+    {0, 12, D3DDECLTYPE_UBYTE4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0},
+    {0, 16, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},
+    {0, 28, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1},
+    D3DDECL_END()};
+
+static void afiado_init(void) {
+    /* o bit 1 (a arte 2D) ligado por padrão desde a rodada do console de 23/10 (08-720p.md, seção 10): na escala 1 não
+       muda nada (as capturas iguais) e na 1,33 o Lucas aprovou; o bit 2 (a cópia para a tela) ele recusou */
+    sAfiado = env_num("BT3_AFIADO", 1) & 3;
+    if (sAfiado == 0) {
+        return;
+    }
+    if ((sAfiado & AF_ARTE) && sEscN == sEscD) {
+        Diario_Escrever("gs_d3d: BT3_AFIADO: na escala 1 a arte 2D fica como antes (o bit 1 só vale nas escalas maiores)");
+        sAfiado &= ~AF_ARTE;
+    }
+    if ((sAfiado & AF_ARTE) && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsAfPs, &sPsGsAf)) ||
+                                FAILED(sDev->CreateVertexShader((const DWORD *)kGsAfVs, &sVsGsAf)) ||
+                                FAILED(sDev->CreateVertexDeclaration(kElemGsAf, &sDeclGsAf)))) {
+        Diario_Escrever("gs_d3d: ERRO: o ps_gs_af, o vs_gs_af ou a declaração deles não foi criado; a arte 2D fica como antes");
+        sAfiado &= ~AF_ARTE;
+    }
+    if ((sAfiado & AF_TELA) && FAILED(sDev->CreatePixelShader((const DWORD *)kCopiaAfPs, &sPsCopiaAf))) {
+        Diario_Escrever("gs_d3d: ERRO: o ps_copia_af não foi criado; a cópia para a tela fica como antes");
+        sAfiado &= ~AF_TELA;
+    }
+    Diario_Escrever("gs_d3d: BT3_AFIADO=%u: a arte 2D por pixel de saída com o bilinear afiado %s, a cópia para a tela com o "
+                    "bilinear afiado %s", sAfiado, (sAfiado & AF_ARTE) ? "sim" : "não", (sAfiado & AF_TELA) ? "sim" : "não");
+}
+
+/* (BT3_AFIADO, bit 1) um desenho de primitivas de arte 2D com textura da memória do GS no buffer do quadro (o que se vê:
+   a mesma condição do estreitamento do 16:9 no gs_draw.c). Os buffers de trabalho dos efeitos e da sombra, também cheios
+   de retângulos 2D, ficam como antes. */
+static int afiado_usa(const GsDraw *d, int estado) {
+    return (sAfiado & AF_ARTE) && estado == 1 && d->misc[3] != 0.0f && d->mode[0] == 1 && d->target >= 0 &&
+           d->target < sQ->targetCount && sQ->targets[d->target].fbp == (uint32_t)sQ->fbp;
+}
+
+static void afiado_log(unsigned t) {
+    if (sAfiado & AF_ARTE) {
+        Diario_Escrever("gs_d3d:   afiado, por quadro: %.1f desenhos de arte 2D pelo ps_gs_af", (double)sAfDes / t);
+    }
+    sAfDes = 0;
+}
+
 /* O pixel shader de um desenho de primitivas (estado 1) ou da VU1 (2 a 4): o ps_gs, ou o ps_gsz com o recorte pelo w; com as
    chaves, uma variante */
 static D3DPixelShader *ps_escolhe(const GsDraw *d, int estado) {
     int z = estado >= 2 && sCorte;
     if (sPsTrivial & (estado >= 2 ? 2u : 1u)) {
         return sPsTriv[z];
+    }
+    if (afiado_usa(d, estado)) {
+        sAfDes++;
+        return sPsGsAf;
     }
     /* (BT3_OTIM_PS) sem DATE (misc.y), sem arte 2D (misc.w), sem teste de alfa (modo.w) e sem alvo como textura (modo.x 2:
        o rect e o c6); o FBA (misc.z) e a função da textura (modo.y, modo.z) o especializado ainda lê das constantes */
@@ -2553,6 +2631,7 @@ static int d3d_init(void) {
     }
     prof_autoteste();
     otim_init(); /* (720p, retomada: antes do autoteste das nativas, que passa pelos shaders da névoa) */
+    afiado_init(); /* (720p, BT3_AFIADO) */
     nat_init(); /* (F5, etapa 7, segunda parte) */
     tempo_init(); /* (F5, etapa 8) */
     gPicos = env_num("BT3_PICOS", 0); /* (F5, etapa 8, picos) */
@@ -2747,7 +2826,8 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     static D3DPixelShader *sCurPs; /* (720p, retomada) o posto, que só vale com sEstadoGs == estado */
     float c[16];
     int x0 = d->scissor[0], y0 = d->scissor[1], x1 = d->scissor[0] + d->scissor[2], y1 = d->scissor[1] + d->scissor[3];
-    int borda = 0;
+    int borda = 0, af = afiado_usa(d, estado), samp;
+    int chave = af ? 5 : estado; /* (BT3_AFIADO) a arte 2D afiada: o vs_gs_af e a declaração com a caixa */
 
     if (esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH) && d->count != 0) {
         corte_conta(d, 0);
@@ -2766,9 +2846,9 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         borda = 0x100;
         alvo_le_alem(d);
     }
-    if (sEstadoGs != estado) {
-        sDev->SetVertexDeclaration(estado >= 2 ? sDeclVu : sDeclGs);
-        sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : sVsGs);
+    if (sEstadoGs != chave) {
+        sDev->SetVertexDeclaration(estado >= 2 ? sDeclVu : af ? sDeclGsAf : sDeclGs);
+        sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : af ? sVsGsAf : sVsGs);
         /* (F5, etapa 7, segunda parte) a VU1 com o recorte pelo w: a profundidade por pixel (ps_gsz, vu_pos); (720p,
            retomada) com as chaves, a variante do desenho (ps_escolhe) */
         sDev->SetPixelShader(sCurPs = ps_escolhe(d, estado));
@@ -2782,8 +2862,8 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
             sDev->SetStreamSource(0, sVuVb[sVuPar], 0, 48);
             sDev->SetIndices(sVuIb[sVuPar]);
         }
-        sEstadoGs = estado;
-    } else if (sPsTrivial != 0 || (sOtim & OT_PS)) {
+        sEstadoGs = chave;
+    } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE)) {
         D3DPixelShader *ps = ps_escolhe(d, estado);
         if (ps != sCurPs) {
             sDev->SetPixelShader(ps);
@@ -2802,9 +2882,16 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
             sCurTexH = (float)desc.Height;
         }
     }
-    if ((d->sampler | borda) != sCurSamp) {
-        aplica_sampler(0, d->sampler | borda);
-        sCurSamp = d->sampler | borda;
+    /* (BT3_AFIADO) a arte 2D afiada lê no ponto, nos centros dos texels: a mistura é do shader, e o filtro do jogo vai no c8 */
+    samp = (af ? d->sampler & ~1 : d->sampler) | borda;
+    if (samp != sCurSamp) {
+        aplica_sampler(0, samp);
+        sCurSamp = samp;
+    }
+    if (af && (float)(d->sampler & 1) != sCurAfJogo) {
+        float c8[4] = {(float)(d->sampler & 1), 0.0f, 0.0f, 0.0f};
+        sDev->SetPixelShaderConstantF(8, c8, 1); /* (só o ps_gs_af lê o c8; ninguém mais o escreve) */
+        sCurAfJogo = c8[0];
     }
     if (d->misc[1] != 0.0f) {
         /* a cópia para o DATE: a do marcador nativo 5, ou a própria textura de um alvo fora da EDRAM */
@@ -3256,6 +3343,7 @@ static void log_quadros(void) {
         sTabTipoN = 0;
         tempo_zera();
         memset(&sOt, 0, sizeof(sOt)); /* (720p, retomada) */
+        sAfDes = 0; /* (720p, BT3_AFIADO) */
         return;
     }
     if (q == 0) {
@@ -3279,6 +3367,7 @@ static void log_quadros(void) {
     log_prof(t);
     log_nativas(t);
     otim_log(t); /* (720p, retomada) */
+    afiado_log(t); /* (720p, BT3_AFIADO) */
     log_tempos(sConta.msQuadro / q);
     log_memoria();
     if (sDiv) {
@@ -3671,6 +3760,42 @@ static int fba_duas(const GsDraw *d) {
            ((k0 >= 2 && k0 <= 4) || (k1 >= 2 && k1 <= 4));
 }
 
+/* (BT3_AFIADO, bit 1) as chamadas da arte 2D afiada: os vértices com a caixa da peça, o menor e o maior uv dos vértices
+   de cada primitiva (um sprite são dois triângulos, e cada um tem três cantos do retângulo: a caixa é a do sprite; uma
+   peça do HUD, a faixa de dois triângulos, o mesmo). O ps_gs_af não lê fora dela. */
+static void chamadas_af(const GsDraw *d, D3DPRIMITIVETYPE tipo, uint32_t porPrim) {
+    uint32_t feitos = 0;
+    while (feitos + porPrim <= d->count) {
+        uint32_t n = d->count - feitos > AF_UP ? AF_UP : d->count - feitos, k, j;
+        n -= n % porPrim;
+        for (k = 0; k < n; k += porPrim) {
+            float c[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+            for (j = 0; j < porPrim; j++) {
+                const Vtx *v = &sQ->verts[d->first + feitos + k + j];
+                float q = v->q != 0.0f ? v->q : 1.0f, u = v->s / q, w = v->t / q;
+                if (j == 0 || u < c[0]) {
+                    c[0] = u;
+                }
+                if (j == 0 || w < c[1]) {
+                    c[1] = w;
+                }
+                if (j == 0 || u > c[2]) {
+                    c[2] = u;
+                }
+                if (j == 0 || w > c[3]) {
+                    c[3] = w;
+                }
+                sVtxAf[k + j].v = *v;
+            }
+            for (j = 0; j < porPrim; j++) {
+                memcpy(sVtxAf[k + j].caixa, c, sizeof(c));
+            }
+        }
+        sDev->DrawPrimitiveUP(tipo, n / porPrim, sVtxAf, sizeof(VtxAf));
+        feitos += n;
+    }
+}
+
 /* as chamadas de um desenho já preparado: da VU1 (ini, no par do quadro) ou primitivas do GS (ini ~0) */
 static void chamadas(const GsDraw *d, uint32_t ini) {
     const Pipe *p = &sPipes[d->pipeline];
@@ -3678,6 +3803,10 @@ static void chamadas(const GsDraw *d, uint32_t ini) {
     uint32_t porPrim = p->topo == 0 ? 3 : p->topo == 1 ? 2 : 1, feitos = 0;
     if (d->vu) {
         sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count);
+        return;
+    }
+    if (afiado_usa(d, 1)) { /* (o prepara pôs o vs_gs_af e a declaração com a caixa) */
+        chamadas_af(d, tipo, porPrim);
         return;
     }
     while (feitos + porPrim <= d->count) {
@@ -4006,7 +4135,21 @@ static void tela_copia(D3DTexture *t) {
         int w = (int)((float)TELA_H * (float)Port_AspectMilli() / 1000.0f + 0.5f), x;
         w = w > TELA_W ? TELA_W : w;
         x = (TELA_W - w) / 2;
-        copia(t, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f, 512.0f / sAreaW, 448.0f / sAreaH, 1);
+        if (sAfiado & AF_TELA) {
+            /* (BT3_AFIADO, bit 2) pelo ps_copia_af, que quer o tamanho da textura (c9); os estados do copia */
+            D3DSURFACE_DESC desc;
+            float c9[4] = {(float)sAlvoW, (float)sAlvoH, 1.0f / sAlvoW, 1.0f / sAlvoH};
+            if (SUCCEEDED(t->GetLevelDesc(0, &desc))) {
+                c9[0] = (float)desc.Width; c9[1] = (float)desc.Height; c9[2] = 1.0f / desc.Width; c9[3] = 1.0f / desc.Height;
+            }
+            sDev->SetPixelShaderConstantF(9, c9, 1);
+            sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
+            sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+            quad(t, sPsCopiaAf, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f, 512.0f / sAreaW,
+                 448.0f / sAreaH, 1);
+        } else {
+            copia(t, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f, 512.0f / sAreaW, 448.0f / sAreaH, 1);
+        }
     }
 }
 

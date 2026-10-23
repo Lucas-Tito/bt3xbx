@@ -1912,6 +1912,33 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Logs de rodada não moram no scratchpad:** um reinício da máquina o limpa (os logs da 1 e da 1,5 de 22/10 se perderam). Guarde
   em `build/sessao_<data>/<nome>` e escreva na nota os números que a próxima comparação vai usar.
 
+### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
+
+- **O header do `fxc` traz a linha de comando no comentário:** dois headers do mesmo shader compilados com caminhos de saída
+  diferentes (`/Fh`, `/Fc`) diferem só ali. Para provar "o mesmo microcódigo", compile o `.hlsl` da main com o mesmo caminho de saída
+  do build (numa pasta à parte que reproduz `build/x360/f2/shaders`) e compare com `cmp`; ou compare sem as linhas `//`.
+- **Uma variante de shader sem duplicar o corpo:** um parâmetro `uniform bool` na função comum, `false` nos pontos de entrada de antes
+  e `true` no novo. O `fxc` resolve o desvio na compilação: os 21 headers de antes saíram byte a byte iguais. Dentro do ramo novo, a
+  leitura com `tex2Dlod` (sem gradiente), que o `fxc` aceita em desvio.
+- **Leituras nos centros dos texels com o sampler no ponto deixam a mistura exata e independente do filtro do jogo:** com o
+  bilinear do hardware, um ponto calculado para cair no centro pode sair um tico antes e levar o vizinho com o peso mínimo do filtro.
+  Quatro leituras no ponto e a mistura no shader custam pouco quando só a arte 2D passa por ali.
+- **No modelo de um filtro em float, "pixel misturado" é peso acima de meio passo de byte (1/512):** o centro de um pixel a
+  exatamente meio pixel da borda dá peso 0 na conta exata e uns 1e-4 em float, e um critério de 1e-6 acusava "2 misturados por borda"
+  que nenhum byte mostra.
+- **Ler a arte 2D por pixel de saída exige a grade que o GS mostra, não o uv contínuo.** O GS lê no canto do pixel dele e fica com
+  o texel inteiro; o HUD manda o uv no centro do texel (`(u << 4) + 8`), e essa fração some no console. O afiado lido no centro
+  do pixel com o uv do vértice ficou meio texel deslocado: a última linha da peça puxava a linha de baixo da folha e, com um
+  texel por pixel e a borda em pixel inteiro, a leitura caía na fronteira entre dois texels (uma rodada do console, 23/10). O
+  modelo sintético passou porque punha o uv inteiro na borda: **o modelo usa as convenções de coordenada do jogo** (procure o
+  `<< 4) + 8` e o `+ 8` no desenho) e uma folha com vizinhos de outra cor.
+- **Um dado por peça quando a lista junta peças num desenho:** uma constante por desenho não serve (o `same_state` junta texto e
+  HUD num desenho só). Um atributo a mais por vértice (a caixa da primitiva no TEXCOORD1), montado no backend num vetor próprio
+  para o `DrawPrimitiveUP`, com uma declaração e um vertex shader à parte e uma chave a mais no cache do estado, não toca o
+  portável.
+- **Duas aberturas com as capturas de mesmo `fnv` têm o mesmo alvo:** o que a tela mostra de diferente vem só da cópia para a
+  tela. Foi o que separou a gauge de ki do bit 2 (a suspeita) do bit 1 (a causa).
+
 
 ### As texturas novas (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 17)
 
