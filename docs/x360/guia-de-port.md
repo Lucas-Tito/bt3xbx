@@ -1926,6 +1926,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **No modelo de um filtro em float, "pixel misturado" é peso acima de meio passo de byte (1/512):** o centro de um pixel a
   exatamente meio pixel da borda dá peso 0 na conta exata e uns 1e-4 em float, e um critério de 1e-6 acusava "2 misturados por borda"
   que nenhum byte mostra.
+- **Ler a arte 2D por pixel de saída exige a grade que o GS mostra, não o uv contínuo.** O GS lê no canto do pixel dele e fica com
+  o texel inteiro; o HUD manda o uv no centro do texel (`(u << 4) + 8`), e essa fração some no console. O afiado lido no centro
+  do pixel com o uv do vértice ficou meio texel deslocado: a última linha da peça puxava a linha de baixo da folha e, com um
+  texel por pixel e a borda em pixel inteiro, a leitura caía na fronteira entre dois texels (uma rodada do console, 23/10). O
+  modelo sintético passou porque punha o uv inteiro na borda: **o modelo usa as convenções de coordenada do jogo** (procure o
+  `<< 4) + 8` e o `+ 8` no desenho) e uma folha com vizinhos de outra cor.
+- **Um dado por peça quando a lista junta peças num desenho:** uma constante por desenho não serve (o `same_state` junta texto e
+  HUD num desenho só). Um atributo a mais por vértice (a caixa da primitiva no TEXCOORD1), montado no backend num vetor próprio
+  para o `DrawPrimitiveUP`, com uma declaração e um vertex shader à parte e uma chave a mais no cache do estado, não toca o
+  portável.
+- **Duas aberturas com as capturas de mesmo `fnv` têm o mesmo alvo:** o que a tela mostra de diferente vem só da cópia para a
+  tela. Foi o que separou a gauge de ki do bit 2 (a suspeita) do bit 1 (a causa).
 
 
 ### As texturas novas (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 17)
