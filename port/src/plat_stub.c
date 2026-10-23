@@ -59,6 +59,36 @@ unsigned gPortVBlanks; /* vertical blanks since start: the headless build's cloc
    the menus (60 frames per second) and two in a battle (30), as on the console. Headless runs do not wait. */
 extern int GsGpu_Enabled(void);
 PORT_HOST unsigned long long gPortSleptNs = 0; /* time spent waiting here (the renderer's frame timing subtracts it) */
+#ifdef PORT_X360
+/* (F5, etapa 8; docs/x360/plano/F5/08-gravacao.md, seção 18) A espera de vblank para a medida por passo
+   (port/x360/headless/passos.c), que lê por diferença: o gPortSleptNs acima o gs_core.c zera a cada entrega da lista, e
+   o passos lia nele uma espera acumulada que não existia. Estes só crescem (menos o pior atraso, que o passos zera por
+   passo):
+     gPortVBlankEsperaNs   o tempo esperado aqui desde o boot;
+     gPortVBlankEsperas    as esperas de fato (não as puladas por atraso), e delas gPortVBlankPeloHw as que acabaram no
+                           vblank de hardware (o evento da callback do gs_d3d.cpp; as outras, no Sleep);
+     gPortVBlankAtrasadas  as que acordaram 1 ms ou mais depois do momento pedido (o vblank de hardware ou, no Sleep, o
+                           da grade);
+     gPortVBlankAtrasoUs   o pior atraso ao acordar desde a última leitura do passos. */
+PORT_HOST unsigned long long gPortVBlankEsperaNs = 0;
+PORT_HOST unsigned gPortVBlankEsperas = 0, gPortVBlankPeloHw = 0, gPortVBlankAtrasadas = 0, gPortVBlankAtrasoUs = 0;
+
+/* port/x360/src/gs/gs_d3d.cpp: a espera pelo vblank de hardware (o evento da callback de vblank do D3D), com
+   BT3_VBLANK_HW=1 (o padrão; 0 volta ao Sleep): 2 esperou, 1 o vblank já tinha passado, 0 sem ele (o Sleep abaixo);
+   *desdeNs, de o último vblank de hardware até a volta */
+extern int GsD3d_VblankEspera(unsigned long long *desdeNs);
+
+static void vblank_acordou(unsigned long long esperouNs, unsigned long long atrasoNs, int peloHw) {
+    unsigned us = atrasoNs < 4000000000ull ? (unsigned)(atrasoNs / 1000ull) : 4000000u;
+    gPortVBlankEsperaNs += esperouNs;
+    gPortVBlankEsperas++;
+    gPortVBlankPeloHw += peloHw != 0;
+    gPortVBlankAtrasadas += us >= 1000u;
+    if (us > gPortVBlankAtrasoUs) {
+        gPortVBlankAtrasoUs = us;
+    }
+}
+#endif
 
 static unsigned long long now_ns(void) {
     struct timespec ts;
@@ -88,6 +118,10 @@ int Port_VBlankUsLeft(void) {
 static void vblank_wait(void) {
     struct timespec ts;
     unsigned long long t = now_ns(), after;
+#ifdef PORT_X360
+    unsigned long long desde;
+    int hw;
+#endif
 
     if (gPortPaceShiftNs != 0) {
         if (next != 0) {
@@ -96,6 +130,20 @@ static void vblank_wait(void) {
         gPortPaceShiftNs = 0;
     }
 
+#ifdef PORT_X360
+    /* (F5, etapa 8; docs/x360/plano/F5/08-gravacao.md, seção 18) a espera acaba no vblank de hardware, com a mesma conta
+       de baixo (o atrasado não espera, mais de 100 ms atrás recomeça); sem ele, o Sleep de baixo */
+    hw = GsD3d_VblankEspera(&desde);
+    if (hw != 0) {
+        after = now_ns();
+        if (hw == 2) {
+            gPortSleptNs += after - t;
+            vblank_acordou(after - t, desde, 1);
+        }
+        /* the coming vertical blank is the hardware's next one (Port_VBlankUsLeft, and the Sleep if the hardware stops) */
+        next = after - (desde < 16683350ull ? desde : 0ull) + 16683350ull;
+    } else
+#endif
     if (next != 0 && t >= next && t - next < 100000000ull) {
         /* Late, but not hopelessly: this blank has passed already, so do not wait, and keep the grid. A fight
            frame waits for two blanks; when its work takes longer than one period (16.7 ms) but less than two, the
@@ -127,6 +175,9 @@ static void vblank_wait(void) {
 #endif
         after = now_ns();
         gPortSleptNs += after - t; /* the time really spent waiting (a sleep can return early or late) */
+#ifdef PORT_X360
+        vblank_acordou(after - t, after > next ? after - next : 0, 0);
+#endif
         next += 16683350ull;
     } else {
         after = t;

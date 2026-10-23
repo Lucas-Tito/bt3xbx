@@ -26,6 +26,15 @@
  * Na x86 e na PPC sem janela não há espera de vblank nem Present: o número é do emulador, não do console, e só prova
  * que a medida existe e anda; o número de verdade vem do 360.
  *
+ * No 360 (F5, etapa 8; plano/F5/08-gravacao.md, seção 18), sob PORT_X360 (a x86 e a PPC compilam o mesmo de antes):
+ *   - a espera de vblank vem de um acumulado próprio (gPortVBlankEsperaNs, plat_stub.c). O gPortSleptNs o gs_core.c zera a
+ *     cada entrega da lista, e a diferença dele entre duas leituras do controle não era a espera do passo: as janelas
+ *     diziam "espera de vblank 0.0 ms", e o "trabalho" era o intervalo inteiro (33,37 de média por construção);
+ *   - "passos: janela K tela: ...": quantas imagens ficaram 1, 2, 3 e 4 ou mais vblanks na tela, contadas no vblank de
+ *     hardware (a callback do gs_d3d.cpp, Passos_Tela), as trocas perdidas, as esperas de vblank (quantas acabaram no
+ *     vblank de hardware) e o atraso ao acordar por passo (o pior do passo: depois do vblank de hardware, ou do momento da
+ *     grade no Sleep). É a tela que o critério do console olha (passos.py --console).
+ *
  * Nada aqui é estado do jogo (os objetos x360_* ficam fora do checksum e do dump de memória: mem.py).
  */
 #include <stdio.h>
@@ -57,6 +66,18 @@ int Passos_Descartes(unsigned *v, int n);
 
 #ifdef PORT_X360
 void Diario_Escrever(const char *formato, ...);
+/* plat_stub.c: a espera de vblank acumulada desde o boot (ninguém zera), as esperas de fato, as que acabaram no vblank de
+   hardware, as que acordaram 1 ms ou mais atrasadas e o pior atraso desde a última leitura (este o passos zera) */
+extern unsigned long long gPortVBlankEsperaNs;
+extern unsigned gPortVBlankEsperas, gPortVBlankPeloHw, gPortVBlankAtrasadas, gPortVBlankAtrasoUs;
+/* gs_d3d.cpp: as imagens por vblanks na tela (1, 2, 3, 4 ou mais), as trocas perdidas, as imagens puladas e os vblanks,
+   acumulados desde a instalação da callback, e (seção 20) da espera pelo vblank de hardware as chamadas com o vblank já
+   passado, os alvos recomeçados pela dívida parada e os novos por estar 100 ms atrás; 0 sem ela */
+int Passos_Tela(unsigned *v, int n);
+#define N_TELA 10
+#define ESPERA_ACUMULADA gPortVBlankEsperaNs
+#else
+#define ESPERA_ACUMULADA gPortSleptNs
 #endif
 
 #define PASSOS_MAX 16384
@@ -66,6 +87,10 @@ void Diario_Escrever(const char *formato, ...);
 typedef struct Passo {
     unsigned intervaloUs, esperaUs, presentUs;
     unsigned short vblanks, imagens;
+#ifdef PORT_X360
+    unsigned atrasoUs;      /* o pior atraso ao acordar das esperas do passo */
+    unsigned short esperas; /* as esperas de fato no passo */
+#endif
 } Passo;
 
 static Passo sP[PASSOS_MAX];
@@ -79,6 +104,10 @@ static unsigned long long sUltImagem;
 static int sTemImagem;
 static unsigned sUltGs;
 static unsigned sDesc0[N_DESC];
+#ifdef PORT_X360
+static unsigned sTela0[N_TELA], sEsperas0, sPeloHw0, sAtrasadas0, sEsperasPasso;
+static int sTemTela;
+#endif
 
 static void escreve(const char *linha) {
 #ifdef PORT_X360
@@ -131,7 +160,45 @@ static void abre(void) {
     if (Passos_Descartes(sDesc0, N_DESC) <= 0) {
         memset(sDesc0, 0, sizeof(sDesc0));
     }
+#ifdef PORT_X360
+    sTemTela = Passos_Tela(sTela0, N_TELA) > 0;
+    sEsperas0 = gPortVBlankEsperas;
+    sPeloHw0 = gPortVBlankPeloHw;
+    sAtrasadas0 = gPortVBlankAtrasadas;
+#endif
 }
+
+#ifdef PORT_X360
+/* a linha da tela da janela que fecha (o vetor sOrdem já foi usado: reaproveitado aqui) */
+static void fecha_tela(void) {
+    char s[800];
+    unsigned t[N_TELA], i, m = 0, imagens, tres;
+    if (!sTemTela || Passos_Tela(t, N_TELA) <= 0) {
+        sprintf(s, "passos: janela %u tela: sem a medida (sem a callback de vblank na janela inteira)", sJanela);
+        escreve(s);
+        return;
+    }
+    for (i = 0; i < N_TELA; i++) {
+        t[i] -= sTela0[i];
+    }
+    for (i = 0; i < sN; i++) {
+        if (sP[i].esperas != 0) {
+            sOrdem[m++] = sP[i].atrasoUs;
+        }
+    }
+    qsort(sOrdem, m, sizeof(sOrdem[0]), cmp);
+    imagens = t[0] + t[1] + t[2] + t[3];
+    tres = t[2] + t[3];
+    sprintf(s, "passos: janela %u tela: %u imagens na tela, por vblanks na tela 1 %u, 2 %u, 3 %u, 4 ou mais %u (3 ou "
+            "mais %.2f%%); trocas perdidas %u, imagens puladas %u, vblanks %u; esperas de vblank %u (%u pelo vblank de "
+            "hardware), atraso ao acordar por passo p50 %.2f p99 %.2f máximo %.2f ms, esperas com 1 ms ou mais %u; vblank "
+            "já passado em %u chamadas, alvo recomeçado %u vezes pela dívida parada e %u por estar 100 ms atrás",
+            sJanela, imagens, t[0], t[1], t[2], t[3], imagens ? 100.0 * tres / imagens : 0.0, t[4], t[5], t[6],
+            gPortVBlankEsperas - sEsperas0, gPortVBlankPeloHw - sPeloHw0, pct(sOrdem, m, 50), pct(sOrdem, m, 99),
+            m ? sOrdem[m - 1] / 1000.0 : 0.0, gPortVBlankAtrasadas - sAtrasadas0, t[7], t[8], t[9]);
+    escreve(s);
+}
+#endif
 
 static void fecha(const char *motivo) {
     char s[600];
@@ -182,6 +249,9 @@ static void fecha(const char *motivo) {
                 3 * VBLANK_MS, int50);
     }
     escreve(s);
+#ifdef PORT_X360
+    fecha_tela();
+#endif
     nd = Passos_Descartes(desc, N_DESC);
     if (nd <= 0) {
         sprintf(s, "passos: janela %u descartes: sem backend D3D (build sem janela)", sJanela);
@@ -198,7 +268,7 @@ static void fecha(const char *motivo) {
 
 /* a fronteira de passo: a leitura do controle do jogador 1 */
 void Passos_Leitura(void) {
-    unsigned long long t = agora_ns(), espera = gPortSleptNs;
+    unsigned long long t = agora_ns(), espera = ESPERA_ACUMULADA;
     unsigned vb = gPortVBlanks;
     int pausa, luta;
     if (!sDito) {
@@ -215,7 +285,15 @@ void Passos_Leitura(void) {
         p->presentUs = sPresentUs;
         p->vblanks = (unsigned short)(vb - sVb0);
         p->imagens = (unsigned short)sImagens;
+#ifdef PORT_X360
+        p->atrasoUs = gPortVBlankAtrasoUs;
+        p->esperas = (unsigned short)(gPortVBlankEsperas - sEsperasPasso);
+#endif
     }
+#ifdef PORT_X360
+    gPortVBlankAtrasoUs = 0;
+    sEsperasPasso = gPortVBlankEsperas;
+#endif
     sPresentUs = 0;
     sImagens = 0;
     luta = combate(&pausa);

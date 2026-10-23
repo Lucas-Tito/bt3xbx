@@ -1518,6 +1518,276 @@ zerada e não escrita inteira aparecer como diferença). A `sVram` é `__attribu
 por grupos: a aposta é que as instruções não são o gargalo); o `dcbt` num laço de uma instrução por linha de 128 bytes. A `sVram` em `0x823ADA00` (o `lis`/`addi` do começo da
 função), múltiplo de 128.
 
+## 19. A espera de vblank medida certo e a espera pelo vblank de hardware (22/10/2026)
+
+Branch `f5-vblank`, sobre a main `64353a4`. Pedido do Lucas: os passos (a) e (b) da investigação feita sobre os logs do console do
+`f5_duelo` (só leitura, o relatório abaixo), cada um com commit próprio, sem nenhum quadro a mais de atraso entre o controle e a
+tela. Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+### O que a investigação achou [lido nos fontes, medido nos logs]
+
+1. **O `passos` não descontava a espera de vblank.** O `gs_core.c` (`Port_GsVif1Chain`, `:1840-1843` na main) lê o `gPortSleptNs`
+   e o zera a cada entrega da lista; o `passos.c` (`Passos_Leitura`) o lia como um acumulado e tirava a diferença entre duas
+   leituras do controle. As janelas diziam "espera de vblank 0.0 ms", e o "trabalho" p50/p95/p99 era o intervalo inteiro entre
+   duas leituras do controle, com média 33,37 ms por construção. **Os números de "trabalho" de todas as rodadas da F5 até aqui são
+   esse intervalo**, não o trabalho.
+2. **Os intervalos acima de 34,37 ms são medidos na CPU logo depois do `Present`** (`Passos_Apresentou`, chamado pelo
+   `frame_end` do `gs_d3d.cpp`); a tela troca no vblank de hardware (`D3DPRESENT_INTERVAL_ONE`, `main360.cpp`), e o jogo marcava
+   o tempo pelo `Sleep` em milissegundos inteiros (`nanosleep` do `posix360.c` dentro do `vblank_wait` do `plat_stub.c`), sem
+   fase com o vídeo. Em 24 de 70 quadros lentos o jogo acordou 1,4 ms ou mais atrasado (até 2,5), e a entrega soma uns 0,7 ms
+   em média.
+
+### (a) A medida certa
+
+| Commit | O quê |
+|---|---|
+| `8bd7db3` (a) | **A espera acumulada própria**: `gPortVBlankEsperaNs` no `plat_stub.c` (só cresce), com as esperas de fato, quantas acabaram no vblank de hardware, quantas acordaram 1 ms ou mais depois do momento pedido e o pior atraso ao acordar desde a última leitura do `passos`. O `passos.c` desconta dela (o `gPortSleptNs` segue como era para o `gs_core.c`). **A tela**: o `gs_d3d.cpp` instala no init (pela dona do dispositivo, a thread de desenho com `BT3_GS_DESENHO=1`) uma callback de vblank (`SetVerticalBlankCallback`), que numa DPC guarda o `mftb`, conta quantos vblanks cada imagem ficou na tela (pelo `Swap` mostrado do `D3DVBLANKDATA`, que muda quando uma imagem nova entra), as trocas perdidas (`D3DVBLANK_SWAPMISSED`) e as imagens puladas, e sinaliza um evento. A callback sai no `GsD3d_Soltar` e a main a tira de novo quando toma o dispositivo de volta. A linha nova `passos: janela K tela:` e o critério do `passos.py --console` pela tela. Tudo em `PORT_X360`: a x86 e a PPC compilam o mesmo texto de antes |
+
+**A callback** [lido no XDK: `D3DVBLANKCALLBACK`, `D3DVBLANKDATA`, `SetVerticalBlankCallback` e o exemplo `AsyncSwaps.cpp:1281`]:
+roda numa DPC, onde só valem os `Interlocked*`, o `SetEvent` e afins com um handle válido, sem float e sem espera. Ela só lê o
+`mftb`, soma inteiros e sinaliza o evento, que nasce uma vez e nunca se fecha (segue válido na saída e numa queda). Os contadores
+só crescem, cada um com um escritor só (a DPC), e quem lê (o `passos`, por diferença entre o começo e o fim da janela) lê palavras
+inteiras.
+
+**A linha nova** (só no 360, entre a `apresentação` e os `descartes`):
+
+```
+passos: janela K tela: N imagens na tela, por vblanks na tela 1 a, 2 b, 3 c, 4 ou mais d (3 ou mais P%); trocas perdidas p,
+imagens puladas u, vblanks V; esperas de vblank E (H pelo vblank de hardware), atraso ao acordar por passo p50 x p99 y máximo
+z ms, esperas com 1 ms ou mais w
+```
+
+Sem a callback na janela inteira: `passos: janela K tela: sem a medida (sem a callback de vblank na janela inteira)`. O atraso ao
+acordar é o pior das esperas de cada passo: com o vblank de hardware, de o vblank (o `mftb` da DPC) até a thread do jogo acordar;
+no `Sleep`, de o momento pedido pela grade até acordar.
+
+**O critério do `passos.py --console`** passa a ser a tela: em cada janela de pelo menos 2.700 passos, **no máximo 1% das imagens
+com 3 vblanks ou mais na tela e nenhuma com 4 ou mais** (o "99% até um período mais 1 ms, nenhum acima de três vblanks" de antes,
+contado onde a imagem de fato fica); mais a parede dentro de 1%, uma imagem nova por passo e zero descartes, como antes. O trabalho
+(agora com a espera certa) e os intervalos medidos na CPU depois do `Present` se listam, sem aceite. Sem a linha `tela` a janela
+falha no `--console`; fora dele a linha é opcional (a x86 e a PPC não a escrevem).
+
+**O verificador visto falhando de propósito** [medido]: um banco de teste do `passos.c` com `PORT_X360` compilado pelo `gcc` daqui
+(o relógio trocado por um falso, três janelas de 3.001 passos, o `Passos_Tela` e os contadores do `plat_stub.c` simulados) escreve as
+linhas como o console; o `passos.py --console` diz "tudo certo" no log bom e com 30 imagens de 3 vblanks em 3.000 (1,00%), e sai
+com 1 em cada estrago: 31 de 3.000 (1,03%), uma imagem de 4 vblanks, a janela sem a medida da tela, e o formato da linha mudado
+numa cópia do `passos.c` (`4+` no lugar de `4 ou mais`, com `assert` de que a cópia mudou: a linha some para o `passos.py` e a
+janela falha por falta da medida). A mesma conta da porcentagem sai das contagens, não do número arredondado da linha. O
+`passos.c` sem `PORT_X360` (como a x86) segue sem a linha, e o `passos.py` sem `--console` aceita o log.
+
+### O critério do escopo que usa o "trabalho" (proposta, o escopo não mudou)
+
+Em `docs/x360/plano/F5/00-escopo.md`, seção "Tempo, memória e uso do console", a tabela tem a linha **"Trabalho por passo | p99
+até 30 ms; nenhum passo acima de um período de luta, aproximadamente 33,37 ms, em cada uma de três janelas de pelo menos 2.700
+passos | CPU e conclusão da GPU, sem a espera deliberada de vblank; ..."**, e a linha **"Apresentação | Em cada janela, pelo menos
+99% dos intervalos entre imagens novas dentro de um período mais 1 ms; nenhum acima de três vblanks, aproximadamente 50,05 ms |
+..."**. O número que as rodadas leram como trabalho era o intervalo inteiro (item 1 acima), e o intervalo entre imagens era o da
+CPU depois do `Present`, não o da tela. Texto proposto, para o Lucas decidir:
+
+| Medida | Aceite proposto | Como medir |
+|---|---|---|
+| Trabalho por passo | Informativo: p50, p95 e p99 do intervalo entre duas leituras do controle menos a espera de vblank do passo; acompanha a folga, sem aceite próprio (com as threads da etapa 8 o trabalho de um passo se sobrepõe ao do anterior, e o que a pessoa vê é a tela) | A espera de vblank de um acumulado próprio, que ninguém zera (`gPortVBlankEsperaNs`), descontada por passo; distinguir sobreposição para não somar tempos concorrentes como se fossem seriais |
+| Apresentação | Em cada janela, no máximo 1% das imagens novas 3 vblanks ou mais na tela; nenhuma 4 ou mais | Contado no vblank de hardware (a callback de vblank do D3D: quantos vblanks cada imagem mostrada ficou na tela, pela troca mostrada); o intervalo medido na CPU depois do `Present` fica como diagnóstico |
+
+E no parágrafo logo abaixo da tabela, "Não usar os 16,7 ms dos menus como duração do passo da luta, nem contar uma espera de vsync
+como CPU trabalhando" segue valendo; a frase "Reservar os cerca de 3,37 ms entre p99 de 30 e o período como margem proposta para
+a F6" perde a base (o p99 de 30 deixa de ser aceite) e vira: "a margem para a F6 se lê no trabalho informativo e nas imagens de 3
+vblanks com o som ligado".
+
+### (b) A espera pelo vblank de hardware
+
+| Commit | O quê |
+|---|---|
+| `3ae20e6` (b) | No 360, o `vblank_wait` do `plat_stub.c` pergunta primeiro ao `gs_d3d.cpp` (`GsD3d_VblankEspera`): a thread do jogo espera o evento que a callback de vblank sinaliza, em vez do `Sleep`. `BT3_VBLANK_HW=1` é o padrão; `BT3_VBLANK_HW=0` volta ao `Sleep` (para comparar na mesma build). O `Sleep` fica de reserva: antes da callback (os menus antes do init do backend), depois do `GsD3d_Soltar` (a saída), sem vblank há 50 ms ou um evento que não veio em 50 ms (a Guide, o dispositivo parado); cada passagem é dita no log (`gs_d3d: vblank: a espera no Sleep (motivo; ...)` e `... de volta ao vblank de hardware`, até 20 vezes). Em `PORT_X360` |
+
+**A conta é a mesma do `vblank_wait`** [lido]: um alvo (o número do vblank de hardware que acaba a próxima espera) que anda um por
+chamada; o vblank que já passou não se espera (o passo da luta que passou de um vblank não perde a vez: a segunda espera dele acaba
+no tempo); mais de seis vblanks atrás (100 ms), um alvo novo a partir de agora, sem esperar, como a grade nova do `Sleep`. O
+evento é de reinício automático e pode ser de um vblank já contado: a volta confere pelo número, não pelo evento. O tempo esperado
+entra no `gPortSleptNs` (o `gs_core.c` o desconta do quadro, como antes) e no acumulado do `passos`; o `sPaceNext` passa a ser o
+próximo vblank de hardware (o `Port_VBlankUsLeft` e a reserva continuam com a grade certa).
+
+**Nenhum quadro a mais de atraso** [lido e simulado]: o número de esperas por passo é o mesmo, e cada uma acaba no vblank de
+hardware (mais a volta da DPC à thread, dezenas de microssegundos [estimado]) em vez de num momento da grade do `Sleep`, que não
+tinha fase com o vídeo e acordava até 2,5 ms tarde. Uma simulação das duas contas (`scratchpad`, fora do repositório: 20 mil passos
+de luta com trabalho de 20 a 60 ms, três fases do vídeo) deu o mesmo número de esperas de fato (7.886 nas duas) e o mesmo período
+médio (33,369 contra 33,368 ms); no modo de hardware todo passo que começa depois de uma espera começa no vblank (fase 0), no `Sleep`
+numa fase qualquer. O que muda é só a fase: o caminho do controle à tela fica igual em média e deixa de variar de um passo a outro.
+
+**Os cuidados** [lido]: a callback só sinaliza (DPC); quem espera é a thread do jogo, que nunca toca o dispositivo (a dona, com
+`BT3_GS_DESENHO=1`, é a de desenho, que instala e tira a callback); antes do init não há evento e a espera é o `Sleep`; na saída o
+`GsD3d_Soltar` tira a callback e marca a espera desligada antes de soltar o dispositivo, e a main tira de novo se tomar o
+dispositivo de uma thread que caiu; numa queda o evento segue válido (nunca se fecha) e a espera que estiver em curso volta em até
+50 ms para o `Sleep`.
+
+### As provas [medido]
+
+| Prova | Resultado |
+|---|---|
+| O pré-processado (`gcc -E -P`, sem linhas em branco) do `plat_stub.c` e do `passos.c`, main contra `3ae20e6` | igual nas definições da x86 plana, da `x86gv` (`BT3_TESTE_VU1`) e da PPC (`PORT_BIG_ENDIAN`); diferente com as do 360 (`PORT_X360`): a comparação vê a mudança onde ela existe. O `gs_d3d.cpp` e o `main360.cpp` só entram na build do 360 |
+| `.text` da x86 plana (WSL, serviço `claude-vblank`, worktree `~/bt3xbx-vb`) | `43444ea4d03a6d448aa1ae74a631e35b356a7caa` na main `64353a4` e no `3ae20e6`: a referência |
+| `.text` da `x86gv` (`--gpu --vu1`), a mesma rodada | `eead10fc381957a692618088926fb09fdeda8aea` antes e depois, a mesma: as listas da `x86gv` não podem mudar |
+| Listas da `x86gv`, `f5_duelo` e `f5_treino`, sem e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1`, main contra `3ae20e6` (`divergencias.py`) | os quatro pares com `divergencias.py` saindo 0, hashes `08a98b6d05b8775a` (`f5_duelo`, 8.380 quadros) e `f76f0f6849b64629` (`f5_treino`, 7.386), os de sempre; contadores do jogo e do desenho iguais, 0 desenhos com textura já solta, 0 `FALHA`; o git do worktree e do clone sem alterados no fim (serviço `claude-vblank`, terminado com `FIM`; as listas apagadas depois de conferidas) |
+| `ppcg` | não refeita: o pré-processado com as definições da PPC é o mesmo (acima), então os objetos são os mesmos (guia, "Uma mudança só no 360 depois das provas do WSL") |
+| O verificador do `passos.py` | visto falhando de propósito (acima, em (a)) |
+| A conta da espera | a simulação das duas contas (acima, em (b)): as mesmas 7.886 esperas e o mesmo período |
+| A callback no `dumpbin` do `.exe` (`vblank_cb`, `0x82277a10` no `default.map` do `3ae20e6`) | só inteiros (`lwz`, `stw`, `std`, `mftb`, `lwsync`) e a chamada ao `SetEvent`: nenhuma instrução de float nem de vetor na DPC |
+
+### A build do 360
+
+`build_f2.sh` em cada commit, carimbo sem diferença: 317 de 317 fontes sem erro, 985 avisos nos fontes do jogo (os mesmos da build da
+main), 0 no `gs_d3d.cpp`, no `main360.cpp`, no `plat_stub.c` e no `passos.c`, os mesmos 103 stubs (`diff` com o `stubs.txt` da main),
+`default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap` `abbd7589c8425797c4a2639068c9bf54` iguais. **`default.xex`** do
+`8bd7db3` (a): `bf6d8814210c5bd2b623357128b7d07b`; do `3ae20e6` (b): **`806fe3c1fc3bb46dfe23f2bb151c2ce3`**. No `default.map` do (b):
+`vblank_cb` em `0x82277a10`, `GsD3d_VblankEspera` em `0x82277d58`, `Passos_Tela` em `0x82277f00`.
+
+### A rodada no console proposta
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-vblank` (a build do `3ae20e6`): `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e
+`boot.txt` (cópias de `port/x360/roteiros/`), `ambiente_vb0.txt` (`BT3_VBLANK_HW=0`, o `Sleep`, saves `saves_vb0`) e
+`ambiente_vb1.txt` (`BT3_VBLANK_HW=1`, o vblank de hardware, saves `saves_vb1`), os dois como o `ambiente_sx1.txt` da última rodada
+da seção 17 (o `f5_duelo` pelo roteiro, `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_WIDE=1`, decisão 26, e `BT3_SOM=1`, o som ligado); o
+`ambiente.txt` é a cópia do `ambiente_vb0.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_vb0.txt build/x360/f2/ambiente_vb1.txt
+# abertura 1 (o Sleep); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_vb1.txt
+# abertura 2 (o vblank de hardware); baixar o log de novo
+# cada log à parte (as duas janelas do combate, 684 e 2.334 passos na referência):
+python3 port/x360/tools/passos.py bt3xbx_vb1.log --console --janelas 2 --minimo 600 --carimbo "3ae20e6 diff:da39a3ee5e"
+```
+
+**O que olhar:**
+
+1. **A linha do init** em cada abertura: `gs_d3d: vblank: a callback do vblank de hardware instalada ...; a espera de vblank pelo
+   Sleep (BT3_VBLANK_HW=0)` e `... pelo vblank de hardware, o Sleep de reserva (BT3_VBLANK_HW=1)`. Na abertura 2, nenhum
+   `gs_d3d: vblank: a espera no Sleep` durante a luta (no boot e nas cargas pode haver).
+2. **As imagens de 3 vblanks na tela**, na linha `passos: janela K tela:` das duas janelas do combate (684 e 2.334 passos na
+   referência): a porcentagem de "3 ou mais" e os "4 ou mais". Na abertura 1 deve aparecer o engasgo que a CPU via (11,5% dos
+   intervalos acima de 34,37 ms com o som); na 2, bem menos [estimado: o que sobrar é passo que de fato passou do período]. Se a
+   linha disser **0 imagens na tela** ou muito menos imagens que passos, o `Swap` do `D3DVBLANKDATA` não anda com as trocas
+   síncronas: a medida da tela precisa de outro sinal (o `QuerySwapStatus` ou o `D3DVBLANK_SWAPMISSED`, que a linha também
+   conta), e a espera do (b) não depende disso.
+3. **O atraso ao acordar**, na mesma linha: na abertura 1, p99 perto de 1,4 a 2,5 ms e muitas esperas com 1 ms ou mais (a
+   investigação viu 24 de 70 quadros lentos); na 2, p99 bem abaixo de 1 ms (a volta da DPC à thread, dezenas de microssegundos
+   [estimado]) e as esperas todas "pelo vblank de hardware".
+4. **O p95 e o p99 do intervalo**: os da `apresentação` (o intervalo na CPU depois do `Present`) e o do `trabalho`, que agora
+   desconta a espera de verdade (a `espera de vblank` da linha de tempo deixa de ser 0,0 ms; o trabalho p50 deixa de ser 33,37).
+5. A parede de cada janela dentro de 1% nas duas aberturas (a espera nova não pode mudar o ritmo), os passos por janela e o
+   resultado da luta iguais aos da referência (vencedor 0x2 KO, vida 0 27160, vblank 11478); nenhum `roteiro: FALHA`, nenhum
+   `vigia:`, nenhum `CRASH`.
+
+**Recomendação.** O padrão do branch já é `BT3_VBLANK_HW=1`. Se a abertura 2 mostrar menos imagens de 3 vblanks e o atraso ao
+acordar abaixo de 1 ms, sem nada novo, fica assim; se não, o padrão volta a 0 num commit e o `Sleep` segue como era. Depois, o
+critério do escopo pela tela (a proposta acima) é decisão do Lucas.
+
+## 20. A rodada do console (22/10/2026) [medido]
+
+A build do `3ae20e6` (`default.xex` `806fe3c1...`, `passos: origem 3ae20e6 diff:da39a3ee5e` nos dois logs), `f5_duelo` pelo
+roteiro, `BT3_SOM=1`, `BT3_PICOS=36`, `BT3_WIDE=1`; o ambiente das duas aberturas difere só no `BT3_VBLANK_HW` (e na pasta dos
+saves). Logs em `build/sessao_2210/vb0/` (`=0`, o `Sleep`) e `vb1/` (`=1`, o vblank de hardware), fora do repositório. A prova do
+WSL (`~/vblank/provas.resumo`) fica **pendente de conferência** por esta análise: o WSL e o Deck estavam fora do ar; a tabela "As
+provas" da seção 18 é a do agente que a rodou.
+
+| Medida (janela 1: 684 passos, fim pausa; janela 2: 2.334, fim combate) | `Sleep` (vb0) | vblank de hardware (vb1) |
+|---|---|---|
+| Linha do init | `... pelo Sleep (BT3_VBLANK_HW=0)` | `... pelo vblank de hardware, o Sleep de reserva (BT3_VBLANK_HW=1)`; nenhum `a espera no Sleep` no log inteiro |
+| Tela: imagens, por vblanks na tela 1/2/3/4+ (3 ou mais) | j1 685: 0/683/2/0 (0,29%); j2 2.335: 13/2.302/20/0 (0,86%) | j1 685: 0/685/0/0 (0,00%); j2 2.335: 7/2.325/3/0 (0,13%) |
+| Trocas perdidas, imagens puladas | 0, 0 | 0, 0 |
+| Esperas de vblank (pelo hardware) | j1 431 (0); j2 1.797 (0) | j1 **0** (0); j2 1.761 (1.761) |
+| Atraso ao acordar por passo p99, máximo; esperas com 1 ms ou mais | j1 1,00, 1,73 ms, 4; j2 0,95, 1,50 ms, 13 | j1 sem esperas; j2 **0,06, 0,07 ms, 0** |
+| Espera de vblank na linha de tempo | j1 1.830,5 ms; j2 16.123,5 ms | j1 **0,0 ms**; j2 15.776,4 ms |
+| "Trabalho" p50 / p95 / p99 / máximo | j1 30,10 / 33,38 / 36,07 / 81,27; j2 28,02 / 33,34 / 33,52 / 39,08 | j1 33,27 / 33,49 / 36,09 / 84,06; j2 27,86 / 33,34 / 33,54 / 39,28 |
+| Apresentação na CPU: p99, máximo; acima de 34,37 ms; acima de 50,05 ms | j1 36,20, 82,24, 21 (3,07%), 1; j2 37,02, 48,64, 241 (10,33%), 0 | j1 33,74, 69,20, 4 (0,59%), 1; j2 36,18, 52,26, 67 (2,87%), 1 |
+| Parede (razão) | j1 1,0004; j2 0,9991 | j1 0,9988; j2 0,9968 |
+| Menus depois da luta (`picos_log.py`, trechos de 60 quadros) | 16,64 a 16,76 ms, pior por trecho até ~20 ms | 16,64 ms, pior 16,65 em quase todos os trechos |
+| Resultado da luta | estado 4 vencedor 0x2 razão 0x1 vida 0 27160 vblank 11478 quadro 7757 | o mesmo |
+| `FALHA`, `vigia:`, `CRASH`, `ERRO` | 0 | 0 |
+| `passos.py --console --janelas 2 --minimo 600` | "tudo certo", sai 0 | "tudo certo", sai 0 |
+
+**O que os números dizem.**
+
+1. **A medida da tela funciona**: 685 e 2.335 imagens para 684 e 2.334 passos (uma por passo, mais a que já estava), 0 trocas
+   perdidas e 0 puladas; o `Swap` do `D3DVBLANKDATA` anda com as trocas síncronas. Não precisa de outro sinal.
+2. **A CPU depois do `Present` exagerava o engasgo**: no `Sleep`, 10,33% dos intervalos acima de 34,37 ms na CPU contra 0,86% de
+   imagens com 3 vblanks na tela (janela 2). O que a pessoa via já era quase todo de 2 vblanks.
+3. **O vblank de hardware melhora a tela e acaba o atraso ao acordar**: 3 ou mais vblanks de 0,29%/0,86% para 0,00%/0,13%,
+   imagens de 1 vblank de 13 para 7, atraso ao acordar p99 de ~1 ms para 0,06 ms (todas as 1.761 esperas da janela 2 pelo
+   hardware), os menus exatamente em um vblank. O intervalo na CPU acima de 34,37 ms cai de 10,33% para 2,87%. O p99 do
+   "trabalho" não muda (33,5 ms): a mudança é de fase, não de custo, como a seção 18 previa.
+4. **A janela 1 do vb1 não teve espera nenhuma** (0 esperas, espera 0,0 ms, "trabalho" p50 33,27 = o intervalo), sem nenhuma
+   passagem ao `Sleep` no log. [lido no código, deduzido dos contadores] Toda chamada do `GsD3d_VblankEspera` achou o alvo já
+   passado (devolveu 1): na cena anterior à janela (quadros 4.600 a 4.617, passos de ~45 ms pela gravação) o alvo ficou de 1 a 5
+   vblanks atrás do atual, menos que os 6 que o recomeçam, e na janela cada passo durou exatamente 2 vblanks pela fila da gravação
+   (`picos`: espera da gravação 21,8 ms em média, vblank 0,0), então o alvo andou 2 por passo como o vblank e a dívida nunca
+   se pagou. A tela ficou perfeita (685 imagens de 2 vblanks), mas o ritmo ali veio da fila da gravação e do `Present`, não da
+   espera, e a medida do trabalho ficou cega na janela. A conta do `Sleep` tem a mesma regra, mas a grade de 16,683 ms anda
+   mais devagar que o vblank de 16,64 e a dívida se desfaz sozinha (o vb0 teve 431 esperas na janela 1).
+   [estimado] Com o jogo adiantado na fila, a leitura do controle pode vir até um passo antes do que viria com a espera: o
+   "nenhum quadro a mais de atraso" da seção 18 não se prova nessa janela. Correção a estudar (não feita): um teto na dívida não
+   basta (um vblank de dívida já trava assim, com o passo de exatamente 2 vblanks); o que resolve é recomeçar o alvo quando a
+   dívida não se paga em alguns passos seguidos (todas as chamadas com o vblank já passado), como os 6 vblanks já fazem, o que
+   não custa ritmo onde a fila da gravação é que manda. Antes, contar na linha `tela` as chamadas com o vblank já passado.
+5. **O vblank de hardware do console dura ~16,64 ms** pelo `QueryPerformanceCounter` (4.667 vblanks em 77.628 ms; apresentação
+   p50 33,27 nas duas aberturas), não os 16,683 da grade de 59,94 Hz. Com o vblank de hardware o jogo segue a frequência
+   efetiva do vídeo (o "usar 2 / frequência como período" do escopo): a parede fica ~0,3% abaixo da conta de 33,37 ms
+   (razão 0,9968), dentro de 1%.
+
+**O critério proposto para o escopo (seção 18) se sustenta**, com uma ressalva. Pela tela, as duas aberturas passam (0,86% e
+0,13% no pior, nenhuma de 4 vblanks), enquanto pelo critério de antes (99% dos intervalos na CPU até 34,37 ms) as duas falhariam
+na janela 2 (10,33% e 2,87%) por um engasgo que a tela não mostrou. O "trabalho" como informativo se confirma: na janela 1 do vb1
+ele virou o intervalo inteiro sem que nada estivesse errado na tela. A ressalva: o vb0 passa a 0,86%, perto do limite, e o
+critério não vê as imagens de 1 vblank (13 no vb0), que também são um tranco na luta; "no máximo 1% das imagens fora de 2
+vblanks" separaria as duas aberturas (vb0 1,41%, falha; vb1 0,43%, passa). Fica para o Lucas.
+
+**Recomendação.** Levar à main com `BT3_VBLANK_HW=1` por padrão: a tela melhora, o atraso ao acordar some, nada novo no log, o
+resultado da luta é o mesmo. Antes ou junto: a correção da dívida do item 4 (com uma rodada curta do console), e a conferência da
+prova do WSL quando a máquina voltar.
+
+## 21. A dívida parada: o alvo recomeça e a espera é já (23/10/2026)
+
+O item 4 da seção 19: na janela 1 do vb1 a espera pelo vblank de hardware sumiu (0 esperas) porque o alvo ficou atrás numa cena
+lenta e a fila da gravação e do desenho segurou cada passo em exatamente dois vblanks. Pedido: recomeçar o alvo quando o atraso
+persiste por alguns passos e contar no log as chamadas com o vblank já passado.
+
+| Commit | O quê |
+|---|---|
+| `67f97a0` | **A conta no `vblank_alvo.h`** (C89, sem o XDK, como o `escala.h`): o `GsD3d_VblankEspera` chama `vb_decide` e `vb_esperou` em vez da conta em linha. O mesmo de antes (um alvo por chamada; o vblank já passado não se espera; 6 vblanks atrás, alvo novo) mais **a dívida parada**: numa sequência de chamadas com o alvo já passado, a soma dos atrasos de cada bloco de 8 chamadas (4 passos) se compara com a menor de um bloco anterior da sequência; dois blocos seguidos sem ficar abaixo dela (24 chamadas, 12 passos, 0,4 s) recomeçam o alvo no próximo vblank **e esperam por ele já**. A linha `passos: janela K tela:` ganha no fim `; vblank já passado em P chamadas, alvo recomeçado R vezes pela dívida parada e L por estar 100 ms atrás`; o `passos.py` a lê (opcional: os logs de antes seguem valendo) e, no `--console`, recusa um fim de linha que não conhece. **`port/x360/tools/teste_vblank.c`**: a simulação |
+
+**Por que a soma e por que esperar já** [simulado]. O atraso anda em vblanks inteiros: um passo de 1,9 vblank paga um vblank a
+cada dez passos, e o maior atraso de um bloco fica igual por vários blocos enquanto a dívida está sendo paga; a soma cai, e os
+três blocos que o recomeço pede deixam essa dívida se pagar como antes (cena C abaixo). Recomeçar o alvo sem esperar não basta:
+na trava o jogo está um passo à frente da tela, parado na entrega à gravação, e volta à fila na chamada seguinte (a variante
+"sem esperar já" teve 52 a 61 recomeços e 7 esperas na janela). Esperando o próximo vblank já, a parada na entrega vira uma espera
+no vblank, a fila esvazia um passo (a imagem que já estava nela cobre a vez) e o controle passa a ser lido um passo mais perto
+da tela.
+
+**A simulação** (`teste_vblank.c`, só tempo simulado): o vblank de 16,635 ms (o medido na seção 19); o jogo trabalha, entrega à
+gravação (espera se ela ainda não tomou a anterior) e espera dois vblanks pela conta; a gravação entrega ao desenho; o Present
+põe a imagem no primeiro vblank seguinte e **segura o desenho até ela entrar na tela** (sem isso o modelo nunca reproduz a trava:
+o desenho adianta a seguinte, sai uma imagem de 1 vblank e ela paga a dívida). A conta nova vem do próprio `vblank_alvo.h`; a de
+antes (`3ae20e6`) está copiada no teste. `gcc -std=c89 -pedantic -Wall -Wextra -Werror`, 69 conferências, 0 falhas:
+
+| Cena | Conta de antes | Conta nova |
+|---|---|---|
+| A. A janela 1 do vb1 (dez fases do vídeo): 20 passos de ~45 ms pela gravação, a fila do desenho em dois vblanks (o desenho de 16,8 a 18,5 ms), um pico da gravação de 60 a 87 ms no passo 120; 684 passos | **0 esperas** depois do pico nas 10 fases; tela 0/682/1/0; o controle à tela p50 99,81 ms (6 vblanks) | 652 de 654 passos com espera depois do pico, 2 recomeços; **a mesma tela**; o controle à tela p50 83,12 ms (5 vblanks), p99 e máximo iguais ou menores; parede igual até um passo |
+| B. O passo comum, 20 mil passos (70% de 15 a 30 ms, 25% de 30 a 33, 5% de picos de 34 a 60), três fases | 18.853 a 18.929 esperas; período 33,2698 ms | as mesmas esperas até 0,08%; período até 0,02% maior; 1 a 5 recomeços; até 5 imagens de 3 vblanks a mais em 20 mil (0,025%); o controle à tela igual |
+| C. A dívida paga devagar: um pico de 90 ms e 200 passos de 1,9 vblank, três fases | 199 esperas | **igual**, 0 recomeços |
+
+**Os mutantes** [medido]: cada um é uma cópia do `vblank_alvo.h` mudada numa pasta à parte, posta antes no `-I`, e **todos saem
+com 1**: sem o recomeço (`0 &&`; 20 falhas: A sem espera), recomeço sem esperar já (`return 1`; 20 falhas: A com 7 esperas),
+recomeço dois vblanks à frente (`n + 2`; 4 falhas: uma imagem de 3 vblanks vira de 4 na tela e a parede passa de um passo), recomeço no primeiro bloco
+parado (`VB_PARADOS 0`; 18 falhas, entre elas C recomeçando e B mudando o período), e "abaixo ou igual" no lugar de "abaixo"
+(3 falhas: em três fases de A, só 528 de 654 passos com espera depois do pico).
+
+**A linha do `passos`** [medido]: um banco de teste do `passos.c` com `PORT_X360` no `gcc` (o relógio trocado por um falso, três
+janelas de 3.001 passos, os contadores do `gs_d3d.cpp` simulados) escreve a linha com o fim novo, e o `passos.py --console` diz
+"tudo certo"; com uma cópia do `passos.c` em que o fim mudou (`divida` sem acento, conferido que a cópia mudou) sai com 1 ("a
+linha tela com um fim que este leitor não conhece"). Os logs da seção 19 (sem o fim novo) seguem com "tudo certo".
+
 ### As provas
 
 | Prova | Resultado |
@@ -1570,7 +1840,7 @@ python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_e1.t
 4. Se a abertura 2 não mudar o `ocupada`, o envio não é memória: uma abertura com `BT3_TEMPOS=1` dá a linha por família (o `envio`
    direto, em ms por quadro) para conferir os 6,5 ms antes de outro corte.
 
-## 19. A rodada do console (22/10/2026) [medido]
+## 22. A rodada do console do envio por linhas (22/10/2026) [medido]
 
 Duas aberturas do `f5_duelo` pelo roteiro com o `.xex` do `b2e1629` (o log diz a build de "Oct 22 2026 22:52:32", a do
 `default.xex` `419e94aa…` da seção 18), `BT3_PICOS=36`, `BT3_TEMPOS=0`, `BT3_WIDE=1`, sem som: e0 com `BT3_ENVIO_RAPIDO=0`
@@ -1628,3 +1898,45 @@ par, dividida pelos bytes.
 ganho visível na apresentação do combate, que agora é presa ao acerto de fase. Ligar por padrão depende de duas coisas: a prova do
 WSL conferida e uma segunda dupla de aberturas (na ordem e1, e0, e de preferência a e2) para ver se os 94 intervalos da janela 1
 se repetem. A frente seguinte da etapa 8 é a fase entre o jogo e a gravação nos quadros de 36 a 38 ms, não mais o envio.
+
+| Pré-processado (`gcc -E -P`) do `passos.c` e do `plat_stub.c`, main (`75e99f5`) contra `67f97a0` | iguais nas definições da x86 plana, da `x86gv` (`BT3_TESTE_VU1`) e da PPC (`PORT_BIG_ENDIAN`); o `passos.c` muda com `PORT_X360`, onde a mudança está. O `plat_stub.c` não mudou neste commit; o `vblank_alvo.h` e o `gs_d3d.cpp` só entram na build do 360. Então os objetos da x86, da `x86gv` e da PPC são os mesmos e as listas não mudam (guia, "Uma mudança só no 360 depois das provas do WSL") |
+| A prova do WSL da seção 18 (`~/vblank/provas.resumo`) | **pendente de conferência**: o WSL e o Deck estavam fora do ar |
+| `teste_vblank.c` e os cinco mutantes | 0 falhas na conta do commit; os cinco mutantes saem com 1 (acima) |
+| O banco do `passos.c` e o `passos.py` | a linha nova lida; o fim mudado recusado (acima) |
+
+### A build do 360
+
+`build_f2.sh` no `67f97a0`, carimbo `67f97a0 diff:da39a3ee5e`: 317 de 317 fontes sem erro, 985 avisos nos fontes do jogo (os
+mesmos), 0 no `hl_passos` e no `gs_d3d`, os avisos dos outros fontes do 360 iguais aos da build do `3ae20e6`, os mesmos 103
+stubs (`diff` com o `stubs.txt` anterior), `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap`
+`abbd7589c8425797c4a2639068c9bf54` iguais aos de referência. **`default.xex` `26591a584263234c079e8e65f784f00f`**. No
+`default.map`: `vblank_cb` em `0x82277ba0` (a callback não mudou), `GsD3d_VblankEspera` em `0x82277f08`, `Passos_Tela` em
+`0x82278088`.
+
+### A rodada curta no console proposta
+
+Uma abertura só, `BT3_VBLANK_HW=1` (o padrão), com saves novos. Os arquivos em `build/x360/f2/` do worktree `bt3xbx-vblank`:
+`default.xex`/`.dat`/`.swap` do `67f97a0`, `f5_duelo.txt` e `boot.txt` (iguais aos de `port/x360/roteiros/`) e
+`ambiente_vb2.txt` (o `ambiente_vb1.txt` com `BT3_SAVES=game:\saves_vb2`), do qual o `ambiente.txt` é a cópia.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt
+# a abertura; depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "67f97a0 diff:da39a3ee5e"
+```
+
+**O que olhar**, contra o vb1 da seção 19:
+
+1. **A janela 1** (684 passos, fim pausa): esperas de vblank bem acima de 0 (no vb1, 0), `alvo recomeçado R vezes pela dívida
+   parada` com R pequeno (1 ou 2 [estimado pela cena A]), a espera de vblank da linha de tempo deixando de ser 0,0 e o trabalho
+   p50 deixando de ser 33,27.
+2. **A tela igual ou melhor**: 3 ou mais vblanks 0,00% e 0,13% no vb1, nenhuma de 4 ou mais; trocas perdidas e imagens puladas 0.
+3. **A janela 2**: os recomeços pela dívida parada poucos (0 a uns 5 [estimado pela cena B]); o atraso ao acordar como no vb1
+   (p99 0,06 ms); o `vblank já passado` dá a ideia de quantas vezes o passo passou de um vblank.
+4. A parede dentro de 1% (no vb1, 0,9988 e 0,9968), o resultado da luta igual (vencedor 0x2, vida 0 27160, vblank 11478), nenhum
+   `roteiro: FALHA`, `vigia:`, `CRASH` ou `gs_d3d: vblank: a espera no Sleep` durante a luta, e o `passos.py --console` com
+   "tudo certo".
+
+O caminho do controle à tela não se mede no console (não há marca do controle na imagem): a melhora de um vblank é da simulação
+[simulado]. Se a janela 1 voltar a ficar sem espera, ou a tela piorar, o recomeço sai num commit e o padrão fica como no vb1.

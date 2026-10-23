@@ -1991,3 +1991,39 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Antes de estimar o ganho na apresentação, classifique os quadros lentos pelo que esperava** (seção 19). O envio tirou 1,8 ms
   da gravação e a apresentação do combate não mudou: os quadros acima de 36 ms já eram o jogo esperando o vblank com a gravação
   parada (80 de 89), não a gravação ocupada (4). A conta "menos trabalho, menos picos" só vale para os quadros presos ao trabalho.
+
+### A espera de vblank e a tela (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 18)
+
+- **Antes de ler uma global como acumulado, procure todos os que a escrevem.** O `passos.c` tirava a espera de vblank do passo
+  pela diferença do `gPortSleptNs` entre duas leituras do controle, mas o `gs_core.c` zera essa global a cada entrega da lista:
+  a espera saía 0 e o "trabalho" de todas as rodadas da F5 era o intervalo inteiro (média 33,37 ms por construção). Ninguém viu
+  porque o número parecia plausível. Um medidor que lê por diferença precisa de um contador dele, que só cresce.
+- **Meça a apresentação onde a tela troca, não na CPU depois do `Present`.** Com `D3DPRESENT_INTERVAL_ONE` a imagem entra no
+  vblank de hardware; o instante em que o `Present` volta na CPU tem a fase do relógio do jogo, não a do vídeo. A callback de
+  vblank do D3D (`SetVerticalBlankCallback`) diz por `D3DVBLANKDATA.Swap` qual troca está na tela: quantos vblanks cada imagem
+  ficou, contados ali, são o que a pessoa vê.
+- **Callback de vblank (e de troca) roda numa DPC**: só `Interlocked*`, `SetEvent` e afins com handle válido, sem float, sem
+  espera, sem o dispositivo. Guarde o `mftb`, some inteiros, sinalize um evento que nunca se fecha (assim ele segue válido numa
+  queda) e tire a callback antes de soltar o dispositivo (`SetVerticalBlankCallback(NULL)`, pela dona).
+- **Marcar o tempo do jogo pelo vblank de hardware, não pelo `Sleep`.** O `Sleep` do 360 é em milissegundos inteiros e não tem
+  fase com o vídeo: o jogo acordava até 2,5 ms tarde e a imagem às vezes perdia o vblank. A espera por um evento sinalizado pela
+  callback de vblank, com a mesma conta de antes (um alvo por chamada; o vblank que já passou não se espera; muito atrás,
+  recomeça) não soma espera nenhuma e deixa a fase fixa. Deixe o `Sleep` de reserva para antes do dispositivo, para a Guide (um
+  evento que não vem em 50 ms) e para a saída, e uma chave que volta a ele para medir um contra o outro na mesma build.
+- **Uma espera que deixa passar o alvo atrasado guarda a dívida, e outra fila pode travá-la para sempre.** Na rodada do console
+  (seção 19), o alvo da espera pelo vblank de hardware ficou de 1 a 5 vblanks atrás numa cena lenta, abaixo dos 6 que o
+  recomeçam; depois, a fila da gravação e do `Present` segurou cada passo em exatamente 2 vblanks, o alvo andou junto com o vídeo
+  e a janela inteira teve 0 esperas (a espera de vblank 0,0 ms e o "trabalho" igual ao intervalo de novo). Com o `Sleep` isso se
+  desfazia sozinho porque a grade (16,683 ms) é mais lenta que o vblank do console (~16,64 ms). Um contador "chamadas com o alvo já
+  passado" na linha da janela teria mostrado na hora; ponha um em toda espera com recuperação de atraso.
+- **A apresentação medida na CPU exagera o tranco que a tela mostra.** No mesmo log, 10,33% dos intervalos acima de 34,37 ms na
+  CPU depois do `Present` contra 0,86% de imagens com 3 vblanks na tela. Aceite pela tela (a callback de vblank), a CPU só como
+  diagnóstico.
+- **Para destravar uma espera presa atrás de outra fila, recomeçar o alvo não basta: espere já.** Na trava da seção 19 o jogo
+  fica um passo à frente da tela, parado na entrega à gravação; um alvo novo sem espera nesta chamada devolve o jogo à mesma
+  fila, e ele trava de novo (a simulação: 52 a 61 recomeços, 7 esperas em 684 passos). Esperando o próximo vblank na hora, a fila
+  esvazia um passo sem mudar a tela, e o controle passa a ser lido um vblank mais perto dela (seção 20).
+- **Um modelo de fila do 360 tem de segurar o desenho no `Present` até a imagem entrar na tela.** Sem isso o desenho adianta a
+  imagem seguinte, sai uma de 1 vblank que paga a dívida, e a simulação nunca reproduz o que o console mostrou (685 imagens de
+  exatamente 2 vblanks com o desenho de ~17 ms). Antes de provar uma correção numa simulação, ela tem de reproduzir o defeito com
+  a conta de antes (a cena A do `teste_vblank.c` confere isso: a conta de antes sem espera em pelo menos metade das fases).
