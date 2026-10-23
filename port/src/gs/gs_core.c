@@ -360,11 +360,12 @@ static void origem_bloco(uint64_t *l, uint32_t b) {
    do texture_get (BT3_TEX_ORIGEM). O endereço de cada pixel no vram_rw é tbp * 256 bytes mais uma conta que só depende de
    tbw, do formato, de x e de y (o bloco é tbp mais um número da grade, e os 4 MB dão a volta): hasheando os blocos de 256
    bytes em que caem os pixels, em ordem de grade, a partir de tbp, a mesma imagem enviada a outro endereço dá o mesmo
-   hash, e uma página mudada fora dos blocos da textura não o muda. Com paleta, os quatro blocos a partir de cbp (1 KB: as
-   256 cores de 32 bits ocupam os blocos 0 a 3 de 16 x 16 pixels; as de 16 bits e as 16 cores de 4 bits, os primeiros). Com
-   o mesmo tbw, formato, tamanho, formato da paleta e TEXA, o mesmo hash é a mesma decodificação, a menos de uma colisão de
-   64 bits. Quatro faixas independentes de 64 bits (o laço sem __int128 do Gs_PageHash), juntadas no fim. */
-uint64_t Gs_TexOrigem(uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uint32_t th, uint32_t cbp, int paleta) {
+   hash, e uma página mudada fora dos blocos da textura não o muda. A paleta (cores 256 ou 16) entra pelo que a
+   decodificação lê dela: as 256 cores de 32 bits são os blocos cbp a cbp + 3 inteiros (16 x 16 pixels), as de 16 bits os
+   blocos cbp e cbp + 1; as 16 cores (8 x 2) dividem o bloco com outras paletas, que o jogo reescreve sem mudar esta, e
+   entram cor a cor, pelo vram_rw. Com o mesmo tbw, formato, tamanho, formato da paleta e TEXA (quando a expansão o lê), o
+   mesmo hash é a mesma decodificação, a menos de uma colisão de 64 bits. Quatro faixas independentes de 64 bits (o laço sem __int128 do Gs_PageHash), juntadas no fim. */
+uint64_t Gs_TexOrigem(uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uint32_t th, uint32_t cbp, uint32_t cpsm, uint32_t cores) {
     uint64_t l[4] = {0x9E3779B97F4A7C15ull, 0xC2B2AE3D27D4EB4Full, 0x165667B19E3779F9ull, 0x27D4EB2F165667C5ull}, q;
     uint32_t bw = tbw ? tbw : 1, zx = 0, pw, ph, x, y, b;
 
@@ -391,8 +392,16 @@ uint64_t Gs_TexOrigem(uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uin
             origem_bloco(l, tbp + b);
         }
     }
-    for (b = 0; paleta && b < 4; b++) {
-        origem_bloco(l, cbp + b);
+    if (cores == 256) {
+        for (b = 0; b < ((cpsm & 0x0F) == 0x02 || (cpsm & 0x0F) == 0x0A ? 2u : 4u); b++) {
+            origem_bloco(l, cbp + b);
+        }
+    } else if (cores == 16) {
+        for (b = 0; b < 16; b++) {
+            q = vram_rw(cbp, 1, cpsm, b & 7, b >> 3, 0, 0);
+            l[b & 3] = (l[b & 3] ^ q) * 0x9FB21C651E98DF25ull;
+            l[b & 3] ^= l[b & 3] >> 32;
+        }
     }
     q = (l[0] ^ (l[1] << 13 | l[1] >> 51) ^ (l[2] << 29 | l[2] >> 35) ^ (l[3] << 47 | l[3] >> 17)) * 0x9FB21C651E98DF25ull;
     return q ^ q >> 29;

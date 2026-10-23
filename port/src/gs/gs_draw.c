@@ -526,7 +526,7 @@ static GsTex texture_get(int ctx) {
     int packFormat = GS_TEXFMT_RGBA8, replaced = 0;
 #ifdef BT3_GS_ESPERAS
     int feito, oCalc = 0;
-    uint64_t oHash = 0;
+    uint64_t oHash = 0, oTexa = 0;
     uint32_t oForma = 0;
 #endif
 
@@ -646,13 +646,16 @@ static GsTex texture_get(int ctx) {
     }
     if (sTexOrigem && !(sTexPackOn && TexPack_Count() != 0)) {
         uint32_t h;
-        oHash = Gs_TexOrigem(tbp, tbw, psm, tw, th, cbp, bits <= 8);
+        oHash = Gs_TexOrigem(tbp, tbw, psm, tw, th, cbp, cpsm, bits == 8 ? 256 : bits == 4 ? 16 : 0);
         oForma = psm | tbw << 6 | (bits <= 8 ? cpsm : 0) << 12 | (uint32_t)((t0 >> 26) & 15) << 16 | (uint32_t)((t0 >> 30) & 15) << 20;
+        /* o TEXA só entra quando o Gs_Expand o lê: as cores que não são de 32 bits (o Blast 2 volta com outro TEXA e a
+           paleta de 32 bits, a mesma decodificação) */
+        oTexa = (bits <= 8 ? cpsm != 0 : (psm & 0x0F) != 0) ? texa : 0;
         oCalc = 1;
-        h = orig_balde(oHash, oForma, texa);
+        h = orig_balde(oHash, oForma, oTexa);
         while (sOrigBucket[h] != 0) {
             TexOrig *o = &sOrig[sOrigBucket[h] - 1];
-            if (o->refs != 0 && o->hash == oHash && o->forma == oForma && o->texa == texa) {
+            if (o->refs != 0 && o->hash == oHash && o->forma == oForma && o->texa == oTexa) {
                 t = &sTex[gsTexCount];
                 t->tex = o->tex;
                 t->orig = (uint16_t)(o - sOrig + 1);
@@ -802,7 +805,7 @@ static GsTex texture_get(int ctx) {
         sOrigLivre = (k + 1) % MAX_TEX;
         sOrig[k].hash = oHash;
         sOrig[k].forma = oForma;
-        sOrig[k].texa = texa;
+        sOrig[k].texa = oTexa;
         sOrig[k].refs = 1;
         sOrig[k].sai = 0;
         sOrig[k].tex = t->tex;
