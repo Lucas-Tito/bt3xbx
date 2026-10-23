@@ -41,7 +41,7 @@ Resumo (texto completo em [plano/base.md](plano/base.md)):
 | F4 | concluída (16/10/2026): rodada completa no WSL e sessão no console com o Lucas | [plano/F4/00-escopo.md](plano/F4/00-escopo.md) |
 | F5 | em andamento: etapas 1 a 7 concluídas; a 8 (desempenho) com a luta de 75,7 para 33,9 ms (mediana pelo roteiro `f5_duelo`, meta 33,37) por duas divisões em threads e cortes na gravação, e a resolução interna maior no fim dela; a 9 com a parte do WSL feita | [plano/F5/00-escopo.md](plano/F5/00-escopo.md), [08-threads](plano/F5/08-threads.md), [08-degrau2](plano/F5/08-degrau2.md), [08-gravacao](plano/F5/08-gravacao.md) |
 | F6 | em andamento em paralelo à F5: etapa 1 com a parte do WSL feita (a rodada do console pendente), etapa 2 com a rede de testes do som; decisão 25 (a 25.10 revista em 22/10) | [plano/F6/00-escopo.md](plano/F6/00-escopo.md) |
-| F7 a F9 | por fazer | só a entrega da tabela acima |
+| F7 a F9 | por fazer | só a entrega da tabela acima; itens anotados para a F8 em [plano/F8/pendencias.md](plano/F8/pendencias.md) e o estudo do [16:9](plano/F8/16x9.md) |
 
 ### F4, etapas (13/10/2026)
 
