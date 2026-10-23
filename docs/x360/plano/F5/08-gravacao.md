@@ -1569,3 +1569,62 @@ python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_e1.t
    `roteiro: FALHA`, nenhum `vigia:`; a imagem sem lixo nas texturas (um `dcbz128` errado apareceria como blocos pretos).
 4. Se a abertura 2 não mudar o `ocupada`, o envio não é memória: uma abertura com `BT3_TEMPOS=1` dá a linha por família (o `envio`
    direto, em ms por quadro) para conferir os 6,5 ms antes de outro corte.
+
+## 19. A rodada do console (22/10/2026) [medido]
+
+Duas aberturas do `f5_duelo` pelo roteiro com o `.xex` do `b2e1629` (o log diz a build de "Oct 22 2026 22:52:32", a do
+`default.xex` `419e94aa…` da seção 18), `BT3_PICOS=36`, `BT3_TEMPOS=0`, `BT3_WIDE=1`, sem som: e0 com `BT3_ENVIO_RAPIDO=0`
+(`saves_ev0`), e1 com `=1` (`saves_ev1`). A abertura com `=2` não foi feita. Logs em `build/sessao_2210/e0` e `e1` (fora do git).
+
+**O que o log deixa medir.** Com o `BT3_PICOS=36`, só os quadros com apresentação acima de 36 ms têm a linha `ocupada`, e as
+linhas de 60 quadros do `gs_d3d` não saem dentro das janelas do roteiro (no combate, só a da pausa, quadro 5399): o quadro típico
+do combate (abaixo de 36 ms) não tem medida de gravação. A comparação que vale é **por pares**: o mesmo quadro nas duas aberturas
+(o roteiro é determinístico), com os mesmos KB de envios e sem texturas novas nem disco nos dois. A mediana de cada abertura em
+separado engana: no combate, os quadros com mais de 2.400 KB que passaram de 36 ms foram 14 na e0 (`ocupada` mediana 28,6) e 30 na
+e1 (25,0), conjuntos diferentes; o par dá 2,2. O tempo de envio por byte não sai do log (`BT3_TEMPOS=0`): sai da diferença por
+par, dividida pelos bytes.
+
+| | e0 (chave 0) | e1 (chave 1) |
+|---|---:|---:|
+| Pares (mesmo quadro, mesmos KB, sem texturas nem disco), todos | 103 quadros, 2.814 KB em média | |
+| `ocupada` da gravação, mediana dos pares | 38,1 ms | **36,3 ms** |
+| Diferença por par (e0 menos e1): mediana, média, faixa | **1,8 ms**, 1,87, de 1,3 a 3,1 | |
+| Só os pares com mais de 2.400 KB (91): diferença mediana | 1,8 ms (0,61 ns por byte) | |
+| Na abertura da luta (quadros 4136 a 4671, 58 pares de 2.991 KB) | 42,7 ms | 41,1 (1,8 a menos) |
+| No combate (4672 a 7757, só 6 pares acima de 2.400 KB, 2.546 KB) | 28,4 ms | 26,3 (2,2 a menos) |
+| Combate (janela 2): trabalho p50 / p95 / p99 / máximo | 33,26 / 34,79 / 34,93 / 38,24 | 33,25 / 34,84 / 34,94 / 36,28 |
+| Combate: apresentação p99 / máximo | 36,94 / 47,41 | 37,31 / 54,88 |
+| Combate: intervalos acima de 34,37 / de 50,05 ms | 218 (9,34%) / 0 | 223 (9,55%) / 1 |
+| Abertura da luta (janela 1): trabalho p99 / máximo | 36,94 / 85,64 | 35,51 / 83,59 |
+| Abertura da luta: apresentação p99 / intervalos acima de 34,37 / de 50,05 ms | 35,94 / 21 (3,07%) / 1 | **38,09 / 94 (13,76%)** / 1 |
+| Quadros no `picos` entre 4672 e 7757 | 66 | 89 |
+| Deles, gravação ocupada acima de 33,4 ms | 7 | 4 |
+| Deles, o jogo esperando o vblank (mais de 5 ms) com a gravação parada (mais de 5 ms sem trabalho) | 42 (0 na janela 1) | 80 (27 na janela 1) |
+| `roteiro: resultado` | vencedor 0x2 razão 0x1 vida 0 27160, vblank 11478 | igual |
+| Passos por janela (684 e 2.334), `FALHA`, `vigia:`, `CRASH` | 684 e 2.334; 0, 0, 0 | iguais; 0, 0, 0 |
+| `textura preta` (RGB zero na textura inteira) | 32 linhas | as mesmas 32 (mesmos quadros e tamanhos) |
+
+**Leitura.**
+
+- **O envio por linhas de cache tira 1,8 ms da gravação ocupada nos quadros pesados** [medido, por pares], com pouca dispersão (de
+  1,3 a 3,1 ms em 103 pares): uns 0,6 ns por byte. É menos que os 2,5 a 4 ms estimados. Se o envio custava os 2,6 ns por byte da
+  seção 18, agora custa uns 2,0 [estimado]: a memória pesa, mas não é tudo, ou o `dcbt` e o `dcbz128` só tiram uma parte das faltas.
+  A abertura com `=2` diria qual das duas metades rendeu.
+- **A apresentação do combate não melhorou**: o p99 e os intervalos acima de 34,37 ms ficaram onde estavam (9,34% e 9,55%). Os quadros
+  lentos do combate já não são da gravação: na e1, 77 de 89 têm `ocupada` até 30 ms, e 80 são o jogo esperando o vblank (uns 10
+  ms) enquanto a gravação fica parada (uns 10 ms sem trabalho), com a apresentação em 36 a 38 ms. O que segura esses quadros é o
+  acerto de fase entre o jogo, a gravação e o vblank, não o trabalho de nenhuma das threads.
+- **Na abertura da luta (janela 1) a e1 teve mais intervalos acima de 34,37 ms** (94 contra 21); dos 32 quadros dela acima de 36
+  ms na e1, 27 são desse tipo (nenhum na e0). Com uma abertura de cada, não dá para separar efeito de variação: entre as aberturas da seção 17 o mesmo
+  número do combate variou de 6,3% a 11,5%. Não há sinal de defeito (o resultado, os passos e a lista de texturas pretas iguais).
+- **Nenhum bloco preto pelo log**: as 32 texturas inteiramente pretas são as mesmas, nos mesmos quadros, nas duas aberturas. O log
+  não vê um bloco preto dentro de uma textura com outros texels; isso fica com as listas do WSL (a sabotagem das linhas) e com o
+  olho na imagem.
+- **A prova do WSL (`~/envio-rapido/provas.resumo` e `parte-a.resumo`) não foi conferida**: o WSL e o Deck estavam fora do ar
+  (23/10). Pendente: a `.text`, o teste na PPC, as listas da `x86gv` com a chave 0 contra 1 nos dois roteiros, sem e com as
+  threads, a contagem com a chave ligada, a sabotagem acusada nos dois roteiros e as listas da `ppcg`.
+
+**Conclusão.** O corte é certo pelo console (nenhuma diferença visível no log) e rende 1,8 ms de gravação nos quadros pesados, sem
+ganho visível na apresentação do combate, que agora é presa ao acerto de fase. Ligar por padrão depende de duas coisas: a prova do
+WSL conferida e uma segunda dupla de aberturas (na ordem e1, e0, e de preferência a e2) para ver se os 94 intervalos da janela 1
+se repetem. A frente seguinte da etapa 8 é a fase entre o jogo e a gravação nos quadros de 36 a 38 ms, não mais o envio.

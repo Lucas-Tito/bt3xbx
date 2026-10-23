@@ -1881,3 +1881,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **`dcbz128` só numa linha escrita inteira e numa memória alinhada a 128**: a variável com `__attribute__((aligned(128)))` no
   `#ifdef PORT_X360`, o endereço conferido no `dumpbin` (o `lis`/`addi`), uma guarda em tempo de execução, e no teste de unidade o
   `dcbz128` trocado por um `memset` da linha, para uma linha zerada e não escrita aparecer como diferença.
+- **Compare um corte da gravação entre aberturas por pares de quadros, não pela mediana de cada uma** (seção 19). O `BT3_PICOS`
+  só registra os quadros acima do limiar, e as linhas de 60 quadros do `gs_d3d` não saem dentro das janelas do roteiro: os quadros
+  que aparecem mudam de uma abertura para a outra (14 contra 30 no combate), e a mediana de cada conjunto deu 3,6 ms de ganho
+  onde o par dava 2,2. Como o roteiro é determinístico, junte o mesmo quadro nas duas, com os mesmos KB de envios e sem texturas
+  nem disco: 103 pares deram 1,8 ms, de 1,3 a 3,1. Para medir o quadro típico do combate, que fica abaixo do limiar, a abertura
+  precisa de um limiar menor ou do `BT3_TEMPOS=1`.
+- **Antes de estimar o ganho na apresentação, classifique os quadros lentos pelo que esperava** (seção 19). O envio tirou 1,8 ms
+  da gravação e a apresentação do combate não mudou: os quadros acima de 36 ms já eram o jogo esperando o vblank com a gravação
+  parada (80 de 89), não a gravação ocupada (4). A conta "menos trabalho, menos picos" só vale para os quadros presos ao trabalho.
