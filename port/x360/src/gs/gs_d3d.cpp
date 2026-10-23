@@ -2067,7 +2067,7 @@ static unsigned sFxaaN;  /* as passadas no trecho (fxaa_log) */
 static Ret sFxaaRet;     /* a parte usada, em pixels de saída (fxaa_init) */
 
 static void fxaa_init(void) {
-    sFxaa = env_num("BT3_FXAA", 0) & 1;
+    sFxaa = env_num("BT3_FXAA", 1) & 1; /* (ligado por padrão desde 23/10: 0,8 a 0,9 ms de GPU; o Lucas aprovou sem a máscara) */
     if (sFxaa == 0) {
         return;
     }
