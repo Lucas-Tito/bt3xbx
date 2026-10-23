@@ -1258,7 +1258,8 @@ static struct {
 } sOt;
 
 static void otim_init(void) {
-    unsigned todas = env_num("BT3_OTIM", 0) != 0;
+    /* ligadas por padrão desde a rodada do console de 23/10 (08-720p.md): a mesma imagem e 1,3 a 2,6 ms a menos de GPU */
+    unsigned todas = env_num("BT3_OTIM", 1) != 0;
     sOtim = (env_num("BT3_OTIM_PS", todas) != 0 ? OT_PS : 0) | (env_num("BT3_OTIM_LIMPA", todas) != 0 ? OT_LIMPA : 0) |
             (env_num("BT3_OTIM_DATE", todas) != 0 ? OT_DATE : 0) | (env_num("BT3_OTIM_NEVOA", todas) != 0 ? OT_NEVOA : 0);
     if ((sOtim & OT_PS) && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsSemPs, &sPsRap[0][0])) ||
