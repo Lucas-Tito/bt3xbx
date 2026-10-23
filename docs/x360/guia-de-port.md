@@ -1911,6 +1911,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   quadros até o jogo sair. Compare só os quadros que as duas aberturas têm.
 - **Logs de rodada não moram no scratchpad:** um reinício da máquina o limpa (os logs da 1 e da 1,5 de 22/10 se perderam). Guarde
   em `build/sessao_<data>/<nome>` e escreva na nota os números que a próxima comparação vai usar.
+- **Adiar o Resolve "para quando a textura for lida" exige olhar a ordem das chamadas** (`08-720p.md`, seção 10, a rodada de
+  23/10): a conferência da leitura rodava antes da troca de alvo, então o alvo que ainda estava posto, e que o desenho seguinte lia,
+  passava como "o posto" e ficava sem Resolve. Três sintomas de uma vez (imagem duplicada, partes pretas, a silhueta de uma página
+  de trabalho somada à tela) e um contador "esperado 0" em 31 por quadro, que o desenho tinha dado como impossível. Antes da rodada,
+  para cada Resolve que sai do caminho, escreva quem lê aquele alvo e em que linha do laço, e ponha um contador que confere a
+  leitura no ponto em que ela acontece (depois da troca, antes do desenho), com uma chave de sabotagem para vê-lo acusar.
 
 ### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
 

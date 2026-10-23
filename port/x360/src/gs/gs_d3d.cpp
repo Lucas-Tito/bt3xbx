@@ -174,6 +174,10 @@ static uint32_t sVuIni[MAX_DRAWS]; /* o primeiro índice de cada desenho da VU1 
 static int sCurUni = -1;            /* o Vu0Uniform posto nas constantes dos vs_vu* */
 static D3DSurface *sEdramCor, *sEdramProf, *sTela;
 static D3DSurface *sEdramProfCor; /* (F5, etapa 7) a profundidade da EDRAM vista como cor: mesma base, mesmos tiles */
+/* (720p, BT3_EDRAM_RESIDENTE) a superfície de cor posta para desenhar e o tamanho dela: sem a chave, sempre sEdramCor e o
+   alvo inteiro (postos no init); com ela, a vaga do alvo posto (ed_poe) */
+static D3DSurface *sCorPosta;
+static int sPostaW = GS_W, sPostaH = GS_H;
 static D3DPixelShader *sPsZCor, *sPsZProf;
 static D3DTexture *sBranco, *sDate;
 static D3DTexture *sDateFonte; /* o que os desenhos com DATE leem: sDate, ou a textura de um alvo fora da EDRAM */
@@ -1589,8 +1593,9 @@ static D3DPixelShader *ps_escolhe(const GsDraw *d, int estado) {
    (a cor e, se for o caso, a profundidade). Quando o conteúdo do alvo volta por cima (o alvo já desenhado e com textura), a
    cópia escreve cada pixel do conteúdo sem mistura nem teste: limpar a cor ali é trabalho jogado fora. A profundidade, se
    pedida, limpa inteira; a cor, só nos até quatro retângulos em volta do conteúdo (nenhum quando ele cobre o alvo). O
-   resultado na EDRAM é o mesmo. 0: o alvo não tem volta (quem chamou limpa tudo, como antes). */
-static int limpa_fora(const Alvo *a, int volta, DWORD limpa) {
+   resultado na EDRAM é o mesmo. 0: o alvo não tem volta (quem chamou limpa tudo, como antes). W x H: a superfície posta (o
+   alvo inteiro; com BT3_EDRAM_RESIDENTE, a vaga dele). */
+static int limpa_fora(const Alvo *a, int volta, DWORD limpa, int W, int H) {
     D3DRECT r[4];
     const Ret *c = &a->conteudo;
     DWORD n = 0;
@@ -1601,16 +1606,16 @@ static int limpa_fora(const Alvo *a, int volta, DWORD limpa) {
         sDev->Clear(0, NULL, limpa & ~(DWORD)D3DCLEAR_TARGET, 0x00000000, 0.0f, 0);
     }
     if (c->y0 > 0) {
-        r[n].x1 = 0; r[n].y1 = 0; r[n].x2 = sAlvoW; r[n].y2 = c->y0; n++;
+        r[n].x1 = 0; r[n].y1 = 0; r[n].x2 = W; r[n].y2 = c->y0; n++;
     }
-    if (c->y1 < sAlvoH) {
-        r[n].x1 = 0; r[n].y1 = c->y1; r[n].x2 = sAlvoW; r[n].y2 = sAlvoH; n++;
+    if (c->y1 < H) {
+        r[n].x1 = 0; r[n].y1 = c->y1; r[n].x2 = W; r[n].y2 = H; n++;
     }
     if (c->x0 > 0) {
         r[n].x1 = 0; r[n].y1 = c->y0; r[n].x2 = c->x0; r[n].y2 = c->y1; n++;
     }
-    if (c->x1 < sAlvoW) {
-        r[n].x1 = c->x1; r[n].y1 = c->y0; r[n].x2 = sAlvoW; r[n].y2 = c->y1; n++;
+    if (c->x1 < W) {
+        r[n].x1 = c->x1; r[n].y1 = c->y0; r[n].x2 = W; r[n].y2 = c->y1; n++;
     }
     if (n > 0) {
         sDev->Clear(n, r, D3DCLEAR_TARGET, 0x00000000, 0.0f, 0);
@@ -2066,7 +2071,7 @@ static void prof_poe(Prof *z, const Ret *r, int modo) {
         sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
         sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
         quad(z->cor, sPsZCor, sAlvoWZ, sAlvoH, x0, y0, x1, y1, x0 / W, y0 / H, x1 / W, y1 / H, 0);
-        sDev->SetRenderTarget(0, sEdramCor);
+        sDev->SetRenderTarget(0, sCorPosta); /* (sEdramCor; com BT3_EDRAM_RESIDENTE, a vaga A ou B, do mesmo tamanho) */
         sDev->SetDepthStencilSurface(sEdramProf);
         sDev->SetViewport(&vp);
     } else {
@@ -2243,6 +2248,522 @@ static void sai_da_edram(void) {
     sSujo.x0 = sSujo.x1 = 0;
 }
 
+/* ---- os alvos residentes na EDRAM (720p, BT3_EDRAM_RESIDENTE=1; docs/x360/plano/F5/08-720p.md, seção 10) ----------
+
+   Sem a chave, um par só na EDRAM: cada troca de alvo resolve o que saiu e limpa e redesenha (a volta) o que entra. Com
+   ela, os 2.048 tiles em faixas fixas: A (base 0, o alvo inteiro, sEdramCor) para o alvo que mais entra no quadro, a
+   profundidade de todos logo depois (base T, sEdramProf, como antes), B (base 2T, o alvo inteiro) para os outros alvos
+   grandes, um de cada vez, e o resto para uma superfície por alvo pequeno (do tamanho do que ele desenha no quadro). O plano
+   é de cada quadro (ed_plano, antes de desenhar). Sair de um alvo não resolve: o sujo fica com a vaga dele. Entrar num alvo
+   que já está na vaga dele só põe a superfície; senão, a entrada de antes (a limpeza e a volta), na vaga. O Resolve
+   (ed_descarrega) só quando a textura vai ser lida: um desenho com o alvo como textura, o marcador de DATE num alvo que não
+   é o posto (e, enquanto a textura dele for a fonte do DATE, a cada saída dele, o de antes), o despejo da B e o fim do
+   quadro (o back buffer mora na base 0). A e B têm a largura da profundidade e a põem; as pequenas, não (a cor e a
+   profundidade do Xenos têm um pitch só), por isso só alvos sem z e sem nativas vão para elas. */
+#define VAGAS_MAX 8 /* A, B e até seis pequenas */
+enum { VG_A = 0, VG_B = 1, VG_P0 = 2 };
+enum { ED_LEITURA, ED_DATE, ED_FONTE, ED_DESPEJO, ED_FIM, ED_N };
+typedef struct Vaga {
+    D3DSurface *cor; /* a superfície (A: sEdramCor) */
+    int w, h;        /* em pixels de saída */
+    UINT base, tiles;
+    int dono;        /* o alvo que ela tem no quadro (-1: nenhum) */
+    Ret sujo;        /* o desenhado nele que ainda não foi para a textura (o do alvo posto está no sSujo) */
+} Vaga;
+static int sEdRes;                       /* 1: a chave ligada e as faixas cabem */
+static int sEdSabota;                    /* BT3_EDRAM_SABOTA=1: o erro da rodada de 23/10 de volta, para ver o contador acusar */
+static Vaga sVaga[VAGAS_MAX];
+static int sVagaN = 2;                   /* A, B e as pequenas do quadro */
+static UINT sEdPool;                     /* 3T: a base da primeira pequena */
+static signed char sVagaDe[MAX_TARGETS]; /* a vaga de cada alvo no quadro */
+static int sVagaPosta = -1;              /* a vaga da superfície posta (-1: nenhuma deste quadro ainda) */
+static unsigned sEdMarca;                /* desenhos e passadas até a entrada no alvo posto (a saída diz se ele desenhou) */
+static const char kEdMotivo[ED_N] = {'l', 'd', 's', 'b', 'f'};
+/* (no trecho) */
+static struct {
+    unsigned entradas, primeiras, reentradas, naB, despejos, saidas, saidasDesenho, pequenaZ, lePosta, foraVaga, semResolve;
+    unsigned desc[ED_N], quadros, tilesMax, pequenasMax;
+    double descPx;
+} sEd;
+static char sEdPlano[256];   /* o plano do último quadro, para o log */
+static char sEdTrilha[960];  /* a sequência das entradas e dos Resolves de um quadro por trecho */
+static int sEdTrilhaN = -1;  /* -1: não gravando */
+static int sEdTrilhaOk;      /* 1: a de um quadro pronta para o log */
+static unsigned sEdTrilhaQ;
+
+static void ed_trilha(const char *s) {
+    size_t n = strlen(s);
+    if (sEdTrilhaN >= 0 && (size_t)sEdTrilhaN + n + 1 < sizeof(sEdTrilha)) {
+        memcpy(sEdTrilha + sEdTrilhaN, s, n + 1);
+        sEdTrilhaN += (int)n;
+    }
+}
+
+/* põe a superfície da vaga v: a profundidade (A e B), a viewport e a posição no recorte (c14) pelo tamanho dela: o mesmo pixel
+   de saída para o mesmo pixel do GS (A e B com a conta de sempre, recorte_poe) */
+static void ed_poe(int v) {
+    Vaga *g = &sVaga[v];
+    D3DVIEWPORT9 vp = {0, 0, (DWORD)g->w, (DWORD)g->h, 0.0f, 1.0f};
+    float c[4] = {2.0f / sAreaW, 2.0f / sAreaH, 0.0f, 0.0f};
+    if (v >= VG_P0) {
+        c[0] = 2.0f * (float)sEscN / ((float)g->w * (float)sEscD); /* (2 / a largura da vaga em pixels do GS) */
+        c[1] = 2.0f * (float)sEscN / ((float)g->h * (float)sEscD);
+    }
+    sDev->SetRenderTarget(0, g->cor);
+    sDev->SetDepthStencilSurface(v < VG_P0 ? sEdramProf : NULL);
+    sDev->SetViewport(&vp);
+    sDev->SetVertexShaderConstantF(14, c, 1);
+    sVagaPosta = v;
+    sCorPosta = g->cor;
+    sPostaW = g->w;
+    sPostaH = g->h;
+}
+
+/* O sujo do alvo t (na vaga dele) vai para a textura: põe a vaga se não for a posta e volta para a posta. motivo: ED_* */
+static void ed_descarrega(int t, int motivo) {
+    int v = t >= 0 ? sVagaDe[t] : -1, posta = sVagaPosta;
+    Vaga *g;
+    Ret r;
+    D3DRECT fonte;
+    D3DPOINT destino;
+    if (v < 0 || sVaga[v].dono != t) {
+        return; /* (fora da EDRAM: a textura já tem tudo) */
+    }
+    g = &sVaga[v];
+    r = t == sResidente ? sSujo : g->sujo;
+    g->sujo.x0 = g->sujo.x1 = 0;
+    if (t == sResidente) {
+        sSujo.x0 = sSujo.x1 = 0;
+    }
+    if (r.x1 <= r.x0 || sAlvoD[t].tex == NULL) {
+        return;
+    }
+    tempo_poe(T_COR_RES);
+    sDev->SetTexture(0, NULL); /* (o destino do Resolve não fica preso como textura) */
+    sDev->SetTexture(1, NULL);
+    sCurTex = (GsTex)-1;
+    sCurDate = NULL;
+    if (v != posta) {
+        sDev->SetRenderTarget(0, g->cor);
+        sDev->SetDepthStencilSurface(NULL);
+    }
+    alinha8(&r);
+    if (r.x1 > g->w || r.y1 > g->h) {
+        sEd.foraVaga++;
+    }
+    fonte.x1 = r.x0; fonte.y1 = r.y0; fonte.x2 = r.x1; fonte.y2 = r.y1;
+    destino.x = r.x0; destino.y = r.y0;
+    sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sAlvoD[t].tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+    ret_une(&sAlvoD[t].conteudo, r.x0, r.y0, r.x1, r.y1);
+    sConta.corResPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+    sEd.desc[motivo]++;
+    sEd.descPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+    if (sEdTrilhaN >= 0) {
+        char b[16];
+        _snprintf(b, sizeof(b) - 1, "^%d%c ", t, kEdMotivo[motivo]);
+        b[sizeof(b) - 1] = '\0';
+        ed_trilha(b);
+    }
+    if (v != posta && posta >= 0) {
+        ed_poe(posta);
+        esquece_estado();
+    }
+}
+
+/* o alvo posto deixa de ser o posto: o sujo fica com a vaga; se a textura dele é a fonte do DATE, vai já (o de antes) */
+static void ed_sai(void) {
+    int t = sResidente;
+    if (t < 0) {
+        return;
+    }
+    sEd.saidas++;
+    sEd.saidasDesenho += sConta.desenhos + sConta.natCont + sConta.natTab != sEdMarca;
+    if (sAlvoD[t].tex != NULL && sAlvoD[t].tex == sDateFonte) {
+        ed_descarrega(t, ED_FONTE);
+    }
+    sVaga[sVagaDe[t]].sujo = sSujo;
+    sResidente = -1;
+    sSujo.x0 = sSujo.x1 = 0;
+}
+
+/* (no frame loop, antes da troca de alvo) um desenho no alvo `alvo` vai ler a textura tex: se ela é de um alvo com sujo
+   guardado numa vaga, descarrega. O alvo posto também: a troca para o alvo do desenho vem depois desta chamada, então o
+   posto que é lido é o que está saindo (a cópia de um alvo para o seguinte, a cadeia do brilho, a página da sombra); sem
+   a chave, a saída dele resolvia antes do desenho. Só o próprio alvo do desenho não (o gs_draw.c recusa; contado). */
+static void ed_leitura(GsTex tex, int alvo) {
+    int v;
+    for (v = 0; v < sVagaN; v++) {
+        int t = sVaga[v].dono;
+        if (t >= 0 && (GsTex)sAlvoD[t].tex == tex) {
+            if (t == alvo || (sEdSabota && t == sResidente)) {
+                sEd.lePosta++; /* (lendo a si mesmo: o gs_draw.c recusa; com a sabotagem, também o posto que sai) */
+            } else {
+                ed_descarrega(t, ED_LEITURA); /* (o posto: sem trocar de superfície, como a saída de antes) */
+            }
+            return;
+        }
+    }
+}
+
+/* (no frame loop, depois da troca, antes do desenho) a conferência: o alvo que o desenho lê como textura, ou a fonte do DATE,
+   não pode ter sujo guardado numa vaga (a textura não teria o que a EDRAM tem). Só conta: tem de dar 0. */
+static void ed_confere(const GsDraw *d) {
+    int v;
+    for (v = 0; v < sVagaN; v++) {
+        int t = sVaga[v].dono;
+        if (t < 0 || t == d->target || t == sResidente || sVaga[v].sujo.x1 <= sVaga[v].sujo.x0 || sAlvoD[t].tex == NULL) {
+            continue; /* (o alvo do desenho: o sujo dele está no sSujo, e a leitura de si mesmo o gs_draw.c recusa) */
+        }
+        if ((d->mode[0] == 2 && (GsTex)sAlvoD[t].tex == d->tex) || (d->misc[1] != 0.0f && sAlvoD[t].tex == sDateFonte)) {
+            sEd.semResolve++;
+        }
+    }
+}
+
+/* A entrada do alvo i pela vaga dele (entra_na_edram com a chave) */
+static void entra_res(int i, int usaZ) {
+    Alvo *a = &sAlvoD[i];
+    int v = sVagaDe[i], poeZ = 0, nova;
+    DWORD limpa = D3DCLEAR_TARGET;
+    Vaga *g = &sVaga[v];
+    ed_sai();
+    if (!sQ->targets[i].cleared && sZDono == i) {
+        sZDono = -1; /* (novo para o jogo: o que a EDRAM tem dele não vale) */
+        sSujoZ.x0 = sSujoZ.x1 = 0;
+    }
+    if (g->dono >= 0 && g->dono != i) {
+        ed_descarrega(g->dono, ED_DESPEJO); /* (a B com outro alvo) */
+        g->dono = -1;
+        sEd.despejos++;
+    }
+    nova = g->dono != i;
+    tempo_poe(T_COR_ENTRA);
+    ed_poe(v);
+    if (usaZ && v >= VG_P0) {
+        sEd.pequenaZ++; /* (o plano não deixa; contado) */
+        usaZ = 0;
+    }
+    if (usaZ) {
+        sConta.zVisitas++;
+        sConta.zSemTex += sProfD[i].tex == NULL;
+        if (sZDono == i) {
+            sConta.zMantida++;
+        } else {
+            prof_entrega();
+            limpa |= D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL;
+            poeZ = 1;
+        }
+        tempo_poe(T_COR_ENTRA);
+    }
+    sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
+    if (nova) {
+        if (!(sOtim & OT_LIMPA) || !limpa_fora(a, sQ->targets[i].cleared, limpa, g->w, g->h)) {
+            sDev->Clear(0, NULL, limpa, 0x00000000, 0.0f, 0);
+        }
+    } else if (poeZ) {
+        sDev->Clear(0, NULL, limpa & ~(DWORD)D3DCLEAR_TARGET, 0x00000000, 0.0f, 0); /* (só a profundidade) */
+    }
+    if (!sQ->targets[i].cleared) {
+        a->conteudo.x0 = a->conteudo.x1 = 0; /* novo para o jogo: começa limpo */
+        sProfD[i].conteudo.x0 = sProfD[i].conteudo.x1 = 0;
+    } else {
+        if (nova && a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
+            Ret r = a->conteudo;
+            tempo_poe(T_COR_VOLTA);
+            copia(a->tex, g->w, g->h, (float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1, (float)r.x0 / sAlvoW,
+                  (float)r.y0 / sAlvoH, (float)r.x1 / sAlvoW, (float)r.y1 / sAlvoH, 0);
+            sConta.restauros++;
+            sConta.corRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+            if (r.x1 > g->w || r.y1 > g->h) {
+                sEd.foraVaga++;
+            }
+        }
+        if (poeZ && sProfD[i].tex != NULL && sProfD[i].conteudo.x1 > sProfD[i].conteudo.x0) {
+            LARGE_INTEGER t;
+            Ret r = sProfD[i].conteudo;
+            QueryPerformanceCounter(&t);
+            tempo_poe(T_PROF);
+            prof_poe(&sProfD[i], &r, sModoZ);
+            sConta.zRest++;
+            sConta.zRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+            sConta.msZQuadro += ms_desde(&t);
+        }
+    }
+    if (poeZ) {
+        sZDono = i;
+    }
+    esquece_estado();
+    if (nova) {
+        g->dono = i;
+        g->sujo.x0 = g->sujo.x1 = 0;
+    }
+    sResidente = i;
+    sSujo = g->sujo;
+    sEdMarca = sConta.desenhos + sConta.natCont + sConta.natTab;
+    sConta.trocas++;
+    sEd.entradas++;
+    sEd.primeiras += nova;
+    sEd.reentradas += !nova;
+    sEd.naB += v == VG_B;
+    if (sEdTrilhaN >= 0) {
+        char b[16];
+        _snprintf(b, sizeof(b) - 1, "%d%c%s%s ", i, v == VG_A ? 'A' : v == VG_B ? 'B' : 'p', nova ? "+" : "",
+                  !usaZ ? "" : poeZ ? "z" : "Z");
+        b[sizeof(b) - 1] = '\0';
+        ed_trilha(b);
+    }
+}
+
+/* O plano do quadro (no começo do frame_end, com a lista inteira e o plano da VU1 feitos): quantas vezes cada alvo entra, a
+   união das tesouras dos desenhos dele (pixels de saída, presas na área) com o conteúdo que ele já tem, e se ele precisa da
+   vaga grande (algum desenho com z: teste além do ALWAYS ou escrita; uma nativa; o filme). A: o que mais entra. Uma pequena,
+   na ordem das entradas, para cada um dos outros que não precisa da grande e cabe no que sobra; o resto pela B. */
+static void ed_plano(const GsQuadro *q) {
+    static int ent[MAX_TARGETS];
+    static unsigned char grande[MAX_TARGETS];
+    static Ret ext[MAX_TARGETS];
+    static int cacheW[VAGAS_MAX], cacheH[VAGAS_MAX];
+    static UINT cacheBase[VAGAS_MAX];
+    int cur = -1, t, i, A = -1, m = 0, nTilesP = 0, nP = 0;
+    UINT base = sEdPool;
+    uint32_t n;
+    memset(ent, 0, sizeof(ent));
+    memset(grande, 0, sizeof(grande));
+    memset(ext, 0, sizeof(ext));
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        int x0, y0, x1, y1;
+        t = d->target;
+        if (t < 0 || t >= q->targetCount || t >= MAX_TARGETS) {
+            continue;
+        }
+        if (d->native != 0) {
+            if (d->native == 1 || d->native == 3 || d->native == 4 || d->native >= 100) {
+                grande[t] = 1; /* (as nativas e o filme entram no alvo e pedem a vaga grande) */
+                ent[t] += t != cur;
+                cur = t;
+            }
+            continue;
+        }
+        if (d->vu && sVuIni[n] == ~0u) {
+            continue;
+        }
+        ent[t] += t != cur;
+        cur = t;
+        if (!sPipes[d->pipeline].fx && (sPipes[d->pipeline].zwrite || sPipes[d->pipeline].ztst != 1)) {
+            grande[t] = 1;
+        }
+        x0 = d->scissor[0];
+        y0 = d->scissor[1];
+        x1 = d->scissor[0] + d->scissor[2];
+        y1 = d->scissor[1] + d->scissor[3];
+        esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH);
+        if (x1 > x0 && y1 > y0) {
+            ret_une(&ext[t], 0, 0, esc_px(x1, sEscN, sEscD), esc_px(y1, sEscN, sEscD));
+        }
+    }
+    for (t = 0; t < q->targetCount && t < MAX_TARGETS; t++) {
+        const Ret *c = &sAlvoD[t].conteudo;
+        sVagaDe[t] = VG_B;
+        if (q->targets[t].cleared && c->x1 > c->x0) {
+            ret_une(&ext[t], 0, 0, c->x1, c->y1);
+        }
+        if (ent[t] > 0 && (A < 0 || ent[t] > ent[A])) {
+            A = t;
+        }
+    }
+    if (A >= 0) {
+        sVagaDe[A] = VG_A;
+    }
+    sVagaN = VG_P0;
+    for (;;) { /* (as pequenas, o que mais entra primeiro) */
+        int melhor = -1, w, h;
+        UINT tl;
+        for (t = 0; t < q->targetCount && t < MAX_TARGETS; t++) {
+            if (t != A && ent[t] > 0 && !grande[t] && sVagaDe[t] == VG_B && ext[t].x1 > 0 && ext[t].y1 > 0 &&
+                (melhor < 0 || ent[t] > ent[melhor])) {
+                melhor = t;
+            }
+        }
+        if (melhor < 0 || sVagaN >= VAGAS_MAX) {
+            break;
+        }
+        t = melhor;
+        w = (ext[t].x1 + 7) & ~7;
+        h = (ext[t].y1 + 7) & ~7;
+        tl = esc_tiles(w, h);
+        if (w > sAlvoW || h > sAlvoH || base + tl > EDRAM_TILES) {
+            grande[t] = 1; /* (não cabe: fica na B) */
+            continue;
+        }
+        i = sVagaN;
+        if (sVaga[i].cor == NULL || cacheW[i] != w || cacheH[i] != h || cacheBase[i] != base) {
+            D3DSURFACE_PARAMETERS sp;
+            if (sVaga[i].cor != NULL) {
+                sVaga[i].cor->Release();
+                sVaga[i].cor = NULL;
+            }
+            memset(&sp, 0, sizeof(sp));
+            sp.Base = base;
+            if (FAILED(sDev->CreateRenderTarget(w, h, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &sVaga[i].cor, &sp))) {
+                sVaga[i].cor = NULL;
+                grande[t] = 1;
+                continue;
+            }
+            cacheW[i] = w;
+            cacheH[i] = h;
+            cacheBase[i] = base;
+        }
+        sVaga[i].w = w;
+        sVaga[i].h = h;
+        sVaga[i].base = base;
+        sVaga[i].tiles = tl;
+        sVaga[i].dono = -1;
+        sVaga[i].sujo.x0 = sVaga[i].sujo.x1 = 0;
+        sVagaDe[t] = (signed char)i;
+        base += tl;
+        nTilesP += (int)tl;
+        nP++;
+        sVagaN++;
+    }
+    for (i = 0; i < VG_P0; i++) {
+        sVaga[i].dono = -1;
+        sVaga[i].sujo.x0 = sVaga[i].sujo.x1 = 0;
+    }
+    sVagaPosta = -1;
+    if ((unsigned)(3 * sVaga[VG_A].tiles + nTilesP) > sEd.tilesMax) {
+        sEd.tilesMax = 3 * sVaga[VG_A].tiles + nTilesP;
+    }
+    if ((unsigned)nP > sEd.pequenasMax) {
+        sEd.pequenasMax = (unsigned)nP;
+    }
+    /* o plano para o log: A, as pequenas (alvo: largura x altura em pixels de saída) e os da B */
+    m = _snprintf(sEdPlano, sizeof(sEdPlano) - 1, "A alvo %d (%d entradas)", A, A >= 0 ? ent[A] : 0);
+    for (t = 0; m > 0 && t < q->targetCount && t < MAX_TARGETS; t++) {
+        int k = 0;
+        if (ent[t] == 0 || t == A) {
+            continue;
+        }
+        if (sVagaDe[t] >= VG_P0) {
+            k = _snprintf(sEdPlano + m, sizeof(sEdPlano) - m - 1, "; pequena alvo %d %dx%d (%u tiles, %d entradas)", t,
+                          sVaga[sVagaDe[t]].w, sVaga[sVagaDe[t]].h, sVaga[sVagaDe[t]].tiles, ent[t]);
+        } else {
+            k = _snprintf(sEdPlano + m, sizeof(sEdPlano) - m - 1, "; B alvo %d (%d entradas%s)", t, ent[t],
+                          grande[t] ? "" : ", sem lugar");
+        }
+        m = k > 0 ? m + k : -1;
+    }
+    sEdPlano[sizeof(sEdPlano) - 1] = '\0';
+    sEd.quadros++;
+    sEdTrilhaN = -1;
+    if (sConta.quadros == 20) { /* (a sequência de um quadro por trecho) */
+        sEdTrilha[0] = '\0';
+        sEdTrilhaN = 0;
+        sEdTrilhaOk = 0;
+        sEdTrilhaQ = q->quadro;
+    }
+}
+
+/* o fim do quadro com a chave: todos os alvos das vagas para as texturas (a captura, a cópia para a tela e o back buffer na
+   base 0 vêm depois) e a vaga A posta, com a profundidade, para o prof_entrega */
+static void ed_fim(void) {
+    int v;
+    ed_sai();
+    for (v = 0; v < sVagaN; v++) {
+        if (sVaga[v].dono >= 0) {
+            ed_descarrega(sVaga[v].dono, ED_FIM);
+            sVaga[v].dono = -1;
+        }
+    }
+    if (sVagaPosta != VG_A) {
+        ed_poe(VG_A);
+    }
+    esquece_estado();
+    if (sEdTrilhaN >= 0) {
+        sEdTrilhaOk = 1; /* (a sequência pronta para o log) */
+        sEdTrilhaN = -1;
+    }
+}
+
+/* (no init, depois do autoteste da profundidade) a chave: a B na base 2T; recusada sem a profundidade por alvo (BT3_Z=0,
+   em que cada entrada zera a profundidade) ou quando A, a profundidade e B não cabem (a escala 2) */
+static void ed_init(UINT tilesCor) {
+    D3DSURFACE_PARAMETERS sp;
+    if (env_num("BT3_EDRAM_RESIDENTE", 0) == 0) {
+        return;
+    }
+    if (sModoZ == 0) {
+        Diario_Escrever("gs_d3d: BT3_EDRAM_RESIDENTE=1 recusada: a profundidade por alvo está desligada (BT3_Z=0 ou o autoteste); "
+                        "fica o caminho de antes");
+        return;
+    }
+    if (3 * tilesCor > EDRAM_TILES) {
+        Diario_Escrever("gs_d3d: BT3_EDRAM_RESIDENTE=1 recusada: A, a profundidade e B de %u tiles cada passam dos %u (alvo "
+                        "%dx%d); fica o caminho de antes", tilesCor, (unsigned)EDRAM_TILES, sAlvoW, sAlvoH);
+        return;
+    }
+    memset(&sp, 0, sizeof(sp));
+    sp.Base = 2 * tilesCor;
+    if (FAILED(sDev->CreateRenderTarget(sAlvoW, sAlvoH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &sVaga[VG_B].cor, &sp))) {
+        Diario_Escrever("gs_d3d: ERRO: BT3_EDRAM_RESIDENTE=1: a vaga B não foi criada; fica o caminho de antes");
+        sVaga[VG_B].cor = NULL;
+        return;
+    }
+    sVaga[VG_A].cor = sEdramCor;
+    sVaga[VG_A].base = 0;
+    sVaga[VG_B].base = 2 * tilesCor;
+    sVaga[VG_A].w = sVaga[VG_B].w = sAlvoW;
+    sVaga[VG_A].h = sVaga[VG_B].h = sAlvoH;
+    sVaga[VG_A].tiles = sVaga[VG_B].tiles = tilesCor;
+    sVaga[VG_A].dono = sVaga[VG_B].dono = -1;
+    sEdPool = 3 * tilesCor;
+    sEdRes = 1;
+    sEdSabota = env_num("BT3_EDRAM_SABOTA", 0) != 0;
+    if (sEdSabota) {
+        Diario_Escrever("gs_d3d: BT3_EDRAM_SABOTA=1: o alvo posto lido pelo desenho seguinte fica sem Resolve (o erro de 23/10), "
+                        "para o contador \"alvo lido sem Resolve\" acusar; a imagem sai errada");
+    }
+    Diario_Escrever("gs_d3d: EDRAM residente (BT3_EDRAM_RESIDENTE=1): A na base 0, a profundidade na base %u e B na base %u, "
+                    "%dx%d e %u tiles cada; as pequenas de %u a %u (%u tiles), até %d por quadro",
+                    tilesCor, 2 * tilesCor, sAlvoW, sAlvoH, tilesCor, sEdPool, (unsigned)EDRAM_TILES,
+                    (unsigned)EDRAM_TILES - sEdPool, VAGAS_MAX - VG_P0);
+}
+
+/* (no log do trecho) */
+static void ed_log(unsigned t) {
+    unsigned tot = 0;
+    int k;
+    if (!sEdRes) {
+        return;
+    }
+    t = t != 0 ? t : 1;
+    for (k = 0; k < ED_N; k++) {
+        tot += sEd.desc[k];
+    }
+    Diario_Escrever("gs_d3d:   EDRAM residente, por quadro: %.1f entradas (%.1f sem limpeza nem volta, %.1f com, %.1f pela B, %.1f "
+                    "despejos da B); %.1f saídas sem Resolve (de %.1f, %.1f com desenho, as que antes resolveriam); Resolves "
+                    "%.1f (leitura %.1f, DATE %.1f, fonte do DATE %.1f, despejo %.1f, fim %.1f; %.0f mil pixels), evitados "
+                    "%.1f; tiles em uso até %u de %u (%u pequenas); no trecho, pequena com z %u, leituras do próprio alvo %u, fora "
+                    "da vaga %u, alvo lido sem Resolve %u (esperados 0)",
+                    (double)sEd.entradas / t, (double)sEd.reentradas / t, (double)sEd.primeiras / t, (double)sEd.naB / t,
+                    (double)sEd.despejos / t, (double)(sEd.saidas - sEd.desc[ED_FONTE]) / t, (double)sEd.saidas / t,
+                    (double)sEd.saidasDesenho / t, (double)tot / t, (double)sEd.desc[ED_LEITURA] / t,
+                    (double)sEd.desc[ED_DATE] / t, (double)sEd.desc[ED_FONTE] / t, (double)sEd.desc[ED_DESPEJO] / t,
+                    (double)sEd.desc[ED_FIM] / t, sEd.descPx / t / 1000.0, ((double)sEd.saidasDesenho - (double)tot) / t,
+                    sEd.tilesMax, (unsigned)EDRAM_TILES, sEd.pequenasMax, sEd.pequenaZ, sEd.lePosta, sEd.foraVaga,
+                    sEd.semResolve);
+    Diario_Escrever("gs_d3d:   EDRAM residente, plano do último quadro: %s", sEdPlano);
+    if (sEdTrilhaOk) {
+        Diario_Escrever("gs_d3d:   EDRAM residente, sequência do quadro %u (alvo e vaga A, B ou p; + com limpeza e volta; z com a "
+                        "profundidade restaurada, Z mantida; ^alvo e motivo: os Resolves, l leitura, d DATE, s saída da fonte do "
+                        "DATE, b despejo da B, f fim): %s", sEdTrilhaQ, sEdTrilha);
+    }
+    memset(&sEd, 0, sizeof(sEd));
+    sEdTrilhaOk = 0;
+}
+
 /* Põe o alvo i na EDRAM: limpa a cor (0) e, se ele já tinha conteúdo, desenha a textura dele de volta por cima.
    A profundidade (usaZ: algum desenho desta visita testa ou escreve z): se a da EDRAM já é a dele, fica; senão a do
    dono anterior volta para a textura dele, a EDRAM é limpa (0, como o gs_gl.c limpa um alvo novo) e a dele volta da
@@ -2252,6 +2773,10 @@ static void entra_na_edram(int i, int usaZ) {
     D3DVIEWPORT9 vp = {0, 0, sAlvoW, sAlvoH, 0.0f, 1.0f};
     DWORD limpa = D3DCLEAR_TARGET;
     int poeZ = 0;
+    if (sEdRes) {
+        entra_res(i, usaZ); /* (720p, BT3_EDRAM_RESIDENTE) */
+        return;
+    }
     sai_da_edram();
     if (!sQ->targets[i].cleared && sZDono == i) {
         sZDono = -1; /* (novo para o jogo: o que a EDRAM tem dele não vale) */
@@ -2277,7 +2802,7 @@ static void entra_na_edram(int i, int usaZ) {
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
-    if (!(sOtim & OT_LIMPA) || !limpa_fora(a, sQ->targets[i].cleared, limpa)) { /* (720p, retomada) */
+    if (!(sOtim & OT_LIMPA) || !limpa_fora(a, sQ->targets[i].cleared, limpa, sAlvoW, sAlvoH)) { /* (720p, retomada) */
         sDev->Clear(0, NULL, limpa, 0x00000000, 0.0f, 0);
     }
     if (!sQ->targets[i].cleared) {
@@ -2842,6 +3367,9 @@ static int d3d_init(void) {
         Diario_Escrever("gs_d3d: ERRO na cor da EDRAM");
         return 0;
     }
+    sCorPosta = sEdramCor;
+    sPostaW = sAlvoW;
+    sPostaH = sAlvoH;
     sp.Base = tilesCor;
     sp.HierarchicalZBase = 0;
     if (FAILED(sDev->CreateDepthStencilSurface(sAlvoW, sAlvoH, D3DFMT_D24S8, D3DMULTISAMPLE_NONE, 0, FALSE, &sEdramProf, &sp))) {
@@ -2884,6 +3412,7 @@ static int d3d_init(void) {
     prof_autoteste();
     otim_init(); /* (720p, retomada: antes do autoteste das nativas, que passa pelos shaders da névoa) */
     afiado_init(); /* (720p, BT3_AFIADO) */
+    ed_init(tilesCor); /* (720p, BT3_EDRAM_RESIDENTE: depois do autoteste da profundidade, que escolhe o sModoZ) */
     nat_init(); /* (F5, etapa 7, segunda parte) */
     tempo_init(); /* (F5, etapa 8) */
     gPicos = env_num("BT3_PICOS", 0); /* (F5, etapa 8, picos) */
@@ -3610,6 +4139,7 @@ static void log_quadros(void) {
         tempo_zera();
         memset(&sOt, 0, sizeof(sOt)); /* (720p, retomada) */
         sAfDes = 0; /* (720p, BT3_AFIADO) */
+        memset(&sEd, 0, sizeof(sEd)); /* (720p, BT3_EDRAM_RESIDENTE) */
         return;
     }
     if (q == 0) {
@@ -3634,6 +4164,7 @@ static void log_quadros(void) {
     log_nativas(t);
     otim_log(t); /* (720p, retomada) */
     afiado_log(t); /* (720p, BT3_AFIADO) */
+    ed_log(t);   /* (720p, BT3_EDRAM_RESIDENTE) */
     log_tempos(sConta.msQuadro / q);
     log_memoria();
     if (sDiv) {
@@ -3697,8 +4228,8 @@ static void nat_textura(DWORD estagio, D3DTexture *t) {
    de Resolve). */
 static void passada(D3DPixelShader *ps, const Ret *r) {
     struct { float x, y, u, v; } q[4];
-    float cx0 = (float)r->x0 / sAlvoW * 2.0f - 1.0f, cx1 = (float)r->x1 / sAlvoW * 2.0f - 1.0f;
-    float cy0 = 1.0f - (float)r->y0 / sAlvoH * 2.0f, cy1 = 1.0f - (float)r->y1 / sAlvoH * 2.0f;
+    float cx0 = (float)r->x0 / sPostaW * 2.0f - 1.0f, cx1 = (float)r->x1 / sPostaW * 2.0f - 1.0f; /* (sAlvoW sem a chave) */
+    float cy0 = 1.0f - (float)r->y0 / sPostaH * 2.0f, cy1 = 1.0f - (float)r->y1 / sPostaH * 2.0f;
     DWORD k;
     q[0].x = cx0; q[0].y = cy0; q[1].x = cx1; q[1].y = cy0; q[2].x = cx0; q[2].y = cy1; q[3].x = cx1; q[3].y = cy1;
     for (k = 0; k < 4; k++) {
@@ -3878,7 +4409,7 @@ static void filme_desenha(const GsDraw *d, uint32_t n, int *cur) {
     sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
-    quad(&x->cab, sPsFilme, sAlvoW, sAlvoH, 0.0f, 0.0f, (float)w, (float)h, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+    quad(&x->cab, sPsFilme, sPostaW, sPostaH, 0.0f, 0.0f, (float)w, (float)h, 0.0f, 0.0f, 1.0f, 1.0f, 0);
     sDev->SetTexture(0, NULL);
     sCurTex = (GsTex)-1;
     ret_une(&sSujo, 0, 0, w, h);
@@ -4522,6 +5053,9 @@ static void frame_end(void) {
         if (msVu > sConta.msVuCopiaPior) sConta.msVuCopiaPior = msVu;
         gGsD3dEtapa = "fim do quadro: refazendo a lista";
     }
+    if (sEdRes) {
+        ed_plano(q); /* (720p, BT3_EDRAM_RESIDENTE: as vagas do quadro) */
+    }
     tempo_abre(); /* (a GPU do quadro começa aqui) */
     recorte_poe();
     for (n = 0; n < q->drawCount; n++) {
@@ -4562,6 +5096,9 @@ static void frame_end(void) {
                 }
                 sDateFonte = sDate;
             } else {
+                if (sEdRes) {
+                    ed_descarrega(d->target, ED_DATE); /* (com sujo guardado numa vaga: a textura em dia, como antes) */
+                }
                 sConta.dateTex++;
             }
             continue;
@@ -4599,10 +5136,16 @@ static void frame_end(void) {
                 continue;
             }
         }
+        if (sEdRes && d->mode[0] == 2) {
+            ed_leitura(d->tex, d->target); /* (o alvo lido como textura com sujo guardado numa vaga: o Resolve agora) */
+        }
         if (cur != d->target || sResidente != d->target) {
             entra_na_edram(d->target, usa_z(n, d->target));
             q->targets[d->target].cleared = 1; /* (com a divisão, na cópia do retrato: o cleared do desenho) */
             cur = d->target;
+        }
+        if (sEdRes) {
+            ed_confere(d); /* (o contador "alvo lido sem Resolve", esperado 0) */
         }
         if (d->vu) {
             QueryPerformanceCounter(&tv);
@@ -4615,7 +5158,11 @@ static void frame_end(void) {
     sConta.msVuDes += msVu;
     if (msVu > sConta.msVuDesPior) sConta.msVuDesPior = msVu;
     gGsD3dEtapa = "fim do quadro: o último alvo volta para a textura";
-    sai_da_edram();
+    if (sEdRes) {
+        ed_fim(); /* (720p, BT3_EDRAM_RESIDENTE: todas as vagas) */
+    } else {
+        sai_da_edram();
+    }
     prof_entrega(); /* (nada fica na EDRAM entre quadros: a Guide e o present podem usá-la) */
     sConta.msZ += sConta.msZQuadro;
     if (sConta.msZQuadro > sConta.msZPior) sConta.msZPior = sConta.msZQuadro;
