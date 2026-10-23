@@ -18,8 +18,12 @@
  * aberto é um IsoArq do vetor sAbertos, e as funções de stdio do shim (Port_X360Fread...) reconhecem um IsoArq
  * pelo endereço e mandam o resto para a CRT. Caminho sob a raiz que não é do disco (fases e músicas de fora,
  * port/src/plat_stages.c, plat_songs.c) vai para o arquivo de verdade.
- * Só leitura. Mais de uma thread lê (a do jogo e a do som): Iso_Iniciar roda na main antes das threads, e a ISO
- * tem um handle só, com trava, que também cobre a carga das tabelas dos AFS.
+ * Só leitura. Mais de uma thread lê: Iso_Iniciar roda na main antes das threads e já lê as tabelas dos três AFS.
+ * A ISO tem dois handles, cada um
+ * com a sua trava: o comum (o jogo, o filme, o boot) e o da thread de leitura dos fluxos de som (som/fluxo.c,
+ * Iso_LeitoraPropria), para que a leitura de um bloco de som não segure a trava que a thread do jogo pega. Abrir uma
+ * entrada do AFS na thread do jogo (o Port_FilePath de cada ADXT_Start*) não espera leitura de outra thread: a tabela
+ * lida não tem trava e a tabela dos abertos tem a trava dela (F6, plano/F6/05.md, "A thread do jogo sem esperar").
  */
 #include <xtl.h>
 #include <stdio.h>
@@ -47,10 +51,17 @@ typedef struct IsoArq {
     char nome[16];
 } IsoArq;
 
-typedef struct Afs { int lido; __int64 ini; unsigned n; unsigned *tab; } Afs; /* tab: deslocamento e tamanho */
+typedef struct Afs { volatile int lido; __int64 ini; unsigned n; unsigned *tab; } Afs; /* tab: deslocamento e tamanho */
 
 static HANDLE sIso = INVALID_HANDLE_VALUE;
-static CRITICAL_SECTION sTrava;
+static CRITICAL_SECTION sTrava;       /* o handle comum (cada ler()) e a carga das tabelas dos AFS */
+/* (F6) o handle da thread de leitura dos fluxos de som: só ela lê por ele (ler() reconhece a thread), com a trava
+   dele; a leitura de um bloco (até 98 ms medidos no console) não segura a sTrava */
+static HANDLE sIsoLeitora = INVALID_HANDLE_VALUE;
+static CRITICAL_SECTION sTravaLeitora;
+static volatile int sTemLeitora;
+static volatile DWORD sLeitora;       /* a thread dela (GetCurrentThreadId) */
+static CRITICAL_SECTION sTravaTabela; /* sAbertos: só a escolha e a volta de um lugar, sem E/S */
 static int sIniciado;
 static int sRecusada; /* a ISO aberta não tem a marca da convertida: o jogo não começa */
 static unsigned sRaizLba, sRaizTam;
@@ -74,11 +85,15 @@ static int ler(__int64 pos, void *buf, unsigned long n) {
     LARGE_INTEGER p, t0, t1;
     DWORD lidos = 0;
     BOOL ok;
+    /* a thread de leitura dos fluxos pelo handle dela; as outras pelo comum */
+    int propria = sTemLeitora && GetCurrentThreadId() == sLeitora;
+    HANDLE h = propria ? sIsoLeitora : sIso;
+    CRITICAL_SECTION *trava = propria ? &sTravaLeitora : &sTrava;
     p.QuadPart = pos;
     QueryPerformanceCounter(&t0);
-    EnterCriticalSection(&sTrava);
-    ok = SetFilePointerEx(sIso, p, NULL, FILE_BEGIN) && ReadFile(sIso, buf, n, &lidos, NULL);
-    LeaveCriticalSection(&sTrava);
+    EnterCriticalSection(trava);
+    ok = SetFilePointerEx(h, p, NULL, FILE_BEGIN) && ReadFile(h, buf, n, &lidos, NULL);
+    LeaveCriticalSection(trava);
     QueryPerformanceCounter(&t1);
     gPicosIsoN++;
     gPicosIsoBytes += n;
@@ -128,6 +143,8 @@ static int tem_marca(const char *caminho) {
     return 1;
 }
 
+static Afs *afs(int n);
+
 /* A primeira .iso da pasta do .xex (ou BT3_ISO). Nome no FATX: até 42 caracteres. Chamada pela main antes de criar
    threads (main360.cpp), depois do ambiente. */
 void Iso_Iniciar(void) {
@@ -137,11 +154,15 @@ void Iso_Iniciar(void) {
     char caminho[512];
     const char *escolhido = getenv("BT3_ISO");
     int pedida = escolhido != NULL && escolhido[0] != '\0';
+    int i;
+    LARGE_INTEGER t0;
 
     if (sIniciado) {
         return;
     }
     InitializeCriticalSection(&sTrava);
+    InitializeCriticalSection(&sTravaLeitora);
+    InitializeCriticalSection(&sTravaTabela);
     sIniciado = 1;
     if (escolhido != NULL && escolhido[0] != '\0') {
         strncpy(caminho, escolhido, sizeof(caminho) - 1);
@@ -187,6 +208,29 @@ void Iso_Iniciar(void) {
         return;
     }
     Diario_Escrever("iso: os arquivos com conversor já vêm convertidos: a carga só lê (sem Conv_Arquivo)");
+    /* (F6) as três tabelas aqui, antes das threads: a do PZS3US2.AFS (65.201 entradas, 509 KiB) era lida no primeiro
+       ADX da partição 2, dentro do afs(), na thread do jogo e com a trava comum */
+    QueryPerformanceCounter(&t0);
+    for (i = 0; i < 3; i++) {
+        afs(i);
+    }
+    Diario_Escrever("iso: as tabelas dos três AFS lidas no boot em %.1f ms", ms_desde(t0));
+    sIsoLeitora = CreateFile(caminho, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (sIsoLeitora == INVALID_HANDLE_VALUE) {
+        Diario_Escrever("iso: o segundo handle (o da leitura dos fluxos de som) não abriu (erro %u): ela lê pelo comum",
+                        (unsigned)GetLastError());
+    }
+}
+
+/* (F6) Chamada pela thread de leitura dos fluxos de som (som/fluxo.c) ao começar: daí em diante o que ela lê da ISO vai
+   pelo segundo handle, com a trava dele. Sem o segundo handle, nada muda (o comum, com a sTrava). */
+void Iso_LeitoraPropria(void) {
+    if (sIsoLeitora != INVALID_HANDLE_VALUE && !sTemLeitora) {
+        sLeitora = GetCurrentThreadId();
+        __lwsync(); /* a thread gravada antes da marca */
+        sTemLeitora = 1;
+        Diario_Escrever("iso: a leitura dos fluxos de som lê pelo handle dela, sem a trava comum");
+    }
 }
 
 /* Diferente de 0 se a ISO foi recusada (a main mostra a recusa e não começa o jogo): 1 = a ISO aberta não é a
@@ -279,9 +323,11 @@ static int achar(const char *caminho, __int64 *ini, long *tam) {
     }
 }
 
-/* A tabela do AFS DATA/PZS3USn.AFS ("AFS\0", n, depois deslocamento e tamanho de cada entrada). Sob a trava (duas
-   threads podem pedir a primeira entrada ao mesmo tempo), e a tabela só aparece já na ordem do host. A trava
-   é recursiva (seção crítica): ler() a toma de novo. */
+/* A tabela do AFS DATA/PZS3USn.AFS ("AFS\0", n, depois deslocamento e tamanho de cada entrada), lida no boot
+   (Iso_Iniciar). Depois de lida, sem
+   trava (a thread do jogo abre uma entrada a cada ADXT_Start* e não pode esperar a leitura de outra thread). A carga é
+   sob a trava (duas threads podem pedir a primeira entrada ao mesmo tempo), e a tabela só aparece já na ordem do host,
+   antes do `lido`. A trava é recursiva (seção crítica): ler() a toma de novo. */
 static Afs *afs(int n) {
     static const char *nomes[3] = {"DATA/PZS3US0.AFS", "DATA/PZS3US1.AFS", "DATA/PZS3US2.AFS"};
     Afs *a = &sAfs[n];
@@ -290,6 +336,10 @@ static Afs *afs(int n) {
     unsigned i, cont = 0;
     __int64 ini = 0;
     long tam;
+    if (a->lido) { /* já lida: sem trava */
+        __lwsync(); /* a tabela gravada antes do `lido` */
+        return a->tab != NULL ? a : NULL;
+    }
     EnterCriticalSection(&sTrava);
     if (a->lido) {
         LeaveCriticalSection(&sTrava);
@@ -314,6 +364,7 @@ static Afs *afs(int n) {
     a->ini = ini;
     a->n = cont;
     a->tab = tab;
+    __lwsync(); /* a tabela antes do `lido`: quem a vê sem trava a vê inteira */
     a->lido = 1;
     LeaveCriticalSection(&sTrava);
     return tab != NULL ? a : NULL;
@@ -341,7 +392,7 @@ static void converter(const char *rel, unsigned char *dados, long tam, double ms
 static IsoArq *novo(__int64 ini, long tam) {
     int i;
     IsoArq *r = NULL;
-    EnterCriticalSection(&sTrava);
+    EnterCriticalSection(&sTravaTabela); /* um lugar (não a sTrava: ela fica pega durante uma leitura) */
     for (i = 0; i < MAX_ABERTOS; i++) {
         if (!sAbertos[i].usado) {
             r = &sAbertos[i];
@@ -349,7 +400,7 @@ static IsoArq *novo(__int64 ini, long tam) {
             break;
         }
     }
-    LeaveCriticalSection(&sTrava);
+    LeaveCriticalSection(&sTravaTabela);
     if (r == NULL) {
         Diario_Escrever("iso: mais de %d arquivos abertos", MAX_ABERTOS);
         return NULL;
@@ -539,9 +590,9 @@ int Iso_Fechar(void *f) {
     }
     free(r->dados);
     r->dados = NULL;
-    EnterCriticalSection(&sTrava);
+    EnterCriticalSection(&sTravaTabela); /* o lugar volta (não a sTrava, como no novo()) */
     r->usado = 0;
-    LeaveCriticalSection(&sTrava);
+    LeaveCriticalSection(&sTravaTabela);
     return 0;
 }
 

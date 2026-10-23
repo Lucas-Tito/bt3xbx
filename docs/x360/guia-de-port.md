@@ -1402,6 +1402,30 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   negativo de uma comparação entre a x86 e a PPC numa forma.
 - **Worktree no Deck:** o clone do Deck não tem `port/build/gen/gs`; o worktree leva links para `asm`, `assets`, `disc` e
   `gamedata` e cópias de `port/build/gen/data` e `port/build/gen/src`.
+- **Tirar a leitura da thread do jogo não basta se a trava da leitura continua no caminho dela** (F6, `05.md`, "A thread
+  do jogo sem esperar"). Com o ADX em blocos, o início de um fluxo na thread do jogo só abria e fechava a entrada da ISO,
+  mas o `afs()`, o `novo()` e o `Iso_Fechar` pegavam a trava que a thread de leitura segurava durante o `ReadFile` de um
+  bloco (até 98 ms no console): inícios de até 59 ms. Procure toda trava que a thread do jogo pega e pergunte quem a
+  segura durante E/S. A correção deu um handle próprio à thread de leitura (cada handle com a sua trava), a tabela do AFS
+  lida sem trava e a tabela dos abertos com uma trava só dela. Um handle aberto sem `FILE_FLAG_OVERLAPPED` serializa as
+  leituras no próprio objeto de arquivo no Windows [lido, não medido no 360]: tirar só a nossa trava, com um handle só,
+  não garantiria nada.
+- **O código do console com trava se testa no Linux com um `xtl.h` de teste.** O `iso360.c` compila de verdade sobre
+  `port/x360/src/som/teste/xtl/xtl.h` (as seções críticas como mutex recursivo, o `ReadFile` por `pread`), com a leitora
+  lenta dentro do `ReadFile` (50 ms dormidos com a trava de quem lê pega) e uma ISO de mentira feita pelo teste. Os
+  mutantes de trava põem de volta um `Enter`/`Leave` da trava comum no trecho, em vez de trocar a trava: trocar só o
+  `Enter` deixa um `Leave` de trava não pega e o teste trava em vez de falhar.
+- **Antes de pôr um pico na conta de uma correção, ver no log o que acontecia naquele quadro** (F6, `05.md`, "A rodada do
+  console" das correções). O quadro 234 do título (98 ms de jogo, `disco 0 leituras`) entrou na lista do que A e B
+  resolveriam; na rodada continuou igual (116 ms). O log anterior já dizia que não: nenhum fluxo abre antes do vblank 1750
+  e o quadro cai no `mcflow -1`, a procura do save. Ler as linhas de evento logo antes do pico (`mcflow`, `tela`, `iso:`,
+  `roteiro:`) separa as hipóteses sem gastar o item da rodada.
+- **Dois handles no mesmo disco tiram a espera da trava, não a do disco.** Com a leitora dos fluxos no handle dela, a
+  thread do jogo parou de esperar (pior início de fluxo de 59 ms para 0,4 ms), mas as cargas do jogo nos menus somaram 862
+  contra 565 ms e os blocos acima de 50 ms passaram de 6 para 14 [medido numa abertura de cada; a causa estimada: os dois
+  `ReadFile` disputando o disco]. O ruído do disco do 360 é grande (a mesma primeira carga, sem concorrência, levou 72 e
+  25 ms): uma abertura de cada não separa. E um contador de tempo de leitura somado entre threads passa a contar tempo
+  sobreposto: o `disco` dos picos pode passar do quadro.
 
 ---
 
