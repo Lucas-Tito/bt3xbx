@@ -63,8 +63,19 @@ static void diario_ambiente(void) {
 void Ambiente_Carregar(const char *caminho) {
     FILE *f;
     char linha[256];
-    definir("BT3_DEMO", "1");
-    definir("BT3_GS", "none");
+    /* o jogo como ele roda (23/10/2026, pedido do Lucas): sem a luta de demonstração, desenhando pela GPU com a VU1 em
+       HLSL, a gravação e o desenho em threads próprias (F5, etapa 8), o som do jogo (F6) e o 16:9 (decisão 26); a 1,33,
+       o afiado, o FXAA, os alvos residentes, o envio por linhas e a VU1 direto já são padrão no backend. Os testes que
+       queriam o de antes dizem no ambiente.txt (BT3_DEMO=1, BT3_GS=none, -BT3_SOM, -BT3_WIDE...) */
+    definir("BT3_GS", "gpu");
+    definir("BT3_VU1", "1");
+    definir("BT3_VU_VERTS", "98304");
+    definir("BT3_MEM_PISO_MB", "32");
+    definir("BT3_MEM_TEX_MB", "128");
+    definir("BT3_GS_THREAD", "1");
+    definir("BT3_GS_DESENHO", "1");
+    definir("BT3_SOM", "1");
+    definir("BT3_WIDE", "1");
     /* o estado dos players de som contado em vblanks (snd_adx.c, by_ticks): a boca de quem fala e as telas que esperam
        o fim da voz andam sem dispositivo de som. Padrão desde a F2; a F6, etapa 1 (docs/x360/plano/F6/00-escopo.md,
        seção 1.1 e a correção no fim) o supôs ausente, e a rodada da VU1 da F5 (F5/06.md) mostrou as bocas mexendo */
