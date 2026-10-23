@@ -2000,6 +2000,7 @@ typedef struct Vaga {
     Ret sujo;        /* o desenhado nele que ainda não foi para a textura (o do alvo posto está no sSujo) */
 } Vaga;
 static int sEdRes;                       /* 1: a chave ligada e as faixas cabem */
+static int sEdSabota;                    /* BT3_EDRAM_SABOTA=1: o erro da rodada de 23/10 de volta, para ver o contador acusar */
 static Vaga sVaga[VAGAS_MAX];
 static int sVagaN = 2;                   /* A, B e as pequenas do quadro */
 static UINT sEdPool;                     /* 3T: a base da primeira pequena */
@@ -2009,7 +2010,7 @@ static unsigned sEdMarca;                /* desenhos e passadas até a entrada n
 static const char kEdMotivo[ED_N] = {'l', 'd', 's', 'b', 'f'};
 /* (no trecho) */
 static struct {
-    unsigned entradas, primeiras, reentradas, naB, despejos, saidas, saidasDesenho, pequenaZ, lePosta, foraVaga;
+    unsigned entradas, primeiras, reentradas, naB, despejos, saidas, saidasDesenho, pequenaZ, lePosta, foraVaga, semResolve;
     unsigned desc[ED_N], quadros, tilesMax, pequenasMax;
     double descPx;
 } sEd;
@@ -2114,18 +2115,36 @@ static void ed_sai(void) {
     sSujo.x0 = sSujo.x1 = 0;
 }
 
-/* (no frame loop) um desenho vai ler a textura tex: se ela é de um alvo com sujo guardado numa vaga, descarrega */
-static void ed_leitura(GsTex tex) {
+/* (no frame loop, antes da troca de alvo) um desenho no alvo `alvo` vai ler a textura tex: se ela é de um alvo com sujo
+   guardado numa vaga, descarrega. O alvo posto também: a troca para o alvo do desenho vem depois desta chamada, então o
+   posto que é lido é o que está saindo (a cópia de um alvo para o seguinte, a cadeia do brilho, a página da sombra); sem
+   a chave, a saída dele resolvia antes do desenho. Só o próprio alvo do desenho não (o gs_draw.c recusa; contado). */
+static void ed_leitura(GsTex tex, int alvo) {
     int v;
     for (v = 0; v < sVagaN; v++) {
         int t = sVaga[v].dono;
         if (t >= 0 && (GsTex)sAlvoD[t].tex == tex) {
-            if (t == sResidente) {
-                sEd.lePosta++; /* (o gs_draw.c recusa; contado, sem descarregar, como antes) */
+            if (t == alvo || (sEdSabota && t == sResidente)) {
+                sEd.lePosta++; /* (lendo a si mesmo: o gs_draw.c recusa; com a sabotagem, também o posto que sai) */
             } else {
-                ed_descarrega(t, ED_LEITURA);
+                ed_descarrega(t, ED_LEITURA); /* (o posto: sem trocar de superfície, como a saída de antes) */
             }
             return;
+        }
+    }
+}
+
+/* (no frame loop, depois da troca, antes do desenho) a conferência: o alvo que o desenho lê como textura, ou a fonte do DATE,
+   não pode ter sujo guardado numa vaga (a textura não teria o que a EDRAM tem). Só conta: tem de dar 0. */
+static void ed_confere(const GsDraw *d) {
+    int v;
+    for (v = 0; v < sVagaN; v++) {
+        int t = sVaga[v].dono;
+        if (t < 0 || t == d->target || t == sResidente || sVaga[v].sujo.x1 <= sVaga[v].sujo.x0 || sAlvoD[t].tex == NULL) {
+            continue; /* (o alvo do desenho: o sujo dele está no sSujo, e a leitura de si mesmo o gs_draw.c recusa) */
+        }
+        if ((d->mode[0] == 2 && (GsTex)sAlvoD[t].tex == d->tex) || (d->misc[1] != 0.0f && sAlvoD[t].tex == sDateFonte)) {
+            sEd.semResolve++;
         }
     }
 }
@@ -2430,6 +2449,11 @@ static void ed_init(UINT tilesCor) {
     sVaga[VG_A].dono = sVaga[VG_B].dono = -1;
     sEdPool = 3 * tilesCor;
     sEdRes = 1;
+    sEdSabota = env_num("BT3_EDRAM_SABOTA", 0) != 0;
+    if (sEdSabota) {
+        Diario_Escrever("gs_d3d: BT3_EDRAM_SABOTA=1: o alvo posto lido pelo desenho seguinte fica sem Resolve (o erro de 23/10), "
+                        "para o contador \"alvo lido sem Resolve\" acusar; a imagem sai errada");
+    }
     Diario_Escrever("gs_d3d: EDRAM residente (BT3_EDRAM_RESIDENTE=1): A na base 0, a profundidade na base %u e B na base %u, "
                     "%dx%d e %u tiles cada; as pequenas de %u a %u (%u tiles), até %d por quadro",
                     tilesCor, 2 * tilesCor, sAlvoW, sAlvoH, tilesCor, sEdPool, (unsigned)EDRAM_TILES,
@@ -2450,14 +2474,15 @@ static void ed_log(unsigned t) {
     Diario_Escrever("gs_d3d:   EDRAM residente, por quadro: %.1f entradas (%.1f sem limpeza nem volta, %.1f com, %.1f pela B, %.1f "
                     "despejos da B); %.1f saídas sem Resolve (de %.1f, %.1f com desenho, as que antes resolveriam); Resolves "
                     "%.1f (leitura %.1f, DATE %.1f, fonte do DATE %.1f, despejo %.1f, fim %.1f; %.0f mil pixels), evitados "
-                    "%.1f; tiles em uso até %u de %u (%u pequenas); no trecho, pequena com z %u, leituras do alvo posto %u, fora "
-                    "da vaga %u (esperados 0)",
+                    "%.1f; tiles em uso até %u de %u (%u pequenas); no trecho, pequena com z %u, leituras do próprio alvo %u, fora "
+                    "da vaga %u, alvo lido sem Resolve %u (esperados 0)",
                     (double)sEd.entradas / t, (double)sEd.reentradas / t, (double)sEd.primeiras / t, (double)sEd.naB / t,
                     (double)sEd.despejos / t, (double)(sEd.saidas - sEd.desc[ED_FONTE]) / t, (double)sEd.saidas / t,
                     (double)sEd.saidasDesenho / t, (double)tot / t, (double)sEd.desc[ED_LEITURA] / t,
                     (double)sEd.desc[ED_DATE] / t, (double)sEd.desc[ED_FONTE] / t, (double)sEd.desc[ED_DESPEJO] / t,
                     (double)sEd.desc[ED_FIM] / t, sEd.descPx / t / 1000.0, ((double)sEd.saidasDesenho - (double)tot) / t,
-                    sEd.tilesMax, (unsigned)EDRAM_TILES, sEd.pequenasMax, sEd.pequenaZ, sEd.lePosta, sEd.foraVaga);
+                    sEd.tilesMax, (unsigned)EDRAM_TILES, sEd.pequenasMax, sEd.pequenaZ, sEd.lePosta, sEd.foraVaga,
+                    sEd.semResolve);
     Diario_Escrever("gs_d3d:   EDRAM residente, plano do último quadro: %s", sEdPlano);
     if (sEdTrilhaOk) {
         Diario_Escrever("gs_d3d:   EDRAM residente, sequência do quadro %u (alvo e vaga A, B ou p; + com limpeza e volta; z com a "
@@ -4692,12 +4717,15 @@ static void frame_end(void) {
             }
         }
         if (sEdRes && d->mode[0] == 2) {
-            ed_leitura(d->tex); /* (o alvo lido como textura com sujo guardado numa vaga: o Resolve agora) */
+            ed_leitura(d->tex, d->target); /* (o alvo lido como textura com sujo guardado numa vaga: o Resolve agora) */
         }
         if (cur != d->target || sResidente != d->target) {
             entra_na_edram(d->target, usa_z(n, d->target));
             q->targets[d->target].cleared = 1; /* (com a divisão, na cópia do retrato: o cleared do desenho) */
             cur = d->target;
+        }
+        if (sEdRes) {
+            ed_confere(d); /* (o contador "alvo lido sem Resolve", esperado 0) */
         }
         if (d->vu) {
             QueryPerformanceCounter(&tv);
