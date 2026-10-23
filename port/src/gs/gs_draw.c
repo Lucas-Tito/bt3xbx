@@ -4811,9 +4811,15 @@ static void vu_direto_liga(void) {
     uint32_t cv = 0, ci = 0, v, i;
     int k;
     char m[240];
+#ifdef PORT_X360
+    if (e != NULL && atoi(e) == 0) { /* (ligado no 360 desde 23/10: sem a chave, a VU1 direto) */
+        return;
+    }
+#else
     if (e == NULL || atoi(e) == 0) {
         return;
     }
+#endif
     if (!sDividido) {
         divisao_log("BT3_VU1_DIRETO=1 sem a divis\303\243o (BT3_GS_DESENHO=1): ignorado, a VU1 nas listas");
         return;

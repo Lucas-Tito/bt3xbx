@@ -3187,7 +3187,7 @@ static void vu_init(void) {
     unsigned v = (unsigned)env_num("BT3_VU_VERTS", 65536);
     int i, ok = 1;
     v = v < 1024 ? 1024 : v > (1u << 20) ? (1u << 20) : v;
-    if (env_num("BT3_VU1_DIRETO", 0) != 0 && GsDraw_Dividido()) {
+    if (env_num("BT3_VU1_DIRETO", 1) != 0 && GsDraw_Dividido()) { /* (ligado por padrão desde 23/10, como no gs_draw.c) */
         if (vu_dir_cria(v)) {
             sVuCapV = v;
             sVuCapI = v * 3;

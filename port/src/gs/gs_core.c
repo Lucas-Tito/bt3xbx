@@ -982,7 +982,11 @@ static void transfer_data(const uint8_t *p, uint32_t bytes) {
     i = 0;
 #ifdef BT3_GS_ESPERAS
     if (sEnvioRapido < 0) {
+#ifdef PORT_X360
+        sEnvioRapido = getenv("BT3_ENVIO_RAPIDO") != NULL ? atoi(getenv("BT3_ENVIO_RAPIDO")) : 1; /* (ligado no 360 desde 23/10) */
+#else
         sEnvioRapido = getenv("BT3_ENVIO_RAPIDO") != NULL ? atoi(getenv("BT3_ENVIO_RAPIDO")) : 0;
+#endif
         if (sEnvioRapido == 1 && ((uintptr_t)sVram & 127) != 0) {
             sEnvioRapido = 2; /* (a VRAM fora da linha: o dcbz128 zeraria o vizinho) */
         }
