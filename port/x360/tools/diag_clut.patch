@@ -1,0 +1,131 @@
+--- a/port/src/gs/gs_draw.c
++++ b/port/src/gs/gs_draw.c
+@@ -384,6 +384,37 @@
+     if (sTexPackOn && TexPack_Count() != 0) {
+         gen ^= 0x5BD1E995u; /* with the pack and without it are different textures: switching it takes effect at once */
+     }
++    {   /* (diagnóstico temporário, F5 09.md) BT3_COL_DIAG: o gen igual com a paleta diferente */
++        static int colDiag = -1;
++        static struct { uint64_t t0, texa; uint32_t gen, usado; uint64_t forte; } col[1 << 16];
++        static unsigned ultQ = ~0u; static uint64_t ultT0;
++        if (colDiag < 0) { colDiag = getenv("BT3_COL_DIAG") != NULL; }
++        if (colDiag && bits <= 8) {
++            uint64_t f = 0;
++            uint32_t n = bits == 8 ? 256 : 16, j, sl = (uint32_t)((t0 * 0x9E3779B97F4A7C15ull ^ gen) >> 48);
++            for (j = 0; j < n; j++) {
++                f = (f ^ Gs_VramRead(cbp, 1, cpsm, j & 15, j >> 4)) * 0x9FB21C651E98DF25ull;
++                f ^= f >> 29;
++            }
++            for (j = 0; j < 64; j++, sl = (sl + 1) & 0xFFFF) {
++                if (!col[sl].usado) {
++                    col[sl].usado = 1; col[sl].t0 = t0; col[sl].texa = texa; col[sl].gen = gen; col[sl].forte = f;
++                    break;
++                }
++                if (col[sl].t0 == t0 && col[sl].texa == texa && col[sl].gen == gen) {
++                    if (col[sl].forte != f) {
++                        if (!(ultQ == gGsFrame && ultT0 == t0)) {
++                            fprintf(stderr, "tabdiag colisao textura quadro %u tbp %04x psm %02x cbp %04x cpsm %u %ux%u gen %08x\n", (unsigned)gGsFrame,
++                                    (unsigned)tbp, (unsigned)psm, (unsigned)cbp, (unsigned)cpsm, (unsigned)tw, (unsigned)th, (unsigned)gen);
++                            ultQ = gGsFrame; ultT0 = t0;
++                        }
++                        col[sl].forte = f;
++                    }
++                    break;
++                }
++            }
++        }
++    }
+     if (sLast != NULL && sLast->tex0 == t0 && sLast->texa == texa && sLast->gen == gen) {
+         sLast->last = gGsFrame;
+         return sLast->tex; /* the common case: the same texture as the previous primitive */
+@@ -611,8 +642,64 @@
+     return t->tex;
+ }
+ 
+-/* A 256-colour table at `cbp` (32-bit, the GS's index order undone) as a 256 x 1 texture; alpha as stored. */
++/* (diagnóstico temporário, F5 09.md) BT3_COL_DIAG: a vaga devolvida com conteúdo diferente do da VRAM; BT3_CLUT_CUSTO: as
++   chamadas, as leituras da VRAM, as conferências e o tempo, numa linha a cada 500 quadros e na saída */
++static int sDiagCol = -1;
++static uint64_t sDiagForte[MAX_CLUTS], sDiagNs, sDiagNsCmp, sDiagCham, sDiagLeit, sDiagCmp, sDiagCmpDif;
++static uint64_t diag_forte(uint32_t cbp) {
++    uint64_t f = 0;
++    uint32_t i;
++    for (i = 0; i < 256; i++) {
++        uint32_t n = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
++        f = (f ^ Gs_VramRead(cbp, 1, 0, n & 15, n >> 4)) * 0x9FB21C651E98DF25ull;
++        f ^= f >> 29;
++    }
++    return f;
++}
++static int diag_cmp(const uint32_t *a, const uint32_t *b) {
++    uint64_t t = gpu_now();
++    int r = memcmp(a, b, 256 * 4);
++    sDiagNsCmp += gpu_now() - t;
++    sDiagCmp++;
++    sDiagCmpDif += r != 0;
++    return r;
++}
++static void diag_custo_linha(void) {
++    fprintf(stderr, "clutdiag custo quadro %u chamadas %llu leituras %llu conferencias %llu (%llu diferentes) ns_conferencia %llu ns_clut %llu\n",
++            (unsigned)gGsFrame, (unsigned long long)sDiagCham, (unsigned long long)sDiagLeit, (unsigned long long)sDiagCmp,
++            (unsigned long long)sDiagCmpDif, (unsigned long long)sDiagNsCmp, (unsigned long long)sDiagNs);
++}
++static GsTex clut_texture_real(uint32_t cbp);
+ static GsTex clut_texture(uint32_t cbp) {
++    static int custo = -1;
++    static unsigned ultQ = ~0u;
++    uint64_t t;
++    GsTex r;
++    int k;
++    if (sDiagCol < 0) {
++        sDiagCol = getenv("BT3_COL_DIAG") != NULL;
++        custo = getenv("BT3_CLUT_CUSTO") != NULL;
++        if (custo) { atexit(diag_custo_linha); }
++    }
++    t = custo ? gpu_now() : 0;
++    r = clut_texture_real(cbp);
++    if (custo) {
++        sDiagNs += gpu_now() - t;
++        sDiagCham++;
++        if (gGsFrame % 500 == 0 && gGsFrame != ultQ) { ultQ = gGsFrame; diag_custo_linha(); }
++    }
++    if (sDiagCol && r != 0) {
++        for (k = 0; k < MAX_CLUTS; k++) {
++            if (sCluts[k].tex == r && sDiagForte[k] != diag_forte(cbp)) {
++                fprintf(stderr, "tabdiag colisao tabela quadro %u cbp %04x hash %08x\n", (unsigned)gGsFrame, (unsigned)cbp, (unsigned)sCluts[k].hash);
++            }
++        }
++    }
++    return r;
++}
++
++/* A 256-colour table at `cbp` (32-bit, the GS's index order undone) as a 256 x 1 texture; alpha as stored. */
++static GsTex clut_texture_real(uint32_t cbp) {
+     uint32_t px[256], hash = 2166136261u, i;
+     GsTex tex;
+     uint32_t *upload;
+@@ -636,6 +723,7 @@
+ #else
+ #define CLUT_LEMBRA(v) ((void)0)
+ #endif
++    sDiagLeit++;
+     for (i = 0; i < 256; i++) {
+         uint32_t n = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
+         px[i] = Gs_VramRead(cbp, 1, 0, n & 15, n >> 4);
+@@ -643,7 +731,7 @@
+     }
+     for (k = 0; k < MAX_CLUTS; k++) {
+         /* (F5, 09.md) o hash igual não basta: as cores também */
+-        if (sCluts[k].tex != 0 && sCluts[k].hash == hash && memcmp(sCluts[k].cor, px, sizeof(px)) == 0) {
++        if (sCluts[k].tex != 0 && sCluts[k].hash == hash && diag_cmp(sCluts[k].cor, px) == 0) {
+             sCluts[k].last = gGsFrame;
+             CLUT_LEMBRA(k);
+             return sCluts[k].tex;
+@@ -672,6 +760,7 @@
+     sCluts[old].last = gGsFrame;
+     sCluts[old].serie = ++sClutSerie;
+     memcpy(sCluts[old].cor, px, sizeof(px));
++    if (sDiagCol > 0) { sDiagForte[old] = diag_forte(cbp); }
+     CLUT_LEMBRA(old);
+     return tex;
+ }
