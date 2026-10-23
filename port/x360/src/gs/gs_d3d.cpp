@@ -1300,9 +1300,10 @@ static void otim_init(void) {
 
 /* (F5, etapa 8, 720p; docs/x360/plano/F5/08-720p.md, seção 10) BT3_AFIADO, desligada por padrão (0: o .xex faz o de antes):
      bit 1  a arte 2D (os sprites e os triângulos com coordenadas inteiras de texel que o gs_draw.c marca no misc.w: texto,
-            HUD, menus) com textura da memória do GS, no buffer do quadro, lida por pixel de saída com o bilinear afiado (ps_gs_af; afiado_le no
-            gs_d3d.hlsl), no lugar da leitura por pixel do GS; o sampler desses desenhos fica no ponto e a mistura é do
-            shader (o filtro do jogo vai no c8). Só nas escalas maiores que 1: na 1 a arte já sai como antes, nada muda;
+            HUD, menus) com textura da memória do GS, no buffer do quadro, lida por pixel de saída com o bilinear afiado
+            (ps_gs_af; afiado_le no gs_d3d.hlsl), no lugar da leitura por pixel do GS; o sampler desses desenhos fica no
+            ponto e a mistura é do shader (o filtro do jogo vai no c8). Só nas escalas maiores que 1: na 1 a arte já sai
+            como antes, nada muda;
      bit 2  a cópia para a tela (tela_copia) com o bilinear afiado (ps_copia_af) no lugar do bilinear comum, em qualquer
             escala. As capturas do BT3_SHOT são do alvo, antes da cópia: este bit não as muda.
    Lida no init, depois da escala (area_init). */
