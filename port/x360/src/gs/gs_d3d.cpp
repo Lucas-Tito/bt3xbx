@@ -1331,7 +1331,9 @@ static const D3DVERTEXELEMENT9 kElemGsAf[] = { /* o elemGs do d3d_init e a caixa
     D3DDECL_END()};
 
 static void afiado_init(void) {
-    sAfiado = env_num("BT3_AFIADO", 0) & 3;
+    /* o bit 1 (a arte 2D) ligado por padrão desde a rodada do console de 23/10 (08-720p.md, seção 10): na escala 1 não
+       muda nada (as capturas iguais) e na 1,33 o Lucas aprovou; o bit 2 (a cópia para a tela) ele recusou */
+    sAfiado = env_num("BT3_AFIADO", 1) & 3;
     if (sAfiado == 0) {
         return;
     }
