@@ -1400,6 +1400,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   lenta dentro do `ReadFile` (50 ms dormidos com a trava de quem lê pega) e uma ISO de mentira feita pelo teste. Os
   mutantes de trava põem de volta um `Enter`/`Leave` da trava comum no trecho, em vez de trocar a trava: trocar só o
   `Enter` deixa um `Leave` de trava não pega e o teste trava em vez de falhar.
+- **Antes de pôr um pico na conta de uma correção, ver no log o que acontecia naquele quadro** (F6, `05.md`, "A rodada do
+  console" das correções). O quadro 234 do título (98 ms de jogo, `disco 0 leituras`) entrou na lista do que A e B
+  resolveriam; na rodada continuou igual (116 ms). O log anterior já dizia que não: nenhum fluxo abre antes do vblank 1750
+  e o quadro cai no `mcflow -1`, a procura do save. Ler as linhas de evento logo antes do pico (`mcflow`, `tela`, `iso:`,
+  `roteiro:`) separa as hipóteses sem gastar o item da rodada.
+- **Dois handles no mesmo disco tiram a espera da trava, não a do disco.** Com a leitora dos fluxos no handle dela, a
+  thread do jogo parou de esperar (pior início de fluxo de 59 ms para 0,4 ms), mas as cargas do jogo nos menus somaram 862
+  contra 565 ms e os blocos acima de 50 ms passaram de 6 para 14 [medido numa abertura de cada; a causa estimada: os dois
+  `ReadFile` disputando o disco]. O ruído do disco do 360 é grande (a mesma primeira carga, sem concorrência, levou 72 e
+  25 ms): uma abertura de cada não separa. E um contador de tempo de leitura somado entre threads passa a contar tempo
+  sobreposto: o `disco` dos picos pode passar do quadro.
 
 ---
 
