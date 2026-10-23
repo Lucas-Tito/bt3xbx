@@ -40,7 +40,10 @@ SEM_DESC = re.compile(r"passos: janela (\d+) descartes: sem backend")
 TELA = re.compile(r"passos: janela (\d+) tela: (\d+) imagens na tela, por vblanks na tela 1 (\d+), 2 (\d+), 3 (\d+), 4 ou "
                   r"mais (\d+) \(3 ou mais ([\d.]+)%\); trocas perdidas (\d+), imagens puladas (\d+), vblanks (\d+); "
                   r"esperas de vblank (\d+) \((\d+) pelo vblank de hardware\), atraso ao acordar por passo p50 ([\d.]+) "
-                  r"p99 ([\d.]+) máximo ([\d.]+) ms, esperas com 1 ms ou mais (\d+)")
+                  r"p99 ([\d.]+) máximo ([\d.]+) ms, esperas com 1 ms ou mais (\d+)"
+                  # (seção 20; opcional: os logs de antes não a têm) a espera pelo vblank de hardware
+                  r"(?:; vblank já passado em (\d+) chamadas, alvo recomeçado (\d+) vezes pela dívida parada e (\d+) por "
+                  r"estar 100 ms atrás)?(.*)$")  # (o resto: um formato que este leitor não conhece, que o --console recusa)
 SEM_TELA = re.compile(r"passos: janela (\d+) tela: sem a medida")
 TELA_MAX_3 = 1.0  # % das imagens com 3 vblanks ou mais na tela (o "99% até um período mais 1 ms" de antes, pela tela)
 
@@ -126,6 +129,9 @@ def main():
                 linha += (f"; tela: {img} imagens, por vblanks 1/2/3/4+ {v1}/{v2}/{v3}/{v4} (3 ou mais {pct3:.2f}%), "
                           f"perdidas {perd}, puladas {pul}, {vbs} vblanks; {esp} esperas ({hw} pelo hardware), atraso ao "
                           f"acordar p50 {at50:.2f} p99 {at99:.2f} máximo {atmax:.2f} ms, {at1} com 1 ms ou mais")
+                if tela[15] is not None:
+                    linha += (f"; vblank já passado em {tela[15]} chamadas, alvo recomeçado {tela[16]} (dívida parada) e "
+                              f"{tela[17]} (100 ms atrás)")
             elif "tela" in d:
                 linha += "; tela: sem a medida"
             print(linha)
@@ -144,6 +150,8 @@ def main():
                                  f"{TELA_MAX_3:.0f}%)")
                 if v4:
                     ruins.append(f"{v4} imagens 4 vblanks ou mais na tela")
+                if tela[18].strip():
+                    ruins.append(f"a linha \"tela\" com um fim que este leitor não conhece: {tela[18].strip()[:80]!r}")
             if not d["apres"]:
                 ruins.append("sem apresentação medida")
             elif nint < n - 1:

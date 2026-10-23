@@ -100,6 +100,7 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "vu6_vs.h"
 
 #include "escala.h"
+#include "vblank_alvo.h" /* (F5, etapa 8, seção 20: a conta da espera pelo vblank de hardware) */
 /* (F5, etapa 8, 720p, etapa 2) O tamanho dos alvos, das profundidades e do par da EDRAM, em pixels de saída: a área de
    BT3_ALVO_AREA vezes a escala (escala.h, area_init; docs/x360/plano/F5/08-720p.md). Sem a chave, 1024 x 1024 (o alvo
    lógico do GS com SCALE = 1), o de antes. Lidos no começo do init, antes de qualquer alvo.
@@ -533,9 +534,11 @@ static void vblank_tira(void) {
    mais que no Sleep: o número de esperas por passo é o mesmo, e cada uma acaba no vblank de hardware em vez de num momento
    da grade do Sleep, sem fase com o vídeo. O Sleep fica de reserva: sem a callback (antes do init, depois do Soltar), com
    BT3_VBLANK_HW=0, sem vblank há 50 ms ou um evento que não veio em 50 ms (a Guide, o dispositivo parado). Devolve 2 se
-   esperou, 1 se o vblank já tinha passado (sem espera), 0 para o Sleep; *desdeNs: de o último vblank até agora. */
-static DWORD sVbAlvo;
-static int sVbTemAlvo, sVbNaReserva;
+   esperou, 1 se o vblank já tinha passado (sem espera), 0 para o Sleep; *desdeNs: de o último vblank até agora.
+   (seção 20) A conta do alvo mora no vblank_alvo.h, com o recomeço pela dívida parada: a fila da gravação segurava o passo
+   em dois vblanks com o alvo atrasado, e a espera sumia (a janela 1 da rodada da seção 19). Só a thread do jogo a mexe. */
+static VbAlvo sVbConta;
+static int sVbNaReserva;
 static unsigned sVbReservas, sVbDitas;
 
 /* os ns de um tique do mftb (contra o QueryPerformanceCounter desde a instalação; no primeiro segundo, o do contador) */
@@ -550,7 +553,7 @@ static double vblank_ns_por_tique(void) {
 }
 
 static int vblank_reserva(const char *motivo) {
-    sVbTemAlvo = 0;
+    vb_solta(&sVbConta);
     sVbReservas++;
     if (!sVbNaReserva && sVbDitas < 20) { /* (a passagem, não cada espera; poucas vezes: a Guide pode ir e vir) */
         sVbDitas++;
@@ -587,22 +590,18 @@ extern "C" int GsD3d_VblankEspera(unsigned long long *desdeNs) {
             Diario_Escrever("gs_d3d: vblank: a espera de volta ao vblank de hardware");
         }
     }
-    if (!sVbTemAlvo || (int)(n - sVbAlvo) >= 6) {
-        sVbAlvo = n + 1; /* (a primeira, ou 100 ms atrás: o próximo vblank é o alvo da espera seguinte) */
-        sVbTemAlvo = 1;
-    } else if ((int)(n - sVbAlvo) >= 0) {
-        sVbAlvo++; /* (atrasado: este vblank já passou, sem esperar) */
-    } else {
+    /* (a primeira, ou 100 ms atrás, ou o vblank já passou: sem esperar; a dívida parada: espera o próximo; vblank_alvo.h) */
+    if (vb_decide(&sVbConta, (unsigned)n) == 0) {
         do {
             if (WaitForSingleObject(sVbEv, 50) != WAIT_OBJECT_0) {
                 return vblank_reserva("o evento do vblank não veio em 50 ms");
             }
             n = sVbN; /* (o evento pode ser de um vblank já contado: confere pelo número) */
-        } while ((int)(n - sVbAlvo) < 0);
+        } while ((int)((unsigned)n - sVbConta.alvo) < 0);
         __lwsync();
         tb = sVbTb;
         t = __mftb();
-        sVbAlvo++;
+        vb_esperou(&sVbConta);
         r = 2;
     }
     *desdeNs = (unsigned long long)((double)(t - tb) * f);
@@ -610,9 +609,10 @@ extern "C" int GsD3d_VblankEspera(unsigned long long *desdeNs) {
 }
 
 /* para o passos.c: as imagens por vblanks na tela (1, 2, 3, 4 ou mais), as trocas perdidas, as imagens puladas e os
-   vblanks vistos, acumulados desde a instalação; 0 sem a callback (antes do init) */
+   vblanks vistos, acumulados desde a instalação, e (seção 20) da espera pelo vblank de hardware as chamadas com o vblank já
+   passado, os alvos recomeçados pela dívida parada e os novos por estar 100 ms atrás; 0 sem a callback (antes do init) */
 extern "C" int Passos_Tela(unsigned *v, int n) {
-    unsigned agora[7];
+    unsigned agora[10];
     int i;
     if (sVbEv == NULL) {
         return 0;
@@ -623,10 +623,13 @@ extern "C" int Passos_Tela(unsigned *v, int n) {
     agora[4] = sVbPerdidas;
     agora[5] = sVbPuladas;
     agora[6] = sVbN;
-    for (i = 0; i < n && i < 7; i++) {
+    agora[7] = sVbConta.passadas; /* (só a thread do jogo os escreve, e é ela que lê, pelo passos) */
+    agora[8] = sVbConta.recomecos;
+    agora[9] = sVbConta.longes;
+    for (i = 0; i < n && i < 10; i++) {
         v[i] = agora[i];
     }
-    return 7;
+    return 10;
 }
 
 /* o relógio para o gs_vu1.c (C, sem o xtl.h): o tempo da VU1 na gravação do quadro */

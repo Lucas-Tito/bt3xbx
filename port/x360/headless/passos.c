@@ -71,9 +71,10 @@ void Diario_Escrever(const char *formato, ...);
 extern unsigned long long gPortVBlankEsperaNs;
 extern unsigned gPortVBlankEsperas, gPortVBlankPeloHw, gPortVBlankAtrasadas, gPortVBlankAtrasoUs;
 /* gs_d3d.cpp: as imagens por vblanks na tela (1, 2, 3, 4 ou mais), as trocas perdidas, as imagens puladas e os vblanks,
-   acumulados desde a instalação da callback; 0 sem ela */
+   acumulados desde a instalação da callback, e (seção 20) da espera pelo vblank de hardware as chamadas com o vblank já
+   passado, os alvos recomeçados pela dívida parada e os novos por estar 100 ms atrás; 0 sem ela */
 int Passos_Tela(unsigned *v, int n);
-#define N_TELA 7
+#define N_TELA 10
 #define ESPERA_ACUMULADA gPortVBlankEsperaNs
 #else
 #define ESPERA_ACUMULADA gPortSleptNs
@@ -170,7 +171,7 @@ static void abre(void) {
 #ifdef PORT_X360
 /* a linha da tela da janela que fecha (o vetor sOrdem já foi usado: reaproveitado aqui) */
 static void fecha_tela(void) {
-    char s[600];
+    char s[800];
     unsigned t[N_TELA], i, m = 0, imagens, tres;
     if (!sTemTela || Passos_Tela(t, N_TELA) <= 0) {
         sprintf(s, "passos: janela %u tela: sem a medida (sem a callback de vblank na janela inteira)", sJanela);
@@ -190,10 +191,11 @@ static void fecha_tela(void) {
     tres = t[2] + t[3];
     sprintf(s, "passos: janela %u tela: %u imagens na tela, por vblanks na tela 1 %u, 2 %u, 3 %u, 4 ou mais %u (3 ou "
             "mais %.2f%%); trocas perdidas %u, imagens puladas %u, vblanks %u; esperas de vblank %u (%u pelo vblank de "
-            "hardware), atraso ao acordar por passo p50 %.2f p99 %.2f máximo %.2f ms, esperas com 1 ms ou mais %u",
+            "hardware), atraso ao acordar por passo p50 %.2f p99 %.2f máximo %.2f ms, esperas com 1 ms ou mais %u; vblank "
+            "já passado em %u chamadas, alvo recomeçado %u vezes pela dívida parada e %u por estar 100 ms atrás",
             sJanela, imagens, t[0], t[1], t[2], t[3], imagens ? 100.0 * tres / imagens : 0.0, t[4], t[5], t[6],
             gPortVBlankEsperas - sEsperas0, gPortVBlankPeloHw - sPeloHw0, pct(sOrdem, m, 50), pct(sOrdem, m, 99),
-            m ? sOrdem[m - 1] / 1000.0 : 0.0, gPortVBlankAtrasadas - sAtrasadas0);
+            m ? sOrdem[m - 1] / 1000.0 : 0.0, gPortVBlankAtrasadas - sAtrasadas0, t[7], t[8], t[9]);
     escreve(s);
 }
 #endif
