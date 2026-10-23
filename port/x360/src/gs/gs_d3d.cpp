@@ -109,6 +109,7 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "gs_af_ps.h"     /* (720p, BT3_AFIADO: ps_gs_af, vs_gs_af e ps_copia_af; ver afiado_init) */
 #include "gs_af_vs.h"
 #include "copia_af_ps.h"
+#include "fxaa_ps.h"       /* (720p, BT3_FXAA: ps_fxaa; ver fxaa_init) */
 
 #include "escala.h"
 #include "vblank_alvo.h" /* (F5, etapa 8, seção 20: a conta da espera pelo vblank de hardware) */
@@ -1000,13 +1001,13 @@ static void picos_desenho(const GsQuadro *q, double msFim, double msPresent, int
    "entradas na EDRAM" são a troca e a limpeza, e a "volta da cor" o desenho do conteúdo do alvo de volta por cima. */
 enum {
     T_OUTROS, T_COMUM, T_VU0, T_VU4, T_VU6, T_PROF, T_CONTORNO, T_TAB_IDS, T_TAB_PROF, T_IDS, T_FBA, T_DATE, T_COR_RES,
-    T_COR_ENTRA, T_COR_VOLTA, T_TELA, T_FILME, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
+    T_COR_ENTRA, T_COR_VOLTA, T_TELA, T_FILME, T_FXAA, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
     T_VU_COPIA = T_GPU_N, T_PRESENT, T_N
 };
 static const char *const kTempoNome[T_N] = {"outros", "comum", "vu0", "vu4", "vu6", "profundidade", "contorno",
                                             "tabela pelos ids", "tabela pela profundidade", "cópia dos ids", "FBA",
                                             "DATE", "resolves de cor", "entradas na EDRAM", "volta da cor", "tela",
-                                            "filme", "medição",
+                                            "filme", "FXAA", "medição",
                                             "cópia da VU1", "Present"};
 #define T_MARCAS 4096 /* por quadro; um quadro com mais é descartado (contado); 136 KB nos dois buffers */
 static volatile unsigned __int64 sMarcaGpu[2 * T_MARCAS]; /* o relógio quando a GPU chegou à marca (tempo_cb) */
@@ -1507,6 +1508,8 @@ static void otim_init(void) {
    Lida no init, depois da escala (area_init). */
 enum { AF_ARTE = 1, AF_TELA = 2 };
 static unsigned sAfiado, sAfDes; /* sAfDes: os desenhos pelo ps_gs_af no trecho (afiado_log) */
+/* (720p, BT3_FXAA; fxaa_init, mais abaixo) a chave lida no init: 0 o de antes, e a classe FXAA fica fora do log dos tempos */
+static unsigned sFxaa;
 static D3DPixelShader *sPsGsAf, *sPsCopiaAf;
 /* (bit 1) os vértices da arte 2D afiada levam a caixa da peça: o Vtx e mais o menor e o maior uv dos vértices da
    primitiva (TEXCOORD1 do vs_gs_af), montados por chamadas_af num vetor daqui */
@@ -2049,6 +2052,77 @@ static void alinha8(Ret *r) { esc_alinha8(&r->x0, &r->y0, &r->x1, &r->y1, sAlvoW
 /* (profundidade) x em múltiplos de 80, a largura de um tile da EDRAM com 32 bits por pixel: o restauro como cor lê o
    pixel x + 40 ou x - 40 do mesmo tile, que assim fica sempre dentro do que foi resolvido */
 static void alinha80(Ret *r) { esc_alinha80(&r->x0, &r->y0, &r->x1, &r->y1, sAlvoW, sAlvoH); }
+
+/* ---- (F5, etapa 8, 720p; docs/x360/plano/F5/08-720p.md, seção 12) BT3_FXAA, desligada por padrão ----------------------
+   Com BT3_FXAA=1, o FXAA de console (ps_fxaa) na imagem mostrada, na resolução interna, no quadro inteiro (a interface também:
+   a máscara é o passo seguinte): no fim do quadro, depois da captura e antes da cópia para a tela, a parte usada da textura do
+   quadro (512 x 448 do GS, mais a coluna e a linha que o bilinear da cópia alcança, em múltiplos de 8) é desenhada pelo
+   ps_fxaa na base 0 da EDRAM (o sEdramCor; nesse ponto tudo já saiu dela, como para a cópia, que escreve o back buffer ali) e
+   resolvida numa textura própria (sFxaaTex, a mesma conta das texturas de alvo), que a cópia e o GsD3d_Repete mostram. O alvo
+   do jogo fica intacto: os efeitos que o leem no quadro seguinte e as capturas do BT3_SHOT veem o de antes. O tempo de GPU na
+   classe FXAA. Sem a chave nada muda: nenhum objeto criado, a classe fora do log. */
+static D3DPixelShader *sPsFxaa;
+static D3DTexture *sFxaaTex;
+static unsigned sFxaaN;  /* as passadas no trecho (fxaa_log) */
+static Ret sFxaaRet;     /* a parte usada, em pixels de saída (fxaa_init) */
+
+static void fxaa_init(void) {
+    sFxaa = env_num("BT3_FXAA", 1) & 1; /* (ligado por padrão desde 23/10: 0,8 a 0,9 ms de GPU; o Lucas aprovou sem a máscara) */
+    if (sFxaa == 0) {
+        return;
+    }
+    sFxaaRet.x0 = sFxaaRet.y0 = 0;
+    /* o que a tela_copia lê: o uv até 512 / sAreaW da textura de sAlvoW, e o texel seguinte que o bilinear mistura */
+    sFxaaRet.x1 = (512 * sAlvoW + sAreaW - 1) / sAreaW + 1;
+    sFxaaRet.y1 = (448 * sAlvoH + sAreaH - 1) / sAreaH + 1;
+    alinha8(&sFxaaRet);
+    if (FAILED(sDev->CreatePixelShader((const DWORD *)kFxaaPs, &sPsFxaa)) || (sFxaaTex = textura_alvo()) == NULL) {
+        Diario_Escrever("gs_d3d: ERRO: BT3_FXAA: o ps_fxaa ou a textura (%u KB) não foi criado (%u MB livres); fica sem o FXAA",
+                        tam_alvo() >> 10, mb_livres());
+        sFxaa = 0;
+        return;
+    }
+    Diario_Escrever("gs_d3d: BT3_FXAA=1: o FXAA de console na imagem mostrada, no quadro inteiro (sem a máscara da interface), "
+                    "%dx%d pixels de saída do alvo de %dx%d, numa textura própria de %u KB (contada com os alvos); as capturas "
+                    "seguem sendo do alvo, antes do FXAA", sFxaaRet.x1, sFxaaRet.y1, sAlvoW, sAlvoH, tam_alvo() >> 10);
+}
+
+/* a passada: devolve a textura que a cópia mostra (a do FXAA; t sem a chave ou sem imagem) */
+static D3DTexture *fxaa_passa(D3DTexture *t) {
+    D3DVIEWPORT9 vp = {0, 0, (DWORD)sAlvoW, (DWORD)sAlvoH, 0.0f, 1.0f};
+    float c9[4] = {(float)sAlvoW, (float)sAlvoH, 1.0f / sAlvoW, 1.0f / sAlvoH};
+    float W = (float)sAlvoW, H = (float)sAlvoH;
+    D3DRECT fonte;
+    D3DPOINT destino;
+    if (!sFxaa || t == NULL) {
+        return t;
+    }
+    tempo_poe(T_FXAA);
+    sDev->SetRenderTarget(0, sEdramCor);
+    sDev->SetDepthStencilSurface(NULL);
+    sDev->SetViewport(&vp);
+    sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    sDev->SetPixelShaderConstantF(9, c9, 1); /* (o copiaTam do ps_fxaa: zw um texel em uv) */
+    quad(t, sPsFxaa, sAlvoW, sAlvoH, 0.0f, 0.0f, (float)sFxaaRet.x1, (float)sFxaaRet.y1, 0.0f, 0.0f, sFxaaRet.x1 / W,
+         sFxaaRet.y1 / H, 1);
+    sDev->SetTexture(0, NULL); /* (a textura do FXAA, destino do Resolve, pode estar no estágio desde a cópia anterior) */
+    sCurTex = (GsTex)-1;
+    fonte.x1 = sFxaaRet.x0; fonte.y1 = sFxaaRet.y0; fonte.x2 = sFxaaRet.x1; fonte.y2 = sFxaaRet.y1;
+    destino.x = 0; destino.y = 0;
+    sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sFxaaTex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+    sFxaaN++;
+    return sFxaaTex;
+}
+
+static void fxaa_log(unsigned t) {
+    if (sFxaa) {
+        Diario_Escrever("gs_d3d:   FXAA, por quadro: %.2f passadas de %dx%d pixels", (double)sFxaaN / t, sFxaaRet.x1,
+                        sFxaaRet.y1);
+    }
+    sFxaaN = 0;
+}
 
 /* ---- profundidade por alvo (F5, etapa 7) --------------------------------------------------------------------- */
 
@@ -3420,6 +3494,7 @@ static int d3d_init(void) {
     prof_autoteste();
     otim_init(); /* (720p, retomada: antes do autoteste das nativas, que passa pelos shaders da névoa) */
     afiado_init(); /* (720p, BT3_AFIADO) */
+    fxaa_init();   /* (720p, BT3_FXAA) */
     ed_init(tilesCor); /* (720p, BT3_EDRAM_RESIDENTE: depois do autoteste da profundidade, que escolhe o sModoZ) */
     nat_init(); /* (F5, etapa 7, segunda parte) */
     tempo_init(); /* (F5, etapa 8) */
@@ -4088,7 +4163,7 @@ static void log_tempos(double msQuadro) {
             double v = ((double)sTempo.gSoma[c] - (double)sTempo.gTrechos[c] * vazio) / q / f,
                    e = (double)sTempo.gEsp[c] / q / f;
             marcas += (double)sTempo.gTrechos[c] / q;
-            if (c == T_MED) {
+            if (c == T_MED || (c == T_FXAA && !sFxaa)) { /* (sem o BT3_FXAA, a linha de antes) */
                 continue;
             }
             soma += v;
@@ -4120,6 +4195,9 @@ static void log_tempos(double msQuadro) {
         for (c = 0; c < T_N; c++) {
             double v = (double)sTempo.cSoma[c] / qc / f;
             cs += v;
+            if (c == T_FXAA && !sFxaa) {
+                continue; /* (sem o BT3_FXAA, a linha de antes) */
+            }
             nc = tempo_junta(lc, nc, sizeof(lc), kTempoNome[c], v, sTempo.cPior[c]);
         }
         Diario_Escrever("gs_d3d:   tempos, CPU do fim do quadro (ms, média e pior; %u quadros): fim do quadro %.2f, soma das "
@@ -4147,6 +4225,7 @@ static void log_quadros(void) {
         tempo_zera();
         memset(&sOt, 0, sizeof(sOt)); /* (720p, retomada) */
         sAfDes = 0; /* (720p, BT3_AFIADO) */
+        sFxaaN = 0; /* (720p, BT3_FXAA) */
         memset(&sEd, 0, sizeof(sEd)); /* (720p, BT3_EDRAM_RESIDENTE) */
         return;
     }
@@ -4172,6 +4251,7 @@ static void log_quadros(void) {
     log_nativas(t);
     otim_log(t); /* (720p, retomada) */
     afiado_log(t); /* (720p, BT3_AFIADO) */
+    fxaa_log(t);   /* (720p, BT3_FXAA) */
     ed_log(t);   /* (720p, BT3_EDRAM_RESIDENTE) */
     log_tempos(sConta.msQuadro / q);
     log_memoria();
@@ -5200,6 +5280,10 @@ static void frame_end(void) {
         mtex != NULL) {
         gGsD3dEtapa = "fim do quadro: captura";
         captura(mostrado, mtex);
+    }
+    if (sFxaa) {
+        gGsD3dEtapa = "fim do quadro: FXAA";
+        mtex = fxaa_passa(mtex); /* (720p, BT3_FXAA: depois da captura, que segue sendo do alvo) */
     }
     gGsD3dEtapa = "fim do quadro: cópia para a tela";
     tempo_poe(T_TELA);
