@@ -52,6 +52,7 @@ static GsBackend *sBackend;
    ela (desenho_entrega, mais abaixo) */
 static void solta_pede(GsTex tex, int alvo);
 static void divisao_decide(void);
+static void vu_direto_liga(void); /* (BT3_VU1_DIRETO) */
 #ifdef PORT_X360
 static int desenho_init(void);
 #endif
@@ -96,15 +97,26 @@ unsigned gsSkipped;
 unsigned gGpuNewTex, gGpuNewTexPixels, gGpuNewPipes; /* created since the front end last cleared them (slow-frame report) */
 unsigned gGpuTexReplaced; /* textures taken from a texture pack so far */
 uint64_t gGpuTexNs, gGpuPipeNs, gGpuEndNs; /* time spent decoding textures, creating pipelines, in GsGpu_FrameEnd */
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, BT3_VU1_DIRETO) as capacidades dos vértices e dos índices da VU1: as das listas, ou, com a gravação gravando
+   direto nos buffers do backend, as deles, se menores (vu_direto_liga) */
+static uint32_t sCapVuV = MAX_VU_VERTS, sCapVuI = MAX_VU_IDX;
+#endif
 #if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
 /* (F5, etapa 8, gravação) BT3_GS_CAP_DIV=N, só de teste nas builds --gpu: as capacidades das listas divididas por N, para ver o
    que não cabe se comportar igual com a divisão ligada e desligada */
 static uint32_t sCapDiv = 1;
 #define CAP_VERTS (MAX_VERTS / sCapDiv)
 #define CAP_DRAWS (MAX_DRAWS / sCapDiv)
-#define CAP_VU_VERTS (MAX_VU_VERTS / sCapDiv)
-#define CAP_VU_IDX (MAX_VU_IDX / sCapDiv)
+#define CAP_VU_VERTS (sCapVuV / sCapDiv)
+#define CAP_VU_IDX (sCapVuI / sCapDiv)
 #define CAP_VU_UNIFORMS (MAX_VU_UNIFORMS / sCapDiv)
+#elif defined(BT3_GS_ESPERAS)
+#define CAP_VERTS MAX_VERTS
+#define CAP_DRAWS MAX_DRAWS
+#define CAP_VU_VERTS sCapVuV
+#define CAP_VU_IDX sCapVuI
+#define CAP_VU_UNIFORMS MAX_VU_UNIFORMS
 #else
 #define CAP_VERTS MAX_VERTS
 #define CAP_DRAWS MAX_DRAWS
@@ -148,12 +160,17 @@ static int jogo_aloca(GsJogo *j) {
     }
     return 1;
 }
+/* (F5, etapa 8, BT3_VU1_DIRETO) a gravação grava os vértices e os índices da VU1 direto nos buffers do backend (vu_direto_liga):
+   gsVuVerts e gsVuIdx não são do jogo de listas, e as listas deles não existem (soltas) */
+static int sVuDir;
 static void jogo_usa(int k) {
     sJogo = k;
     gsDraws = sJogos[k].draws;
     gsVerts = sJogos[k].verts;
-    gsVuVerts = sJogos[k].vuVerts;
-    gsVuIdx = sJogos[k].vuIdx;
+    if (!sVuDir) {
+        gsVuVerts = sJogos[k].vuVerts;
+        gsVuIdx = sJogos[k].vuIdx;
+    }
     gsVuUni = sJogos[k].vuUni;
     sVuFaixa = sJogos[k].vuFaixa;
 }
@@ -162,19 +179,38 @@ static void jogo_usa(int k) {
    um trecho em ordem crescente (base + i + k, com i e k crescendo), então o menor é o primeiro do trecho e o maior o último;
    quando o trecho se junta ao desenho anterior (same_state), a faixa é a união das duas. Um desenho sem índices fica com a
    faixa vazia (menor 0xFFFFFFFF, maior 0), que não muda a união. A tabela é do jogo (sJogos), como as listas: o desenho lê a
-   do retrato entregue e a gravação escreve na do outro. */
-static void vu_faixa(uint32_t n, uint32_t first, uint32_t count, int junta) {
-    uint32_t lo = 0xFFFFFFFFu, hi = 0;
-    if (count != 0) {
-        lo = gsVuIdx[first];
-        hi = gsVuIdx[first + count - 1];
-    }
+   do retrato entregue e a gravação escreve na do outro. (BT3_VU1_DIRETO) O primeiro e o último índice do trecho vêm de quem
+   os gerou (lo e hi), não relidos da lista: com a chave, ela fica em memória de escrita combinada, que a CPU lê devagar; o
+   mesmo valor (o BT3_VU_PLANO_CONFERE confere a faixa contra os índices relidos). */
+static void vu_faixa(uint32_t n, uint32_t lo, uint32_t hi, int junta) {
     if (junta) {
         if (sVuFaixa[2 * n] < lo) lo = sVuFaixa[2 * n];
         if (sVuFaixa[2 * n + 1] > hi) hi = sVuFaixa[2 * n + 1];
     }
     sVuFaixa[2 * n] = lo;
     sVuFaixa[2 * n + 1] = hi;
+}
+/* o primeiro e o último índice de um trecho cujos triângulos com a marca no terceiro vértice não saem (o GsGpu_DrawVu6 e os
+   destroços do GsGpu_DrawVu0): o primeiro triângulo sem marca começa em base + i, o último acaba em base + i + 2. Lê a marca
+   dos vértices de entrada (a memória da VU), não os índices gravados. Só se chama com algum triângulo gravado. */
+static void vu_faixa_marcas(const float *v, uint32_t passo, uint32_t count, uint32_t base, uint32_t *lo, uint32_t *hi) {
+    uint32_t i, flag;
+    *lo = 0xFFFFFFFFu;
+    *hi = 0;
+    for (i = 0; i + 2 < count; i++) {
+        memcpy(&flag, &v[(i + 2) * passo + 3], 4);
+        if (!(flag & 0xFFFF)) {
+            *lo = base + i;
+            break;
+        }
+    }
+    for (i = count - 2; i-- > 0;) {
+        memcpy(&flag, &v[(i + 2) * passo + 3], 4);
+        if (!(flag & 0xFFFF)) {
+            *hi = base + i + 2;
+            break;
+        }
+    }
 }
 #endif
 
@@ -1551,7 +1587,7 @@ static int same_state_vu(const GsDraw *a, const GsDraw *b) {
            a->misc[2] == b->misc[2] && a->misc[3] == b->misc[3] && a->blendc == b->blendc && iguais32(a->rect, b->rect, 4) &&
            iguais32(a->orig, b->orig, 4) && iguais32(a->scissor, b->scissor, 4);
 }
-static void vu_fecho(GsDraw *d, const Vu0Uniform *pu) {
+static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) {
     GsDraw *last;
     gsTargets[d->target].draws++;
     gsTargets[d->target].gen = gGsPageGen[gsTargets[d->target].fbp & 511];
@@ -1560,7 +1596,7 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu) {
     EST_CONTA_FECHO(last, d, pu);
 #endif
     if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
-        vu_faixa(gsDrawCount - 1, d->first, d->count, 1);
+        vu_faixa(gsDrawCount - 1, lo, hi, 1);
         last->count += d->count;
 #ifdef PORT_X360
         GS_VU_MARCA(GS_FAM_V_FECHO);
@@ -1568,7 +1604,7 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu) {
         return;
     }
     d->uniform = (int)gsVuUniCount++; /* (pu é a vaga gsVuUni[gsVuUniCount]) */
-    vu_faixa(gsDrawCount, d->first, d->count, 0);
+    vu_faixa(gsDrawCount, lo, hi, 0);
     gsDraws[gsDrawCount++] = *d;
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
@@ -1595,7 +1631,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
 #endif
     float us, vs;
 #ifdef BT3_GS_ESPERAS
-    uint32_t i, flag; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+    uint32_t i, flag, lo, hi; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
 #else
     uint32_t i, k, flag;
 #endif
@@ -1687,7 +1723,8 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     }
 #endif
 #ifdef BT3_GS_ESPERAS
-    vu_fecho(&d, pu);
+    vu_faixa_marcas(vertices, 16, count, gsVuVertCount - count, &lo, &hi); /* (d.count > 0: voltou acima sem triângulo) */
+    vu_fecho(&d, pu, lo, hi);
 #else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
@@ -1729,7 +1766,7 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 #endif
     float us, vs;
 #ifdef BT3_GS_ESPERAS
-    uint32_t i; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+    uint32_t i, lo, hi; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
 #else
     uint32_t i, k;
 #endif
@@ -1802,7 +1839,9 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     }
 #endif
 #ifdef BT3_GS_ESPERAS
-    vu_fecho(&d, pu);
+    lo = gsVuVertCount - count; /* (todos os triângulos da tira: do primeiro vértice ao último) */
+    hi = gsVuVertCount - 1;
+    vu_fecho(&d, pu, lo, hi);
 #else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
@@ -1844,7 +1883,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
 #endif
     float us, vs;
 #ifdef BT3_GS_ESPERAS
-    uint32_t i; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
+    uint32_t i, lo, hi; /* (sem o k: os índices saem três a três, seção 16 da nota da gravação) */
 #else
     uint32_t i, k;
 #endif
@@ -1939,7 +1978,16 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     }
 #endif
 #ifdef BT3_GS_ESPERAS
-    vu_fecho(&d, pu);
+    if (d.count == 0) { /* (os destroços todos marcados: a faixa vazia) */
+        lo = 0xFFFFFFFFu;
+        hi = 0;
+    } else if (layer == 4) {
+        vu_faixa_marcas(vertices, 12, count, gsVuVertCount - count, &lo, &hi);
+    } else {
+        lo = gsVuVertCount - count;
+        hi = gsVuVertCount - 1;
+    }
+    vu_fecho(&d, pu, lo, hi);
 #else
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
@@ -2260,6 +2308,9 @@ int GsGpu_Init(void) {
     TexPack_Init();
 #if defined(BT3_GS_ESPERAS) && !defined(PORT_X360)
     divisao_decide();
+#endif
+#ifdef BT3_GS_ESPERAS
+    vu_direto_liga(); /* (BT3_VU1_DIRETO: com a divisão e o backend pronto) */
 #endif
     return 1;
 }
@@ -4200,6 +4251,29 @@ extern void GsD3d_Soltar(void);          /* gs_d3d.cpp: o dispositivo volta para
 extern int Port_X360CondEsperaMs(pthread_cond_t *c, pthread_mutex_t *m, unsigned ms); /* posix360.c: 1 se o tempo acabou */
 #endif
 static unsigned sEntregas, sSoltasPedidas;
+/* (F5, etapa 8, BT3_VU1_DIRETO=1) A gravação grava os vértices e os índices da VU1 direto nos buffers do backend, em vez das
+   listas do jogo que o frame_end do 360 copiava para o par de buffers da GPU (a "cópia da VU1", uns 3 ms por quadro pesado na
+   thread de desenho, no caminho da imagem). VU_JOGOS jogos de buffers em rodízio, um por quadro gravado: o quadro s (vuSeq) grava
+   no jogo s % VU_JOGOS; o desenho desenha dali, e o backend diz pelo vuFeito o maior s que a GPU acabou de ler. Antes de regravar
+   um jogo, a gravação espera a GPU largar o quadro que o usou. Com três, o jogo do quadro que a gravação começa é o de três
+   quadros atrás, e o desenho já acabou o frame_end do de dois atrás (a entrega esperou): a GPU teve pelo menos esse frame_end
+   inteiro para acabar o de três atrás (a cópia de antes, com dois pares no começo do frame_end, esperava pelo mesmo quadro no
+   mesmo instante, e não esperou nenhuma vez na etapa 6). A espera é da gravação, nunca do desenho; passado VU_ESPERA_MS, grava
+   assim mesmo (contada: o quadro pode sair com vértices errados, mas nada trava). As constantes (gsVuUni) ficam nas listas, em
+   memória com cache, e o backend as põe nos registradores do shader sem cópia. Só com a divisão: sem ela quem copia já é a
+   própria gravação. */
+#define VU_JOGOS 3
+#ifdef BT3_GPU_FALSO
+#define VU_ESPERA_MS 2000 /* (o desenho falso sob o qemu pode levar dezenas de ms por quadro: o limite não decide a prova) */
+#else
+#define VU_ESPERA_MS 100
+#endif
+static float *sVdV[VU_JOGOS];
+static uint32_t *sVdI[VU_JOGOS];
+static uint32_t sVdSeq, sVdSeqDe[VU_JOGOS]; /* o número do quadro em gravação; o do último gravado em cada jogo (0: nenhum) */
+static int sVdJogo = -1;                    /* o jogo do quadro em gravação */
+static unsigned sVdEsperas, sVdForcadas;
+static uint64_t sVdEsperaNs, sVdEsperaPior;
 static uint32_t sMaior[5]; /* desenhos, vértices de CPU, da VU, índices, constantes: o maior quadro entregue */
 static uint64_t sCopiaNs, sCopiaPior;
 #ifdef BT3_GPU_FALSO
@@ -4244,6 +4318,8 @@ static void backend_frame_end(void) {
     q->soltaCount = 0;
     q->vivo = 1;
     q->dividido = 0;
+    q->vuJogo = -1; /* (BT3_VU1_DIRETO só com a divisão) */
+    q->vuSeq = 0;
     gsQuadro = q;
     sBackend->frameEnd();
 }
@@ -4456,6 +4532,13 @@ void GsDraw_DesenhoResumo(void) {
                         sEntregas, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
                         sEntregas ? (double)sCopiaNs / sEntregas / 1e6 : 0.0, (double)sCopiaPior / 1e6);
         sCopiaPior = 0; /* (o pior é do trecho) */
+        if (sVuDir) {
+            Diario_Escrever("gs: VU1 direto (BT3_VU1_DIRETO): %u quadros em %d jogos de buffers; a grava\303\247\303\243o esperou a GPU "
+                            "largar o jogo %u vezes (%u passaram do limite de %u ms), m\303\251dia %.3f ms, pior %.3f ms",
+                            sVdSeq, VU_JOGOS, sVdEsperas, sVdForcadas, VU_ESPERA_MS,
+                            sVdEsperas ? (double)sVdEsperaNs / sVdEsperas / 1e6 : 0.0, (double)sVdEsperaPior / 1e6);
+            sVdEsperaPior = 0;
+        }
         return;
     }
 #endif
@@ -4463,6 +4546,12 @@ void GsDraw_DesenhoResumo(void) {
                     "v\303\251rtices, %u da VU, %u \303\255ndices, %u constantes; entrega m\303\251dia %.3f ms, pior %.3f ms\n",
             sEntregas, sSoltasPedidas, sMaior[0], sMaior[1], sMaior[2], sMaior[3], sMaior[4],
             sEntregas ? (double)sCopiaNs / sEntregas / 1e6 : 0.0, (double)sCopiaPior / 1e6);
+    if (sVuDir) {
+        fprintf(stderr, "gs: VU1 direto (BT3_VU1_DIRETO): %u quadros em %d jogos de buffers; a grava\303\247\303\243o esperou a GPU "
+                        "largar o jogo %u vezes (%u passaram do limite de %u ms), m\303\251dia %.3f ms, pior %.3f ms\n",
+                sVdSeq, VU_JOGOS, sVdEsperas, sVdForcadas, VU_ESPERA_MS,
+                sVdEsperas ? (double)sVdEsperaNs / sVdEsperas / 1e6 : 0.0, (double)sVdEsperaPior / 1e6);
+    }
 }
 
 static void desenho_parar(void) {
@@ -4671,6 +4760,96 @@ static void Gs_FamTrecho(void) {
     desde = agora;
 }
 
+/* (BT3_VU1_DIRETO) o jogo de buffers do quadro que a gravação começa: o seguinte do rodízio, depois de a GPU largar o quadro que
+   o usou por último (ver VU_JOGOS) */
+static void vu_direto_proximo(void) {
+    uint32_t de;
+    int k;
+    sVdSeq++;
+    k = (int)(sVdSeq % VU_JOGOS);
+    de = sVdSeqDe[k];
+    if (de != 0 && (int32_t)(sBackend->vuFeito() - de) < 0) {
+        uint64_t t0 = gpu_now(), dt;
+#ifdef PORT_X360
+        extern volatile const char *gGsD3dEtapaGrav; /* gs_d3d.cpp: para o vigia */
+        volatile const char *antes = gGsD3dEtapaGrav;
+        gGsD3dEtapaGrav = "esperando a GPU largar o jogo de buffers da VU1 (BT3_VU1_DIRETO)";
+#endif
+        sVdEsperas++;
+        for (;;) {
+            struct timespec ts;
+            if ((int32_t)(sBackend->vuFeito() - de) >= 0) {
+                break;
+            }
+            if (gpu_now() - t0 > (uint64_t)VU_ESPERA_MS * 1000000u) {
+                sVdForcadas++;
+                break;
+            }
+            ts.tv_sec = 0;
+            ts.tv_nsec = 100000L;
+            nanosleep(&ts, NULL);
+        }
+#ifdef PORT_X360
+        gGsD3dEtapaGrav = antes;
+#endif
+        dt = gpu_now() - t0;
+        sVdEsperaNs += dt;
+        if (dt > sVdEsperaPior) {
+            sVdEsperaPior = dt;
+        }
+    }
+    sVdSeqDe[k] = sVdSeq;
+    sVdJogo = k;
+    gsVuVerts = sVdV[k];
+    gsVuIdx = sVdI[k];
+}
+
+/* (BT3_VU1_DIRETO=1) no fim do GsGpu_Init, com a divisão e o backend pronto: os jogos de buffers do backend, as capacidades da
+   VU1 (as dos buffers, se menores que as das listas) e as listas da VU1 dos dois jogos soltas (não se usam mais) */
+static void vu_direto_liga(void) {
+    const char *e = getenv("BT3_VU1_DIRETO");
+    uint32_t cv = 0, ci = 0, v, i;
+    int k;
+    char m[240];
+    if (e == NULL || atoi(e) == 0) {
+        return;
+    }
+    if (!sDividido) {
+        divisao_log("BT3_VU1_DIRETO=1 sem a divis\303\243o (BT3_GS_DESENHO=1): ignorado, a VU1 nas listas");
+        return;
+    }
+    if (sBackend->vuJogo == NULL || sBackend->vuFeito == NULL) {
+        divisao_log("BT3_VU1_DIRETO=1 recusado: o backend n\303\243o grava a VU1 direto; a VU1 nas listas");
+        return;
+    }
+    for (k = 0; k < VU_JOGOS; k++) {
+        if (!sBackend->vuJogo(k, &sVdV[k], &sVdI[k], &v, &i)) {
+            divisao_log("BT3_VU1_DIRETO=1 recusado: o backend n\303\243o tem os jogos de buffers; a VU1 nas listas");
+            return;
+        }
+        if (k == 0 || v < cv) {
+            cv = v;
+        }
+        if (k == 0 || i < ci) {
+            ci = i;
+        }
+    }
+    sCapVuV = cv < MAX_VU_VERTS ? cv : MAX_VU_VERTS;
+    sCapVuI = ci < MAX_VU_IDX ? ci : MAX_VU_IDX;
+    for (k = 0; k < 2; k++) {
+        free(sJogos[k].vuVerts);
+        free(sJogos[k].vuIdx);
+        sJogos[k].vuVerts = NULL;
+        sJogos[k].vuIdx = NULL;
+    }
+    sVuDir = 1;
+    vu_direto_proximo();
+    sprintf(m, "BT3_VU1_DIRETO=1: a VU1 gravada direto em %d jogos de buffers do backend, %u v\303\251rtices e %u \303\255ndices "
+               "(as listas da VU1 dos dois jogos soltas, %u KB)", VU_JOGOS, (unsigned)sCapVuV, (unsigned)sCapVuI,
+            (unsigned)((2u * (MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u)) >> 10));
+    divisao_log(m);
+}
+
 /* A entrega, na thread de gravação, no lugar do frameEnd. */
 static void desenho_entrega(void) {
     unsigned char limpa[MAX_TARGETS];
@@ -4741,6 +4920,8 @@ static void desenho_entrega(void) {
     sSoltaN[sSoltaPend] = 0;
     sRetrato.vivo = 0;
     sRetrato.dividido = 1;
+    sRetrato.vuJogo = sVuDir ? sVdJogo : -1;
+    sRetrato.vuSeq = sVuDir ? sVdSeqDe[sVdJogo] : 0;
     /* o cleared da gravação (o risco 1): ligado aqui para todo alvo com desenho não nativo, mais o que a regra do backend
        pedir; o do desenho fica na cópia da tabela que vai no retrato */
     memset(limpa, 0, sizeof(limpa));
@@ -4787,6 +4968,12 @@ static void desenho_entrega(void) {
     sDesTem = 1;
     pthread_cond_signal(&sDesAcorda);
     pthread_mutex_unlock(&sDesLock);
+    if (sVuDir) { /* (BT3_VU1_DIRETO) o jogo de buffers do quadro seguinte, com o desenho já acordado: a espera, se houver, corre
+                     junto com o desenho deste */
+        GS_FAM_INI(f0);
+        vu_direto_proximo();
+        GS_FAM_FIM(GS_FAM_ESPERA, f0);
+    }
     if (gsPendingScale) { /* (o backend muda de tamanho com o desenho parado) */
         GsDraw_DesenhoEspera();
         scale_apply();

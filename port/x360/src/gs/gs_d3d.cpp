@@ -154,6 +154,22 @@ static D3DVertexBuffer *sVuVb[VU_PARES];
 static D3DIndexBuffer *sVuIb[VU_PARES];
 static unsigned sVuCapV, sVuCapI; /* vértices e índices de cada par */
 static int sVuPar;
+/* (F5, etapa 8, BT3_VU1_DIRETO=1, com a divisão; gs_draw.c, VU_JOGOS) Os jogos de buffers em que a gravação grava os vértices e
+   os índices da VU1 direto, no lugar dos pares que o vu_copia enchia: cabeçalhos do XG sobre XPhysicalAlloc de escrita combinada
+   (como as texturas, xg_cria), sem Lock. A gravação nunca os lê (a faixa de cada desenho vem de quem gerou os índices); o
+   desenho os põe no fluxo 0 e nos índices do quadro (sVuVbQ, sVuIbQ) e, no fim do quadro, uma marca da GPU (vu_cb) diz o vuSeq
+   que ela acabou de ler (sVdFeito), que a gravação espera antes de regravar o jogo. */
+#define VU_DIR_JOGOS 3
+typedef struct VuDir {
+    D3DVertexBuffer vb;
+    D3DIndexBuffer ib;
+    void *v, *i;
+} VuDir;
+static VuDir sVd[VU_DIR_JOGOS];
+static int sVdN;                    /* jogos criados (0: sem a chave, os pares do vu_copia) */
+static volatile uint32_t sVdFeito;  /* o maior vuSeq que a GPU acabou de ler (vu_cb, numa DPC da thread de hardware 1) */
+static D3DVertexBuffer *sVuVbQ;     /* o que o quadro desenha: o par do vu_copia ou o jogo da gravação */
+static D3DIndexBuffer *sVuIbQ;
 static uint32_t sVuIni[MAX_DRAWS]; /* o primeiro índice de cada desenho da VU1 no buffer do quadro (~0: fora) */
 static int sCurUni = -1;            /* o Vu0Uniform posto nas constantes dos vs_vu* */
 static D3DSurface *sEdramCor, *sEdramProf, *sTela;
@@ -418,6 +434,7 @@ static struct {
        o tempo da VU1 na gravação (gs_vu1.c) e o do desenho dela aqui (cópia e chamadas), por quadro */
     unsigned vuFeitos[3], vuPulados[3], vuSemEspaco[3], vuTri[3], vuMaxV[3], vuMaxI[3], vuMaxT[2], vuEsperas;
     double msVuGrav, msVuGravPior, msVuDes, msVuDesPior;
+    double msVuCopia, msVuCopiaPior; /* (F5, etapa 8) só a cópia (vu_copia; sem a divisão, também o vu_plano) */
     double msFim, msFimPior, msQuadro, msQuadroPior, msPresent, msPresentPior;
     unsigned acima16, acima33, capturas, maiorDesenho;
     double msCaptura;
@@ -734,7 +751,7 @@ struct PicoG {
 };
 struct PicoD {
     unsigned q, captura, repete;
-    float per, fim, present, cova;
+    float per, fim, present, cova, copiaVu; /* (copiaVu: a cópia da VU1 dentro do frame_end; 0 com BT3_VU1_DIRETO) */
     unsigned __int64 marca; /* o mftb quando a CPU pôs a marca da GPU */
 };
 static PicoJ sPJ[PICOS_N];
@@ -903,11 +920,11 @@ static void picos_escreve(unsigned n) {
         gpuPer = gf != 0 && ga != 0 && gf > ga ? picos_ms(gf - ga) : -1.0f;
         Diario_Escrever("picos: quadro %u (vblank %u)%s%s: apresentação %.1f ms; jogo %.1f (espera da gravação %.1f em %u, "
                         "vblank %.1f, %u vblanks); gravação %.1f (ocupada %.1f, dela memória %.1f; esperando o desenho %.1f, "
-                        "sem trabalho %.1f); desenho: frame_end %.1f, Present %.1f, cova %.1f, %u repetidas; GPU: fim %.1f "
+                        "sem trabalho %.1f); desenho: frame_end %.1f (cópia da VU1 %.1f), Present %.1f, cova %.1f, %u repetidas; GPU: fim %.1f "
                         "depois da CPU, período %.1f",
                         n, j->vblank, d->captura ? ", CAPTURA" : "", Passos_Medindo() ? ", na janela" : "", per, j->per,
                         j->espera, j->esperas, j->vb, j->vblanks, g->per, g->ocupada, g->espMem, g->espDes, g->ocioso, d->fim,
-                        d->present, d->cova, d->repete, gpuFim, gpuPer);
+                        d->copiaVu, d->present, d->cova, d->repete, gpuFim, gpuPer);
         Diario_Escrever("picos:   quadro %u, o que teve: texturas %u (%u mil pixels, %.1f ms), envios %u (%u KB), hash %u, "
                         "VU1 %u lotes, desenhos %u, vértices %u de CPU e %u da VU (%u índices); descarte: %u pressões, %u "
                         "texturas, %u esperas; memória medida %u vezes; XG: %u texturas, %u alvos, %u profundidades (%u KB, "
@@ -946,7 +963,7 @@ static void picos_apresentou(void) {
 }
 
 /* no fim do frame_end: o lado do desenho do quadro e a linha do de dois atrás */
-static void picos_desenho(const GsQuadro *q, double msFim, double msPresent, int captura) {
+static void picos_desenho(const GsQuadro *q, double msFim, double msPresent, int captura, double msCopiaVu) {
     static unsigned __int64 covaAnt;
     static unsigned repAnt;
     PicoD *p = &sPD[q->quadro % PICOS_N];
@@ -954,6 +971,7 @@ static void picos_desenho(const GsQuadro *q, double msFim, double msPresent, int
     unsigned r = sPicoRepete;
     p->per = sPicoPresAnt != 0 ? picos_ms(sPicoPres - sPicoPresAnt) : 0.0f;
     p->fim = (float)msFim;
+    p->copiaVu = (float)msCopiaVu;
     p->present = (float)msPresent;
     p->captura = (unsigned)captura;
     p->cova = picos_ms(c - covaAnt);
@@ -2587,11 +2605,70 @@ static void mem_init(void) {
     mem_mede();
 }
 
-/* F5, etapa 6: os pares de buffers da VU1. Sem eles, os desenhos dela são contados como sem espaço. */
+/* (BT3_VU1_DIRETO) os jogos de buffers da gravação, v vértices e 3v índices cada; 0 sem memória (nada fica) */
+static int vu_dir_cria(unsigned v) {
+    int k;
+    for (k = 0; k < VU_DIR_JOGOS; k++) {
+        VuDir *d = &sVd[k];
+        d->v = XPhysicalAlloc(v * 48u, MAXULONG_PTR, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+        d->i = XPhysicalAlloc(v * 3u * 4u, MAXULONG_PTR, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+        if (d->v == NULL || d->i == NULL) {
+            for (; k >= 0; k--) {
+                if (sVd[k].v != NULL) XPhysicalFree(sVd[k].v);
+                if (sVd[k].i != NULL) XPhysicalFree(sVd[k].i);
+                sVd[k].v = sVd[k].i = NULL;
+            }
+            return 0;
+        }
+        XGSetVertexBufferHeader(v * 48u, 0, (D3DPOOL)0, 0, &d->vb);
+        XGOffsetResourceAddress(&d->vb, d->v);
+        XGSetIndexBufferHeader(v * 3u * 4u, 0, D3DFMT_INDEX32, (D3DPOOL)0, 0, &d->ib);
+        XGOffsetResourceAddress(&d->ib, d->i);
+    }
+    sVdN = VU_DIR_JOGOS;
+    return 1;
+}
+
+/* (BT3_VU1_DIRETO) os ganchos da gravação (gs_draw.c, vu_direto_liga e vu_direto_proximo) e a marca da GPU */
+static int vu_jogo(int k, float **verts, uint32_t **idx, uint32_t *capV, uint32_t *capI) {
+    if (k < 0 || k >= sVdN) {
+        return 0;
+    }
+    *verts = (float *)sVd[k].v;
+    *idx = (uint32_t *)sVd[k].i;
+    *capV = sVuCapV;
+    *capI = sVuCapI;
+    return 1;
+}
+static uint32_t vu_feito(void) {
+    return sVdFeito;
+}
+static void WINAPI vu_cb(DWORD seq) {
+    sVdFeito = (uint32_t)seq;
+    __lwsync();
+}
+
+/* F5, etapa 6: os pares de buffers da VU1. Sem eles, os desenhos dela são contados como sem espaço. (F5, etapa 8) Com
+   BT3_VU1_DIRETO=1 e a divisão, no lugar deles os jogos de buffers em que a gravação grava direto (sem memória, os pares). */
 static void vu_init(void) {
     unsigned v = (unsigned)env_num("BT3_VU_VERTS", 65536);
     int i, ok = 1;
     v = v < 1024 ? 1024 : v > (1u << 20) ? (1u << 20) : v;
+    if (env_num("BT3_VU1_DIRETO", 0) != 0 && GsDraw_Dividido()) {
+        if (vu_dir_cria(v)) {
+            sVuCapV = v;
+            sVuCapI = v * 3;
+            /* (as listas da VU1 dos dois jogos do gs_draw.c saem: vu_direto_liga) */
+            sMem.buffers += VU_DIR_JOGOS * (sVuCapV * 48u + sVuCapI * 4u);
+            sMem.buffers -= 2u * (MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u);
+            Diario_Escrever("gs_d3d: VU1: %d jogos de buffers em que a gravação grava direto (BT3_VU1_DIRETO=1), %u vértices e "
+                            "%u índices cada (%u KB ao todo; BT3_VU_VERTS), sem os pares da cópia", VU_DIR_JOGOS, sVuCapV,
+                            sVuCapI, VU_DIR_JOGOS * (sVuCapV * 48u + sVuCapI * 4u) >> 10);
+            return;
+        }
+        Diario_Escrever("gs_d3d: VU1: ERRO: sem memória para os %d jogos de buffers do BT3_VU1_DIRETO (%u vértices); a cópia "
+                        "de antes", VU_DIR_JOGOS, v);
+    }
     for (i = 0; i < VU_PARES && ok; i++) {
         ok = SUCCEEDED(sDev->CreateVertexBuffer(v * 48, 0, 0, D3DPOOL_DEFAULT, &sVuVb[i], NULL)) &&
              SUCCEEDED(sDev->CreateIndexBuffer(v * 3 * 4, 0, D3DFMT_INDEX32, D3DPOOL_DEFAULT, &sVuIb[i], NULL));
@@ -3036,8 +3113,8 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
         if (estado >= 2) {
             /* (o DrawPrimitiveUP desfaz o fluxo 0: posto de novo a cada volta para cá) */
-            sDev->SetStreamSource(0, sVuVb[sVuPar], 0, 48);
-            sDev->SetIndices(sVuIb[sVuPar]);
+            sDev->SetStreamSource(0, sVuVbQ, 0, 48);
+            sDev->SetIndices(sVuIbQ);
         }
         sEstadoGs = chave;
     } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE)) {
@@ -3184,7 +3261,7 @@ static void vu_plano(const GsQuadro *q) {
     uint32_t n, f, lo, hi, nv = 0, ni = 0, pedV[3] = {0, 0, 0}, pedI[3] = {0, 0, 0};
 
     sVuCabem = 0;
-    if (sVuCapV == 0) {
+    if (sVuCapV == 0 || (q->vuJogo < 0 && sVuVb[0] == NULL)) { /* (sem buffers: os da VU1 de fora, contados) */
         for (n = 0; n < q->drawCount; n++) {
             sVuIni[n] = ~0u;
         }
@@ -3203,6 +3280,12 @@ static void vu_plano(const GsQuadro *q) {
         hi = q->vuFaixa[2 * n + 1];
         pedV[f] += hi >= lo ? hi - lo + 1 : 0;
         pedI[f] += d->count;
+        if (q->vuJogo >= 0) { /* (BT3_VU1_DIRETO) já no jogo de buffers, na posição da lista: tudo cabe (a capacidade é a
+                                 da gravação), nada se copia */
+            sVuIni[n] = d->first;
+            sVuCabem++;
+            continue;
+        }
         if (hi >= q->vuVertCount || hi - lo + 1 > sVuCapV - nv || d->count > sVuCapI - ni) {
             continue; /* sem espaço (ou índice fora do quadro): pulado e contado no frame_end */
         }
@@ -3285,6 +3368,9 @@ static void log_memoria(void) {
                      sMem.vivos[CL_PROF] + sMem.pend[CL_PROF];
     unsigned usado = sMem.total > sMem.livres ? sMem.total - sMem.livres : 0;
     unsigned brancas = 0;
+    /* (BT3_VU1_DIRETO) a capacidade da VU1 na gravação é a dos jogos de buffers, se menor (gs_draw.c, vu_direto_liga) */
+    unsigned capV = sVdN && sVuCapV < MAX_VU_VERTS ? sVuCapV : MAX_VU_VERTS;
+    unsigned capI = sVdN && sVuCapI < MAX_VU_IDX ? sVuCapI : MAX_VU_IDX;
     int i;
     for (i = 1; i < BR_N; i++) {
         brancas += sMem.branca[i];
@@ -3307,8 +3393,8 @@ static void log_memoria(void) {
     Diario_Escrever("gs_d3d:   buffers, o maior quadro do trecho: vértices %u de %u%s, VU %u de %u%s, índices %u de %u%s, "
                     "constantes %u de %u%s, desenhos %u de %u%s",
                     sMem.maxVerts, (unsigned)MAX_VERTS, sMem.maxVerts >= MAX_VERTS ? " CHEIO" : "", sMem.maxVu,
-                    (unsigned)MAX_VU_VERTS, sMem.maxVu >= MAX_VU_VERTS ? " CHEIO" : "", sMem.maxIdx, (unsigned)MAX_VU_IDX,
-                    sMem.maxIdx >= MAX_VU_IDX ? " CHEIO" : "", sMem.maxUni, (unsigned)MAX_VU_UNIFORMS,
+                    capV, sMem.maxVu >= capV ? " CHEIO" : "", sMem.maxIdx, capI,
+                    sMem.maxIdx >= capI ? " CHEIO" : "", sMem.maxUni, (unsigned)MAX_VU_UNIFORMS,
                     sMem.maxUni >= MAX_VU_UNIFORMS ? " CHEIO" : "", sMem.maxDraws, (unsigned)MAX_DRAWS,
                     sMem.maxDraws >= MAX_DRAWS ? " CHEIO" : "");
     log_memoria_zera();
@@ -3336,8 +3422,11 @@ static void log_vu1(unsigned t) {
                         "quadro %u vértices e %u índices", nome[k], sConta.vuFeitos[k], sConta.vuTri[k], sConta.vuPulados[k],
                         sConta.vuSemEspaco[k], sConta.vuMaxV[k], sConta.vuMaxI[k]);
     }
-    Diario_Escrever("gs_d3d:   VU1, buffers: as três no maior quadro %u de %u vértices e %u de %u índices, %u esperas pelo par",
-                    sConta.vuMaxT[0], sVuCapV, sConta.vuMaxT[1], sVuCapI, sConta.vuEsperas);
+    Diario_Escrever("gs_d3d:   VU1, buffers: as três no maior quadro %u de %u vértices e %u de %u índices, %u esperas pelo par; "
+                    "%s, cópia %.2f ms por quadro (pior %.2f)",
+                    sConta.vuMaxT[0], sVuCapV, sConta.vuMaxT[1], sVuCapI, sConta.vuEsperas,
+                    sVdN ? "gravados direto em 3 jogos de buffers (BT3_VU1_DIRETO)" : "copiados para 2 pares",
+                    sConta.msVuCopia / t, sConta.msVuCopiaPior);
     Diario_Escrever("gs_d3d:   VU1, lotes (shader/interpretador/não executados): vu0 %u/%u/%u, vu4 %u/%u/%u, vu6 %u/%u/%u; "
                     "não reconhecidos %u/%u (%s); instruções desconhecidas %u; tempo por quadro: gravação %.2f ms (pior "
                     "%.2f), desenho %.2f ms (pior %.2f)", sVuLotes[0][0], sVuLotes[0][1], sVuLotes[0][2],
@@ -4366,7 +4455,7 @@ static int alvo_do_fbp(const GsQuadro *q, int fbp) {
 static void frame_end(void) {
     const GsQuadro *q = gsQuadro;
     LARGE_INTEGER t0, tp, tv;
-    double msVu;
+    double msVu, msCopiaVu;
     double msFim, msPresent;
     unsigned capturas = sConta.capturas;
     int cur = -1, mostrado, i;
@@ -4417,9 +4506,20 @@ static void frame_end(void) {
         if (!q->dividido) {
             vu_plano(q); /* (com a divisão, a entrega fez a conta) */
         }
-        vu_copia(q);
+        if (q->vuJogo >= 0 && q->vuJogo < sVdN) {
+            /* (BT3_VU1_DIRETO) a gravação gravou no jogo de buffers: nada a copiar */
+            sVuVbQ = &sVd[q->vuJogo].vb;
+            sVuIbQ = &sVd[q->vuJogo].ib;
+        } else {
+            vu_copia(q);
+            sVuVbQ = sVuVb[sVuPar];
+            sVuIbQ = sVuIb[sVuPar];
+        }
         tempo_poe(T_OUTROS);
         msVu = ms_desde(&tv);
+        msCopiaVu = msVu;
+        sConta.msVuCopia += msVu;
+        if (msVu > sConta.msVuCopiaPior) sConta.msVuCopiaPior = msVu;
         gGsD3dEtapa = "fim do quadro: refazendo a lista";
     }
     tempo_abre(); /* (a GPU do quadro começa aqui) */
@@ -4552,6 +4652,11 @@ static void frame_end(void) {
     sMostradoTex = mtex;
     tempo_fecha_gpu(capturas != sConta.capturas);
     tempo_poe(T_PRESENT);
+    if (q->vuJogo >= 0) {
+        /* (BT3_VU1_DIRETO) quando a GPU acabar tudo o que veio antes (os desenhos da VU1 do quadro), o jogo de buffers dele
+           está livre: a gravação o regrava depois disso (gs_draw.c, vu_direto_proximo) */
+        sDev->InsertCallback(D3DCALLBACK_IDLE | D3DCALLBACK_CPU1, vu_cb, q->vuSeq);
+    }
     if (gPicos != 0) {
         picos_marca(q->quadro); /* (picos: a GPU terminou o quadro) */
     }
@@ -4614,7 +4719,7 @@ static void frame_end(void) {
         sPassoAPasso--;
     }
     if (gPicos != 0) {
-        picos_desenho(q, msFim, msPresent, capturas != sConta.capturas);
+        picos_desenho(q, msFim, msPresent, capturas != sConta.capturas, msCopiaVu);
     }
     gGsD3dQuadros++;
     gGsD3dEtapa = q->dividido ? "esperando o retrato seguinte" : "jogo e gravação do quadro";
@@ -4703,6 +4808,10 @@ static void entrega(const GsQuadro *q, unsigned char *limpa) {
     uint64_t ft; /* (F5, etapa 8, gravação) as partes do gancho por família, fora da soma (gs_internal.h) */
 #endif
     gGsD3dEtapaGrav = "entrega do retrato";
+    if (q->vuJogo >= 0) {
+        __sync(); /* (BT3_VU1_DIRETO) a escrita combinada da gravação no jogo de buffers sai deste núcleo antes de o desenho
+                     poder mandar a GPU lê-la (o lwsync da trava da entrega não ordena essa memória) */
+    }
     grav_junta();
     sPendGrav = 0; /* (o que foi pedido até aqui viaja com este retrato) */
     if (q->fbp >= 0) {
@@ -4758,6 +4867,8 @@ GsBackend sD3dBackend = {
     entrega,
     solta_pede,
     solta,
+    vu_jogo,
+    vu_feito,
 };
 }
 

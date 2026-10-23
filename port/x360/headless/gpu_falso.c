@@ -199,6 +199,90 @@ static uint64_t normal_desenhos(const GsDraw *draws, uint32_t n) {
     return d;
 }
 
+#ifdef BT3_GS_ESPERAS
+/* (F5, etapa 8, BT3_VU1_DIRETO=1) Os jogos de buffers em que a gravação grava os vértices e os índices da VU1 direto (gs_draw.c,
+   vu_direto_liga), com a capacidade das listas (a lista do quadro sai a mesma da cópia), e uma GPU falsa que os lê atrasada: o
+   quadro desenhado agora é "lido" (o hash dos vértices e dos índices refeito sobre o jogo) BT3_GPU_FALSO_ATRASO quadros depois
+   (padrão 1; 0 a 2), e só então o vuFeito diz que ela o largou. Se a gravação regravar um jogo que a GPU ainda não leu (o
+   rodízio ou a espera errados), o hash relido difere do que o fim do quadro tirou: uma linha por quadro diferente (até 20) e a
+   conta no resumo. Com o atraso 2 a gravação precisa esperar (o jogo de três quadros atrás é lido no fim do quadro seguinte ao
+   que ela acabou de entregar): a espera é exercitada. Com 3 ela esperaria pelo próprio quadro que não pode entregar. */
+#define FV_JOGOS 8
+static float *sFvV[FV_JOGOS];
+static uint32_t *sFvI[FV_JOGOS];
+static uint32_t sFvFeito;
+static int sFvAtraso = -1;
+static struct {
+    uint32_t seq, nv, ni;
+    int jogo;
+    uint64_t hv, hi;
+} sFvPend[4];
+static int sFvPendN;
+static unsigned sFvRelidos, sFvDiferentes;
+
+static int fake_vu_jogo(int k, float **verts, uint32_t **idx, uint32_t *capV, uint32_t *capI) {
+    if (k < 0 || k >= FV_JOGOS) {
+        return 0;
+    }
+    if (sFvV[k] == NULL) {
+        sFvV[k] = (float *)malloc(MAX_VU_VERTS * 48u);
+        sFvI[k] = (uint32_t *)malloc(MAX_VU_IDX * 4u);
+        if (sFvV[k] == NULL || sFvI[k] == NULL) {
+            free(sFvV[k]);
+            free(sFvI[k]);
+            sFvV[k] = NULL;
+            sFvI[k] = NULL;
+            return 0;
+        }
+    }
+    if (sFvAtraso < 0) {
+        sFvAtraso = getenv("BT3_GPU_FALSO_ATRASO") != NULL ? atoi(getenv("BT3_GPU_FALSO_ATRASO")) : 1;
+        sFvAtraso = sFvAtraso < 0 ? 0 : sFvAtraso > 2 ? 2 : sFvAtraso;
+    }
+    *verts = sFvV[k];
+    *idx = sFvI[k];
+    *capV = MAX_VU_VERTS;
+    *capI = MAX_VU_IDX;
+    return 1;
+}
+static uint32_t fake_vu_feito(void) {
+    return __atomic_load_n(&sFvFeito, __ATOMIC_ACQUIRE);
+}
+static uint64_t fv_hash(const uint32_t *w, uint32_t n) {
+    uint64_t h = 1469598103934665603ull;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        h = (h ^ w[i]) * 1099511628211ull;
+    }
+    return h;
+}
+/* a GPU falsa lê o quadro pendente mais antigo e o larga */
+static void fv_le_um(void) {
+    int k;
+    uint64_t hv, hi;
+    if (sFvPendN == 0) {
+        return;
+    }
+    k = sFvPend[0].jogo;
+    hv = fv_hash((const uint32_t *)sFvV[k], sFvPend[0].nv * 12u);
+    hi = fv_hash(sFvI[k], sFvPend[0].ni);
+    sFvRelidos++;
+    if (hv != sFvPend[0].hv || hi != sFvPend[0].hi) {
+        if (sFvDiferentes++ < 20) {
+            char linha[200];
+            snprintf(linha, sizeof(linha), "gpu_falso: VU1 direto: o jogo %d do quadro de ordem %u relido diferente (%s%s)\n", k,
+                     sFvPend[0].seq, hv != sFvPend[0].hv ? "vértices " : "", hi != sFvPend[0].hi ? "índices" : "");
+            fputs(linha, stderr);
+        }
+    }
+    __atomic_store_n(&sFvFeito, sFvPend[0].seq, __ATOMIC_RELEASE);
+    for (k = 1; k < sFvPendN; k++) {
+        sFvPend[k - 1] = sFvPend[k];
+    }
+    sFvPendN--;
+}
+#endif
+
 /* (degrau 2) o quadro que o fim do quadro lê: o gsQuadro nas builds com a divisão (as listas vivas sem ela), as listas
    vivas nas outras */
 typedef struct Vista {
@@ -305,6 +389,20 @@ static void fake_frame_end(void) {
     fecha(S_VUIDX);
     hmix_words(q.vuUni, q.vuUniCount * (uint32_t)(sizeof(Vu0Uniform) / 4));
     fecha(S_VUUNI);
+#ifdef BT3_GS_ESPERAS
+    if (q.dividido && g->vuJogo >= 0) { /* (BT3_VU1_DIRETO) o quadro vai para a GPU falsa, que o lê atrasada */
+        sFvPend[sFvPendN].seq = g->vuSeq;
+        sFvPend[sFvPendN].jogo = g->vuJogo;
+        sFvPend[sFvPendN].nv = q.vuVertCount;
+        sFvPend[sFvPendN].ni = q.vuIdxCount;
+        sFvPend[sFvPendN].hv = fv_hash((const uint32_t *)q.vuVerts, q.vuVertCount * 12u);
+        sFvPend[sFvPendN].hi = fv_hash(q.vuIdx, q.vuIdxCount);
+        sFvPendN++;
+        while (sFvPendN > sFvAtraso) {
+            fv_le_um();
+        }
+    }
+#endif
     for (i = 0; i < S_N; i++) {
         quadro = (quadro ^ sSecao[i]) * 1099511628211ull;
     }
@@ -410,7 +508,7 @@ static void fake_solta(GsTex tex, int alvo) {
         envenena(tex);
     }
 }
-#define FAKE_DIVISAO , fake_entrega, fake_solta_pede, fake_solta
+#define FAKE_DIVISAO , fake_entrega, fake_solta_pede, fake_solta, fake_vu_jogo, fake_vu_feito
 #else
 #define FAKE_DIVISAO
 #endif
@@ -501,6 +599,15 @@ static void relatorio(void) {
             GsDraw_DesenhoEspera(); /* (degrau 2) e desenhado */
             GsDraw_DesenhoResumo();
         }
+#ifdef BT3_GS_ESPERAS
+        if (sFvRelidos + (unsigned)sFvPendN != 0) { /* (BT3_VU1_DIRETO) a GPU falsa lê o que ficou e diz o que achou */
+            while (sFvPendN > 0) {
+                fv_le_um();
+            }
+            fprintf(stderr, "gpu_falso: VU1 direto: %u quadros relidos pela GPU falsa (atraso %d), %u diferentes\n", sFvRelidos,
+                    sFvAtraso, sFvDiferentes);
+        }
+#endif
         /* depois da espera os dois contadores são o mesmo número: o do jogo avançou na entrega, o do desenho no fim da gravação */
         fprintf(stderr, "gpu_falso: contador de quadros do jogo %u, do desenho %u\n", gGsFrameJogo, gGsFrame);
     }
