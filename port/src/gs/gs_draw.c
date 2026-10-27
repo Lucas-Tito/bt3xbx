@@ -642,7 +642,11 @@ static GsTex texture_get(int ctx) {
     /* (seção 26) o cache pela origem: a mesma imagem já decodificada com outra chave (outro gen ou outro TEX0) dá o mesmo
        recurso, sem decodificar nem criar (o tempo do hash conta como o da decodificação). Fora com um pacote de texturas. */
     if (sTexOrigem < 0) {
+#ifdef PORT_X360
+        sTexOrigem = getenv("BT3_TEX_ORIGEM") == NULL || atoi(getenv("BT3_TEX_ORIGEM")) != 0; /* (ligado no 360 desde 27/10) */
+#else
         sTexOrigem = getenv("BT3_TEX_ORIGEM") != NULL && atoi(getenv("BT3_TEX_ORIGEM")) != 0;
+#endif
     }
     if (sTexOrigem && !(sTexPackOn && TexPack_Count() != 0)) {
         uint32_t h;
