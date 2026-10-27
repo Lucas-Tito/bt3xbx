@@ -5,7 +5,9 @@
 O instalador `port/x360/tools/iso_convertida.py` lê a ISO original USA e usa os conversores existentes da
 `conv_tool`, pelo `--saida`. Não altera o tamanho de 3.020.816.384 bytes, posições, tamanhos, tabelas ISO 9660,
 UDF ou AFS. A saída é exclusiva do port. O 360 exige esta ISO: `Iso_Iniciar` (`port/x360/src/iso360.c`) procura
-a assinatura da marca e, sem ela, recusa a imagem com uma caixa de mensagem do sistema; da convertida, a carga só lê
+a identificação do volume e do `SYSTEM.CNF` antes da assinatura da marca. A recusa distingue original, versão não
+suportada e imagem ilegível, com mensagens em inglês; a busca automática prefere a convertida compatível
+([F8, avisos](../plano/F8/01-avisos.md)). Da convertida, a carga só lê
 ([plano/F5/02.md](../plano/F5/02.md), "Lado do 360"). Os `mods/` continuam no formato do PS2, convertidos ao abrir,
 até as últimas fases.
 

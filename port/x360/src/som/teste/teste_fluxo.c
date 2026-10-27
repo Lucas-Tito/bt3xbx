@@ -252,7 +252,12 @@ static int registro(unsigned char *s, int k, const char *nome, unsigned lba, uns
     int nl = (int)strlen(nome), len = 33 + nl + ((33 + nl) & 1);
     s[k] = (unsigned char)len;
     p32(s + k + 2, lba);
+    s[k + 6] = (unsigned char)(lba >> 24); s[k + 7] = (unsigned char)(lba >> 16);
+    s[k + 8] = (unsigned char)(lba >> 8); s[k + 9] = (unsigned char)lba;
     p32(s + k + 10, tam);
+    s[k + 14] = (unsigned char)(tam >> 24); s[k + 15] = (unsigned char)(tam >> 16);
+    s[k + 16] = (unsigned char)(tam >> 8); s[k + 17] = (unsigned char)tam;
+    s[k + 28] = 1; s[k + 31] = 1;
     s[k + 25] = dir ? 2 : 0;
     s[k + 32] = (unsigned char)nl;
     memcpy(s + k + 33, nome, (size_t)nl);
@@ -304,19 +309,31 @@ static int faz_iso(void) {
     memset(s, 0, sizeof(s));
     s[0] = 1;
     memcpy(s + 1, "CD001", 5);
-    registro(s, 156, "\0", 18, SETOR, 1);
+    s[6] = 1;
+    memset(s + 40, ' ', 32);
+    memcpy(s + 40, "SLUS_21678", 10);
+    p32(s + 80, 1475008);
+    s[84] = (unsigned char)(1475008u >> 24); s[85] = (unsigned char)(1475008u >> 16);
+    s[86] = (unsigned char)(1475008u >> 8); s[87] = (unsigned char)1475008u;
+    s[129] = 8; s[130] = 8;
+    registro(s, 156, "x", 18, SETOR, 1);
+    s[189] = 0;
     grava(o, 16 * SETOR, s, SETOR);
     memset(s, 0, sizeof(s));
-    registro(s, 0, "DATA", 19, SETOR, 1);
+    k = registro(s, 0, "DATA", 19, SETOR, 1);
+    registro(s, k, "SYSTEM.CNF;1", 20, 57, 0);
     grava(o, 18 * SETOR, s, SETOR);
     memset(s, 0, sizeof(s));
     k = registro(s, 0, "PZS3US0.AFS;1", lba0, tam0, 0);
     k = registro(s, k, "PZS3US1.AFS;1", lba1, tam1, 0);
     registro(s, k, "PZS3US2.AFS;1", lba2, tam2, 0);
     grava(o, 19 * SETOR, s, SETOR);
+    grava(o, 20 * SETOR, "BOOT2 = cdrom0:\\SLUS_216.78;1\r\nVER = 1.00\r\nVMODE = NTSC\r\n", 57);
     memset(s, 0, sizeof(s));
     memcpy(s, "BT3X360-ISO", 11);
     grava(o, 0x3DF400, s, 512);
+    /* Arquivo esparso: o volume inteiro sem reservar 3 GB de dados. */
+    grava(o, (long long)3020816384u - 1, s + 511, 1);
     fclose(o);
     return 1;
 }

@@ -7,8 +7,8 @@
  *   amarelo  um instante, entre o D3D e o jogo
  *   azul     a luta rodando
  *   verde    terminou bem; qualquer botão volta para o dashboard
- *   vermelho falhou (o log diz onde: game:\bt3xbx.log, game:\saida.txt), ou a ISO não é a convertida no PC
- *            (decisão 23): a caixa do sistema diz isso por cima da tela vermelha, e o jogo não começa
+ *   vermelho falhou (o log diz onde: game:\bt3xbx.log, game:\saida.txt)
+ * A ISO recusada tem uma caixa do sistema sobre o preto, e o jogo não começa (decisão 23).
  * O jogo roda noutra thread, com pilha grande e a FPU em truncamento (o modelo do PS2 para soma e multiplicação).
  * Com BT3_GS=gpu (F3, etapa 7) o jogo desenha: o dispositivo passa para a thread do jogo, que apresenta um quadro por
  * quadro do GS (port/x360/src/gs/gs_d3d.cpp), e a main só espera; quando o jogo termina, ela pega o dispositivo de
@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "diario.h"
+#include "iso360.h"
 #include "som/som360.h"
 
 extern "C" {
@@ -35,9 +36,6 @@ void Port_Abortar(void);
 void Ambiente_Carregar(const char *caminho); /* posix360.c */
 void Estado_Resumo(void);                  /* estado360.c */
 void Port_X360FecharSaida(void);           /* posix360.c */
-void Iso_Iniciar(void);                    /* iso360.c */
-const char *Iso_Pedida(void);              /* iso360.c: o caminho do BT3_ISO que não abriu */
-int Iso_Recusada(void);                    /* iso360.c: a ISO aberta não tem a marca da convertida */
 extern const char *volatile gPortStage;    /* plat_mem.c: até onde o arranque chegou */
 void GsD3d_Soltar(void);                   /* port/x360/src/gs/gs_d3d.cpp */
 void Port_GsParar(void);                   /* port/src/gs/gs_core.c: a thread de gravação (BT3_GS_THREAD) acaba e solta o dispositivo */
@@ -243,7 +241,7 @@ static DWORD WINAPI Preparar(LPVOID arg) {
     return 0;
 }
 
-/* A ISO original (sem a marca da convertida) foi recusada: a caixa de mensagem do sistema por cima da tela preta.
+/* A ISO foi recusada: a caixa de mensagem do sistema por cima da tela preta.
    A caixa só aparece com a tela sendo apresentada, então a main apresenta enquanto ela está aberta (sem bloquear:
    a Guide congela o console se ninguém apresentar). O texto, os botões, o resultado e o XOVERLAPPED ficam fora da
    pilha: o sistema os usa depois da chamada voltar. Se outra tela do sistema estiver aberta (ERROR_ACCESS_DENIED),
@@ -251,22 +249,33 @@ static DWORD WINAPI Preparar(LPVOID arg) {
    abriu e fechou: o OK leva direto ao dashboard (o jogo nunca começou). Se não abriu, a tela parada e um botão voltam
    ao dashboard. */
 static bool MostrarRecusa(D3DDevice *dev, int motivo) {
-    static const WCHAR kTituloOriginal[] = L"ISO original";
-    static const WCHAR kTituloAusente[] = L"ISO n\x00E3o encontrada";
+    static const WCHAR kTituloOriginal[] = L"ISO conversion required";
+    static const WCHAR kTituloAusente[] = L"ISO not found";
+    static const WCHAR kTituloVersao[] = L"Unsupported game version";
+    static const WCHAR kTituloIlegivel[] = L"Cannot read ISO";
     static const WCHAR kTextoOriginal[] =
-        L"Esta \x00E9 a ISO original do jogo. O port l\x00EA a ISO convertida no PC: converta-a com "
-        L"port/x360/tools/iso_convertida.py, copie a convertida para a pasta do jogo e aponte o BT3_ISO do "
-        L"ambiente.txt para ela.";
-    static const WCHAR kPrefixoAusente[] =
-        L"O arquivo do BT3_ISO n\x00E3o existe ou n\x00E3o \x00E9 uma ISO. Caminho pedido no ambiente.txt: ";
+        L"Convert the original USA ISO on your PC with port/x360/tools/iso_convertida.py, "
+        L"then copy the converted ISO to the game folder. Update BT3_ISO in ambiente.txt if set.";
+    static const WCHAR kTextoVersao[] =
+        L"Only the USA SLUS-21678 is supported. Use the original USA ISO and convert it on your PC "
+        L"with port/x360/tools/iso_convertida.py.";
+    static const WCHAR kTextoIlegivel[] =
+        L"The ISO is unreadable, incomplete or damaged. Copy it again, or create a new image from your disc.";
+    static const WCHAR kPrefixoAusente[] = L"The ISO file was not found. Check BT3_ISO in ambiente.txt: ";
     static WCHAR sTextoAusente[600]; /* estático: o sistema o usa depois da chamada voltar */
-    const WCHAR *kTitulo = motivo == 2 ? kTituloAusente : kTituloOriginal;
-    const WCHAR *kTexto = kTextoOriginal;
+    const WCHAR *kTitulo = kTituloIlegivel;
+    const WCHAR *kTexto = kTextoIlegivel;
     static LPCWSTR kBotoes[1] = {L"OK"};
     static MESSAGEBOX_RESULT sResultado;
     static XOVERLAPPED sOv;
     DWORD r, inicio = GetTickCount(), fim = 0;
-    if (motivo == 2) {
+    if (motivo == ISO_ORIGINAL) {
+        kTitulo = kTituloOriginal;
+        kTexto = kTextoOriginal;
+    } else if (motivo == ISO_NAO_SUPORTADA) {
+        kTitulo = kTituloVersao;
+        kTexto = kTextoVersao;
+    } else if (motivo == ISO_AUSENTE) {
         const char *c = Iso_Pedida();
         size_t n = wcslen(kPrefixoAusente), i;
         wcscpy(sTextoAusente, kPrefixoAusente);
@@ -274,6 +283,7 @@ static bool MostrarRecusa(D3DDevice *dev, int motivo) {
             sTextoAusente[n++] = (WCHAR)(unsigned char)c[i];
         }
         sTextoAusente[n] = 0;
+        kTitulo = kTituloAusente;
         kTexto = sTextoAusente;
     }
     for (;;) {
@@ -290,7 +300,7 @@ static bool MostrarRecusa(D3DDevice *dev, int motivo) {
                         (unsigned)r);
         return false;
     }
-    Diario_Escrever("recusa: caixa do sistema aberta, \"%s\"", motivo == 2 ? "ISO não encontrada" : "ISO original");
+    Diario_Escrever("recusa: caixa do sistema aberta (motivo %d)", motivo);
     while (!XHasOverlappedIoCompleted(&sOv)) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);

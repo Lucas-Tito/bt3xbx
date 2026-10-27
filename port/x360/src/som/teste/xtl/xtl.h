@@ -1,7 +1,7 @@
 /*
  * F6: o pedaço da API do 360 que o port/x360/src/iso360.c usa, sobre POSIX, só para o teste do WSL
- * (port/x360/src/som/teste/teste_fluxo.c, pelo port/x360/tools/teste_som360.sh, com -I desta pasta). Não entra em
- * nenhuma build do jogo.
+ * (port/x360/src/som/teste/teste_fluxo.c, pelo port/x360/tools/teste_som360.sh, com -I desta pasta). Também serve ao
+ * teste sintético da identificação e busca da ISO na F8 (teste_iso_avisos.py). Não entra em nenhuma build do jogo.
  *
  * O ReadFile tem uma leitora lenta: uma leitura que toca [gTesteLentaIni, gTesteLentaFim) da imagem dorme
  * gTesteLentaUs microssegundos antes de ler (o disco lento do console, dentro da trava de quem lê), e gTesteDentro
@@ -19,6 +19,8 @@
 #include <stdio.h>
 #include <time.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
+#include <glob.h>
 
 #define __int64 long long
 typedef int BOOL;
@@ -34,6 +36,8 @@ typedef struct { char cFileName[260]; } WIN32_FIND_DATA;
 #define OPEN_EXISTING 3
 #define FILE_ATTRIBUTE_NORMAL 0x80
 #define FILE_BEGIN 0
+#define ERROR_FILE_NOT_FOUND 2
+#define ERROR_PATH_NOT_FOUND 3
 #define _snprintf snprintf
 #define _stricmp strcasecmp
 #define __lwsync() __sync_synchronize()
@@ -45,8 +49,15 @@ extern volatile int gTesteDentro;
 typedef struct TesteArq { int fd; long long pos; } TesteArq;
 
 static inline HANDLE CreateFile(const char *c, int a, int s, void *x, int d, int f, void *y) {
-    int fd = open(c, O_RDONLY);
+    char caminho[1024];
+    const char *pasta = getenv("TESTE_GAME");
+    int fd;
     TesteArq *h;
+    if (pasta != NULL && strncmp(c, "game:\\", 6) == 0) {
+        snprintf(caminho, sizeof(caminho), "%s/%s", pasta, c + 6);
+        c = caminho;
+    }
+    fd = open(c, O_RDONLY);
     (void)a; (void)s; (void)x; (void)d; (void)f; (void)y;
     if (fd < 0) {
         return INVALID_HANDLE_VALUE;
@@ -101,13 +112,48 @@ static inline void InitializeCriticalSection(CRITICAL_SECTION *c) {
 static inline void EnterCriticalSection(CRITICAL_SECTION *c) { pthread_mutex_lock(c); }
 static inline void LeaveCriticalSection(CRITICAL_SECTION *c) { pthread_mutex_unlock(c); }
 static inline DWORD GetCurrentThreadId(void) { return (DWORD)syscall(SYS_gettid); }
-static inline DWORD GetLastError(void) { return (DWORD)errno; }
+static inline DWORD GetLastError(void) { return errno == ENOENT ? ERROR_FILE_NOT_FOUND : (DWORD)errno; }
+static inline BOOL GetFileSizeEx(HANDLE h, LARGE_INTEGER *tam) {
+    struct stat s;
+    if (fstat(((TesteArq *)h)->fd, &s) != 0) {
+        return 0;
+    }
+    tam->QuadPart = s.st_size;
+    return 1;
+}
+typedef struct TesteBusca { glob_t nomes; size_t pos; } TesteBusca;
+static inline BOOL FindNextFile(HANDLE h, WIN32_FIND_DATA *d) {
+    TesteBusca *b = (TesteBusca *)h;
+    const char *nome;
+    if (b->pos == b->nomes.gl_pathc) {
+        return 0;
+    }
+    nome = strrchr(b->nomes.gl_pathv[b->pos++], '/');
+    snprintf(d->cFileName, sizeof(d->cFileName), "%s", nome != NULL ? nome + 1 : "");
+    return 1;
+}
 static inline HANDLE FindFirstFile(const char *c, WIN32_FIND_DATA *d) {
-    (void)c; (void)d;
-    return INVALID_HANDLE_VALUE;
+    char caminho[1024];
+    const char *pasta = getenv("TESTE_GAME");
+    TesteBusca *b;
+    (void)c;
+    if (pasta == NULL) {
+        return INVALID_HANDLE_VALUE;
+    }
+    b = (TesteBusca *)calloc(1, sizeof(*b));
+    snprintf(caminho, sizeof(caminho), "%s/*.iso", pasta);
+    if (glob(caminho, 0, NULL, &b->nomes) != 0) {
+        globfree(&b->nomes);
+        free(b);
+        return INVALID_HANDLE_VALUE;
+    }
+    FindNextFile(b, d);
+    return b;
 }
 static inline BOOL FindClose(HANDLE h) {
-    (void)h;
+    TesteBusca *b = (TesteBusca *)h;
+    globfree(&b->nomes);
+    free(b);
     return 1;
 }
 #endif

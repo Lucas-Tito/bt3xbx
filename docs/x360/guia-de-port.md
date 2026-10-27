@@ -125,7 +125,8 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 - **Desde 23/10/2026 os padrões do `Ambiente_Carregar` são o jogo como ele roda:** sem a demonstração, a GPU com a VU1, as
   duas threads, o som e o 16:9. Um `ambiente.txt` antigo que contava com o padrão de antes (a luta de demonstração, sem
   desenho, sem som) precisa dizer `BT3_DEMO=1`, `BT3_GS=none`, `-BT3_SOM`; a ISO continua pela busca em `game:\` ou pelo
-  `BT3_ISO` (com a original e a convertida na mesma pasta, diga qual).
+  `BT3_ISO`. Desde a F8, `01-avisos`, a busca automática percorre as `.iso` até achar uma convertida compatível;
+  `BT3_ISO` explícito continua definitivo.
 - **Antes de dizer que uma variável falta no console, leia os padrões do `Ambiente_Carregar`**
   (`port/x360/src/f2/posix360.c`): o `getenv` do 360 é aquela tabela mais o `ambiente.txt`, não o da CRT nem o
   `port/x360/src/ambiente.c` da F1. O estudo da F6 deu o `BT3_SOUND_TICKS` como ausente, a primeira rodada da VU1 da
@@ -357,6 +358,7 @@ linha de todo log é "passos: origem COMMIT diff:HASH", o carimbo da build (`hea
 | `tipos.py` | liga cada leitura do rastreio a struct e campo do código (coluna do DWARF + AST JSON do clang) |
 | `port/x360/conv/` (`conv_tool`) | conversores por formato em C89, para o instalador do 360 e para o PC: troca in-place com limite conferido e cada byte marcado; `conv_tool --mapa` confere contra o rastreio e mede a cobertura (decisão 12); `--disco` termina com o censo dos arquivos de menu por faixa de id (quantos arquivos e contêineres BPE ainda sem conversor); `--pecas` valida cada peça comum dos menus (`formatos/menus-pecas.md`) só na seção dela, em todo pacote do disco que a usa (a tabela `sUsos`), antes de o pacote inteiro ganhar conversor, e com `--mapa` confere só as posições dessa seção. No `--mapa`, uma leitura de 2, 4 ou 8 bytes sobre texto que o conversor deixou em bytes (o laço do fim do rótulo do Flash vira `strlen` na x86r) conta à parte, "em cadeia de texto lida por inteiro". Arquivo e seção para formato numa tabela só (`sFaixas`, conv.c). A `conv_tool` se compila sem `conv_jogo.c`, a ponte do jogo, que cita funções dele. Cada conteúdo descomprimido (`ARQ@0xN#bpe`) se converte também pelo caminho do jogo (`Conv_FormatoBits`, o mapa de bits de `conv_jogo.c`): bytes, resultado e cobertura têm de ser os mesmos, e o conteúdo tem de caber em `CONV_JOGO_MAX` |
 | `iso_convertida.py` e `teste_iso_convertida.py` | instalação no PC da decisão 23: usa `conv_tool --lista-conversores` e `--saida`, publica uma ISO do mesmo tamanho só depois da reabertura integral; `--conferir --dados DIR` confere outra vez contra os dados extraídos. O teste completo provoca recusas e estragos e roda `--disco`. Contrato e comandos em `formatos/iso-convertida.md`; ainda não muda a carga do 360 |
+| `teste_iso_avisos.py` | F8: o leitor `iso360.c` real sobre a API de teste do Linux, com cabeçalhos, diretórios e AFS inventados em imagens esparsas; confere identificação, recusas e escolha da convertida, exige falha numa cópia estragada e acusa seis mutantes em execução; sem console nem emulador |
 | `elfdados.py` | retipa as tabelas de dados do executável (o splat põe `.long` em tudo) pela largura lida |
 | `bitfields.py` | reescreve os campos de bits do C pré-processado para o GCC big-endian ter a ordem do PS2 (no 360 é `#pragma bitfield_order(lsb_to_msb)`) |
 | `headless/chamadas.c`, `chamadas.py` | sequência de funções chamadas nas duas builds, para achar onde a execução se separa |
@@ -2200,3 +2202,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - O diagnóstico de gravação do 360 calibra o mftb contra o relógio do sistema mesmo com `BT3_TEMPOS=0`.
   Não depender da calibração de `Gs_FamTrecho`: ela volta cedo quando as famílias estão desligadas e deixa o valor
   inicial de 49,875 MHz. As duas leituras do sistema ficam fora do intervalo exclusivo, não em cada lote.
+
+### Identificação e avisos da ISO (F8, `plano/F8/01-avisos.md`)
+
+- **Identificar antes da marca evita orientar a conversão de outra região.** O volume e o `SYSTEM.CNF` distinguem a
+  USA conhecida; tamanho físico diferente do volume é truncamento. A marca só é consultada depois. Os hashes
+  continuam no instalador do PC: metadados iguais não autenticam a imagem inteira.
+- **Um registro ISO inválido precisa estar no caminho que o teste percorre.** A primeira tentativa de testar um
+  registro cruzando o setor ainda deixava o `SYSTEM.CNF` antes dele, então a busca já tinha terminado. A imagem
+  sintética agora coloca oito registros inventados de 254 bytes antes da quebra, que deixa só 16 bytes no setor.
+  Não ler comprimento do nome nem os outros campos antes de conferir o tamanho mínimo e o intervalo do registro.
+- **Ao endurecer a identificação, atualizar também a ISO de mentira do áudio.** O `teste_fluxo.c` compila o leitor
+  real e precisa de PVD, volume, ordens de bytes e `SYSTEM.CNF` coerentes. Completar o arquivo de teste com um byte
+  no fim o torna esparso, com o tamanho esperado de 3 GB sem gravar 3 GB. O `teste_som360.sh` segue passando com os
+  mutantes das travas acusados; falhar só na identificação não provaria as travas.
+- **GCC com `-m32` pode não achar `asm/errno.h` neste WSL.** Na repetição do teste da ISO em 32 bits,
+  `-isystem /usr/include/x86_64-linux-gnu` fornece os headers de sistema que faltavam na busca. O invólucro externo
+  também usa `-D_FILE_OFFSET_BITS=64` para o `stat` e o `pread` da imagem esparsa de 3 GB; os `long` continuam com
+  32 bits, como no `cl`. Não instalar `gcc-multilib`, que remove o cross da PPC (armadilha acima).

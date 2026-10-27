@@ -13,6 +13,8 @@ A mensagem é a mesma para qualquer ISO sem a marca.
 1. **Mensagens separadas por caso** (pedido): a ISO USA original sem converter ("converta no PC com o script"), uma
    versão não suportada (outra região, outra revisão: "só a USA SLUS-21678") e a imagem ilegível ou truncada. O console
    distingue pela identificação do disco (o `SYSTEM.CNF` e o volume) antes de olhar a marca.
+   Implementado no WSL em [01-avisos](01-avisos.md), junto com a busca pela convertida (item 6); build e sessão no
+   360 ficam para a revisão.
 2. **Conversão no próprio console** (pergunta para quando a F8 for escopada; seria rever a decisão 23): o código de
    conversão já rodou no console antes da decisão 23; o custo é ler e gravar 3 GB no FATX, com tela de progresso, e os
    conteúdos comprimidos (BPE) continuariam convertidos na carga.
@@ -23,6 +25,7 @@ A mensagem é a mesma para qualquer ISO sem a marca.
    memória, a queda), as telas de falha e qualquer texto do port na tela. O que vai só para o log (`bt3xbx.log`,
    `saida.txt`) pode seguir em português. Fazer o levantamento dos textos visíveis (as chamadas de `XShowMessageBoxUI`,
    as telas de cor por fase e os textos desenhados pelo port) antes de traduzir.
+   Levantamento e tradução em [01-avisos](01-avisos.md); as telas de cor não tinham texto.
 
 ## Fechamento de gaps, antes do release (27/10/2026)
 
