@@ -63,6 +63,7 @@ INVENTARIO = {
     "BT3_WINDOW": ("fora", "plat_stub.c: tamanho da janela"),
     "BT3_SOM": ("saida", "som360.cpp (só no 360; no WSL é o arquivo do rastro, headless/som.c, fora desta lista): =1 o "
                 "SDL_InitSubSystem aceita e o jogo toca pelo XAudio2"),
+    "BT3_FILME_LOG": ("saida", "som360.cpp: posição do BGM tocado por imagem apresentada, etapa 7"),
     "BT3_SOM_TESTE": ("saida", "som360.cpp: =1 o tom de teste no começo"),
     "BT3_SOM_TESTE_HZ": ("saida", "som360.cpp: a frequência do tom de teste"),
     "BT3_SOM_TESTE_S": ("saida", "som360.cpp: a duração da primeira fase do tom de teste"),

@@ -29,6 +29,7 @@
  */
 #include <xtl.h>
 #include <xaudio2.h>
+#include <ppcintrinsics.h>
 #include <float.h>
 #include <math.h>
 #include <stdio.h>
@@ -38,6 +39,10 @@
 #include "som360.h"
 #include "som_nucleo.h"
 #include "fluxo.h"
+#include "filme_tempo.h"
+
+/* O user do retorno feed é o handle adxt. BGM é a entrada 0 da tabela do jogo (include/sys/file.h). */
+extern "C" struct { char *label; int workSize, reloadSct; void *work; void *adxt; } gAdxPlayerTbl[6];
 
 extern "C" unsigned Port_AdxFluxosTarde(void); /* gs/snd_adx.c: vistas que o cabeçalho acertou depois do fim */
 /* O mesmo contrato lido pelo roteiro.c: include/sys/file.h, AdxPlayer. A tabela é criada no boot; o user do
@@ -67,6 +72,12 @@ static HANDLE sSistema;
 static volatile LONG sGuide;
 static int sDeriva;
 static LARGE_INTEGER sDerivaIni;
+static int sFilmeLog;
+struct FilmeTempoEntrada {
+    volatile LONG versao;
+    volatile unsigned saida, geracao, inicio, dados;
+};
+static FilmeTempoEntrada sFilmeTempo[32]; /* um escritor, cópias por versão; 341 ms de histórico */
 
 static HANDLE sEvento, sMisturador; /* o retorno do XAudio2 acorda o misturador */
 static volatile LONG sLivres, sFimMisturador;
@@ -85,6 +96,48 @@ static volatile unsigned sTravaPiorUs, sTravaLonga, sBlocosLentos;
 static volatile DWORD sMemMin = 0xFFFFFFFF;
 /* a falha pega na mistura */
 static volatile unsigned sQuedaCodigo, sQuedaIar, sQuedaLr, sQuedaEnd, sQuedaVista;
+
+extern "C" void Som360_FilmeAmostra(unsigned long long tb, double tbPorMs, SomFilmeAmostra *a) {
+    XAUDIO2_VOICE_STATE st;
+    unsigned atraso, tocadas, k;
+    unsigned __int64 agora;
+    FilmeTempo historico[32];
+    memset(a, 0, sizeof(*a));
+    if (!sFilmeLog || sVoz == NULL) {
+        return;
+    }
+    for (k = 0; k < 32; k++) {
+        const FilmeTempoEntrada *e = &sFilmeTempo[k];
+        unsigned v = (unsigned)e->versao;
+        __lwsync();
+        historico[k].saida = e->saida;
+        historico[k].geracao = e->geracao;
+        historico[k].inicio = e->inicio;
+        historico[k].dados = e->dados;
+        __lwsync();
+        if (!filme_tempo_consistente(v, (unsigned)e->versao)) historico[k].geracao = 0;
+    }
+    sVoz->GetState(&st, 0);
+    agora = __mftb();
+    a->janelaUs = agora >= tb && tbPorMs > 0 ? (unsigned)((agora - tb) * 1000.0 / tbPorMs) : 0xFFFFFFFF;
+    atraso = a->janelaUs < 250000 ? (unsigned)(a->janelaUs * 48.0 / 1000.0 + 0.5) : 0xFFFFFFFF;
+    tocadas = (unsigned)st.SamplesPlayed - atraso;
+    if (atraso != 0xFFFFFFFF && st.SamplesPlayed >= atraso && st.BuffersQueued > 0) {
+        for (k = 0; k < 32; k++) {
+            if (filme_tempo_posicao(&historico[k], tocadas, &a->posicao)) {
+                a->geracao = historico[k].geracao;
+                a->valido = 1;
+                break;
+            }
+        }
+    }
+    a->faltas = sFaltas;
+    a->travas = sTravasPerdidas;
+    a->silencios = sSilencios;
+    a->erro = (unsigned)sErroVoz | (unsigned)sErroMotor | (unsigned)sMorto;
+    /* Uma falta anterior já torna o resultado conservadoramente inconclusivo nesta abertura. */
+    if (a->faltas || a->travas || a->silencios || a->erro) a->valido = 0;
+}
 
 /* ------------------------------------------------------------------------------------------- a trava do núcleo */
 
@@ -285,7 +338,21 @@ static void Encher(int i) {
             memset(sBuf[i], 0, sizeof(sBuf[i]));
             sTravasPerdidas++;
         } else {
-            int ok = MisturarProtegido(sBuf[i]);
+            SomFilmeRelogio antes, depois;
+            int ok;
+            if (sFilmeLog) SomNucleo_FilmeRelogio(gAdxPlayerTbl[0].adxt, &antes);
+            ok = MisturarProtegido(sBuf[i]);
+            if (sFilmeLog && ok) {
+                FilmeTempoEntrada *ft = &sFilmeTempo[sBlocos % 32];
+                SomNucleo_FilmeRelogio(gAdxPlayerTbl[0].adxt, &depois);
+                InterlockedIncrement(&ft->versao);
+                ft->saida = sBlocos * BLOCO;
+                ft->inicio = antes.quadros;
+                ft->dados = depois.quadros - antes.quadros;
+                ft->geracao = ok && antes.geracao == depois.geracao ? antes.geracao : 0;
+                __lwsync();
+                InterlockedIncrement(&ft->versao);
+            }
             LeaveCriticalSection(&sTrava); /* (a do TryEnter; a recursiva da mistura já voltou) */
             if (!ok) {
                 memset(sBuf[i], 0, sizeof(sBuf[i]));
@@ -303,7 +370,7 @@ static void Encher(int i) {
     ZeroMemory(&b, sizeof(b));
     b.AudioBytes = sizeof(sBuf[i]);
     b.pAudioData = (const BYTE *)sBuf[i];
-    sVoz->SubmitSourceBuffer(&b);
+    { HRESULT h = sVoz->SubmitSourceBuffer(&b); if (FAILED(h)) sErroVoz = h; }
     sBlocos++;
 }
 
@@ -589,6 +656,7 @@ extern "C" void Som360_Iniciar(void) {
         Diario_Escrever("som: desligado (BT3_SOM=1 liga o som do jogo; BT3_SOM_TESTE=1, o tom de teste)");
         return;
     }
+    sFilmeLog = getenv("BT3_FILME_LOG") != NULL && atoi(getenv("BT3_FILME_LOG")) == 1;
     QueryPerformanceFrequency(&sFreq);
     QueryPerformanceCounter(&sDerivaIni);
     sDeriva = getenv("BT3_SOM_DERIVA") != NULL && strcmp(getenv("BT3_SOM_DERIVA"), "1") == 0;
