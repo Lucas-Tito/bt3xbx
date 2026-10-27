@@ -2125,3 +2125,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - `BT3_GPU_LISTA` e `BT3_GPU_NORMAL` no backend falso são chaves por presença: `=0` ainda grava as listas e calcula
   o hash normal. Para uma medida sem esse trabalho, retire as variáveis do ambiente. Registre separadamente o tempo
   total do roteiro e o das parcelas instrumentadas, sem chamar a entrega do falso de tempo de desenho do Xenos.
+- O `save_mc.sh` preserva sua saída antiga, em que estados diferentes só são impressos. Ao integrá-lo numa rodada
+  automática, não basta aceitar RC 0: o serviço dos cortes confere os estados A/B1/B2 contra a x86, exige dados não
+  vazios e compara o save recuperado de B2. A comparação adicional foi vista recusando estados adulterados.
+- A limpeza parcial e a comparação em grupos cortam centésimos de ms na x86gv, mas não demonstram ganho de ritmo.
+  Para o cenário, o uniforme só depende de `consts[0..15]`, XYOFFSET e ZBUF.PSM. Uma memória desses valores evita
+  montar o bloco e converter inteiros para float em cada lote. Sua vaga é da gravação: o fecho precisa copiá-la
+  para a lista antes do próximo lote quando abre um desenho. Conferir cada acerto contra a montagem completa.
