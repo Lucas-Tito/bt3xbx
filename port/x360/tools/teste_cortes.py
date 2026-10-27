@@ -132,3 +132,43 @@ for nome, ruim in [('soma', bom.replace('total 11.', 'total 12.', 1)),
     else:
         raise SystemExit('FALHA: leitor aceitou ' + nome)
 print('leitor: tudo certo')
+
+# O oráculo da igualdade conhecida deve recusar uma cópia cujo conteúdo foi adulterado.
+fonte = (RAIZ / 'port/src/gs/gs_draw.c').read_text()
+a = fonte.index('static int vu_uniforme_igual(')
+b = fonte.index('{', a)
+nivel, fim = 1, b + 1
+while nivel:
+    if fonte[fim] == '{': nivel += 1
+    elif fonte[fim] == '}': nivel -= 1
+    fim += 1
+funcao = fonte[a:fim]
+pre = r'''
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "port/src/gs/gs_draw.h"
+#define BT3_GPU_FALSO 1
+static unsigned gGsFrame = 17, sVu4Identidades;
+static int sVu4Confere = 1;
+static int vu4_uniforme_conhecido(const void *a, const void *b, unsigned q) { return 1; }
+static int iguais32(const void *a, const void *b, unsigned n) { return memcmp(a, b, n * 4) == 0; }
+static int vu_iguais4(const void *a, const void *b, unsigned n) { return iguais32(a, b, n); }
+'''
+pos = r'''
+int main(void) {
+    Vu0Uniform a, b;
+    setenv("BT3_VU_FECHO", "1", 1);
+    memset(&a, 0, sizeof(a)); b = a;
+    return !vu_uniforme_igual(&a, &b);
+}
+'''
+neg = pos.replace('b = a;', 'b = a; b.misc[0] = 1.0f;')
+assert neg != pos
+with tempfile.TemporaryDirectory(prefix='bt3-identidade-') as d:
+    p = pathlib.Path(d)
+    assert compila_roda(p, 'identidade-boa', pre + funcao + pos, 'gcc') == 0
+    assert compila_roda(p, 'identidade-estragada', pre + funcao + neg, 'gcc') != 0
+print('identidade: cópia boa aceita, conteúdo adulterado recusado pelo oráculo real')
+print('tudo certo')

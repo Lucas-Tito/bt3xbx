@@ -25,7 +25,14 @@ fim() {
     exit "$rc"
 }
 trap fim EXIT
-t() { (flock 9; "$@") 9>>"$HOME/wsl.lock"; }
+t() {
+    (
+        flock 9
+        pgrep -af 'qemu|roteiros' >> "$I/processos.log" || true
+        if pgrep -x qemu-ppc; then echo 'FALHA: outro qemu'; exit 1; fi
+        "$@"
+    ) 9>>"$HOME/wsl.lock"
+}
 build() {
     local w=$1 nome=$2; shift 2
     (cd "$w"; python3 port/x360/tools/headless.py "$@") > "$I/build-$nome.log" 2>&1
@@ -37,7 +44,7 @@ lista() {
         cd "$w"
         export BT3_GS=gpu BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1
         export BT3_UNCAPPED=1 BT3_NOSOUND=1 BT3_GPU_LISTA=1 BT3_GPU_NORMAL=2 BT3_TEX_ORIGEM=1 BT3_TEMPOS=0
-        export BT3_GS_THREAD=$thread BT3_GS_DESENHO=$thread BT3_VU_CONSTANTES=$constantes BT3_VU_FECHO=$fecho BT3_CORTES=$diag
+        export BT3_GS_THREAD=$thread BT3_GS_DESENHO=$thread BT3_VU_CONSTANTES=$constantes BT3_VU_FECHO=$fecho BT3_CORTES=$diag BT3_VU_CONST_CONFERE=1
         export BT3_ROTEIRO=port/x360/roteiros/$r.txt BT3_SAVES=$I/save
         unset BT3_WIDE BT3_MAPA BT3_GUARDA
         rm -rf "$BT3_SAVES"
@@ -75,6 +82,10 @@ for par in "base:$BASE" "final:$FINAL"; do
     t build "$w" "$nome-ppcg" --alvo ppc --gpu
     test -z "$(git -C "$w" status --porcelain)"
 done
+for alvo in x86 x86gv ppcg; do
+    cmp "$I/base/port/build/$alvo/stubs.txt" "$I/final/port/build/$alvo/stubs.txt"
+done
+pa 'stubs iguais nas três builds'
 python3 - "$I" <<'PY'
 import pathlib, subprocess, sys
 p = pathlib.Path(sys.argv[1])
@@ -105,7 +116,7 @@ for alvo in x86gv ppcg; do
         for thread in 0 1; do
             ref=base-$alvo-$r-t$thread
             t lista "$I/base" "$alvo" "$r" "$ref" "$thread" 0 0
-            for modo in 00 10 01 11; do
+            for modo in 00 10 20 01 11 21; do
                 nome=final-$alvo-$r-t$thread-c$modo
                 t lista "$I/final" "$alvo" "$r" "$nome" "$thread" "${modo:0:1}" "${modo:1:1}"
                 div "$ref" "$nome"
@@ -138,6 +149,8 @@ for r in f5_duelo f5_treino; do
 done
 git restore -- port/x360/include/vu_iguais.h
 t build "$I/final" restaurada --alvo x86 --gpu --vu1
+bash port/x360/tools/cortes_medir.sh "$I/sem-listas" 3 > "$I/sem-listas.log" 2>&1
+pa 'medição sem marcas e sem listas: tudo certo'
 # Critérios oficiais com os binários do commit final, em série e sem mapa na PPC.
 t build "$I/final" x86r --alvo x86 --rastreio
 t build "$I/final" ppc --alvo ppc

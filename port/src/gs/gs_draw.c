@@ -1833,14 +1833,15 @@ static void vu_limpa_constantes(Vu0Uniform *u, int familia) {
 }
 #include "../../x360/include/vu4_constantes.h"
 #ifdef BT3_GPU_FALSO
+static int sVu4Confere = -1;
+static unsigned sVu4Identidades;
 static void vu4_const_confere(const Vu0Uniform *u, const float *c, uint64_t xy, uint64_t z, int acerto) {
-    static int ligado = -1;
     static unsigned acertos, novos;
-    if (ligado < 0) {
+    if (sVu4Confere < 0) {
         const char *e = getenv("BT3_VU_CONST_CONFERE");
-        ligado = e != NULL && atoi(e) != 0;
+        sVu4Confere = e != NULL && atoi(e) != 0;
     }
-    if (!ligado) return;
+    if (!sVu4Confere) return;
     if (!vu4_uniforme_confere(u, c, xy, z)) {
         fprintf(stderr, "FALHA: constantes do cenario diferentes no quadro %u\n", gGsFrame);
         abort();
@@ -1860,7 +1861,20 @@ static int vu_uniforme_igual(const void *a, const void *b) {
         ligado = e != NULL && atoi(e) != 0;
     }
     if (ligado) {
-        if (vu4_uniforme_conhecido(a, b, gGsFrame)) return 1;
+        if (vu4_uniforme_conhecido(a, b, gGsFrame)) {
+#ifdef BT3_GPU_FALSO
+            if (sVu4Confere > 0) {
+                if (!iguais32(a, b, sizeof(Vu0Uniform) / 4)) {
+                    fprintf(stderr, "FALHA: identidade do uniforme incorreta no quadro %u\n", gGsFrame);
+                    abort();
+                }
+                if (++sVu4Identidades == 1 || sVu4Identidades % 100000 == 0) {
+                    fprintf(stderr, "constantes: identidade: %u igualdades conferidas, 0 diferentes\n", sVu4Identidades);
+                }
+            }
+#endif
+            return 1;
+        }
         return vu_iguais4(a, b, sizeof(Vu0Uniform) / 4);
     }
     return iguais32(a, b, sizeof(Vu0Uniform) / 4);

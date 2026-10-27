@@ -17,7 +17,8 @@ for nome in ('boot', 'f5_duelo'):
 # As aberturas de comparação ficam sem marcas finas. O diagnóstico vai em aberturas próprias.
 for nome, constantes, fecho, diag, gpu in [
     ('base', 0, 0, '0', '0'), ('constantes', 1, 0, '0', '0'),
-    ('fecho', 0, 1, '0', '0'), ('ambos', 1, 1, '0', '0'),
+    ('fecho', 0, 1, '0', '0'), ('parcial_fecho', 1, 1, '0', '0'),
+    ('cache', 2, 0, '0', '0'), ('ambos', 2, 1, '0', '0'),
     ('gravacao', 0, 0, '6900,7025', '0'), ('gpu6930', 0, 0, '0', '6929,6931'),
     ('gpu6960', 0, 0, '0', '6959,6961')]:
     linhas = [
