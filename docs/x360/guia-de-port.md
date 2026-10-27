@@ -2114,3 +2114,20 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   16 x 1, repetindo o defeito do `clut_hash`, e não via a segunda linha. O `clut16.py` usa a leitura da decodificação,
   8 x 2, compara palavras exatas e roda antes de qualquer retorno do cache. Sua prova negativa muda isoladamente cada
   uma das 16 cores e restaura a chave antiga numa cópia: as oito da segunda linha precisam ser acusadas, inclusive na PPC.
+
+### O preparo da rodada final da F5 (`plano/F5/10.md`)
+
+- **Código 0 do `save_mc.sh` não é julgamento de todos os casos.** O script imprime estados diferentes e testes da
+  camada, mas não agrega cada falha. A rodada final usa `f5_final_confere.py save-mc`: término dos dois testes,
+  estados A/B1/B2 contra x86, erro de escrita F, chegada ao menu e arquivos recuperados. Esse julgamento também
+  precisa recusar cópias estragadas, mesmo se o comando anterior saiu com 0.
+- **A captura interna não vê o FXAA.** No `frame_end`, `captura()` vem antes de `fxaa_passa()`. `BT3_SHOT_CHEIA=1`
+  muda a resolução capturada, não essa ordem. As PPM provam o alvo anterior ao filtro; imagem final com FXAA exige
+  captura da saída ou instrumentação específica depois dele, com medição de fps em outra abertura.
+- **Não aninhar a trava do CLUT16.** `teste_clut16.sh` abre `~/wsl.lock` e toma `flock` sozinho. Rodá-lo dentro de
+  outro `flock` sobre o mesmo arquivo bloqueia a própria fila. O `f5_final.sh` usa trava por etapa, deixa a do
+  CLUT16 com ele e recusa outro qemu/roteiro antes de iniciar. `FIM` só diz que o serviço terminou; verificar o
+  código de saída e a linha de sucesso antes de aprovar a rede do WSL.
+- **Cópia negativa de save sem arrastar os dados.** `port/build/save_mc/dados` contém links para os dados do jogo.
+  Copiar só estados, logs e cartões necessários, ou preservar os links e excluir `dados`; um `copytree` que segue
+  links duplica gigabytes sem acrescentar prova. Usar diretório próprio em `~/` e conferir o tamanho antes.
