@@ -2672,3 +2672,137 @@ desta análise. O binário antigo do clone principal tem outro SHA1 (`ee54716ba7
 registrado sem tratá-lo como referência; ambos ficam intocados. Sem fontes ou objetos alterados, não houve build,
 comparação nova de objetos, roteiro, save, emulador ou acesso ao console. Os ganhos futuros, o tempo individual
 de gravação após o cache e sua sessão longa no 360 continuam sem prova nesta entrega de análise.
+
+## 28. O restante da gravação, os cortes de constantes e fecho e o perfil pontual da GPU (27/10/2026)
+
+Branch `codex/f5-cortes`, base `1003b9f5` (`troca/codex/f5-picos`). Sem console nesta tarefa. A meta continua sendo
+nenhum pico na luta sem acrescentar vblank nem atraso de entrada. Convenção: **[medido]**, **[lido]**, **[estimado]**.
+
+### Medir antes de cortar
+
+`cc4037a1`: `BT3_CORTES=A,B`, desligado por padrão, mede cada quadro de A até B, inclusive. `=1` escolhe 6900 a 7025.
+A pilha divide exclusivamente DMA, VIF, GIF, desenhos de CPU, VU1, Unpack, envio, entrega, hash, constantes e fecho.
+O GIF chamado pela VU1 entra no GIF, e o envio dele só no envio. A soma conserva o total; não se somam famílias
+inclusivas à pilha. Só a thread de gravação escreve os contadores. A medição começa no `run_chain`, não inclui o
+intervalo sem trabalho entre duas listas, e termina depois da entrega, antes da captura de software.
+
+**[Medido, x86gv]** Duelo com `BT3_TEX_ORIGEM=1`, sem threads, `BT3_TEMPOS=0`, chaves dos cortes ainda ausentes.
+`~/f5-cortes/diag-duelo.log`: 3.088 quadros, 4670 a 7757, soma conservada em todos por `cortes.py`; roteiro completo,
+8.380 quadros. Tempos em ms, com as marcas por chamada:
+
+| Quadro | Total | DMA | VIF | GIF | CPU | VU1 restante | Unpack | Envio | Entrega | Hash | Constantes | Fecho |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 6930 | 1,437 | 0,064 | 0,219 | 0,109 | 0,127 | 0,193 | 0,106 | 0,169 | 0,195 | 0,179 | 0,031 | 0,044 |
+| 6960 | 2,832 | 0,089 | 0,349 | 0,206 | 0,162 | 0,512 | 0,240 | 0,200 | 0,695 | 0,184 | 0,086 | 0,109 |
+| Mediana do combate | 4,635 | 0,137 | 0,567 | 0,285 | 0,152 | 0,897 | 0,407 | 0,285 | 1,240 | 0,260 | 0,155 | 0,193 |
+| 4976, maior total | 6,481 | 0,149 | 0,630 | 0,461 | 0,146 | 2,185 | 0,453 | 0,436 | 1,352 | 0,276 | 0,170 | 0,224 |
+
+O antigo resto tem trabalho identificável: no 6960, DMA/VIF/GIF/CPU somam **0,806 ms**; no 6930, **0,520 ms**.
+Isso não transfere os cerca de 5 ms do Xenon diretamente para essas parcelas. O diagnóstico cobra relógios por chamada,
+e a entrega inclui o hash e a leitura das listas pelo backend falso, sem rasterização. Com as threads ela também pode
+esperar o desenho. A VU1 restante exclui constantes, fecho e quaisquer filhos medidos. Não é o número inclusivo da família
+VU1 antiga. O DMA inclui a contagem dos bytes de teste e o `GsVu1_FrameEnd`.
+
+**[Preparado, 360]** `BT3_CORTES_GPU=A,B` seleciona os quadros mesmo em `Passos_Medindo()`, independentemente de
+`BT3_TEMPOS`; `=1` seleciona só 6960. Guarda o número emitido com cada buffer e drena os buffers fora da faixa.
+Linhas `cortes: gpu quadro Q` mostram total, custo das marcas e, por classe, tempo bruto, líquido estimado, limite
+da espera pela CPU e número de marcas. `cortes: cpu quadro Q` mostra o `frame_end` e as classes, com preparo,
+plano da EDRAM e limpeza separados. O custo descontado é o trecho vazio do mesmo quadro, como no perfil existente.
+As marcas esvaziam o pipeline: o perfil identifica passadas, mas não certifica fase nem ganho de apresentação.
+Nenhum tempo individual de GPU do 6960 foi medido aqui; nenhum corte de shader, Resolve ou área foi aplicado sem ele.
+
+### Os cortes, desligados por padrão
+
+| Commit | Chave | Mudança [lido] |
+|---|---|---|
+| `5c240eaf` | `BT3_VU_FECHO=1` | A igualdade binária do uniforme passa de uma palavra por volta a quatro palavras com XOR/OR; conserva cada bit, inclusive NaNs e sinais de zero, e exige só alinhamento de quatro bytes |
+| `5459444e` | `BT3_VU_CONSTANTES=1` | Nos programas 4 e 6, zera somente os campos que não recebem valor logo depois: elimina 76 e 152 bytes de escritas redundantes por bloco, respectivamente; o programa 0 fica com a montagem anterior |
+| `ab252e4d` | `BT3_VU_CONSTANTES=2` | Acrescenta ao modo 1 a memória do uniforme do cenário: a chave compara os 64 bytes da matriz, XYOFFSET e ZBUF.PSM. Em acerto evita a montagem e as três conversões; o fecho copia a vaga estática ao abrir um desenho |
+| `852d05c7` | Constantes 2 e `BT3_VU_FECHO=1` | A igualdade da cópia anterior é conhecida por endereço, quadro e versão; neste caso evita reler os 304 bytes. Qualquer outra origem ou versão volta à comparação binária |
+
+A ordem dos desenhos, os índices, os uniformes completos e os estados continuam os mesmos. Não há nova espera,
+fila ou recurso. As chaves não mudam padrões. O código novo entra no ramo da PPC e no teste explícito `--vu1`,
+com os corpos originais da x86 plana preservados.
+
+### Provas locais e alcance
+
+**[Medido]** `teste_cortes.py` extrai o código real do rateio e do perfil de GPU e testa relógios e dispositivo simulados.
+Passa, e acusa três mutantes: soma perdida, quadro leitor no lugar do emitido e ausência do dreno. O leitor do rateio
+recusa, com saída 1, cópias com total adulterado, quadro alvo ausente e fim do roteiro retirado; o teste também tira uma parcela.
+
+`teste_vu_cortes.sh`, x86 de 32 bits e PPC real no qemu: **512 blocos de constantes iguais byte a byte**, começando com todos
+os 256 bytes de preenchimento possíveis nas duas famílias; **2.926 diferenças de palavras acusadas**, inclusive comprimentos
+não múltiplos de quatro e origem deslocada quatro bytes. Os mutantes que aceitam tudo no fecho ou esquecem o `light2` falham
+nas duas arquiteturas. A memória do cenário acrescenta 256 sequências com mudanças de matriz, XY e formato Z e 256
+cópias adulteradas recusadas pelo oráculo completo; as chaves sem XY ou sem matriz também falham na x86 e na PPC. Os testes não dependem de um bloco estático inicialmente zerado.
+
+**[Medido]** `~/f5-cortes/local.log`: as 16 comparações `divergencias.py --normal` da `x86gv` passaram, quatro combinações
+00/10/01/11 nos dois roteiros e nas duas configurações de threads, contra o binário do diagnóstico anterior aos cortes.
+A memória do cenário passou em mais 12 comparações locais (00/20/21, nos mesmos quatro casos). O último resumo do Duelo
+tem 4.096.367 acertos e 3.633 montagens novas conferidas, nenhum diferente; no Treino, 1.097.255 e 2.745, respectivamente.
+Cada roteiro acabou com os mesmos 8.380/7.386 quadros e sem `FALHA`, `CRASH` ou `race:`. Isso é prova local de desenvolvimento;
+a matriz do commit final contra a base da tarefa, incluindo `ppcg`, fica na rodada abaixo.
+
+### Ganho medido e estimativa separada
+
+**[Medido, x86gv]** Em `~/f5-cortes/`, as séries `rateio-*`, `cache-rateio-*` e `identidade-rateio-*` conservam os
+3.088 quadros do combate. As parcelas abaixo são medianas em ms, com marcas, comparadas dentro de cada série:
+
+| Mudança | Parcela antes | Depois | Ganho na parcela |
+|---|---:|---:|---:|
+| Limpeza parcial, 00 contra 10 | constantes 0,1587 | 0,1536 | 0,0051 |
+| Comparação em grupos, 00 contra 01 | fecho 0,1969 | 0,1800 | 0,0169 |
+| Memória do cenário, série final 00 contra 20 | constantes 0,1572 | 0,1563 | 0,0009, abaixo da variação observada |
+| Combinação final, 00 contra 21 | fecho 0,1957 | 0,1793 | 0,0164; não separa ganho adicional da identidade |
+
+Na série final, sem marcas finas e com `BT3_GPU_LISTA`/`BT3_GPU_NORMAL` **ausentes**, três repetições do Duelo completo:
+CPU mediana 20,56 s (00), 20,57 (20), 20,49 (21); parede 20,21 / 20,21 / 21,22 s. A economia de CPU da combinação é
+**0,07 s, cerca de 0,34%**, aproximadamente 0,0084 ms por quadro do roteiro inteiro; a parede piora nessa amostra.
+Não chamar isso de melhora do ritmo. As parcelas vêm de outra corrida, com marcas, não de uma subtração dessa CPU.
+No 6930, fecho 0,0445 para 0,0384 ms, total 1,429 para 1,473; no 6960, fecho 0,1064 para 0,1027, total 2,757 para 2,767.
+**Não há redução demonstrada do total dos quadros alvo na x86gv**, nem ganho isolado da memória ou da identidade no roteiro.
+
+**[Estimado, Xenon, sem crédito no orçamento até o console]** Grupos do fecho: 0 a 0,15 ms; limpeza parcial: 0 a 0,10;
+memória da VU4: 0 a 0,30; identidade: 0 a 0,25. As faixas são hipóteses, não somáveis: a memória tira conversões que a x86
+faz barato e o atalho tira leituras do mesmo fecho que os grupos já encurtam. A combinação tem hipótese de 0 a 0,5 ms,
+muito aquém dos 10,4 ms de corte com margem propostos para o 6960. Por isso todos continuam desligados. A decisão sobre
+GPU/Resolves depende do novo perfil no console; nenhuma passagem adicional ao vblank foi introduzida.
+
+**Provas finais curtas [medido]:** mais quatro comparações da identidade e duas da sua instrumentação passaram, totalizando
+34 pares locais normais da x86gv. O contador do atalho conferiu o conteúdo completo em pelo menos **3.900.000 igualdades no
+Duelo e 1.100.000 no Treino**, sem divergência. O teste extrai o oráculo real do fecho e o vê abortar com uma cópia adulterada.
+Os mutantes sem quadro ou versão falham na x86 e na PPC; no jogo, a chave que aceita qualquer matriz foi acusada no quadro
+4137, saída 134. A árvore foi restaurada e recompilada depois da sabotagem.
+
+A `.text` plana recompilada após os cortes tem SHA1 **`43444ea4d03a6d448aa1ae74a631e35b356a7caa`**. Os objetos sem depuração
+(`objcopy --strip-debug`, `cmp`) são iguais aos da base preservada do cache, salvo `x360_passos.o`, que contém o carimbo de teste.
+O pré-processado plano dos três fontes continua igual ao anterior à memória; a explicitação das guardas em `ac219da3` também
+conservou os nove pré-processados (três fontes, três configurações). Logs em `plana-final.log` e `guardas.log`.
+
+### Rodada preparada no console
+
+`cortes_console.py ~/f5-cortes/console --rodada cortes27` preparou os nove ambientes e os dois roteiros, sem build do 360
+nem acesso ao console. Na revisão Linux, compilar o commit final e preparar novamente os ambientes ao lado da build.
+Para repetir a rodada, escolher outro identificador, pois cada abertura precisa de saves vazios.
+
+- `base`, `constantes`, `fecho`, `parcial_fecho`, `cache`, `ambos`: mesmos padrões, som, 16:9, escala 1,33, FXAA, envio por linhas, VU1 direto e
+  cache pela origem; `BT3_PICOS=36`, `BT3_PICOS_TELA=1`, sem marcas finas. Variam só os modos dos cortes e a pasta dos saves. `ambos` usa constantes 2 e fecho 1.
+- `gravacao`: cortes desligados, `BT3_CORTES=6900,7025`. Completa o rateio do resto no Xenon, sem marcas finas de GPU.
+- `gpu6930` e `gpu6960`: cortes desligados, sem rateio fino da gravação, marcas só em 6929 a 6931 e 6959 a 6961.
+
+Olhar as **imagens de 3 vblanks na janela 2**, sobretudo 6929 e 6959, e a folga da GPU até o prazo, mínimo/p1/p10/mediana.
+Comparar gravação ocupada e `frame_end` por pares de quadros, com mesmos envios e sem texturas novas; não usar só p99 da CPU.
+O resumo da tela deve manter perto de zero trocas sem quadro, sem repetição escondida. Conferir 684/2.334 passos por janela,
+vencedor 0x2, razão 0x1, vida 0/27160, sem queda, vigia ou descartes novos. Aplicar `passos.py --console --janelas 2 --minimo 600`
+com o carimbo da build efetivamente produzida. Esses dois trechos não substituem o critério completo de três janelas longas.
+
+### Rodada final longa
+
+`cortes_rodada.sh FINAL 1003b9f5` cria worktrees próprios em `~/f5-cortes/final/{base,final}`, compila as três builds em cada
+lado e compara objetos sem depuração e SHA1 da `.text`. Faz 48 comparações de listas normais contra a base: seis combinações de chaves,
+dois roteiros, duas configurações de threads, duas arquiteturas. Confere também a instrumentação contra a lista limpa,
+as sabotagens, a medição sem listas, os roteiros oficiais com `SEMMAPA=1 IMG=1` e o `save_mc.sh` do commit final.
+O serviço de usuário `bt3-cortes` recebe `MemoryMax=5G`; toda build e emulador usa `flock ~/wsl.lock`. O resumo em
+`~/f5-cortes/final/provas.resumo` termina em `FIM`, com `tudo certo` ou `FALHA RC=...` antes dele. Foi visto recusar uma árvore
+já existente e terminar o resumo de falha com `FIM`. A falha nunca é registrada como sucesso. A conferência adicional do save exige estados e dados não vazios, pois o script antigo só imprime diferenças. O serviço pode morrer se a sessão
+WSL cair, conforme o guia. A tarefa pede dispará-lo e parar; a certificação longa continua pendente até ler seu resultado.
