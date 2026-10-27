@@ -33,6 +33,13 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 - **Todo verificador novo tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer.
 - Todo aprendizado que custou uma rodada entra no guia, no mesmo commit da correção.
 - Processo longo: rode com `tee` para um log em `~/` (o `/tmp` do WSL some quando a distribuição para).
+- **Esperar é com o shell, não com você.** Para esperar a trava, um serviço ou um processo longo, rode **um único
+  comando bloqueante** em primeiro plano, com o maior tempo limite que a ferramenta aceitar, que só devolve quando
+  acabar e imprime só o fim: o próprio `flock ~/wsl.lock <comando>`, ou um laço como
+  `while pgrep -f bt3-xxx >/dev/null; do sleep 300; done; tail -5 ~/log`. Se o tempo limite cortar, rode o mesmo
+  comando de novo, sem ler logs no meio. Nada de conferir de tempo em tempo (cada olhada gasta a cota sem avançar)
+  nem de lançar vários `flock` em segundo plano: a ordem em que pegam a trava não é garantida. Junte os passos
+  dependentes num script só, dentro de um `flock`.
 - Não mexa no console (FTP) sem a tarefa pedir.
 
 ## Como entregar
