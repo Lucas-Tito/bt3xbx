@@ -1371,6 +1371,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 
 ### O filme com som (F6, etapa 7, `plano/F6/07.md`)
 
+- **O menu da História tem dois eixos de navegação.** `HistSel` usa CIMA/BAIXO no menu de duas opções, mas
+  ESQUERDA/DIREITA na lista circular de sagas. O primeiro roteiro usou CIMA e terminou sem abrir o filme.
+  Exigir o `start p0 fname zs3used.adx` no rastro, além do retorno ao menu, recusou essa rodada. O bit 1 do
+  `gameRepeat` é `PADG_LEFT`, não o bit bruto de CIMA do controle; conferir `include/sys/pad.h`.
 - **A trava não congela a árvore de fontes.** Uma build que ficou enfileirada pode começar enquanto a revisão
   ainda edita ou emenda o commit. Na primeira rodada desta etapa, x86/x86r ficaram num carimbo e PPC/gravador no
   seguinte; a conferência recusou a origem antes do roteiro. Fechar a revisão antes de enfileirar a rodada final,

@@ -8,7 +8,7 @@ aperta X ate tela 6
 quadros 3000
 aperta X                        # Episódios: abre a lista de sagas (focus 1, cursor 0)
 quadros 120
-aperta CIMA                     # a lista circular vai do primeiro item ao último, HISTSEL_ITEM_ENDING (8)
+aperta ESQUERDA                 # a lista circular vai do primeiro item ao último, HISTSEL_ITEM_ENDING (8)
 quadros 120
 marca final selecionado
 aperta X                        # HistSel devolve 2, Hist_Main entra no modo 3
