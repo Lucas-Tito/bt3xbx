@@ -2672,3 +2672,33 @@ desta análise. O binário antigo do clone principal tem outro SHA1 (`ee54716ba7
 registrado sem tratá-lo como referência; ambos ficam intocados. Sem fontes ou objetos alterados, não houve build,
 comparação nova de objetos, roteiro, save, emulador ou acesso ao console. Os ganhos futuros, o tempo individual
 de gravação após o cache e sua sessão longa no 360 continuam sem prova nesta entrega de análise.
+
+### CLUT16: as 16 cores na chave de sempre (27/10, `codex/f5-clut16`)
+
+O `clut_hash` lia `(i & 15, i >> 4)` também com 16 entradas: lia x=8 a 15 da primeira linha, deixando fora a segunda
+linha, as cores 8 a 15. Em CSM1 a CLUT16 é 8 x 2 em `CBP`, com o formato `CPSM`; `CSA` seleciona a posição no buffer
+interno do GS, não desloca essas entradas na VRAM. O leitor e a decodificação atuais usam esse caminho CSM1, não implementam
+CSM2; a correção acompanha suas 16 leituras `(i & 7, i >> 3)`. As 256 entradas e a memória por gerações ficam como antes.
+Pela regra do upstream, a mudança fica no ramo `PORT_BIG_ENDIAN`, também exercitado pela `BT3_TESTE_VU1` da x86gv, com a
+linha original no `#else`.
+
+**Antes de corrigir [medido].** `clut16.py diagnostico` numa cópia: compara as 16 palavras exatas antes dos acertos do
+cache, por `(TEX0, TEXA, gen)`, e conta transições com a mesma chave e só a metade alta diferente. A memória por época só
+pula consultas à mesma VRAM; a tabela cheia é erro explícito. Na x86gv, `f5_duelo`, `f5_treino` e `shenlong` deram **0
+colisões**, em 560.547, 430.109 e 239.176 leituras de paleta; nenhum CSM2. Não se espera mudança de imagem nesses roteiros.
+
+**Prova sintética [medido].** `teste_clut16.sh`, x86 de 32 bits e PPC no qemu: 288 mudanças individuais nas 16 cores,
+4.608 nas 256 cores, três CPSM (0, 2, 10), seis CBP incluindo limites de página e a volta da VRAM; chave corrigida com 0
+falhas. Restaurar a chave antiga numa cópia acusa 144 colisões, todas nas cores 8 a 15, e o teste sai 1. O verificador do
+log também recusa o resumo ausente e a contagem adulterada.
+
+**Listas na x86gv [medido, `662a69b7`].** `divergencias.py --normal`: 0 quadros diferentes nos 8.380 do duelo, 7.386 do
+treino e 5.818 do Shenlong. A correção também deixa de hashear cores de fora da paleta: as decodificações caíram de
+2.431 para 2.388, de 1.248 para 1.157 e de 531 para 519. Por isso a lista crua e o acumulado chamado de "hash do jogo"
+no `gpu_falso` mudam, apesar da lista normal igual. A `.text` plana do mesmo commit deu o SHA-1 exigido abaixo.
+
+**Rodada final preparada.** `clut16_rodada.sh COMMIT BASE`, serviço `bt3-clut16`, resumo `~/f5-clut16/provas.resumo`,
+terminando em `FIM`. Recompila base e commit final, compara objetos sem depuração e a `.text` plana com
+`43444ea4d03a6d448aa1ae74a631e35b356a7caa`, compara as listas normais dos três roteiros na x86gv e ppcg com
+`divergencias.py --normal`, e repete o diagnóstico e seus controles. A conclusão depende de `tudo certo` no resumo;
+resultados ainda não conferidos nesta nota. Sem console.

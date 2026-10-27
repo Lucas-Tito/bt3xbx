@@ -346,7 +346,12 @@ static uint32_t clut_hash(uint32_t cbp, uint32_t cpsm, uint32_t count) {
         return memo[slot].hash;
     }
     for (i = 0; i < count; i++) {
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+        /* CLUT16 em CSM1: duas linhas de oito cores, como na decodificação. */
+        COR_MISTURA(h, Gs_VramRead(cbp, 1, cpsm, count == 16 ? i & 7 : i & 15, count == 16 ? i >> 3 : i >> 4));
+#else
         COR_MISTURA(h, Gs_VramRead(cbp, 1, cpsm, i & 15, i >> 4));
+#endif
     }
     memo[slot].key = key + 1;
     memo[slot].gen0 = g0;
