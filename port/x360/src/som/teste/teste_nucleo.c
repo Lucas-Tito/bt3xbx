@@ -347,6 +347,85 @@ static void caso_vida(void) {
     CONFERE(sProf == 0, "trava presa: %d", sProf);
 }
 
+static void caso_guide(void) {
+    SDL_AudioStream *s[4];
+    Gerador g[4];
+    const int taxas[4] = {24000, 44100, 16000, 48000};
+    const int blocos[6] = {37, 512, 193, 1500, 71, 512};
+    int pos[4] = {0, 0, 0, 0}, j, b, i, c;
+    SomRelogio r, antes;
+    SomContadores c0, c1;
+    sCaso = "Guide: BGM e MAP seguem, vozes e sampler conservam fila e fase";
+    for (i = 0; i < 20000; i++) {
+        sEnt[i] = (short)((i * 37) % 3000 - 1500);
+    }
+    for (j = 0; j < 4; j++) {
+        memset(&g[j], 0, sizeof(g[j]));
+        g[j].seq = sEnt;
+        g[j].canais = 1;
+        g[j].total = 20000;
+        g[j].sobra = 300; /* a Guide também deve conservar a fila já cheia */
+        s[j] = novo(taxas[j], 1);
+        SDL_SetAudioStreamGetCallback(s[j], SDLCALL_gera, &g[j]);
+    }
+    /* O sampler real usa user NULL. Aqui, uma fila pronta e sem retorno. */
+    SDL_SetAudioStreamGetCallback(s[3], NULL, NULL);
+    SDL_PutAudioStreamData(s[3], sEnt, 20000 * 2);
+    for (b = 0; b < 6; b++) {
+        int aberta = b == 1 || b == 2 || b == 4;
+        int chamadas = g[2].chamadas, geradas = g[2].pos;
+        SomNucleo_Relogio(&g[2], &antes);
+        SomNucleo_Contadores(&c0);
+        som_travar();
+        SomNucleo_Guide(aberta, &g[0], &g[1]);
+        som_destravar();
+        mistura(sSaida, blocos[b]);
+        for (i = 0; i < blocos[b]; i++) {
+            int e = 0;
+            for (j = 0; j < 4; j++) {
+                if (!aberta || j < 2) {
+                    e += esperado(sEnt, 1, 0, pos[j] + i, taxas[j]);
+                }
+            }
+            for (c = 0; c < 2; c++) {
+                CONFERE(sSaida[i * 2 + c] == e, "bloco %d, quadro %d: %d, esperado %d", b, i, sSaida[i * 2 + c], e);
+            }
+        }
+        for (j = 0; j < 4; j++) {
+            if (!aberta || j < 2) {
+                pos[j] += blocos[b];
+            }
+        }
+        SomNucleo_Contadores(&c1);
+        CONFERE(c1.curtos == c0.curtos, "a Guide contou falta");
+        CONFERE(SomNucleo_Relogio(&g[2], &r) && r.quadros == (unsigned)pos[2], "relógio da voz andou na pausa");
+        if (aberta) {
+            CONFERE(g[2].chamadas == chamadas && g[2].pos == geradas && r.quadros == antes.quadros,
+                    "a voz consumiu dados ou chamou o retorno na Guide");
+        }
+    }
+    for (j = 0; j < 4; j++) {
+        SDL_DestroyAudioStream(s[j]);
+    }
+    CONFERE(!SomNucleo_Relogio(&g[2], &r) && r.geracao == 0, "relógio de fluxo destruído");
+    /* Um fluxo que nasce na Guide fica intacto, inclusive com os handles de música ainda nulos. */
+    SomNucleo_Guide(1, NULL, NULL);
+    s[0] = novo(24000, 1);
+    SDL_PutAudioStreamData(s[0], sEnt, 20000 * 2);
+    mistura(sSaida, 512);
+    for (i = 0; i < 1024; i++) {
+        CONFERE(sSaida[i] == 0, "um fluxo novo com user NULL tocou na Guide");
+    }
+    SomNucleo_Guide(0, NULL, NULL);
+    mistura(sSaida, 37);
+    for (i = 0; i < 37; i++) {
+        CONFERE(sSaida[i * 2] == esperado(sEnt, 1, 0, i, 24000), "o fluxo novo perdeu o começo");
+    }
+    SDL_DestroyAudioStream(s[0]);
+    CONFERE(sProf == 0, "trava presa: %d", sProf);
+    printf("Guide: música contínua, pausa e retomada exatas, fluxo novo suspenso\n");
+}
+
 int main(void) {
     sSemente = 25;
     caso_taxa("48 kHz estéreo, identidade", 48000, 2, 3000);
@@ -365,6 +444,7 @@ int main(void) {
     caso_falta();
     caso_partido_e_fila();
     caso_vida();
+    caso_guide();
     printf("trava: profundidade máxima %d\n", sProfMax);
     if (sFalhas) {
         printf(">> FALHA: %d caso(s)\n", sFalhas);

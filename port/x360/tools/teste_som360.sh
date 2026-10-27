@@ -4,8 +4,9 @@
 #   port/x360/tools/teste_som360.sh            (aqui ou no WSL: cat ... | ssh bt3win "wsl ... bash -s" com RAIZ=)
 # 1. o núcleo em C89 estrito (-std=c89 -pedantic -Werror, o que o cl.exe do XDK aceita) e o teste
 #    (port/x360/src/som/teste/teste_nucleo.c) com gcc; o teste tem de passar;
-# 2. os mutantes: cópias do núcleo estragadas de seis jeitos (corte, interpolação, canal direito, arredondamento do
-#    ganho, fase inicial, tamanho do pedido ao retorno); cada troca tem de casar uma vez só e o teste tem de falhar;
+# 2. os mutantes: cópias do núcleo estragadas de oito jeitos (corte, interpolação, canal direito, arredondamento do
+#    ganho, fase inicial, tamanho do pedido ao retorno, Guide ignorada, música pausada com a Guide); cada troca tem
+#    de casar uma vez só e o teste tem de falhar;
 # 3. (F6, etapa 5) a leitura em blocos (port/x360/src/som/fluxo.c) em C89 estrito e o teste dela
 #    (port/x360/src/som/teste/teste_fluxo.c, com pthreads) três vezes seguidas; e cinco mutantes do fluxo.c (sem o
 #    adiantado do começo do laço, sem a sobra do bloco, um byte deslocado, a tabela que não se esvazia, o arquivo que não
@@ -51,6 +52,8 @@ MUT=(
   '(v * g + 32768) >> 16'                        '(v * g) >> 16'
   's->f = 2 * SOM_TAXA;'                         's->f = 1 * SOM_TAXA;'
   '(precisa - s->n) * tam,'                       '(precisa - s->n) * tam - tam,'
+  '!sGuide || (s->user != NULL && (s->user == sBgm || s->user == sMap))' '1'
+  's->user == sBgm || s->user == sMap'             '0'
 )
 for ((i = 0; i < ${#MUT[@]}; i += 2)); do
   de=${MUT[i]}; para=${MUT[i+1]}; d=$T/m$i
@@ -132,7 +135,7 @@ for ((i = 0; i < ${#MUTI[@]}; i += 2)); do
   fi
 done
 if [ $falhas -eq 0 ]; then
-  echo "teste_som360: núcleo certo e os 6 mutantes acusados; leitura em blocos certa e os 5 mutantes acusados; a thread do jogo sem esperar e os 5 mutantes do iso360.c acusados"
+  echo "teste_som360: tudo certo; núcleo e Guide com 8 mutantes acusados; leitura em blocos com 5; a thread do jogo sem esperar com 5 do iso360.c"
 else
   echo ">> FALHA: teste_som360 com $falhas falha(s)"
 fi

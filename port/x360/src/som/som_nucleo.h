@@ -43,6 +43,17 @@ const char *SomNucleo_Erro(void);
    SDL: additional = o que falta, em bytes da taxa do fluxo; total = o pedido inteiro). Com a trava pega. */
 void SomNucleo_Misturar(short *saida, int quadros);
 
+/* A Guide suspende os fluxos cujo user não é o handle BGM nem MAP do jogo. Sem consumir a fila, mudar ganho,
+   fase ou pausa do próprio jogo. Handles nulos nunca identificam música (o sampler dos efeitos usa user NULL).
+   Chamadas com a trava pega, inclusive a leitura do relógio. Fluxos criados com a Guide aberta também param. */
+void SomNucleo_Guide(int aberta, void *bgm, void *map);
+typedef struct SomRelogio {
+    unsigned geracao; /* identidade da criação do fluxo, mesmo se malloc reutilizar o endereço */
+    unsigned quadros; /* saídas de 48 kHz produzidas por este fluxo, incluindo as voltas do laço */
+    unsigned curtos;  /* saídas sem dado; uma pausa da Guide não conta falta */
+} SomRelogio;
+int SomNucleo_Relogio(void *user, SomRelogio *r);
+
 /* contadores desde o começo (lidos sem trava, para o log) */
 typedef struct SomContadores {
     unsigned misturas;   /* chamadas de SomNucleo_Misturar */

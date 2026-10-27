@@ -1,0 +1,21 @@
+# F6, etapa 8: tom de 1 kHz por 15 min desde o boot, pelo menos 10 min deles sob Treino. Ver a nota 08.md.
+-BT3_DEMO
+-BT3_ROTEIRO
+-BT3_NOMOVIE
+-BT3_NOSOUND
+BT3_ISO=game:\bt3_convertida.iso
+BT3_GS=gpu
+BT3_SAVES=game:\saves_f6e8
+BT3_SOUND_TICKS=1
+BT3_VU1=1
+BT3_VU_VERTS=98304
+BT3_MEM_PISO_MB=32
+BT3_MEM_TEX_MB=128
+BT3_GS_THREAD=1
+BT3_GS_DESENHO=1
+BT3_WIDE=1
+BT3_SOM=0
+BT3_SOM_DERIVA=0
+BT3_SOM_TESTE=1
+BT3_SOM_TESTE_HZ=1000
+BT3_SOM_TESTE_S=900

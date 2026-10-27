@@ -19,6 +19,7 @@
  *   BT3_SOM_TESTE=1    o tom de teste no começo, pelo mesmo caminho (fluxos do núcleo), em cinco fases
  *   BT3_SOM_TESTE_HZ   a frequência do tom (440)
  *   BT3_SOM_TESTE_S    a duração da primeira fase, em segundos (3; 600 para a prova de 10 min do escopo)
+ *   BT3_SOM_DERIVA=1   registra SamplesPlayed, os vblanks e o relógio do BGM por segundo; desligado por padrão
  *
  * (F6, etapas 4 e 5) As medidas que o vigia escreve a cada 60 s e na saída (linhas "som (medidas)" e "som (leitura)"):
  * a latência do pedido do jogo ao primeiro bloco misturado (efeitos: do comando da fila; fluxos: do ADXT_Start*, com a
@@ -39,6 +40,13 @@
 #include "fluxo.h"
 
 extern "C" unsigned Port_AdxFluxosTarde(void); /* gs/snd_adx.c: vistas que o cabeçalho acertou depois do fim */
+/* O mesmo contrato lido pelo roteiro.c: include/sys/file.h, AdxPlayer. A tabela é criada no boot; o user do
+   retorno feed do snd_adx.c é o handle adxt, nunca a ordem em que os fluxos abrem. MAP também é música. */
+extern "C" {
+extern struct { char *label; int workSize, reloadSct; void *work; void *adxt; } gAdxPlayerTbl[6];
+extern unsigned gPortVBlanks, gGsFrame;
+extern volatile unsigned gX360Luta;
+}
 
 #pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
 
@@ -55,6 +63,10 @@ static volatile LONG sTravaPronta, sLigado, sJogo, sMorto;
 static volatile int sProf;          /* a profundidade da trava (só muda com ela pega) */
 static HANDLE sVigia, sPare;
 static LARGE_INTEGER sFreq;
+static HANDLE sSistema;
+static volatile LONG sGuide;
+static int sDeriva;
+static LARGE_INTEGER sDerivaIni;
 
 static HANDLE sEvento, sMisturador; /* o retorno do XAudio2 acorda o misturador */
 static volatile LONG sLivres, sFimMisturador;
@@ -221,6 +233,7 @@ static int MisturarProtegido(short *saida) {
     __try {
         som_travar();
         pegou = 1;
+        SomNucleo_Guide(sGuide != 0, gAdxPlayerTbl[0].adxt, gAdxPlayerTbl[1].adxt);
         SomNucleo_Misturar(saida, BLOCO);
         som_destravar();
         pegou = 0;
@@ -399,9 +412,69 @@ static void Contadores(const char *quando) {
     }
 }
 
-/* espera ms ou o pedido de parar (1) */
+/* Só o vigia consome o listener. Nunca notificação nem diário nas threads 4 e 5. A espera curta também atende a
+   Guide durante os 600 s do tom, quando TocarTom ainda não devolveu o controle ao laço do vigia. */
+static void Guide(void) {
+    DWORD id;
+    ULONG_PTR valor;
+    if (sSistema == NULL) {
+        return;
+    }
+    while (XNotifyGetNext(sSistema, 0, &id, &valor)) {
+        if (id == XN_SYS_UI && (valor != 0) != (sGuide != 0)) {
+            InterlockedExchange(&sGuide, valor != 0);
+            Diario_Escrever("som: Guide %s, efeitos e vozes %s; BGM e MAP seguem",
+                            valor ? "aberta" : "fechada", valor ? "suspensos" : "retomados");
+        }
+    }
+}
+
+/* espera ms ou o pedido de parar (1); a Guide é consultada ao menos a cada 20 ms */
 static int Esperar(DWORD ms) {
-    return WaitForSingleObject(sPare, ms) == WAIT_OBJECT_0;
+    DWORD ini = GetTickCount();
+    for (;;) {
+        DWORD passou, falta;
+        Guide();
+        passou = GetTickCount() - ini;
+        if (passou >= ms) {
+            return WaitForSingleObject(sPare, 0) == WAIT_OBJECT_0;
+        }
+        falta = ms - passou;
+        if (WaitForSingleObject(sPare, falta < 20 ? falta : 20) == WAIT_OBJECT_0) {
+            return 1;
+        }
+    }
+}
+
+/* A voz conta PCM realmente consumido, inclusive silêncio: por isso também vai o relógio do BGM e a geração do
+   fluxo. A análise só aceita música contínua, sem curtos, faltas, travas perdidas ou silêncios, com as duas contas
+   andando juntas (a diferença é a fila). O relógio é relativo ao primeiro registro válido, não mede a latência do
+   ADXT_Start. A trava nunca espera; uma olhada perdida vira lacuna detectável pela ferramenta. */
+static void Deriva(void) {
+    SomRelogio r;
+    XAUDIO2_VOICE_STATE st;
+    LARGE_INTEGER t0, t1;
+    unsigned vb, vbFim, quadro, enviadas, luta;
+    if (!sDeriva || sVoz == NULL || !TryEnterCriticalSection(&sTrava)) {
+        return;
+    }
+    QueryPerformanceCounter(&t0);
+    vb = gPortVBlanks;
+    quadro = gGsFrame;
+    luta = gX360Luta;
+    SomNucleo_Relogio(gAdxPlayerTbl[0].adxt, &r);
+    sVoz->GetState(&st, 0); /* sem NOSAMPLESPLAYED: é a posição tocada, não a enviada */
+    enviadas = sBlocos * BLOCO;
+    vbFim = gPortVBlanks;
+    QueryPerformanceCounter(&t1);
+    LeaveCriticalSection(&sTrava);
+    Diario_Escrever("som (deriva): ms=%u vb=%u vb_fim=%u quadro=%u luta=%u tocadas=%I64u enviadas=%u mixadas=%u "
+                    "geracao=%u curtos=%u fila=%u faltas=%u travas=%u silencios=%u erro_voz=%u erro_motor=%u "
+                    "guide=%u janela_us=%u",
+                    (unsigned)((t0.QuadPart - sDerivaIni.QuadPart) * 1000 / sFreq.QuadPart), vb, vbFim, quadro, luta,
+                    st.SamplesPlayed, enviadas, r.quadros, r.geracao, r.curtos, (unsigned)st.BuffersQueued,
+                    sFaltas, sTravasPerdidas, sSilencios, (unsigned)sErroVoz, (unsigned)sErroMotor,
+                    (unsigned)sGuide, Microssegundos(t1.QuadPart - t0.QuadPart));
 }
 
 static int NumeroDoAmbiente(const char *v, int padrao, int min, int max) {
@@ -483,6 +556,7 @@ static DWORD WINAPI Vigia(LPVOID arg) {
             sMemMin = m.dwAvailPhys;
         }
         segundos++;
+        Deriva();
         if (sFaltas != faltas || sTravasPerdidas != travas || (sQuedaCodigo != 0 && !sQuedaVista) ||
             (sJogo && segundos % 60 == 0)) {
             faltas = sFaltas;
@@ -516,6 +590,8 @@ extern "C" void Som360_Iniciar(void) {
         return;
     }
     QueryPerformanceFrequency(&sFreq);
+    QueryPerformanceCounter(&sDerivaIni);
+    sDeriva = getenv("BT3_SOM_DERIVA") != NULL && strcmp(getenv("BT3_SOM_DERIVA"), "1") == 0;
     hr = XAudio2Create(&sX, 0, XAUDIO2_DEFAULT_PROCESSOR);
     Diario_Escrever("som: XAudio2Create 0x%08X (threads de hardware 4 e 5)", (unsigned)hr);
     if (FAILED(hr)) {
@@ -573,6 +649,12 @@ extern "C" void Som360_Iniciar(void) {
     Diario_Escrever("som: Start 0x%08X, BuffersQueued %u; o jogo %s o som", (unsigned)hr, (unsigned)st.BuffersQueued,
                     sJogo ? "abre" : "não abre (BT3_SOM=1 liga)");
     sPare = CreateEvent(NULL, TRUE, FALSE, NULL);
+    sSistema = XNotifyCreateListener(XNOTIFY_SYSTEM);
+    if (sSistema == INVALID_HANDLE_VALUE) {
+        sSistema = NULL;
+    }
+    Diario_Escrever("som: notificações da Guide %s; log de deriva %s",
+                    sSistema != NULL ? "ligadas" : "FALHARAM", sDeriva ? "ligado" : "desligado");
     sVigia = CreateThread(NULL, 64 * 1024, Vigia, NULL, CREATE_SUSPENDED, NULL);
     if (sVigia != NULL) {
         XSetThreadProcessor(sVigia, 1);
@@ -598,6 +680,10 @@ extern "C" void Som360_Parar(void) {
         }
         CloseHandle(sVigia);
         sVigia = NULL;
+    }
+    if (sSistema != NULL) {
+        CloseHandle(sSistema);
+        sSistema = NULL;
     }
     Contadores("saída");
     sX->StopEngine();
