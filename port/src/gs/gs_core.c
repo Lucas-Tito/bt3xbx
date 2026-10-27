@@ -73,6 +73,9 @@ double Gs_FamMs(uint64_t tiques) {
 }
 #endif
 #endif
+#ifdef BT3_GS_ESPERAS
+#include "../../x360/src/gs/cortes_impl.h"
+#endif
 unsigned gGsFbUploads; /* bit 0 / 1: pixels were uploaded into display buffer 0 / 0x70 since the back end last looked */
 unsigned gGsFrame;
 #define gs gGs
@@ -411,7 +414,19 @@ uint64_t Gs_TexOrigem(uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uin
 /* A hash of one 8 KB page of GS memory, recomputed only after an upload touched the page. The GPU back end keys
    its texture cache on these, so a texture the game uploads again unchanged (it streams the stage's textures to
    one address many times per frame) is recognised instead of decoded again. */
+#ifdef BT3_GS_ESPERAS
+uint32_t Gs_PageHash_cortes_corpo(uint32_t page);
 uint32_t Gs_PageHash(uint32_t page) {
+    uint32_t resultado;
+    GS_CORTES_ENTRA(COR_HASH);
+    resultado = Gs_PageHash_cortes_corpo(page);
+    GS_CORTES_SAI();
+    return resultado;
+}
+uint32_t Gs_PageHash_cortes_corpo(uint32_t page) {
+#else
+uint32_t Gs_PageHash(uint32_t page) {
+#endif
     static uint32_t hash[512], seen[512];
     static uint8_t valid[512];
     uint32_t h = 2166136261u, i;
@@ -972,7 +987,17 @@ static void envio_faixa32(const uint32_t *s, const uint8_t *pede_de, uint32_t pe
 }
 #endif
 
+#ifdef BT3_GS_ESPERAS
+static void transfer_data_cortes_corpo(const uint8_t *p, uint32_t bytes);
 static void transfer_data(const uint8_t *p, uint32_t bytes) {
+    GS_CORTES_ENTRA(COR_ENVIO);
+    transfer_data_cortes_corpo(p, bytes);
+    GS_CORTES_SAI();
+}
+static void transfer_data_cortes_corpo(const uint8_t *p, uint32_t bytes) {
+#else
+static void transfer_data(const uint8_t *p, uint32_t bytes) {
+#endif
     uint32_t dbp = (gs.bitbltbuf >> 32) & 0x3FFF, dbw = (gs.bitbltbuf >> 48) & 0x3F, dpsm = (gs.bitbltbuf >> 56) & 0x3F;
     uint32_t bits, total, i;
 #ifdef BT3_GS_ESPERAS
@@ -1244,7 +1269,17 @@ int GsGpu_Enabled(void) {
 /* ------------------------------------------------------------------------------------------------ GIF */
 
 /* One run of GIF data (whole quadwords). */
+#ifdef BT3_GS_ESPERAS
+void Gs_Gif_cortes_corpo(const uint8_t *p, uint32_t qwc);
 void Gs_Gif(const uint8_t *p, uint32_t qwc) {
+    GS_CORTES_ENTRA(COR_GIF);
+    Gs_Gif_cortes_corpo(p, qwc);
+    GS_CORTES_SAI();
+}
+void Gs_Gif_cortes_corpo(const uint8_t *p, uint32_t qwc) {
+#else
+void Gs_Gif(const uint8_t *p, uint32_t qwc) {
+#endif
     static uint64_t tag_lo, tag_hi; /* current tag: persists across runs */
     static uint32_t loops, reg;     /* loops left, register index within the loop */
     const uint64_t *q = (const uint64_t *)p;
@@ -1324,7 +1359,17 @@ void Gs_Gif(const uint8_t *p, uint32_t qwc) {
 /* One run of VIF data (32-bit words): GIF data (DIRECT) goes to the GS, everything else to VU1 (gs_vu1.c).
    A command's data may continue in the next run (the command word often sits in the DMA tag, its data behind):
    DIRECT data is passed on as it comes, the data of the other commands is collected first. */
+#ifdef BT3_GS_ESPERAS
+static void vif_cortes_corpo(const uint32_t *w, uint32_t count);
 static void vif(const uint32_t *w, uint32_t count) {
+    GS_CORTES_ENTRA(COR_VIF);
+    vif_cortes_corpo(w, count);
+    GS_CORTES_SAI();
+}
+static void vif_cortes_corpo(const uint32_t *w, uint32_t count) {
+#else
+static void vif(const uint32_t *w, uint32_t count) {
+#endif
     static uint32_t direct;                    /* quadwords of GIF data still to come */
     static uint32_t pend, need, have, buf[2048]; /* a command waiting for `need` words of data */
     uint32_t i = 0;
@@ -2190,6 +2235,10 @@ static void run_chain(uint32_t tadr, int tte) {
     int pre = GsVu1_Pre();
 #endif
 
+#ifdef BT3_GS_ESPERAS
+    Gs_CortesInicio(gGsFrame);
+#endif
+
 #ifdef BT3_GPU_FALSO
     bytes_walk(tadr);
 #endif
@@ -2250,8 +2299,17 @@ static void run_chain(uint32_t tadr, int tte) {
     memset(sStat, 0, sizeof(sStat));
     GsVu1_FrameEnd();
     if (sGpu) {
+#ifdef BT3_GS_ESPERAS
+        GS_CORTES_ENTRA(COR_ENTREGA);
+#endif
         GsGpu_FrameEnd();
+#ifdef BT3_GS_ESPERAS
+        GS_CORTES_SAI();
+#endif
     }
+#ifdef BT3_GS_ESPERAS
+    Gs_CortesFim();
+#endif
     screenshot();
     if (sMissingTex != 0 && getenv("BT3_GS_VERBOSE") != NULL) {
         fprintf(stderr, "gs: frame %u: %u texel reads from textures that were never uploaded\n", sFrame, sMissingTex);

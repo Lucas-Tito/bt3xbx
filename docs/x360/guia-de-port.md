@@ -2107,3 +2107,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **A prova que roda noutra máquina tem de voltar para a principal no fim.** A rodada do Deck deixou o resumo só lá, e a análise
   do console encontrou o Deck fora da rede: a prova ficou sem leitura. O script da rodada copia o resumo e as saídas que ele cita
   para a máquina principal (ou o resumo vai no relatório de quem disparou) antes de o branch ir à análise.
+
+### O rateio pontual da gravação e da GPU (F5, cortes)
+
+- O perfil de GPU antigo fica mudo em `Passos_Medindo()`. `BT3_CORTES_GPU=A,B` seleciona quadros nessa janela,
+  guarda o número do quadro emitido junto das marcas e drena os dois buffers mesmo depois da faixa selecionada.
+  Sem o dreno, selecionar só o 6960 nunca publica a sua GPU. Não chamar o quadro leitor de quadro medido.
+- O rateio de `BT3_CORTES=A,B` usa uma pilha de etapas exclusivas. A VU1 também chama o GIF; subtrair de tempos
+  inclusivos sem considerar esse aninhamento conta envio duas vezes. A soma das etapas deve conservar o total.
+  Os tempos incluem o relógio e a instrumentação por chamada; comparar ganhos com o perfil desligado também.

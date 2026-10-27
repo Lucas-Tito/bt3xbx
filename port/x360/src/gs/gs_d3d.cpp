@@ -1216,13 +1216,13 @@ static void tela_apresentou(unsigned quadro, int repete) {
 enum {
     T_OUTROS, T_COMUM, T_VU0, T_VU4, T_VU6, T_PROF, T_CONTORNO, T_TAB_IDS, T_TAB_PROF, T_IDS, T_FBA, T_DATE, T_COR_RES,
     T_COR_ENTRA, T_COR_VOLTA, T_TELA, T_FILME, T_FXAA, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
-    T_VU_COPIA = T_GPU_N, T_PRESENT, T_N
+    T_VU_COPIA = T_GPU_N, T_PRESENT, T_PREPARO, T_PLANO, T_LIMPEZA, T_N
 };
 static const char *const kTempoNome[T_N] = {"outros", "comum", "vu0", "vu4", "vu6", "profundidade", "contorno",
                                             "tabela pelos ids", "tabela pela profundidade", "cópia dos ids", "FBA",
                                             "DATE", "resolves de cor", "entradas na EDRAM", "volta da cor", "tela",
                                             "filme", "FXAA", "medição",
-                                            "cópia da VU1", "Present"};
+                                            "cópia da VU1", "Present", "preparo", "plano", "limpeza"};
 #define T_MARCAS 4096 /* por quadro; um quadro com mais é descartado (contado); 136 KB nos dois buffers */
 static volatile unsigned __int64 sMarcaGpu[2 * T_MARCAS]; /* o relógio quando a GPU chegou à marca (tempo_cb) */
 static unsigned __int64 sMarcaCpu[2 * T_MARCAS];          /* o relógio quando a CPU terminou de pô-la */
@@ -1295,6 +1295,10 @@ static int tempo_valida(int b, unsigned n) {
 
 /* O quadro marcado no buffer b (dois quadros atrás): os trechos por classe, o custo de uma marca (o trecho vazio) e
    o limite da espera da GPU pela CPU (o trecho começou na GPU antes de a CPU terminar de pô-lo). */
+/* Diagnóstico pontual na janela da luta, independente de BT3_TEMPOS. Desligado por padrão.
+   O quadro guardado é o emitido, nunca o que lê as marcas dois quadros depois. */
+static int sCortesGpu;
+static unsigned sCortesGpuA, sCortesGpuB, sCortesGpuQ[2];
 static void tempo_le(int b) {
     const volatile unsigned __int64 *g = &sMarcaGpu[b * T_MARCAS];
     const unsigned __int64 *cp = &sMarcaCpu[b * T_MARCAS];
@@ -1336,6 +1340,15 @@ static void tempo_le(int b) {
         }
     }
     vazio = raw[T_MED]; /* (só a marca 0 é da medição) */
+    if (sCortesGpu) {
+        Diario_Escrever("cortes: gpu quadro %u total %.6f marcas %u custo %.6f ms",
+                        sCortesGpuQ[b], (double)(g[n - 1] - g[0]) / f, n, (double)vazio * (n - 1) / f);
+        for (c = 0; c < T_GPU_N; c++) {
+            Diario_Escrever("cortes: gpu quadro %u classe %s bruto %.6f liquido %.6f espera %.6f marcas %u",
+                            sCortesGpuQ[b], kTempoNome[c], (double)raw[c] / f,
+                            ((double)raw[c] - (double)seg[c] * vazio) / f, (double)esp[c] / f, seg[c]);
+        }
+    }
     total = g[n - 1] - g[0];
     for (c = 0; c < T_GPU_N; c++) {
         sTempo.gSoma[c] += raw[c];
@@ -1356,17 +1369,18 @@ static void tempo_le(int b) {
 
 /* o começo do fim do quadro: lê o quadro de dois atrás, no buffer que este vai usar */
 static void tempo_comeca(void) {
-    sTempo.quadro = sTempo.ligado && !Passos_Medindo();
-    if (!sTempo.quadro) {
-        return;
-    }
+    if (!sTempo.ligado || (!sCortesGpu && Passos_Medindo())) { sTempo.quadro = 0; return; }
+    /* Drena também fora da faixa: o último quadro selecionado precisa ser lido. */
+    sTempo.buf ^= 1;
+    tempo_le(sTempo.buf);
+    sTempo.n[sTempo.buf] = 0;
+    sTempo.quadro = sCortesGpu ? sQ->quadro >= sCortesGpuA && sQ->quadro <= sCortesGpuB : !Passos_Medindo();
+    if (!sTempo.quadro) return;
+    sCortesGpuQ[sTempo.buf] = sQ->quadro;
     memset(sTempo.cq, 0, sizeof(sTempo.cq));
     sTempo.desde = __mftb();
     sTempo.cpu = T_MED;
     sTempo.aberta = 0;
-    sTempo.buf ^= 1;
-    tempo_le(sTempo.buf);
-    sTempo.n[sTempo.buf] = 0;
     sTempo.transbordou = 0;
     tempo_poe(T_OUTROS);
 }
@@ -1407,6 +1421,13 @@ static void tempo_fecha_cpu(double msFim, int vale) {
         double v = (double)sTempo.cq[c] / sTempo.freq;
         sTempo.cSoma[c] += sTempo.cq[c];
         if (v > sTempo.cPior[c]) sTempo.cPior[c] = v;
+    }
+    if (sCortesGpu) {
+        Diario_Escrever("cortes: cpu quadro %u frame_end %.6f ms", sCortesGpuQ[sTempo.buf], msFim);
+        for (c = 0; c < T_N; c++) {
+            const char *nome = kTempoNome[c];
+            Diario_Escrever("cortes: cpu quadro %u classe %s %.6f ms", sCortesGpuQ[sTempo.buf], nome, (double)sTempo.cq[c] / sTempo.freq);
+        }
     }
     sTempo.cFim += msFim;
     sTempo.cQuadros++;
@@ -3525,7 +3546,13 @@ static void tempo_init(void) {
     double usGpu, usCpu, msMarcas, msParada;
     int ok, controle;
     unsigned k;
-    sTempo.ligado = env_num("BT3_TEMPOS", 1) != 0;
+    {
+        const char *e = getenv("BT3_CORTES_GPU");
+        sCortesGpu = e != NULL && atoi(e) > 0;
+        sCortesGpuA = sCortesGpuB = 6960;
+        if (e != NULL && atoi(e) != 1) sscanf(e, "%u,%u", &sCortesGpuA, &sCortesGpuB);
+    }
+    sTempo.ligado = sCortesGpu || env_num("BT3_TEMPOS", 1) != 0;
     if (!sTempo.ligado) {
         Diario_Escrever("gs_d3d: tempos: desligados (BT3_TEMPOS=0)");
         return;
@@ -5309,6 +5336,7 @@ static void frame_end(void) {
     QueryPerformanceCounter(&t0);
     sQ = q;
     tempo_comeca(); /* (F5, etapa 8: lê o quadro de dois atrás) */
+    tempo_poe(T_PREPARO);
     if (!q->dividido) {
         grav_junta(); /* (com a divisão, na entrega) */
     }
@@ -5364,6 +5392,7 @@ static void frame_end(void) {
         if (msVu > sConta.msVuCopiaPior) sConta.msVuCopiaPior = msVu;
         gGsD3dEtapa = "fim do quadro: refazendo a lista";
     }
+    tempo_poe(T_PLANO);
     if (sEdRes) {
         ed_plano(q); /* (720p, BT3_EDRAM_RESIDENTE: as vagas do quadro) */
     }
@@ -5536,6 +5565,7 @@ static void frame_end(void) {
     }
     tempo_poe(T_OUTROS);
     Passos_Apresentou(q->quadro, (unsigned)(msPresent * 1000.0));
+    tempo_poe(T_LIMPEZA);
     gGsD3dEtapa = "fim do quadro: texturas soltas";
     /* nada do quadro fica preso no dispositivo: as texturas soltas podem ir quando a GPU terminar com elas */
     sDev->SetTexture(0, NULL);
