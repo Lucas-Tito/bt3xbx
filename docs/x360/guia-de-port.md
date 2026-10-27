@@ -2119,3 +2119,6 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - A comparação binária dos uniformes admite agrupar quatro palavras com XOR/OR sem mudar a igualdade. Não usar
   comparação numérica de floats: sinais de zero e NaNs precisam manter os bits. Os uniformes só garantem quatro
   bytes de alinhamento, portanto uma leitura de 64 bits seria uma hipótese adicional sobre o Xenon.
+- Nos programas 4 e 6, o bloco uniforme tem 304 bytes, mas 76 e 152 bytes recebem valores logo depois da limpeza.
+  Uma limpeza parcial precisa provar também os campos que o shader não lê: eles entram no hash binário da lista.
+  Preencher a vaga com bytes não nulos antes do teste encontra os campos esquecidos que uma área estática zerada esconderia.

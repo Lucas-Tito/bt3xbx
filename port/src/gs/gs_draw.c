@@ -1817,6 +1817,16 @@ static int iguais32(const void *a, const void *b, unsigned n) {
     return 1;
 }
 /* O teste --vu1 entra pelo mesmo ramo da PPC; a x86 plana conserva o corpo original. */
+#include "../../x360/include/vu_constantes.h"
+static void vu_limpa_constantes(Vu0Uniform *u, int familia) {
+    static int ligado = -1;
+    if (ligado < 0) {
+        const char *e = getenv("BT3_VU_CONSTANTES");
+        ligado = e != NULL && atoi(e) != 0;
+    }
+    if (ligado) vu_limpa_parcial(u, familia);
+    else memset(u, 0, sizeof(*u));
+}
 #include "../../x360/include/vu_iguais.h"
 static int vu_uniforme_igual(const void *a, const void *b) {
     static int ligado = -1;
@@ -1913,7 +1923,11 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     GS_CORTES_ENTRA(COR_CONST);
     pu = &gsVuUni[gsVuUniCount];
 #endif
+#ifdef BT3_GS_ESPERAS
+    vu_limpa_constantes(&VU_U, 3);
+#else
     memset(&VU_U, 0, sizeof(VU_U));
+#endif
     memcpy(VU_U.boneA, &consts[0x0C * 4], 64);  /* world -> shadow camera */
     VU_U.pivotA[0] = consts[0x10 * 4];          /* texture scale */
     VU_U.pivotB[0] = us;
@@ -2052,7 +2066,11 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     GS_CORTES_ENTRA(COR_CONST);
     pu = &gsVuUni[gsVuUniCount];
 #endif
+#ifdef BT3_GS_ESPERAS
+    vu_limpa_constantes(&VU_U, 2);
+#else
     memset(&VU_U, 0, sizeof(VU_U));
+#endif
     memcpy(VU_U.screen, &consts[0], 64);
     VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
     VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
