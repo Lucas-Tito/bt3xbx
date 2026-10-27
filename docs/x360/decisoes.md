@@ -723,3 +723,16 @@ mostra mais objetos), e a resolução maior (o 720p adiado) vem depois. Escolhas
 4. **A escolha** vem do `ambiente.txt` (`BT3_WIDE=1`) por enquanto; o ajuste de vídeo do painel do console como padrão fica
    para depois.
 5. **As medições** de desempenho (os roteiros no console e no WSL) passam a usar `BT3_WIDE=1` dos dois lados.
+
+## 27. F5: zero imagens longas na luta como aceite da apresentação (27/10/2026)
+
+O critério antigo de trabalho por passo (p99 até 30 ms) media o intervalo entre leituras do controle, que fica perto de
+33,37 ms por construção, e passava mesmo com engasgo na tela. A preparação da rodada final (`plano/F5/10.md`, seção 2)
+propôs medir pela tela e aceitar até 1% de imagens com três vblanks. O Lucas escolheu:
+
+1. **Apresentação:** zero imagens com três vblanks ou mais no combate, em cada uma das três janelas longas (fria e duas
+   aquecidas), sem vblank de folga nem atraso de entrada somado. O 1% aceitaria até 28 engasgos por janela de 1,5 min,
+   catorze vezes o que a rodada o1 de 23/10 mostrou (2 de 2.334).
+2. **Trabalho por passo:** só informativo, publicado em percentis.
+3. **Se o zero se mostrar inviável** (os picos da GPU na troca de cena sem corte possível), o plano muda com o Lucas,
+   sem afrouxar o critério sozinho.

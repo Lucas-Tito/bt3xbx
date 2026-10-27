@@ -45,7 +45,7 @@ TELA = re.compile(r"passos: janela (\d+) tela: (\d+) imagens na tela, por vblank
                   r"(?:; vblank já passado em (\d+) chamadas, alvo recomeçado (\d+) vezes pela dívida parada e (\d+) por "
                   r"estar 100 ms atrás)?(.*)$")  # (o resto: um formato que este leitor não conhece, que o --console recusa)
 SEM_TELA = re.compile(r"passos: janela (\d+) tela: sem a medida")
-TELA_MAX_3 = 1.0  # % das imagens com 3 vblanks ou mais na tela (o "99% até um período mais 1 ms" de antes, pela tela)
+TELA_MAX_3 = 0.0  # % das imagens com 3 vblanks ou mais na tela: zero no combate (decisão 27, 27/10; era 1%)
 
 
 def mesma_origem(origem, esperado):
@@ -147,7 +147,7 @@ def main():
                     ruins.append("nenhuma imagem contada na tela")
                 elif 100.0 * (v3 + v4) / img > TELA_MAX_3:  # (pelas contagens, não pelo % arredondado da linha)
                     ruins.append(f"{pct3:.2f}% das imagens 3 vblanks ou mais na tela ({v3 + v4} de {img}; aceite: até "
-                                 f"{TELA_MAX_3:.0f}%)")
+                                 f"{TELA_MAX_3:g}%)")
                 if v4:
                     ruins.append(f"{v4} imagens 4 vblanks ou mais na tela")
                 if tela[18].strip():
