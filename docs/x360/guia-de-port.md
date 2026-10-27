@@ -2096,3 +2096,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **A prova que roda noutra máquina tem de voltar para a principal no fim.** A rodada do Deck deixou o resumo só lá, e a análise
   do console encontrou o Deck fora da rede: a prova ficou sem leitura. O script da rodada copia o resumo e as saídas que ele cita
   para a máquina principal (ou o resumo vai no relatório de quem disparou) antes de o branch ir à análise.
+
+### As 16 cores no clut_hash (F5, seção 26 de `08-gravacao.md`)
+
+- **Um diagnóstico não pode copiar a coordenada suspeita do hash.** O `diag_clut.patch` lia as paletas de 16 cores como
+  16 x 1, repetindo o defeito do `clut_hash`, e não via a segunda linha. O `clut16.py` usa a leitura da decodificação,
+  8 x 2, compara palavras exatas e roda antes de qualquer retorno do cache. Sua prova negativa muda isoladamente cada
+  uma das 16 cores e restaura a chave antiga numa cópia: as oito da segunda linha precisam ser acusadas, inclusive na PPC.

@@ -2432,3 +2432,28 @@ grep 'picos: tela' bt3xbx.log
 **Recomendação.** Se a rodada confirmar o 5338 e o 7017 sem imagem longa e nada pior no resto, ligar `BT3_TEX_ORIGEM` por padrão
 (o mesmo conteúdo provado textura a textura no WSL; o risco que sobra é o descarte por memória do 360, que o WSL não exercita, e
 um recurso que só sai com a última entrada fica mais tempo na memória).
+
+### CLUT16: as 16 cores na chave de sempre (27/10, `codex/f5-clut16`)
+
+O `clut_hash` lia `(i & 15, i >> 4)` também com 16 entradas: lia x=8 a 15 da primeira linha, deixando fora a segunda
+linha, as cores 8 a 15. Em CSM1 a CLUT16 é 8 x 2 em `CBP`, com o formato `CPSM`; `CSA` seleciona a posição no buffer
+interno do GS, não desloca essas entradas na VRAM. O leitor e a decodificação atuais usam esse caminho CSM1, não implementam
+CSM2; a correção acompanha suas 16 leituras `(i & 7, i >> 3)`. As 256 entradas e a memória por gerações ficam como antes.
+Pela regra do upstream, a mudança fica no ramo `PORT_BIG_ENDIAN`, também exercitado pela `BT3_TESTE_VU1` da x86gv, com a
+linha original no `#else`.
+
+**Antes de corrigir [medido].** `clut16.py diagnostico` numa cópia: compara as 16 palavras exatas antes dos acertos do
+cache, por `(TEX0, TEXA, gen)`, e conta transições com a mesma chave e só a metade alta diferente. A memória por época só
+pula consultas à mesma VRAM; a tabela cheia é erro explícito. Na x86gv, `f5_duelo`, `f5_treino` e `shenlong` deram **0
+colisões**, em 560.547, 430.109 e 239.176 leituras de paleta; nenhum CSM2. Não se espera mudança de imagem nesses roteiros.
+
+**Prova sintética [medido].** `teste_clut16.sh`, x86 de 32 bits e PPC no qemu: 288 mudanças individuais nas 16 cores,
+4.608 nas 256 cores, três CPSM (0, 2, 10), seis CBP incluindo limites de página e a volta da VRAM; chave corrigida com 0
+falhas. Restaurar a chave antiga numa cópia acusa 144 colisões, todas nas cores 8 a 15, e o teste sai 1. O verificador do
+log também recusa o resumo ausente e a contagem adulterada.
+
+**Rodada final preparada.** `clut16_rodada.sh COMMIT BASE`, serviço `bt3-clut16`, resumo `~/f5-clut16/provas.resumo`,
+terminando em `FIM`. Recompila base e commit final, compara objetos sem depuração e a `.text` plana com
+`43444ea4d03a6d448aa1ae74a631e35b356a7caa`, compara as listas normais dos três roteiros na x86gv e ppcg com
+`divergencias.py --normal`, e repete o diagnóstico e seus controles. A conclusão depende de `tudo certo` no resumo;
+resultados ainda não conferidos nesta nota. Sem console.
