@@ -41,12 +41,10 @@
 #include "fluxo.h"
 #include "filme_tempo.h"
 
-/* O user do retorno feed é o handle adxt. BGM é a entrada 0 da tabela do jogo (include/sys/file.h). */
-extern "C" struct { char *label; int workSize, reloadSct; void *work; void *adxt; } gAdxPlayerTbl[6];
-
 extern "C" unsigned Port_AdxFluxosTarde(void); /* gs/snd_adx.c: vistas que o cabeçalho acertou depois do fim */
 /* O mesmo contrato lido pelo roteiro.c: include/sys/file.h, AdxPlayer. A tabela é criada no boot; o user do
-   retorno feed do snd_adx.c é o handle adxt, nunca a ordem em que os fluxos abrem. MAP também é música. */
+   retorno feed do snd_adx.c é o handle adxt, nunca a ordem em que os fluxos abrem. BGM é a entrada 0, MAP (também
+   música) a 1. */
 extern "C" {
 extern struct { char *label; int workSize, reloadSct; void *work; void *adxt; } gAdxPlayerTbl[6];
 extern unsigned gPortVBlanks, gGsFrame;
