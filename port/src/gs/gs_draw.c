@@ -1859,7 +1859,10 @@ static int vu_uniforme_igual(const void *a, const void *b) {
         const char *e = getenv("BT3_VU_FECHO");
         ligado = e != NULL && atoi(e) != 0;
     }
-    if (ligado) return vu_iguais4(a, b, sizeof(Vu0Uniform) / 4);
+    if (ligado) {
+        if (vu4_uniforme_conhecido(a, b, gGsFrame)) return 1;
+        return vu_iguais4(a, b, sizeof(Vu0Uniform) / 4);
+    }
     return iguais32(a, b, sizeof(Vu0Uniform) / 4);
 }
 #endif
@@ -1900,7 +1903,10 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
         return;
     }
 #if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
-    if (pu != &gsVuUni[gsVuUniCount]) gsVuUni[gsVuUniCount] = *pu;
+    if (pu != &gsVuUni[gsVuUniCount]) {
+        gsVuUni[gsVuUniCount] = *pu;
+        if (pu == &sVu4Const.u) vu4_uniforme_gravou(&gsVuUni[gsVuUniCount], gGsFrame);
+    }
 #endif
     d->uniform = (int)gsVuUniCount++; /* (pu é a vaga gsVuUni[gsVuUniCount]) */
     vu_faixa(gsDrawCount, lo, hi, 0);
@@ -2111,11 +2117,11 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
         vu4_const_confere(pu, consts, gGs.xyoffset[ctx], gGs.zbuf[ctx], acerto);
 #endif
     } else {
-    vu_limpa_constantes(&VU_U, 2);
-    memcpy(VU_U.screen, &consts[0], 64);
-    VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
-    VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
-    VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+        vu_limpa_constantes(&VU_U, 2);
+        memcpy(VU_U.screen, &consts[0], 64);
+        VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
+        VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
+        VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
     }
 #else
     memset(&VU_U, 0, sizeof(VU_U));

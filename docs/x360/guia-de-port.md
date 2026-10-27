@@ -2132,3 +2132,6 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Para o cenário, o uniforme só depende de `consts[0..15]`, XYOFFSET e ZBUF.PSM. Uma memória desses valores evita
   montar o bloco e converter inteiros para float em cada lote. Sua vaga é da gravação: o fecho precisa copiá-la
   para a lista antes do próximo lote quando abre um desenho. Conferir cada acerto contra a montagem completa.
+- Uma vaga estática não é identidade suficiente para pular a igualdade de uniformes: seu endereço não muda quando
+  a matriz muda. A cópia gravada precisa do endereço da lista, do quadro e da versão da entrada; o teste troca cada
+  um separadamente. A versão só avança numa falha da chave completa, e a lista recebe os 304 bytes antes da marca.
