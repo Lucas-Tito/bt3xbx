@@ -41,6 +41,7 @@ while IFS= read -r v; do
     case "$v" in BT3_*|PPC|SEMMAPA|IMG|REF|REFS|SOM|REUSA|DESENVOLVIMENTO|MEM|O|T|CARTAO|ALVO|TP|JANELA|GUARDA_SOM) unset "$v";; esac
 done < <(compgen -e)
 export DEBUGINFOD_URLS= BT3_WIDE=1
+export BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1
 livre() {
     pgrep -af 'qemu|roteiros' >> "$I/processos.log" || true
     if pgrep -x qemu-ppc || pgrep -f '(^|/|[[:space:]])roteiros[.]sh([[:space:]]|$)'; then

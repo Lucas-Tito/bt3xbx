@@ -2131,3 +2131,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Cópia negativa de save sem arrastar os dados.** `port/build/save_mc/dados` contém links para os dados do jogo.
   Copiar só estados, logs e cartões necessários, ou preservar os links e excluir `dados`; um `copytree` que segue
   links duplica gigabytes sem acrescentar prova. Usar diretório próprio em `~/` e conferir o tamanho antes.
+- **Ambiente de um filho não volta para o executor.** O `roteiros.sh` exporta os padrões do teste só para seus
+  próprios filhos. Antes do `som.sh controles`, o executor precisa definir também `BT3_SOUND_TICKS=1`,
+  `BT3_DESBLOQUEIO=1`, `BT3_NOMOVIE=1`, `BT3_MENU_ITEM4=0`, `BT3_GS=none` e `BT3_SETTINGS=`; sem isso a rodada
+  nova do gravador pode ter outro estado. As listas GPU sobrescrevem o desenho apenas no seu subshell.
