@@ -2122,3 +2122,6 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Nos programas 4 e 6, o bloco uniforme tem 304 bytes, mas 76 e 152 bytes recebem valores logo depois da limpeza.
   Uma limpeza parcial precisa provar também os campos que o shader não lê: eles entram no hash binário da lista.
   Preencher a vaga com bytes não nulos antes do teste encontra os campos esquecidos que uma área estática zerada esconderia.
+- `BT3_GPU_LISTA` e `BT3_GPU_NORMAL` no backend falso são chaves por presença: `=0` ainda grava as listas e calcula
+  o hash normal. Para uma medida sem esse trabalho, retire as variáveis do ambiente. Registre separadamente o tempo
+  total do roteiro e o das parcelas instrumentadas, sem chamar a entrega do falso de tempo de desenho do Xenos.

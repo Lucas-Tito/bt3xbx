@@ -111,3 +111,24 @@ with tempfile.TemporaryDirectory(prefix='bt3-cortes-') as d:
             raise SystemExit(f'FALHA: {nome}, saída {rc}')
         print(f'{nome}: {"sabotagem acusada" if negativo else "tudo certo"} (saída {rc})')
 print('tudo certo')
+
+# O leitor exige fim do jogo, os alvos e conservação de todas as parcelas.
+import importlib.util
+spec = importlib.util.spec_from_file_location('leitor_cortes', RAIZ / 'port/x360/tools/cortes.py')
+leitor = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(leitor)
+linha = lambda q: f'cortes: gravacao quadro {q} total 11.000000' + ''.join(' ' + e + ' 1.000000/1' for e in leitor.ETAPAS)
+bom = linha(6930) + '\n' + linha(6960) + '\nroteiro: f5_duelo.txt:99 fim vblank 12570 quadro 8378\ngpu_falso: 8380 quadros, hash do jogo 08a98b6d05b8775a\n'
+assert len(leitor.confere(bom)) == 2
+for nome, ruim in [('soma', bom.replace('total 11.', 'total 12.', 1)),
+                   ('parcela', bom.replace(' gif 1.000000/1', '', 1)),
+                   ('alvo', bom.replace(linha(6960), '')),
+                   ('fim', bom.replace(' fim ', ' incompleto '))]:
+    assert ruim != bom
+    try:
+        leitor.confere(ruim)
+    except ValueError:
+        print(f'leitor, {nome}: sabotagem acusada')
+    else:
+        raise SystemExit('FALHA: leitor aceitou ' + nome)
+print('leitor: tudo certo')
