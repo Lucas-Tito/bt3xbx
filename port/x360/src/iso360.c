@@ -8,8 +8,9 @@
  *   - mods/...    arquivo de verdade, como no PC;
  *   - disc/...    o arquivo da ISO (ISO 9660, sem extensões: nomes em maiúsculas com ";1");
  *   - pzsN/...    a entrada do AFS dentro da ISO.
- * A ISO tem de ser a convertida no PC (decisão 23, port/x360/tools/iso_convertida.py): Iso_Iniciar procura a marca
- * dela (docs/x360/formatos/iso-convertida.md) e, sem a marca, recusa a imagem (Iso_Recusada; a main mostra a caixa
+ * A ISO tem de ser a convertida no PC (decisão 23, port/x360/tools/iso_convertida.py): Iso_Iniciar identifica o volume
+ * e o SYSTEM.CNF antes de procurar a marca (docs/x360/formatos/iso-convertida.md); recusa a imagem incompatível,
+ * ilegível ou original sem converter (Iso_Recusada; a main mostra a caixa
  * do sistema e o jogo não começa). Da ISO convertida, a entrada com conversor (Conv_FormatoDe, port/x360/conv) já
  * vem na ordem do 360: é lida inteira na abertura, sem Conv_Arquivo; o resto (fluxos de som, filmes) é lido da ISO
  * a cada fread. Os conteúdos comprimidos (BPE) continuam convertidos depois de descomprimidos, pelos ganchos do
@@ -30,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "diario.h"
+#include "iso360.h"
 #include "conv.h"
 #include "f2/blocos.h"
 
@@ -63,7 +65,8 @@ static volatile int sTemLeitora;
 static volatile DWORD sLeitora;       /* a thread dela (GetCurrentThreadId) */
 static CRITICAL_SECTION sTravaTabela; /* sAbertos: só a escolha e a volta de um lugar, sem E/S */
 static int sIniciado;
-static int sRecusada; /* a ISO aberta não tem a marca da convertida: o jogo não começa */
+static int sRecusada; /* ISO_* do iso360.h: o jogo não começa se houver recusa */
+static __int64 sIsoTam, sVolumeTam;
 static unsigned sRaizLba, sRaizTam;
 static Afs sAfs[3];
 static IsoArq sAbertos[MAX_ABERTOS];
@@ -124,7 +127,7 @@ static int tem_marca(const char *caminho) {
     unsigned i, zeros = 0;
     if (!ler(MARCA_POS, m, MARCA_TAM)) {
         Diario_Escrever("iso: %s: a leitura da marca em 0x%X falhou (imagem menor que o esperado?)", caminho, MARCA_POS);
-        return 0;
+        return -1;
     }
     if (memcmp(m, "BT3X360-ISO\0\0\0\0\0", 16) != 0) {
         for (i = 0; i < MARCA_TAM; i++) {
@@ -132,7 +135,7 @@ static int tem_marca(const char *caminho) {
         }
         Diario_Escrever("iso: %s sem a marca da ISO convertida em 0x%X (%s): recusada", caminho, MARCA_POS,
                         zeros == MARCA_TAM ? "a região está zerada, como na ISO original" : "bytes desconhecidos");
-        return 0;
+        return zeros == MARCA_TAM ? 0 : -1;
     }
     hexa(m + 32, 16, md5);
     hexa(m + 80, 32, fontes);
@@ -145,16 +148,149 @@ static int tem_marca(const char *caminho) {
 
 static Afs *afs(int n);
 
-/* A primeira .iso da pasta do .xex (ou BT3_ISO). Nome no FATX: até 42 caracteres. Chamada pela main antes de criar
-   threads (main360.cpp), depois do ambiente. */
+static int achar(const char *caminho, __int64 *ini, long *tam);
+
+static unsigned be32(const unsigned char *p) {
+    return (unsigned)p[0] << 24 | (unsigned)p[1] << 16 | (unsigned)p[2] << 8 | (unsigned)p[3];
+}
+
+/* Os dois sentidos da ISO 9660 e o intervalo dentro do volume, antes de percorrer qualquer registro. */
+static int registro_valido(const unsigned char *r, unsigned disponivel) {
+    unsigned n = r[0], nome, lba, tam;
+    if (n < 34 || n > disponivel) {
+        return 0;
+    }
+    nome = r[32];
+    lba = le32(r + 2);
+    tam = le32(r + 10);
+    return nome > 0 && 33 + nome <= n && r[1] == 0 && r[26] == 0 && r[27] == 0 &&
+           r[28] == 1 && r[29] == 0 && r[30] == 0 && r[31] == 1 &&
+           lba == be32(r + 6) && tam == be32(r + 14) && (r[25] & 0x80) == 0 &&
+           (__int64)lba * SETOR <= sVolumeTam && (__int64)tam <= sVolumeTam - (__int64)lba * SETOR;
+}
+
+/* SYSTEM.CNF: valores por linha, sem depender de espaços ou de CRLF. Chaves repetidas são ambíguas. */
+static int cnf_valor(const char *cnf, const char *chave, const char *valor) {
+    const char *p = cnf;
+    size_t nc = strlen(chave), nv = strlen(valor);
+    int achou = 0;
+    while (*p != '\0') {
+        const char *fim = p, *v, *q;
+        while (*fim != '\0' && *fim != '\r' && *fim != '\n') {
+            fim++;
+        }
+        while (p < fim && (*p == ' ' || *p == '\t')) {
+            p++;
+        }
+        if ((size_t)(fim - p) >= nc && memcmp(p, chave, nc) == 0) {
+            q = p + nc;
+            while (q < fim && (*q == ' ' || *q == '\t')) {
+                q++;
+            }
+            if (q < fim && *q == '=') {
+                v = q + 1;
+                while (v < fim && (*v == ' ' || *v == '\t')) {
+                    v++;
+                }
+                q = fim;
+                while (q > v && (q[-1] == ' ' || q[-1] == '\t')) {
+                    q--;
+                }
+                if (achou || (size_t)(q - v) != nv || memcmp(v, valor, nv) != 0) {
+                    return 0;
+                }
+                achou = 1;
+            }
+        }
+        p = fim;
+        while (*p == '\r' || *p == '\n') {
+            p++;
+        }
+    }
+    return achou;
+}
+
+/* A identificação vem antes da marca, que só faz sentido no layout da USA conhecida. Não calcula hashes no 360:
+   a autenticação integral da original continua no instalador do PC (decisão 23). */
+static int identificar(void) {
+    unsigned char pvd[SETOR];
+    char cnf[1025];
+    __int64 ini;
+    long tam;
+    unsigned setores, i;
+    int r, usa;
+    LARGE_INTEGER tamanho;
+    if (!GetFileSizeEx(sIso, &tamanho) || tamanho.QuadPart < 17 * SETOR) {
+        return ISO_ILEGIVEL;
+    }
+    sIsoTam = tamanho.QuadPart;
+    if (!ler(16 * SETOR, pvd, SETOR) || memcmp(pvd, "\1CD001\1", 7) != 0) {
+        return ISO_ILEGIVEL;
+    }
+    setores = le32(pvd + 80);
+    sVolumeTam = (__int64)setores * SETOR;
+    if (setores < 18 || setores != be32(pvd + 84) || sIsoTam != sVolumeTam ||
+        pvd[128] != 0 || pvd[129] != 8 || pvd[130] != 8 || pvd[131] != 0 ||
+        !registro_valido(pvd + 156, 34) || (pvd[181] & 2) == 0) {
+        return ISO_ILEGIVEL;
+    }
+    sRaizLba = le32(pvd + 158);
+    sRaizTam = le32(pvd + 166);
+    usa = memcmp(pvd + 40, "SLUS_21678", 10) == 0;
+    for (i = 50; i < 72; i++) {
+        usa = usa && pvd[i] == ' ';
+    }
+    r = achar("SYSTEM.CNF", &ini, &tam);
+    if (r < 0 || (r > 0 && (tam <= 0 || tam > 1024 || !ler(ini, cnf, (unsigned long)tam)))) {
+        return ISO_ILEGIVEL;
+    }
+    if (r == 0) {
+        return usa ? ISO_ILEGIVEL : ISO_NAO_SUPORTADA;
+    }
+    if (memchr(cnf, '\0', (size_t)tam) != NULL) {
+        return ISO_ILEGIVEL;
+    }
+    cnf[tam] = '\0';
+    Diario_Escrever("iso: volume %.32s, %u setores; SYSTEM.CNF: %s", pvd + 40, setores, cnf);
+    if (!usa || sVolumeTam != (__int64)3020816384u ||
+        !cnf_valor(cnf, "BOOT2", "cdrom0:\\SLUS_216.78;1") ||
+        !cnf_valor(cnf, "VER", "1.00") || !cnf_valor(cnf, "VMODE", "NTSC")) {
+        return ISO_NAO_SUPORTADA;
+    }
+    return ISO_OK;
+}
+
+static int tentar(const char *caminho) {
+    int motivo, marca;
+    DWORD erro;
+    sIso = CreateFile(caminho, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (sIso == INVALID_HANDLE_VALUE) {
+        erro = GetLastError();
+        Diario_Escrever("iso: não abriu %s (erro %u)", caminho, (unsigned)erro);
+        return erro == ERROR_FILE_NOT_FOUND || erro == ERROR_PATH_NOT_FOUND ? ISO_AUSENTE : ISO_ILEGIVEL;
+    }
+    motivo = identificar();
+    if (motivo == ISO_OK) {
+        marca = tem_marca(caminho);
+        motivo = marca > 0 ? ISO_OK : marca == 0 ? ISO_ORIGINAL : ISO_ILEGIVEL;
+    }
+    Diario_Escrever("iso: %s: identificação e marca, resultado %d", caminho, motivo);
+    if (motivo != ISO_OK) {
+        CloseHandle(sIso);
+        sIso = INVALID_HANDLE_VALUE;
+    }
+    return motivo;
+}
+
+/* Todas as .iso da pasta do .xex até achar uma convertida compatível. BT3_ISO é explícito: sem outra tentativa.
+   Sem convertida, prefere o diagnóstico da USA original, que permite orientar a conversão. */
 void Iso_Iniciar(void) {
     WIN32_FIND_DATA d;
-    HANDLE h;
-    unsigned char pvd[SETOR];
+    HANDLE h = INVALID_HANDLE_VALUE;
     char caminho[512];
     const char *escolhido = getenv("BT3_ISO");
     int pedida = escolhido != NULL && escolhido[0] != '\0';
-    int i;
+    int i, motivo;
     LARGE_INTEGER t0;
 
     if (sIniciado) {
@@ -164,7 +300,7 @@ void Iso_Iniciar(void) {
     InitializeCriticalSection(&sTravaLeitora);
     InitializeCriticalSection(&sTravaTabela);
     sIniciado = 1;
-    if (escolhido != NULL && escolhido[0] != '\0') {
+    if (pedida) {
         strncpy(caminho, escolhido, sizeof(caminho) - 1);
     } else {
         h = FindFirstFile("game:\\*.iso", &d);
@@ -172,42 +308,28 @@ void Iso_Iniciar(void) {
             Diario_Escrever("iso: nenhuma .iso em game:\\, os dados vêm de arquivos soltos");
             return;
         }
+    }
+    do {
+        if (!pedida) {
+            _snprintf(caminho, sizeof(caminho) - 1, "game:\\%s", d.cFileName);
+        }
+        caminho[sizeof(caminho) - 1] = '\0';
+        motivo = tentar(caminho);
+        if (motivo == ISO_OK || sRecusada == ISO_OK || motivo == ISO_ORIGINAL) {
+            sRecusada = motivo;
+            strncpy(sNomeIso, caminho, sizeof(sNomeIso) - 1);
+        }
+        if (motivo == ISO_OK || pedida) {
+            break;
+        }
+    } while (FindNextFile(h, &d));
+    if (h != INVALID_HANDLE_VALUE) {
         FindClose(h);
-        _snprintf(caminho, sizeof(caminho) - 1, "game:\\%s", d.cFileName);
     }
-    caminho[sizeof(caminho) - 1] = '\0';
-    sIso = CreateFile(caminho, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (sIso == INVALID_HANDLE_VALUE) {
-        Diario_Escrever("iso: não abriu %s (erro %u)", caminho, (unsigned)GetLastError());
-        if (pedida) {
-            Diario_Escrever("iso: o BT3_ISO foi dado e o arquivo não existe: recusada (caso ISO não encontrada)");
-            strncpy(sNomeIso, caminho, sizeof(sNomeIso) - 1);
-            sRecusada = 2;
-        }
+    if (sRecusada != ISO_OK) {
         return;
     }
-    if (!ler(16 * SETOR, pvd, SETOR) || pvd[0] != 1 || memcmp(pvd + 1, "CD001", 5) != 0) {
-        Diario_Escrever("iso: %s não é uma imagem ISO 9660", caminho);
-        CloseHandle(sIso);
-        sIso = INVALID_HANDLE_VALUE;
-        if (pedida) {
-            Diario_Escrever("iso: o BT3_ISO foi dado e o arquivo não é uma ISO: recusada (caso ISO não encontrada)");
-            strncpy(sNomeIso, caminho, sizeof(sNomeIso) - 1);
-            sRecusada = 2;
-        }
-        return;
-    }
-    sRaizLba = le32(pvd + 156 + 2);
-    sRaizTam = le32(pvd + 156 + 10);
-    strncpy(sNomeIso, caminho, sizeof(sNomeIso) - 1);
-    Diario_Escrever("iso: %s", caminho);
-    if (!tem_marca(caminho)) {
-        CloseHandle(sIso);
-        sIso = INVALID_HANDLE_VALUE;
-        sRecusada = 1; /* caso ISO original */
-        return;
-    }
-    Diario_Escrever("iso: os arquivos com conversor já vêm convertidos: a carga só lê (sem Conv_Arquivo)");
+    Diario_Escrever("iso: %s; os arquivos com conversor já vêm convertidos: a carga só lê (sem Conv_Arquivo)", sNomeIso);
     /* (F6) as três tabelas aqui, antes das threads: a do PZS3US2.AFS (65.201 entradas, 509 KiB) era lida no primeiro
        ADX da partição 2, dentro do afs(), na thread do jogo e com a trava comum */
     QueryPerformanceCounter(&t0);
@@ -215,7 +337,7 @@ void Iso_Iniciar(void) {
         afs(i);
     }
     Diario_Escrever("iso: as tabelas dos três AFS lidas no boot em %.1f ms", ms_desde(t0));
-    sIsoLeitora = CreateFile(caminho, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    sIsoLeitora = CreateFile(sNomeIso, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (sIsoLeitora == INVALID_HANDLE_VALUE) {
         Diario_Escrever("iso: o segundo handle (o da leitura dos fluxos de som) não abriu (erro %u): ela lê pelo comum",
                         (unsigned)GetLastError());
@@ -233,13 +355,12 @@ void Iso_LeitoraPropria(void) {
     }
 }
 
-/* Diferente de 0 se a ISO foi recusada (a main mostra a recusa e não começa o jogo): 1 = a ISO aberta não é a
-   convertida (a original); 2 = o BT3_ISO foi dado e o arquivo não existe ou não é uma ISO (Iso_Pedida diz o caminho). */
+/* ISO_* do iso360.h: diferente de zero impede o início do jogo. */
 int Iso_Recusada(void) {
     return sRecusada;
 }
 
-/* O caminho do BT3_ISO que falhou (só vale com Iso_Recusada() == 2). */
+/* O caminho escolhido, inclusive quando recusado pela busca automática. */
 const char *Iso_Pedida(void) {
     return sNomeIso;
 }
@@ -273,7 +394,7 @@ static int mesmo_nome(const char *a, size_t na, const unsigned char *b, unsigned
     return 1;
 }
 
-/* "DATA/PZS3US1.AFS" -> posição e tamanho na ISO; 0 se não há. Os registros não cruzam setores. */
+/* "DATA/PZS3US1.AFS" -> posição e tamanho na ISO; 0 se não há, -1 se ilegível. Registros não cruzam setores. */
 static int achar(const char *caminho, __int64 *ini, long *tam) {
     unsigned lba = sRaizLba, dirTam = sRaizTam;
     unsigned char setor[SETOR];
@@ -288,14 +409,26 @@ static int achar(const char *caminho, __int64 *ini, long *tam) {
         }
         n = (size_t)(fim - p);
         ultimo = *fim == '\0';
+        if (dirTam == 0 || dirTam > 1024 * 1024 ||
+            (__int64)lba * SETOR + ((dirTam + SETOR - 1) / SETOR) * SETOR > sVolumeTam) {
+            return -1;
+        }
         for (s = 0; s < (dirTam + SETOR - 1) / SETOR && !achou; s++) {
             unsigned k = 0;
             if (!ler((__int64)(lba + s) * SETOR, setor, SETOR)) {
-                return 0;
+                return -1;
             }
             while (k < SETOR && setor[k] != 0) {
-                unsigned len = setor[k], nl = setor[k + 32];
-                if (k + 33 + nl <= SETOR && mesmo_nome(p, n, setor + k + 33, nl)) {
+                unsigned len = setor[k], nl;
+                unsigned disponivel = dirTam - s * SETOR;
+                if (disponivel > SETOR) {
+                    disponivel = SETOR;
+                }
+                if (k >= disponivel || !registro_valido(setor + k, disponivel - k)) {
+                    return -1;
+                }
+                nl = setor[k + 32];
+                if (mesmo_nome(p, n, setor + k + 33, nl)) {
                     int dir = (setor[k + 25] & 2) != 0;
                     if (ultimo != (unsigned)!dir) {
                         return 0; /* pasta onde se queria arquivo, ou o contrário */
@@ -345,7 +478,7 @@ static Afs *afs(int n) {
         LeaveCriticalSection(&sTrava);
         return a->tab != NULL ? a : NULL;
     }
-    if (!achar(nomes[n], &ini, &tam) || !ler(ini, cab, 8) || memcmp(cab, "AFS", 4) != 0) {
+    if (achar(nomes[n], &ini, &tam) <= 0 || !ler(ini, cab, 8) || memcmp(cab, "AFS", 4) != 0) {
         Diario_Escrever("iso: %s não está na ISO ou não é AFS", nomes[n]);
     } else {
         cont = le32(cab + 4);
@@ -462,7 +595,7 @@ void *Iso_Abrir(const char *rel) {
         return (void *)-1;
     }
     if (strncmp(rel, "disc/", 5) == 0) {
-        if (!achar(rel + 5, &ini, &tam)) {
+        if (achar(rel + 5, &ini, &tam) <= 0) {
             return NULL;
         }
     } else if (sscanf(rel, "pzs3us%1d/%5d.%3s", &part, &ent, resto) == 3 && part >= 0 && part <= 2 &&
