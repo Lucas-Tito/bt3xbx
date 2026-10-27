@@ -2836,3 +2836,271 @@ O serviço de usuário `bt3-cortes` recebe `MemoryMax=5G`; toda build e emulador
 `~/f5-cortes/final/provas.resumo` termina em `FIM`, com `tudo certo` ou `FALHA RC=...` antes dele. Foi visto recusar uma árvore
 já existente e terminar o resumo de falha com `FIM`. A falha nunca é registrada como sucesso. A conferência adicional do save exige estados e dados não vazios, pois o script antigo só imprime diferenças. O serviço pode morrer se a sessão
 WSL cair, conforme o guia. A tarefa pede dispará-lo e parar; a certificação longa continua pendente até ler seu resultado.
+
+## 29. A rodada dos cortes de 27/10: duas imagens longas e a cadeia até o prazo
+
+Branch `codex/f5-cortes2`, base `troca/main` `ccdd3b01`. **[Medido]** Análise dos cinco logs do Lucas em
+`~/sessao_2710/cortes/{base,ambos,gpu6930,gpu6960,gravacao}/bt3xbx.log`, uma abertura de cada, saves novos
+`sv_ct2710_NOME`. Todos os cálculos param na primeira linha `roteiro: f5_duelo.txt:99 fim`; sobretudo, os quadros
+até 24059 da continuação de `gpu6930` não entram. Sem acesso ao console, alteração de código ou execução do jogo.
+Convenção: **[medido]** para os logs e as contas sobre eles, **[lido]** para o código, **[estimado]** para ganhos futuros.
+
+A build foi informada como main `16a29b9`, com o código do 360 da base desta tarefa. O carimbo **literal** nas cinco
+é `ba63dab diff:4bcb7b67df`; conservá-lo na evidência, sem chamá-lo de build limpa `16a29b9` ou `ccdd3b01`.
+Os ambientes registrados confirmam constantes/fecho 0/0 na base e nos diagnósticos, 2/1 em `ambos`, som, escala
+1,33, FXAA, cache pela origem, envio rápido, VU1 direto, duas threads e `BT3_TEMPOS=0`. Os opcionais
+`constantes`, `fecho`, `parcial_fecho` e `cache` não rodaram: nenhum resultado isolado é inferido deles.
+
+### As imagens na luta [medido]
+
+As duas janelas são combate: 684 passos até a pausa e 2.334 da retomada ao fim. Nas dez janelas: ritmo do roteiro
+exatamente dois vblanks por passo, razão parede/esperado 0,9972, descartes requeridos zero. Resultado nas cinco:
+vencedor 0x2, razão 0x1, vida 0/27160, vblank 11478, quadro 7757; fim do roteiro no quadro 8378. Até esse fim,
+nenhum `FALHA`, `CRASH`, `ERRO` ou `vigia:`. Nos resumos por imagem: zero repetições, trocas sem quadro, puladas e
+marcas GPU ausentes. A associação entre imagem, quadro seguinte e prazo vale nesta rodada.
+
+| Abertura | Janela 1, 3 / 4+ | Janela 2, tela do passos: 1 / 2 / 3 / 4+ | Imagens longas A → quadro atrasado B, janela 2 | Folga GPU j2: mínimo / p1 / p10 / mediana (ms) |
+|---|---|---|---|---|
+| base | 0 / 0 | 3 / 2329 / 2 / 0 | 6929 → 6930; 6959 → 6960 | -9,6 / 2,5 / 6,3 / 8,5 |
+| ambos | 0 / 0 | 3 / 2329 / 2 / 0 | 6929 → 6930; 6959 → 6960 | -9,2 / 2,8 / 6,4 / 8,6 |
+| gpu6930 | 0 / 0 | 3 / 2329 / 2 / 0 | 6928 → 6929; 6959 → 6960 | -9,6 / 2,5 / 6,3 / 8,5 |
+| gpu6960 | 0 / 0 | 3 / 2329 / 2 / 0 | 6929 → 6930; 6958 → 6959 | -2,5 / 2,5 / 6,3 / 8,5 |
+| gravacao | 0 / 0 | 3 / 2328 / 3 / 0 | 6929 → 6930; 6959 → 6960; 6989 → 6990 | -11,5 / 1,5 / 6,5 / 9,5 |
+
+Todas as **11 imagens longas duram três vblanks**; nenhuma quatro ou mais. A janela 1 tem 684 imagens de dois nas
+cinco, incluindo o Blast 2. Na janela 2, a contagem por imagem soma uma imagem de dois a mais que o passos nas
+quatro primeiras (2.335 trocas, histograma 3/2330/2/0); em `gravacao`, ambos contam 2.334. É a mesma fronteira
+assíncrona da seção 27, sem associação perdida. Não somar as duas contagens como amostras independentes.
+
+A tabela seguinte contém **cada** imagem longa. J/G/P/U são as folgas até o prazo da entrega do jogo, da gravação,
+do Present e do fim GPU; negativo significa atraso. G ocupada e F (`frame_end`) são trabalho/intervalo da CPU,
+não GPU total. Em todas as linhas: **zero texturas novas e 0,0 ms de decodificação**.
+
+| Abertura | A → B | J / G / P / U (ms) | G ocupada / F (ms) |
+|---|---|---|---|
+| base | 6929 → 6930 | 32,9 / 18,4 / 11,8 / -2,6 | 14,5 / 6,6 |
+| base | 6959 → 6960 | 32,8 / 13,0 / 7,4 / -9,6 | 19,9 / 5,5 |
+| ambos | 6929 → 6930 | 32,9 / 18,8 / 12,2 / -2,2 | 14,1 / 6,7 |
+| ambos | 6959 → 6960 | 32,8 / 13,4 / 7,8 / -9,2 | 19,5 / 5,5 |
+| gpu6930 | 6928 → 6929 | 32,9 / 18,3 / 15,9 / -0,9 | 14,6 / 2,4 |
+| gpu6930 | 6959 → 6960 | 32,8 / 13,0 / 7,5 / -9,6 | 19,9 / 5,5 |
+| gpu6960 | 6929 → 6930 | 32,9 / 18,5 / 11,8 / -2,5 | 14,5 / 6,7 |
+| gpu6960 | 6958 → 6959 | 33,0 / 19,2 / 16,4 / -0,4 | 13,8 / 2,8 |
+| gravacao | 6929 → 6930 | 32,9 / 17,4 / 11,0 / -3,5 | 15,7 / 5,6 |
+| gravacao | 6959 → 6960 | 32,8 / 11,1 / 5,6 / -11,5 | 21,9 / 5,5 |
+| gravacao | 6989 → 6990 | 49,4 / 26,8 / 15,4 / -0,8 | 22,8 / 11,4 |
+
+As linhas `picos: quadro B` e `o que teve` completam a leitura quando presentes:
+
+| B | Conteúdo nas cinco aberturas | GPU depois da CPU / período GPU, base (ms) |
+|---|---|---|
+| 6930 | 172 envios/2181 KB, 276 hashes recalculados, 2276 lotes, 213 desenhos; 2247 vértices CPU, 17358 VU, 41466 índices | 14,4 / 38,2 |
+| 6960 | 245 envios/2290 KB, 293 hashes recalculados, 3150 lotes, 1408 desenhos; 3270 vértices CPU, 31287 VU, 74841 índices | 17,0 / 45,5 |
+| 6990 | 245 envios/2308 KB, 296 hashes recalculados, 3238 lotes, 1412 desenhos; 2937 vértices CPU, 31841 VU, 76059 índices | 17,6 / 38,2 |
+
+Nesses três B, todas têm disco, XG, descarte, espera por memória/desenho e cova zero; texturas também zero.
+O período do jogo fica em 33,3/33,4 ms. Em `gravacao`, 6990 tem gravação 22,8 e F 11,4 ms, contra 20,9 e 10,0 na
+base; a cauda GPU é 16,2 contra 17,6. A escritora do diário trabalha 21,5 ms em paralelo nele e 26,1 no 6930;
+isso não é espera medida da thread do jogo nem prova de causalidade exclusiva. A base já tem um pico CPU no
+6990, mas sua imagem não é longa. Nos novos B 6929 (`gpu6930`) e 6959 (`gpu6960`), **não há** par individual
+`picos: quadro/o que teve`; a linha da tela e o perfil pontual são a evidência disponível, sem atribuir disco ou
+hash individual por ausência de uma linha filtrada.
+
+**Base contra ambos:** mesmas duas imagens longas. G ocupada cai 0,4 ms em cada alvo, o Present adianta 0,4 e a GPU
+termina 0,4 ms mais cedo em relação ao prazo; o déficit do 6960 continua 9,2 ms. Trabalho j2 p50/p99/máximo:
+24,84/30,47/32,03 para 24,43/29,90/31,58 ms. A combinação tem sinal favorável na CPU desta amostra, mas **uma
+abertura por condição não isola o ganho nem justifica ligar as chaves por padrão**. A apresentação não melhorou.
+
+**As marcas alteram o experimento:** GPU mantém duas longas, deslocando a longa para o quadro anterior ao alvo
+(A 6928 ou 6958); os alvos 6930/6960 deixam de ser os B longos nessas aberturas. Uma imagem anterior que dura
+três muda a fase do prazo seguinte. Não creditar essa mudança a uma otimização, nem concluir que o 6960 já cabe
+pela ausência de sua linha longa em `gpu6960`. O rateio da gravação aumenta a contagem de duas para três, acrescenta
+6989 e piora os atrasos dos alvos em 0,9/1,9 ms. As diferenças de G ocupada contra base são +1,2/+2,0 ms;
+são o efeito observado da abertura instrumentada, não uma calibração universal das marcas.
+
+### A GPU no Xenos [medido]
+
+Bruto e custo são impressos pelo diagnóstico. O líquido é **estimativa calibrada**: bruto menos um trecho vazio
+por segmento; inclui o efeito residual de esvaziar o pipeline. Não é uma segunda corrida sem marcas.
+
+| Q | Bruto (ms) | Marcas | Custo (ms) | Líquido (ms) | Limite de espera CPU (ms) |
+|---|---|---|---|---|---|
+| 6929 | 18,699 | 163 | 2,498 | 16,201 | 0,000 |
+| 6930 | 18,356 | 163 | 2,692 | 15,664 | 0,000 |
+| 6931 | 18,429 | 163 | 2,679 | 15,750 | 0,000 |
+| 6959 | 19,005 | 155 | 2,476 | 16,528 | 0,000 |
+| 6960 | 25,983 | 214 | 3,421 | 22,562 | 0,000 |
+| 6961 | 26,024 | 214 | 3,587 | 22,437 | 0,000 |
+
+| Classe, líquido estimado (ms) | 6929 | 6930 | 6931 | 6959 | 6960 | 6961 |
+|---|---|---|---|---|---|---|
+| comum | 9,008 | 8,719 | 8,841 | 8,538 | 12,123 | 12,158 |
+| vu0 | 0,100 | 0,095 | 0,097 | 0,082 | 0,826 | 0,818 |
+| vu4 | 1,910 | 1,761 | 1,773 | 2,790 | 2,809 | 2,785 |
+| profundidade | 0,412 | 0,444 | 0,416 | 0,409 | 0,453 | 0,418 |
+| contorno | 0,000 | 0,000 | 0,000 | 0,000 | 0,692 | 0,692 |
+| tabela pelos ids | 0,000 | 0,000 | 0,000 | 0,000 | 0,404 | 0,401 |
+| tabela pela profundidade | 0,998 | 0,995 | 0,995 | 0,996 | 0,996 | 0,994 |
+| cópia dos ids | 0,000 | 0,000 | 0,000 | 0,000 | 0,154 | 0,154 |
+| FBA | 1,111 | 1,060 | 1,059 | 1,109 | 1,115 | 1,096 |
+| DATE | 0,228 | 0,214 | 0,214 | 0,219 | 0,223 | 0,212 |
+| resolves de cor | 0,859 | 0,832 | 0,830 | 0,840 | 1,166 | 1,160 |
+| entradas na EDRAM | 0,168 | 0,123 | 0,144 | 0,154 | 0,175 | 0,160 |
+| volta da cor | 0,287 | 0,311 | 0,281 | 0,283 | 0,314 | 0,279 |
+| tela | 0,324 | 0,326 | 0,324 | 0,324 | 0,324 | 0,326 |
+| FXAA | 0,793 | 0,780 | 0,775 | 0,783 | 0,787 | 0,783 |
+
+`vu6`, filme e medição líquidos são zero nas seis; outros fica entre 0,001 e 0,003 ms.
+
+**[Lido]** `tempo_marca` insere callbacks `IDLE`; `tempo_poe` só marca a mudança de classe. As 44/64 marcas em
+`comum` dos quadros 6930/6960 são segmentos entre classes, **não** número de desenhos. `desenha_comum` classifica
+por `d->vu`, e FBA tem classe própria. O nome `comum` não identifica textura, shader, alvo ou área individual.
+`tempo_le` limita a espera CPU pela comparação dos carimbos e estima o custo pelo trecho vazio do próprio quadro.
+O limite zero nas seis não exclui bloqueio da CPU nas APIs, dependências internas da GPU ou efeitos das marcas.
+
+**[Medido]** `comum` pesa 51,7% a 56,1% do líquido: 8,72 ms no 6930 e 12,12 no 6960. Do 6959 ao 6960, o líquido
+sobe 6,03 ms: comum +3,58, VU0 +0,74 e contorno/tabela pelos ids/cópia dos ids +1,25, além dos demais deltas.
+VU4 fica em ~2,8; FXAA em ~0,79. Resolves de cor custam 0,83/1,17 nos alvos, entradas na EDRAM 0,12/0,17 e volta
+da cor 0,31/0,31: não há dez ms isolados em Resolve ou FXAA a recuperar. Não remover passadas requeridas.
+
+A GPU sozinha **não excede dois vblanks** nos quadros alvo: mesmo o bruto é 18,36/25,98 ms, e o líquido
+15,66/22,56, para ~33,27 ms disponíveis por período nessa sessão. Ela acaba tarde **em relação ao prazo da cadeia**:
+na base, o Present ainda tem 11,8/7,4 ms, mas a cauda até a marca dura 14,4/17,0 ms. Não somar GPU total a essa
+cauda, nem GPU total a todo `frame_end`: o envio de comandos já se sobrepõe à execução da GPU.
+
+O perfil CPU reforça a necessidade de localizar as chamadas: F 2,413/6,846/2,993 nos 6929/6930/6931 e
+2,776/5,772/5,998 nos 6959/6960/6961. No 6930, `outros` tem 5,416 ms; no 6960, VU0 tem 3,859, contra 0,826 de
+GPU líquida. Preparo/plano/limpeza têm 0,001/0,071/0,003 no 6930 e 0,001/0,219/0,004 no 6960. Isso não permite
+chamar os 5,4 ms de um shader nem supor que juntar constantes os tirará: as classes CPU acumulam tempo entre
+mudanças de classe, incluindo chamadas e possíveis esperas. Separar esses trechos na próxima medida.
+
+### A gravação no Xenon [medido]
+
+126 quadros, **6900 a 7025**, soma exclusiva conservada em todos, com marcas por chamada. O total não inclui o
+intervalo sem trabalho entre listas. A VU1 restante exclui seus filhos; envio e hash não se somam novamente ao GIF.
+Tempos em ms; as cinco maiores somas são 6900, 6996, 6995, 6994 e 6999. A mediana é desta faixa, não do combate
+inteiro. As medianas das parcelas não precisam somar a mediana do total.
+
+| Q | Total | DMA | VIF | GIF | CPU | VU1 restante | Unpack | Envio | Entrega | Hash | Constantes | Fecho |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 6900 | 31,840 | 0,288 | 2,673 | 4,587 | 2,419 | 6,982 | 2,839 | 5,000 | 0,728 | 2,530 | 1,938 | 1,857 |
+| 6930 | 15,570 | 0,191 | 1,429 | 1,295 | 1,800 | 2,588 | 1,196 | 3,463 | 0,068 | 2,023 | 0,567 | 0,950 |
+| 6960 | 21,742 | 0,240 | 1,978 | 2,072 | 2,371 | 4,517 | 1,824 | 3,496 | 0,410 | 2,237 | 1,259 | 1,338 |
+| 6994 | 25,868 | 0,275 | 2,516 | 2,099 | 2,214 | 5,666 | 2,504 | 4,561 | 0,408 | 2,349 | 1,503 | 1,771 |
+| 6995 | 25,922 | 0,273 | 2,504 | 2,096 | 2,179 | 5,684 | 2,500 | 4,528 | 0,440 | 2,437 | 1,500 | 1,778 |
+| 6996 | 26,017 | 0,272 | 2,506 | 2,084 | 2,203 | 5,674 | 2,522 | 4,705 | 0,408 | 2,377 | 1,496 | 1,769 |
+| 6999 | 25,867 | 0,272 | 2,482 | 1,995 | 2,057 | 5,656 | 2,494 | 4,749 | 0,456 | 2,428 | 1,494 | 1,784 |
+| Mediana | 16,587 | 0,190 | 1,422 | 1,755 | 2,106 | 3,269 | 1,246 | 3,284 | 0,407 | 2,039 | 0,929 | 0,939 |
+
+Comparação com a x86gv histórica da seção 28 (`~/f5-cortes/diag-duelo.log`), sem threads e com backend falso:
+
+| Parcela (ms) | Xenon 6930 | x86gv 6930 | Xenon 6960 | x86gv 6960 | Xenon mediana faixa | x86gv mediana faixa |
+|---|---|---|---|---|---|---|
+| Total | 15,570 | 1,437 | 21,742 | 2,832 | 16,587 | 2,633 |
+| dma | 0,191 | 0,064 | 0,240 | 0,089 | 0,190 | 0,086 |
+| vif | 1,429 | 0,219 | 1,978 | 0,349 | 1,422 | 0,311 |
+| gif | 1,295 | 0,109 | 2,072 | 0,206 | 1,755 | 0,187 |
+| cpu | 1,800 | 0,127 | 2,371 | 0,162 | 2,106 | 0,151 |
+| vu1 | 2,588 | 0,193 | 4,517 | 0,512 | 3,269 | 0,462 |
+| unpack | 1,196 | 0,106 | 1,824 | 0,240 | 1,246 | 0,205 |
+| envio | 3,463 | 0,169 | 3,496 | 0,200 | 3,284 | 0,194 |
+| entrega | 0,068 | 0,195 | 0,410 | 0,695 | 0,407 | 0,648 |
+| hash | 2,023 | 0,179 | 2,237 | 0,184 | 2,039 | 0,177 |
+| constantes | 0,567 | 0,031 | 1,259 | 0,086 | 0,929 | 0,078 |
+| fecho | 0,950 | 0,044 | 1,338 | 0,109 | 0,939 | 0,097 |
+
+No 6960, DMA/VIF/GIF/CPU somam **6,660 ms**, contra 0,806 na x86gv; no 6930, **4,715**, contra 0,520.
+O resto antigo tem peso real no Xenon, além de VU1, envio e hash. No 6960, envio 3,496 e hash 2,237 somam 5,733;
+constantes/fecho somam 2,598. Mesmo a eliminação hipotética dessas duas últimas parcelas **inteiras e instrumentadas**
+não cobriria o déficit de 9,6 ms. Na x86gv, envio/hash são 0,200/0,184, e CPU 0,162 contra 2,371 no Xenon:
+não transportar fatores de ganho da x86 para o console.
+
+A mediana total da x86gv no combate inteiro da seção 28 era 4,635 ms; **na mesma faixa** 6900:7025 ela é 2,633,
+contra 16,587 do Xenon. A entrega 0,407 do console contra 0,648 no falso também mostra que não há um multiplicador
+único. A x86gv hasheia/lê as listas na entrega, não desenha no Xenos; o Xenon usa threads, VU1 direto, outro compilador,
+outro float e relógios por chamada. São rateios de ambientes diferentes, não uma regressão de 6,3 vezes nem uma
+previsão de ganho transferível. Os 31,840 ms do 6900 não geraram imagem longa: somas ocupadas maiores não determinam
+o prazo de tela sem a fase de cada entrega. Os quadros pesados 6994 a 6999 tampouco são os B das longas desta abertura.
+
+`cortes.py` exige o rodapé `gpu_falso` e, por isso, não aceita diretamente um log de console. A extração local aplica
+às linhas do Xenon o mesmo formato e a mesma tolerância de conservação, sem inventar esse rodapé. O 404 de `hash`
+no rateio do 6960 conta chamadas à parcela, incluindo acertos; o 293 dos picos conta recálculos de página. Não
+interpretar contadores diferentes como perda de eventos. **[Lido]** `Gs_PageHash` já tem cache por geração da página:
+propor simplesmente acrescentar esse cache contaria uma otimização existente de novo.
+
+### Causa, próximo corte e o que medir
+
+**[Medido]** Na base, a cadeia desde a entrega do jogo até o fim GPU dura aproximadamente **35,5 ms no 6930** e
+**42,4 no 6960**, para 32,9/32,8 até o prazo. Ela se decompõe pelos carimbos em 14,5 + 6,6 + 14,4 e
+19,9 + ~5,6 + 17,0 (arredondamento de F 5,5). O jogo chega no tempo, o desenho apresenta antes do prazo, mas a GPU
+termina 2,6/9,6 ms depois. Não há textura nova nesses quadros. É uma cadeia tardia, com mudança de carga de desenhos
+no 6960, não evidência de GPU isolada acima do período nem de falta de média de fps. Os cortes atuais adiantaram
+~0,4 ms nesta amostra; **zero continua reprovado**. Nas cinco aberturas, o cache já evita a imagem longa do Blast 2;
+essa ausência não quantifica o trabalho individual dele nem prova partida livre sem cargas.
+
+**Decisão conservadora:** não há, neste rateio, **um corte pequeno identificado que demonstre zerar as duas**.
+Nenhuma otimização nova, chave ou mudança de padrão foi implementada. Não mudar apresentação, filas, escala, FXAA,
+conteúdo, vblank ou latência para produzir artificialmente o zero. A alternativa prevista na tarefa é esta análise
+e a próxima medição; as provas x86/PPC, mutantes do corte, `divergencias.py` e novos ambientes de uma otimização
+ficam condicionadas a existir esse corte. Não as declarar executadas para um código que não mudou.
+
+**[Estimado]** Para o pior alvo **sem marcas**, o novo orçamento precisa recuperar **ao menos 10,6 ms na cadeia**
+(9,6 medidos mais 1 de margem); para o 6930, 3,6. Um caminho a investigar é reduzir o trabalho comum da GPU pela
+área efetivamente necessária e pelos shaders dos estados dominantes, junto de envios redundantes e do restante
+da gravação, preservando ordem e conteúdo. Como metas de investigação, não ganhos: 2 a 3 ms em envio/hash,
+1 a 2 no desenho e 4 a 6 na cauda GPU. A soma nominal 7 a 11 **não garante** o orçamento: apenas sua ponta superior
+alcança 10,6, e há sobreposição entre CPU/GPU. Não creditar os 12,12 ms inteiros de `comum` como removíveis.
+O perfil atual não identifica qual subpassada domina ou se sua área pode encolher sem mudar a imagem.
+
+Próxima rodada, a preparar com a revisão Linux após instrumentar os trechos que faltam:
+
+1. **Controle sem marcas:** pelo menos três pares alternados base/ambos, mesma combinação, som e roteiro, saves
+   novos e únicos a cada abertura (`sv_c2b01`, `sv_c2a01`, depois 02/03). Publicar todas as imagens longas, folgas e
+   ocupada por alvo; estimar a variação entre aberturas antes de atribuir os ~0,4 ms a uma chave. Se for necessário
+   separar constantes/fecho/cache, rodar os opcionais em aberturas próprias, sem inferir o que ainda não rodou.
+2. **GPU em aberturas separadas, só o alvo:** `BT3_CORTES_GPU=6930,6930` e `6960,6960`, com `BT3_CORTES=0` e saves
+   `sv_c2g30_01`/`sv_c2g60_01`, depois novos sufixos. Não marcar o antecessor: nesta rodada foi ele que perdeu o prazo,
+   mudando a referência do alvo. Continuar drenando os buffers. Comparar com base sem marcas, nunca aprovar a tela
+   pelo diagnóstico. Repetir cada alvo para separar variação de custo de marca.
+3. **Abrir `comum` sem marcas por desenho na luta inteira:** segmentos contíguos por fonte (`mode[0]`: sem textura,
+   VRAM, alvo, pacote), shader escolhido, afiado e alvo de destino; contagem de desenhos, área da tesoura e leituras
+   de alvo. Somar ao `comum` antigo, calibrar as marcas e registrar bruto/líquido. Distinguir cópias/efeitos sobre alvos
+   dos desenhos comuns de geometria antes de propor redução de área ou shader. Identificar a parcela e a economia
+   necessária em cada alvo, sem remover contorno, DATE, FBA ou tabela requerida.
+4. **CPU e gravação em diagnósticos separados:** localizar chamadas/esperas dentro de `outros` no 6930 e VU0 no 6960;
+   dividir envio por formato e bytes, recálculos/acertos de hash e escritos repetidos, VIF/GIF/CPU por leitor e VU1
+   restante por família. O cache por geração já existe: medir a repetição e as invalidações antes de propor omitir
+   escrita/hash. Reaplicar o rateio também com ambos, sem perfil GPU, pois o atual não isola cada corte.
+5. Só então prototipar o candidato desligado por padrão. Exigir equivalência das listas x86gv/PPC sem mapa,
+   controle negativo de cada verificador, objetos planos sem depuração iguais e `.text` preservada. O ganho só vale
+   se adiantar a **GPU até o prazo sem marcas**, sem atraso de entrada, e zerar a tela. Repetir depois as três
+   janelas longas fria/aquecidas, a sessão livre com cargas e os outros critérios da etapa 10. Este Duelo curto
+   de 684/2.334 passos não fecha a F5.
+
+### Conferência desta análise [medido]
+
+Artefatos fora do git em `~/f5-cortes2/`: `confere.py`, `imagens.json`, `extracao.log`, logs recortados `NOME/ate-fim.log`
+e saídas do passos. O extrator confere ambientes/saves, fim/resultado, associação, histogramas e linhas individuais,
+classes e conservação bruto/líquido/custo da GPU, faixa integral e soma do rateio. Foi visto sair com **1** em nove
+cópias: fim retirado, associação perdida, imagem longa omitida, duração trocada, classe GPU retirada, custo GPU
+adulterado, total de gravação adulterado, parcela retirada e quadro rateado retirado. Originais: “tudo certo na
+extração”, **não** “zero aprovado”. Os arquivos originais foram preservados.
+
+| Rodada final da análise | Resultado |
+|---|---|
+| Extração dos cinco logs e controles negativos | saída 0 nos originais; nove cópias recusadas com saída 1 |
+| `passos.py NOME/ate-fim.log` nas cinco | estrutura conforme, saída 0 |
+| `passos.py NOME/ate-fim.log --console --janelas 2 --minimo 600` nas cinco | saída 1 em todas: j2 com 2/2/2/2/3 imagens longas; apenas j1 passa |
+| GPU, seis quadros | classes completas; somas bruta, líquida, custo e marcas conservadas |
+| Gravação, 126 quadros | faixa completa, parcelas exclusivas conservam o total |
+| Roteiros, resultado e associação da rodada do Lucas | fim nas cinco, resultado e passos iguais; nenhum erro/associação perdida |
+
+O `passos.py` do commit atual aplica a decisão 27, não o antigo 1%. O parâmetro 600 só deixa examinar estas duas
+janelas curtas; não substitui três de 2.700. Seu “estrutura ok” imprime o aviso genérico sobre emulador mesmo ao
+ler este log de console; aqui foi usado apenas para a estrutura. Não foi usado `--carimbo` para certificar uma
+build limpa: a origem literal acima é a que foi efetivamente registrada.
+
+A `.text` do binário x86 **preexistente** em `port/build/x86/bt3_x86` (carimbo `763e4b73 diff:da39a3ee5e`), extraída
+novamente com `objcopy -O binary --only-section=.text`, deu SHA1 **`43444ea4d03a6d448aa1ae74a631e35b356a7caa`**.
+Não é build nova deste branch. Só documentação muda: nenhum fonte, objeto ou binário foi alterado; não há nova
+prova de execução x86/PPC ou build 360 nesta entrega. As provas anteriores da seção 28 não são reatribuídas a ela.
