@@ -23,7 +23,7 @@ for nome, arq, de, para in (
     ('relogio', 'som_nucleo.c', 's->filme.quadros++;', 's->filme.quadros += 2;'),
     ('fila', 'filme_tempo.h', '*posicao = b->inicio +', '*posicao = b->inicio -'),
     ('silencio', 'filme_tempo.h', 'deslocamento < b->dados ? deslocamento : b->dados', 'deslocamento'),
-    ('identidade', 'som_nucleo.c', 's->user == user', 's->user != user'),
+    ('identidade', 'som_nucleo.c', 's->user == user) {\n            *r = s->filme;', 's->user != user) {\n            *r = s->filme;'),  # (o relógio da deriva tem a mesma comparação)
     ('versao', 'filme_tempo.h', 'antes == depois && !(antes & 1u)', 'antes == depois'),
 ):
     d = p / nome; d.mkdir()
