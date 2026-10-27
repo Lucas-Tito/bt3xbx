@@ -1320,10 +1320,12 @@ static void tempo_le(int b) {
     __lwsync();
     if (e == 2 || n < 3) {
         sTempo.descartados++;
+        if (sCortesGpu) Diario_Escrever("cortes: gpu quadro %u indisponivel: captura, marcas cheias ou menos de tres marcas (%u)", sCortesGpuQ[b], n);
         return;
     }
     if (!tempo_valida(b, n)) {
         sTempo.perdidos++;
+        if (sCortesGpu) Diario_Escrever("cortes: gpu quadro %u indisponivel: marcas ausentes ou fora de ordem", sCortesGpuQ[b]);
         return;
     }
     memset(raw, 0, sizeof(raw));

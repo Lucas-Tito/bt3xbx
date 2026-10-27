@@ -4,6 +4,14 @@ int gGsCortesAtivo;
 static int sCortesInit, sCortesLigado, sCortesPilha[32], sCortesTopo;
 static unsigned sCortesA, sCortesB, sCortesQuadro, sCortesChamadas[COR_N];
 static uint64_t sCortesDesde, sCortesInicio, sCortesT[COR_N];
+#ifdef PORT_X360
+static uint64_t sCortesSistema, sCortesCalibra;
+static uint64_t cortes_sistema(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+}
+#endif
 static void cortes_marca(int etapa) {
     uint64_t t = GS_FAM_TIQUE();
     sCortesT[etapa] += t - sCortesDesde;
@@ -33,6 +41,10 @@ void Gs_CortesInicio(unsigned quadro) {
     memset(sCortesT, 0, sizeof(sCortesT));
     memset(sCortesChamadas, 0, sizeof(sCortesChamadas));
     sCortesTopo = 0; sCortesPilha[0] = COR_DMA; sCortesQuadro = quadro;
+#ifdef PORT_X360
+    sCortesSistema = cortes_sistema();
+    sCortesCalibra = GS_FAM_TIQUE();
+#endif
     sCortesDesde = sCortesInicio = GS_FAM_TIQUE();
 }
 void Gs_CortesFim(void) {
@@ -44,6 +56,12 @@ void Gs_CortesFim(void) {
     if (sCortesTopo != 0) abort();
     cortes_marca(COR_DMA);
     total = sCortesDesde - sCortesInicio;
+#ifdef PORT_X360
+    {
+        uint64_t sistema = cortes_sistema(), tb = GS_FAM_TIQUE();
+        if (sistema > sCortesSistema) gGsFamTbMs = (double)(tb - sCortesCalibra) / ((double)(sistema - sCortesSistema) / 1e6);
+    }
+#endif
     gGsCortesAtivo = 0;
     n = snprintf(linha, sizeof(linha), "cortes: gravacao quadro %u total %.6f", sCortesQuadro, Gs_FamMs(total));
     for (i = 0; i < COR_N; i++) n += snprintf(linha + n, sizeof(linha) - n, " %s %.6f/%u", nomes[i], Gs_FamMs(sCortesT[i]), sCortesChamadas[i]);

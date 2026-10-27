@@ -2135,3 +2135,6 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Uma vaga estática não é identidade suficiente para pular a igualdade de uniformes: seu endereço não muda quando
   a matriz muda. A cópia gravada precisa do endereço da lista, do quadro e da versão da entrada; o teste troca cada
   um separadamente. A versão só avança numa falha da chave completa, e a lista recebe os 304 bytes antes da marca.
+- O diagnóstico de gravação do 360 calibra o mftb contra o relógio do sistema mesmo com `BT3_TEMPOS=0`.
+  Não depender da calibração de `Gs_FamTrecho`: ela volta cedo quando as famílias estão desligadas e deixa o valor
+  inicial de 49,875 MHz. As duas leituras do sistema ficam fora do intervalo exclusivo, não em cada lote.
