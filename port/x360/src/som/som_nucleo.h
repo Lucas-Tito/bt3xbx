@@ -54,6 +54,13 @@ typedef struct SomContadores {
 } SomContadores;
 void SomNucleo_Contadores(SomContadores *c);
 
+/* Etapa 7: posição do fluxo em quadros de saída de 48 kHz, com a trava pega. Conta só dados consumidos,
+   inclusive PCM de valor zero; falta de dados não anda. user é o handle adxt, não a ordem dos fluxos. */
+typedef struct SomFilmeRelogio {
+    unsigned geracao, quadros;
+} SomFilmeRelogio;
+int SomNucleo_FilmeRelogio(void *user, SomFilmeRelogio *r);
+
 /* da plataforma: uma trava recursiva única (a do XAudio2 no 360; no teste do WSL, nada) */
 void som_travar(void);
 void som_destravar(void);

@@ -36,8 +36,9 @@ typedef struct Mpeg2 Mpeg2;
 int Mpeg2_NextPlanes(Mpeg2 *m, const unsigned char **y, const unsigned char **cb, const unsigned char **cr, int *stride);
 int Mpeg2_Width(const Mpeg2 *m);
 int Mpeg2_Height(const Mpeg2 *m);
-int GsD3d_FilmeVaga(unsigned imagem, unsigned char **dados, unsigned *pitch, double *msEspera); /* gs_d3d.cpp */
+int GsD3d_FilmeVaga(unsigned imagem, unsigned local, unsigned tipo, unsigned char **dados, unsigned *pitch, double *msEspera); /* gs_d3d.cpp */
 void GsD3d_FilmeFim(void);
+void GsD3d_FilmeEsperaCaptura(void);
 int Iso_FilmeEspera(double *ms, unsigned *esperas); /* iso360.c */
 extern unsigned __int64 gPicosIsoTiques;              /* iso360.c: o tempo dentro do ReadFile da ISO, de todas as threads */
 
@@ -118,7 +119,12 @@ int Filme360_Imagem(Mpeg2 *m) {
         return 0;
     }
     imagem = ++sNumero;
-    if (!GsD3d_FilmeVaga(imagem, &dados, &pitch, &msVaga)) {
+    {
+        extern char gPortMoviePath[512];
+        unsigned tipo = strstr(gPortMoviePath, "zs3used") || strstr(gPortMoviePath, "ZS3USED") ? 2 : 1;
+        ok = GsD3d_FilmeVaga(imagem, sImagens, tipo, &dados, &pitch, &msVaga);
+    }
+    if (!ok) {
         sSemVaga++;
         gFilme360Imagem = 0; /* (a imagem não aparece; o filme segue no ritmo) */
         QueryPerformanceCounter(&t2);
@@ -189,6 +195,7 @@ static void estatistica(int c, unsigned de, unsigned n, double *p50, double *p99
 void Filme360_Fechou(void) {
     unsigned n = sImagens < MAX_N ? sImagens : MAX_N;
     double p99Total = 0, p50Per = 0, p99Per = 0;
+    GsD3d_FilmeEsperaCaptura(); /* só as capturas: a última não se perde com o número zerado no fechamento */
     gFilme360Imagem = 0;
     if (sMed == NULL) {
         return;

@@ -16,6 +16,14 @@ void Som360_Iniciar(void);
 void Som360_Parar(void);
 /* A queda (AoMorrer): StopEngine já, sem soltar nada; a mistura passa a dar silêncio. */
 void Som360_Queda(void);
+
+/* Etapa 7: só a thread de desenho consulta, nunca a DPC. A posição volta ao instante do vblank pelo mftb;
+   as faltas da voz invalidam a extrapolação. Copia um anel por versão, sem tomar nem acrescentar trava no mixer. */
+typedef struct SomFilmeAmostra {
+    unsigned valido, geracao, posicao, faltas, travas, silencios, erro;
+    unsigned janelaUs;
+} SomFilmeAmostra;
+void Som360_FilmeAmostra(unsigned long long tb, double tbPorMs, SomFilmeAmostra *a);
 #ifdef __cplusplus
 }
 #endif

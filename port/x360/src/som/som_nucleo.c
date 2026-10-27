@@ -31,6 +31,7 @@ struct SDL_AudioStream {
     int nresto;          /* bytes de um quadro incompleto (a SDL aceita qualquer tamanho) */
     int f;               /* a fase: a posição entre a e b, em 1/SOM_TAXA de quadro do fluxo */
     short a[2], b[2];
+    SomFilmeRelogio filme;
     struct SDL_AudioStream *prox;
 };
 
@@ -38,6 +39,19 @@ static SDL_AudioStream *sFluxos;
 static const char *sErro = "";
 static SomContadores sCont;
 static int sAcc[PEDACO * 2];
+static unsigned sFilmeGeracao;
+
+int SomNucleo_FilmeRelogio(void *user, SomFilmeRelogio *r) {
+    SDL_AudioStream *s;
+    memset(r, 0, sizeof(*r));
+    for (s = sFluxos; user != NULL && s != NULL; s = s->prox) {
+        if (s->ligado && s->user == user) {
+            *r = s->filme;
+            return 1;
+        }
+    }
+    return 0;
+}
 
 const char *SomNucleo_Erro(void) {
     return sErro;
@@ -73,6 +87,7 @@ SDL_AudioStream *SDL_CreateAudioStream(const SDL_AudioSpec *de, const SDL_AudioS
     s->ganho = SOM_GANHO_UM;
     zera_fase(s);
     som_travar();
+    s->filme.geracao = ++sFilmeGeracao;
     s->prox = sFluxos;
     sFluxos = s;
     sCont.fluxos++;
@@ -289,6 +304,7 @@ static void um_fluxo(SDL_AudioStream *s, int n) {
             sAcc[i * 2 + c] += com_ganho(v, s->ganho);
         }
         s->f += s->taxa;
+        s->filme.quadros++;
     }
 }
 

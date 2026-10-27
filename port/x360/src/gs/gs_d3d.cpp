@@ -111,6 +111,7 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "copia_af_ps.h"
 #include "fxaa_ps.h"       /* (720p, BT3_FXAA: ps_fxaa; ver fxaa_init) */
 
+#include "../som/som360.h"
 #include "escala.h"
 #include "vblank_alvo.h" /* (F5, etapa 8, seção 20: a conta da espera pelo vblank de hardware) */
 /* (F5, etapa 8, 720p, etapa 2) O tamanho dos alvos, das profundidades e do par da EDRAM, em pixels de saída: a área de
@@ -532,6 +533,14 @@ struct TelaPres {
     int repete;
     unsigned __int64 tb;
 };
+/* Etapa 7: o número local do filme acompanha a troca até o vblank que a mostrou. */
+static int sFilmeLog;
+struct FilmePres { DWORD swap; unsigned global, local, tipo, quadro; };
+static FilmePres sFilmePres[TELA_N], sFilmeAtual, sFilmeVisto;
+static int sFilmeAlvoAtual;
+static DWORD sFilmeFeito;
+static int sFilmeTem;
+static void filme_apresentou(void);
 static int sTelaLiga;                 /* a chave */
 static TelaEnt sTelaEnt[TELA_N];     /* (só a DPC escreve) */
 static volatile DWORD sTelaUlt;      /* a última troca guardada pela DPC */
@@ -552,7 +561,7 @@ static void WINAPI vblank_cb(D3DVBLANKDATA *d) {
             sVbPuladas += d->Swap - sVbSwap - 1;
             sVbSwap = d->Swap;
             sVbSwapN = n;
-            if (sTelaLiga) { /* (só inteiros: a DPC) */
+            if (sTelaLiga || sFilmeLog) { /* (só inteiros: a DPC) */
                 TelaEnt *e = &sTelaEnt[d->Swap % TELA_N];
                 e->swap = d->Swap;
                 e->n = n;
@@ -3713,6 +3722,7 @@ static int d3d_init(void) {
     nat_init(); /* (F5, etapa 7, segunda parte) */
     tempo_init(); /* (F5, etapa 8) */
     gPicos = env_num("BT3_PICOS", 0); /* (F5, etapa 8, picos) */
+    sFilmeLog = env_num("BT3_FILME_LOG", 0) == 1;
     sTelaLiga = env_num("BT3_PICOS_TELA", 0) != 0; /* (seção 25: a tela por imagem, com os carimbos do picos) */
     if (sTelaLiga && gPicos == 0) {
         gPicos = 100000; /* (os carimbos dos três lados sem as linhas por quadro) */
@@ -3777,7 +3787,7 @@ static int na_lista(unsigned quadro) {
    (720p, etapa 3) Na escala maior que 1, a captura sai reduzida a 640 x 448 (cada pixel do GS a média dos pixels de
    saída dele, esc_reduz), para o compara_quadros.py seguir comparando com a escala 1; BT3_SHOT_CHEIA=1 grava a imagem na
    resolução interna (960 x 672 ou 1280 x 896). Os buffers maiores são pedidos na primeira captura, só nessas escalas. */
-static void captura(int alvo, D3DTexture *tex) {
+static void captura(int alvo, D3DTexture *tex, const char *arquivo = NULL) {
     static int criou, cheia = -1, sw, sh;
     static unsigned linear1[640 * 448], *linear, *red;
     static unsigned char ppm1[16 + 640 * 448 * 3], *ppm;
@@ -3816,7 +3826,7 @@ static void captura(int alvo, D3DTexture *tex) {
     if (linear == NULL || ppm == NULL) {
         return;
     }
-    fbw = (fbw ? fbw : 10) * 64;
+    fbw = arquivo != NULL ? 512 : (fbw ? fbw : 10) * 64;
     if (fbw > 640) fbw = 640;
     /* textura presa no dispositivo fica ocupada para sempre (IsBusy): o LockRect esperaria sem fim */
     sDev->SetTexture(0, NULL);
@@ -3851,12 +3861,14 @@ static void captura(int alvo, D3DTexture *tex) {
             o[2] = (unsigned char)c;
         }
     }
-    _snprintf(nome, sizeof(nome), "game:\\shots\\gpu_%05u.ppm", sQ->quadro);
+    if (arquivo != NULL) _snprintf(nome, sizeof(nome), "game:\\shots\\%s", arquivo);
+    else _snprintf(nome, sizeof(nome), "game:\\shots\\gpu_%05u.ppm", sQ->quadro);
     h = CreateFile(nome, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h != INVALID_HANDLE_VALUE) {
-        WriteFile(h, ppm, (DWORD)(o - ppm), &n, NULL);
+        if (!WriteFile(h, ppm, (DWORD)(o - ppm), &n, NULL) || n != (DWORD)(o - ppm))
+            Diario_Escrever("gs_d3d: ERRO: captura incompleta %s", nome);
         CloseHandle(h);
-    }
+    } else { Diario_Escrever("gs_d3d: ERRO: não abriu a captura %s", nome); }
     {   /* (720p, retomada) o FNV-1a do arquivo no log: duas aberturas com as mesmas imagens se conferem pelo log, sem trazer
            as imagens (são do jogo: o compara_quadros.py roda no WSL) */
         unsigned fnv = 2166136261u;
@@ -3864,7 +3876,8 @@ static void captura(int alvo, D3DTexture *tex) {
         for (b = ppm; b < o; b++) {
             fnv = (fnv ^ *b) * 16777619u;
         }
-        Diario_Escrever("gs_d3d: captura gpu_%05u.ppm: fnv %08x", sQ->quadro, fnv);
+        if (arquivo != NULL) Diario_Escrever("gs_d3d: captura %s: quadro %u, fnv %08x", arquivo, sQ->quadro, fnv);
+        else Diario_Escrever("gs_d3d: captura gpu_%05u.ppm: fnv %08x", sQ->quadro, fnv);
     }
     sConta.capturas++;
     sConta.msCaptura += ms_desde(&t0);
@@ -4610,6 +4623,7 @@ static void nat_entra(int t, uint32_t n, int *cur) {
 #define FILME_W 512
 #define FILME_H 448
 static TexXg *sFilmeTex[FILME_VAGAS];
+static unsigned sFilmeLocal[FILME_VAGAS], sFilmeTipo[FILME_VAGAS];
 static volatile unsigned sFilmeImagemDa[FILME_VAGAS]; /* (jogo) o número da imagem na vaga */
 static volatile LONG sFilmeOcupada[FILME_VAGAS];      /* (jogo põe 1, desenho põe 0) escrita e a GPU ainda não a leu */
 static unsigned sFilmeDesenhadaDa[FILME_VAGAS];       /* (desenho) o número que ele desenhou dela */
@@ -4620,10 +4634,29 @@ static unsigned sFilmeUltima;                         /* (desenho) o maior núme
 static volatile LONG sFilmeEstado;
 static unsigned sFilmeSoltarQuadros, sFilmeDes, sFilmeTrocadas, sFilmePuladas; /* (desenho) */
 static unsigned sFilmeEsperas, sFilmeForcadas, sFilmeFalhou;                    /* (jogo) */
+static unsigned sFilmeCapturaPedida; /* só o jogo escreve; o índice global, que não reinicia */
+static volatile unsigned sFilmeCapturaFeita; /* só o desenho escreve, depois do arquivo */
+
+/* Só no diagnóstico de capturas: impedir que o próximo número global ou o fechamento esconda a imagem pedida
+   antes de a gravação consumir sua cadeia. Espera limitada, fora do mixer e da DPC. O arquivo ausente segue falha. */
+extern "C" void GsD3d_FilmeEsperaCaptura(void) {
+    if (sFilmeCapturaPedida != 0) {
+        LARGE_INTEGER t;
+        QueryPerformanceCounter(&t);
+        while (sFilmeCapturaFeita < sFilmeCapturaPedida && ms_desde(&t) < 2000.0) Sleep(1);
+        if (sFilmeCapturaFeita < sFilmeCapturaPedida)
+            Diario_Escrever("gs_d3d: ERRO: captura do filme %u não chegou em 2 s", sFilmeCapturaPedida);
+        sFilmeCapturaPedida = 0;
+    }
+}
+
 
 /* (thread do jogo) a vaga da imagem `imagem`, livre, para os planos; 0 sem memória (a imagem não aparece) */
-extern "C" int GsD3d_FilmeVaga(unsigned imagem, unsigned char **dados, unsigned *pitch, double *msEspera) {
+extern "C" int GsD3d_FilmeVaga(unsigned imagem, unsigned local, unsigned tipo, unsigned char **dados, unsigned *pitch, double *msEspera) {
     int k;
+    static int shots = -1;
+    GsD3d_FilmeEsperaCaptura();
+    if (shots < 0) shots = env_num("BT3_FILME_SHOTS", 0) == 1;
     *msEspera = 0.0;
     if (sDev == NULL) {
         return 0; /* (sem o backend da GPU ninguém desenharia nem soltaria as vagas) */
@@ -4686,11 +4719,15 @@ extern "C" int GsD3d_FilmeVaga(unsigned imagem, unsigned char **dados, unsigned 
         }
         *msEspera = ms_desde(&t0);
     }
+    sFilmeLocal[k] = local;
+    sFilmeTipo[k] = tipo;
     sFilmeImagemDa[k] = imagem;
     __lwsync(); /* (o número antes da marca: quem vê a vaga ocupada vê o número novo) */
     sFilmeOcupada[k] = 1;
     *dados = (unsigned char *)sFilmeTex[k]->dados;
     *pitch = sFilmeTex[k]->pitch;
+    if (shots && (local == 0 || local == 1000 || local == 2000 || local == (tipo == 2 ? 4199u : 2809u)))
+        sFilmeCapturaPedida = imagem;
     return 1;
 }
 
@@ -4730,6 +4767,81 @@ static void filme_desenha(const GsDraw *d, uint32_t n, int *cur) {
         sFilmeUltima = im;
     }
     sFilmeDes++;
+    sFilmeAlvoAtual = d->target;
+    sFilmeAtual.global = im;
+    sFilmeAtual.local = sFilmeLocal[k];
+    sFilmeAtual.tipo = sFilmeTipo[k];
+    sFilmeAtual.quadro = sQ->quadro;
+    /* A captura é do resultado do ps_filme, antes do fade. Assim a imagem 0 também é conferível.
+       Resolve o alvo pela mesma regra do fim do quadro; a próxima primitiva restaura seus estados. */
+    {
+        static int shots = -1;
+        unsigned local = sFilmeLocal[k], ultima = sFilmeTipo[k] == 2 ? 4199 : 2809;
+        if (shots < 0) shots = env_num("BT3_FILME_SHOTS", 0) == 1;
+        if (shots && (local == 0 || local == 1000 || local == 2000 || local == ultima)) {
+            char arquivo[40];
+            if (sEdRes) ed_descarrega(d->target, ED_LEITURA);
+            else sai_da_edram();
+            _snprintf(arquivo, sizeof(arquivo), "filme_%s_%05u.ppm", sFilmeTipo[k] == 2 ? "ed" : "op", local);
+            captura(d->target, sAlvoD[d->target].tex, arquivo);
+            __lwsync();
+            sFilmeCapturaFeita = im;
+            esquece_estado();
+            *cur = -1;
+        }
+    }
+}
+
+/* SamplesPlayed volta ao vblank por tempo de parede, e procura o bloco PCM correspondente no histórico.
+   O tempo do mftb é calibrado contra QPC desde a instalação da callback. Não zera a posição na primeira amostra. */
+static void filme_apresentou(void) {
+    D3DSWAP_STATUS st;
+    DWORD ult;
+    sDev->QuerySwapStatus(&st);
+    sFilmeAtual.swap = st.Swap;
+    sFilmePres[st.Swap % TELA_N] = sFilmeAtual;
+    if (!sTelaTem) return;
+    ult = sTelaUlt;
+    __lwsync();
+    if (!sFilmeTem) { sFilmeFeito = ult - 1; sFilmeTem = 1; }
+    if (ult - sFilmeFeito > TELA_N / 2) {
+        Diario_Escrever("filme_av: LACUNA nas trocas de vídeo");
+        sFilmeFeito = ult - 1;
+    }
+    while (sFilmeFeito != ult) {
+        DWORD troca = ++sFilmeFeito;
+        const FilmePres *p = &sFilmePres[troca % TELA_N];
+        const TelaEnt *e = &sTelaEnt[troca % TELA_N];
+        if (p->swap == troca && p->global == 0 && e->swap == troca && sFilmeVisto.global != 0) {
+            LARGE_INTEGER agora;
+            unsigned __int64 tbAgora = __mftb();
+            double tbPorMs;
+            QueryPerformanceCounter(&agora);
+            tbPorMs = (double)(tbAgora - sVbTb0) * (double)sFreq.QuadPart /
+                       ((double)(agora.QuadPart - sVbQ0.QuadPart) * 1000.0);
+            Diario_Escrever("filme_av_fim: tipo=%u global=%u imagem=%u tb=%I64u tb_ms=%.3f",
+                            sFilmeVisto.tipo, sFilmeVisto.global, sFilmeVisto.local, e->tb, tbPorMs);
+            memset(&sFilmeVisto, 0, sizeof(sFilmeVisto));
+        }
+        if (p->swap == troca && p->global != 0 && e->swap == troca) {
+            LARGE_INTEGER agora;
+            MEMORYSTATUS mem;
+            SomFilmeAmostra a;
+            unsigned __int64 tb = e->tb, tbAgora = __mftb();
+            double tbPorMs;
+            sFilmeVisto = *p;
+            QueryPerformanceCounter(&agora);
+            tbPorMs = (double)(tbAgora - sVbTb0) * (double)sFreq.QuadPart /
+                       ((double)(agora.QuadPart - sVbQ0.QuadPart) * 1000.0);
+            Som360_FilmeAmostra(tb, tbPorMs, &a);
+            GlobalMemoryStatus(&mem);
+            Diario_Escrever("filme_av: tipo=%u global=%u imagem=%u quadro=%u swap=%u vb=%u tb=%I64u tb_ms=%.3f "
+                            "valido=%u geracao=%u audio=%u janela_us=%u faltas=%u travas=%u silencios=%u erro=%u livre_kb=%u",
+                            p->tipo, p->global, p->local, p->quadro, troca, (unsigned)e->n, tb, tbPorMs,
+                            a.valido, a.geracao, a.posicao, a.janelaUs, a.faltas, a.travas, a.silencios, a.erro,
+                            (unsigned)(mem.dwAvailPhys >> 10));
+        }
+    }
 }
 
 /* (desenho, no fim do quadro, com a cerca dele) as vagas desenhadas recebem a cerca; as que a GPU já leu e as puladas
@@ -5308,6 +5420,8 @@ static void frame_end(void) {
 
     QueryPerformanceCounter(&t0);
     sQ = q;
+    memset(&sFilmeAtual, 0, sizeof(sFilmeAtual));
+    sFilmeAlvoAtual = -1;
     tempo_comeca(); /* (F5, etapa 8: lê o quadro de dois atrás) */
     if (!q->dividido) {
         grav_junta(); /* (com a divisão, na entrega) */
@@ -5493,6 +5607,7 @@ static void frame_end(void) {
         mostrado = i;
     }
     mtex = mostrado >= 0 && q->targets[mostrado].cleared ? sAlvoD[mostrado].tex : NULL;
+    if (mostrado != sFilmeAlvoAtual) memset(&sFilmeAtual, 0, sizeof(sFilmeAtual));
     if (every < 0) {
         every = getenv("BT3_SHOT") != NULL ? atoi(getenv("BT3_SHOT")) : 0;
     }
@@ -5536,6 +5651,7 @@ static void frame_end(void) {
     }
     tempo_poe(T_OUTROS);
     Passos_Apresentou(q->quadro, (unsigned)(msPresent * 1000.0));
+    if (sFilmeLog) filme_apresentou();
     gGsD3dEtapa = "fim do quadro: texturas soltas";
     /* nada do quadro fica preso no dispositivo: as texturas soltas podem ir quando a GPU terminar com elas */
     sDev->SetTexture(0, NULL);

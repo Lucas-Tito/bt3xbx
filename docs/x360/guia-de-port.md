@@ -1369,6 +1369,26 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `roteiros.sh` de outro agente, para uns minutos de CPU de um núcleo sem emulador. Como o `teste_som360.sh`: cópia
   temporária por tar em base64, sem trava; a trava é do emulador.
 
+### O filme com som (F6, etapa 7, `plano/F6/07.md`)
+
+- **A trava não congela a árvore de fontes.** Uma build que ficou enfileirada pode começar enquanto a revisão
+  ainda edita ou emenda o commit. Na primeira rodada desta etapa, x86/x86r ficaram num carimbo e PPC/gravador no
+  seguinte; a conferência recusou a origem antes do roteiro. Fechar a revisão antes de enfileirar a rodada final,
+  conservar a árvore e o HEAD até o fim e refazer todas as builds se a origem mudar.
+- **A frequência do laço do jogo não é a frequência de origem do filme.** Os dois MPEG têm `frame_rate_code=5`
+  (30 fps) e seus ADX duram exatamente N/30 segundos. O laço pede dois vblanks, nominalmente 29,97 fps. Para a
+  deriva, usar o tempo de origem `imagem * 1000/30`; para o ritmo, os vblanks reais e o aceite do jogo. Usar
+  29,97 nos dois lados esconderia até 140 ms no final. Não zerar o atraso na primeira amostra.
+- **`SamplesPlayed` da voz única inclui o silêncio e todos os sons; a posição decodificada do ADX inclui a fila.**
+  Guardar por buffer a posição do BGM que entrou na mistura, depois buscar o buffer que estava tocando no vblank
+  mostrado. A identidade é o `user` do retorno, o handle adxt. Troca de fluxo ganha uma geração. Falta da voz,
+  silêncio de recuperação ou histórico vencido invalidam a extrapolação para o vblank.
+- **A imagem 0 do filme não é o quadro 0 do GS e pode estar sob o fade.** `BT3_FILME_SHOTS=1` escolhe o índice local,
+  captura a conversão da GPU antes do fade e nomeia pelo filme e índice. A rodada de captura fixa escala 1 para a
+  redução ser a identidade. Medir ritmo e deriva em outra abertura, sem capturas.
+- **Memória física livre não conta os buffers retirados de um heap já reservado.** O teto do filme soma também
+  `Movie_Open`, o `sFrame` estático e o ES do decodificador; a diferença de `dwAvailPhys` sozinha subestima o custo.
+
 ### Efeitos e fluxos no 360 (F6, etapas 4 e 5, `plano/F6/04.md` e `05.md`)
 
 - **O estado que o jogo vê pode esperar uma leitura sem deixar de ser determinístico.** A duração de um fluxo vinha do

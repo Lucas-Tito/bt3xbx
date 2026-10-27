@@ -1,0 +1,19 @@
+# F6, etapa 7: repetir o final pela seleção de sagas, sem jogar a campanha.
+# Cartão vazio e BT3_DESBLOQUEIO=1. Sem BT3_NOMOVIE no console: boot.txt espera a abertura terminar inteira.
+# O WSL pula os filmes por contrato; o rastro de som prova o pedido de zs3used.adx, não a exibição nem a escuta.
+inclui boot.txt
+quadros 90
+aperta X ate tela 6
+# A primeira visita tem a explicação de Goku e, com tudo liberado, a de 100%. Deixar as vozes terminarem.
+quadros 3000
+aperta X                        # Episódios: abre a lista de sagas (focus 1, cursor 0)
+quadros 120
+aperta CIMA                     # a lista circular vai do primeiro item ao último, HISTSEL_ITEM_ENDING (8)
+quadros 120
+marca final selecionado
+aperta X                        # HistSel devolve 2, Hist_Main entra no modo 3
+quadros 180                     # cobre a saída da seleção; no console já está dentro do filme
+espera tela 6 max 10000          # 4.200 imagens no console; na x86 o filme termina sem janela
+quadros 120
+marca final retorno
+fim
