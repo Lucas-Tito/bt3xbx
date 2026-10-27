@@ -2116,3 +2116,6 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - O rateio de `BT3_CORTES=A,B` usa uma pilha de etapas exclusivas. A VU1 também chama o GIF; subtrair de tempos
   inclusivos sem considerar esse aninhamento conta envio duas vezes. A soma das etapas deve conservar o total.
   Os tempos incluem o relógio e a instrumentação por chamada; comparar ganhos com o perfil desligado também.
+- A comparação binária dos uniformes admite agrupar quatro palavras com XOR/OR sem mudar a igualdade. Não usar
+  comparação numérica de floats: sinais de zero e NaNs precisam manter os bits. Os uniformes só garantem quatro
+  bytes de alinhamento, portanto uma leitura de 64 bits seria uma hipótese adicional sobre o Xenon.

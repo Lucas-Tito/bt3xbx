@@ -1816,6 +1816,17 @@ static int iguais32(const void *a, const void *b, unsigned n) {
     }
     return 1;
 }
+/* O teste --vu1 entra pelo mesmo ramo da PPC; a x86 plana conserva o corpo original. */
+#include "../../x360/include/vu_iguais.h"
+static int vu_uniforme_igual(const void *a, const void *b) {
+    static int ligado = -1;
+    if (ligado < 0) {
+        const char *e = getenv("BT3_VU_FECHO");
+        ligado = e != NULL && atoi(e) != 0;
+    }
+    if (ligado) return vu_iguais4(a, b, sizeof(Vu0Uniform) / 4);
+    return iguais32(a, b, sizeof(Vu0Uniform) / 4);
+}
 static int same_state_vu(const GsDraw *a, const GsDraw *b) {
     return !a->native && a->vu == b->vu && a->target == b->target && a->tex == b->tex && a->sampler == b->sampler &&
            a->pipeline == b->pipeline && iguais32(a->mode, b->mode, 4) && a->misc[0] == b->misc[0] && a->misc[1] == b->misc[1] &&
@@ -1840,7 +1851,7 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
 #if defined(BT3_GPU_FALSO)
     EST_CONTA_FECHO(last, d, pu);
 #endif
-    if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
+    if (last != NULL && same_state_vu(last, d) && vu_uniforme_igual(&gsVuUni[last->uniform], pu)) {
         vu_faixa(gsDrawCount - 1, lo, hi, 1);
         last->count += d->count;
 #ifdef PORT_X360
