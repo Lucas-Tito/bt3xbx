@@ -2057,6 +2057,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   sai com o quadro e a distância de cada lado ao prazo (`BT3_PICOS_TELA`, seção 25).
 - **Imagens de 3 e de 1 aos pares, com os vblanks da janela exatamente 2 por passo, são quadros isolados que perderam o vblank**,
   não um passo lento: o seguinte entrou no tempo. Procure o quadro, não o passo.
+- **Uma repetição pode estar somada na duração, mas ainda reiniciar o prazo do diagnóstico** (F5, etapa 8, seção 27).
+  O `tela_troca` soma os 4 vblanks do Blast 2, mas calcula as folgas a partir da última troca, a repetição: GPU 5,5 ms
+  antes desse prazo corresponde a cerca de 27,8 ms depois do prazo da primeira entrada da imagem. Confira a âncora do prazo
+  antes de concluir que uma imagem longa tinha folga; na janela sem repetições, a leitura direta vale.
+- **O quadro que deixa uma imagem longa na tela é o seguinte ao número inicial da linha da tela.** Em 23/10, a imagem 6959
+  ficou 3 vblanks porque o 6960 terminou tarde. As imagens curtas também precisam ser listadas: as duas de 6911/6912 vieram
+  antes das longas, não como recuperação imediata de cada uma. Histogramas iguais não provam pares consecutivos.
+- **O filtro dos picos não mede o que deixou de imprimir.** Depois do cache pela origem, 5338 e 7017 somem tanto das linhas
+  da tela quanto das linhas `picos`; isso prova a apresentação, mas não mede a gravação ocupada depois nem lhe dá teto de
+  36 ms, pois o filtro consulta períodos de apresentação e do jogo. Não apresentar a subtração dos custos antigos como ganho
+  medido. E a partida livre tinha `BT3_TEMPOS=1` por padrão: comparar seu p99 com uma rodada sem marcas mistura duas mudanças.
 
 ### A correção da colisão das tabelas (F5, etapa 9, `plano/F5/09.md`, "A correção da colisão das tabelas")
 
