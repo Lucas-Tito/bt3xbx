@@ -221,9 +221,13 @@ void GsVu1_Unpack(uint32_t cmd, uint32_t num, uint32_t imm, const uint32_t *data
     uint64_t t;
     GS_FAM_INI(t);
     sUnpVia = 2;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_ENTRA(COR_UNPACK);
+#endif
     vu1_unpack(cmd, num, imm, data);
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_SAI();
+#endif
     if (gGsFam) {
         uint64_t d = GS_FAM_TIQUE() - t;
         gGsFamTiques[GS_FAM_UNPACK] += d;
@@ -922,9 +926,13 @@ void GsVu1_Call(int addr) {
         gGsFamVezes[GS_FAM_V_PROG]++; /* (os lotes da amostra) */
     }
     gGsFamNaVu1 = 1;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_ENTRA(COR_VU1);
+#endif
     vu1_call(addr);
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_SAI();
+#endif
     gGsFamNaVu1 = 0;
     GS_VU_MARCA(GS_FAM_V_PROG);
     gGsVuMede = 0;
@@ -952,9 +960,13 @@ void GsVu1_Call(int addr) {
 #endif
     GS_FAM_INI(t);
     gGsFamNaVu1 = 1;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_ENTRA(COR_VU1);
+#endif
     vu1_call(addr);
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_SAI();
+#endif
     gGsFamNaVu1 = 0;
 #ifdef BT3_TESTE_VU1
     if (sStatRuns != runs) {

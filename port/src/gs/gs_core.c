@@ -73,7 +73,7 @@ double Gs_FamMs(uint64_t tiques) {
 }
 #endif
 #endif
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 #include "../../x360/src/gs/cortes_impl.h"
 #endif
 unsigned gGsFbUploads; /* bit 0 / 1: pixels were uploaded into display buffer 0 / 0x70 since the back end last looked */
@@ -414,7 +414,7 @@ uint64_t Gs_TexOrigem(uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uin
 /* A hash of one 8 KB page of GS memory, recomputed only after an upload touched the page. The GPU back end keys
    its texture cache on these, so a texture the game uploads again unchanged (it streams the stage's textures to
    one address many times per frame) is recognised instead of decoded again. */
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 uint32_t Gs_PageHash_cortes_corpo(uint32_t page);
 uint32_t Gs_PageHash(uint32_t page) {
     uint32_t resultado;
@@ -987,7 +987,7 @@ static void envio_faixa32(const uint32_t *s, const uint8_t *pede_de, uint32_t pe
 }
 #endif
 
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 static void transfer_data_cortes_corpo(const uint8_t *p, uint32_t bytes);
 static void transfer_data(const uint8_t *p, uint32_t bytes) {
     GS_CORTES_ENTRA(COR_ENVIO);
@@ -1269,7 +1269,7 @@ int GsGpu_Enabled(void) {
 /* ------------------------------------------------------------------------------------------------ GIF */
 
 /* One run of GIF data (whole quadwords). */
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 void Gs_Gif_cortes_corpo(const uint8_t *p, uint32_t qwc);
 void Gs_Gif(const uint8_t *p, uint32_t qwc) {
     GS_CORTES_ENTRA(COR_GIF);
@@ -1359,7 +1359,7 @@ void Gs_Gif(const uint8_t *p, uint32_t qwc) {
 /* One run of VIF data (32-bit words): GIF data (DIRECT) goes to the GS, everything else to VU1 (gs_vu1.c).
    A command's data may continue in the next run (the command word often sits in the DMA tag, its data behind):
    DIRECT data is passed on as it comes, the data of the other commands is collected first. */
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 static void vif_cortes_corpo(const uint32_t *w, uint32_t count);
 static void vif(const uint32_t *w, uint32_t count) {
     GS_CORTES_ENTRA(COR_VIF);
@@ -2235,7 +2235,7 @@ static void run_chain(uint32_t tadr, int tte) {
     int pre = GsVu1_Pre();
 #endif
 
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     Gs_CortesInicio(gGsFrame);
 #endif
 
@@ -2299,15 +2299,15 @@ static void run_chain(uint32_t tadr, int tte) {
     memset(sStat, 0, sizeof(sStat));
     GsVu1_FrameEnd();
     if (sGpu) {
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
         GS_CORTES_ENTRA(COR_ENTREGA);
 #endif
         GsGpu_FrameEnd();
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
         GS_CORTES_SAI();
 #endif
     }
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     Gs_CortesFim();
 #endif
     screenshot();

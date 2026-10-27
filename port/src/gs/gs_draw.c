@@ -1601,7 +1601,7 @@ void GsGpu_PagesMoved(uint32_t delta) {
     }
 }
 
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 void GsGpu_Draw_cortes_corpo(int type, int ctx, const GsVertex *v);
 void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
     GS_CORTES_ENTRA(COR_CPU);
@@ -1817,6 +1817,7 @@ static int iguais32(const void *a, const void *b, unsigned n) {
     return 1;
 }
 /* O teste --vu1 entra pelo mesmo ramo da PPC; a x86 plana conserva o corpo original. */
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 #include "../../x360/include/vu_constantes.h"
 static void vu_limpa_constantes(Vu0Uniform *u, int familia) {
     static int ligado = -1;
@@ -1837,13 +1838,14 @@ static int vu_uniforme_igual(const void *a, const void *b) {
     if (ligado) return vu_iguais4(a, b, sizeof(Vu0Uniform) / 4);
     return iguais32(a, b, sizeof(Vu0Uniform) / 4);
 }
+#endif
 static int same_state_vu(const GsDraw *a, const GsDraw *b) {
     return !a->native && a->vu == b->vu && a->target == b->target && a->tex == b->tex && a->sampler == b->sampler &&
            a->pipeline == b->pipeline && iguais32(a->mode, b->mode, 4) && a->misc[0] == b->misc[0] && a->misc[1] == b->misc[1] &&
            a->misc[2] == b->misc[2] && a->misc[3] == b->misc[3] && a->blendc == b->blendc && iguais32(a->rect, b->rect, 4) &&
            iguais32(a->orig, b->orig, 4) && iguais32(a->scissor, b->scissor, 4);
 }
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
 static void vu_fecho_cortes_corpo(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi);
 static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) {
     GS_CORTES_ENTRA(COR_FECHO);
@@ -1861,7 +1863,11 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
 #if defined(BT3_GPU_FALSO)
     EST_CONTA_FECHO(last, d, pu);
 #endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     if (last != NULL && same_state_vu(last, d) && vu_uniforme_igual(&gsVuUni[last->uniform], pu)) {
+#else
+    if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
+#endif
         vu_faixa(gsDrawCount - 1, lo, hi, 1);
         last->count += d->count;
 #ifdef PORT_X360
@@ -1920,10 +1926,12 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
 #ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_ENTRA(COR_CONST);
+#endif
     pu = &gsVuUni[gsVuUniCount];
 #endif
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     vu_limpa_constantes(&VU_U, 3);
 #else
     memset(&VU_U, 0, sizeof(VU_U));
@@ -1936,7 +1944,7 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
     VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
     VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_SAI();
 #endif
 #ifdef PORT_X360
@@ -2063,10 +2071,12 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
 #ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_ENTRA(COR_CONST);
+#endif
     pu = &gsVuUni[gsVuUniCount];
 #endif
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     vu_limpa_constantes(&VU_U, 2);
 #else
     memset(&VU_U, 0, sizeof(VU_U));
@@ -2075,7 +2085,7 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
     VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
     VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_SAI();
 #endif
 #ifdef PORT_X360
@@ -2188,7 +2198,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
 #ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_ENTRA(COR_CONST);
+#endif
     pu = &gsVuUni[gsVuUniCount];
 #endif
     memcpy(VU_U.boneA, &consts[0], 64);
@@ -2204,7 +2216,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
     VU_U.misc[3] = (float)layer;
     VU_U.light2[0] = consts[41]; VU_U.light2[1] = consts[45]; VU_U.light2[2] = consts[49]; VU_U.light2[3] = consts[53];
-#ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     GS_CORTES_SAI();
 #endif
 #ifdef PORT_X360
