@@ -37,4 +37,8 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
    [F5/09](../F5/09.md) e os branches `f5-shenlong` e `codex/f5-namek`.
 5. **O estágio do deserto à noite escuro demais** (visto pelo Lucas jogando, 23/10): talvez o mesmo brilho somado
    mais fraco no 360 (a H9 de [F5/09](../F5/09.md)); sem captura ainda.
+6. **Arrumação para a finalização** (27/10/2026): o 360 achar a ISO convertida quando há a original e a convertida na
+   mesma pasta (hoje a busca pega a primeira `.iso`); a numeração repetida das seções das notas da F5; as pastas
+   temporárias do WSL; propor ao upstream as correções do cache que valem também para o PC (a colisão das tabelas do
+   `f5-clut` e as 16 cores do `codex/f5-clut16`).
 
