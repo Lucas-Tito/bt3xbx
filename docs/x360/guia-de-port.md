@@ -2203,6 +2203,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Não depender da calibração de `Gs_FamTrecho`: ela volta cedo quando as famílias estão desligadas e deixa o valor
   inicial de 49,875 MHz. As duas leituras do sistema ficam fora do intervalo exclusivo, não em cada lote.
 
+- **As marcas podem deslocar a imagem longa sem mudar sua contagem** (F5, gravação, seção 29). Marcando o
+  antecessor e o alvo juntos no console, a imagem longa passou para o antecessor: duas longas continuaram duas,
+  mas o prazo do alvo mudou de fase. Perfil pontual não certifica apresentação, mesmo descontando o trecho vazio.
+  Para localizar custo, medir o alvo sozinho em outra abertura e manter uma referência sem marcas; para certificar
+  zero, tirar as marcas. O rateio da gravação também acrescentou uma terceira longa nesta rodada.
+- **Medianas só se comparam com a faixa explícita e o backend identificado.** O rateio x86gv do combate inteiro
+  tinha mediana 4,635 ms; nos mesmos 126 quadros medidos no Xenon, 2,633. Entrega no falso inclui leitura/hash da
+  lista, não desenho do Xenos. `cortes.py` exige o rodapé do falso: a extração de console precisa conferir o fim
+  real e conservar as parcelas sem fabricar esse rodapé. O contador da parcela hash inclui acertos, enquanto o
+  dos picos conta recálculos de página. `Gs_PageHash` já guarda o resultado por geração: medir invalidações e
+  escritas repetidas antes de propor outro cache por geração.
+
 ### Identificação e avisos da ISO (F8, `plano/F8/01-avisos.md`)
 
 - **Identificar antes da marca evita orientar a conversão de outra região.** O volume e o `SYSTEM.CNF` distinguem a
