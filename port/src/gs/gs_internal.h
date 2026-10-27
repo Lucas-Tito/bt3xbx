@@ -60,6 +60,9 @@ extern uint32_t gGsPageEpoch; /* changes whenever any gGsPageGen entry does (F5,
 #define BT3_GS_ESPERAS 1 /* (F5, etapa 8, degrau 1) a thread de gravação com as esperas que o PS2 já fazia */
 #endif
 #ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+#include "../../x360/include/gs_cortes.h"
+#endif
 /* (degrau 2, etapa 3) gs_core.c: 1 se a gravação roda na sua thread (BT3_GS_THREAD=1); e quem para a thread de desenho
    (gs_draw.c a põe ao ligar a divisão; o Port_GsParar a chama depois de a gravação parar) */
 int Port_GsComThread(void);

@@ -1610,7 +1610,17 @@ void GsGpu_PagesMoved(uint32_t delta) {
     }
 }
 
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+void GsGpu_Draw_cortes_corpo(int type, int ctx, const GsVertex *v);
 void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
+    GS_CORTES_ENTRA(COR_CPU);
+    GsGpu_Draw_cortes_corpo(type, ctx, v);
+    GS_CORTES_SAI();
+}
+void GsGpu_Draw_cortes_corpo(int type, int ctx, const GsVertex *v) {
+#else
+void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
+#endif
     if (gPortResim) { /* a frame that is only being re-run: nothing is drawn */
         return;
     }
@@ -1815,13 +1825,87 @@ static int iguais32(const void *a, const void *b, unsigned n) {
     }
     return 1;
 }
+/* O teste --vu1 entra pelo mesmo ramo da PPC; a x86 plana conserva o corpo original. */
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+#include "../../x360/include/vu_constantes.h"
+static int vu_const_modo(void) {
+    static int modo = -1;
+    if (modo < 0) {
+        const char *e = getenv("BT3_VU_CONSTANTES");
+        modo = e != NULL ? atoi(e) : 0;
+    }
+    return modo;
+}
+static void vu_limpa_constantes(Vu0Uniform *u, int familia) {
+    if (vu_const_modo() != 0) vu_limpa_parcial(u, familia);
+    else memset(u, 0, sizeof(*u));
+}
+#include "../../x360/include/vu4_constantes.h"
+#ifdef BT3_GPU_FALSO
+static int sVu4Confere = -1;
+static unsigned sVu4Identidades;
+static void vu4_const_confere(const Vu0Uniform *u, const float *c, uint64_t xy, uint64_t z, int acerto) {
+    static unsigned acertos, novos;
+    if (sVu4Confere < 0) {
+        const char *e = getenv("BT3_VU_CONST_CONFERE");
+        sVu4Confere = e != NULL && atoi(e) != 0;
+    }
+    if (!sVu4Confere) return;
+    if (!vu4_uniforme_confere(u, c, xy, z)) {
+        fprintf(stderr, "FALHA: constantes do cenario diferentes no quadro %u\n", gGsFrame);
+        abort();
+    }
+    acertos += acerto != 0;
+    novos += acerto == 0;
+    if (acertos + novos == 1 || (acertos + novos) % 100000 == 0) {
+        fprintf(stderr, "constantes: cenario: %u acertos, %u novos, 0 diferentes\n", acertos, novos);
+    }
+}
+#endif
+#include "../../x360/include/vu_iguais.h"
+static int vu_uniforme_igual(const void *a, const void *b) {
+    static int ligado = -1;
+    if (ligado < 0) {
+        const char *e = getenv("BT3_VU_FECHO");
+        ligado = e != NULL && atoi(e) != 0;
+    }
+    if (ligado) {
+        if (vu4_uniforme_conhecido(a, b, gGsFrame)) {
+#ifdef BT3_GPU_FALSO
+            if (sVu4Confere > 0) {
+                if (!iguais32(a, b, sizeof(Vu0Uniform) / 4)) {
+                    fprintf(stderr, "FALHA: identidade do uniforme incorreta no quadro %u\n", gGsFrame);
+                    abort();
+                }
+                if (++sVu4Identidades == 1 || sVu4Identidades % 100000 == 0) {
+                    fprintf(stderr, "constantes: identidade: %u igualdades conferidas, 0 diferentes\n", sVu4Identidades);
+                }
+            }
+#endif
+            return 1;
+        }
+        return vu_iguais4(a, b, sizeof(Vu0Uniform) / 4);
+    }
+    return iguais32(a, b, sizeof(Vu0Uniform) / 4);
+}
+#endif
 static int same_state_vu(const GsDraw *a, const GsDraw *b) {
     return !a->native && a->vu == b->vu && a->target == b->target && a->tex == b->tex && a->sampler == b->sampler &&
            a->pipeline == b->pipeline && iguais32(a->mode, b->mode, 4) && a->misc[0] == b->misc[0] && a->misc[1] == b->misc[1] &&
            a->misc[2] == b->misc[2] && a->misc[3] == b->misc[3] && a->blendc == b->blendc && iguais32(a->rect, b->rect, 4) &&
            iguais32(a->orig, b->orig, 4) && iguais32(a->scissor, b->scissor, 4);
 }
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+static void vu_fecho_cortes_corpo(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi);
 static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) {
+    GS_CORTES_ENTRA(COR_FECHO);
+    vu_fecho_cortes_corpo(d, pu, lo, hi);
+    GS_CORTES_SAI();
+}
+static void vu_fecho_cortes_corpo(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) {
+#else
+static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) {
+#endif
     GsDraw *last;
     gsTargets[d->target].draws++;
     gsTargets[d->target].gen = gGsPageGen[gsTargets[d->target].fbp & 511];
@@ -1829,7 +1913,11 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
 #if defined(BT3_GPU_FALSO)
     EST_CONTA_FECHO(last, d, pu);
 #endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    if (last != NULL && same_state_vu(last, d) && vu_uniforme_igual(&gsVuUni[last->uniform], pu)) {
+#else
     if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
+#endif
         vu_faixa(gsDrawCount - 1, lo, hi, 1);
         last->count += d->count;
 #ifdef PORT_X360
@@ -1837,6 +1925,12 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
 #endif
         return;
     }
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    if (pu != &gsVuUni[gsVuUniCount]) {
+        gsVuUni[gsVuUniCount] = *pu;
+        if (pu == &sVu4Const.u) vu4_uniforme_gravou(&gsVuUni[gsVuUniCount], gGsFrame);
+    }
+#endif
     d->uniform = (int)gsVuUniCount++; /* (pu é a vaga gsVuUni[gsVuUniCount]) */
     vu_faixa(gsDrawCount, lo, hi, 0);
     gsDraws[gsDrawCount++] = *d;
@@ -1888,9 +1982,16 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
 #ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    GS_CORTES_ENTRA(COR_CONST);
+#endif
     pu = &gsVuUni[gsVuUniCount];
 #endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    vu_limpa_constantes(&VU_U, 3);
+#else
     memset(&VU_U, 0, sizeof(VU_U));
+#endif
     memcpy(VU_U.boneA, &consts[0x0C * 4], 64);  /* world -> shadow camera */
     VU_U.pivotA[0] = consts[0x10 * 4];          /* texture scale */
     VU_U.pivotB[0] = us;
@@ -1899,6 +2000,9 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
     VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
     VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    GS_CORTES_SAI();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
@@ -2023,13 +2127,35 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
 #ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    GS_CORTES_ENTRA(COR_CONST);
+#endif
     pu = &gsVuUni[gsVuUniCount];
 #endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    if (vu_const_modo() == 2) {
+        int acerto;
+        pu = vu4_uniforme(consts, gGs.xyoffset[ctx], gGs.zbuf[ctx], &acerto);
+#ifdef BT3_GPU_FALSO
+        vu4_const_confere(pu, consts, gGs.xyoffset[ctx], gGs.zbuf[ctx], acerto);
+#endif
+    } else {
+        vu_limpa_constantes(&VU_U, 2);
+        memcpy(VU_U.screen, &consts[0], 64);
+        VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
+        VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
+        VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+    }
+#else
     memset(&VU_U, 0, sizeof(VU_U));
     memcpy(VU_U.screen, &consts[0], 64);
     VU_U.misc[0] = (float)(gGs.xyoffset[ctx] & 0xFFFF) / 16.0f;
     VU_U.misc[1] = (float)((gGs.xyoffset[ctx] >> 32) & 0xFFFF) / 16.0f;
     VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
+#endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    GS_CORTES_SAI();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
@@ -2140,6 +2266,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     GS_VU_MARCA(GS_FAM_V_ESTADO);
 #endif
 #ifdef BT3_GS_ESPERAS
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    GS_CORTES_ENTRA(COR_CONST);
+#endif
     pu = &gsVuUni[gsVuUniCount];
 #endif
     memcpy(VU_U.boneA, &consts[0], 64);
@@ -2155,6 +2284,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     VU_U.misc[2] = ((gGs.zbuf[ctx] >> 24) & 15) == 0 ? 4294967295.0f : ((gGs.zbuf[ctx] >> 24) & 15) == 1 ? 16777215.0f : 65535.0f;
     VU_U.misc[3] = (float)layer;
     VU_U.light2[0] = consts[41]; VU_U.light2[1] = consts[45]; VU_U.light2[2] = consts[49]; VU_U.light2[3] = consts[53];
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    GS_CORTES_SAI();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif

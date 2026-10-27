@@ -2145,3 +2145,34 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   próprios filhos. Antes do `som.sh controles`, o executor precisa definir também `BT3_SOUND_TICKS=1`,
   `BT3_DESBLOQUEIO=1`, `BT3_NOMOVIE=1`, `BT3_MENU_ITEM4=0`, `BT3_GS=none` e `BT3_SETTINGS=`; sem isso a rodada
   nova do gravador pode ter outro estado. As listas GPU sobrescrevem o desenho apenas no seu subshell.
+
+### O rateio pontual da gravação e da GPU (F5, cortes)
+
+- O perfil de GPU antigo fica mudo em `Passos_Medindo()`. `BT3_CORTES_GPU=A,B` seleciona quadros nessa janela,
+  guarda o número do quadro emitido junto das marcas e drena os dois buffers mesmo depois da faixa selecionada.
+  Sem o dreno, selecionar só o 6960 nunca publica a sua GPU. Não chamar o quadro leitor de quadro medido.
+- O rateio de `BT3_CORTES=A,B` usa uma pilha de etapas exclusivas. A VU1 também chama o GIF; subtrair de tempos
+  inclusivos sem considerar esse aninhamento conta envio duas vezes. A soma das etapas deve conservar o total.
+  Os tempos incluem o relógio e a instrumentação por chamada; comparar ganhos com o perfil desligado também.
+- A comparação binária dos uniformes admite agrupar quatro palavras com XOR/OR sem mudar a igualdade. Não usar
+  comparação numérica de floats: sinais de zero e NaNs precisam manter os bits. Os uniformes só garantem quatro
+  bytes de alinhamento, portanto uma leitura de 64 bits seria uma hipótese adicional sobre o Xenon.
+- Nos programas 4 e 6, o bloco uniforme tem 304 bytes, mas 76 e 152 bytes recebem valores logo depois da limpeza.
+  Uma limpeza parcial precisa provar também os campos que o shader não lê: eles entram no hash binário da lista.
+  Preencher a vaga com bytes não nulos antes do teste encontra os campos esquecidos que uma área estática zerada esconderia.
+- `BT3_GPU_LISTA` e `BT3_GPU_NORMAL` no backend falso são chaves por presença: `=0` ainda grava as listas e calcula
+  o hash normal. Para uma medida sem esse trabalho, retire as variáveis do ambiente. Registre separadamente o tempo
+  total do roteiro e o das parcelas instrumentadas, sem chamar a entrega do falso de tempo de desenho do Xenos.
+- O `save_mc.sh` preserva sua saída antiga, em que estados diferentes só são impressos. Ao integrá-lo numa rodada
+  automática, não basta aceitar RC 0: o serviço dos cortes confere os estados A/B1/B2 contra a x86, exige dados não
+  vazios e compara o save recuperado de B2. A comparação adicional foi vista recusando estados adulterados.
+- A limpeza parcial e a comparação em grupos cortam centésimos de ms na x86gv, mas não demonstram ganho de ritmo.
+  Para o cenário, o uniforme só depende de `consts[0..15]`, XYOFFSET e ZBUF.PSM. Uma memória desses valores evita
+  montar o bloco e converter inteiros para float em cada lote. Sua vaga é da gravação: o fecho precisa copiá-la
+  para a lista antes do próximo lote quando abre um desenho. Conferir cada acerto contra a montagem completa.
+- Uma vaga estática não é identidade suficiente para pular a igualdade de uniformes: seu endereço não muda quando
+  a matriz muda. A cópia gravada precisa do endereço da lista, do quadro e da versão da entrada; o teste troca cada
+  um separadamente. A versão só avança numa falha da chave completa, e a lista recebe os 304 bytes antes da marca.
+- O diagnóstico de gravação do 360 calibra o mftb contra o relógio do sistema mesmo com `BT3_TEMPOS=0`.
+  Não depender da calibração de `Gs_FamTrecho`: ela volta cedo quando as famílias estão desligadas e deixa o valor
+  inicial de 49,875 MHz. As duas leituras do sistema ficam fora do intervalo exclusivo, não em cada lote.
