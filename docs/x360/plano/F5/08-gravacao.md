@@ -2452,6 +2452,11 @@ colisões**, em 560.547, 430.109 e 239.176 leituras de paleta; nenhum CSM2. Não
 falhas. Restaurar a chave antiga numa cópia acusa 144 colisões, todas nas cores 8 a 15, e o teste sai 1. O verificador do
 log também recusa o resumo ausente e a contagem adulterada.
 
+**Listas na x86gv [medido, `662a69b7`].** `divergencias.py --normal`: 0 quadros diferentes nos 8.380 do duelo, 7.386 do
+treino e 5.818 do Shenlong. A correção também deixa de hashear cores de fora da paleta: as decodificações caíram de
+2.431 para 2.388, de 1.248 para 1.157 e de 531 para 519. Por isso a lista crua e o acumulado chamado de "hash do jogo"
+no `gpu_falso` mudam, apesar da lista normal igual. A `.text` plana do mesmo commit deu o SHA-1 exigido abaixo.
+
 **Rodada final preparada.** `clut16_rodada.sh COMMIT BASE`, serviço `bt3-clut16`, resumo `~/f5-clut16/provas.resumo`,
 terminando em `FIM`. Recompila base e commit final, compara objetos sem depuração e a `.text` plana com
 `43444ea4d03a6d448aa1ae74a631e35b356a7caa`, compara as listas normais dos três roteiros na x86gv e ppcg com
