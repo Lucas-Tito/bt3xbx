@@ -23,3 +23,18 @@ A mensagem é a mesma para qualquer ISO sem a marca.
    memória, a queda), as telas de falha e qualquer texto do port na tela. O que vai só para o log (`bt3xbx.log`,
    `saida.txt`) pode seguir em português. Fazer o levantamento dos textos visíveis (as chamadas de `XShowMessageBoxUI`,
    as telas de cor por fase e os textos desenhados pelo port) antes de traduzir.
+
+## Fechamento de gaps, antes do release (27/10/2026)
+
+Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não travar as fases:
+
+4. **O preto intermitente de Namek na animação do Shenlong** (vinha da F5, etapa 9): no começo da animação, com as
+   esferas subindo, um pedaço do céu e da água fica preto e volta. O pulso do brilho do Shenlong, que era outro
+   defeito, foi corrigido (o cache das tabelas, `f5-clut`). Já testado no console sem resolver: o cache da GPU
+   (`BT3_INVALIDA`), os alvos limpos, o alfa (`BT3_ALFA255`, `BT3_ALFA_INT`), o alvo sobreposto (`BT3_PULA_FBP`), o
+   brilho em 100% (`BT3_GLOW`) e todos os efeitos de tela fora. O céu são 32 triângulos da CPU com Gouraud e CLUT
+   estável; a água, grupos da VU1 com DATE e FBA. Estado, hipóteses e a rodada de 4 aberturas preparada:
+   [F5/09](../F5/09.md) e os branches `f5-shenlong` e `codex/f5-namek`.
+5. **O estágio do deserto à noite escuro demais** (visto pelo Lucas jogando, 23/10): talvez o mesmo brilho somado
+   mais fraco no 360 (a H9 de [F5/09](../F5/09.md)); sem captura ainda.
+
