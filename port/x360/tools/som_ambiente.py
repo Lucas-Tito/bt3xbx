@@ -66,6 +66,7 @@ INVENTARIO = {
     "BT3_SOM_TESTE": ("saida", "som360.cpp: =1 o tom de teste no começo"),
     "BT3_SOM_TESTE_HZ": ("saida", "som360.cpp: a frequência do tom de teste"),
     "BT3_SOM_TESTE_S": ("saida", "som360.cpp: a duração da primeira fase do tom de teste"),
+    "BT3_SOM_DERIVA": ("saida", "som360.cpp: =1 registra SamplesPlayed, BGM e vblanks por segundo para som_deriva.py"),
     "BT3_FLUXO_BLOCO": ("tempo", "fluxo.c (o caminho em blocos do 360 e o teste_som --fluxo): o tamanho do bloco lido; "
                         "muda quando os dados chegam, não o que o jogo vê (a vista conta os vblanks até o cabeçalho)"),
     "BT3_FLUXO_SABOTA": ("saida", "fluxo.c, só fora do 360 (#ifndef _XBOX): =1 troca um byte de cada bloco depois do "

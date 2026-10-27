@@ -1250,6 +1250,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 
 ### O som no WSL (F6, etapa 2, `plano/F6/02.md`)
 
+- **Deriva de áudio não se mede por blocos enviados** (F6, etapa 8, `plano/F6/08.md`). Eles incluem até 42,7 ms
+  ainda na fila, e `SamplesPlayed` também conta silêncio. Registrar a posição consumida com `GetState(..., 0)`,
+  junto com vblanks e um relógio do BGM que conte saídas úteis sem voltar no laço. Exigir a mesma geração e a mesma
+  luta por dez minutos; falta de dado, troca de música ou juntar lutas curtas não valem. `som_deriva.py` conserva
+  a incerteza de um vblank no limite de 100 ms e recusa log sem os dados, em vez de inferir posição tocada.
+- **Conferir o consumidor da Guide no código**, mesmo se o plano disser que ela pausa a luta. Em `3e1f34bd` não
+  havia consumidor de `XN_SYS_UI` no port. A etapa 8 instalou o do som no vigia, consultado inclusive durante o
+  tom longo; os handles BGM e MAP identificam música, e `user NULL` do sampler não pode ser confundido com um
+  handle de música ainda não criado. O núcleo preserva fila e fase, mas só o console prova a pausa da luta.
+
 - **As referências do `.dat` e do `.swap` do 360 mudaram em 22/10/2026** (main `a14c59a`, a etapa 3 da F6): de
   `6d30baaf87b1177fb2359a855f8befc0` e `a7cf723fbfaea860fcc3707ad288e755` para `fb489b2f6e00d0e4de7e394f7037540c` e
   `abbd7589c8425797c4a2639068c9bf54`. A `xaudio2.lib` entra em toda build do 360 (mesmo com o som desligado) e põe 0x90020

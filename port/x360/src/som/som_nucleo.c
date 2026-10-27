@@ -31,6 +31,7 @@ struct SDL_AudioStream {
     int nresto;          /* bytes de um quadro incompleto (a SDL aceita qualquer tamanho) */
     int f;               /* a fase: a posição entre a e b, em 1/SOM_TAXA de quadro do fluxo */
     short a[2], b[2];
+    SomRelogio relogio;
     struct SDL_AudioStream *prox;
 };
 
@@ -38,6 +39,30 @@ static SDL_AudioStream *sFluxos;
 static const char *sErro = "";
 static SomContadores sCont;
 static int sAcc[PEDACO * 2];
+static int sGuide;
+static void *sBgm, *sMap;
+static unsigned sGeracao;
+
+void SomNucleo_Guide(int aberta, void *bgm, void *map) {
+    sGuide = aberta != 0;
+    sBgm = bgm;
+    sMap = map;
+}
+
+int SomNucleo_Relogio(void *user, SomRelogio *r) {
+    SDL_AudioStream *s;
+    memset(r, 0, sizeof(*r));
+    if (user == NULL) {
+        return 0;
+    }
+    for (s = sFluxos; s != NULL; s = s->prox) {
+        if (s->ligado && s->user == user) {
+            *r = s->relogio;
+            return 1;
+        }
+    }
+    return 0;
+}
 
 const char *SomNucleo_Erro(void) {
     return sErro;
@@ -73,6 +98,7 @@ SDL_AudioStream *SDL_CreateAudioStream(const SDL_AudioSpec *de, const SDL_AudioS
     s->ganho = SOM_GANHO_UM;
     zera_fase(s);
     som_travar();
+    s->relogio.geracao = ++sGeracao;
     s->prox = sFluxos;
     sFluxos = s;
     sCont.fluxos++;
@@ -278,6 +304,8 @@ static void um_fluxo(SDL_AudioStream *s, int n) {
         while (s->f >= SOM_TAXA) {
             if (s->n == 0) {
                 sCont.curtos += (unsigned)(n - i);
+                s->relogio.curtos += (unsigned)(n - i);
+                s->relogio.quadros += (unsigned)i;
                 return;
             }
             anda(s);
@@ -290,6 +318,7 @@ static void um_fluxo(SDL_AudioStream *s, int n) {
         }
         s->f += s->taxa;
     }
+    s->relogio.quadros += (unsigned)n;
 }
 
 void SomNucleo_Misturar(short *saida, int quadros) {
@@ -305,7 +334,8 @@ void SomNucleo_Misturar(short *saida, int quadros) {
             ordem[k++] = s;
         }
         for (i = k - 1; i >= 0; i--) {
-            if (ordem[i]->ligado) {
+            s = ordem[i];
+            if (s->ligado && (!sGuide || (s->user != NULL && (s->user == sBgm || s->user == sMap)))) {
                 um_fluxo(ordem[i], n);
             }
         }
