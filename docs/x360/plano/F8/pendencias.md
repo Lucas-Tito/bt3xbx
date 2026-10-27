@@ -42,3 +42,8 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
    temporárias do WSL; propor ao upstream as correções do cache que valem também para o PC (a colisão das tabelas do
    `f5-clut` e as 16 cores do `codex/f5-clut16`).
 
+## A abertura do repositório, a última parte do plano (27/10/2026)
+
+7. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
+   guia de instalação e o de contribuição; e o GitHub configurado para receber as contribuições.
+
