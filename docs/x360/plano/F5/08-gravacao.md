@@ -2156,3 +2156,279 @@ análise o Deck e o WSL estavam fora da rede e nenhum ssh foi feito. Os itens 1 
 de antes). Ligar por padrão pede a prova do Deck conferida (sobretudo as sabotagens e a GPU falsa atrasada 2 sem `relido diferente`)
 e a imagem vista nos especiais; o ganho que justifica ligar é a memória (22 MB) e a folga do desenho, não o tempo de quadro. O
 próximo corte de tempo tem de vir da gravação ou do jogo (`ocupada` e a espera do jogo nos picos), não do desenho.
+
+## 25. Rumo a nenhuma imagem longa na luta: o que os logs dizem e a tela por imagem (23/10/2026)
+
+Branch `f5-zero`, sobre a main `5021312`. A meta do Lucas: **nenhum pico na luta** (fora dela não importa). Pedido: ligar cada
+imagem que ficou 3 vblanks no combate ao quadro e à causa, com as aberturas de 23/10, e propor o caminho para zero; se o log não
+bastar, uma chave barata que registre isso. Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+### O que os logs de 23/10 dizem [medido]
+
+Dez aberturas do `f5_duelo` pelo roteiro, todas a 1,33 (logs fora do git): `build/sessao_2310d/` `kbase`, `kenv` (envio por linhas),
+`kvu` (VU1 direto), `kambos` (os dois), as quatro com `BT3_PICOS=36`; `x0`, `x1` (FXAA 0 e 1) e `x1m` (FXAA com `BT3_TEMPOS=1`);
+`build/sessao_2310c/` `m133e0` e `m133e1`; `build/sessao_2310b/vb2` (com som e `BT3_PICOS=36`). As outras sem som.
+
+| Janela (passos) | Imagens de 3 vblanks, nas 10 | De 1 vblank | De 4 ou mais | Maior intervalo na CPU depois do `Present` |
+|---|---|---|---|---|
+| 1, a abertura da luta (684) | 11 (de 0 a 3 por abertura) | 0 | 1 (só na `kambos`) | 64 a 75 ms em **todas** |
+| 2, o combate (2.334) | 41 (de 2 a 7) | 44 (de 3 a 7) | 0 | 44 a 52 ms |
+
+1. **As imagens de 3 e as de 1 vêm aos pares**, e os vblanks da janela 2 são exatamente 2 por passo nas 10 (4.668): cada imagem
+   longa é um quadro que perdeu o vblank, e o seguinte entrou no tempo (a de 1). O ritmo não se perde; o tranco é de um quadro.
+2. **A contagem da tela não vê as repetições.** No quadro 5338 (logo depois da ação 0x10f do roteiro, o Blast 2: 65 texturas
+   novas, 3,2 M pixels, 33 ms de decodificação e 7 ms do XG, a gravação ocupada 77 a 80 ms) a tela ficou parada 64 a 75 ms em
+   todas as aberturas. Em 4 das 5 com `picos` a linha diz `1 repetidas`: o `GsD3d_Repete` (50 ms sem quadro) apresentou a mesma
+   imagem de novo, e a callback de vblank contou duas imagens de 2. Só na `kambos` (64 ms, sem repetição) ela aparece como "4 ou
+   mais 1". **Há uma imagem de 4 vblanks por abertura, na luta, que o critério da seção 19 não vê.**
+3. **O jogo não é a causa no combate**: nas linhas `picos` da janela 2 das quatro aberturas, o período do jogo fica entre 33,1 e
+   33,5 ms, e os resumos dizem `0 pelo jogo`; o trabalho p99 é 30,4 a 33,3 ms.
+4. **Dois quadros se repetem nas quatro aberturas com `picos`**, com o período da GPU (do fim de um quadro ao do anterior) de 44 a
+   50 ms, que não cabe em 2 vblanks: **6960** (os desenhos caem de uns 2.400 para 1.400, uma troca de cena; o `frame_end` dura só
+   6 a 9 ms, mas a gravação entregou uns 6,5 ms depois do período e a GPU acabou 16 ms depois da CPU, contra 10 a 14 nos outros)
+   e **7017** (15 texturas novas, 1 M pixels, 10,6 ms na gravação: ocupada 30 a 32 ms, contra 17 a 19 nos vizinhos). Na `kenv` e
+   na `kambos`, que tiveram 2 imagens de 3 no combate, são essas duas [estimado: o log não liga a imagem ao quadro].
+5. **O resto varia de abertura a abertura com o mesmo roteiro** (de 0 a 5): quadros com o período da GPU de 36 a 39 ms (6087,
+   6995, 7063, 6930, 6990) entram ou não no prazo conforme a folga de fase daquela abertura. Os cortes de CPU da etapa 8 (envio por
+   linhas, VU1 direto) não separam do ruído: 5, 2, 3 e 2 com um cada.
+6. **O sistema não aparece**: o quadro 4807 teve o mesmo intervalo (36,5 ms) nas quatro com `picos`, com a escritora do diário
+   gravando 109 a 130 ms nele em três e parada na `kbase`; as aberturas sem som (`kbase` 5, `x0` 7) têm tantas quanto a com som
+   (`vb2` 5).
+7. **A GPU a 1,33** (`x1m`, as linhas de 60 quadros fora das janelas): 20 a 26 ms por quadro no combate (com uns 4 ms das marcas
+   da medição) e 32,7 ms (pior 33,0) no trecho do Blast 2 e da pausa (quadros 5340 a 5399).
+
+### Por que o log não liga a imagem ao quadro [lido]
+
+- A callback de vblank (`vblank_cb`) só soma: quantas imagens ficaram 1, 2, 3 ou 4 vblanks, sem o número da troca nem o quadro.
+- As linhas `picos` saem pelo intervalo na CPU depois do `Present` acima do limiar (36 ms); uma imagem que entrou um vblank tarde
+  com o intervalo na CPU abaixo dele não tem linha, e um quadro com linha pode ter entrado no tempo.
+- Os carimbos do `picos` são períodos (de uma entrega à anterior), não momentos: não dá para saber a que distância do vblank cada
+  lado entregou.
+- A repetição é uma troca nova com a mesma imagem.
+
+O que falta registrar: **o número da troca de cada `Present`** (o `QuerySwapStatus` logo depois dele, que a amostra
+`DualFrameAsyncSwaps` do XDK usa assim) e **o vblank em que cada troca entrou**, com o `mftb` dele (o `D3DVBLANKDATA.Swap` na
+callback); **o `mftb` de cada lado do quadro** (a entrega do jogo, a da gravação, o `Present`, a GPU acabando); e, para cada
+troca, **o prazo**: o segundo vblank depois de a imagem anterior entrar.
+
+### A chave `BT3_PICOS_TELA=1` (commit `dac2466`)
+
+Só no `gs_d3d.cpp` (360), desligada por padrão; nada portável muda.
+
+- **A DPC** guarda, por troca, o vblank e o `mftb` em que ela entrou (um anel de 64, só inteiros: no `dumpbin` do `vblank_cb`,
+  `lwz`, `stw`, `std`, `mftb`, `lwsync` e as chamadas, nenhuma instrução de float nem de vetor).
+- **O desenho**, logo depois de cada `Present` (o do quadro e o do `GsD3d_Repete`), guarda por troca o quadro do GS, se é uma
+  repetição e o `mftb`; e lê as trocas que entraram desde a última vez. Os carimbos dos três lados são os do `picos` (`PicoJ` e
+  `PicoG` ganham o `mftb` da entrega); sem `BT3_PICOS`, a chave liga o `picos` com limiar de 100.000 ms (os carimbos sem as linhas).
+- **Na janela do passos**, uma linha por imagem de fato (as repetições somadas à imagem que repetem) que não ficou 2 vblanks:
+
+```
+picos: tela: a imagem do quadro A ficou N vblanks na tela (K na última troca); a seguinte, do quadro B (troca S), entrou no
+vblank V; até o prazo (+ antes, - depois): a entrega do jogo J, a da gravação G, o Present P, a GPU acabou U ms; o quadro: jogo
+..., gravação ocupada ... (sem trabalho ...; texturas ..., ... ms), frame_end ...; a troca anterior: Present ..., GPU ... ms antes
+do prazo dela
+```
+
+- **No fim de cada janela**, `picos: tela, janela:` com as trocas, as repetições, as trocas sem o quadro, as puladas, as imagens de
+  fato por vblanks e a folga até o prazo de todas as trocas (mínimo, p1, p10 e mediana, da GPU acabando e do `Present`).
+- **O teste** `port/x360/tools/teste_tela.sh` recorta do `gs_d3d.cpp` os anéis e o `tela_*` e os compila com o `teste_tela.cpp`
+  (g++ daqui; o relógio, a DPC, o `QuerySwapStatus` e os carimbos simulados): uma cena com uma imagem de 3, uma de 1 e um engasgo
+  de 4 escondido por uma repetição; "tudo certo" [medido]. **Os cinco mutantes saem com 1**: a repetição ignorada (`rep = 0`, 3
+  falhas), a soma trocada por atribuição (1), o prazo a 1 vblank (1), só as imagens acima de 2 (1) e a repetição contada como
+  imagem (2).
+- **A build** (`build_f2.sh` no `dac2466`, carimbo `dac2466 diff:da39a3ee5e`): 317 de 317 fontes sem erro, 0 avisos no `gs_d3d`,
+  os mesmos 103 stubs, `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e `default.swap` `abbd7589c8425797c4a2639068c9bf54`,
+  **`default.xex` `7cbc25ea06341cbafc2b4e55417b4bd0`**.
+
+### O caminho para zero (proposta) [estimado]
+
+| Ordem | Correção | O que tira, por abertura | Custo |
+|---|---|---|---|
+| 1 | **A medida**: a linha `tela` do passos somando as repetições à imagem que repetem (o desenho passa à DPC o número das trocas repetidas) e, na luta, sem `GsD3d_Repete` enquanto a gravação trabalha num quadro | nada na tela; o critério passa a ver a imagem de 4 do Blast 2 | pequeno, só no 360 |
+| 2 | **As texturas novas fora da gravação**: o cache pela origem (seção 17, (a): na luta, 81% dos pixels decodificados são conteúdo já visto) e, para a primeira vez (o Blast 2), a decodificação numa thread auxiliar (seção 17, (b)) | a imagem de 4 da janela 1 e a de 3 do 7017 (umas 1 + 1) | médio; a lista do WSL prova a imagem |
+| 3a | **A folga de fase pela cadeia**: cortar a gravação, o desenho e a GPU do quadro (a GPU a 1,33 é a maior parcela) | as de 3 que passam do prazo por poucos ms (de 0 a 5) | depende do que a chave mostrar |
+| 3b | **Um vblank de folga na luta**: `D3DRS_PRESENTINTERVAL` em `D3DPRESENT_INTERVAL_TWO` só na luta (o 360 muda por quadro; a amostra `MultiRateRender` do XDK faz isso) e o primeiro quadro da luta um vblank mais tarde | as de fase (6960 e as variáveis): todas as que atrasam menos de 16,6 ms | **16,6 ms a mais do controle à tela na luta**, contra o "nenhum quadro a mais de atraso" da seção 19: decisão do Lucas |
+
+Com 1 e 2 sobram as de fase (de 1 a 5 por abertura); 3a ou 3b decide-se pela folga que a chave medir: se o p1 da folga da GPU for
+de poucos ms e as imagens longas passarem do prazo por poucos ms, cortar a cadeia rende; se as longas passarem por 6 a 16 ms
+(o 6960), só a folga de um vblank zera.
+
+### A rodada no console proposta
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-zero`: `default.xex`/`.dat`/`.swap` do `dac2466`, `f5_duelo.txt` e `boot.txt`
+(iguais aos de `port/x360/roteiros/`), `ambiente_z1.txt` e `ambiente_z2.txt` (o jogo como ele roda, com os padrões da main e o
+som, mais `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_PICOS_TELA=1`; saves novos `saves_zero_z1` e `saves_zero_z2`); o `ambiente.txt` é a
+cópia do `ambiente_z1.txt`. As duas aberturas iguais: o dobro de casos.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_z1.txt build/x360/f2/ambiente_z2.txt
+# abertura 1; depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_z2.txt
+# abertura 2; baixar o log de novo
+python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "dac2466 diff:da39a3ee5e"
+grep 'picos: tela' bt3xbx.log
+```
+
+**O que olhar:**
+
+1. A linha do init `gs_d3d: picos: a tela por imagem ligada`. No resumo `picos: tela, janela:` de cada janela, **as trocas sem o
+   quadro perto de 0** (se forem quase todas, o `Swap` do `QuerySwapStatus` não é o do `D3DVBLANKDATA`: a ligação está errada e
+   as linhas não valem) e as repetições: na janela 1, 1 (o Blast 2) [estimado].
+2. **As imagens de fato** do resumo contra a linha `passos: janela K tela:`: as mesmas, menos a repetição (na janela 1, a de 4).
+3. **Cada linha `picos: tela:`** da janela 2: o quadro, e qual lado passou do prazo (a GPU acabou depois dele com o `Present`
+   antes: a GPU; o `Present` depois dele: a gravação ou o desenho, pelo `ocupada`, `texturas` e `frame_end`). Esperado: o 6960 e o
+   7017 nas duas aberturas.
+4. **A folga da GPU até o prazo** (mínimo, p1, p10, mediana): decide entre 3a e 3b.
+5. O resultado da luta igual (vencedor 0x2 razão 0x1 vida 0 27160), os passos por janela (684 e 2.334), nenhum `roteiro: FALHA`,
+   `vigia:` ou `CRASH`, e as imagens longas da linha `tela` na faixa das aberturas de 23/10 (a chave não deve mudar o ritmo).
+
+## 26. O cache de texturas pela origem, `BT3_TEX_ORIGEM` (23/10/2026)
+
+Branch `f5-texcache`, sobre a main `5021312`, com o `f5-zero` juntado (a linha por imagem longa, `BT3_PICOS_TELA`, seção 25).
+Pedido: o caminho 2 da seção 25, a opção (a) da seção 17. Os picos que se repetem na luta são de texturas novas na gravação: o
+Blast 2 (quadro 5338, 65 texturas, 3,2 M pixels, 33 ms de decodificação e 7 ms do XG; a tela parada 64 a 75 ms em todas as
+aberturas) e o 7017 (10,6 ms na gravação). Convenção: **[medido]**, **[lido]** e **[estimado]**.
+
+### O que foi feito
+
+| Commit | O quê |
+|---|---|
+| `f84354a` | O cache pela origem no `texture_get` (`gs_draw.c`) e o `Gs_TexOrigem` (`gs_core.c`), sob `BT3_TEX_ORIGEM=1` (lida uma vez), **desligado por padrão**; a linha "R" da contagem e o `tex_conta.py` com `--quadros` e `--quadro` |
+| `a6c39b2` | Junta o `f5-zero` (só o `gs_d3d.cpp` do 360, o teste da tela e a nota) |
+| `3a9256b`, `bbd4200` | `BT3_GPU_NORMAL=2` no `gpu_falso.c`: a lista normal com as junções pelo conteúdo (abaixo) |
+| `bf7f96c` | A chave só com o que a decodificação lê da paleta e do `TEXA` (a primeira versão não pegava o Blast 2, abaixo) |
+
+**A chave [lido].** O endereço de cada pixel no `vram_rw` é `tbp * 256` bytes mais uma conta que só depende de `tbw`, do formato,
+de x e de y (o bloco é `tbp` mais um número da grade, com a volta nos 4 MB). O `Gs_TexOrigem` hasheia, em ordem de grade a partir
+de `tbp`, os blocos de 256 bytes em que caem os pixels: a mesma imagem enviada a outro endereço dá o mesmo hash, e uma página
+mudada fora dos blocos da textura não o muda. A paleta entra pelo que a decodificação lê: as 256 cores de 32 bits são os blocos
+`cbp` a `cbp + 3` inteiros, as de 16 bits `cbp` e `cbp + 1`; as 16 cores (8 x 2) dividem o bloco com outras paletas e entram cor
+a cor, pelo `vram_rw`. A chave completa: o hash, o formato, o `tbw`, o tamanho, o formato da paleta e o `TEXA` só quando o
+`Gs_Expand` o lê (cores que não são de 32 bits). Quatro faixas de 64 bits, o laço sem `__int128` do `Gs_PageHash`.
+
+**O reuso [lido].** Uma vaga por recurso decodificado (`sOrig`, até `MAX_TEX`), com a chave e quantas entradas do `sTex`
+apontam para o recurso. No erro do `texture_get` (depois do descarte e da varredura do cache cheio, que podem soltar vagas), o hash
+é feito; se a chave tem vaga, a entrada nova aponta para o mesmo recurso, sem decodificar nem criar (sem `malloc`, sem XG); o tempo
+do hash conta como o da decodificação (`gPicosTexNs`), e só as decodificações contam em `texturas t` dos `picos`. O recurso só é
+solto quando a última entrada sai (`tex_solta`, nas duas varreduras); o descarte do 360 (`GsDraw_X360Abre`) só soma os bytes de
+um recurso de que saem todas as entradas. Com um pacote de texturas carregado, o cache fica de fora. Desligado, nenhuma entrada
+tem vaga e o caminho é o de antes; tudo dentro de `BT3_GS_ESPERAS` (a x86 plana não muda).
+
+**Por que a primeira versão não pegava o Blast 2 [medido].** Ela hasheava 1 KB a partir de `cbp` e o `TEXA` sempre. Na x86gv o
+`f5_duelo` reusou 1.549 texturas, mas o 5338 seguiu com as 65 e os 7015 a 7017 com as suas. Pela contagem, as 65 do Blast 2 eram
+o mesmo `TEX0` (o mesmo `tbp`, `tbw` e paleta) de texturas do quadro 4136, com o `TEXA` `8000008080` contra `8000000000`: a
+expansão das cores de 32 bits não lê o `TEXA`. E nos 7015 a 7017 (4 bits) as 16 cores dividem os blocos com outras paletas que o
+jogo reescreve. Com a chave exata (`bf7f96c`), os quatro quadros saem inteiros do cache.
+
+**Achado lateral, sem correção [lido].** O `clut_hash` do `gen` (a chave de sempre) lê as 16 cores de 4 bits como `(i & 15, 0)`,
+e a decodificação as lê como `(i & 7, i >> 3)`: as cores 8 a 15 (a segunda linha) não entram no `gen`. Uma mudança só nelas
+deixaria a textura velha no cache. Corrigir muda as listas de sempre; fica anotado.
+
+### A medida na x86gv [medido]
+
+`BT3_TEX_CONTA` com a chave 0 e 1, sem as threads; o custo pela estimativa no console a 10,4 ns por pixel (seção 17, a rodada de
+22/10). "Reusadas": as linhas "R", cada uma conferida pixel a pixel (abaixo).
+
+| | `f5_duelo`, chave 0 | chave 1 | `f5_treino`, chave 0 | chave 1 |
+|---|---:|---:|---:|---:|
+| Texturas decodificadas | 2.424 | **687** | 1.242 | **564** |
+| Pixels decodificados | 37,8 M | 20,9 M | 28,4 M | 17,7 M |
+| Quadros com decodificação | 546 | 157 | 257 | 115 |
+| Reusadas sem decodificar | | 1.737 (16,9 M pixels) | | 678 (10,7 M pixels) |
+| Primeira vez, dos pixels decodificados | 55,1% | 99,7% | 62,1% | 99,6% |
+
+**A luta** (`--quadros 4673:7758`, 4:3):
+
+| | Chave 0 | Chave 1 |
+|---|---:|---:|
+| Texturas decodificadas | 1.805 (19,2 M pixels) | **217 (3,7 M pixels)**, todas de primeira vez |
+| Reusadas | | 1.588 (15,5 M pixels) |
+| Quadros com decodificação | 404 | 59 |
+| Quadros de 5 ms ou mais (estimado) | 3: 5338 (33,4 ms), 7015 (5,8), 7017 (5,2) | **0** |
+| O maior | 5338, 65 texturas, 3,2 M pixels | 4905, 15 texturas, 300 mil pixels, 3,1 ms |
+| Quadro 5338 (Blast 2) | 65 decodificadas | **0**; 65 reusadas |
+| Quadros 7015, 7016, 7017 | 5, 14 e 11 decodificadas | **0**; todas reusadas |
+
+O que sobra na luta é a primeira vez: o efeito dos quadros 4976 a 4980 (291 mil pixels por quadro, uns 3 ms) e a entrada dos
+lutadores (4767 a 4770). Fora da luta, os 3 quadros de 5 a 10 ms são da carga.
+
+### As provas no WSL [medido]
+
+Serviço `claude-texcache` (`systemd-run` de sistema, `--uid=codex`, `MemoryMax=5G`), script `~/texcache/rodada.sh`, resumo
+`~/texcache/provas.resumo` (termina em `FIM`), worktree `~/bt3xbx-texcache` do pacote `tc.bundle`, cada passo pesado dentro do
+`flock ~/wsl.lock`; o clone ficou em `f5-pingpong`, sem alterados.
+
+| Prova | Resultado |
+|---|---|
+| `.text` da x86 plana | `43444ea4d03a6d448aa1ae74a631e35b356a7caa` na main `5021312` e no `bf7f96c` |
+| Teste de unidade do `Gs_TexOrigem` (VRAM aleatória, 3.000 texturas, os 13 formatos com os de profundidade, `tbw` 0 a 16): (1) um pixel ou uma cor mudada que muda a decodificação muda o hash; (2) a VRAM girada de `d` blocos, a textura em `tbp + d`: a mesma decodificação e o mesmo hash; (3) blocos de fora mudados: o mesmo hash; (4) o resto do bloco de uma paleta de 16 cores mudado: o mesmo hash | "tudo certo" na x86 e na **PPC de verdade** (`qemu-ppc`): 0 falhas em 2.911 e 2.902 decodificações mudadas, 3.000 giradas, 3.000 e 1.400 de fora. Visto falhando aqui: sem a paleta (290 hashes iguais com a decodificação diferente), o bloco de 4 bits errado (54), o bloco sem `tbp` (2.108 e 2.899 giradas), sem as 16 cores e sem as 256 |
+| A conferência de cada reuso (a decodificação refeita no reuso contra a cópia guardada dos pixels da vaga) | **1.737 de 1.737** iguais no `f5_duelo` e **678 de 678** no `f5_treino`, na `x86gv` e na `ppcg`, sem e com as duas threads; a conferência da decodificação por linha, 2.424 e 1.242 (chave 0), 687 e 564 (chave 1) iguais |
+| Listas normais (`BT3_GPU_NORMAL=2`), chave 0 contra 1, `x86gv` e `ppcg`, `f5_duelo` (8.380 quadros) e `f5_treino` (7.386), sem e com `BT3_GS_THREAD=1 BT3_GS_DESENHO=1` | os **8 pares** com `divergencias.py --normal` saindo 0; 0 desenhos com textura já solta; o resultado do roteiro igual (vencedor 0x2 razão 0x1 vida 0 27160 no duelo); os hashes de sempre com a chave 0 (`08a98b6d05b8775a` e `f76f0f6849b64629` na `x86gv`, `994627a2aecd429a` e `f76f0f6849b64629` na `ppcg`) |
+| As listas cruas, chave 0 contra 1 | diferentes (6.285 quadros no duelo, desde o 2095), como deve: o `gpu_falso` numera as texturas pela criação e hasheia cada envio; com 687 em vez de 2.424, os números e a seção 0 mudam |
+| O cache cheio (`BT3_GS_TEX_MAX=256`, a varredura a cada poucos quadros: 5.144 decodificações com a chave 0), chave 0 contra 1, sem e com as threads | normais iguais, e iguais às do cache livre; 2.576 reusos, todos conferidos iguais; 0 desenhos com textura já solta: a contagem de referências solta o recurso só com a última entrada |
+| **Sabotagem 1**: a chave sem a paleta (nem as 16 nem as 256 cores) | a conferência acusa **190 reusos diferentes** no duelo e **79** no treino; as listas normais diferem em 4.133 e 3.330 quadros; `divergencias.py` sai 1 |
+| **Sabotagem 2**: a contagem de referências ignorada (o recurso solto na saída de qualquer entrada), cache cheio, threads | **760.046 desenhos com textura já solta**, `divergencias.py` sai 1 |
+| O git do worktree no fim | 0 alterados (as sabotagens desfeitas e a `x86gv` refeita) |
+
+**Por que a lista normal precisou de `=2`.** Com a chave ligada, duas texturas de mesmo conteúdo viram o mesmo recurso, e dois
+desenhos seguidos que só diferiam no número da textura viram um (o `same_state` compara o número): com a primeira versão da chave,
+21 quadros do duelo (240 desenhos a menos) e 12 do treino com a lista normal diferente, todos só pelo `drawCount`. É a mesma
+imagem: o mesmo estado e os mesmos pixels num desenho só. O `BT3_GPU_NORMAL=2` conta como um só dois desenhos de primitivas
+seguidos, com a faixa contígua, que a junção do `gs_draw.c` juntaria se a textura valesse pelo conteúdo, e refaz a seção das
+contagens com esse número; com a chave 0 dá o mesmo que `=1` (o resultado das listas da chave 0 não mudou). A sabotagem 1 mostra
+que ela continua vendo uma textura errada.
+
+### A estimativa depois de (a) [estimado]
+
+No Blast 2 não sobra decodificação (0 de 65), nem o XG (o reuso não cria recurso): saem uns 33 ms de decodificação e uns 7 ms do
+XG, e entra o hash dos blocos, uns 2,5 MB (as 65 texturas em 8 e 4 bits), na faixa de 0,2 a 1 ns por byte no Xenon: de 0,5 a
+2,5 ms. Pela estimativa do pedido (as decodificações que sobram vezes 10,4 ns por pixel), o Blast 2 fica em 0 ms de textura e
+**a opção (b), a decodificação adiantada numa thread, não é precisa**: o maior quadro de textura da luta passa a ser o 4905, com
+3,1 ms. O que sobra no 5338 não é textura: a gravação ocupada tinha 77 a 80 ms com 33 + 7 de textura (seção 25), então uns 37 a
+40 ms são outro trabalho no mesmo quadro (o envio dos 3,2 MB ao novo endereço e os hashes das páginas, a cena da técnica). Se a
+rodada mostrar o 5338 ainda acima do período, o próximo passo é medir esse resto, não a thread.
+
+### A build do 360
+
+`build_f2.sh` no `bf7f96c` (carimbo `bf7f96c diff:da39a3ee5e`): 317 de 317 fontes sem erro, 985 avisos no total (os mesmos do
+`f5-zero`; 2 no `gs_draw`, 0 no `gs_core`), os mesmos **103 stubs**, `default.dat` `fb489b2f6e00d0e4de7e394f7037540c` e
+`default.swap` `abbd7589c8425797c4a2639068c9bf54` iguais, **`default.xex` `9e480e206afd114d140cf5ded4630f82`**. O `Gs_TexOrigem` em
+`0x8217ce78` no `default.map`; o `tex_solta` entrou em linha. A memória a mais: o `sOrig` (8.192 vagas de 32 bytes) e o balde
+(64 KB), uns 320 KB.
+
+### A rodada no console proposta
+
+Os arquivos em `build/x360/f2/` do worktree `bt3xbx-texcache`: `default.xex`/`.dat`/`.swap` do `bf7f96c`, `f5_duelo.txt` e
+`boot.txt` (iguais aos de `port/x360/roteiros/`), `ambiente_o0.txt` e `ambiente_o1.txt` (os `ambiente_z1.txt` da seção 25, o jogo
+como ele roda com `BT3_TEMPOS=0`, `BT3_PICOS=36` e `BT3_PICOS_TELA=1`, mais `BT3_TEX_ORIGEM=0` e `=1`; saves novos `saves_tc_o0` e
+`saves_tc_o1`); o `ambiente.txt` é a cópia do `ambiente_o0.txt`.
+
+```
+port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/ambiente_o0.txt build/x360/f2/ambiente_o1.txt
+# abertura 1 (chave 0); depois, com o console de volta na FreeStyle:
+python3 port/x360/tools/subir.py --baixar bt3xbx.log
+python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_o1.txt
+# abertura 2 (chave 1); baixar o log de novo
+python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "bf7f96c diff:da39a3ee5e"
+grep 'picos: tela' bt3xbx.log
+```
+
+**O que olhar:**
+
+1. **O quadro 5338 (Blast 2)**: na abertura 2, sem linha `picos: tela:` (nenhuma imagem longa nele) e sem a repetição na janela 1
+   (`picos: tela, janela:`); na linha `picos:   quadro 5338`, `texturas 0` e o tempo de textura só do hash (de 0,5 a 2,5 ms
+   [estimado]), contra 65 texturas e uns 33 ms na abertura 1. E a **gravação ocupada** nele: de 77 a 80 ms para uns 37 a 42
+   [estimado]; se ficar acima de 33,4 ms, o resto do quadro é a próxima medida (acima).
+2. **O quadro 7017** (e os 7015, 7016): `texturas 0`, a gravação ocupada perto dos vizinhos (17 a 19 ms), e sem linha `tela`.
+3. **O quadro 6960**, que não é de textura (seção 25): deve seguir igual nas duas; ele separa o que o cache tira do que é de fase.
+4. As imagens de 3 vblanks do combate (`passos: janela 2 tela:` e as linhas `tela`) contra a abertura 1 e as de 23/10; o tempo de
+   textura da luta inteira (uns 85 ms na rodada de 22/10) deve cair para uns 20%, mais o hash (3,7 M pixels contra 19,2 M).
+5. O resultado da luta igual (vencedor 0x2 razão 0x1 vida 0 27160), os passos por janela (684 e 2.334), nenhum `roteiro: FALHA`,
+   `vigia:` ou `CRASH`, e nenhuma linha `gs_d3d: branca` a mais (o descarte com recursos partilhados).
+
+**Recomendação.** Se a rodada confirmar o 5338 e o 7017 sem imagem longa e nada pior no resto, ligar `BT3_TEX_ORIGEM` por padrão
+(o mesmo conteúdo provado textura a textura no WSL; o risco que sobra é o descarte por memória do 360, que o WSL não exercita, e
+um recurso que só sai com a última entrada fica mais tempo na memória).

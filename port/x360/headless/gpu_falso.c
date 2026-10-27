@@ -181,20 +181,85 @@ static void fecha(int k) {
 }
 
 /* o hash "normal" dos desenhos (BT3_GPU_NORMAL): cada textura vale pelo conteúdo. Lê o sConteudo, que a gravação aumenta
-   (realloc): com a divisão é feito na entrega, na gravação */
+   (realloc): com a divisão é feito na entrega, na gravação.
+   (F5, etapa 8, seção 26) BT3_GPU_NORMAL=2: também as junções pelo conteúdo. Com o cache pela origem (BT3_TEX_ORIGEM), duas
+   texturas de mesmo conteúdo viram o mesmo recurso, e dois desenhos seguidos que antes só diferiam no número da textura
+   passam a ser um desenho só (o same_state do gs_draw.c compara o número). Aqui dois desenhos seguidos de primitivas com
+   tudo igual depois da troca da textura pelo conteúdo (fora a faixa) e a faixa do segundo começando onde a do primeiro
+   acaba contam como um só, com a soma das faixas: o mesmo que a junção do gs_draw.c faria. Assim a rodada que junta e a
+   que não junta dão o mesmo hash quando a única diferença é essa. */
+static int sNormalJunta = -1;
+static uint32_t sNormalN; /* (=2) quantos desenhos a lista tem com as junções pelo conteúdo: o drawCount da seção das contagens */
+static void normal_mistura(uint64_t *d, const GsDraw *g) {
+    const uint32_t *w = (const uint32_t *)g;
+    uint32_t k;
+    for (k = 0; k < (uint32_t)(sizeof(GsDraw) / 4); k++) {
+        *d = (*d ^ w[k]) * 1099511628211ull;
+    }
+}
+static int normal_junta(const GsDraw *a, const GsDraw *b) {
+    GsDraw x = *a, y = *b;
+    if (a->native || b->native || b->first != a->first + a->count) {
+        return 0;
+    }
+    x.first = y.first = 0;
+    x.count = y.count = 0;
+    if (a->vu == 0) { /* (o same_state não olha o bloco uniforme nem o src de um desenho de primitivas) */
+        x.uniform = y.uniform = 0;
+        x.src = y.src = 0;
+    } else if (a->uniform != b->uniform) {
+        return 0; /* (da VU1: a junção do gs_draw.c não abre bloco uniforme; com blocos diferentes as constantes já diferem) */
+    }
+    return memcmp(&x, &y, sizeof(x)) == 0;
+}
 static uint64_t normal_desenhos(const GsDraw *draws, uint32_t n) {
     uint64_t d = 1469598103934665603ull;
-    uint32_t i, k;
+    uint32_t i;
+    GsDraw ant;
+    int tem = 0;
+    if (sNormalJunta < 0) {
+        sNormalJunta = getenv("BT3_GPU_NORMAL") != NULL && atoi(getenv("BT3_GPU_NORMAL")) == 2;
+    }
     for (i = 0; i < n; i++) {
         GsDraw g = draws[i];
-        const uint32_t *w;
         if (!g.tex_is_target && g.tex >= 16 && g.tex - 16 < sConteudoN) {
             g.tex = (GsTex)(sConteudo[g.tex - 16] ^ sConteudo[g.tex - 16] >> 32); /* o conteúdo no lugar do número */
         }
-        w = (const uint32_t *)&g;
-        for (k = 0; k < (uint32_t)(sizeof(GsDraw) / 4); k++) {
-            d = (d ^ w[k]) * 1099511628211ull;
+        if (!sNormalJunta) {
+            normal_mistura(&d, &g);
+            continue;
         }
+        if (tem && normal_junta(&ant, &g)) {
+            ant.count += g.count;
+            continue;
+        }
+        if (tem) {
+            normal_mistura(&d, &ant);
+        }
+        ant = g;
+        tem = 1;
+    }
+    if (tem) {
+        normal_mistura(&d, &ant);
+    }
+    sNormalN = n;
+    if (sNormalJunta) {
+        uint32_t m = 0;
+        tem = 0;
+        for (i = 0; i < n; i++) { /* (a mesma junção, para contar) */
+            GsDraw g = draws[i];
+            if (!g.tex_is_target && g.tex >= 16 && g.tex - 16 < sConteudoN) {
+                g.tex = (GsTex)(sConteudo[g.tex - 16] ^ sConteudo[g.tex - 16] >> 32);
+            }
+            if (tem && normal_junta(&ant, &g)) {
+                ant.count += g.count;
+                continue;
+            }
+            ant = g;
+            tem = 1;
+            m++;
+        }
+        sNormalN = m;
     }
     return d;
 }
@@ -306,10 +371,36 @@ typedef struct Vista {
 /* o que, com a divisão, a gravação manda na entrega (fake_entrega): uma entrega por vez, o desenho lê depois do sinal */
 static struct {
     uint64_t tex, normal;
+    uint32_t normalN; /* (BT3_GPU_NORMAL=2) */
     unsigned novas;
     int pipes;
     uint32_t bytes[8];
 } sEntregue;
+
+/* a seção das contagens no sH (desenhos: o drawCount, ou o da lista normal com as junções) */
+static void contagens(const Vista *q, uint32_t desenhos, int pipes) {
+    uint32_t i;
+    hmix(q->quadro);
+    hmix(desenhos);
+    hmix(q->vertCount);
+    hmix(q->vuVertCount);
+    hmix(q->vuIdxCount);
+    hmix(q->vuUniCount);
+    hmix((uint32_t)q->anchor);
+    hmix(q->skipped);
+    hmix(q->native);
+    hmix((uint32_t)q->targetCount);
+    for (i = 0; i < (uint32_t)q->targetCount; i++) {
+        hmix(q->targets[i].fbp);
+        hmix((uint32_t)q->targets[i].cleared);
+        hmix(q->targets[i].draws);
+        hmix(q->targets[i].gen);
+        hmix((uint32_t)q->targets[i].stale);
+    }
+    for (i = 0; i < (uint32_t)pipes; i++) { /* (o sPipeKey só cresce: abaixo da contagem da entrega não muda) */
+        hmix(sPipeKey[i]);
+    }
+}
 
 static void fake_frame_end(void) {
     uint32_t i;
@@ -344,26 +435,7 @@ static void fake_frame_end(void) {
         bytes = gGsBytes;
     }
     sH = 1469598103934665603ull;
-    hmix(q.quadro);
-    hmix(q.drawCount);
-    hmix(q.vertCount);
-    hmix(q.vuVertCount);
-    hmix(q.vuIdxCount);
-    hmix(q.vuUniCount);
-    hmix((uint32_t)q.anchor);
-    hmix(q.skipped);
-    hmix(q.native);
-    hmix((uint32_t)q.targetCount);
-    for (i = 0; i < (uint32_t)q.targetCount; i++) {
-        hmix(q.targets[i].fbp);
-        hmix((uint32_t)q.targets[i].cleared);
-        hmix(q.targets[i].draws);
-        hmix(q.targets[i].gen);
-        hmix((uint32_t)q.targets[i].stale);
-    }
-    for (i = 0; i < (uint32_t)pipes; i++) { /* (o sPipeKey só cresce: abaixo da contagem da entrega não muda) */
-        hmix(sPipeKey[i]);
-    }
+    contagens(&q, q.drawCount, pipes);
     fecha(S_CONTAGENS);
     hmix_words(q.draws, q.drawCount * (uint32_t)(sizeof(GsDraw) / 4));
     fecha(S_DESENHOS);
@@ -431,8 +503,15 @@ static void fake_frame_end(void) {
         memset(gGsPivos, 0, sizeof(gGsPivos));
     }
     if (getenv("BT3_GPU_NORMAL") != NULL) { /* (F5, degrau 1) o quadro sem o que depende de quantas texturas se decodificaram */
-        uint64_t n = 1469598103934665603ull, d = q.dividido ? sEntregue.normal : normal_desenhos(q.draws, q.drawCount);
-        n = (n ^ sSecao[S_CONTAGENS]) * 1099511628211ull;
+        uint64_t n = 1469598103934665603ull, d = q.dividido ? sEntregue.normal : normal_desenhos(q.draws, q.drawCount), c = sSecao[S_CONTAGENS];
+        if (sNormalJunta) { /* (=2) a seção das contagens refeita com o número de desenhos depois das junções pelo conteúdo */
+            uint64_t h = sH;
+            sH = 1469598103934665603ull;
+            contagens(&q, q.dividido ? sEntregue.normalN : sNormalN, pipes);
+            c = sH;
+            sH = h;
+        }
+        n = (n ^ c) * 1099511628211ull;
         n = (n ^ d) * 1099511628211ull;
         for (i = S_VERTICES; i < S_N; i++) {
             n = (n ^ sSecao[i]) * 1099511628211ull;
@@ -486,6 +565,7 @@ static void fake_entrega(const GsQuadro *q, unsigned char *limpa) {
     sEntregue.pipes = sPipeCount;
     memcpy(sEntregue.bytes, gGsBytes, sizeof(sEntregue.bytes));
     sEntregue.normal = getenv("BT3_GPU_NORMAL") != NULL ? normal_desenhos(q->draws, q->drawCount) : 0;
+    sEntregue.normalN = sNormalN;
     for (i = 0; i < q->drawCount; i++) {
         if (q->draws[i].native >= 100 && q->draws[i].target >= 0 && q->draws[i].target < MAX_TARGETS) {
             limpa[q->draws[i].target] = 1;

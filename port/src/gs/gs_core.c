@@ -341,6 +341,71 @@ int Gs_TexDecode(uint32_t *px, uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_
         return 0;
     }
 }
+
+/* um bloco de 256 bytes (o número dá a volta nos 4 MB) nas quatro faixas do Gs_TexOrigem */
+static void origem_bloco(uint64_t *l, uint32_t b) {
+    const uint32_t *w = &sVram[(b & 0x3FFF) << 6];
+    uint64_t q;
+    uint32_t i, j;
+    for (i = 0; i < 64; i += 8) {
+        for (j = 0; j < 4; j++) {
+            memcpy(&q, &w[i + j * 2], 8);
+            l[j] = (l[j] ^ q) * 0x9FB21C651E98DF25ull;
+            l[j] ^= l[j] >> 32;
+        }
+    }
+}
+
+/* (F5, etapa 8, texturas: 08-gravacao.md, seção 26) O hash do que a decodificação de uma textura lê, para o cache pela origem
+   do texture_get (BT3_TEX_ORIGEM). O endereço de cada pixel no vram_rw é tbp * 256 bytes mais uma conta que só depende de
+   tbw, do formato, de x e de y (o bloco é tbp mais um número da grade, e os 4 MB dão a volta): hasheando os blocos de 256
+   bytes em que caem os pixels, em ordem de grade, a partir de tbp, a mesma imagem enviada a outro endereço dá o mesmo
+   hash, e uma página mudada fora dos blocos da textura não o muda. A paleta (cores 256 ou 16) entra pelo que a
+   decodificação lê dela: as 256 cores de 32 bits são os blocos cbp a cbp + 3 inteiros (16 x 16 pixels), as de 16 bits os
+   blocos cbp e cbp + 1; as 16 cores (8 x 2) dividem o bloco com outras paletas, que o jogo reescreve sem mudar esta, e
+   entram cor a cor, pelo vram_rw. Com o mesmo tbw, formato, tamanho, formato da paleta e TEXA (quando a expansão o lê), o
+   mesmo hash é a mesma decodificação, a menos de uma colisão de 64 bits. Quatro faixas independentes de 64 bits (o laço sem __int128 do Gs_PageHash), juntadas no fim. */
+uint64_t Gs_TexOrigem(uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uint32_t th, uint32_t cbp, uint32_t cpsm, uint32_t cores) {
+    uint64_t l[4] = {0x9E3779B97F4A7C15ull, 0xC2B2AE3D27D4EB4Full, 0x165667B19E3779F9ull, 0x27D4EB2F165667C5ull}, q;
+    uint32_t bw = tbw ? tbw : 1, zx = 0, pw, ph, x, y, b;
+
+    if ((psm & 0x30) == 0x30) {
+        zx = 0x18;
+        psm &= 0x0F;
+    }
+    switch (psm) { /* o tamanho do bloco em pixels */
+    case 0x02: case 0x0A: pw = 16; ph = 8; break;
+    case 0x13: pw = 16; ph = 16; break;
+    case 0x14: pw = 32; ph = 16; break;
+    default: pw = 8; ph = 8; break;
+    }
+    for (y = 0; y < th; y += ph) {
+        for (x = 0; x < tw; x += pw) {
+            switch (psm) { /* as contas do vram_rw, sem a coluna */
+            case 0x02: case 0x0A:
+                b = ((y >> 1) & ~0x1Fu) * bw + ((x >> 1) & ~0x1Fu) + ((psm == 0x0A ? kBlock16S : kBlock16)[(y >> 3) & 7][(x >> 4) & 3] ^ zx);
+                break;
+            case 0x13: b = ((y >> 1) & ~0x1Fu) * (bw >> 1) + ((x >> 2) & ~0x1Fu) + kBlock32[(y >> 4) & 3][(x >> 4) & 7]; break;
+            case 0x14: b = ((y >> 2) & ~0x1Fu) * (bw >> 1) + ((x >> 2) & ~0x1Fu) + kBlock16[(y >> 4) & 7][(x >> 5) & 3]; break;
+            default: b = (y & ~0x1Fu) * bw + ((x >> 1) & ~0x1Fu) + (kBlock32[(y >> 3) & 3][(x >> 3) & 7] ^ zx); break;
+            }
+            origem_bloco(l, tbp + b);
+        }
+    }
+    if (cores == 256) {
+        for (b = 0; b < ((cpsm & 0x0F) == 0x02 || (cpsm & 0x0F) == 0x0A ? 2u : 4u); b++) {
+            origem_bloco(l, cbp + b);
+        }
+    } else if (cores == 16) {
+        for (b = 0; b < 16; b++) {
+            q = vram_rw(cbp, 1, cpsm, b & 7, b >> 3, 0, 0);
+            l[b & 3] = (l[b & 3] ^ q) * 0x9FB21C651E98DF25ull;
+            l[b & 3] ^= l[b & 3] >> 32;
+        }
+    }
+    q = (l[0] ^ (l[1] << 13 | l[1] >> 51) ^ (l[2] << 29 | l[2] >> 35) ^ (l[3] << 47 | l[3] >> 17)) * 0x9FB21C651E98DF25ull;
+    return q ^ q >> 29;
+}
 #endif
 
 /* A hash of one 8 KB page of GS memory, recomputed only after an upload touched the page. The GPU back end keys

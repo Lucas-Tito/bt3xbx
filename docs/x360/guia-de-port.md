@@ -1973,6 +1973,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   decodificação errada nos 4 bits mudou 141 quadros. Mesmo assim, uma conferência por textura (a decodificação nova refeita noutro
   buffer contra a de antes, `BT3_TEX_CONTA`) diz qual textura e qual formato, e vale para os quadros em que a textura errada não
   chegaria a ser desenhada.
+- **A chave de um cache pelo conteúdo tem de ter exatamente o que a decodificação lê, nem mais** (seção 26). A primeira versão do
+  cache pela origem hasheava 1 KB a partir da paleta e o `TEXA` sempre: reusou 1.549 texturas no `f5_duelo` e deixou de fora
+  justo o alvo, o Blast 2 (65 texturas que voltam com outro `TEXA`, que as cores de 32 bits não leem) e os quadros de página (as
+  16 cores dividem o bloco com paletas que o jogo reescreve). Confira o alvo na contagem por quadro (`tex_conta.py --quadro`)
+  antes da rodada longa; uma chave a mais não erra a imagem, só não pega, e as provas de igualdade passam do mesmo jeito.
+- **Um reuso que funde recursos muda a contagem de desenhos sem mudar a imagem** (seção 26): o `same_state` junta dois desenhos
+  pelo número da textura, e com o recurso partilhado 21 quadros do duelo saíram com desenhos a menos. A lista normal só via a
+  diferença na seção das contagens (o `drawCount`), que ela inclui. O `BT3_GPU_NORMAL=2` junta pelo conteúdo antes de contar.
+  Ao trocar a identidade de qualquer recurso, pergunte quem compara a identidade (junções, memórias de estado) antes de rodar
+  as listas: custou duas largadas da rodada do WSL.
 
 ### O envio de imagens para a VRAM (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 18)
 
@@ -2037,6 +2047,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   imagem seguinte, sai uma de 1 vblank que paga a dívida, e a simulação nunca reproduz o que o console mostrou (685 imagens de
   exatamente 2 vblanks com o desenho de ~17 ms). Antes de provar uma correção numa simulação, ela tem de reproduzir o defeito com
   a conta de antes (a cena A do `teste_vblank.c` confere isso: a conta de antes sem espera em pelo menos metade das fases).
+- **A troca que a callback de vblank conta não é a imagem que a pessoa vê.** O `GsD3d_Repete` apresenta a mesma imagem de novo
+  depois de 50 ms sem quadro; a callback vê uma troca nova e conta duas imagens de 2 vblanks onde a tela ficou parada 4. Assim o
+  engasgo de 64 a 75 ms do Blast 2 passou como "nenhuma imagem de 4" em 9 de 10 aberturas (seção 25). Some as repetições à imagem
+  que repetem antes de aceitar pela tela.
+- **Para chegar a zero, conte por imagem e ligue a imagem ao quadro.** A porcentagem de imagens longas não diz qual quadro nem
+  que lado atrasou, e o filtro do `picos` (o intervalo na CPU) não é o da tela. O `QuerySwapStatus` logo depois do `Present` dá
+  o número da troca, o `D3DVBLANKDATA.Swap` na callback diz quando ela entrou: com os `mftb` dos três lados, cada imagem longa
+  sai com o quadro e a distância de cada lado ao prazo (`BT3_PICOS_TELA`, seção 25).
+- **Imagens de 3 e de 1 aos pares, com os vblanks da janela exatamente 2 por passo, são quadros isolados que perderam o vblank**,
+  não um passo lento: o seguinte entrou no tempo. Procure o quadro, não o passo.
 
 ### A correção da colisão das tabelas (F5, etapa 9, `plano/F5/09.md`, "A correção da colisão das tabelas")
 

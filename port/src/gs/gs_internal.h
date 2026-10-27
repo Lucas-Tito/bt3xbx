@@ -161,6 +161,8 @@ uint32_t Gs_Expand(uint32_t c, uint32_t psm); /* stored colour -> R | G << 8 | B
 #ifdef BT3_GS_ESPERAS
 /* (F5, etapa 8, texturas) a textura inteira em px, uma linha por vez; 0: formato que fica com o laço do texture_get */
 int Gs_TexDecode(uint32_t *px, uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uint32_t th, uint32_t cbp, uint32_t cpsm);
+/* (seção 26) o hash dos blocos que a decodificação lê e das cores da paleta (0, 16 ou 256): a chave do cache pela origem */
+uint64_t Gs_TexOrigem(uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uint32_t th, uint32_t cbp, uint32_t cpsm, uint32_t cores);
 #endif
 
 void Gs_Gif(const uint8_t *p, uint32_t qwc); /* GIF data for the GS (from VIF1 DIRECT or a VU1 kick) */

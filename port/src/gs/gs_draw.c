@@ -229,12 +229,89 @@ typedef struct Tex {
     int replaced;  /* from a texture pack: several times the size, so always filtered (texture_get) */
     uint32_t ow, oh, rw, rh; /* then: the original's size and the replacement's */
     uint32_t amax;           /* and the largest alpha byte of the original */
+#ifdef BT3_GS_ESPERAS
+    uint16_t orig; /* (BT3_TEX_ORIGEM) índice + 1 da vaga do cache pela origem; 0: o recurso é só desta entrada */
+#endif
 } Tex;
 static Tex sTex[MAX_TEX];
 static uint16_t sTexBucket[TEX_BUCKETS]; /* index + 1 of a cache entry, 0 = empty (open addressing) */
 static Tex *sLast; /* the entry the previous lookup returned */
 #ifdef BT3_GS_ESPERAS
 static int sTexRapida = -1; /* BT3_TEX_RAPIDA (texture_get), lida uma vez */
+
+/* (F5, etapa 8, texturas: docs/x360/plano/F5/08-gravacao.md, seção 26) O cache pela origem, BT3_TEX_ORIGEM=1 (lida uma vez;
+   desligado por padrão). Na luta, uns 81% dos pixels decodificados eram imagens que o cache já tinha com outra chave: a
+   página mudou sem mudar a textura (o gen é das páginas inteiras) ou a mesma imagem veio a outro endereço (outro TEX0).
+   Uma vaga por recurso decodificado, com a chave do que a decodificação lê (Gs_TexOrigem: os blocos da textura e o 1 KB
+   da paleta; mais o formato, o tbw, o tamanho, o formato da paleta e o TEXA) e quantas entradas do sTex apontam para o
+   recurso. No erro do texture_get, se a chave já tem vaga, a entrada nova aponta para o mesmo recurso, sem decodificar
+   nem criar. O recurso só é solto quando a última entrada sai (tex_solta, nas duas varreduras); o descarte do 360 só
+   conta os bytes de um recurso que sai de fato. Desligado, nenhuma entrada tem vaga (orig 0) e tudo é como antes. */
+typedef struct TexOrig {
+    uint64_t hash, texa;
+    uint32_t forma; /* psm | tbw << 6 | cpsm << 12 | log2 da largura << 16 | log2 da altura << 20 */
+    uint32_t refs;  /* entradas do sTex com esta vaga; 0: vaga livre */
+    uint32_t sai;   /* (GsDraw_X360Abre) quantas delas o descarte já escolheu */
+    GsTex tex;
+#if defined(BT3_GPU_FALSO)
+    uint32_t *copia; /* (BT3_TEX_CONTA) os pixels decodificados, para a conferência de cada reuso */
+#endif
+} TexOrig;
+static TexOrig sOrig[MAX_TEX]; /* (cada vaga em uso tem uma entrada ou mais: nunca mais vagas que entradas) */
+static uint16_t sOrigBucket[TEX_BUCKETS]; /* índice + 1 de uma vaga, 0 = vazio; refeito quando uma vaga se solta */
+static uint32_t sOrigLivre;               /* onde a busca por vaga livre recomeça */
+static int sOrigMudou;                    /* uma vaga se soltou: o balde é refeito no fim da varredura */
+static int sTexOrigem = -1;
+
+static uint32_t orig_balde(uint64_t hash, uint32_t forma, uint64_t texa) {
+    uint64_t h = (hash ^ ((uint64_t)forma << 21) ^ (texa * 0x9E3779B97F4A7C15ull)) * 0xD6E8FEB86659FD93ull;
+    return (uint32_t)(h >> 40) & (TEX_BUCKETS - 1);
+}
+
+static void orig_insere(uint32_t k) {
+    uint32_t h = orig_balde(sOrig[k].hash, sOrig[k].forma, sOrig[k].texa);
+    while (sOrigBucket[h] != 0) {
+        h = (h + 1) & (TEX_BUCKETS - 1);
+    }
+    sOrigBucket[h] = (uint16_t)(k + 1);
+}
+
+/* o balde sem as vagas soltas (no fim das varreduras do cache) */
+static void orig_refaz(void) {
+    uint32_t k;
+    if (!sOrigMudou) {
+        return;
+    }
+    sOrigMudou = 0;
+    memset(sOrigBucket, 0, sizeof(sOrigBucket));
+    for (k = 0; k < MAX_TEX; k++) {
+        if (sOrig[k].refs != 0) {
+            orig_insere(k);
+        }
+    }
+}
+
+/* a entrada sai do cache: o recurso é solto só se nenhuma outra aponta para ele */
+static void tex_solta(const Tex *t) {
+    if (t->orig != 0) {
+        TexOrig *o = &sOrig[t->orig - 1];
+        o->sai = 0;
+        if (--o->refs != 0) {
+            return;
+        }
+#if defined(BT3_GPU_FALSO)
+        free(o->copia);
+        o->copia = NULL;
+#endif
+        sOrigMudou = 1;
+    }
+    TEX_DESTROY(t->tex);
+}
+#define TEX_SOLTA(t) tex_solta(t)
+#define ORIG_REFAZ() orig_refaz()
+#else
+#define TEX_SOLTA(t) TEX_DESTROY((t)->tex)
+#define ORIG_REFAZ() ((void)0)
 #endif
 
 /* The 256-colour tables as textures, by hash of the palette entries they use (64 slots). (F5, docs/x360/plano/F5/09.md,
@@ -313,15 +390,21 @@ int GsDraw_X360Abre(uint32_t w, uint32_t h, int modo) {
     }
     qsort(sX360Ordem, n, sizeof(sX360Ordem[0]), x360_mais_antiga);
     for (k = 0; k < n && soma < falta; k++) {
-        soma += GsD3d_TexBytes(sTex[sX360Ordem[k]].tex);
+        const Tex *e = &sTex[sX360Ordem[k]];
         sX360Sai[sX360Ordem[k]] = 1;
+#ifdef BT3_GS_ESPERAS
+        if (e->orig != 0 && ++sOrig[e->orig - 1].sai < sOrig[e->orig - 1].refs) {
+            continue; /* (BT3_TEX_ORIGEM: o recurso segue com outra entrada, sair esta não libera nada) */
+        }
+#endif
+        soma += GsD3d_TexBytes(e->tex);
     }
     if (k > 0) {
         idade = gGsFrame - sTex[sX360Ordem[k - 1]].last;
         /* fora do cache e do balde antes de soltar: nada fica apontando para o recurso */
         for (m = 0, i = 0; i < (uint32_t)gsTexCount; i++) {
             if (sX360Sai[i]) {
-                TEX_DESTROY(sTex[i].tex);
+                TEX_SOLTA(&sTex[i]);
             } else {
                 sTex[m++] = sTex[i];
             }
@@ -336,6 +419,7 @@ int GsDraw_X360Abre(uint32_t w, uint32_t h, int modo) {
             }
             sTexBucket[h2] = (uint16_t)(i + 1);
         }
+        ORIG_REFAZ();
     }
     return GsD3d_Descartou(w, h, modo, k, soma, idade, (unsigned)gsTexCount - (n - k));
 }
@@ -366,6 +450,68 @@ static uint32_t tex_pages(uint32_t tbp, uint32_t bw, uint32_t psm, uint32_t tw, 
 }
 #endif
 
+#if defined(BT3_GS_ESPERAS) && defined(BT3_GPU_FALSO)
+/* (F5, etapa 8, texturas; só nas builds --gpu do WSL) o arquivo do BT3_TEX_CONTA, aberto na primeira linha */
+static FILE *tex_conta_arq(void) {
+    static FILE *cf;
+    if (cf == NULL) {
+        cf = fopen(getenv("BT3_TEX_CONTA"), "w");
+    }
+    return cf;
+}
+
+/* a decodificação pixel a pixel do texture_get (o laço), para a conferência de um formato que o Gs_TexDecode não faz */
+static void tex_laco(uint32_t *px, uint32_t tbp, uint32_t tbw, uint32_t psm, uint32_t tw, uint32_t th, uint32_t cbp, uint32_t cpsm,
+                     uint32_t bits) {
+    uint32_t x, y, c;
+    for (y = 0; y < th; y++) {
+        for (x = 0; x < tw; x++) {
+            c = Gs_VramRead(tbp, tbw, psm, x, y);
+            if (bits > 8) {
+                c = Gs_Expand(c, psm);
+            } else if (bits == 8) {
+                c = (c & 0xE7) | ((c & 8) << 1) | ((c & 0x10) >> 1);
+                c = Gs_Expand(Gs_VramRead(cbp, 1, cpsm, c & 15, c >> 4), cpsm);
+            } else {
+                c = Gs_Expand(Gs_VramRead(cbp, 1, cpsm, c & 7, c >> 3), cpsm);
+            }
+            px[y * tw + x] = c;
+        }
+    }
+}
+
+/* (seção 26) BT3_TEX_CONTA com o cache pela origem: uma linha "R" por reuso (o quadro, o tamanho, os formatos, a chave nova
+   do cache, o hash do conteúdo de agora e a conferência: a textura decodificada agora contra os pixels guardados da vaga,
+   1 iguais, 0 diferentes, 3 sem a cópia) */
+static void tex_conta_reuso(const TexOrig *o, uint64_t t0, uint64_t texa, uint32_t gen, uint32_t tbp, uint32_t tbw, uint32_t psm,
+                            uint32_t tw, uint32_t th, uint32_t cbp, uint32_t cpsm, uint32_t bits) {
+    FILE *cf;
+    uint32_t *px2, k;
+    uint64_t ch = 1469598103934665603ull;
+    int igual = 3;
+    if (getenv("BT3_TEX_CONTA") == NULL || (cf = tex_conta_arq()) == NULL) {
+        return;
+    }
+    px2 = malloc((size_t)tw * th * 4);
+    if (px2 == NULL) {
+        return;
+    }
+    if (!Gs_TexDecode(px2, tbp, tbw, psm, tw, th, cbp, cpsm)) {
+        tex_laco(px2, tbp, tbw, psm, tw, th, cbp, cpsm, bits);
+    }
+    for (k = 0; k < tw * th; k++) {
+        ch = (ch ^ px2[k]) * 1099511628211ull;
+    }
+    if (o->copia != NULL) {
+        igual = memcmp(o->copia, px2, (size_t)tw * th * 4) == 0;
+    }
+    free(px2);
+    fprintf(cf, "R %u %u %u %x %x %llx %llx %x %llx %d\n", (unsigned)gGsFrame, (unsigned)tw, (unsigned)th, (unsigned)psm, (unsigned)cpsm,
+            (unsigned long long)t0, (unsigned long long)texa, (unsigned)gen, (unsigned long long)ch, igual);
+    fflush(cf);
+}
+#endif
+
 /* GS memory -> an RGBA texture for the current TEX0 (alpha as stored: 0x80 is opaque). The back end makes
    the texture and takes the decoded pixels (freed after it has uploaded them). */
 static GsTex texture_get(int ctx) {
@@ -379,7 +525,9 @@ static GsTex texture_get(int ctx) {
     uint32_t packMaxAlpha = 255, rw = tw, rh = th;
     int packFormat = GS_TEXFMT_RGBA8, replaced = 0;
 #ifdef BT3_GS_ESPERAS
-    int feito;
+    int feito, oCalc = 0;
+    uint64_t oHash = 0, oTexa = 0;
+    uint32_t oForma = 0;
 #endif
 
     if (tw > 1024) { tw = 1024; }
@@ -467,7 +615,7 @@ static GsTex texture_get(int ctx) {
                 if (sTex[i].last >= keep) {
                     sTex[n++] = sTex[i];
                 } else {
-                    TEX_DESTROY(sTex[i].tex);
+                    TEX_SOLTA(&sTex[i]);
                 }
             }
             gsTexCount = n;
@@ -481,6 +629,7 @@ static GsTex texture_get(int ctx) {
             }
             sTexBucket[h] = (uint16_t)(i + 1);
         }
+        ORIG_REFAZ();
         if (gsTexCount == MAX_TEX) {
 #ifdef PORT_X360
             GsD3d_Branca(2, tw, th);
@@ -489,6 +638,59 @@ static GsTex texture_get(int ctx) {
         }
     }
     tex_t0 = gpu_now();
+#ifdef BT3_GS_ESPERAS
+    /* (seção 26) o cache pela origem: a mesma imagem já decodificada com outra chave (outro gen ou outro TEX0) dá o mesmo
+       recurso, sem decodificar nem criar (o tempo do hash conta como o da decodificação). Fora com um pacote de texturas. */
+    if (sTexOrigem < 0) {
+        sTexOrigem = getenv("BT3_TEX_ORIGEM") != NULL && atoi(getenv("BT3_TEX_ORIGEM")) != 0;
+    }
+    if (sTexOrigem && !(sTexPackOn && TexPack_Count() != 0)) {
+        uint32_t h;
+        oHash = Gs_TexOrigem(tbp, tbw, psm, tw, th, cbp, cpsm, bits == 8 ? 256 : bits == 4 ? 16 : 0);
+        oForma = psm | tbw << 6 | (bits <= 8 ? cpsm : 0) << 12 | (uint32_t)((t0 >> 26) & 15) << 16 | (uint32_t)((t0 >> 30) & 15) << 20;
+        /* o TEXA só entra quando o Gs_Expand o lê: as cores que não são de 32 bits (o Blast 2 volta com outro TEXA e a
+           paleta de 32 bits, a mesma decodificação) */
+        oTexa = (bits <= 8 ? cpsm != 0 : (psm & 0x0F) != 0) ? texa : 0;
+        oCalc = 1;
+        h = orig_balde(oHash, oForma, oTexa);
+        while (sOrigBucket[h] != 0) {
+            TexOrig *o = &sOrig[sOrigBucket[h] - 1];
+            if (o->refs != 0 && o->hash == oHash && o->forma == oForma && o->texa == oTexa) {
+                t = &sTex[gsTexCount];
+                t->tex = o->tex;
+                t->orig = (uint16_t)(o - sOrig + 1);
+                o->refs++;
+                gsTexCount++;
+                h = tex_bucket(t0, texa, gen);
+                while (sTexBucket[h] != 0) {
+                    h = (h + 1) & (TEX_BUCKETS - 1);
+                }
+                sTexBucket[h] = (uint16_t)gsTexCount;
+                sLast = t;
+                t->tex0 = t0;
+                t->texa = texa;
+                t->gen = gen;
+                t->last = gGsFrame;
+                t->replaced = 0;
+                t->ow = t->rw = tw;
+                t->oh = t->rh = th;
+                t->amax = 255u;
+#if defined(BT3_GPU_FALSO)
+                tex_conta_reuso(o, t0, texa, gen, tbp, tbw, psm, tw, th, cbp, cpsm, bits);
+#endif
+                {
+                    uint64_t d_ = gpu_now() - tex_t0;
+                    gGpuTexNs += d_;
+#ifdef PORT_X360
+                    gPicosTexNs += d_;
+#endif
+                }
+                return t->tex;
+            }
+            h = (h + 1) & (TEX_BUCKETS - 1);
+        }
+    }
+#endif
     /* a texture pack's replacement for this texture, if there is one (gs_texpack.c) */
     if (sTexPackOn && TexPack_Count() != 0) {
         const char *path = TexPack_Lookup(tbp, tbw, psm, tw, th, (uint32_t)((t0 >> 34) & 1), cbp, cpsm, &packMaxAlpha);
@@ -540,13 +742,10 @@ static GsTex texture_get(int ctx) {
        decodificação e a conferência da decodificação por linha (Gs_TexDecode refeita noutro buffer: 1 os mesmos pixels,
        0 diferentes, 2 formato que ela não faz). O tex_conta.py separa a primeira vez das redecodificações. */
     if (!replaced && px != NULL && getenv("BT3_TEX_CONTA") != NULL) {
-        static FILE *cf;
+        FILE *cf = tex_conta_arq();
         uint64_t ch = 1469598103934665603ull, ns = gpu_now() - tex_t0;
         uint32_t k, *px2 = malloc((size_t)tw * th * 4);
         int igual = 2;
-        if (cf == NULL) {
-            cf = fopen(getenv("BT3_TEX_CONTA"), "w");
-        }
         for (k = 0; k < tw * th; k++) {
             ch = (ch ^ px[k]) * 1099511628211ull;
         }
@@ -596,6 +795,32 @@ static GsTex texture_get(int ctx) {
         }
         return gsWhite;
     }
+#ifdef BT3_GS_ESPERAS
+    t->orig = 0;
+    if (oCalc && !replaced) { /* (seção 26) a vaga do recurso novo */
+        uint32_t k = sOrigLivre;
+        while (sOrig[k].refs != 0) {
+            k = (k + 1) % MAX_TEX;
+        }
+        sOrigLivre = (k + 1) % MAX_TEX;
+        sOrig[k].hash = oHash;
+        sOrig[k].forma = oForma;
+        sOrig[k].texa = oTexa;
+        sOrig[k].refs = 1;
+        sOrig[k].sai = 0;
+        sOrig[k].tex = t->tex;
+#if defined(BT3_GPU_FALSO)
+        if (getenv("BT3_TEX_CONTA") != NULL && px != NULL) {
+            sOrig[k].copia = malloc((size_t)tw * th * 4);
+            if (sOrig[k].copia != NULL) {
+                memcpy(sOrig[k].copia, px, (size_t)tw * th * 4);
+            }
+        }
+#endif
+        orig_insere(k);
+        t->orig = (uint16_t)(k + 1);
+    }
+#endif
     if (replaced) {
         int level;
         for (level = 0; level < pack.levels; level++) {

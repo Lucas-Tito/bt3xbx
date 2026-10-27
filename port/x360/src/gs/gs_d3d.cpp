@@ -518,6 +518,26 @@ static unsigned __int64 sVbTb0;             /* o mftb e o QueryPerformanceCounte
 static LARGE_INTEGER sVbQ0;
 static int sVbHw;                           /* BT3_VBLANK_HW: 1 (o padrão) a espera é pelo vblank de hardware; 0, o Sleep */
 
+/* (BT3_PICOS_TELA, 08-gravacao.md, seção 25) a imagem ligada ao quadro: a DPC guarda, por troca (o Swap mostrado), o vblank
+   em que ela entrou e o mftb dele; o desenho guarda, por troca (o QuerySwapStatus logo depois do Present), o quadro do GS, se
+   foi uma repetição (GsD3d_Repete) e o mftb do Present. Um escritor por anel; o desenho lê os dois (tela_processa). */
+#define TELA_N 64
+struct TelaEnt {
+    volatile DWORD swap, n;
+    volatile unsigned __int64 tb;
+};
+struct TelaPres {
+    DWORD swap;
+    unsigned q;
+    int repete;
+    unsigned __int64 tb;
+};
+static int sTelaLiga;                 /* a chave */
+static TelaEnt sTelaEnt[TELA_N];     /* (só a DPC escreve) */
+static volatile DWORD sTelaUlt;      /* a última troca guardada pela DPC */
+static volatile int sTelaTem;
+static TelaPres sTelaPres[TELA_N];   /* (só o desenho) */
+
 static void WINAPI vblank_cb(D3DVBLANKDATA *d) {
     DWORD n = sVbN + 1, k;
     sVbTb = __mftb();
@@ -532,6 +552,15 @@ static void WINAPI vblank_cb(D3DVBLANKDATA *d) {
             sVbPuladas += d->Swap - sVbSwap - 1;
             sVbSwap = d->Swap;
             sVbSwapN = n;
+            if (sTelaLiga) { /* (só inteiros: a DPC) */
+                TelaEnt *e = &sTelaEnt[d->Swap % TELA_N];
+                e->swap = d->Swap;
+                e->n = n;
+                e->tb = sVbTb;
+                __lwsync();
+                sTelaUlt = d->Swap;
+                sTelaTem = 1;
+            }
         }
         if (d->Flags & D3DVBLANK_SWAPMISSED) {
             sVbPerdidas++;
@@ -748,11 +777,13 @@ extern unsigned gPortVBlanks; /* plat_stub.c */
 struct PicoJ {
     unsigned q, esperas, vblanks, vblank, isoN, isoKb, diario;
     float per, espera, vb, isoMs, discoMs;
+    unsigned __int64 tb; /* o mftb da entrega (BT3_PICOS_TELA) */
 };
 struct PicoG {
     unsigned q, qJogo, texN, texKpx, envios, envioKb, hash, lotes, desenhos, verts, vuVerts, vuIdx, press, descN, esperasMem;
     unsigned xg[3], xgKb, soltas, memMede;
     float per, ocupada, espDes, ocioso, espMem, texMs, xgMs;
+    unsigned __int64 tb; /* o mftb da entrega (BT3_PICOS_TELA) */
 };
 struct PicoD {
     unsigned q, captura, repete;
@@ -805,6 +836,7 @@ extern "C" void Picos_Jogo(unsigned quadro, uint64_t vblankNs) {
     n = gPicosDiarioDiscoUs;
     p->discoMs = (float)(n - discoUs) / 1000.0f;
     discoUs = n;
+    p->tb = t;
     __lwsync();
     p->q = quadro;
 }
@@ -863,6 +895,7 @@ extern "C" void Picos_Gravou(unsigned quadro, uint64_t esperaTiques, const uint3
     n = sPicoMemMede;
     p->memMede = n - memMede;
     memMede = n;
+    p->tb = t;
     __lwsync();
     p->q = quadro;
 }
@@ -985,6 +1018,187 @@ static void picos_desenho(const GsQuadro *q, double msFim, double msPresent, int
     repAnt = r;
     p->q = q->quadro;
     picos_escreve(q->quadro - 2);
+}
+
+/* ---- a tela por imagem (F5, etapa 8; BT3_PICOS_TELA=1; 08-gravacao.md, seção 25) ---------------------------------- */
+/* O passos conta as imagens por vblanks na tela pela callback de vblank, sem saber de que quadro cada uma é nem se é uma
+   repetição (o GsD3d_Repete apresenta de novo a mesma imagem depois de 50 ms sem quadro, e a contagem a vê como imagem
+   nova: um engasgo de 4 vblanks vira duas imagens de 2). Com a chave, o desenho liga cada troca ao quadro (o
+   QuerySwapStatus logo depois do Present; a DPC guarda o vblank em que a troca entrou) e, na janela do passos, escreve uma
+   linha para cada imagem de fato (as repetições somadas à imagem que repetem) que não ficou 2 vblanks, com os momentos do
+   quadro da troca seguinte contados até o prazo dela, o vblank 2 depois de a imagem anterior entrar: a entrega do jogo, a
+   da gravação, o Present e a GPU acabando (o InsertCallback do picos). No fim da janela, o resumo de todas as trocas. Só o
+   desenho (a dona do dispositivo) mexe nisto; os carimbos dos três lados são os do picos (o BT3_PICOS, ou um limiar alto). */
+#define TELA_FOLGAS 4096
+#define TELA_LINHAS 200
+static DWORD sTelaFeito;               /* a última troca vista pelo desenho */
+static int sTelaComeco, sTelaJanela;   /* já viu uma troca; a janela do passos aberta na última passada */
+static unsigned sTelaUltQ;             /* o quadro da última apresentação (o que o GsD3d_Repete repete) */
+static unsigned sTelaAcum;             /* os vblanks da imagem de fato até aqui (as repetições somam) */
+static unsigned sTelaHist[4], sTelaTrocas, sTelaRepet, sTelaSemQ, sTelaPuladas, sTelaLinhas, sTelaSemG;
+static float sTelaFolgaG[TELA_FOLGAS], sTelaFolgaP[TELA_FOLGAS];
+static unsigned sTelaNG, sTelaNP;
+static float sTelaAntG = -999.0f, sTelaAntP = -999.0f; /* as folgas da troca anterior */
+
+/* de tb até o prazo, em ms: positivo antes do prazo, negativo depois */
+static float tela_ms(unsigned __int64 prazo, unsigned __int64 tb) {
+    return (float)((double)(__int64)(prazo - tb) / sPicoTbMs);
+}
+
+static int tela_cmp(const void *a, const void *b) {
+    float x = *(const float *)a, y = *(const float *)b;
+    return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/* o mínimo, o p1, o p10 e a mediana (ordena o vetor) */
+static void tela_pct(float *v, unsigned n, float *o) {
+    if (n == 0) {
+        o[0] = o[1] = o[2] = o[3] = -999.0f;
+        return;
+    }
+    qsort(v, n, sizeof(float), tela_cmp);
+    o[0] = v[0];
+    o[1] = v[n / 100];
+    o[2] = v[n / 10];
+    o[3] = v[n / 2];
+}
+
+static void tela_zera(void) {
+    memset(sTelaHist, 0, sizeof(sTelaHist));
+    sTelaTrocas = sTelaRepet = sTelaSemQ = sTelaPuladas = sTelaLinhas = sTelaSemG = sTelaNG = sTelaNP = 0;
+    sTelaAcum = 0;
+}
+
+static void tela_fecha(void) {
+    float g[4], p[4];
+    tela_pct(sTelaFolgaG, sTelaNG, g);
+    tela_pct(sTelaFolgaP, sTelaNP, p);
+    Diario_Escrever("picos: tela, janela: %u trocas, %u repetições (GsD3d_Repete), %u sem o quadro, %u puladas; imagens de "
+                    "fato por vblanks na tela 1 %u, 2 %u, 3 %u, 4 ou mais %u; folga até o prazo (o segundo vblank depois de "
+                    "a imagem anterior entrar), da GPU acabando o quadro: mínimo %.1f, p1 %.1f, p10 %.1f, mediana %.1f ms "
+                    "(%u trocas, %u sem a marca); do Present: mínimo %.1f, p1 %.1f, p10 %.1f, mediana %.1f ms (%u); %u linhas",
+                    sTelaTrocas, sTelaRepet, sTelaSemQ, sTelaPuladas, sTelaHist[0], sTelaHist[1], sTelaHist[2], sTelaHist[3],
+                    g[0], g[1], g[2], g[3], sTelaNG, sTelaSemG, p[0], p[1], p[2], p[3], sTelaNP, sTelaLinhas);
+}
+
+/* a troca s entrou na tela (a DPC a guardou): a imagem anterior acabou */
+static void tela_troca(DWORD s) {
+    const TelaEnt *e = &sTelaEnt[s % TELA_N], *a = &sTelaEnt[(s - 1) % TELA_N];
+    const TelaPres *p = &sTelaPres[s % TELA_N], *pa = &sTelaPres[(s - 1) % TELA_N];
+    DWORD en, an;
+    unsigned __int64 etb, atb, prazo, gtb = 0;
+    unsigned k, q = 0, img;
+    int temP, temPa, rep;
+    const PicoD *d = NULL;
+    const PicoG *g = NULL;
+    const PicoJ *j = NULL;
+    float fG = -999.0f, fP = -999.0f;
+    if (e->swap != s) {
+        sTelaPuladas++;
+        sTelaAcum = 0;
+        return;
+    }
+    en = e->n;
+    etb = e->tb;
+    an = a->n;
+    atb = a->tb;
+    if (a->swap != s - 1 || en <= an) {
+        sTelaAcum = 0;
+        return;
+    }
+    k = en - an;
+    prazo = atb + 2 * ((etb - atb) / k);
+    temP = p->swap == s;
+    temPa = pa->swap == s - 1;
+    rep = temP && p->repete;
+    sTelaTrocas++;
+    sTelaRepet += rep;
+    sTelaSemQ += !temP;
+    sTelaAcum += k;
+    if (temP && !rep) {
+        q = p->q;
+        if (sPD[q % PICOS_N].q == q) {
+            d = &sPD[q % PICOS_N];
+            gtb = sPicoGpu[q % PICOS_N];
+        }
+        if (sPG[q % PICOS_N].q == q) {
+            g = &sPG[q % PICOS_N];
+            if (sPJ[g->qJogo % PICOS_N].q == g->qJogo) {
+                j = &sPJ[g->qJogo % PICOS_N];
+            }
+        }
+        fP = tela_ms(prazo, p->tb);
+        if (sTelaNP < TELA_FOLGAS) {
+            sTelaFolgaP[sTelaNP++] = fP;
+        }
+        if (d != NULL && gtb != 0) {
+            fG = tela_ms(prazo, gtb);
+            if (sTelaNG < TELA_FOLGAS) {
+                sTelaFolgaG[sTelaNG++] = fG;
+            }
+        } else {
+            sTelaSemG++;
+        }
+    }
+    if (rep) {
+        return; /* (a mesma imagem segue; a linha sai quando a próxima imagem de fato entrar) */
+    }
+    img = sTelaAcum;
+    sTelaHist[img >= 4 ? 3 : img == 0 ? 0 : img - 1]++;
+    sTelaAcum = 0;
+    if ((img != 2 || k != 2) && sTelaLinhas < TELA_LINHAS) {
+        sTelaLinhas++;
+        Diario_Escrever("picos: tela: a imagem do quadro %u%s ficou %u vblanks na tela (%u na última troca); a seguinte, do "
+                        "quadro %u (troca %u), entrou no vblank %u; até o prazo (+ antes, - depois): a entrega do jogo %.1f, a "
+                        "da gravação %.1f, o Present %.1f, a GPU acabou %.1f ms; o quadro: jogo %.1f (espera da gravação %.1f, "
+                        "vblank %.1f), gravação ocupada %.1f (sem trabalho %.1f; texturas %u, %.1f ms), frame_end %.1f; a troca "
+                        "anterior: Present %.1f, GPU %.1f ms antes do prazo dela",
+                        temPa ? pa->q : 0u, temPa ? (pa->repete ? " (repetição)" : "") : " (sem o quadro)", img, k, q, s, en,
+                        j != NULL ? tela_ms(prazo, j->tb) : -999.0f, g != NULL ? tela_ms(prazo, g->tb) : -999.0f, fP, fG,
+                        j != NULL ? j->per : -1.0f, j != NULL ? j->espera : -1.0f, j != NULL ? j->vb : -1.0f,
+                        g != NULL ? g->ocupada : -1.0f, g != NULL ? g->ocioso : -1.0f, g != NULL ? g->texN : 0u,
+                        g != NULL ? g->texMs : -1.0f, d != NULL ? d->fim : -1.0f, sTelaAntP, sTelaAntG);
+    }
+    sTelaAntP = fP;
+    sTelaAntG = fG;
+}
+
+/* (o desenho, logo depois de cada Present) o quadro da troca e as trocas que entraram desde a última vez */
+static void tela_apresentou(unsigned quadro, int repete) {
+    D3DSWAP_STATUS st;
+    TelaPres *p;
+    DWORD ult;
+    int janela;
+    sDev->QuerySwapStatus(&st);
+    p = &sTelaPres[st.Swap % TELA_N];
+    p->swap = st.Swap;
+    p->q = quadro;
+    p->repete = repete;
+    p->tb = __mftb();
+    if (!sTelaTem) {
+        return;
+    }
+    ult = sTelaUlt;
+    __lwsync();
+    janela = Passos_Medindo() != 0;
+    if (janela && !sTelaJanela) {
+        tela_zera();
+    }
+    if (!sTelaComeco || ult - sTelaFeito > TELA_N / 2) {
+        sTelaComeco = 1;
+        sTelaFeito = ult; /* (a primeira vez, ou atrás demais: recomeça daqui) */
+        sTelaAcum = 0;
+    }
+    while (sTelaFeito != ult) {
+        sTelaFeito++;
+        if (janela) {
+            tela_troca(sTelaFeito);
+        }
+    }
+    if (!janela && sTelaJanela) {
+        tela_fecha();
+    }
+    sTelaJanela = janela;
 }
 
 /* ---- tempos por passada (F5, etapa 8; BT3_TEMPOS, ligado por padrão) ----------------------------------------- */
@@ -3499,9 +3713,18 @@ static int d3d_init(void) {
     nat_init(); /* (F5, etapa 7, segunda parte) */
     tempo_init(); /* (F5, etapa 8) */
     gPicos = env_num("BT3_PICOS", 0); /* (F5, etapa 8, picos) */
+    sTelaLiga = env_num("BT3_PICOS_TELA", 0) != 0; /* (seção 25: a tela por imagem, com os carimbos do picos) */
+    if (sTelaLiga && gPicos == 0) {
+        gPicos = 100000; /* (os carimbos dos três lados sem as linhas por quadro) */
+    }
     if (gPicos != 0) {
         Diario_Escrever("gs_d3d: picos: o registro dos quadros lentos ligado, limiar %u ms (BT3_PICOS): uma linha por quadro "
                         "acima dele, dois quadros depois, e um resumo a cada 60", gPicos);
+    }
+    if (sTelaLiga) {
+        Diario_Escrever("gs_d3d: picos: a tela por imagem ligada (BT3_PICOS_TELA=1): na janela do passos, uma linha por imagem "
+                        "de fato (as repetições somadas) que não ficou 2 vblanks na tela, com o quadro seguinte e os momentos "
+                        "dele até o prazo, e um resumo no fim de cada janela");
     }
     Diario_Escrever("gs_d3d: pronto; alvo %dx%d, EDRAM: cor %u + profundidade %u de %u tiles; %u MB livres", sAlvoW, sAlvoH,
                     tilesCor, tilesProf, (unsigned)EDRAM_TILES, mb_livres());
@@ -5307,6 +5530,10 @@ static void frame_end(void) {
     if (gPicos != 0) {
         picos_apresentou();
     }
+    if (sTelaLiga) {
+        sTelaUltQ = q->quadro;
+        tela_apresentou(q->quadro, 0); /* (BT3_PICOS_TELA) */
+    }
     tempo_poe(T_OUTROS);
     Passos_Apresentou(q->quadro, (unsigned)(msPresent * 1000.0));
     gGsD3dEtapa = "fim do quadro: texturas soltas";
@@ -5396,6 +5623,9 @@ extern "C" int GsD3d_Repete(void) {
     tela_copia(sMostradoTex);
     sDev->Present(NULL, NULL, NULL, NULL);
     sUltimoPresent = GetTickCount();
+    if (sTelaLiga) {
+        tela_apresentou(sTelaUltQ, 1); /* (BT3_PICOS_TELA: a mesma imagem de novo) */
+    }
     sDev->SetTexture(0, NULL);
     esquece_estado();
     gGsD3dEtapa = sDiv ? "esperando o retrato seguinte" : "jogo e gravação do quadro";
