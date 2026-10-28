@@ -2403,6 +2403,26 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   vblanks a mais na fronteira. Publicar os dois denominadores; as duas longas são as mesmas. A ausência
   de longa marginal no 7170 desses dois a não restaura F antigo nem dispensa controles entre builds.
 
+### Builds alternadas no 7170: regressão do diagnóstico inativo (F5, seção 35)
+
+- A rp33a2810 alternou três pares c57e807/8c1ec1d na mesma sessão, com saves novos. A longa
+  7169 → 7170 apareceu em 3/3 novas e 0/3 antigas; F foi 16,0 a 16,1 contra 17,8 ms, e a folga
+  mediana perdeu 0,6 ms. Isso fecha a dúvida entre build e sessão das seções 33 e 34. Não continuar
+  atribuindo a ocorrência a variação de sessão nem aprovar um corte pela melhora de outros alvos.
+- As únicas fontes de execução alteradas nesse diff são o diagnóstico CPU e seus escopos no backend.
+  Retirar as marcas numa cópia recupera byte a byte o backend antigo, com controle negativo de chamada.
+  Zero relógios desligado continua insuficiente: construtores/destrutores inativos podem mudar
+  instruções, inlining, registradores e pilha. Restaurar produção sem essas marcas e selecionar perfil
+  na compilação. Antes de integrar alfa/prefixos, provar código, dados e relocações com o XDK contra o
+  controle antigo, fora do console; a prova nativa e a igualdade dos fontes não substituem essa comparação.
+- O perfil exato do 7170 mede alfa em 4,723/4,781 ms e VU0 em 14,037/13,980, num total de ~22,3,
+  com 37.499 escopos. Alfa já existia na antiga; não confundir seu custo com os ~1,8 ms de regressão,
+  nem usar o total instrumentado para ratear o acréscimo desligado. Continua sem prova de shader frio,
+  espera eliminável ou troca de cena. O controle novo sem marcas é ~17,8 ms.
+- Passos e imagens têm denominadores distintos: nesta rodada as antigas registram 2.335 imagens para
+  2.334 passos, tanto em passos quanto em picos, com histograma conservado. Publicar ambos e conferir
+  as associações. Não corrigir automaticamente a contagem nem fabricar uma imagem longa adicional.
+
 ### A preparação da rodada final da F6 (`plano/F6/09.md`)
 
 - **Serviço de usuário precisa do barramento da sessão.** Neste WSL o systemd está ativo, mas a sessão do agente
