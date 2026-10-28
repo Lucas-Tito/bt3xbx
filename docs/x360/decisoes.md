@@ -780,8 +780,10 @@ que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
 2. **Só os ícones do 360 no console.** Os do PS2 continuam nas builds de teste do WSL, que leem os dados originais.
 3. **O "voltar" dos menus continua no Y**, fiel ao físico (o jogo volta com o triângulo): só a arte muda, nenhuma
    mudança de entrada.
-4. **A arte ainda não está escolhida:** o Lucas quer ver antes como fica. As opções são uma arte própria feita por
-   gerador ou ícones já prontos sem direitos autorais; nunca a arte da Microsoft, nenhum byte do jogo no repositório.
-   O passo da conversão recebe a arte como entrada, para trocar de fonte sem mexer no resto.
+4. **A arte é a do Kenney** ([Input Prompts](https://opengameart.org/node/159839), versão 1.5A, de Kenney,
+   www.kenney.nl, domínio público CC0), escolhida pelo Lucas numa comparação com uma arte gerada pelo projeto e com
+   a do Xelu, todas reduzidas a 32x32 e 16 cores. A licença não exige crédito, mas o Lucas quer o crédito ao autor
+   no repositório. Nunca a arte da Microsoft, nenhum byte do jogo no repositório. O passo da conversão recebe a arte
+   como entrada, para trocar de fonte sem mexer no resto.
 5. **SELECT fica como está:** o 360 também tem o botão de selecionar, então nem o ícone 8 nem o texto "SELECT button"
    da lição mudam.
