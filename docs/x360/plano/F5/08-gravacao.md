@@ -4839,7 +4839,7 @@ sem desenho, trecho perdido (GPU não conservada), curva fora de ordem ou sem fi
 
 ### Conferência completa e o que volta ao Lucas
 
-`alfa_prefixos_rodada.sh BASE SAIDA` (`a2c159f8`, na worktree `~/bt3xbx-alfa2`, base `~/f5-alfa-prefixos2/base` na main
+`alfa_prefixos_rodada.sh BASE SAIDA` (no commit final do branch, worktree `~/bt3xbx-alfa2`, base `~/f5-alfa-prefixos2/base` na main
 `c3dcc4d`): fontes iguais à main; objetos sem depuração da build normal iguais aos da main em x86, x86gv e PPCg salvo
 carimbo e falso; a build com o alfa diferente só em `gs_gs_draw.o` e `x360_gpu_falso.o`; `.text`; stubs; unidades;
 matriz da seção 28 na build com o alfa (Duelo/Treino, sem threads/gravação/desenho, cortes 00/10/20/01/11/21) contra a
