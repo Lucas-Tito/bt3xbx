@@ -4705,3 +4705,186 @@ Comandos em `build/x360/cmp/` (fora do git): a cópia do `gs_d3d.cpp` e dos head
 com `som` ligado ao do port, o `cl.exe` da `build_f2.sh`, e `link.exe /dump /nologo /disasm` (a imagem do XDK não
 tem `dumpbin.exe`). Falta só a confirmação no console de que o 7170 volta a 2 longas com a build normal; os controles
 das próximas rodadas usam esta build, e o diagnóstico, a de perfil.
+
+## 37. Rodada ap35a2810: 7170 restaurado e alfa repetido; o 6960 ainda exige os prefixos (28/10/2026)
+
+**Resposta: a correção desfez a regressão do 7170, e o alfa retirou a longa do 6929 nas três repetições.**
+A condição de ganho repetido da decisão 32 está cumprida. O alfa desligado por ambiente apresenta um custo pequeno
+contra a main; o zero da F5 continua reprovado, agora por 6959 → 6960 em todas as três aberturas com alfa.
+Os logs não publicam os tempos individuais dos quadros que melhoraram: não permitem certificar os milissegundos
+líquidos do alfa, nem margem de 1 ms no 6929/6930 ou 7170. A adoção como padrão continua condicionada às provas de
+imagem e jogo da seção 28, e à versão selecionada na compilação da decisão 32.
+
+Só análise e documentação, base `74e8cf2a`, sem console, emulador ou build. A seção 36 foi lida pelo objeto
+`d3b96c07:docs/x360/plano/F5/08-gravacao.md`, do branch de alfa/prefixos, onde ainda está; o número 36 fica reservado.
+Evidências, extrator adaptado da seção 35 e comandos em `~/f5-ap35-analise/`. Nenhuma outra worktree foi alterada.
+
+### Proveniência e conferência habitual
+
+**[Informado pelo Lucas]** Duas builds alternadas, mesma sessão, `.dat` `4fe9d049` e `.swap` `2e97a3e5`.
+Main: árvore `c3dcc4d`, `.xex` MD5 `3a9ca7bb`, compilada antes do commit, carimbo literal
+`1287ec9 diff:31093ef053`. Alfa: teste `86aaca1`, main corrigida mais alfa de `f9ed4da`, `.xex` MD5 `e2a6caf9`.
+É a versão com `BT3_ALFA_FORA` de ambiente, anterior a `BT3_ALFA_ORIGEM` de compilação. Carimbo literal
+`86aaca1 diff:da39a3ee5e` tanto na base como no alfa. Os MD5 abreviados e a composição das árvores são informação
+da sessão, não uma inspeção dos binários nesta análise. Main3/base3 foram dispensadas pelo Lucas; não são falhas
+nem repetições implícitas. Não houve abertura de oráculo.
+
+**[Medido]** Ordem real abaixo. Ambientes conferidos integralmente contra
+`~/f5-alfa-prefixos/console-ap35a2810/ambiente_NOME.txt`; main1/2 reconstruídos de base1/2, mudando só o save.
+Todos sem DEMO, hardware de desenho 3, som/16:9/FXAA/origem/VU1 direto/envio rápido ligados, escala 1,33,
+constantes/fecho 0/0, CPU/cortes/GPU comum/tempos/oráculo 0, picos 36 e tela 1.
+`BT3_ALFA_FORA=0` em main/base, 1 em alfa; sete saves distintos `game:\sv_ap35a2810_NOME`.
+A inexistência dos saves no console não foi reinspecionada. As cópias de conferência dos ambientes ficam fora do git.
+
+Originais preservados em `~/sessao_2810b/ap35/NOME/bt3xbx.log`. SHA256 dos bytes completos, reconferido no final;
+cada análise acaba no primeiro `f5_duelo.txt:99 fim vblank 12570 quadro 8378`. Continuação posterior não entra.
+
+| Abertura, ordem real | SHA256 original | Linhas usadas / totais |
+|---|---|---:|
+| main1 | `c54d50d0fb39e2928d70b6e8f9d12e3a57184c6cab81ed59f0bd953caadf21ba` | 2813 / 2990 |
+| base1 | `bd7537a312a4d23755cbad6cfee9e96707e0edef5da0c7068b20f17e77483950` | 2854 / 3081 |
+| alfa1 | `cd6656cd291ed2caad74af78a676057816631a61fa384e490c5b8f3d1bbcd37c` | 2798 / 2975 |
+| main2 | `b8c753ea799deed2b2abbfd2444b0ded84af1a9e0345cc6b9f2adb9958ec7918` | 2819 / 3448 |
+| base2 | `b07dde7fc074ad75047047b1825d1559e8b7666c98a1312aa497ca2dfe2a7b63` | 2855 / 2931 |
+| alfa2 | `91d750b786727bf47e596e28bc11b6797a7762f298fa4ab2c9a7634ef2bd4355` | 2805 / 2881 |
+| alfa3 | `2709a2c73aa0cdfe7405f25e2b33006555375591f34c825f5b1b8c6954779777` | 2798 / 3226 |
+
+Nas sete: j1/j2 com **684/2.334 passos**, **1.368/4.668 vblanks**, todos os passos de dois vblanks,
+parede/esperado 0,9972; resultado estado 4, vencedor 0x2, razão 0x1, vida 0/27160, vblank 11478/quadro 7757.
+Zero erro, vigia, amostra indisponível, linha perdida do diário, descarte requerido, pressão, espera de descarte,
+textura recusada/branca, alvo sem textura, leitura sem Resolve, VU pulada ou falta de espaço.
+Conferidos os 88 resumos de recursos de cada abertura, sem somar seus contadores cumulativos, e os descartes dos
+picos individuais. Nenhuma marca CPU/GPU fina ou de gravação ativa.
+
+As catorze janelas têm associação completa: nenhuma repetição, troca sem quadro, imagem pulada ou marca GPU ausente;
+histogramas conservam trocas e linhas excepcionais, com os quadros seguintes em ordem. J1 tem 684 imagens,
+todas de dois vblanks. Em j2 os denominadores diferem:
+
+| Grupo | Imagens de picos / passos | Histograma picos 1/2/3/4+ | Histograma passos 1/2/3/4+ |
+|---|---|---|---|
+| main1/2 | 2335 / 2335 | 4/2329/2/0 | 4/2329/2/0 |
+| base1/2 | 2335 / 2334 | 3/2330/2/0 | 3/2329/2/0 |
+| alfa1/2/3 | 2335 / 2334 | 2/2332/1/0 | 2/2331/1/0 |
+
+A diferença de uma imagem de dois vblanks na fronteira não cria outra longa. **Nenhuma imagem de quatro ou mais.**
+`passos.py RECORTE --carimbo CARIMBO_REAL` sai 0 nas sete; acrescentando
+`--console --janelas 2 --minimo 600`, sai **1 nas sete**, somente pela longa de j2 e pela consequente falta da
+segunda janela aprovada. J1 passa. Isso confere a estrutura, não aprova o zero nem as três janelas longas finais.
+
+### 7170: a confirmação que faltava à seção 35
+
+**[Medido]** Reprocessados também os seis controles alternados de `~/sessao_2810b/rp33/`, com os ambientes,
+carimbos e SHA256 da seção 35, usando o mesmo leitor desta worktree. Estrutura 0 e aceite 1 nos seis.
+F é `frame_end`, U é a folga da GPU no prazo da imagem anterior; valores em ms. `n/d` significa não publicado.
+
+| Grupo | F do 7170 por repetição | Gravação ocupada | 7169 → 7170 com três vblanks | U individual do 7170 | Folga j2 p10 / p50 |
+|---|---|---|---|---|---|
+| rp33 antiga1/2/3 | 16,0 / 16,0 / 16,1 | 21,1 / 21,2 / 21,1 | 0/3 | n/d | 6,3 / 8,4 |
+| rp33 nova1/2/3, antes da correção | 17,8 / 17,8 / 17,8 | 20,8 / 20,8 / 20,8 | 3/3 | -0,1 / -0,1 / -0,1 | 5,9 / 7,8 |
+| ap35 main1/2, corrigida | 15,9 / 16,1 | 21,2 / 21,1 | 0/2 | n/d | 6,3 / 8,4 |
+| ap35 base1/2, alfa desligado | 16,1 / 16,0 | 21,8 / 21,7 | 0/2 | n/d | 6,0 e 5,9 / 8,2 |
+| ap35 alfa1/2/3 | n/d | n/d | 0/3 | n/d | 6,0 / 8,1 |
+
+A main recuperou F antigo dentro de 0,1 ms, tirou **1,7 a 1,9 ms** contra a nova regressiva, restaurou p10/p50 de j2
+e não repetiu a longa. A confirmação é direta para as duas main e compatível nas cinco da build de teste.
+Apresentação CPU do 7170: antiga 39,9 a 40,0, regressiva 40,6, main 39,9 a 40,0, base 40,3 a 40,4.
+Intervalo CPU de apresentação maior que 33,4 não significa três vblanks na tela.
+U antigo/main/base não é impresso, pois a imagem passa a dois vblanks; alfa também deixa de imprimir o pico CPU.
+Não atribuir ao alfa a retirada desta regressão: as main/base corrigidas já a retiraram sem ele.
+
+### Alfa: ganho repetido, tempos filtrados e custo desligado
+
+**[Medido]** A imagem A=6929 fica três vblanks porque o quadro seguinte B=6930 atrasa.
+J/G/P/U abaixo são folgas até esse prazo, não durações das quatro etapas. F e gravação ocupada são durações CPU.
+
+| Abertura | J/G/P/U do 6930 | F do 6930 | Gravação ocupada | Permanência do 6929 | U do próprio 6929 |
+|---|---|---:|---:|---|---|
+| main1 | 32,9 / 18,2 / 11,6 / -2,8 | 6,7 | 14,7 | 3 | 1,0 |
+| base1 | 32,9 / 18,2 / 11,5 / -2,8 | 6,7 | 14,7 | 3 | 1,1 |
+| alfa1 | n/d | n/d | n/d | 2 | n/d |
+| main2 | 32,9 / 18,2 / 11,6 / -2,8 | 6,7 | 14,7 | 3 | 1,0 |
+| base2 | 32,9 / 18,2 / 11,5 / -2,9 | 6,7 | 14,8 | 3 | 1,0 |
+| alfa2 | n/d | n/d | n/d | 2 | n/d |
+| alfa3 | n/d | n/d | n/d | 2 | n/d |
+
+A longa ocorre nas **duas main e duas base** e desaparece nos **três alfa**; a melhora retorna depois de main2/base2.
+Nos controles, a amplitude de U do 6930 é 0,0 na main e 0,1 na base, F não varia. Nos três alfa o histograma de j2
+é idêntico, p10/p50=6,0/8,1, p1=2,0/2,1/2,1, mínimo=-10,5 nos três. Não há variação de ocorrência do ganho.
+
+**[Limite da medida]** O código de `picos_escreve` só imprime o quadro quando apresentação ou período do jogo
+superam `BT3_PICOS=36`; `tela_troca` só imprime permanências diferentes de dois vblanks. Com alfa, 6929, 6930 e
+7170 não aparecem em nenhuma dessas linhas individuais. As associações e histogramas completos provam as
+permanências de dois; não recuperam J/G/P/U ou F. A apresentação CPU do 6930 sai de 37,4 para no máximo 36 ms
+(inferência do filtro, não ganho de F ou de U). Os ~5,4 ms do perfil histórico e a folga 2,8 do modelo da seção 36
+não viram medidas desta rodada. U do próprio 6929 só é recuperável nos controles pela linha da troca seguinte,
+que publica a folga anterior. Com alfa ambos os quadros passam em dois vblanks, mas **margem >=1 ms não foi provada**
+para nenhum deles; mesmo 1,0 impresso no controle é arredondado. Não substituir essa lacuna pelo p1 da janela.
+
+**[Conclusão para a decisão 32]** Sim, está cumprida a condição específica de o console confirmar o ganho nas
+repetições. A aprovação completa do alfa padrão também exige as provas de mesma imagem/jogo da seção 28 e a
+conferência da variante de compilação: esta sessão mediu a versão de ambiente, com oráculo desligado e sem capturas.
+Nenhum padrão ou código foi alterado nesta análise. Mantidas as condições já autorizadas, sem nova pergunta ao Lucas.
+
+**[Medido, alfa desligado contra main]** Não é custo zero nesta versão de ambiente. Folga j2 mediana cai
+8,4 → 8,2, p10 6,3 → 6,0/5,9; no 6960, U cai -9,9 → -10,3/-10,2, com gravação ocupada
+20,2 → 20,6/20,5. No 7170, gravação cresce de 21,1 a 21,2 para 21,7 a 21,8, mantendo F e dois vblanks.
+O efeito repetido no 6960 (0,3 a 0,4 ms) é maior que a amplitude interna de 0,1 da base e 0,0 da main em U.
+O fonte de `f9ed4da` ainda chama `alfa_ligado()` por vértice/desenho e zera acumuladores sem condição;
+é compatível com custo inativo, sem isolar cada instrução ou excluir cache/layout.
+Isso reforça a seleção na compilação da seção 36; não mede seu custo desligado nem substitui a prova XDK.
+
+### 6959/6960: orçamento atualizado para os prefixos da seção 36
+
+**[Medido]** A única longa dos três alfa é 6959 → 6960; o 6960 conserva 1.408 desenhos,
+3.150 lotes VU1, 245 envios/2.290 KB e 293 recálculos de hash em todas as sete aberturas.
+Nesse pico, criação de textura/XG, disco, descarte e escritora do diário são zero.
+
+| Abertura | J/G/P/U do 6960 | F | Gravação ocupada | Folga j2 mín./p1/p10/p50 |
+|---|---|---:|---:|---|
+| main1 | 32,8 / 12,6 / 6,9 / -9,9 | 5,8 | 20,2 | -9,9 / 2,2 / 6,3 / 8,4 |
+| base1 | 32,8 / 12,3 / 6,6 / -10,3 | 5,7 | 20,6 | -10,3 / 2,1 / 6,0 / 8,2 |
+| alfa1 | 32,8 / 12,1 / 6,4 / -10,5 | 5,6 | 20,8 | -10,5 / 2,0 / 6,0 / 8,1 |
+| main2 | 32,8 / 12,7 / 6,8 / -9,9 | 5,8 | 20,2 | -9,9 / 2,2 / 6,3 / 8,4 |
+| base2 | 32,8 / 12,3 / 6,7 / -10,2 | 5,7 | 20,5 | -10,2 / 2,2 / 5,9 / 8,2 |
+| alfa2 | 32,8 / 12,0 / 6,4 / -10,5 | 5,6 | 20,9 | -10,5 / 2,1 / 6,0 / 8,1 |
+| alfa3 | 32,8 / 12,0 / 6,4 / -10,5 | 5,6 | 20,8 | -10,5 / 2,1 / 6,0 / 8,1 |
+
+Alfa acrescenta 0,2 a 0,3 ms de atraso contra base e 0,6 contra main no 6960; não há ganho de alfa a somar aqui.
+A meta com margem de 1 ms passa de **10,6 históricos** para **10,9 na main corrigida, 11,2 a 11,3 na base e
+11,5 no alfa medido**. O orçamento deve partir desses controles, sem manter o déficit da build regressiva.
+
+**[Estimado, só aritmética de sensibilidade]** Se os 13,0 a 15,9 ms do teto idealizado da seção 36 continuassem
+inteiros disponíveis sobre o alfa atual, a folga resultante seria **2,5 a 5,4 ms**, 0,9 abaixo dos 3,4 a 6,3 do
+modelo anterior; sobrariam 1,5 a 4,4 além da margem de 1. Não é uma nova simulação nem transferência de ganho
+certificada: F caiu de 6,5 da base antiga do modelo para 5,6, e o progresso real da gravação no Xenon continua
+sem medida. Recalibrar P/U e a curva por faixa, mantendo todo o custo de fila, despacho D3D, memória/SMT,
+DATE longo, versões e cercas. Não somar novamente os ~5,4 do 6930 ou ~4,7 do 7170 ao teto do 6960.
+
+O resultado sustenta a próxima etapa já autorizada na decisão 32: relógio da gravação por faixa na build de perfil,
+depois integração `BT3_GS_LOTES` desligada por padrão, plano previsto com fallback e DATE limitado, com imagem,
+entrada e latência iguais. A barreira integral e o DATE integral continuam sem fechar a conta do modelo.
+Não antecipa aceite do zero nem os termos da exceção E; se os números reais não fecharem, voltam ao Lucas como previsto.
+
+### Rodada final, verificadores e limites
+
+| Conferência no commit final | Resultado |
+|---|---|
+| Sete ap35: ambiente, carimbo, SHA256, fim, passos, resultado, recursos e associações | tudo certo na estrutura |
+| Seis controles rp33, mesma conferência e SHA256 da seção 35 | tudo certo na estrutura |
+| `passos.py`, estrutura / aceite `--console --janelas 2 --minimo 600` | 0 / **1 nas treze**, somente longas; zero reprovado |
+| Extrator adaptado visto falhar em cópias | **20 saídas 1**, mutantes preservados fora do git |
+| `src/`, `include/`, `port/` contra `74e8cf2a` | nenhuma alteração; sem build nova |
+| `.text` x86 histórica reextraída, `cmp` contra a referência da seção 35 | igual, SHA1 `43444ea4d03a6d448aa1ae74a631e35b356a7caa` |
+
+`~/f5-ap35-analise/final.sh` e `final.log` guardam comandos e saídas; `originais.sha256`, ambientes, recortes,
+`rodada/dados.json`, saídas integrais de `passos.py` e negativos permitem repetir a análise sem jogo.
+Negativos: fim, associação, imagem, duração, resultado, save, carimbo, recurso recusado, descarte no pico e no
+resumo, chave de alfa, ambiente duplicado, pico ausente, recurso de pico/resumo ausente, marca GPU pendente,
+folga anterior incompleta, perda no diário, quadro seguinte e histograma. O primeiro ensaio revelou que alterar o
+primeiro `descarte:` atingia um pico de boot, antes do resumo; o leitor passou a exigir zero nos dois lugares e os
+dois controles negativos foram vistos sair com 1. Aprendizado registrado no guia neste commit.
+
+A `.text` vem de `~/f5-gpu-comum/base/port/build/x86/bt3_x86`, carimbo histórico `4c85c039 diff:da39a3ee5e`;
+é referência preexistente, não build deste commit ou prova nova de objetos. A tarefa proíbe emulador e console:
+não se rodaram roteiros, save, captura, oráculo, XDK, três janelas longas ou sessão livre. Além dessas provas,
+continuam sem medida os tempos exatos e a margem individual do alfa, o ganho real dos prefixos, F7 e 720p.
