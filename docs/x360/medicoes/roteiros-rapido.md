@@ -150,8 +150,15 @@ O controle real de memória truncada e pixel alterado recusou as duas cópias.
 Sua primeira restauração falhou porque o teste não preservou `grav_*.bin`:
 `roteiros.sh` os apaga por padrão após julgar o mixer. Para reaplicar `SOM=1`
 com `REUSA=1`, é obrigatório coletar com `GUARDA_SOM=1` e manter essa variável
-nas verificações das cópias. A recuperação regenera apenas as duas gravações
-por roteiro, confere rastros e mixer e reaplica os julgamentos completos sem
-repetir as passagens caras de memórias e imagens. Isso não entra no tempo do
-ganho. O relatório de entrega registra o resultado final dos controles e os
-logs conservados em `~/rapido/`.
+nas verificações das cópias. Os controles específicos de memória e imagem
+podem retirar `SOM` do ambiente: a prova de áudio continua nos quatro casos
+oficiais completos, sem alterar seu julgamento nem fingir PCM ausente.
+
+O fechamento não repete o jogo por uma mudança de documentação: recompila as
+cinco builds finais e compara suas seções `.text` com as da rodada aprovada,
+além dos objetos sem depuração contra a base. Reaplica os julgamentos de memória
+e imagem com `REUSA=1`, vê as duas corrupções falharem isoladamente e exige
+`tudo certo` após restaurar a cópia. O relatório registra os resultados e os
+logs conservados em `~/rapido/`. A tentativa de regenerar áudio foi cancelada
+enquanto ainda aguardava a trava de outra tarefa, antes de executar qualquer
+emulador. O custo de espera não entra na medida do ganho.

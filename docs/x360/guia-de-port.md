@@ -966,7 +966,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   com 79 e 93 arquivos/provas equivalentes. A projeção dos roteiros da F6 é 13,71 para 9,79 h; da F5, 13,39 para
   9,46 h, sem contar os testes fixos. As faixas e os limites da extrapolação estão no inventário.
   Para controles com `SOM=1 REUSA=1`, colete e confira com `GUARDA_SOM=1`: os PCM são apagados por padrão,
-  e a primeira restauração da cópia reprovou por falta deles. Exija também a cópia restaurada com `tudo certo`.
+  e a primeira restauração da cópia reprovou por falta deles. Para controles específicos de memória e imagem,
+  retire `SOM` do ambiente e preserve o julgamento de áudio da rodada completa. Exija também a cópia restaurada
+  com `tudo certo`. Uma mudança só de documentação não pede repetir o jogo: recompilar e comparar o código
+  com a rodada aprovada conserva essa prova sem ocupar o emulador.
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**
   - **O rasterizador pintando todo quadro leva umas três horas por roteiro na PPC** (no qemu, uns 30 quadros por
     minuto nos menus; a x86, 7 minutos). O que custa é pintar: com o GS ligado e nada pintado (`BT3_GS_FROM` alto) a
