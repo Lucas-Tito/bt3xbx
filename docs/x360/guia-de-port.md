@@ -2402,3 +2402,46 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Nos dois grav*_a, j2 de picos conta 2.335 trocas, contra 2.334 em passos, apenas uma imagem de dois
   vblanks a mais na fronteira. Publicar os dois denominadores; as duas longas são as mesmas. A ausência
   de longa marginal no 7170 desses dois a não restaura F antigo nem dispensa controles entre builds.
+
+### A preparação da rodada final da F6 (`plano/F6/09.md`)
+
+- **Serviço de usuário precisa do barramento da sessão.** Neste WSL o systemd está ativo, mas a sessão do agente
+  pode chegar sem `XDG_RUNTIME_DIR`. `systemctl --user` então diz `No medium found`; usar
+  `/run/user/$(id -u)`, sem elevar usuário nem criar outro serviço root. `f6_final.sh` define essa variável e
+  mantém uma única chamada bloqueante de `flock` para a fila inteira, com logs em `~/`.
+- **A rede do filme não se reduz às quatro capturas.** O escopo pede hash RGBA por imagem nas duas arquiteturas:
+  `f6_filme_hash.c` decodifica os 7010 índices, `f6_final_confere.py filmes` recusa corte, índice repetido e hash
+  diferente. O modelo inclui o decodificador real, sem mudar upstream. O `mpeg2test` citado no escopo não está
+  neste clone; a referência independente fica explicitamente reprovada, sem renomear o mesmo código como oráculo.
+- **Finalizar a fila não significa aprovar a rodada.** O conferente F6 exige todos os casos, códigos, logs íntegros
+  por SHA256, carimbos, SHA1 da `.text` e filmes completos. Continua as redes independentes para diagnosticar,
+  mas sai 1 em qualquer falha. `FIM` sozinho é término. As propostas antigas de p99 de trabalho não substituem
+  o zero de imagens longas no combate da decisão 27; a soma de custo do som ainda tem limite próprio.
+- **No WSL, espaço livre no ext4 não mede o espaço do Windows.** Em 28/10 a rodada F6 encheu o disco do
+  Windows e morreu após quatro roteiros, apesar de `df` mostrar centenas de GiB livres no volume virtual.
+  Guardar todos os rastreios, partes, convertidos, dumps e imagens acumulou cerca de 16 GiB só nesta rodada.
+  Após julgamento, conservar logs textuais, gdb, rastro de som para negativos, carimbos e hashes; apagar os
+  intermediários de cada caso imediatamente. `f6_final_arquivo.py` não segue links e registra o descarte em
+  `retencao.json`. Isso impede repetir `REUSA=1` sobre o caso compactado; os logs conservam o julgamento,
+  não os insumos de uma nova comparação. Reservar provisoriamente 16 GiB adicionais no disco físico para
+  um caso ativo e a ISO, sem contar os dados existentes; `espaco.json` mede o pico amostrado a cada 20 s.
+  Os 40 GB disponíveis nesta retomada bastam para essa reserva, sem acumular saídas entre casos.
+- **Retomar conserva reprovações e proveniência.** `f6_final.sh COMMIT BASE DESTINO --retomar` valida a
+  origem, os SHA256 dos logs, worktrees limpos e os cinco carimbos. Pula todo caso já registrado, inclusive
+  falha; uma interrupção sem registro refaz só esse caso. Metadados são publicados por troca atômica.
+  O executor pode mudar apenas ferramentas/documentos/ambientes, mantendo os fontes ensaiados. Sua revisão
+  fica em `executores.txt`; não chamar builds antigas de builds do executor novo. Novas durações usam
+  `$SECONDS`: o relógio civil recuou 1 s na rodada original e deixou `filme-build` com duração negativa.
+  Esse registro é preservado e recusado pelo conferente. Um `.sh` versionado sem bit executável deve ser
+  invocado por `bash`; a tentativa original recusada permanece na tabela, com novo caso explícito para o teste.
+- **Medida final da retenção da F6:** 21 roteiros, 47,6 GiB de intermediários descartados ao longo da
+  fila; pico amostrado da pasta 4.940.568 KiB (4,712 GiB), 2.035 amostras de 20 s, final cerca de 0,67 GiB.
+  Essa medida da retomada não inclui temporários externos nem um pico entre amostras. Manter reserva de
+  16 GiB físicos adicionais para uma rodada nova, ISO, temporários e margem; não confiar no `df` do ext4.
+  Apagar permite reutilizar blocos do volume virtual, sem implicar compactação do VHDX no Windows.
+- **Falha de imagem pode ser de identidade ou ausência.** Em `discfusion`, duas lutas usam o mesmo nome
+  `luta`: a captura da segunda sobrescreve a primeira e o conferente recusa o quadro, mesmo com 26/26
+  PPM iguais. Em `f6_final`/`f6_final_start`, a marca de retorno e `fim` coincidem; falta o desenho seguinte
+  para capturar a marca nas duas arquiteturas. Registrar como captura/âncora reprovada, sem afirmar
+  diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
+  e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
