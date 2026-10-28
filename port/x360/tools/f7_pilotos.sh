@@ -14,8 +14,12 @@ case "$maquina" in
     Deck) trava="$HOME/deck.lock";;
     *) echo 'F7_MAQUINA deve ser WSL ou Deck'; exit 1;;
 esac
-exec 9> "$trava"
-flock 9
+if [ "${F7_TRAVADO:-}" = 1 ]; then
+    [ "$(readlink /proc/$$/fd/9)" = "$trava" ] && flock -n 9 || exit 1
+else
+    exec 9> "$trava"
+    flock 9
+fi
 if [ "$maquina" = Deck ]; then
     grep -q '^FIM$' "$HOME/prova2810.resumo"
     grep -q 'roteiro duelo .* RC=0' "$HOME/prova2810.resumo"
