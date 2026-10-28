@@ -750,3 +750,20 @@ O escopo da F7 (`plano/F7/00-escopo.md`, seção 5) pediu quatro escolhas. O Luc
    ganho real partindo do New Game. Nenhuma opção de liberar tudo no produto.
 4. **Console:** o lote completo de arquivos, ações e fluxos no WSL e no Deck; no console, a inspeção por família, os
    casos problemáticos, os piores cenários de desempenho e a sessão livre.
+
+## 29. F5: reprojetar a cadeia de desenho antes de aceitar exceção (28/10/2026)
+
+O perfil fino de 28/10 (`plano/F5/08-gravacao.md`, seção 31) mostrou que nenhum corte pequeno fecha os 10,9 ms que o
+zero da decisão 27 pede nas trocas de cena (quadros 6929 e 6959): a soma otimista dos candidatos dá 5,9 ms. Das cinco
+opções da seção 31, o Lucas escolheu:
+
+1. **Reprojetar a cadeia** (gravação no Xenon, `frame_end` e a cauda da GPU) mantendo o zero, a imagem e a entrada:
+   sem vblank de folga, sem atraso de entrada, sem baixar resolução nem cortar efeitos.
+2. **Nenhuma regressão no port:** cada mudança desligada por padrão até provada, com as provas da seção 28 (x86 e PPC
+   sem mapa, listas, `divergencias.py`, objetos e `.text`, roteiros e save) e, no console, imagem igual e prazo
+   medido. Mudança que não prove igualdade não entra.
+3. **De olho na resolução maior:** entre caminhos equivalentes, preferir o que também abre folga para o 720p adiado
+   (decisão 26), sem que isso vire requisito desta etapa.
+4. **Se o reprojeto não fechar** sem regressão, aceitar a exceção (opção E da seção 31): imagens de três vblanks só
+   nas trocas de cena dentro da luta, nenhuma de quatro ou mais, conferidas nas três janelas longas. Os termos exatos
+   voltam ao Lucas com os números antes de valer, e a mesma regra se aplica à tela dividida da F7 (decisão 28).
