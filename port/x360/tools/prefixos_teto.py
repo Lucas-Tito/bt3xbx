@@ -18,9 +18,12 @@ depois do último, e calibra uma escala de CPU e outra de GPU para reproduzir P 
 atual (tudo liberado em G). Teto é idealizado: fila, cópias, disputa SMT e disputa de memória com a GPU não entram; o
 DATE sem consulta paga a cópia da área inteira (DATE_PX). O progresso da gravação até cada desenho não tem medida no
 Xenon: U (uniforme por índice), W (as parcelas da gravação do console por tipo de desenho) e, com --curva LOG, X (o relógio
-da gravação na x86/PPC do falso, linhas "prefixos2: curva" do BT3_GS_PREFIXOS=2); mais a sensibilidade.
+da gravação na x86/PPC do falso, linhas "prefixos2: curva" do BT3_GS_PREFIXOS=2); mais a sensibilidade. Desde a seção 37,
+com --console LOG, C: o relógio da gravação medido no Xenon por desenho (build de perfil, BT3_RELOGIO_GRAV, linhas
+"relogio:" do diário), em fração de J a G da própria abertura, aplicada ao G sem marcas; a lista do console tem de ter o
+mesmo número de desenhos da lista x86gv.
 
-    prefixos_teto.py LISTAS DADOS [--aberturas g6930_1,g6960_1] [--curva LOG]
+    prefixos_teto.py LISTAS DADOS [--aberturas g6930_1,g6960_1] [--curva LOG] [--console LOG]
     prefixos_teto.py --mutantes     (dados sintéticos: o verificador tem de recusar as cópias estragadas)
 """
 import argparse, json, re, sys
@@ -172,6 +175,10 @@ def libera(ds, plano_previsto, consultas):
 def progresso(ds, q, modelo, curva=None):
     """fração da gravação feita quando o desenho i fecha (o índice N é o fim)."""
     N = len(ds)
+    if modelo == 'C':  # o relógio do console por desenho: curva[i] em us desde J até o desenho i ficar pronto
+        assert curva and len(curva['us']) == N - 1, 'relógio do console com outro número de desenhos que a lista'
+        g = curva['G'] * 1000.0
+        return [x / g for x in curva['us']] + [1.0, 1.0]
     if modelo == 'X':  # o relógio medido a cada 1/16 da lista, interpolado
         assert curva and len(curva) == 17 and curva[-1] == 1000 and all(a <= b for a, b in zip(curva, curva[1:])), 'curva'
         f = []
@@ -214,7 +221,7 @@ def simula(G, C, ini_c, fim_c, fim_g, R, Gfim, sc, sg):
     return t_c, u, u0
 
 
-def analisa(q, ds, ab, sens, curva=None, medido=None):
+def analisa(q, ds, ab, sens, curva=None, medido=None, console=None):
     g = ab['gpu'][str(q)]['classes']; c = ab['cpu'][str(q)]
     trechos = [t for t in ab['trechos'] if t['quadro'] == q]
     G, C, ini_g, fim_g, ini_c, fim_c, sobra = custos(ds, g, c, trechos)
@@ -242,8 +249,8 @@ def analisa(q, ds, ab, sens, curva=None, medido=None):
                            ('previsto, só DATE adiante', True, {'date'}), ('previsto, z e DATE curto', True, {'z', 'date_curto'}),
                            ('previsto, nenhuma adiante', True, set())):
         rel = libera(ds, pp, cons)
-        for mod in ('U',) + (('W',) if q in GRAV else ()) + (('X',) if curva else ()):
-            f = progresso(ds, q, mod, curva)
+        for mod in ('U',) + (('W',) if q in GRAV else ()) + (('X',) if curva else ()) + (('C',) if console else ()):
+            f = progresso(ds, q, mod, console if mod == 'C' else curva)
             R = [f[k] * m['G'] if k < N else m['G'] for k in rel] if nome != 'atual' else base_R
             Gx = list(G)
             marc = [i for i, d in enumerate(ds) if d['native'] == 5]
@@ -296,6 +303,54 @@ def curvas(texto):
     return out
 
 
+RELOGIO_CAB = re.compile(r'relogio: quadro (\d+) desenhos (\d+) marcados (\d+); (desde a entrega do jogo \(J\)|sem J[^,]*), '
+                         r'ms: primeiro desenho (-?[0-9.]+), entrega da gravação \(G\) (-?[0-9.]+);')
+RELOGIO_LIN = re.compile(r'relogio: quadro (\d+) de (\d+) a (\d+) us((?: -?\d+)+)$')
+RELOGIO_CURVA = re.compile(r'relogio: curva quadro (\d+) desenhos (\d+) ms ([0-9.]+) milesimos((?: -?\d+){17})$')
+
+
+def relogios(texto):
+    """As linhas "relogio:" de um diário do console (build de perfil, BT3_RELOGIO_GRAV): por quadro, os carimbos em us
+    desde J de cada desenho pronto, G e a curva; recusa lacuna, repetição, desordem, carimbo depois de G, quadro sem J,
+    contagem que não fecha e curva que não confere com os carimbos."""
+    out, us = {}, {}
+    for linha in texto.splitlines():
+        m = RELOGIO_CAB.search(linha)
+        if m:
+            q, n, k = (int(m.group(i)) for i in (1, 2, 3))
+            assert q not in out, f'quadro {q} repetido no log'
+            assert m.group(4).startswith('desde'), f'quadro {q} sem J (BT3_PICOS desligado)'
+            assert k == n - 1, f'quadro {q}: {k} marcados para {n} desenhos (o último fecha em G)'
+            out[q] = dict(desenhos=n, primeiro=float(m.group(5)), G=float(m.group(6)), curva=None)
+            us[q] = []
+            continue
+        m = RELOGIO_LIN.search(linha)
+        if m:
+            q, a, b = (int(m.group(i)) for i in (1, 2, 3))
+            assert q in us and a == len(us[q]), f'quadro {q}: linha de {a} fora de ordem ou sem cabeçalho'
+            v = [int(x) for x in m.group(4).split()]
+            assert len(v) == b - a + 1, f'quadro {q}: linha de {a} a {b} com {len(v)} valores'
+            us[q] += v
+            continue
+        m = RELOGIO_CURVA.search(linha)
+        if m:
+            q = int(m.group(1))
+            assert q in out and out[q]['curva'] is None, f'curva do {q} sem cabeçalho ou repetida'
+            out[q]['curva'] = [int(x) for x in m.group(4).split()]
+    for q, r in out.items():
+        v, n, g = us[q], r['desenhos'], r['G']
+        assert len(v) == n - 1, f'quadro {q}: {len(v)} carimbos para {n} desenhos'
+        assert v and v[0] >= 0 and all(a <= b for a, b in zip(v, v[1:])), f'quadro {q}: carimbo negativo ou fora de ordem'
+        assert v[-1] <= g * 1000.0 + 1.0, f'quadro {q}: carimbo depois de G'
+        assert r['curva'] is not None, f'quadro {q} sem a curva'
+        for k in range(17):
+            i = k * n // 16
+            t = v[i] if i < n - 1 else g * 1000.0
+            assert abs(r['curva'][k] - t / (g * 1000.0) * 1000.0) <= 1.5, f'quadro {q}: curva não confere com os carimbos'
+        r['us'] = v
+    return out
+
+
 def mutantes():
     """Um quadro sintético: GPU 10 ms, CPU 3; calibra, conserva e ordena as partições; cópias estragadas recusadas."""
     tipos = [(0, 0, 1), (1, 0, 0), (0, 0, 0), (0, 5, 0), (0, 0, 0), (2, 0, 0), (0, 0, 0), (0, 0, 0)]
@@ -312,8 +367,8 @@ def mutantes():
     ab = {'gpu': {'1': {'classes': g}}, 'cpu': {'1': c}, 'trechos': trechos}
     medido = {1: dict(prazo=20.0, G=10.0, P=13.0, U=24.0)}
 
-    def roda(ds_, ab_, curva=None, med=medido):
-        linhas, res = analisa(1, ds_, ab_, None, curva, med)
+    def roda(ds_, ab_, curva=None, med=medido, console=None):
+        linhas, res = analisa(1, ds_, ab_, None, curva, med, console)
         assert abs(res[('atual', 'U')] - med[1]['U']) < 1e-6, 'calibração'
         assert res[('previsto, z e DATE adiante', 'U')] <= res[('atual', 'U')] + 1e-9, 'liberar antes nunca atrasa U'
         assert res[('plano integral', 'U')] == res[('atual', 'U')], 'plano integral'
@@ -324,6 +379,26 @@ def mutantes():
                 ('curva fora de ordem', lambda: roda(ds, ab, [0, 500, 400] + [600] * 13 + [1000])),
                 ('curva sem fim', lambda: roda(ds, ab, list(range(0, 1020, 60))[:17])),
                 ('U medido antes do possível', lambda: roda(ds, ab, None, {1: dict(medido[1], U=11.0)}))]
+    # o relógio do console: um diário sintético de três desenhos prontos e G 9 ms; cópias estragadas recusadas
+    us = [1000, 2000, 2000, 4000, 5000, 6500, 8000]
+    cur = ' '.join(str(round((us[k * 8 // 16] if k * 8 // 16 < 7 else 9000) / 9.0)) for k in range(17))
+    diario = ('[1.0] relogio: quadro 1 desenhos 8 marcados 7; desde a entrega do jogo (J), ms: primeiro desenho 0.500, '
+              'entrega da gravação (G) 9.000; carimbos em us, o desenho i pronto quando o i+1 começou (o último em G); 0 vagas perdidas\n'
+              '[1.1] relogio: quadro 1 de 0 a 3 us 1000 2000 2000 4000\n'
+              '[1.2] relogio: quadro 1 de 4 a 6 us 5000 6500 8000\n'
+              f'[1.3] relogio: curva quadro 1 desenhos 8 ms 9.000 milesimos {cur}\n')
+    con = relogios(diario)[1]
+    assert con['us'] == us and con['G'] == 9.0, 'relógio lido'
+    res = roda(ds, ab, None, medido, con)
+    assert res[('previsto, z e DATE adiante', 'C')] <= res[('atual', 'U')] + 1e-9, 'relógio no modelo'
+    estragos += [('relógio sem uma linha', lambda: relogios(diario.replace('[1.1] relogio: quadro 1 de 0 a 3 us 1000 2000 2000 4000\n', ''))),
+                 ('relógio fora de ordem', lambda: relogios(diario.replace('us 1000 2000 2000', 'us 1000 2000 1900'))),
+                 ('relógio depois de G', lambda: relogios(diario.replace('6500 8000', '6500 9500'))),
+                 ('relógio com contagem errada', lambda: relogios(diario.replace('marcados 7', 'marcados 6'))),
+                 ('relógio sem J', lambda: relogios(diario.replace('desde a entrega do jogo (J)', 'sem J (BT3_PICOS desligado): desde o primeiro desenho'))),
+                 ('relógio com curva estragada', lambda: relogios(diario.replace(f'milesimos {cur}', 'milesimos ' + ' '.join(['0'] * 16 + ['1000'])))),
+                 ('relógio repetido', lambda: relogios(diario + diario)),
+                 ('relógio com outro número de desenhos', lambda: roda(ds[:-1] + [dict(ds[-1])], ab, None, medido, dict(con, us=us[:-1])))]
     for nome, f in estragos:
         try:
             f()
@@ -338,21 +413,38 @@ def main():
     ap.add_argument('listas', type=Path, nargs='?'); ap.add_argument('dados', type=Path, nargs='?')
     ap.add_argument('--aberturas', default='g6930_1,g6960_1,g6930_2,g6960_2')
     ap.add_argument('--curva', type=Path, help='log do falso com BT3_GS_PREFIXOS=2 (linhas "prefixos2: curva")')
+    ap.add_argument('--console', type=Path, help='diário do console com BT3_RELOGIO_GRAV (build de perfil; linhas "relogio:")')
+    ap.add_argument('--so-relogio', action='store_true', help='só lê e confere as linhas "relogio:" do --console')
     ap.add_argument('--mutantes', action='store_true')
     a = ap.parse_args()
     try:
         if a.mutantes:
             mutantes(); print('tudo certo nos mutantes do teto'); return
+        if a.so_relogio:
+            assert a.console, '--so-relogio pede --console'
+            con = relogios(a.console.read_text(errors='replace'))
+            assert con, 'nenhum quadro com o relógio'
+            for q, r in sorted(con.items()):
+                print(f'relógio: quadro {q} desenhos {r["desenhos"]} primeiro {r["primeiro"]:.3f} G {r["G"]:.3f} ms; '
+                      f'curva {" ".join(map(str, r["curva"]))}')
+            print('tudo certo no relógio'); return
         if a.listas is None or a.dados is None:
             ap.error('informe LISTAS e DADOS')
         dados = json.loads(a.dados.read_text())
         cv = curvas(a.curva.read_text(errors='replace')) if a.curva else {}
+        con = relogios(a.console.read_text(errors='replace')) if a.console else {}
         for nome in a.aberturas.split(','):
             ab = dados[nome]; q = int(list(ab['gpu'])[0])
             ds = le_lista((a.listas / f'{q}.jsonl').read_text(), q)
             if a.curva:
                 assert q in cv, f'curva do {q} ausente em {a.curva}'
-            linhas, _ = analisa(q, ds, ab, {6960: 1152, 6930: 128}, cv.get(q))
+            if a.console:
+                assert q in con, f'relógio do {q} ausente em {a.console}'
+                r = con[q]
+                print(f'== relógio do console, quadro {q}: {r["desenhos"]} desenhos, primeiro pronto em {r["primeiro"]:.2f} ms, '
+                      f'G {r["G"]:.2f} ms desde J (sem marcas, {MEDIDO[q]["G"]:.1f}); desenhos prontos em ' +
+                      ', '.join(f'{i}: {r["us"][i] / 1000:.1f}' for i in sorted({r["desenhos"] // 4, r["desenhos"] // 2, {6960: 1152, 6930: 128}.get(q, 0)}) if i < len(r['us'])))
+            linhas, _ = analisa(q, ds, ab, {6960: 1152, 6930: 128}, cv.get(q), None, con.get(q))
             print(f'== {nome}'); print('\n'.join(linhas))
         print('tudo certo; teto idealizado, não é ganho medido')
     except (OSError, AssertionError, KeyError) as e:
