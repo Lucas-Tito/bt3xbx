@@ -955,6 +955,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   de calcular hashes com as imagens precisa entrar na medida do ganho. O inventário, o protocolo de equivalência,
   a integração da `.text` dos conferentes F5/F6 e os caminhos das medidas estão em
   [medicoes/roteiros-rapido.md](medicoes/roteiros-rapido.md). Cada execução grava sua duração em `tempos.tsv`.
+  Na comparação entre modos, os caminhos absolutos são normalizados para o mesmo arquivo lógico e os dois
+  ponteiros temporários `gColWalkBox`/`gColWalkCtx` usam a dispensa já existente; o restante da memória é byte a byte.
+  Cada arquivo de páginas é recalculado sobre o dump original pela libxxhash, antes de normalizar os caminhos.
   `REUSA=1` continua julgando todas as memórias e imagens; uma cópia estragada precisa falhar também neste modo.
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**
   - **O rasterizador pintando todo quadro leva umas três horas por roteiro na PPC** (no qemu, uns 30 quadros por

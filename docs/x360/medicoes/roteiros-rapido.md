@@ -87,8 +87,14 @@ python3 port/x360/tools/compara_roteiros_rapido.py "$HOME/rapido/separado/duelo"
 ```
 
 O comparador exige rastros, leituras, todas as amostras de luta e cartões
-iguais; dumps, páginas, subalocações e PPM byte a byte; capturas no mesmo
-quadro/vblank. `--mutantes` vê alteração e ausência de memória, imagem e hash
+iguais; subalocações e PPM byte a byte; capturas no mesmo quadro/vblank.
+A memória também é byte a byte, salvo os caminhos do host em `sMc.path`,
+`gPortAdxView.path` e `gPortMoviePath`, normalizados para o mesmo arquivo
+lógico, e os dois ponteiros de locais da pilha `gColWalkBox`/`gColWalkCtx`.
+São as mesmas dispensas já justificadas em `DIFERENTES_CONHECIDAS`, sem
+abrir outra. O nome lógico do arquivo e os campos numéricos continuam
+obrigatórios. As páginas são recalculadas sobre cada dump original pela
+`libxxhash.so.0`, antes da normalização, para provar sua integridade. `--mutantes` vê alteração e ausência de memória, imagem e hash
 falharem com saída 1. `teste_memorias.py` exercita três destinos em dois
 momentos, a continuidade e cinco listas inválidas sem emulador. Os controles
 sobre a rodada real usam `REUSA=1` numa cópia, com memória truncada e pixel
