@@ -2276,3 +2276,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `$SECONDS`: o relógio civil recuou 1 s na rodada original e deixou `filme-build` com duração negativa.
   Esse registro é preservado e recusado pelo conferente. Um `.sh` versionado sem bit executável deve ser
   invocado por `bash`; a tentativa original recusada permanece na tabela, com novo caso explícito para o teste.
+- **Medida final da retenção da F6:** 21 roteiros, 47,6 GiB de intermediários descartados ao longo da
+  fila; pico amostrado da pasta 4.940.568 KiB (4,712 GiB), 2.035 amostras de 20 s, final cerca de 0,67 GiB.
+  Essa medida da retomada não inclui temporários externos nem um pico entre amostras. Manter reserva de
+  16 GiB físicos adicionais para uma rodada nova, ISO, temporários e margem; não confiar no `df` do ext4.
+  Apagar permite reutilizar blocos do volume virtual, sem implicar compactação do VHDX no Windows.
+- **Falha de imagem pode ser de identidade ou ausência.** Em `discfusion`, duas lutas usam o mesmo nome
+  `luta`: a captura da segunda sobrescreve a primeira e o conferente recusa o quadro, mesmo com 26/26
+  PPM iguais. Em `f6_final`/`f6_final_start`, a marca de retorno e `fim` coincidem; falta o desenho seguinte
+  para capturar a marca nas duas arquiteturas. Registrar como captura/âncora reprovada, sem afirmar
+  diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
+  e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.

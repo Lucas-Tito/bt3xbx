@@ -164,6 +164,19 @@ referencia_upstream() {
     echo 'FALHA: mpeg2test do upstream ausente neste clone; comparação independente pendente na revisão Linux'
     return 1
 }
+filme_testes_suplementar() {
+    # Uma retomada pode conservar a recusa antiga por permissão. Rodada nova já usa bash.
+    if python3 - "$I/casos.json" <<'PY'
+import json, sys
+sys.exit(0 if any(c['nome'] == 'filme-testes' and c['rc'] == 0
+                 for c in json.load(open(sys.argv[1]))) else 1)
+PY
+    then
+        echo 'teste já executado por bash: ver filme-testes.log'
+    else
+        OUT="$I/filmes" bash port/x360/tools/teste_filme.sh
+    fi
+}
 soma() {
     python3 port/x360/tools/roteiros.py soma "$I"/roteiros/*/gdb.txt --prog port/build/x86/bt3_x86
 }
@@ -188,9 +201,9 @@ passo som-ambiente python3 port/x360/tools/som_ambiente.py --mutantes
 passo som360 port/x360/tools/teste_som360.sh
 passo som-amostras env T="$I/som-amostras" port/x360/tools/som.sh amostras
 passo som-fluxo env T="$I/som-fluxo" port/x360/tools/som.sh fluxo
-passo filme-testes env OUT="$I/filmes" port/x360/tools/teste_filme.sh
+passo filme-testes env OUT="$I/filmes" bash port/x360/tools/teste_filme.sh
 # A tentativa original fica registrada; invocar pelo shell também cobre arquivos sem bit executável.
-passo filme-testes-bash env OUT="$I/filmes" bash port/x360/tools/teste_filme.sh
+passo filme-testes-bash filme_testes_suplementar
 passo filme-blocos port/x360/tools/teste_blocos.sh
 passo filme-build filme_build
 for tipo in op ed; do
