@@ -2253,3 +2253,8 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Os quadros próximos de uma troca de cena podem mudar de fase entre arquiteturas. Na x86gv desta análise,
   a segunda cadeia de brilho já entra no 6959; o perfil do console só muda no 6960. Comparar a estrutura
   e os quadros vizinhos, sem transportar o tempo do 6959 do console para a lista 6959 da x86.
+- No censo de escritas comuns, FBA em duas passadas retira o alfa da primeira máscara. Um desenho que só
+  escreve alfa pode ter cobertura positiva e nenhuma escrita de cor na primeira chamada, ficando todo em
+  `T_FBA`. O teste deve incluir esse caso com área não nula: no Duelo analisado o único caso sem testes tem
+  área zero, o que escondia um mínimo incorreto em entradas futuras. O máximo do censo permanece um limite
+  conservador; não se acrescenta a área da segunda chamada à família comum.

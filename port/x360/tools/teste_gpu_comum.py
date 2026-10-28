@@ -118,6 +118,28 @@ h = dict(quadro=6960, desenhos=2, alvos=[0], fbp=0, escala=1)
 r = censo.censo(h, [d,e], 1,1)
 assert (r['fragmentos'], r['uniao'], r['sobreposicao']) == (64,48,16)
 assert sum(g['escritas_min'] for g in r['grupos'].values()) == 64
+# A mesma geometria, máscara só alfa: FBA em duas chamadas tira todo o RGB da
+# primeira. Sem FBA, a chamada comum escreve alfa nos 32 pixels.
+f = dict(d, pipe=0x80445, misc=[0,0,1,0])
+r = censo.censo(h, [f], 1,1)
+assert sum(g.get('escritas_min', 0) for g in r['grupos'].values()) == 0
+# A cópia com a máscara FBA ignorada deve falhar no mesmo oráculo.
+fonte_censo = (RAIZ/'port/x360/tools/gpu_comum.py').read_text()
+predicado = 'area if mascara & 7 or not fba_duas else 0'
+assert predicado in fonte_censo
+mutante = dict(censo.__dict__)
+exec(fonte_censo.replace(predicado, 'area'), mutante)
+r = mutante['censo'](h, [f], 1,1)
+try:
+    assert sum(g.get('escritas_min', 0) for g in r['grupos'].values()) == 0
+except AssertionError:
+    print('censo: mutante que ignora a máscara FBA recusado')
+else:
+    raise SystemExit('FALHA: máscara FBA ignorada foi aceita')
+f['misc'] = [0,0,0,0]
+r = censo.censo(h, [f], 1,1)
+assert sum(g.get('escritas_min', 0) for g in r['grupos'].values()) == 32
+print('censo FBA só alfa: mínimo comum 0 com duas passadas, 32 sem FBA')
 with tempfile.TemporaryDirectory(prefix='bt3-censo-') as td:
     import copy, json
     p = Path(td)/'6960.jsonl'

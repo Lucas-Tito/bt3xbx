@@ -3129,7 +3129,7 @@ A área abaixo é **fragmentos geométricos antes de alfa/DATE/Z**, somados por 
 comum. A coluna de 4/3 usa centros de pixels na grade de 854 x 598 que contém a área lógica de 640 x 448; a alocação
 real do console é 864 x 608 (648 x 456 lógicos). Não é largura de viewport mudada para 854, nem rasterização capturada
 do Xenos. A sobreposição é soma menos união de pixels por alvo; não significa trabalho removível.
-Para as escritas, o mínimo conta somente máscara não vazia, Z sempre e nenhum teste de alfa ou DATE; o máximo
+Para as escritas, o mínimo conta somente máscara efetiva não vazia na primeira chamada, Z sempre e nenhum teste de alfa ou DATE; o máximo
 admite todos os fragmentos. Não afirmar um total exato dos pixels escritos pelos desenhos com testes sem reproduzir
 seus buffers e texturas. A quantização das bordas no Xenos também pode diferir desta reconstrução.
 
@@ -3212,7 +3212,7 @@ textura, tesoura, UP e índices, somente no quadro selecionado, incluindo outras
 final. Conta comandos, não estados distintos ou custo. A DPC continua só com o relógio e a barreira; sem log,
 float, desenho ou acesso ao dispositivo. Os metadados acrescentam 96 KB estáticos, sem alocação na luta.
 
-`comum_console.py ~/f5-gpu-comum/console --rodada gc2810a` preparou dez ambientes, `boot.txt`, `f5_duelo.txt`
+`python3 port/x360/tools/comum_console.py ~/f5-gpu-comum/console --rodada gc2810a` preparou dez ambientes, `boot.txt`, `f5_duelo.txt`
 e `ordem.txt`, sem build nem FTP: três pares alternados `base1/ambos1` a `base3/ambos3` sem marcas finas, depois
 `g6930_1/g6960_1` e `g6930_2/g6960_2`, cada um marcando **só o alvo**, com constantes/fecho desligados.
 Saves `sv_gc2810a_NOME`, todos distintos. Repetição exige outro identificador e diretório novo. Na revisão Linux,
@@ -3256,6 +3256,7 @@ exportador; não são prova de equivalência de um shader novo, pois o backend f
 | x86gv, Duelo completo, duas threads e exportação de 6800/7000/7100 | 8.380 quadros; listas normais iguais às da base sem threads |
 | `teste_gpu_comum.py`, código real com dispositivo simulado | seleção, shader, alvo, faixa, VU, dreno e conservação passam; cinco mutantes recusados |
 | Censo, entradas copiadas e estragadas | desenho ausente, posições truncadas, ordem e alvo inválidos recusados; um JSONL real truncado sai 1 |
+| Censo, primeira chamada FBA com máscara só alfa | caso sintético de 32 pixels: mínimo 0 com as duas passadas e 32 sem FBA; números dos quadros analisados preservados |
 | `teste_cortes.py` | diagnóstico anterior, dreno e seus controles negativos continuam passando |
 | `divergencias.py` e `cmp`, cópias adulteradas | hash normal do 6960 e byte de objeto alterados: saída 1 nos dois |
 | Ambientes | dez saves únicos; tentativa de sobrescrever diretório existente recusada |

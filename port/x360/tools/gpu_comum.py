@@ -84,6 +84,9 @@ def censo(h, ds, num, den):
         # ZTST=ALWAYS, nenhum clip de alfa nem DATE, máscara não vazia.
         certo = not d['modo'][3] and not d['misc'][1] and (d['pipe'] >> 10 & 3) == 1
         mascara = d['pipe'] >> 16 & 15
+        k0, k1 = d['pipe'] >> 1 & 7, d['pipe'] >> 4 & 7
+        fba_duas = d['misc'][2] != 0 and d['pipe'] & 1 and (d['pipe'] >> 7 & 3) == 0 and (
+            2 <= k0 <= 4 or 2 <= k1 <= 4)
         area = 0
         for y, a, b in faixas(d, num, den):
             area += b-a
@@ -94,7 +97,9 @@ def censo(h, ds, num, den):
         if mascara:
             g['escritas_max'] += area
             if certo:
-                g['escritas_min'] += area
+                # Na primeira passada FBA só RGB escreve; só alfa fica para T_FBA.
+                # O máximo continua conservador, admitindo todos os fragmentos.
+                g['escritas_min'] += area if mascara & 7 or not fba_duas else 0
         # A passada extra do FBA é separada da comum no perfil, não somada aqui.
         area_alvo = sum(b-a for _, a, b in faixas(d, num, den, 648, 456))
         por_desenho.append(dict(n=d['n'], shader=shader(d, principal), alvo=d['alvo'], fonte=d['modo'][0],
