@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""F5, seção 37: os objetos de duas builds do XDK têm o mesmo código, função a função.
+"""F5, seção 38: os objetos de duas builds do XDK têm o mesmo código, função a função.
 
 Os .obj do cl mudam a cada compilação (carimbo de hora do COFF, linhas do fonte na depuração), então a comparação é
 pela desmontagem: `link.exe /dump /disasm` dentro da imagem do XDK (collectionui-xdk:light), com os rótulos que dependem

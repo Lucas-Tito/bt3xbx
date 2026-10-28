@@ -913,7 +913,7 @@ extern "C" void Picos_Gravou(unsigned quadro, uint64_t esperaTiques, const uint3
 }
 
 #ifdef BT3_PERFIL_CADEIA
-/* ---- o relógio da gravação por desenho (F5, seção 37; só na build de perfil) ---------------------------------------- */
+/* ---- o relógio da gravação por desenho (F5, seção 38; só na build de perfil) ---------------------------------------- */
 /* BT3_RELOGIO_GRAV=Q1,Q2,... (até 16 quadros; 0 ou ausente, desligado): o gs_draw.c carimba com o mftb o instante em que
    cada desenho ficou pronto (o seguinte começou; o último, na entrega) e, na entrega dos quadros da lista, a gravação copia
    os carimbos para uma vaga (Relogio_Gravou, depois do Picos_Gravou, que já pôs J e G no anel). O desenho escreve a vaga
@@ -1880,7 +1880,7 @@ static struct {
     double limpaPx, datePx, datePxAntes;
 } sOt;
 #ifdef BT3_GS_LOTES
-/* ---- BT3_GS_LOTES, primeira parte (F5, decisão 32; 08-gravacao.md, seção 37) ----------------------------------------
+/* ---- BT3_GS_LOTES, primeira parte (F5, decisão 32; 08-gravacao.md, seção 38) ----------------------------------------
    Para o desenho mandar à GPU os desenhos fechados enquanto a gravação ainda grava, as duas consultas que leem a lista
    inteira mudam de lugar (o envio ainda espera a entrega nesta parte; a imagem tem de sair igual antes de qualquer ganho):
      o plano da EDRAM (ed_plano) usa as contas do quadro anterior (quantas entradas, quem pede a vaga grande, até onde
@@ -6253,7 +6253,7 @@ static void frame_end(void) {
     msFim = ms_desde(&t0);
     tempo_fecha_cpu(msFim, capturas == sConta.capturas);
     cadeia_fim(capturas != sConta.capturas);
-    RELOGIO_ESCREVE(q->quadro); /* (F5, seção 37: só na build de perfil) */
+    RELOGIO_ESCREVE(q->quadro); /* (F5, seção 38: só na build de perfil) */
     ms = ms_desde(&sUltimoFim);
     QueryPerformanceCounter(&sUltimoFim);
     if (capturas == sConta.capturas) {

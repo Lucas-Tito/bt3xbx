@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""F5, seção 37: prova nativa do relógio da gravação, sem jogo, XDK ou emulador; exige sabotagens.
+"""F5, seção 38: prova nativa do relógio da gravação, sem jogo, XDK ou emulador; exige sabotagens.
 
 Tira do gs_draw.c o GS_RELOGIO/gs_relogio e do gs_d3d.cpp o bloco do relógio (Relogio_Ligado, Relogio_Gravou,
 relogio_escreve), compila os dois com g++ e um mftb de mentira, grava quadros sintéticos (anexos, um descarte no meio,
@@ -85,7 +85,7 @@ def importa(nome):
 
 def extrai():
     draw = (RAIZ / 'port/src/gs/gs_draw.c').read_text()
-    m = re.search(r'#if defined\(PORT_X360\) && defined\(BT3_PERFIL_CADEIA\)\n(/\* \(F5, seção 37[\s\S]*?)#else\n#define GS_RELOGIO\(\)', draw)
+    m = re.search(r'#if defined\(PORT_X360\) && defined\(BT3_PERFIL_CADEIA\)\n(/\* \(F5, seção 38[\s\S]*?)#else\n#define GS_RELOGIO\(\)', draw)
     assert m, 'bloco do relógio no gs_draw.c'
     d3d = (RAIZ / 'port/x360/src/gs/gs_d3d.cpp').read_text()
     n = re.search(r'#ifdef BT3_PERFIL_CADEIA\n(/\* ---- o relógio da gravação[\s\S]*?)#define RELOGIO_ESCREVE\(q\) relogio_escreve\(q\)\n', d3d)

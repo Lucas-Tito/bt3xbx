@@ -18,7 +18,7 @@ depois do último, e calibra uma escala de CPU e outra de GPU para reproduzir P 
 atual (tudo liberado em G). Teto é idealizado: fila, cópias, disputa SMT e disputa de memória com a GPU não entram; o
 DATE sem consulta paga a cópia da área inteira (DATE_PX). O progresso da gravação até cada desenho não tem medida no
 Xenon: U (uniforme por índice), W (as parcelas da gravação do console por tipo de desenho) e, com --curva LOG, X (o relógio
-da gravação na x86/PPC do falso, linhas "prefixos2: curva" do BT3_GS_PREFIXOS=2); mais a sensibilidade. Desde a seção 37,
+da gravação na x86/PPC do falso, linhas "prefixos2: curva" do BT3_GS_PREFIXOS=2); mais a sensibilidade. Desde a seção 38,
 com --console LOG, C: o relógio da gravação medido no Xenon por desenho (build de perfil, BT3_RELOGIO_GRAV, linhas
 "relogio:" do diário), em fração de J a G da própria abertura, aplicada ao G sem marcas; a lista do console tem de ter o
 mesmo número de desenhos da lista x86gv.

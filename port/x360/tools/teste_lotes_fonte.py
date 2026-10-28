@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""F5, seção 37: o BT3_GS_LOTES não pode mudar o que conta no plano da EDRAM, só quando.
+"""F5, seção 38: o BT3_GS_LOTES não pode mudar o que conta no plano da EDRAM, só quando.
 
 O lotes_guarda_plano (gs_d3d.cpp, só na build com a chave) refaz no fim do quadro o laço do ed_plano que conta as
 entradas, a vaga grande e até onde cada alvo desenha. Os dois laços têm de ser iguais letra por letra; e a regra da

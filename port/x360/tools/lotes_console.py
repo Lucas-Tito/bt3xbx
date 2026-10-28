@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""F5, seção 37: prepara as rodadas de console do relógio da gravação e da imagem do BT3_GS_LOTES, sem executar build
+"""F5, seção 38: prepara as rodadas de console do relógio da gravação e da imagem do BT3_GS_LOTES, sem executar build
 nem tocar no console.
 
 relogio: duas builds do mesmo commit, as duas de perfil (o relógio só existe nelas), pela build_f2.sh:
@@ -72,7 +72,7 @@ def prepara(saida, rodada, quadros, repeticoes, modo='relogio'):
     (saida / 'ordem.txt').write_text('\n'.join(f'{c[0]} {c[1]}' for c in casos) + '\n')
     shutil.copyfile(saida / f'ambiente_{casos[0][0]}.txt', saida / 'ambiente.txt')
     if modo == 'imagem':
-        (saida / 'LEIA.txt').write_text(f'''Rodada {rodada}: a imagem do BT3_GS_LOTES, primeira parte (F5, seção 37 do 08-gravacao.md).
+        (saida / 'LEIA.txt').write_text(f'''Rodada {rodada}: a imagem do BT3_GS_LOTES, primeira parte (F5, seção 38 do 08-gravacao.md).
 Duas builds do mesmo commit (ordem.txt: abertura e build): normal (build_f2.sh) e lotes (BT3_GS_LOTES=1). Antes de abrir:
 conferir o carimbo, a linha "gs_d3d: lotes (BT3_GS_LOTES), primeira parte ligada" só nas lot* ("desligada" nas lct*), e a
 inexistência de TODOS os saves e pastas de captura do manifesto. Se qualquer um existir, gerar outra rodada inteira.
@@ -82,7 +82,7 @@ lct contra nor (o controle); no log das lot, "lotes, no trecho" com planos previ
 sem Resolve 0" e o DATE "lendo fora do que o alvo tinha" em 0 na normal. Imagem igual não é ganho: o envio ainda espera a entrega.
 ''')
         return manifesto
-    (saida / 'LEIA.txt').write_text(f'''Rodada {rodada}: o relógio da gravação por desenho no Xenon (F5, seção 37 do 08-gravacao.md).
+    (saida / 'LEIA.txt').write_text(f'''Rodada {rodada}: o relógio da gravação por desenho no Xenon (F5, seção 38 do 08-gravacao.md).
 Duas builds de perfil do mesmo commit (ordem.txt: abertura e build): perfil (BT3_PERFIL_CADEIA=1) e perfil+alfa
 (BT3_PERFIL_CADEIA=1 BT3_ALFA_ORIGEM=1). Antes de abrir: conferir o carimbo, a linha "gs_d3d: alfa exato na origem" só
 na perfil+alfa, a linha "relogio: o relógio da gravação ligado" só nas aberturas rel*, e a inexistência de TODOS os saves

@@ -33,14 +33,14 @@ echo "   carimbo: $CARIMBO"
 # (F5, seção 36) BT3_ALFA_ORIGEM=1: a build com o alfa exato calculado na gravação, nos dois lados (gs_draw.c pelo c89.py e o
 # backend); a normal não o tem. O log da build com ele diz "gs_d3d: alfa exato na origem"; o carimbo é o mesmo commit.
 ALFA=""; [ "${BT3_ALFA_ORIGEM:-0}" = 1 ] && ALFA="-D BT3_ALFA_ORIGEM" && echo "   build com o alfa na origem: BT3_ALFA_ORIGEM"
-# (F5, seção 37) BT3_GS_LOTES=1: a build dos lotes (só o backend, gs_d3d.cpp); o log dela diz "gs_d3d: lotes (BT3_GS_LOTES)"
+# (F5, seção 38) BT3_GS_LOTES=1: a build dos lotes (só o backend, gs_d3d.cpp); o log dela diz "gs_d3d: lotes (BT3_GS_LOTES)"
 [ "${BT3_GS_LOTES:-0}" = 1 ] && ALFA="$ALFA -D BT3_GS_LOTES" && echo "   build com os lotes: BT3_GS_LOTES"
 docker run --rm --user "$(id -u):$(id -g)" -e BT3_CARIMBO="$CARIMBO" -e BT3_ALFA_ORIGEM="${BT3_ALFA_ORIGEM:-0}" -e BT3_PERFIL_CADEIA="${BT3_PERFIL_CADEIA:-0}" -v "$RAIZ":/app -w /app bt3xbx-ferramentas python3 port/x360/tools/c89.py $OUT/c89 | tail -2
 
 echo "== 2. compilação (cl.exe)"
 CLFLAGS="-c -Ox -Oi -fp:precise -fp:except- -GS- -Gy -GF -MT -W3 -Zi"
 # (F5, seção 35) BT3_PERFIL_CADEIA=1: a build de perfil, com as marcas do diagnóstico da CPU (gs/cadeia_cpu.h) e, desde a
-# seção 37, o relógio da gravação por desenho (gs_draw.c pelo c89.py); a normal fica sem elas, porque mesmo desligadas
+# seção 38, o relógio da gravação por desenho (gs_draw.c pelo c89.py); a normal fica sem elas, porque mesmo desligadas
 # custavam tempo no fim do quadro
 PERFIL=""; [ "${BT3_PERFIL_CADEIA:-0}" = 1 ] && PERFIL="-D BT3_PERFIL_CADEIA" && echo "   build de perfil: BT3_PERFIL_CADEIA"
 port/x360/tools/cl_jogo.sh $OUT/c89 $OUT/obj $CLFLAGS -Fd$OUT/obj/ >/dev/null

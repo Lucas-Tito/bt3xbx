@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Conferência no WSL da seção 37 do 08-gravacao.md (o relógio da gravação e a primeira parte do BT3_GS_LOTES), sem
+# Conferência no WSL da seção 38 do 08-gravacao.md (o relógio da gravação e a primeira parte do BT3_GS_LOTES), sem
 # emulador: as duas mudanças só existem no console (o relógio com PORT_X360 e BT3_PERFIL_CADEIA, os lotes no
 # gs_d3d.cpp), então as builds x86 e PPC têm de dar os mesmos objetos da base, e com objetos iguais as provas de
 # execução da seção 28 (roteiros, listas, save) não mudam. Prova também as unidades e os mutantes das ferramentas.

@@ -47,7 +47,7 @@ extern int gPortMusicPercent, gPortSePercent;
 
 static GsBackend *sBackend;
 #if defined(PORT_X360) && defined(BT3_PERFIL_CADEIA)
-/* (F5, seção 37 do 08-gravacao.md) O relógio da gravação por desenho, só na build de perfil (BT3_PERFIL_CADEIA=1
+/* (F5, seção 38 do 08-gravacao.md) O relógio da gravação por desenho, só na build de perfil (BT3_PERFIL_CADEIA=1
    build_f2.sh): com BT3_RELOGIO_GRAV=Q1,Q2,... no ambiente, cada desenho anexado fecha o anterior com uma leitura do mftb
    (o desenho i está pronto quando o i+1 começa; o último, na entrega), e a entrega passa os carimbos do quadro ao
    gs_d3d.cpp (Relogio_Gravou), que escreve pelo desenho os dos quadros da lista. Na build normal GS_RELOGIO() é vazio. */
