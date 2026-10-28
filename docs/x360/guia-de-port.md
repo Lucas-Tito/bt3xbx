@@ -2478,3 +2478,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - `espera forma L ID`, `espera blast L N` e `confere membro L ID TRAJE VARIANTE MIN MAX`
   observam o membro ativo. `BT3_F7=1` registra pedido, classe, custo e queda do estoque, sem
   chamar a função que pede transformação. As imagens e a memória incluem os pontos do piloto.
+
+- A grade de personagens tem sete colunas: o id 1 fica na primeira coluna da segunda
+  linha, não na segunda célula. Confirmar a célula por `gCharSel->cells` no gdb antes
+  de repetir a rede inteira. Com New Game, a segunda célula só tem a forma 13 e pula
+  a janela de formas; um X excedente passa a escolher o COM, e as direções seguintes
+  atingem outra fase. O ensaio acusou ids 13/13 e arena 0; usar BAIXO e aguardar o
+  carrossel preserva os quatro X do id 1 e os três X do adversário 25.
