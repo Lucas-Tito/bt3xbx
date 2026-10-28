@@ -4853,3 +4853,144 @@ Perguntas que voltam ao Lucas: (1) se o console de hoje confirmar o alfa no 6930
 (2) autorizar a integração `BT3_GS_LOTES` com o desenho acima, sabendo que é a única rota medida que chega ao 6960
 sem mudar imagem, entrada ou aceite, e que antes dela vale uma medida barata: o relógio da gravação por faixa de
 desenhos na build de perfil, para trocar os modelos U/W/X pelo progresso real do Xenon.
+
+## 38. O relógio da gravação no Xenon e a primeira parte do BT3_GS_LOTES (28/10/2026)
+
+**Resultado.** Pela decisão 32, começando pela medida: a build de perfil ganhou o **relógio da gravação por desenho**
+(o instante, no Xenon, em que cada desenho do quadro fica pronto, em us desde J), com as rodadas de console prontas
+(`rl37a2810`, oito aberturas com controles da mesma build) e o `prefixos_teto.py --console` que troca os modelos U/W/X
+da seção 36 pelo progresso medido. E a **primeira parte do `BT3_GS_LOTES`** (chave de compilação, desligada por padrão):
+as duas consultas que mudam de lugar (o plano da EDRAM pelo quadro anterior e o DATE só até 64 desenhos à frente), com
+o envio ainda na entrega, para a prova de imagem igual vir sozinha (`li37a2810`, seis aberturas). Nada rodou no console:
+**nenhum ganho medido**, o teto da seção 36 continua modelo e o zero continua reprovado. No XDK, a build normal deste
+branch tem a mesma desmontagem da main `c3dcc4d` nos 348 objetos (fecha também a prova do XDK que a seção 36 deixou ao
+Lucas). Branch `claude/f5-lotes`, base `d3b96c07` (`codex/f5-alfa-prefixos`).
+
+### O relógio da gravação (só na build de perfil)
+
+**[Lido]** O desenho i está pronto quando o i+1 começa (a fusão só mexe no último); o último, na entrega (G). Em
+`gs_draw.c`, depois de cada um dos dez `gsDraws[gsDrawCount++]`, `GS_RELOGIO()` fecha com uma leitura do `mftb` os
+desenhos ainda abertos abaixo do último (um descarte fora da entrega recomeça a conta junto com a lista). A entrega
+passa os carimbos do quadro a `Relogio_Gravou` (`gs_d3d.cpp`), depois do `Picos_Gravou`, que já pôs J e G no anel do
+picos; se o quadro está em `BT3_RELOGIO_GRAV=Q1,Q2,...` (até 16), a gravação copia os carimbos para uma de quatro vagas
+(uma vaga cheia perde o quadro e conta). O desenho escreve a vaga pelo diário a partir do quadro seguinte, até quatro
+linhas por quadro, depois do `cadeia_fim` (fora do tempo do quadro):
+
+```text
+relogio: quadro 6960 desenhos 1408 marcados 1407; desde a entrega do jogo (J), ms: primeiro desenho ..., entrega da gravação (G) ...
+relogio: quadro 6960 de 0 a 99 us t0 t1 ... t99          (cem carimbos por linha, us desde J)
+relogio: curva quadro 6960 desenhos 1408 ms G milesimos m0 ... m16   (dezesseis avos de J a G, o formato do falso)
+```
+
+Só existe com `BT3_PERFIL_CADEIA=1 build_f2.sh`, que agora passa a chave também ao `c89.py` (o `gs_draw.c` é C do
+jogo); na build normal `GS_RELOGIO()` é `((void)0)` e o `RELOGIO_ESCREVE` também. Com a chave e
+`BT3_RELOGIO_GRAV=0`, um teste por desenho anexado, sem ler o relógio: é o controle da mesma build. Exige `BT3_PICOS`
+(sem ele, os carimbos saem desde o primeiro desenho, e o leitor recusa o quadro).
+
+**[Medido, teste nativo]** `teste_relogio.py --saida PASTA` compila os dois blocos com g++ e um `mftb` de mentira,
+grava quadros sintéticos (1.408 desenhos, um descarte no meio, quadros fora da lista, uma vaga perdida) e lê o
+diário pelo leitor do teto: os carimbos voltam iguais. Sete sabotagens acusadas (fechar um a mais, sem recomeço, J
+ou G trocados, linha pulada, vaga que não esvazia, quadro fora da lista escrito).
+
+### O teto com o relógio do console
+
+`prefixos_teto.py LISTAS DADOS --console LOG` acrescenta o modelo C: a fração de J a G em que cada desenho ficou
+pronto na abertura, aplicada ao G sem marcas, com a mesma convenção do falso (a liberação que pede k desenhos usa o
+k-ésimo carimbo: conservador por um desenho). `--console LOG --so-relogio` só confere as linhas. O leitor recusa
+lacuna, repetição, desordem, carimbo depois de G, quadro sem J, contagem que não fecha, curva que não confere com os
+carimbos e lista do console de outro tamanho que a da x86gv (as listas são iguais por construção desde a seção 30;
+se não forem, o modelo não vale): oito mutantes novos, treze no total.
+
+**Como ler.** A sensibilidade da seção 36 diz o que procurar: no 6960, com o desenho 1152 (começo da segunda cadeia
+de brilho) pronto a 50/60/70/80/90% de G, a folga do teto fica em 7,8/7,2/6,5/4,8/3,0 ms. O modelo C dá o número com
+o progresso real; o ponto de parada continua o da seção 34: se o teto C não passar dos 10,6 ms no 6960, os números
+voltam ao Lucas para a exceção E (decisão 32), antes da segunda parte.
+
+### A primeira parte do BT3_GS_LOTES: as duas consultas mudam de lugar
+
+**[Lido, `gs_d3d.cpp`, só com `-D BT3_GS_LOTES`; `BT3_GS_LOTES=1 build_f2.sh`]**
+
+- **O plano da EDRAM previsto.** No fim do `frame_end`, com a lista ainda viva, `lotes_guarda_plano` refaz o laço do
+  `ed_plano` (entradas por alvo, quem pede a vaga grande, até onde cada um desenha) e guarda as contas; o `ed_plano` do
+  quadro seguinte as usa no lugar da varredura da lista dele, e o resto (o conteúdo que o alvo já tem, a escolha da A,
+  as pequenas e a B) é o mesmo código. Um desenho que não cabe na pequena prevista (z sem ser efeito, nativa, filme,
+  tesoura além da vaga, conteúdo que a volta não cabe) passa o alvo para a B: `ed_sai`, o sujo da pequena vai para a
+  textura (`ed_descarrega`, motivo despejo) e a entrada pela B o traz de volta, o caminho de sempre dos alvos da B.
+  O alvo só desce (pequena para B) dentro do quadro. A cor sai igual por construção (Resolve e volta são cópias); a
+  profundidade só entra nas vagas grandes, e os efeitos não leem nem escrevem z. Onde pode mudar: a ida e volta da
+  profundidade pela textura num alvo que o plano previsto mandou à B e o integral a uma pequena (a mesma ida e volta
+  que a EDRAM residente já faz entre A e B, provada igual em 23/10), e só isso a captura decide.
+- **O DATE curto.** `date_area` só procura o próximo marcador até `LOTES_DATE_CURTO` (64) desenhos; mais longe, copia
+  a área inteira que o Resolve copiaria, como sem o `BT3_OTIM_DATE`. Cada pixel que um desenho com DATE lê dentro dessa
+  área sai igual; fora dela (o `dateFora` do log, contado na build normal em todos os marcadores) o `sDate` guarda o
+  que um Resolve anterior deixou, e só ali a imagem pode mudar. Se o `dateFora` da normal for 0 nos quadros da luta,
+  a imagem é a mesma.
+- `BT3_LOTES=0` desliga as duas na build com a chave (o controle da mesma build). O log diz `gs_d3d: lotes
+  (BT3_GS_LOTES), primeira parte ligada` e, por trecho, `lotes, no trecho: N planos previstos, M integrais; R alvos
+  passados da pequena prevista para a B (K por nativa ou filme); DATE: C perto, L copiando a área inteira`.
+- **O envio ainda espera a entrega**: esta parte não muda quando a GPU começa, só tira as duas consultas do caminho do
+  envio por lotes. Nenhum ganho é esperado dela (o plano ainda varre a lista, agora no fim do quadro anterior).
+
+**[Medido, teste da fonte]** `teste_lotes_fonte.py`: o laço do `lotes_guarda_plano` igual ao do `ed_plano` letra por
+letra, a regra da vaga grande e da tesoura do `lotes_vaga` iguais às do laço (a vaga tem `(ext + 7) & ~7`), as nativas
+pela vaga grande no `nat_entra` e as marcas vazias sem a chave; cinco estragos recusados.
+
+### Provas sem console
+
+**[Medido, XDK, `xdk_objetos.py`]** Os `.obj` do cl mudam a cada compilação (carimbo do COFF, linhas da depuração),
+então a comparação é a desmontagem de todos os objetos pelo `link /dump /disasm` na imagem do XDK, com os rótulos que
+dependem da linha normalizados (`$M`, `$LN`, `$rotulo$NNN`) e as funções do `.map` (onde um COMDAT descartado pelo
+`-OPT:REF` apareceria; os `__unwind$N` contam por objeto). Cinco mutantes recusados e uma diferença real vista falhar
+(saída 1).
+
+| Builds comparadas (commit `2689be1`, código igual ao final) | Resultado |
+|---|---|
+| normal x main `c3dcc4d` normal | 348 objetos iguais, 9.617 funções iguais |
+| normal x base `d3b96c07` normal | 348 iguais |
+| lotes x normal | só `gs_d3d.obj`; no `.map` só `lotes_guarda_plano`, `lotes_rebaixa`, `lotes_vaga` a mais |
+| perfil x perfil da base | só `gs_d3d.obj` e `gs_gs_draw.obj`; no `.map` só `gs_relogio`, `Relogio_Ligado`, `Relogio_Gravou`, `relogio_escreve` |
+
+**[WSL, `lotes_wsl.sh BASE SAIDA`, serviço `bt3-lotes-wsl-adf640e8`, sem emulador]** As duas mudanças só existem no
+console; base e final compiladas em x86, x86gv, PPCg e PPCg com o alfa, objetos sem depuração, `.text` e stubs
+comparados (o `cmp` visto falhar), e as unidades e mutantes das ferramentas novas. Com os objetos iguais, as provas de
+execução da seção 28 (roteiros, listas, `divergencias.py`, save) não têm o que mudar. Resultado em
+`~/f5-lotes/wsl1/provas.resumo` (abaixo).
+
+### As rodadas de console prontas
+
+Geradas por `lotes_console.py relogio|imagem SAIDA --rodada R`, que confere os ambientes (sete estragos do relógio e
+quatro da imagem recusados, e as rodadas já usadas). Builds do commit `2689be1` (carimbo `2689be1 diff:da39a3ee5e`),
+na máquina do XDK, em `/home/lucas-tito/Documentos/bt3xbx-lotes/build/x360/console-<rodada>/` com `builds/<build>/`
+(`default.xex` e `.map`), `ordem.txt`, `manifesto.json`, os `ambiente_<abertura>.txt` e `LEIA.txt`:
+
+| Rodada | Aberturas, em ordem | Builds (md5 do `.xex`) | O que dá |
+|---|---|---|---|
+| `rl37a2810` | rel1 ctl1 rela1 ctla1 rel2 ctl2 rela2 ctla2 | perfil `5b68d773...`, perfil+alfa `5a8acd3c...` | o relógio nos quadros 6900, 6930, 6960, 7000 e 7170 (rel*), o mesmo sem ele (ctl*), J/G/P/U pela tela por imagem |
+| `li37a2810` | nor1 lot1 lct1 nor2 lot2 lct2 | normal `cf51ee86...`, lotes `954ecf0b...` | 22 capturas cheias por abertura nas trocas de cena (6928 a 6932, 6958 a 6962, 7168 a 7172) e fora delas, em `game:\shots_li37a2810_<abertura>` |
+
+Todas com a cadeia desligada, picos e tela por imagem ligados, saves `sv_<rodada>_<abertura>` novos. A prova da
+imagem: `compara_quadros.py` de lot e lct contra nor com todos os pixels iguais em todos os quadros, e no log
+`fora da vaga 0`, `alvo lido sem Resolve 0` e, na normal, o DATE `lendo fora do que o alvo tinha` em 0. Se igual, o
+plano previsto e o DATE curto ficam provados para a segunda parte; se não, a captura e a sequência da EDRAM do trecho
+dizem onde.
+
+### A segunda parte: o envio durante a gravação (não feita)
+
+O que falta para os lotes chegarem ao D3D antes de G, cada item com a sua prova:
+
+1. **Publicação dos desenhos fechados.** A gravação publica, com barreira, quantos desenhos do quadro estão prontos
+   (o `GS_RELOGIO` já marca o ponto); o desenho consome em ordem, esperando o próximo lote ou a entrega, sem fila de
+   vblank nova e com um Present só, no fim.
+2. **As regras de liberação** do `px_regras` no D3D: a fusão (o último espera), o `usa_z` da entrada de uma visita
+   (até o primeiro desenho com z ou a troca de alvo), o DATE até 64 à frente e as contas do plano acumuladas no laço
+   em vez da varredura no fim.
+3. **O que hoje a entrega faz com o desenho parado** (`entrega`: `vu_plano`, profundidades e alvos novos, versões,
+   memória, o `cleared` da cópia da tabela) passa a ir por lote, com a regra de que o desenho só vê um alvo, textura ou
+   profundidade depois de publicados; `sincroniza_alvos`/`prof_garante` no fio certo.
+4. **O despacho do buffer de comandos** a cada lote (o D3D do 360 só começa ao despachar) e as cercas da VU1 direta
+   (o rodízio de três jogos não pode liberar um jogo com lote em voo).
+5. **As provas**: listas e comandos iguais no falso com o consumo por lotes (o ensaio `BT3_GS_PREFIXOS=2` vira o
+   oráculo), atrasos 1/5/20 ms, objetos da normal iguais, e no console imagem igual, prazo medido e o 7170.
+
+**Ponto de parada.** Esta tarefa para aqui: a segunda parte muda a sincronização entre a gravação e o desenho e só se
+prova com o console. A medida do relógio decide se ela vale a pena.

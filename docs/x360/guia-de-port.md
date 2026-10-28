@@ -2504,3 +2504,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - A versão lógica de alvo não é um snapshot dos recursos D3D; o teto não conta fila, disputa de memória/SMT, lotes
   pequenos no buffer de comandos nem plano previsto errado. A integração `BT3_GS_LOTES` continua exigindo as provas
   da seção 28 e o console.
+
+### Medir antes de integrar e comparar builds do XDK (F5, gravação, seção 38)
+
+- **Os `.obj` do `cl` nunca saem iguais** (carimbo do COFF, linhas da depuração): `cmp` acusa todos os 348. A prova
+  de que uma chave de compilação desligada não muda a build normal é a desmontagem: `xdk_objetos.py RAIZ A B` roda o
+  `link /dump /disasm` de todos os objetos na imagem do XDK, normaliza os rótulos que dependem da linha (`$M`, `$LN`
+  e os rótulos C viram `$nome$NNN`) e compara as funções do `.map` (os `__unwind$N` mudam de número com qualquer
+  função nova no objeto: contar por objeto). `--espera-diferente` diz quais podem mudar; sem ele, a mesma comparação
+  tem de sair com 1 numa diferença real.
+- **Uma medida nova no caminho da gravação vai na build de perfil, chave de compilação até o `c89.py`.** O `gs_draw.c`
+  passa pelo `c89.py`, não pelo `cl` do backend: a chave do `build_f2.sh` tem de chegar aos dois, como o alfa.
+  O relógio por desenho (`BT3_RELOGIO_GRAV`) escreve os carimbos pela thread de desenho, depois do `cadeia_fim`,
+  quatro linhas por quadro, para não pôr o diário no tempo do quadro medido.
+- **Uma integração que muda dependência e tempo ao mesmo tempo não se prova.** O `BT3_GS_LOTES` começou pelas duas
+  consultas ao futuro (plano previsto, DATE curto) com o envio ainda na entrega: a captura igual prova a imagem sem
+  o envio por lotes no meio, e só depois o envio muda o tempo.
+- Teste nativo de código do 360 com g++: `unsigned __int64` só compila com `#define __int64 long long` (um `typedef`
+  não aceita o `unsigned` na frente).
