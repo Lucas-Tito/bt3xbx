@@ -1879,6 +1879,30 @@ static struct {
     unsigned psRap, psSem, psGs, limpaN, limpaRets, dateN, dateVazio, dateFora;
     double limpaPx, datePx, datePxAntes;
 } sOt;
+#ifdef BT3_GS_LOTES
+/* ---- BT3_GS_LOTES, primeira parte (F5, decisão 32; 08-gravacao.md, seção 37) ----------------------------------------
+   Para o desenho mandar à GPU os desenhos fechados enquanto a gravação ainda grava, as duas consultas que leem a lista
+   inteira mudam de lugar (o envio ainda espera a entrega nesta parte; a imagem tem de sair igual antes de qualquer ganho):
+     o plano da EDRAM (ed_plano) usa as contas do quadro anterior (quantas entradas, quem pede a vaga grande, até onde
+     desenha), guardadas no fim do frame_end dele (lotes_guarda_plano); um desenho que não cabe na pequena prevista (z,
+     nativa, filme, tesoura além da vaga, conteúdo que a volta não cabe) passa o alvo para a B: o sujo da pequena vai para
+     a textura e a entrada pela B o traz de volta, o caminho de sempre dos alvos da B (lotes_vaga);
+     o DATE (date_area) só procura até LOTES_DATE_CURTO desenhos à frente; com o próximo marcador mais longe, copia a área
+     inteira que o Resolve copiaria sem o BT3_OTIM_DATE (cada pixel que um leitor lê sai igual; o dateFora da build normal
+     diz se algum leitor lê fora dela).
+   BT3_LOTES=0 desliga na build com a chave (o controle da mesma build). A build normal não tem nada disto. */
+#define LOTES_DATE_CURTO 64
+static int sLotes;
+static struct {
+    int valido, alvos;
+    int ent[MAX_TARGETS];
+    unsigned char grande[MAX_TARGETS];
+    Ret ext[MAX_TARGETS];
+} sLtPlano;
+static struct {
+    unsigned previstos, integrais, rebaixados, rebaixadosNativa, dateLongos, dateCurtos;
+} sLt;
+#endif
 
 static void otim_init(void) {
     /* ligadas por padrão desde a rodada do console de 23/10 (08-720p.md): a mesma imagem e 1,3 a 2,6 ms a menos de GPU */
@@ -1904,6 +1928,12 @@ static void otim_init(void) {
                         (sOtim & OT_PS) ? "sim" : "não", (sOtim & OT_LIMPA) ? "sim" : "não", (sOtim & OT_DATE) ? "sim" : "não",
                         (sOtim & OT_NEVOA) ? "sim" : "não");
     }
+#ifdef BT3_GS_LOTES
+    sLotes = env_num("BT3_LOTES", 1) != 0;
+    Diario_Escrever("gs_d3d: lotes (BT3_GS_LOTES), primeira parte %s: o plano da EDRAM do quadro anterior e o DATE só até %d "
+                    "desenhos à frente; o envio ainda espera a entrega", sLotes ? "ligada" : "desligada (BT3_LOTES=0)",
+                    LOTES_DATE_CURTO);
+#endif
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
     if (sPsTrivial != 0 && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsTrivPs, &sPsTriv[0])) ||
@@ -2064,6 +2094,17 @@ static int date_area(uint32_t n, Ret *r) {
     Ret u = {0, 0, 0, 0}, ra = *r, ua;
     float s = sEscF;
     uint32_t k, v;
+#ifdef BT3_GS_LOTES
+    if (sLotes) { /* (o próximo marcador longe: a área inteira, como sem o BT3_OTIM_DATE) */
+        for (k = n + 1; k < sQ->drawCount && k - n <= LOTES_DATE_CURTO && sQ->draws[k].native != 5; k++) {
+        }
+        if (k - n > LOTES_DATE_CURTO) {
+            sLt.dateLongos++;
+            return 1;
+        }
+        sLt.dateCurtos++;
+    }
+#endif
     esc_alinha8(&ra.x0, &ra.y0, &ra.x1, &ra.y1, sAlvoW, sAlvoH);
     sOt.dateN++;
     sOt.datePxAntes += (double)(ra.x1 - ra.x0) * (ra.y1 - ra.y0);
@@ -3057,6 +3098,19 @@ static void ed_plano(const GsQuadro *q) {
     memset(ent, 0, sizeof(ent));
     memset(grande, 0, sizeof(grande));
     memset(ext, 0, sizeof(ext));
+#ifdef BT3_GS_LOTES
+    if (sLotes && sLtPlano.valido) { /* (o plano previsto: as contas do quadro anterior, os alvos que ele tinha) */
+        for (t = 0; t < sLtPlano.alvos && t < q->targetCount; t++) {
+            ent[t] = sLtPlano.ent[t];
+            grande[t] = sLtPlano.grande[t];
+            ext[t] = sLtPlano.ext[t];
+        }
+        sLt.previstos++;
+    } else if (sLotes) {
+        sLt.integrais++; /* (o primeiro quadro, ou depois de um sem a EDRAM residente) */
+    }
+    if (!sLotes || !sLtPlano.valido)
+#endif
     for (n = 0; n < q->drawCount; n++) {
         const GsDraw *d = &q->draws[n];
         int x0, y0, x1, y1;
@@ -3212,6 +3266,119 @@ static void ed_fim(void) {
     }
 }
 
+#ifdef BT3_GS_LOTES
+/* (no fim do frame_end, com a lista do quadro ainda viva) as contas do plano para o quadro seguinte: o mesmo laço do
+   ed_plano, letra por letra (o teste_lotes_fonte.py confere), escrevendo no sLtPlano */
+static void lotes_guarda_plano(const GsQuadro *q) {
+    int *ent = sLtPlano.ent, cur = -1, t;
+    unsigned char *grande = sLtPlano.grande;
+    Ret *ext = sLtPlano.ext;
+    uint32_t n;
+    if (!sLotes || !sEdRes) {
+        sLtPlano.valido = 0;
+        return;
+    }
+    memset(sLtPlano.ent, 0, sizeof(sLtPlano.ent));
+    memset(sLtPlano.grande, 0, sizeof(sLtPlano.grande));
+    memset(sLtPlano.ext, 0, sizeof(sLtPlano.ext));
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        int x0, y0, x1, y1;
+        t = d->target;
+        if (t < 0 || t >= q->targetCount || t >= MAX_TARGETS) {
+            continue;
+        }
+        if (d->native != 0) {
+            if (d->native == 1 || d->native == 3 || d->native == 4 || d->native >= 100) {
+                grande[t] = 1; /* (as nativas e o filme entram no alvo e pedem a vaga grande) */
+                ent[t] += t != cur;
+                cur = t;
+            }
+            continue;
+        }
+        if (d->vu && sVuIni[n] == ~0u) {
+            continue;
+        }
+        ent[t] += t != cur;
+        cur = t;
+        if (!sPipes[d->pipeline].fx && (sPipes[d->pipeline].zwrite || sPipes[d->pipeline].ztst != 1)) {
+            grande[t] = 1;
+        }
+        x0 = d->scissor[0];
+        y0 = d->scissor[1];
+        x1 = d->scissor[0] + d->scissor[2];
+        y1 = d->scissor[1] + d->scissor[3];
+        esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH);
+        if (x1 > x0 && y1 > y0) {
+            ret_une(&ext[t], 0, 0, esc_px(x1, sEscN, sEscD), esc_px(y1, sEscN, sEscD));
+        }
+    }
+    sLtPlano.alvos = q->targetCount < MAX_TARGETS ? q->targetCount : MAX_TARGETS;
+    sLtPlano.valido = 1;
+}
+
+/* o alvo t sai da pequena prevista para a B: o que ela tem vai para a textura, e a próxima entrada (pela B, com a volta)
+   o traz; *cur = -1 força essa entrada */
+static void lotes_rebaixa(int t, int *cur) {
+    int v = sVagaDe[t];
+    if (sResidente == t) {
+        ed_sai();
+    }
+    if (sVaga[v].dono == t) {
+        ed_descarrega(t, ED_DESPEJO);
+        sVaga[v].dono = -1;
+    }
+    sVagaDe[t] = VG_B;
+    *cur = -1;
+    sLt.rebaixados++;
+}
+
+/* (no laço, antes da entrada de um desenho comum) o desenho cabe na pequena prevista do alvo? A regra do ed_plano: vaga
+   grande para z (não efeito) e a tesoura presa na área até a largura e a altura da vaga; e, se a volta vai trazer o
+   conteúdo, ele também */
+static void lotes_vaga(const GsDraw *d, int *cur) {
+    int t = d->target, v, x0, y0, x1, y1;
+    const Vaga *g;
+    if (!sLotes || !sEdRes || t < 0 || t >= MAX_TARGETS || sVagaDe[t] < VG_P0) {
+        return;
+    }
+    v = sVagaDe[t];
+    g = &sVaga[v];
+    if (!sPipes[d->pipeline].fx && (sPipes[d->pipeline].zwrite || sPipes[d->pipeline].ztst != 1)) {
+        lotes_rebaixa(t, cur);
+        return;
+    }
+    x0 = d->scissor[0];
+    y0 = d->scissor[1];
+    x1 = d->scissor[0] + d->scissor[2];
+    y1 = d->scissor[1] + d->scissor[3];
+    esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH);
+    if (x1 > x0 && y1 > y0 && (esc_px(x1, sEscN, sEscD) > g->w || esc_px(y1, sEscN, sEscD) > g->h)) {
+        lotes_rebaixa(t, cur);
+        return;
+    }
+    if (g->dono != t && sQ->targets[t].cleared && sAlvoD[t].conteudo.x1 > sAlvoD[t].conteudo.x0 &&
+        (sAlvoD[t].conteudo.x1 > g->w || sAlvoD[t].conteudo.y1 > g->h)) {
+        lotes_rebaixa(t, cur);
+    }
+}
+
+/* (no nat_entra) as nativas e o filme pedem a vaga grande */
+static void lotes_grande(int t, int *cur) {
+    if (sLotes && sEdRes && t >= 0 && t < MAX_TARGETS && sVagaDe[t] >= VG_P0) {
+        lotes_rebaixa(t, cur);
+        sLt.rebaixadosNativa++;
+    }
+}
+#define LOTES_VAGA(d, cur) lotes_vaga(d, cur)
+#define LOTES_GRANDE(t, cur) lotes_grande(t, cur)
+#define LOTES_GUARDA(q) lotes_guarda_plano(q)
+#else
+#define LOTES_VAGA(d, cur) ((void)0)
+#define LOTES_GRANDE(t, cur) ((void)0)
+#define LOTES_GUARDA(q) ((void)0)
+#endif
+
 /* (no init, depois do autoteste da profundidade) a chave: a B na base 2T; recusada sem a profundidade por alvo (BT3_Z=0,
    em que cada entrada zera a profundidade) ou quando A, a profundidade e B não cabem (a escala 2) */
 static void ed_init(UINT tilesCor) {
@@ -3280,6 +3447,13 @@ static void ed_log(unsigned t) {
                     sEd.tilesMax, (unsigned)EDRAM_TILES, sEd.pequenasMax, sEd.pequenaZ, sEd.lePosta, sEd.foraVaga,
                     sEd.semResolve);
     Diario_Escrever("gs_d3d:   EDRAM residente, plano do último quadro: %s", sEdPlano);
+#ifdef BT3_GS_LOTES
+    Diario_Escrever("gs_d3d:   lotes, no trecho: %u planos previstos pelo quadro anterior, %u integrais; %u alvos passados da "
+                    "pequena prevista para a B (%u por nativa ou filme); DATE: %u marcadores com o próximo perto, %u copiando a "
+                    "área inteira", sLt.previstos, sLt.integrais, sLt.rebaixados, sLt.rebaixadosNativa, sLt.dateCurtos,
+                    sLt.dateLongos);
+    memset(&sLt, 0, sizeof(sLt));
+#endif
     if (sEdTrilhaOk) {
         Diario_Escrever("gs_d3d:   EDRAM residente, sequência do quadro %u (alvo e vaga A, B ou p; + com limpeza e volta; z com a "
                         "profundidade restaurada, Z mantida; ^alvo e motivo: os Resolves, l leitura, d DATE, s saída da fonte do "
@@ -4915,6 +5089,7 @@ static void nat_contorno_passa(const Ret *r, float passo) {
 
 /* o alvo de uma nativa na EDRAM (com a profundidade se os desenhos seguintes da visita a usam) */
 static void nat_entra(int t, uint32_t n, int *cur) {
+    LOTES_GRANDE(t, cur); /* (BT3_GS_LOTES: a pequena prevista não serve a uma nativa) */
     if (*cur != t || sResidente != t) {
         entra_na_edram(t, usa_z(n, t));
         *cur = t;
@@ -5956,6 +6131,7 @@ static void frame_end(void) {
         if (sEdRes && d->mode[0] == 2) {
             ed_leitura(d->tex, d->target); /* (o alvo lido como textura com sujo guardado numa vaga: o Resolve agora) */
         }
+        LOTES_VAGA(d, &cur); /* (BT3_GS_LOTES: o desenho cabe na pequena prevista?) */
         if (cur != d->target || sResidente != d->target) {
             entra_na_edram(d->target, usa_z(n, d->target));
             q->targets[d->target].cleared = 1; /* (com a divisão, na cópia do retrato: o cleared do desenho) */
@@ -5980,6 +6156,7 @@ static void frame_end(void) {
     } else {
         sai_da_edram();
     }
+    LOTES_GUARDA(q); /* (BT3_GS_LOTES: as contas do plano para o quadro seguinte) */
     prof_entrega(); /* (nada fica na EDRAM entre quadros: a Guide e o present podem usá-la) */
     sConta.msZ += sConta.msZQuadro;
     if (sConta.msZQuadro > sConta.msZPior) sConta.msZPior = sConta.msZQuadro;
