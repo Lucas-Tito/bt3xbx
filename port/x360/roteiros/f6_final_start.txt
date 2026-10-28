@@ -1,0 +1,4 @@
+# Final da História sem esperar a abertura inteira do boot.
+# boot_start só chega ao título; f6_final inclui o boot normal e percorre a História.
+inclui boot_start.txt
+inclui f6_final.txt

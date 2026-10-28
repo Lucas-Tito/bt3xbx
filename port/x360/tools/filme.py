@@ -44,7 +44,12 @@ def compara(console, referencia, tipo):
     falhas = []
     for i in (0, 1000, 2000, TOTAIS[tipo] - 1):
         nome = f"filme_{tipo}_{i:05d}.ppm"
-        a, b = ppm(Path(console) / nome, True), ppm(Path(referencia) / nome)
+        try:
+            a, b = ppm(Path(console) / nome, True), ppm(Path(referencia) / nome)
+        except (OSError, ValueError) as e:
+            print(f"{nome}: FALHA: {e}")
+            falhas.append(nome)
+            continue
         n, _, _, ate8, pior, _, quadrados, _ = medir(a, b, 8)
         psnr = math.inf if not quadrados else 10 * math.log10(255 ** 2 / (quadrados / (3 * n)))
         ok = ate8 / n >= .98 and psnr >= 30
@@ -194,6 +199,15 @@ def controles():
         p.unlink(); recusa("captura ausente", lambda: compara(a, b, "op"))
         recusa_cli("captura ausente", ["compara", a, b])
         p.write_bytes(original)
+        zero = a / "filme_op_00000.ppm"
+        zero.unlink()
+        # Conferir também o contrato da CLI: lista as três presentes, mas continua saindo com 1.
+        r = subprocess.run([sys.executable, __file__, "compara", str(a), str(b)], capture_output=True, text=True)
+        if r.returncode != 1 or r.stdout.count(": ok") != 3 or "00000.ppm: FALHA" not in r.stdout:
+            raise ValueError("imagem 0 ausente escondeu as outras ou deixou de recusar")
+        print("controle CLI imagem 0 ausente: três presentes medidas, saída 1 confirmada")
+        recusas += 1
+        zero.write_bytes(original)
         # Um erro difuso de 9 excede os 2% de pixels, mesmo com PSNR acima de 30.
         difuso = bytearray(px)
         for j in range(len(px) * 3 // 100): difuso[j] = min(255, difuso[j] + 9)
