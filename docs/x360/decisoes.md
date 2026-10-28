@@ -767,3 +767,20 @@ opções da seção 31, o Lucas escolheu:
 4. **Se o reprojeto não fechar** sem regressão, aceitar a exceção (opção E da seção 31): imagens de três vblanks só
    nas trocas de cena dentro da luta, nenhuma de quatro ou mais, conferidas nas três janelas longas. Os termos exatos
    voltam ao Lucas com os números antes de valer, e a mesma regra se aplica à tela dividida da F7 (decisão 28).
+
+## 30. Os ícones dos botões do 360 entram na conversão da ISO (28/10/2026)
+
+O estudo `pesquisa/04-icones-botoes.md` achou os 28 ícones numa folha só do arquivo de boot (`00004.bin`, entrada 8),
+que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
+
+1. **A troca é um passo da conversão da ISO** (opção a do estudo), no código de conversão comum, para valer na conversão
+   pelo PC (`iso_convertida.py`) e na conversão pelo próprio console quando ela vier (F8, pendência 2: o console detecta
+   a ISO não convertida e faz a conversão). Reconverter não pesa: o repositório é privado, e a conversão que for
+   publicada já sai com os ícones. A marca da ISO convertida muda de versão, e uma convertida sem os ícones é recusada.
+2. **Só os ícones do 360 no console.** Os do PS2 continuam nas builds de teste do WSL, que leem os dados originais.
+3. **O "voltar" dos menus continua no Y**, fiel ao físico (o jogo volta com o triângulo): só a arte muda, nenhuma
+   mudança de entrada.
+4. **Arte do projeto**, feita por um gerador no repositório (A verde, B vermelho, X azul, Y amarelo, LB/RB, LT/RT,
+   cliques e BACK); nunca a arte da Microsoft, nenhum byte do jogo no repositório.
+5. **O texto "SELECT button"** da lição do Treino está dentro de um conteúdo comprimido (BPE): muda junto com o
+   compressor BPE, a etapa posterior da decisão 23.
