@@ -3588,3 +3588,265 @@ e analisam as builds do console identificadas pelo carimbo real, não uma build 
 Não ficaram provados: equivalência ou ganho de um corte novo, subclasses dos quatro vizinhos, zero nas três
 janelas longas, sessão livre com cargas ou desempenho da tela dividida. As seis reprovações oficiais fazem parte
 da entrega; **não se declara a F5 pronta**.
+
+## 32. Reprojeto da cadeia: mapa, orçamento e próxima medida (28/10/2026)
+
+Branch `codex/f5-reprojeto`, base `bbc07118`. Decisão 29, opção A: manter zero, imagem e entrada,
+sem regressão; favorecer a resolução maior. **Recomendação:** medir as lacunas de CPU e preparar o envio
+progressivo de prefixos imutáveis do mesmo quadro, combinado com retirada comprovada de trabalho repetido.
+Mais trabalhadores de gravação ficam como alternativa posterior. Não há ganho novo demonstrado nem autorização
+para uma exceção. Esta primeira parte entrega o mapa, o projeto, o diagnóstico desligado e os ambientes.
+
+### Mapa do caminho crítico, sem confundir quadros ou relógios
+
+**[Medido]** Reextração nesta worktree dos quinze logs originais de `~/sessao_2810/gpu/` e
+`~/sessao_2710/cortes/`, parando no primeiro `f5_duelo.txt:99 fim`. Carimbos literais:
+`c57e807 diff:da39a3ee5e` em 28/10 e `ba63dab diff:4bcb7b67df` em 27/10. Não são builds deste branch.
+As seções 29 e 31 conservam as tabelas completas; dados e verificações novos ficam em `~/f5-reprojeto/`.
+
+**[Lido]** O caminho atual é este. Os nomes se referem aos fontes desta base, não às linhas do estudo antigo.
+
+| Ordem e dono | Trabalho e dependência | Evidência e limite |
+|---|---|---|
+| Jogo, hardware 2 | `Port_PadRead`/roteiro, lógica de `Battle_Loop`, `Battle_Draw`, montagem de DMA e REF/CALL; `Gfx_EndFrame(2)` espera GS e vblank; `Dma_Flush` chega a `Port_GsVif1Chain` | [lido] `gs_input.c`, `src/battle/battle.c`, `src/sys/gfx.c`, `src/sys/dma.c`. O controle usa o contador do jogo; não mover sua leitura nem usar o progresso de trabalhadores para escolher botões |
+| Jogo entrega J | Espera a lista anterior, copia REF pequenos (`ref_copia`), captura FBP e número do quadro, `Picos_Jogo`, `render_post`; avança `gGsFrameJogo` | [lido] `gs_core.c`. J é entrega, não instante do botão. Os logs não medem a latência física botão/fóton nem repartem a lógica do pior alvo |
+| Gravação, hardware 0 | `render_thread` pega o trabalho; `run_chain` percorre DMA, `vif` mantém DIRECT/UNPACK pendentes, `GsVu1_Unpack` escreve a memória VU; MSCAL/MSCNT chamam `GsVu1_Call` | [lido] `gs_core.c`, `gs_vu1.c`. VIF, GIF, estado GS e VU são máquinas sequenciais, com estado que atravessa blocos |
+| Gravação, HLE e GS | `hle_program*` lê a VU, também chama GIF; `GsGpu_DrawVu0/4/6` resolve estado/textura, uniformes, vértices e índices. `Gs_Gif` interpreta PACKED/REGLIST/IMAGE, registra primitivas CPU ou envia imagem para a VRAM GS | [lido] VU0 neste ponto é a família de lutadores gerada pela VU1, não prova de um interpretador separado de VU0 consumindo os ms do desenho |
+| Gravação, envio/hash | `transfer_data` escreve a VRAM de 4 MiB, inclusive paletas e formatos parciais; invalida gerações. `Gs_PageHash` já memoriza por geração. `texture_get` usa hashes e cache pela origem, decodifica e cria via XG apenas em falta | [lido] `gs_core.c`/`gs_draw.c`. Envios do jogo à VRAM GS são CPU, diferentes de envio de comandos D3D à GPU. Nos alvos há zero textura nova, não zero transferência |
+| Entrega G | `GsVu1_FrameEnd`, `GsGpu_FrameEnd`, `desenho_entrega`: espera retrato anterior, alterna ponteiros de listas, copia alvos/metadados, `entrega` faz `vu_plano`, recursos/profundidades, versões e memória; publica retrato | [lido] `gs_draw.c`, `gs_d3d.cpp`. Listas alternadas e VU1 direto em três jogos já existem. `__sync` publica escritas combinadas; liberações seguem a fila por quadro e a cova |
+| Desenho, hardware 3 | `desenho_thread`, único dono D3D, consome retrato; `frame_end`: estatísticas, `alfa_alto` periódico, escolha dos buffers, `ed_plano`, comandos em ordem: DATE/nativas, residência/Resolve/Z, `prepara`, uniformes, índices/UP e FBA | [lido] `gs_d3d.cpp`. A execução da GPU já se sobrepõe a esse envio. `usa_z`, `date_area`, `ed_plano` e `vu_plano` consultam a lista do quadro, obstáculo real ao envio precoce |
+| Fim do desenho P | Descarrega alvos e profundidade, FXAA, cópia para tela, callback de fim da GPU, `Present`, limpeza/cova; a thread depois libera o retrato | [lido] A marca GPU é posta antes de `Present`; seu carimbo indica quando os comandos anteriores terminaram. `Present` retornar não demonstra imagem pronta |
+| GPU U e tela | GPU termina comandos, swap entra na callback de vblank; o prazo é o segundo vblank após a entrada da troca anterior | [medido/lido] `picos_*`, `tela_*`, `vblank_cb`. Em 6959 → 6960 não houve repetição: o prazo tem associação íntegra; a ressalva do Blast 2 da seção 27 não se aplica |
+
+**[Lido]** As esperas existentes são parte do contrato: jogo pela gravação em `sceGsSyncPath`, reset/empréstimo
+de buffers, leitura de disco e guarda de estado; gravação sem trabalho até o jogo entregar; gravação pelo retrato
+anterior e por memória liberada pelo desenho; rodízio VU1 pela callback da GPU; desenho pelo retrato e APIs D3D;
+GPU pelas dependências de alvos/comandos; tela pelo vblank. Não retirar nenhuma como se fosse trabalho redundante.
+O áudio ocupa 4/5, o diário a 1; pares SMT são 0/1, 2/3 e 4/5. A thread 1 disputa o núcleo da gravação,
+e 4/5 não são trabalhadores disponíveis sem medir áudio junto. O teste antigo na 1 piorou contra a 3 (seção do degrau 2).
+
+**[Medido, base de 28/10]** A é a imagem retida; B é o próximo quadro, cujos tempos aparecem.
+Tempos em ms, carimbos relativos a J=0; arredondamento de décimos impede somar trabalho como relógio exato.
+
+| Par A → B | J | G | P | U | Prazo | Gravação ocupada / frame_end |
+|---|---:|---:|---:|---:|---:|---|
+| 6929 → 6930, base1/2/3 | 0 | 14,6 | 21,3 / 21,3 / 21,3 | 35,6 / 35,6 / 35,7 | 32,9 | 14,7 / 6,7 |
+| 6959 → 6960, base1 | 0 | 20,1 | 25,9 | 42,6 | 32,8 | 20,1 / 5,8 |
+| 6959 → 6960, base2 | 0 | 20,1 | 25,9 | 42,7 | 32,8 | 20,2 / 5,8 |
+| 6959 → 6960, base3 | 0 | 20,1 | 26,0 | 42,7 | 32,8 | 20,2 / 5,9 |
+
+```text
+Tempo relativo a J do quadro 6960, base3 [medido nos carimbos arredondados]
+0                    20,1       26,0      32,8                  42,7 ms
+J----------------------G----------P---------prazo------------------U
+gravação 6960           frame_end   cauda da GPU até a marca
+jogo 6961 pode avançar  GPU já executa durante frame_end
+```
+
+**[Medido]** O período do jogo é 33,4 ms, não 33,4 ms de lógica somáveis à linha acima. Lógica seguinte,
+gravação e desenho de quadros diferentes podem se sobrepor; no mesmo quadro o desenho espera G integralmente,
+e só a partir dos comandos a GPU executa. Não há medida do instante do primeiro comando útil na base.
+As esperas por disco, XG, descarte, memória/desenho e cova são zero nos pares de picos de 27/10 dos alvos;
+isso não mede bloqueios internos do D3D nem permite atribuir zeros individuais a cada vizinho sem linha de picos.
+
+### Onde estão os 10,9 ms e o que ainda não tem nome
+
+**[Medido]** A conta de prazo é `J-U`: 42,7 ms de cadeia para 32,8 disponíveis, atraso de 9,9.
+**[Estimado, requisito de margem]** É preciso terminar até J+31,8: recuperar 10,9 ms.
+Isso é um déficit do caminho crítico, não uma parcela escondida denominada `outros`, nem GPU total acima de 33 ms.
+O ganho demonstrado de constantes 2/fecho 1 é 0,3 a 0,4 ms, deixando 10,5 de meta sobre ambos.
+
+**[Medido, 27/10, gravação instrumentada do 6960]** O total exclusivo 21,741600 ms se reparte assim:
+
+| Grupo | ms | Interpretação [lido] |
+|---|---:|---|
+| DMA / VIF / GIF / primitivas CPU | 0,240 / 1,978 / 2,072 / 2,371 | soma 6,660, sem seus filhos; inclui parser, estado, vértices CPU e `draw_state` |
+| VU1 restante / constantes / fecho | 4,517 / 1,259 / 1,338 | soma 7,114; não somar o tempo inclusivo da família VU1 novamente |
+| Unpack | 1,824 | memória da VU e conversões, após o caminho que já evita a cópia intermediária |
+| Envio / hash | 3,496 / 2,237 | soma 5,733; 245 envios, 2.290 KB e 293 recálculos nos picos. As 404 chamadas de hash no rateio incluem acertos |
+| Entrega | 0,410 | gancho, metadados e eventuais esperas, sem duplicar o tempo de outra thread |
+
+O total tem custo de relógio por chamada; não é uma decomposição numérica dos 20,2 ms sem marcas de 28/10.
+Eliminar ficticiamente todo envio/hash instrumentado não alcança 10,9; comparar origem/tamanho sem comprovar
+bytes não autoriza pular escrita. Formatos 16/24 bits e paleta parcial podem preservar partes da palavra anterior.
+**[Não medido]** No console não há rateio do envio por formato, acerto/invalidação, escrita realmente igual,
+nem duração da parte da VU1 que seria paralelizável após resolver texturas. O novo orçamento não lhes credita ganho.
+
+**[Medido, CPU nos perfis GPU]** Em 28/10, `outros` no 6930 pesa 5,380 a 5,384 ms; VU0 no 6960,
+4,167 a 4,238. Em 27/10 eram 5,416 e 3,859. São intervalos entre trocas de classe, incluindo preparo do desenho
+seguinte e possíveis bloqueios. A GPU VU0 fina pesa apenas 0,829 a 0,830 ms; não subtrair esses números para
+anunciar uma espera medida. **[Lido/hipótese]** `alfa_alto` percorre índices e vértices para estatística quando
+`sConta.quadros == 30`, antes de `tempo_abre`. É um candidato específico para `outros` do 6930, compatível com a
+periodicidade, ainda sem medida própria. Não explica por si os 10,9 do 6960. Na VU0, `prepara`, estado/sampler,
+uniformes, índices e APIs precisam ser separados. O perfil implementado abaixo resolve essa atribuição na próxima rodada.
+
+**[Medido, GPU com desconto calibrado de 28/10]** Total do 6960 22,807 a 22,821 ms; comum 12,300 a 12,312,
+com sem textura 5,757 a 5,762 e alvos 3,443 a 3,457. As duas cadeias de brilho comuns somam ~2,35 e leem versões
+diferentes. Isso localiza trabalho, não ganho: o desconto das marcas IDLE não desfaz a drenagem ou a fase.
+A cauda sem marcas de 16,7 a 16,8 ms já exclui a parte da GPU sobreposta ao desenho; não somar 22,8 à cauda.
+
+### Caminhos de arquitetura e suas provas
+
+Todos os ganhos abaixo são **[estimado]**, relativos ao pior alvo e sem crédito de ganho novo até medir U
+sem marcas. Uma faixa inclui zero e pode piorar sob disputa; tetos idealizados não são previsões.
+Para todos valem as provas comuns da subseção seguinte, incluindo entrada, fase, determinismo e memória.
+
+| Caminho | Mudança concreta | Orçamento no 6960 e evidência distinta | Risco, prova específica e resolução maior |
+|---|---|---|---|
+| A. Prefixos do mesmo quadro chegam ao desenho antes de G | Gravação publica apenas desenhos fechados, estado/recursos imutáveis e contagens por lote; desenho único emite comandos em ordem enquanto a gravação continua. Um único Present final | É o único caminho que pode esconder uma parte grande dos ~20,2 ms à GPU. Meta de 6 a 12 ms na cadeia ao esconder cerca de 30% a 60% da gravação; faixa ainda possível 0 a 12, dependente do primeiro prefixo, pausas e custo da fila; ganho medido 0. Modelo ideal abaixo, não promessa de 12 | Alto: consultas ao futuro (`ed_plano`, `usa_z`, `date_area`), `cleared`, reutilização de vaga e filas. Provar versão de cada alvo e leitor, ordem, cercas e imagens de todos intermediários. Ajuda a resolução maior ao começar GPU antes; não reduz os pixels e pode perder residência/Resolve, a medir |
+| B. Trabalhadores só na expansão de lotes VU | O leitor sequencial resolve GS/VRAM/textura e faz retrato da memória VU lida; trabalhador preenche faixa exclusiva, junção estável na ordem original. Dispositivo permanece em um dono | Todo VU restante/constantes/fecho instrumentado soma 7,114. Dividir isso perfeitamente em dois pouparia no máximo ~3,56, antes de snapshots/junção/SMT; faixa de investigação 0 a 3 ms na cadeia. Dividir os 20,2 inteiros em dois idealmente pouparia só 10,1, ainda insuficiente | Alto: ponteiros para VU reescrita, floats, contadores/uniões e cache global `draw_state_vu`; não executar esses mutadores nos trabalhadores. Copiar só entradas lidas, buffers limitados e retorno serial em falta. Provar atrasos 1/5/20 ms e junção normal idêntica. Ajuda CPU nas duas resoluções, não barateia GPU; não ocupar 4/5 sem prova do áudio |
+| C. Eliminar repetição comprovada | Mesma arquitetura; deduplicar apenas envios de bytes idênticos com geração e regiões preservadas; calcular estatísticas durante uma passagem já necessária; reaproveitar estado com chave completa | Hipótese 0 a 2 ms em envio/hash e 0 a 1 no desenho do 6960; não somar a 0,4 já medido. Teto fictício envio/hash 5,733 não é ganho. `alfa_alto` pode ajudar especialmente 6930, sem valor atribuído ao 6960 | Médio: alias de origem, mudança in-place, wrap VRAM, PSM, CLUT e escritas parciais. Oráculo executa caminho completo e compara VRAM/gerações/saída, mutantes em cada campo. Preservar estatísticas quando deslocadas. Ajuda CPU e banda, em ambas as escalas |
+| D. Recursos/estado da troca preparados cedo | Pré-alocar capacidades comprovadas e cabeçalhos fora do caminho crítico; manter caches de estado válidos por versão. Só antecipar dados independentes do controle atual | Ganho atribuído 0 ms: nos alvos há zero novas texturas/XG. Shaders são binários `fxc`, criados no `d3d_init`, não compilados na troca; `pipe_get` só guarda descrição. Não propor um cache de compilação que já não existe no quadro | Médio: mais memória, pressão e expulsão antecipada; a primeira utilização não pode usar conteúdo antigo. Provar teto/minimo livre e cargas frias. Pode ajudar recursos maiores, pode atrapalhar RAM; não aquecer por hardcode de 6960 |
+| E. Mudar dependência GPU/CPU no fim | Retirar do início do envio somente trabalho sem efeito nos comandos; encurtar invalidações comprovadas. Antecipar comandos, preservando callback de fim após o último consumidor e Present após a imagem completa | Hipótese 0 a 2 ms na cadeia, só após localizar `outros`/VU0. Present em si é ~0,12 ms nos diagnósticos: mudar apenas sua chamada não tira a cauda de ~16,8 | Alto se publicar callback/rodízio antes do último leitor, perdendo vértices ou liberando textura viva. Provar última utilização e monotonia de sequência; capturas/intermediários e atraso de entrada. Ajuda começar GPU cedo; não aumenta vazão de pixels |
+| F. Especialização exata de shaders e residência | Manter ordem/versões e especializar predicados completos; alterar plano de alvos só com prova de região lida/escrita, halos e formatos | Faixa antiga 0 a 3 ms para shader, 0 a 0,5 para redundância, sem ganho demonstrado e com sobreposição. Comum 12,3 não é removível; apagar brilho/FXAA/imagem não é candidato | Alto: precisão, mistura, DATE/FBA, Z, amostragem e bordas; oráculo shader e todas as escalas/intermediários. Maior potencial para resolução maior, mas não sustenta sozinho os 10,9 |
+
+**[Estimado, modelo para decidir A cedo]** Com os números atuais como referência de escala, uma GPU de
+22,8 ms precisaria começar trabalho útil até J+9,0 para acabar em J+31,8, se executasse sem lacunas.
+Não é reconstrução do início real, pois usa perfil calibrado de outra abertura. No limite irreal de sobreposição
+perfeita, `max(20,2; 5,9; 22,8) = 22,8` permitiria folga; isso só demonstra espaço aritmético para estudar A.
+
+O teste válido usa prefixos: para cada lote i, medir `r_i` (pronto com recursos), custo CPU de submissão `c_i`
+e custo GPU `g_i`; simular `C_i=max(r_i,C_anterior)+c_i`, `U_i=max(C_i,U_anterior)+g_i`.
+Somar `g_i` calibrados exige ressalvar a instrumentação e repetir sem marcas; dependências/callbacks do fim
+entram como lotes. A contribuição de C/E/F só vale uma vez e no cronograma combinado, nunca somando tetos.
+Se o primeiro prefixo útil só ficar pronto depois de J+9,0, o modelo de 22,8 sem cortes GPU já não fecha;
+se fica cedo mas a GPU espera prefixos depois, o início precoce também não basta.
+
+### Projeto recomendado em degraus e ponto de parada
+
+**[Lido/proposto]** Nenhuma chave de otimização abaixo foi implementada nesta primeira parte.
+Cada uma nasce ausente/desligada; sem igualdade fica fora do produto.
+
+1. **Diagnóstico**, `BT3_CADEIA_CPU` implementado abaixo, e controles sem marcas. Abrir alfa, VU0, envio/hash.
+   Se `outros` for estatística, protótipo `BT3_ALFA_FORA=1` mantém o mesmo resultado da estatística numa passagem
+   já necessária ou depois dos comandos, sem segurar o quadro seguinte. Conferir log além da imagem. Limite:
+   uma rodada de localização e até dois dias de investigação; não gastar uma semana tentando explicar médias.
+2. **Ensaio de dependências**, futuro `BT3_GS_PREFIXOS=1`, primeiro no falso: um produtor e um consumidor,
+   fila limitada, descritores com quadro/índice final e faixas de dados imutáveis, snapshots de recursos e versão.
+   Sem worker nem D3D concorrente. Publicar só após fechar desenho/uniforme e todas as escritas referidas;
+   nunca publicar ponteiro para `vu.mem` ou `GsDraw` que o lote seguinte ainda pode juntar/modificar.
+   Manter `gGsFrameJogo`, espera dos REF/CALL e o contador de entrada intactos.
+3. **Envio progressivo D3D**, futuro `BT3_GS_LOTES=1`: trocar a barreira do retrato completo por lotes do mesmo
+   quadro, mantendo uma thread dona e um Present. Usar plano conservador de dependências por lote para
+   substituir consultas ao futuro, inclusive profundidade/DATE; plano de residência pode conservar o caminho
+   integral para casos ainda não suportados. No estouro, bloquear produtor/consumidor sem perder quadro,
+   sem descartar e sem publicar parcialmente um desenho. O bloqueio não pode criar fila de outro quadro.
+   Renderização final, FXAA e tela só após todos os lotes. Callback `vu_cb`, cova e fila de profundidade só
+   depois do último uso real, nunca ao fim da primeira fatia.
+4. **Cortes C/E demonstráveis**, futuras `BT3_ENVIO_IGUAL=1` e `BT3_ESTADO_LOTES=1`, isoladamente e em combinação
+   com A; retirar marcas e medir GPU até o mesmo prazo. Não mudar campos do GS, arredondamento ou ordem para
+   ganhar paralelismo. B só começa se uma fração independente substancial da VU for medida e o ganho combinado
+   ainda puder fechar, com medição da disputa SMT e do som. F segue como apoio, com orçamento próprio de pixels.
+
+Fila proposta: capacidade fixa por janela de lotes, definida após censo de máximos, sem duplicar a VRAM GS ou
+as listas completas. Um lote grande usa o caminho integral, sem recusa nova; pedir mais capacidade exige medir
+mínimo livre, recursos vivos/pendentes e pressão de descarte, inclusive duas vistas. Os 3 a 8 MB por quadro do
+estudo antigo eram estimativas de snapshots, não memória adicional já autorizada. Na resolução maior a lista
+geométrica não necessariamente cresce, mas a alocação de alvos e GPU aumenta: publicar as duas contas separadas.
+
+**Porta de decisão antes do D3D:** a prova de dependências deve registrar liberação dos prefixos com endereço,
+tamanho, última escrita e consumidor, validar que nenhum plano consulta sufixo desconhecido e estimar o cronograma.
+Se o ganho líquido combinado sustentado não chegar a 10,9 ms (ou 10,5 sobre ambos), ou qualquer dependência
+obrigar esperar G integralmente para quase todo trabalho pesado, parar A antes da integração cara.
+No primeiro protótipo de console, se dois ajustes de lote não adiantarem U de forma repetível para folga >=1 ms
+nos dois alvos, recalcular o teto com as medidas; sem candidato independente para o restante, parar.
+Proposta de limite: uma rodada diagnóstica, dois dias do ensaio e dois da primeira integração; se travar por
+mais do dobro desses limites, registrar estado/hipóteses e parar conforme AGENTS. Não transformar esses limites
+em promessa de prazo, nem declarar inviabilidade universal de reprojeto por falha de uma partição.
+
+Ao parar, devolver ao Lucas os atrasos por quadro, folgas, longas/4+, latência, limites de memória e ganho
+máximo restante, para os termos da exceção E. A decisão 29 não autoriza ativá-la automaticamente; mantêm-se
+zero e a F7 pendentes. Os logs curtos com zero de quatro não provam as três janelas nem a tela dividida.
+
+**Prova obrigatória para cada degrau de execução futuro (seção 28):** x86gv e PPCg sem mapa, Duelo/Treino,
+sem threads/com gravação/com desenho, chaves 0/1 e combinações, atrasos 1/5/20 ms, listas normais e hashes
+iguais, `divergencias.py --normal`, zero `race:`, uso após soltar e descartes novos; mutantes que quebrem cada
+regra de ordem, versão, barreira e liberação. Comparar objetos planos com `objcopy --strip-debug`/`cmp`,
+publicar exceção somente do carimbo de teste e SHA1 da `.text`; `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo
+f5_treino`, `SEMMAPA=1 IMG=1 roteiros.sh duelo`, `save_mc.sh` com estados e saves não vazios/iguais.
+No console: mesmos estados e referências por versão, capturas de intermediários e final byte a byte iguais
+contra a base na mesma arquitetura, ambas as escalas, Guide/saída/carga e pressão, áudio sem falha; não usar
+apenas tolerância de comparação console/x86 para aceitar imagem alterada. Entrada: mesmo vblank de leitura,
+mesmo botão/estado/hash e primeiro quadro que reage, mesmas associações de J/G/P/U/swap, sem vblank extra,
+sem fila nova. Medir controles alternados, depois três janelas longas fria/aquecidas e sessão livre com cargas.
+As três janelas continuam com zero longas, nenhuma repetição escondida. Testar cedo a carga de duas vistas;
+nenhum número desta tarefa certifica F7 nem 720p.
+
+### Próxima rodada preparada e o diagnóstico implementado
+
+**[Lido/testado nativamente]** `port/x360/src/gs/cadeia_cpu.h`, incluído somente pelo backend 360,
+implementa `BT3_CADEIA_CPU=A,B` (inclusivo), `=1` para 6960, ausente/0 desligado. Não insere comando,
+cerca ou callback, não toca DPC, GS, entrada ou listas. Mede com `QueryPerformanceCounter` e a frequência
+já inicializada, sem calibração dependente de `BT3_TEMPOS`. Ausente/0 não lê relógio nos escopos.
+Só a thread dona do dispositivo escreve o diagnóstico; aproximadamente 1,3 KB de contadores fixos.
+
+Escopos restauram o pai inclusive em retornos antecipados. Cruzam família (quadro/comum/VU0/VU4/VU6/nativa)
+com etapa: alfa, buffers, plano, EDRAM, preparo, pipe, sampler, estado, textura, uniforme, índices, UP,
+Present, limpeza, FXAA, tela e resto. Filhos são descontados do pai. As APIs de estado do `prepara`,
+`aplica_pipe`/`aplica_sampler`, uniformes VU, índices/UP e Present têm marcas próprias; outras APIs ficam na
+etapa envolvente. `GetLevelDesc` fica em preparo e `aplica_blend` em pipe, não são tempos isolados dessas APIs.
+EDRAM do laço externo pertence ao grupo quadro; EDRAM chamada dentro da nativa herda nativa.
+A amostra cobre o trecho inicial até a limpeza/memória, não os relatórios finais e a liberação do retrato.
+`cadeia: cpu quadro Q total`, parcelas por grupo/etapa e `soma` conservam a amostra; captura a invalida.
+O diário sai após fechar a amostra. Marca CPU inclui espera interna do driver/preempção: não é CPU pura nem
+medidor de espera isolada. Marcas frequentes também perturbam a fase; nenhum diagnóstico aprova apresentação.
+
+`cadeia_cpu.py LOG --quadros 6960` exige todas as parcelas presentes conservarem total/soma, quadros exatos,
+nenhuma duplicata/classe desconhecida/indisponível e fim real do Duelo. Não inventa rodapé do backend falso.
+
+**[Preparado, não executado no console]** `reprojeto_console.py SAIDA --rodada rp32a2810` gera 34 ambientes,
+`ordem.txt`, `ambiente.txt`, `boot.txt` e `f5_duelo.txt`. Arquivos desta entrega em
+`~/f5-reprojeto/console/`; saves `sv_rp32a2810_NOME`, distintos e não encontrados nos logs históricos lidos.
+Não houve acesso ao console: a revisão deve confirmar que cada pasta ainda não existe antes de abrir o jogo.
+Se existir qualquer uma, gerar rodada/diretório inteiramente novos; nunca reaproveitar save ou completar por cima.
+
+| Ordem | Nomes | Chaves de diagnóstico e finalidade |
+|---|---|---|
+| 1 a 6 | base1/ambos1, base2/ambos2, base3/ambos3 | Sem marcas finas; constantes/fecho 0/0 ou 2/1, medir variação e a tela |
+| 7 a 10 | cpu6930_1/2, cpu6960_1/2 | CPU nova só Q,Q, constantes/fecho 0/0, demais marcas 0; localizar alfa/VU0 primeiro |
+| 11 a 18 | cpu6929_1/2, cpu6931_1/2, cpu6959_1/2, cpu6961_1/2 | Mesma CPU, um vizinho por abertura; comparar dependências sem supor mesma fase da x86 |
+| 19 a 22 | grav6930_b/a, grav6960_b/a | Só `BT3_CORTES=Q,Q`, base/ambos; envio/hash/VIF/GIF exclusivos e efeito de constantes/fecho |
+| 23 a 34 | qQ_R, Q=6929,6930,6931,6959,6960,6961; R=1/2 | Complemento gf29b: só `BT3_COMUM_GPU=Q,Q`, CPU e cortes 0, constantes/fecho 0/0 |
+
+São grupos independentes: após 1 a 10, analisar a CPU antes de gastar as demais aberturas; o complemento GPU
+fecha os vizinhos ausentes da seção 31, não condiciona localizar alfa. Manter som, hardware 3, 16:9, 1,33,
+FXAA, origem, VU1 direto, envio rápido, tempos 0 e picos/tela como nos controles antigos. Nenhum ambiente novo
+altera fila ou intervalo de vblank. A rodada não contém cortes novos ligados; ambos é a combinação anterior.
+
+Na revisão Linux: compilar o commit final desta preparação com XDK, conferir avisos/stubs, `.dat`/`.swap`,
+carimbo real e padrões; só depois preparar/enviar o lote da mesma build. Comparar base antes/depois do diagnóstico
+com ele desligado. Para cada abertura guardar ambiente, carimbo, SHA256 original e log até o primeiro fim;
+conferir 684/2.334 passos, resultado 0x2/0x1, vida 0/27160, zero erro/vigia/descartes, associações completas e
+nenhum recurso recusado. Aplicar `passos.py LOG --console --janelas 2 --minimo 600 --carimbo CARIMBO_REAL`.
+Se as duas longas persistirem, saída 1 é a reprovação correta do zero, não erro do extrator.
+Publicar todos os tempos J/G/P/U, mínimo/p1/p10/mediana de folga e longas, distinguindo controles e marcas.
+O envio por formato/igualdade e os carimbos de prefixos exigem novos ganchos na gravação, com oráculos;
+ficam explicitamente para a próxima tarefa com emulador antes de um corte de envio ou do degrau 2 acima.
+
+### Conferência desta primeira parte
+
+**[Medido]** `teste_cadeia_cpu.py --saida ~/f5-reprojeto/provas --base bbc07118`: C++03 nativo com relógio e
+APIs simulados, `-Wall -Wextra -Werror`; aninhamento inclusive de etapa repetida, herança de família, retorno
+antecipado, faixa/atalho 1, chave ausente/0/inválida, efeitos das chamadas e captura inválida. Cinco mutantes
+(soma, família, restauração, faixa e relógio desligado) abortam; a fonte sem marcas reproduz exatamente a base,
+e uma chamada adulterada é recusada. Leitor recusa captura e seis cópias (fim, total, parcela, quadro, classe,
+soma repetida), cada uma com saída 1. Gerador recusa diretório existente e identificador inválido.
+
+| Rodada final sem emulador | Resultado |
+|---|---|
+| Diagnóstico, leitor e ambientes | tudo certo no teste nativo, sabotagens acusadas; 34 saves distintos |
+| Reextração 28/10, dez logs + quinze negativos | estrutura 0 nas dez, negativos 1; seis controles continuam com as mesmas duas longas |
+| Reextração 27/10, cinco logs + nove negativos | extração 0, negativos 1; 126 somas exclusivas e seis perfis GPU conservados |
+| Aceite atual, quinze logs do console recortados, com seus carimbos reais | saída 1 nos quinze; zero continua reprovado |
+| Testes nativos existentes `teste_cortes.py`, `teste_gpu_comum.py`, `teste_tela.sh` | tudo certo, incluindo os mutantes previstos nas duas primeiras ferramentas |
+| Fontes fora de `port/x360/` | nenhuma alteração; chamadas D3D originais recompostas exatamente contra `bbc07118` |
+| `.text` x86 preexistente, extraída novamente | `43444ea4d03a6d448aa1ae74a631e35b356a7caa` |
+
+A `.text` é de `~/f5-gpu-comum/base/port/build/x86/bt3_x86`, carimbo `4c85c039 diff:da39a3ee5e`,
+extraída para `~/f5-reprojeto/x86-preexistente.text`. Não é build nova. Não houve emulador, execução do jogo,
+build 360, FTP ou alteração das tarefas concorrentes. As entradas da build plana não incluem os dois fontes D3D
+alterados; não se atribui a esta entrega comparação nova de objetos compilados. A matriz x86/PPC, roteiros e save
+da seção 28 fica especificada acima para a tarefa de implementação autorizada a usar emulador; não foi executada
+nem certificada aqui. Igualdade de comandos por leitura/teste não substitui execução no XDK e capturas.
+Ainda não estão provados o diagnóstico no Xenon, a hipótese de alfa, os prefixos, nenhum ganho novo, imagem/entrada
+sob reprojeto, zero nas três janelas longas, sessão livre, duas vistas ou resolução maior.
