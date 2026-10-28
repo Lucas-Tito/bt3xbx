@@ -912,6 +912,144 @@ extern "C" void Picos_Gravou(unsigned quadro, uint64_t esperaTiques, const uint3
     p->q = quadro;
 }
 
+#ifdef BT3_PERFIL_CADEIA
+/* ---- o relógio da gravação por desenho (F5, seção 37; só na build de perfil) ---------------------------------------- */
+/* BT3_RELOGIO_GRAV=Q1,Q2,... (até 16 quadros; 0 ou ausente, desligado): o gs_draw.c carimba com o mftb o instante em que
+   cada desenho ficou pronto (o seguinte começou; o último, na entrega) e, na entrega dos quadros da lista, a gravação copia
+   os carimbos para uma vaga (Relogio_Gravou, depois do Picos_Gravou, que já pôs J e G no anel). O desenho escreve a vaga
+   pelo diário a partir do quadro seguinte, até quatro linhas por quadro, depois do cadeia_fim: os carimbos em us desde a
+   entrega do jogo (J; sem BT3_PICOS, desde o primeiro desenho) e a curva de dezesseis avos de J a G no formato do falso,
+   para o prefixos_teto.py. É o progresso real da gravação no Xenon, que a seção 36 modelava (U, W, X). */
+#define REL_VAGAS 4
+#define REL_MAX 4096
+#define REL_LINHA 100
+struct RelVaga {
+    volatile unsigned estado; /* 0 livre, 1 cheia (a gravação escreveu), o desenho a esvazia */
+    unsigned quadro, desenhos, marcados, escritos, temJ;
+    unsigned __int64 j, primeiro, g, t[REL_MAX];
+};
+static RelVaga sRel[REL_VAGAS];
+static unsigned sRelQ[16], sRelQN, sRelPerdidas;
+
+extern "C" int Relogio_Ligado(void) {
+    const char *e = getenv("BT3_RELOGIO_GRAV");
+    char *f;
+    if (e == NULL || strcmp(e, "0") == 0) {
+        return 0;
+    }
+    while (*e != 0 && sRelQN < 16) {
+        unsigned long v = strtoul(e, &f, 10);
+        if (f == e || (*f != ',' && *f != 0)) {
+            Diario_Escrever("relogio: BT3_RELOGIO_GRAV inválida (use Q1,Q2,...); desligado");
+            sRelQN = 0;
+            return 0;
+        }
+        sRelQ[sRelQN++] = (unsigned)v;
+        e = *f == ',' ? f + 1 : f;
+    }
+    Diario_Escrever("relogio: o relógio da gravação ligado em %u quadros (build de perfil), o primeiro %u", sRelQN,
+                    sRelQN ? sRelQ[0] : 0u);
+    return sRelQN != 0;
+}
+
+extern "C" void Relogio_Gravou(unsigned quadro, unsigned desenhos, unsigned marcados, const uint64_t *t, uint64_t primeiro) {
+    unsigned i;
+    RelVaga *v = NULL;
+    const PicoG *g = &sPG[quadro % PICOS_N];
+    for (i = 0; i < sRelQN && sRelQ[i] != quadro; i++) {
+    }
+    if (i == sRelQN) {
+        return;
+    }
+    for (i = 0; i < REL_VAGAS && v == NULL; i++) {
+        if (sRel[i].estado == 0) {
+            v = &sRel[i];
+        }
+    }
+    if (v == NULL) {
+        sRelPerdidas++;
+        return;
+    }
+    v->quadro = quadro;
+    v->desenhos = desenhos;
+    v->marcados = marcados < REL_MAX ? marcados : REL_MAX;
+    memcpy(v->t, t, v->marcados * sizeof(v->t[0]));
+    v->primeiro = primeiro;
+    v->temJ = 0;
+    v->g = __mftb();
+    if (gPicos != 0 && g->q == quadro) { /* (o Picos_Gravou acabou de escrever a vaga, nesta thread) */
+        const PicoJ *j = &sPJ[g->qJogo % PICOS_N];
+        v->g = g->tb;
+        if (j->q == g->qJogo && j->tb != 0) {
+            v->j = j->tb;
+            v->temJ = 1;
+        }
+    }
+    if (!v->temJ) {
+        v->j = primeiro;
+    }
+    v->escritos = 0;
+    __lwsync();
+    v->estado = 1;
+}
+
+static int rel_us(unsigned __int64 t, unsigned __int64 j) {
+    double us = (double)(__int64)(t - j) * 1000.0 / sPicoTbMs;
+    return us < -9999999.0 ? -9999999 : us > 99999999.0 ? 99999999 : (int)(us + (us < 0 ? -0.5 : 0.5));
+}
+
+/* (o desenho, no fim do frame_end, fora do tempo do quadro) até quatro linhas de uma vaga cheia de quadro anterior */
+static void relogio_escreve(unsigned quadro) {
+    RelVaga *v = NULL;
+    unsigned i, k, linhas = 0;
+    char buf[REL_LINHA * 12 + 16]; /* (os valores limitados a 8 dígitos com sinal) */
+    for (i = 0; i < REL_VAGAS && v == NULL; i++) {
+        if (sRel[i].estado == 1 && sRel[i].quadro < quadro) {
+            v = &sRel[i];
+        }
+    }
+    if (v == NULL) {
+        return;
+    }
+    __lwsync();
+    if (v->escritos == 0) {
+        Diario_Escrever("relogio: quadro %u desenhos %u marcados %u; %s, ms: primeiro desenho %.3f, entrega da gravação (G) "
+                        "%.3f; carimbos em us, o desenho i pronto quando o i+1 começou (o último em G); %u vagas perdidas",
+                        v->quadro, v->desenhos, v->marcados, v->temJ ? "desde a entrega do jogo (J)" :
+                        "sem J (BT3_PICOS desligado): desde o primeiro desenho", (double)(__int64)(v->primeiro - v->j) / sPicoTbMs,
+                        (double)(__int64)(v->g - v->j) / sPicoTbMs, sRelPerdidas);
+    }
+    while (v->escritos < v->marcados && linhas < 4) {
+        unsigned fim = v->escritos + REL_LINHA < v->marcados ? v->escritos + REL_LINHA : v->marcados, p = 0;
+        for (k = v->escritos; k < fim; k++) {
+            p += sprintf(buf + p, " %d", rel_us(v->t[k], v->j));
+        }
+        Diario_Escrever("relogio: quadro %u de %u a %u us%s", v->quadro, v->escritos, fim - 1, buf);
+        v->escritos = fim;
+        linhas++;
+    }
+    if (v->escritos >= v->marcados) {
+        if (v->desenhos > 16 && v->g > v->j) { /* (a curva de dezesseis avos de J a G, no formato do falso) */
+            unsigned p = 0;
+            double tot = (double)(v->g - v->j);
+            for (k = 0; k <= 16; k++) {
+                unsigned d = k * v->desenhos / 16;
+                unsigned __int64 tk = d < v->marcados ? v->t[d] : v->g;
+                double m = (double)(__int64)(tk - v->j) / tot * 1000.0;
+                p += sprintf(buf + p, " %d", m < -9999.0 ? -9999 : m > 99999.0 ? 99999 : (int)(m + (m < 0 ? -0.5 : 0.5)));
+            }
+            Diario_Escrever("relogio: curva quadro %u desenhos %u ms %.3f milesimos%s", v->quadro, v->desenhos,
+                            tot / sPicoTbMs, buf);
+        }
+        __lwsync();
+        v->estado = 0;
+    }
+}
+#define RELOGIO_ESCREVE(q) relogio_escreve(q)
+#else
+#define RELOGIO_ESCREVE(q) ((void)0)
+#endif
+
 static void WINAPI picos_cb(DWORD k) {
     sPicoGpu[k] = __mftb();
     __lwsync();
@@ -5938,6 +6076,7 @@ static void frame_end(void) {
     msFim = ms_desde(&t0);
     tempo_fecha_cpu(msFim, capturas == sConta.capturas);
     cadeia_fim(capturas != sConta.capturas);
+    RELOGIO_ESCREVE(q->quadro); /* (F5, seção 37: só na build de perfil) */
     ms = ms_desde(&sUltimoFim);
     QueryPerformanceCounter(&sUltimoFim);
     if (capturas == sConta.capturas) {

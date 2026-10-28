@@ -28,6 +28,9 @@ DEFS = ["-DPORT_BIG_ENDIAN", "-DPORT_X360", "-D_XBOX"]
 # (F5, seção 36) BT3_ALFA_ORIGEM=1 no ambiente (build_f2.sh): a build com o alfa exato na origem (port/src/gs/gs_draw.h)
 if os.environ.get("BT3_ALFA_ORIGEM") == "1":
     DEFS.append("-DBT3_ALFA_ORIGEM")
+# (F5, seção 37) BT3_PERFIL_CADEIA=1 (build_f2.sh): a build de perfil leva também o relógio da gravação (gs_draw.c, GS_RELOGIO)
+if os.environ.get("BT3_PERFIL_CADEIA") == "1":
+    DEFS.append("-DBT3_PERFIL_CADEIA")
 I = lambda p: "-I" + str(ROOT / p)  # noqa: E731
 
 # O que o 360 troca por versão própria em port/x360/src (o resto de port/src e de port/src/gs entra como está).
