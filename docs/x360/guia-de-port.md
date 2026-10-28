@@ -2384,3 +2384,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Guardar SHA256 dos bytes originais, mas recortar no primeiro fim para aplicar o aceite. Continuação
   longa depois do roteiro não é janela adicional. Uma longa marginal, até `-0,0` ms arredondado, continua
   longa se a permanência foi três vblanks. Não trocar permanência na tela por intervalo CPU de apresentação.
+
+### Vizinhos e rateio da gravação rp32a2810 (F5, seção 34)
+
+- Os perfis CPU finos de 6960 e 6961 mantêm 1.220 desenhos VU0 e cerca de 5,96 a 5,98 ms nessa família,
+  contra 48 desenhos e 0,17 ms no 6959. O custo persiste no vizinho seguinte, sem ganho de aquecimento
+  demonstrado. Não confundir primeira submissão de uma carga maior com um custo transitório removível.
+- Um total estável não torna estável sua atribuição a APIs: no 6959, comum/UP passa de 1,275 a 0,260 ms
+  entre aberturas e quadro/resto de 0,216 a 1,258, com total 3,131/3,167. Não chamar essa diferença de
+  shader frio ou espera localizada sem outra marca que identifique a causa.
+- Um par grav b/a por alvo localiza parcelas, não certifica ganho isolado nem ganho de tela. Fecho cai
+  ~0,42 ms, constantes crescem ~0,08, saldo ~0,34; total cai 0,327/0,411 no 6930/6960. No 6930, U fica
+  -3,4 ms nos dois, apesar de a gravação diminuir. Não recalcular o déficit do produto com marcas ativas.
+- No console, uma abertura com `BT3_CORTES=Q,Q` tem só um quadro e não tem rodapé `gpu_falso`.
+  Conferir o formato das onze parcelas de `cortes.py`, soma e alvo, sem fabricar rodapé para fazer o leitor
+  aceitar. Chamadas de hash incluem acertos; não são os recálculos de página dos picos.
+- Nos dois grav*_a, j2 de picos conta 2.335 trocas, contra 2.334 em passos, apenas uma imagem de dois
+  vblanks a mais na fronteira. Publicar os dois denominadores; as duas longas são as mesmas. A ausência
+  de longa marginal no 7170 desses dois a não restaura F antigo nem dispensa controles entre builds.
