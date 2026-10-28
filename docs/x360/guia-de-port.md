@@ -2474,22 +2474,33 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 
 ### Metadados exatos do alfa (F5, gravação, seção 36)
 
-- `BT3_ALFA_FORA=1`, ausente/0 original: guarda um byte por desenho no jogo de listas, em memória comum.
-  Na VU, só `misc[3]==3` consulta os alfas dos vértices referidos; as demais camadas usam `color0[3]`.
-  A união de fusões inclui somente trechos não vazios. Aplicar a máscara no desenho fechado, mantendo
-  nativas/count fora da amostra e preservando os dois contadores. O limite continua sendo `>128`, não `>=128`.
-- O falso compara cada desenho de cada quadro com a varredura original quando ligado. No D3D,
+- O alfa exato existe só na build com `BT3_ALFA_ORIGEM` (`build_f2.sh` com a variável, `headless.py --alfa`): guarda
+  um byte por desenho no jogo de listas, em memória comum. Na VU, só `misc[3]==3` consulta os alfas dos vértices
+  referidos; as demais camadas usam `color0[3]`. A união de fusões inclui somente trechos não vazios. Aplicar a
+  máscara no desenho fechado, mantendo nativas/count fora da amostra e preservando os dois contadores. O limite
+  continua sendo `>128`, não `>=128`.
+- **Chave nova em caminho quente é de compilação, não de execução.** A primeira versão testava `BT3_ALFA_FORA` a cada
+  vértice no `put`; é o mesmo custo desligado que fez a longa do 7170 (seção 35). Com a chave na compilação, a prova
+  de "desligado sem regressão" vira texto e objeto: `alfa_igual.py BASE` exige o texto da main nos fontes do console
+  com os blocos tirados, e os objetos sem depuração da build normal têm de ser os da main. Ligar a gravação ao
+  backend por um símbolo (`gGsAlfaOrigem`) para que uma build com a chave só de um lado não feche a ligação.
+- O falso compara cada desenho de cada quadro com a varredura original na build com o alfa. No D3D,
   `BT3_ALFA_CONFERE=1` repete a varredura somente na amostra periódica e acusa diferenças no diário;
   essa abertura tem custo de oráculo e não serve para anunciar ganho em U. Nenhuma leitura dos buffers
   combinados foi movida para depois de Present. Os metadados viajam no mesmo rodízio das listas.
 
 ### Ensaio dos prefixos no falso (F5, gravação, seção 36)
 
-- `BT3_GS_PREFIXOS=1` existe somente no backend falso. Publica até `drawCount-1`, pois a última vaga
+- `BT3_GS_PREFIXOS=1|2` existe somente no backend falso. Publica até `drawCount-1`, pois a última vaga
   ainda pode fundir. Uma fila de oito descritores tem um consumidor e drena antes da entrega normal;
   o consumidor confere novamente os dados referidos, a sequência e versões lógicas de alvos. Atrasos
   de 1/5/20 ms cobrem a primeira leitura de cada quadro. Não há interpretação de D3D concorrente.
-- Fechar geometria não libera o desenho: o ensaio marca explicitamente as cinco dependências integrais
-  do backend original. `liberados 0` significa que a fila apenas provou fechamento; não medir esse número
-  como ganho nem anunciar o ensaio como GPU progressiva. A versão lógica de alvo não é um snapshot dos
-  recursos D3D. Trocar o plano da EDRAM/DATE/Z e a entrega de versões continua exigindo suas próprias provas.
+- **Um ensaio que carrega todas as barreiras mede a barreira, não a cadeia.** O modo 1 marcava as cinco consultas
+  integrais e deu "teto 0"; olhando cada consulta, só o `ed_plano` lê a lista inteira e só um marcador DATE (o 94 do
+  6960, que olha até o 1342) prende o resto. O modo 2 faz o censo das regras reais (plano previsto, z da visita, DATE
+  curto) e a curva do relógio da gravação; `prefixos_teto.py` simula C/U por desenho com o perfil fino do console,
+  calibrado nos P/U sem marcas. Antes de declarar uma partição inviável, listar o que cada consulta ao futuro lê de
+  verdade e quanto custa a alternativa que não muda a imagem.
+- A versão lógica de alvo não é um snapshot dos recursos D3D; o teto não conta fila, disputa de memória/SMT, lotes
+  pequenos no buffer de comandos nem plano previsto errado. A integração `BT3_GS_LOTES` continua exigindo as provas
+  da seção 28 e o console.
