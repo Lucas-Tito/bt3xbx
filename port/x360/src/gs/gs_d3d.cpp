@@ -919,13 +919,16 @@ extern "C" void Picos_Gravou(unsigned quadro, uint64_t esperaTiques, const uint3
    os carimbos para uma vaga (Relogio_Gravou, depois do Picos_Gravou, que já pôs J e G no anel). O desenho escreve a vaga
    pelo diário a partir do quadro seguinte, até quatro linhas por quadro, depois do cadeia_fim: os carimbos em us desde a
    entrega do jogo (J; sem BT3_PICOS, desde o primeiro desenho) e a curva de dezesseis avos de J a G no formato do falso,
-   para o prefixos_teto.py. É o progresso real da gravação no Xenon, que a seção 36 modelava (U, W, X). */
+   para o prefixos_teto.py. É o progresso real da gravação no Xenon, que a seção 36 modelava (U, W, X). Por último, a
+   linha "relogio: fim" com G, P (a marca da GPU posta antes do Present) e U (a GPU chegou a ela) desde J, esperando a
+   GPU até seis quadros. BT3_RELOGIO_MARCAS=0 tira os carimbos e deixa a linha do fim: o controle da mesma build, que
+   diz quanto os carimbos custam em G, P e U sem depender do limiar do picos. */
 #define REL_VAGAS 4
 #define REL_MAX 4096
 #define REL_LINHA 100
 struct RelVaga {
     volatile unsigned estado; /* 0 livre, 1 cheia (a gravação escreveu), o desenho a esvazia */
-    unsigned quadro, desenhos, marcados, escritos, temJ;
+    unsigned quadro, desenhos, marcados, escritos, temJ, cab;
     unsigned __int64 j, primeiro, g, t[REL_MAX];
 };
 static RelVaga sRel[REL_VAGAS];
@@ -934,6 +937,7 @@ static unsigned sRelQ[16], sRelQN, sRelPerdidas;
 extern "C" int Relogio_Ligado(void) {
     const char *e = getenv("BT3_RELOGIO_GRAV");
     char *f;
+    int marcas;
     if (e == NULL || strcmp(e, "0") == 0) {
         return 0;
     }
@@ -947,9 +951,11 @@ extern "C" int Relogio_Ligado(void) {
         sRelQ[sRelQN++] = (unsigned)v;
         e = *f == ',' ? f + 1 : f;
     }
-    Diario_Escrever("relogio: o relógio da gravação ligado em %u quadros (build de perfil), o primeiro %u", sRelQN,
-                    sRelQN ? sRelQ[0] : 0u);
-    return sRelQN != 0;
+    e = getenv("BT3_RELOGIO_MARCAS");
+    marcas = e == NULL || strcmp(e, "0") != 0;
+    Diario_Escrever("relogio: o relógio da gravação ligado em %u quadros (build de perfil), o primeiro %u, %s", sRelQN,
+                    sRelQN ? sRelQ[0] : 0u, marcas ? "com os carimbos por desenho" : "sem os carimbos (BT3_RELOGIO_MARCAS=0)");
+    return sRelQN == 0 ? 0 : marcas ? 2 : 1;
 }
 
 extern "C" void Relogio_Gravou(unsigned quadro, unsigned desenhos, unsigned marcados, const uint64_t *t, uint64_t primeiro) {
@@ -989,6 +995,7 @@ extern "C" void Relogio_Gravou(unsigned quadro, unsigned desenhos, unsigned marc
         v->j = primeiro;
     }
     v->escritos = 0;
+    v->cab = 0;
     __lwsync();
     v->estado = 1;
 }
@@ -1003,8 +1010,8 @@ static void relogio_escreve(unsigned quadro) {
     RelVaga *v = NULL;
     unsigned i, k, linhas = 0;
     char buf[REL_LINHA * 12 + 16]; /* (os valores limitados a 8 dígitos com sinal) */
-    for (i = 0; i < REL_VAGAS && v == NULL; i++) {
-        if (sRel[i].estado == 1 && sRel[i].quadro < quadro) {
+    for (i = 0; i < REL_VAGAS; i++) { /* (a mais velha: o anel do picos guarda P e U por 16 quadros) */
+        if (sRel[i].estado == 1 && sRel[i].quadro < quadro && (v == NULL || sRel[i].quadro < v->quadro)) {
             v = &sRel[i];
         }
     }
@@ -1012,11 +1019,13 @@ static void relogio_escreve(unsigned quadro) {
         return;
     }
     __lwsync();
-    if (v->escritos == 0) {
+    if (!v->cab) {
+        v->cab = 1;
         Diario_Escrever("relogio: quadro %u desenhos %u marcados %u; %s, ms: primeiro desenho %.3f, entrega da gravação (G) "
                         "%.3f; carimbos em us, o desenho i pronto quando o i+1 começou (o último em G); %u vagas perdidas",
                         v->quadro, v->desenhos, v->marcados, v->temJ ? "desde a entrega do jogo (J)" :
-                        "sem J (BT3_PICOS desligado): desde o primeiro desenho", (double)(__int64)(v->primeiro - v->j) / sPicoTbMs,
+                        "sem J (BT3_PICOS desligado): desde o primeiro desenho",
+                        v->primeiro != 0 ? (double)(__int64)(v->primeiro - v->j) / sPicoTbMs : -1.0,
                         (double)(__int64)(v->g - v->j) / sPicoTbMs, sRelPerdidas);
     }
     while (v->escritos < v->marcados && linhas < 4) {
@@ -1029,7 +1038,12 @@ static void relogio_escreve(unsigned quadro) {
         linhas++;
     }
     if (v->escritos >= v->marcados) {
-        if (v->desenhos > 16 && v->g > v->j) { /* (a curva de dezesseis avos de J a G, no formato do falso) */
+        unsigned kq = v->quadro % PICOS_N;
+        int temP = sPD[kq].q == v->quadro, temU = temP && sPicoGpu[kq] != 0;
+        if (!temU && quadro < v->quadro + 6) {
+            return; /* (a GPU ainda não chegou à marca do quadro) */
+        }
+        if (v->marcados > 0 && v->desenhos > 16 && v->g > v->j) { /* (a curva de dezesseis avos de J a G, no formato do falso) */
             unsigned p = 0;
             double tot = (double)(v->g - v->j);
             for (k = 0; k <= 16; k++) {
@@ -1041,6 +1055,10 @@ static void relogio_escreve(unsigned quadro) {
             Diario_Escrever("relogio: curva quadro %u desenhos %u ms %.3f milesimos%s", v->quadro, v->desenhos,
                             tot / sPicoTbMs, buf);
         }
+        Diario_Escrever("relogio: fim quadro %u desenhos %u marcados %u; ms desde J: G %.3f, marca da GPU posta (P) %.3f, GPU "
+                        "acabou (U) %.3f", v->quadro, v->desenhos, v->marcados, (double)(__int64)(v->g - v->j) / sPicoTbMs,
+                        temP ? (double)(__int64)(sPD[kq].marca - v->j) / sPicoTbMs : -1.0,
+                        temU ? (double)(__int64)(sPicoGpu[kq] - v->j) / sPicoTbMs : -1.0);
         __lwsync();
         v->estado = 0;
     }

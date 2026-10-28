@@ -176,7 +176,8 @@ def progresso(ds, q, modelo, curva=None):
     """fração da gravação feita quando o desenho i fecha (o índice N é o fim)."""
     N = len(ds)
     if modelo == 'C':  # o relógio do console por desenho: curva[i] em us desde J até o desenho i ficar pronto
-        assert curva and len(curva['us']) == N - 1, 'relógio do console com outro número de desenhos que a lista'
+        assert curva and curva.get('us') is not None, 'relógio do console sem carimbos (uma abertura de controle)'
+        assert len(curva['us']) == N - 1, 'relógio do console com outro número de desenhos que a lista'
         g = curva['G'] * 1000.0
         return [x / g for x in curva['us']] + [1.0, 1.0]
     if modelo == 'X':  # o relógio medido a cada 1/16 da lista, interpolado
@@ -306,13 +307,16 @@ def curvas(texto):
 RELOGIO_CAB = re.compile(r'relogio: quadro (\d+) desenhos (\d+) marcados (\d+); (desde a entrega do jogo \(J\)|sem J[^,]*), '
                          r'ms: primeiro desenho (-?[0-9.]+), entrega da gravação \(G\) (-?[0-9.]+);')
 RELOGIO_LIN = re.compile(r'relogio: quadro (\d+) de (\d+) a (\d+) us((?: -?\d+)+)$')
+RELOGIO_FIM = re.compile(r'relogio: fim quadro (\d+) desenhos (\d+) marcados (\d+); ms desde J: G (-?[0-9.]+), '
+                         r'marca da GPU posta \(P\) (-?[0-9.]+), GPU acabou \(U\) (-?[0-9.]+)$')
 RELOGIO_CURVA = re.compile(r'relogio: curva quadro (\d+) desenhos (\d+) ms ([0-9.]+) milesimos((?: -?\d+){17})$')
 
 
 def relogios(texto):
     """As linhas "relogio:" de um diário do console (build de perfil, BT3_RELOGIO_GRAV): por quadro, os carimbos em us
-    desde J de cada desenho pronto, G e a curva; recusa lacuna, repetição, desordem, carimbo depois de G, quadro sem J,
-    contagem que não fecha e curva que não confere com os carimbos."""
+    desde J de cada desenho pronto, G, a curva e o fim (G, P e U desde J); com BT3_RELOGIO_MARCAS=0 (o controle), só o
+    fim, e 'us' fica None. Recusa lacuna, repetição, desordem, carimbo depois de G, quadro sem J, contagem que não fecha,
+    curva que não confere com os carimbos e fim ausente ou fora de ordem (P antes de G, U antes de P)."""
     out, us = {}, {}
     for linha in texto.splitlines():
         m = RELOGIO_CAB.search(linha)
@@ -320,8 +324,8 @@ def relogios(texto):
             q, n, k = (int(m.group(i)) for i in (1, 2, 3))
             assert q not in out, f'quadro {q} repetido no log'
             assert m.group(4).startswith('desde'), f'quadro {q} sem J (BT3_PICOS desligado)'
-            assert k == n - 1, f'quadro {q}: {k} marcados para {n} desenhos (o último fecha em G)'
-            out[q] = dict(desenhos=n, primeiro=float(m.group(5)), G=float(m.group(6)), curva=None)
+            assert k == n - 1 or k == 0, f'quadro {q}: {k} marcados para {n} desenhos (o último fecha em G)'
+            out[q] = dict(desenhos=n, marcados=k, primeiro=float(m.group(5)), G=float(m.group(6)), curva=None, fim=None)
             us[q] = []
             continue
         m = RELOGIO_LIN.search(linha)
@@ -332,6 +336,13 @@ def relogios(texto):
             assert len(v) == b - a + 1, f'quadro {q}: linha de {a} a {b} com {len(v)} valores'
             us[q] += v
             continue
+        m = RELOGIO_FIM.search(linha)
+        if m:
+            q = int(m.group(1))
+            assert q in out and out[q]['fim'] is None, f'fim do {q} sem cabeçalho ou repetido'
+            assert int(m.group(2)) == out[q]['desenhos'] and int(m.group(3)) == out[q]['marcados'], f'fim do {q} com outra contagem'
+            out[q]['fim'] = tuple(float(m.group(i)) for i in (4, 5, 6))
+            continue
         m = RELOGIO_CURVA.search(linha)
         if m:
             q = int(m.group(1))
@@ -339,6 +350,15 @@ def relogios(texto):
             out[q]['curva'] = [int(x) for x in m.group(4).split()]
     for q, r in out.items():
         v, n, g = us[q], r['desenhos'], r['G']
+        assert r['fim'] is not None, f'quadro {q} sem a linha do fim'
+        G2, P, U = r['fim']
+        assert abs(G2 - g) < 0.0015, f'quadro {q}: G do fim diferente do cabeçalho'
+        assert (P < 0 or P >= g - 0.0015) and (U < 0 or P < 0 or U >= P), f'quadro {q}: P antes de G ou U antes de P'
+        r['P'], r['U'] = P, U
+        if r['marcados'] == 0:  # o controle: sem carimbos nem curva
+            assert not v and r['curva'] is None, f'quadro {q}: controle com carimbos'
+            r['us'] = None
+            continue
         assert len(v) == n - 1, f'quadro {q}: {len(v)} carimbos para {n} desenhos'
         assert v and v[0] >= 0 and all(a <= b for a, b in zip(v, v[1:])), f'quadro {q}: carimbo negativo ou fora de ordem'
         assert v[-1] <= g * 1000.0 + 1.0, f'quadro {q}: carimbo depois de G'
@@ -386,9 +406,15 @@ def mutantes():
               'entrega da gravação (G) 9.000; carimbos em us, o desenho i pronto quando o i+1 começou (o último em G); 0 vagas perdidas\n'
               '[1.1] relogio: quadro 1 de 0 a 3 us 1000 2000 2000 4000\n'
               '[1.2] relogio: quadro 1 de 4 a 6 us 5000 6500 8000\n'
-              f'[1.3] relogio: curva quadro 1 desenhos 8 ms 9.000 milesimos {cur}\n')
+              f'[1.3] relogio: curva quadro 1 desenhos 8 ms 9.000 milesimos {cur}\n'
+              '[1.4] relogio: fim quadro 1 desenhos 8 marcados 7; ms desde J: G 9.000, marca da GPU posta (P) 12.000, GPU acabou (U) 24.000\n')
+    controle = ('[2.0] relogio: quadro 1 desenhos 8 marcados 0; desde a entrega do jogo (J), ms: primeiro desenho -1.000, '
+                'entrega da gravação (G) 9.100; carimbos em us, o desenho i pronto quando o i+1 começou (o último em G); 0 vagas perdidas\n'
+                '[2.1] relogio: fim quadro 1 desenhos 8 marcados 0; ms desde J: G 9.100, marca da GPU posta (P) 12.100, GPU acabou (U) 24.100\n')
+    ctl = relogios(controle)[1]
+    assert ctl['us'] is None and ctl['U'] == 24.1, 'controle lido'
     con = relogios(diario)[1]
-    assert con['us'] == us and con['G'] == 9.0, 'relógio lido'
+    assert con['us'] == us and con['G'] == 9.0 and (con['P'], con['U']) == (12.0, 24.0), 'relógio lido'
     res = roda(ds, ab, None, medido, con)
     assert res[('previsto, z e DATE adiante', 'C')] <= res[('atual', 'U')] + 1e-9, 'relógio no modelo'
     estragos += [('relógio sem uma linha', lambda: relogios(diario.replace('[1.1] relogio: quadro 1 de 0 a 3 us 1000 2000 2000 4000\n', ''))),
@@ -398,7 +424,12 @@ def mutantes():
                  ('relógio sem J', lambda: relogios(diario.replace('desde a entrega do jogo (J)', 'sem J (BT3_PICOS desligado): desde o primeiro desenho'))),
                  ('relógio com curva estragada', lambda: relogios(diario.replace(f'milesimos {cur}', 'milesimos ' + ' '.join(['0'] * 16 + ['1000'])))),
                  ('relógio repetido', lambda: relogios(diario + diario)),
-                 ('relógio com outro número de desenhos', lambda: roda(ds[:-1] + [dict(ds[-1])], ab, None, medido, dict(con, us=us[:-1])))]
+                 ('relógio com outro número de desenhos', lambda: roda(ds[:-1] + [dict(ds[-1])], ab, None, medido, dict(con, us=us[:-1]))),
+                 ('relógio sem o fim', lambda: relogios(diario.split('[1.4]')[0])),
+                 ('relógio com U antes de P', lambda: relogios(diario.replace('GPU acabou (U) 24.000', 'GPU acabou (U) 11.000'))),
+                 ('relógio com G do fim trocado', lambda: relogios(diario.replace('ms desde J: G 9.000', 'ms desde J: G 9.500'))),
+                 ('controle com carimbos', lambda: relogios(controle.replace('[2.1]', '[2.05] relogio: quadro 1 de 0 a 0 us 1000\n[2.1]'))),
+                 ('controle no modelo', lambda: roda(ds, ab, None, medido, ctl))]
     for nome, f in estragos:
         try:
             f()
@@ -425,8 +456,9 @@ def main():
             con = relogios(a.console.read_text(errors='replace'))
             assert con, 'nenhum quadro com o relógio'
             for q, r in sorted(con.items()):
-                print(f'relógio: quadro {q} desenhos {r["desenhos"]} primeiro {r["primeiro"]:.3f} G {r["G"]:.3f} ms; '
-                      f'curva {" ".join(map(str, r["curva"]))}')
+                print(f'relógio: quadro {q} desenhos {r["desenhos"]} marcados {r["marcados"]}; desde J, ms: G {r["G"]:.3f} '
+                      f'P {r["P"]:.3f} U {r["U"]:.3f}' + (f'; primeiro {r["primeiro"]:.3f}, curva {" ".join(map(str, r["curva"]))}'
+                                                          if r['us'] is not None else ' (controle, sem carimbos)'))
             print('tudo certo no relógio'); return
         if a.listas is None or a.dados is None:
             ap.error('informe LISTAS e DADOS')
@@ -441,6 +473,7 @@ def main():
             if a.console:
                 assert q in con, f'relógio do {q} ausente em {a.console}'
                 r = con[q]
+                assert r['us'] is not None, f'o {q} em {a.console} é de uma abertura de controle (sem carimbos)'
                 print(f'== relógio do console, quadro {q}: {r["desenhos"]} desenhos, primeiro pronto em {r["primeiro"]:.2f} ms, '
                       f'G {r["G"]:.2f} ms desde J (sem marcas, {MEDIDO[q]["G"]:.1f}); desenhos prontos em ' +
                       ', '.join(f'{i}: {r["us"][i] / 1000:.1f}' for i in sorted({r["desenhos"] // 4, r["desenhos"] // 2, {6960: 1152, 6930: 128}.get(q, 0)}) if i < len(r['us'])))

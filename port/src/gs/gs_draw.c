@@ -50,7 +50,8 @@ static GsBackend *sBackend;
 /* (F5, seção 38 do 08-gravacao.md) O relógio da gravação por desenho, só na build de perfil (BT3_PERFIL_CADEIA=1
    build_f2.sh): com BT3_RELOGIO_GRAV=Q1,Q2,... no ambiente, cada desenho anexado fecha o anterior com uma leitura do mftb
    (o desenho i está pronto quando o i+1 começa; o último, na entrega), e a entrega passa os carimbos do quadro ao
-   gs_d3d.cpp (Relogio_Gravou), que escreve pelo desenho os dos quadros da lista. Na build normal GS_RELOGIO() é vazio. */
+   gs_d3d.cpp (Relogio_Gravou), que escreve pelo desenho os dos quadros da lista. Com BT3_RELOGIO_MARCAS=0, sem os
+   carimbos (sRelLiga 1: só J, G, P e U dos quadros, o controle da mesma build). Na build normal GS_RELOGIO() é vazio. */
 void Relogio_Gravou(unsigned quadro, unsigned desenhos, unsigned marcados, const uint64_t *t, uint64_t primeiro);
 int Relogio_Ligado(void);
 static uint64_t sRelT[MAX_DRAWS], sRelPrimeiro;
@@ -69,7 +70,7 @@ static void gs_relogio(void) {
         sRelT[sRelN++] = t;
     }
 }
-#define GS_RELOGIO() do { if (sRelLiga > 0) gs_relogio(); } while (0)
+#define GS_RELOGIO() do { if (sRelLiga > 1) gs_relogio(); } while (0)
 #else
 #define GS_RELOGIO() ((void)0)
 #endif

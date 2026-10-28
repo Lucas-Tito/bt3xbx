@@ -5,8 +5,9 @@ nem tocar no console.
 relogio: duas builds do mesmo commit, as duas de perfil (o relógio só existe nelas), pela build_f2.sh:
   perfil       BT3_PERFIL_CADEIA=1
   perfil+alfa  BT3_PERFIL_CADEIA=1 BT3_ALFA_ORIGEM=1      (o log diz "gs_d3d: alfa exato na origem")
-Cada build abre alternando com o relógio ligado (BT3_RELOGIO_GRAV com os quadros) e desligado (controle da mesma build:
-diz o que os carimbos custam em G, P e U). As marcas da cadeia ficam desligadas (BT3_CADEIA_CPU=0) e o picos e a tela
+Cada build abre alternando com os carimbos por desenho (BT3_RELOGIO_GRAV com os quadros) e sem eles
+(BT3_RELOGIO_MARCAS=0: o controle da mesma build, que escreve só J, G, P e U dos mesmos quadros e diz o que os carimbos
+custam, sem depender do limiar do picos). As marcas da cadeia ficam desligadas (BT3_CADEIA_CPU=0) e o picos e a tela
 por imagem ligados (J e G do relógio vêm do anel do picos). Saves novos e únicos por abertura.
 
 imagem: a build normal e a dos lotes (BT3_GS_LOTES=1) do mesmo commit, e a dos lotes com BT3_LOTES=0 (o controle da
@@ -59,8 +60,8 @@ def prepara(saida, rodada, quadros, repeticoes, modo='relogio'):
         if len(save) > 42:
             raise ValueError('save excede FATX')
         if modo == 'relogio':
-            extra = [f'BT3_RELOGIO_GRAV={lista if liga else 0}']
-            m = {'relogio': lista if liga else '0'}
+            extra = [f'BT3_RELOGIO_GRAV={lista}', f'BT3_RELOGIO_MARCAS={liga}']
+            m = {'relogio': lista, 'marcas': liga}
         else:
             pasta = f'shots_{rodada}_{nome}'
             extra = ['BT3_RELOGIO_GRAV=0', f'BT3_LOTES={liga}', f'BT3_SHOT_LISTA={lista}', 'BT3_SHOT_CHEIA=1', f'BT3_SHOT_PASTA={pasta}']
@@ -88,8 +89,9 @@ Duas builds de perfil do mesmo commit (ordem.txt: abertura e build): perfil (BT3
 na perfil+alfa, a linha "relogio: o relógio da gravação ligado" só nas aberturas rel*, e a inexistência de TODOS os saves
 do manifesto. Se qualquer save existir, gerar outra rodada inteira. Não reutilizar {", ".join(ANTIGAS)}.
 Executar na ordem, cada abertura com o ambiente_<nome>.txt como ambiente.txt. Preservar os logs com o nome da abertura e SHA256.
-O que se lê: nas rel*, as linhas "relogio:" dos quadros {lista} (prefixos_teto.py --console LOG --so-relogio confere;
-com LISTAS e DADOS, o modelo C); nas ctl*, as mesmas linhas "picos: tela" para comparar J/G/P/U com e sem os carimbos.
+O que se lê: nas rel*, as linhas "relogio:" dos quadros {lista} com os carimbos por desenho (prefixos_teto.py --console
+LOG --so-relogio confere; com LISTAS e DADOS, o modelo C); nas ctl*, só a linha "relogio: fim" dos mesmos quadros (J, G, P
+e U), para comparar com e sem os carimbos.
 É medida, não aceite: a build de perfil não é a normal (seção 35), e nenhum ganho dos prefixos foi integrado.
 ''')
     return manifesto
@@ -108,8 +110,11 @@ def confere(pasta, rodada):
         rel = [x for x in t if x.startswith('BT3_RELOGIO_GRAV=')]
         if rel != [f'BT3_RELOGIO_GRAV={m["relogio"]}'] or not re.fullmatch(r'0|\d+(,\d+){0,15}', m['relogio']):
             raise ValueError(f'{m["abertura"]}: relógio diferente do manifesto')
-        if m['modo'] == 'relogio' and (m['abertura'].startswith('rel')) == (m['relogio'] == '0'):
-            raise ValueError(f'{m["abertura"]}: abertura de relógio sem relógio, ou controle com ele')
+        if m['modo'] == 'relogio':
+            mar = [x for x in t if x.startswith('BT3_RELOGIO_MARCAS=')]
+            if m['relogio'] == '0' or mar != [f'BT3_RELOGIO_MARCAS={m["marcas"]}'] or \
+                    m['abertura'].startswith('rel') != (m['marcas'] == 1):
+                raise ValueError(f'{m["abertura"]}: abertura de relógio sem carimbos, controle com eles, ou sem a lista')
         if t[-1] != f'BT3_SAVES=game:\\{m["save"]}':
             raise ValueError(f'{m["abertura"]}: save diferente do manifesto')
         if m['modo'] == 'relogio' and m['build'] not in ('perfil', 'perfil+alfa'):
@@ -134,8 +139,9 @@ def mutantes():
         assert confere(base, 'teste1') == 8
         estragos = {
             'save repetido': ('manifesto.json', lambda s: s.replace('sv_teste1_ctl1', 'sv_teste1_rel1')),
-            'relógio no controle': ('ambiente_ctl1.txt', lambda s: s.replace('BT3_RELOGIO_GRAV=0', 'BT3_RELOGIO_GRAV=6930')),
+            'carimbos no controle': ('ambiente_ctl1.txt', lambda s: s.replace('BT3_RELOGIO_MARCAS=0', 'BT3_RELOGIO_MARCAS=1')),
             'relógio desligado': ('ambiente_rel2.txt', lambda s: s.replace('BT3_RELOGIO_GRAV=6930,6960', 'BT3_RELOGIO_GRAV=0')),
+            'controle sem a lista': ('manifesto.json', lambda s: s.replace('"relogio": "6930,6960",\n    "marcas": 0', '"relogio": "0",\n    "marcas": 0', 1)),
             'cadeia ligada': ('ambiente_rela1.txt', lambda s: s.replace('BT3_CADEIA_CPU=0', 'BT3_CADEIA_CPU=1')),
             'picos desligado': ('ambiente_rel1.txt', lambda s: s.replace('BT3_PICOS=36', 'BT3_PICOS=0')),
             'build normal': ('manifesto.json', lambda s: s.replace('"perfil+alfa"', '"alfa"', 1)),
