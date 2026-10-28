@@ -736,3 +736,17 @@ propôs medir pela tela e aceitar até 1% de imagens com três vblanks. O Lucas 
 2. **Trabalho por passo:** só informativo, publicado em percentis.
 3. **Se o zero se mostrar inviável** (os picos da GPU na troca de cena sem corte possível), o plano muda com o Lucas,
    sem afrouxar o critério sozinho.
+
+## 28. F7: as escolhas do escopo (28/10/2026)
+
+O escopo da F7 (`plano/F7/00-escopo.md`, seção 5) pediu quatro escolhas. O Lucas ficou com as recomendações:
+
+1. **Tela dividida:** o mesmo aceite da decisão 27, 30 fps e zero imagens com três vblanks ou mais nas três janelas, sem
+   perda de imagem nem atraso de entrada. A medida vem cedo (etapa 3 e a sonda da 7); se não couber, os números voltam ao
+   Lucas antes de qualquer limite próprio ou corte de escala e efeitos só no dividido.
+2. **Modos:** todo o jogo base nesta fase, com campanhas completas, as 100 missões, os cursos, a loja, os replays e o
+   Torneio entre dois humanos. Só os gaps já adiados (Namek, deserto escuro) seguem para o fechamento no fim do plano.
+3. **Desbloqueios:** a progressão original. Cartões avançados só para teste, gerados fora do repositório, e casos de
+   ganho real partindo do New Game. Nenhuma opção de liberar tudo no produto.
+4. **Console:** o lote completo de arquivos, ações e fluxos no WSL e no Deck; no console, a inspeção por família, os
+   casos problemáticos, os piores cenários de desempenho e a sessão livre.

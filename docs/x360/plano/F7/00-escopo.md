@@ -2,10 +2,9 @@
 
 [Índice do plano](../../plano.md) | anterior: [F6](../F6/00-escopo.md)
 
-[Lido] Estudo de 28/10/2026, base `c57e807f`, branch `codex/f7-escopo`. **Escopo proposto, esperando as decisões
-do Lucas.** Esta tarefa só altera documentação: não executou jogo, emulador, build ou console. As sete seções
-seguem o modelo da F6. As perguntas da seção 5 ainda não são decisões do projeto; registrar as respostas em
-`decisoes.md` antes da implementação dependente delas.
+[Lido] Estudo de 28/10/2026, base `c57e807f`, branch `codex/f7-escopo`. **Escopo aprovado em 28/10 (decisão 28; as
+respostas estão no fim).** Esta tarefa só altera documentação: não executou jogo, emulador, build ou console. As
+sete seções seguem o modelo da F6.
 
 [Lido] Legenda: **[medido]** é contagem nos dados ou resultado de log identificado, inclusive de uma rodada
 anterior; **[lido]** é comportamento encontrado em fonte ou documento, sem prova nova de execução;
@@ -402,3 +401,7 @@ não há controle negativo novo a certificar nesta entrega. Os controles futuros
 save/reabertura, imagens por metade, som, percentis/máximos, memória, erros e casos ausentes; controles negativos
 vistos falhando e SHA1/objetos da x86. Não fechar F7 com a rodada F6 incompleta, com desempenho só médio ou com
 os únicos dados avançados gerados pelo desbloqueio total de teste.
+
+## Respostas do Lucas (28/10/2026, decisão 28)
+
+1a, 2a, 3a, 4a: as recomendações da seção 5. Texto em [decisoes.md](../../decisoes.md), decisão 28.
