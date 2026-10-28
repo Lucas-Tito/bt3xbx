@@ -5,8 +5,8 @@
 O instalador `port/x360/tools/convert_iso.py` lê a ISO original USA e usa os conversores existentes da
 `conv_tool`, pelo `--saida`. Não altera o tamanho de 3.020.816.384 bytes, posições, tamanhos, tabelas ISO 9660,
 UDF ou AFS. A saída é exclusiva do port. O 360 exige esta ISO: `Iso_Iniciar` (`port/x360/src/iso360.c`) procura
-a identificação do volume e do `SYSTEM.CNF` antes da assinatura da marca. A recusa distingue original, versão não
-suportada, conversão antiga e imagem ilegível, com mensagens em inglês; a busca automática prefere a convertida compatível
+a identificação do volume e do `SYSTEM.CNF` antes da assinatura da marca. A recusa distingue original (inclusive a convertida
+por outra versão do conversor), versão não suportada e imagem ilegível, com mensagens em inglês; a busca automática prefere a convertida compatível
 ([F8, avisos](../plano/F8/01-avisos.md)). Da convertida, a carga só lê
 ([plano/F5/02.md](../plano/F5/02.md), "Lado do 360"). Os `mods/` continuam no formato do PS2, convertidos ao abrir,
 até as últimas fases.
@@ -62,7 +62,8 @@ console pode chamar a mesma API, fornecendo o mesmo pacote. A API valida as
 incompatíveis. Não existe troca em tempo de desenho nem mudança dos controles.
 
 O console agora exige versão 2, marca de 512 bytes e tamanho de origem correto.
-Outra versão da conversão recebe caixa própria pedindo reconversão da original;
+Outra versão da conversão é recusada com a mesma caixa da original, que pede a conversão (o Lucas
+não quer caixa própria de versão: só a conversão publicada vai existir fora do projeto);
 imagem de outra região continua recebendo a caixa de versão do jogo.
 
 ## Região da marca e prova

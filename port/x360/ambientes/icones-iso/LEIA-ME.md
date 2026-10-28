@@ -28,7 +28,7 @@ na TV e registrar o resultado no relatório da revisão. Nenhuma captura entra n
 | 02 pausa | New Game e a mesma luta. START, deixar a pausa aberta com suas dicas. Capturar e conferir as letras novas; A confirma e Y volta. |
 | 03 lição | New Game, Treino, aulas, primeira classe e primeira aula. Avançar até uma página com marcas de botão; deixar aberta e capturar. Navegar também por páginas de carga/segurar para conferir o ▼ amarelo. O ícone SELECT e o texto "SELECT button" ficam originais. |
 | 04 golpes | New Game e a mesma luta, START, lista de golpes. Percorrer até aparecerem botões de ação, ombros, gatilhos, cliques e variantes com ▼. Capturar páginas suficientes; conferir os rótulos sem cortar e espaçamento dentro da linha. |
-| 05 antiga | Abrir com a convertida versão 1 já existente no console, selecionada explicitamente. Exigir `Unsupported converted ISO version`, reconversão com `convert_iso.py` e destino `bt3-x360.iso`; o jogo não começa e OK volta ao dashboard. |
+| 05 antiga | Abrir com a convertida versão 1 já existente no console, selecionada explicitamente. Exigir `ISO conversion required` (não há caixa própria de versão), conversão com `convert_iso.py` e destino `bt3-x360.iso`; o jogo não começa e OK volta ao dashboard. |
 | 06 ausente | O ambiente aponta para um nome novo que deve estar ausente, mesmo com a ISO nova instalada. Exigir `ISO not found`, raiz do jogo, `bt3-x360.iso` e `default.xex`, sem variável nem arquivo de configuração no texto. Confirmar também uma abertura **sem ambiente e sem nenhuma ISO na raiz**, retirando temporariamente as imagens por procedimento do Lucas, para provar a busca padrão ausente. OK volta ao dashboard. |
 
 Comparações contra imagens do WSL devem marcar as áreas dos ícones como diferença

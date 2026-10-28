@@ -137,7 +137,7 @@ static int tem_marca(const char *caminho) {
         return zeros == MARCA_TAM ? 0 : -1;
     }
     if (le32(m + 16) != ISO_MARCA_VERSAO) {
-        Diario_Escrever("iso: conversão versão %u, esperada %u: reconverta a original", le32(m + 16), ISO_MARCA_VERSAO);
+        Diario_Escrever("iso: conversão versão %u, esperada %u: recusada como não convertida", le32(m + 16), ISO_MARCA_VERSAO);
         return -2;
     }
     if (le32(m + 20) != MARCA_TAM || le32(m + 24) != 3020816384U || le32(m + 28) != 0) return -1;
@@ -276,7 +276,8 @@ static int tentar(const char *caminho) {
     motivo = identificar();
     if (motivo == ISO_OK) {
         marca = tem_marca(caminho);
-        motivo = marca > 0 ? ISO_OK : marca == 0 ? ISO_ORIGINAL : marca == -2 ? ISO_CONVERSAO_ANTIGA : ISO_ILEGIVEL;
+        /* Convertida por outra versão do conversor: o usuário vê o mesmo pedido de conversão da original. */
+        motivo = marca > 0 ? ISO_OK : marca == 0 || marca == -2 ? ISO_ORIGINAL : ISO_ILEGIVEL;
     }
     Diario_Escrever("iso: %s: identificação e marca, resultado %d", caminho, motivo);
     if (motivo != ISO_OK) {

@@ -109,7 +109,8 @@ def main():
             h = h.replace(*troca)
         cpp = a.saida/(nome+'.cpp'); exe = a.saida/nome
         cpp.write_text(PRE+h+POS)
-        subprocess.run(['g++', '-std=c++03', '-Wall', '-Wextra', '-Werror', '-O2', str(cpp), '-o', str(exe)], check=True)
+        subprocess.run(['g++', '-std=c++03', '-Wall', '-Wextra', '-Werror', '-O2', '-DBT3_PERFIL_CADEIA', str(cpp), '-o', str(exe)],
+                       check=True)
         r = subprocess.run([str(exe)], capture_output=True, text=True)
         (a.saida/(nome+'.log')).write_text(r.stdout+r.stderr)
         assert (r.returncode != 0) == bool(troca), (nome, r.returncode)

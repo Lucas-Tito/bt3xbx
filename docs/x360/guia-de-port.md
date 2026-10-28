@@ -2403,6 +2403,32 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   vblanks a mais na fronteira. Publicar os dois denominadores; as duas longas são as mesmas. A ausência
   de longa marginal no 7170 desses dois a não restaura F antigo nem dispensa controles entre builds.
 
+### Builds alternadas no 7170: regressão do diagnóstico inativo (F5, seção 35)
+
+- A rp33a2810 alternou três pares c57e807/8c1ec1d na mesma sessão, com saves novos. A longa
+  7169 → 7170 apareceu em 3/3 novas e 0/3 antigas; F foi 16,0 a 16,1 contra 17,8 ms, e a folga
+  mediana perdeu 0,6 ms. Isso fecha a dúvida entre build e sessão das seções 33 e 34. Não continuar
+  atribuindo a ocorrência a variação de sessão nem aprovar um corte pela melhora de outros alvos.
+- As únicas fontes de execução alteradas nesse diff são o diagnóstico CPU e seus escopos no backend.
+  Retirar as marcas numa cópia recupera byte a byte o backend antigo, com controle negativo de chamada.
+  Zero relógios desligado continua insuficiente: construtores/destrutores inativos podem mudar
+  instruções, inlining, registradores e pilha. Restaurar produção sem essas marcas e selecionar perfil
+  na compilação. Antes de integrar alfa/prefixos, provar código, dados e relocações com o XDK contra o
+  controle antigo, fora do console; a prova nativa e a igualdade dos fontes não substituem essa comparação.
+- O perfil exato do 7170 mede alfa em 4,723/4,781 ms e VU0 em 14,037/13,980, num total de ~22,3,
+  com 37.499 escopos. Alfa já existia na antiga; não confundir seu custo com os ~1,8 ms de regressão,
+  nem usar o total instrumentado para ratear o acréscimo desligado. Continua sem prova de shader frio,
+  espera eliminável ou troca de cena. O controle novo sem marcas é ~17,8 ms.
+- Passos e imagens têm denominadores distintos: nesta rodada as antigas registram 2.335 imagens para
+  2.334 passos, tanto em passos quanto em picos, com histograma conservado. Publicar ambos e conferir
+  as associações. Não corrigir automaticamente a contagem nem fabricar uma imagem longa adicional.
+- **Como provar que a build normal voltou ao código antigo (feito em 28/10):** compilar o `gs_d3d.cpp` de cada
+  versão no XDK com as opções da `build_f2.sh` (a cópia numa pasta `gs/` com `som` ligado ao do port, por causa do
+  `#include "../som/..."`), desmontar com `link.exe /dump /disasm` (a imagem `collectionui-xdk:light` não tem
+  `dumpbin.exe`) e comparar com os rótulos `$M`/`$LN` normalizados, que mudam de número sem mudar o código. Funções
+  `inline` vazias ainda saem como COMDATs de um `blr`; conferir no `default.map` que o `-OPT:REF` as descartou.
+  Diagnóstico de tempo no caminho do desenho fica atrás de uma chave de **compilação**, nunca só de ambiente.
+
 ### A preparação da rodada final da F6 (`plano/F6/09.md`)
 
 - **Serviço de usuário precisa do barramento da sessão.** Neste WSL o systemd está ativo, mas a sessão do agente
@@ -2446,7 +2472,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
 
-### Metadados exatos do alfa (F5, gravação, seção 35)
+### Metadados exatos do alfa (F5, gravação, seção 36)
 
 - `BT3_ALFA_FORA=1`, ausente/0 original: guarda um byte por desenho no jogo de listas, em memória comum.
   Na VU, só `misc[3]==3` consulta os alfas dos vértices referidos; as demais camadas usam `color0[3]`.
@@ -2457,7 +2483,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   essa abertura tem custo de oráculo e não serve para anunciar ganho em U. Nenhuma leitura dos buffers
   combinados foi movida para depois de Present. Os metadados viajam no mesmo rodízio das listas.
 
-### Ensaio dos prefixos no falso (F5, gravação, seção 35)
+### Ensaio dos prefixos no falso (F5, gravação, seção 36)
 
 - `BT3_GS_PREFIXOS=1` existe somente no backend falso. Publica até `drawCount-1`, pois a última vaga
   ainda pode fundir. Uma fila de oito descritores tem um consumidor e drena antes da entrega normal;

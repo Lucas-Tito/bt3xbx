@@ -39,7 +39,8 @@ A folha completa fica **fora do git**, em `~/icones/contato_kenney.png`.
 
 Textos ingleses estáticos em `iso_avisos.h`, usados por `MostrarRecusa`, sem caminho
 variável, `BT3_ISO` ou `ambiente.txt`. Dizem `convert_iso.py`, raiz do jogo e
-`bt3-x360.iso`. A quinta caixa separa conversão antiga de região/revisão incompatível.
+`bt3-x360.iso`. Não há caixa própria de versão da conversão (pedido do Lucas, 28/10): a convertida por outra
+versão recebe a mesma caixa da original, "ISO conversion required".
 A caixa de imagem ilegível orienta nova cópia ou nova conversão da original.
 
 Sem configuração, prefere o nome público, depois percorre outras `.iso` como antes.
