@@ -2331,8 +2331,8 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   retornos, prova ausência de leituras do relógio desligado e exige os controles negativos. Isso não compila
   o backend XDK inteiro. Não ativar CPU fina junto da GPU fina para atribuir ganho ou aprovar apresentação.
 - A classe antiga `outros` contém a varredura estatística `alfa_alto`, antes do primeiro envio GPU; sua
-  contribuição ainda precisa de medida própria. A VU0 do perfil de desenho é a família dos lutadores
-  produzida pela VU1, não evidência de outro interpretador. Tempo de API pode incluir bloqueio/preempção;
+  contribuição foi medida em ~5,4 ms no 6930 da rodada rp32a2810 (seção 33). A VU0 do perfil de desenho
+  é a família dos lutadores produzida pela VU1, não evidência de outro interpretador. Tempo de API pode incluir bloqueio/preempção;
   não chamar a diferença CPU menos GPU de espera medida. GetLevelDesc fica em preparo no diagnóstico novo.
 - Envio à VRAM GS é trabalho CPU; envio de comandos D3D é outra coisa. Hash por geração, cache pela origem,
   listas alternadas, VU1 direto e shaders compilados no build já existem. Qualquer cache novo precisa mostrar
@@ -2345,3 +2345,26 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   complemento gf29b. Saves distintos localmente não provam pastas vazias no console. Conferir inexistência
   antes de usar e trocar o identificador inteiro se qualquer pasta já existir. Começar pelos controles e
   CPU dos alvos; analisar antes de gastar os vizinhos. Todas as saídas ficam fora do git.
+
+
+### Perfil CPU rp32a2810: desligado também precisa de controle (F5, seção 33)
+
+- Zero leituras de relógio com a chave 0 prova esse contrato, não desempenho igual. Os escopos inativos
+  ainda podem custar testes por chamada e mudar o código gerado. Nesta rodada as três bases ganharam
+  `7169 → 7170` de três vblanks, ausente nos controles antigos, e `frame_end` do 7170 subiu de 15,9 a
+  16,1 para 17,8 a 17,9 ms. Não certificar ausência de regressão pela melhora dos dois alvos conhecidos
+  ou pelo teste nativo. Alternar as duas builds na mesma sessão, com saves novos; a causa continua por isolar.
+- `alfa_alto` confirmou ~5,4 ms no 6930. É estatística periódica por trecho de 60 quadros, não compilação
+  de shader de primeira vez. Em VU1 direto ela pode reler índices/vértices de escrita combinada; produzir
+  metadados exatos na passagem que já gera os dados precisa de oráculo por desenho e medida sem marcas.
+  Mover a leitura para depois de Present pode apenas atrasar o quadro seguinte.
+- As 22.303 entradas de escopo no 6960 elevam a amostra CPU a ~8,5 ms, contra 6,5 a 6,6 no controle,
+  mas U perde só 0,1 ms. Não descontar a diferença inteira de uma família nem comparar o total com
+  os ~4,2 ms de outra instrumentação como regressão do produto. Preparo exclui seus filhos; estado
+  contém as APIs de pipe/sampler. CPU menos GPU não isola espera.
+- Aquecimento só recebe crédito depois de comparação controlada: zero criação/decodificação/XG nos
+  alvos dá zero ms de criação a retirar. O perfil histórico conserva VU0 em 6961 (3,822 contra 3,859 ms),
+  sem isolar cache/driver. Aberturas _1/_2 não são a mesma carga antes/depois de aquecer dentro da abertura.
+- Guardar SHA256 dos bytes originais, mas recortar no primeiro fim para aplicar o aceite. Continuação
+  longa depois do roteiro não é janela adicional. Uma longa marginal, até `-0,0` ms arredondado, continua
+  longa se a permanência foi três vblanks. Não trocar permanência na tela por intervalo CPU de apresentação.
