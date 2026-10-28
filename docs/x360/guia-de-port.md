@@ -989,6 +989,31 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     `BT3_NAMEFONT_TEST`: sem a correção a PPC não diz nada; com ela corta as 36 e as 24 legendas como a x86. As
     imagens de teste ainda diferem em uns 3% dos bytes (causa não achada; só vale para estágio ou música de fora do
     disco, que o 360 não tem: `plano/F4/05.md`).
+- **Coleta conjunta de memórias e imagens (28/10/2026).** Com `SEMMAPA=1`, `RAPIDO=1` é o padrão:
+  a PPC normal coleta a memória final, todas as telas e as imagens numa passagem; a x86 de memória faz o mesmo.
+  `BT3_MEMORIAS` lista os vblanks e destinos, e o gancho de teste grava dump, páginas e subalocações sem sair.
+  Continuam as janelas de pintura, as comparações de tipos e donos e os mesmos arquivos para os verificadores.
+  `RAPIDO=0` conserva o modo separado; `MEM=menu` conserva o fluxo da guarda. O gravador fica separado para provar
+  que abri-lo não muda o jogo. Em `historia_novo`, os arquivos da rodada da F6 de 28/10 delimitam 4968 s no total,
+  4265 s de PPC, sendo 1880 s nas imagens e 1851 s nas passagens PPC que a coleta pode retirar. O custo acrescido
+  de calcular hashes com as imagens precisa entrar na medida do ganho. O inventário, o protocolo de equivalência,
+  a integração da `.text` dos conferentes F5/F6 e os caminhos das medidas estão em
+  [medicoes/roteiros-rapido.md](medicoes/roteiros-rapido.md). Cada execução grava sua duração em `tempos.tsv`.
+  Na comparação entre modos, os caminhos absolutos são normalizados para o mesmo arquivo lógico e os dois
+  ponteiros temporários `gColWalkBox`/`gColWalkCtx` usam a dispensa já existente. A primeira equivalência das Opções
+  mostrou também endereços malloc de `sMapa` e do IOP de `SndMgr`, e restos livres/enchimento do heap.
+  O comparador preserva NULL contra não NULL e aplica as mesmas exclusões de `memdiff --so-em-uso`;
+  dados vivos, cabeçalhos e rodapés continuam byte a byte. Controles nas duas ordens de bytes provam os limites.
+  Cada arquivo de páginas é recalculado sobre o dump original pela libxxhash, antes de normalizar os caminhos.
+  `REUSA=1` continua julgando todas as memórias e imagens; uma cópia estragada precisa falhar também neste modo.
+  Na rodada final, Opções passou de 998,93 para 829,74 s (16,9%) e Duelo de 1676,15 para 1294,51 s (22,8%),
+  com 79 e 93 arquivos/provas equivalentes. A projeção dos roteiros da F6 é 13,71 para 9,79 h; da F5, 13,39 para
+  9,46 h, sem contar os testes fixos. As faixas e os limites da extrapolação estão no inventário.
+  Para controles com `SOM=1 REUSA=1`, colete e confira com `GUARDA_SOM=1`: os PCM são apagados por padrão,
+  e a primeira restauração da cópia reprovou por falta deles. Para controles específicos de memória e imagem,
+  retire `SOM` do ambiente e preserve o julgamento de áudio da rodada completa. Exija também a cópia restaurada
+  com `tudo certo`. Uma mudança só de documentação não pede repetir o jogo: recompilar e comparar o código
+  com a rodada aprovada conserva essa prova sem ocupar o emulador.
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**
   - **O rasterizador pintando todo quadro leva umas três horas por roteiro na PPC** (no qemu, uns 30 quadros por
     minuto nos menus; a x86, 7 minutos). O que custa é pintar: com o GS ligado e nada pintado (`BT3_GS_FROM` alto) a
