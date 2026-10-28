@@ -2445,3 +2445,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   para capturar a marca nas duas arquiteturas. Registrar como captura/âncora reprovada, sem afirmar
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
+
+### Metadados exatos do alfa (F5, gravação, seção 35)
+
+- `BT3_ALFA_FORA=1`, ausente/0 original: guarda um byte por desenho no jogo de listas, em memória comum.
+  Na VU, só `misc[3]==3` consulta os alfas dos vértices referidos; as demais camadas usam `color0[3]`.
+  A união de fusões inclui somente trechos não vazios. Aplicar a máscara no desenho fechado, mantendo
+  nativas/count fora da amostra e preservando os dois contadores. O limite continua sendo `>128`, não `>=128`.
+- O falso compara cada desenho de cada quadro com a varredura original quando ligado. No D3D,
+  `BT3_ALFA_CONFERE=1` repete a varredura somente na amostra periódica e acusa diferenças no diário;
+  essa abertura tem custo de oráculo e não serve para anunciar ganho em U. Nenhuma leitura dos buffers
+  combinados foi movida para depois de Present. Os metadados viajam no mesmo rodízio das listas.

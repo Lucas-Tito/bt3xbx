@@ -404,6 +404,25 @@ static void contagens(const Vista *q, uint32_t desenhos, int pipes) {
 
 #include "gpu_comum.h"
 
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+#include "../include/gs_alfa.h"
+static void alfa_confere(const GsQuadro *q) {
+    unsigned n, des = 0, alto = 0;
+    if (q->alfa == NULL) return;
+    for (n = 0; n < q->drawCount; n++) {
+        unsigned mascara = (sPipeKey[q->draws[n].pipeline] >> 16) & 15;
+        int ref = gs_alfa_referencia(q, &q->draws[n], mascara);
+        int novo = gs_alfa_metadado(q, n, mascara);
+        if (ref != novo) {
+            fprintf(stderr, "FALHA: alfa quadro %u desenho %u: %d != %d\n", q->quadro, n, ref, novo);
+            abort();
+        }
+        des += ref >= 0;
+        alto += ref > 0;
+    }
+    fprintf(stderr, "alfa: quadro %u desenhos %u altos %u, 0 diferentes\n", q->quadro, des, alto);
+}
+#endif
 static void fake_frame_end(void) {
     uint32_t i;
     uint64_t quadro = 1469598103934665603ull;
@@ -413,6 +432,9 @@ static void fake_frame_end(void) {
     const uint32_t *bytes;
 #ifdef BT3_GS_ESPERAS
     const GsQuadro *g = gsQuadro;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    alfa_confere(g);
+#endif
     q.draws = g->draws; q.drawCount = g->drawCount; q.verts = g->verts; q.vertCount = g->vertCount;
     q.vuVerts = g->vuVerts; q.vuVertCount = g->vuVertCount; q.vuIdx = g->vuIdx; q.vuIdxCount = g->vuIdxCount;
     q.vuUni = g->vuUni; q.vuUniCount = g->vuUniCount; q.targets = g->targets; q.targetCount = g->targetCount;

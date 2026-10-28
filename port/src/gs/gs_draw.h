@@ -181,6 +181,9 @@ typedef struct GsQuadro {
     /* (F5, etapa 8, BT3_VU1_DIRETO) o jogo de buffers do backend em que a gravação gravou os vértices e os índices da VU1
        (vuVerts e vuIdx apontam para ele; o backend desenha dali sem copiar) e o número de ordem dele, que o backend devolve
        pelo vuFeito quando a GPU acabar de lê-lo; -1: nas listas do gs_draw.c, como antes (o backend copia) */
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    const unsigned char *alfa; /* memória comum do jogo de listas, nunca escrita combinada */
+#endif
     int vuJogo;
     uint32_t vuSeq;
 } GsQuadro;

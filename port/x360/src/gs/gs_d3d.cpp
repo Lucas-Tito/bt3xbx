@@ -5253,17 +5253,23 @@ static void desenha_fba(const GsDraw *d, uint32_t ini) {
 /* Num quadro por trecho: os desenhos que escrevem alfa e quantos deles têm alfa de vértice acima de 0x80 (o que o alfa
    saturado da cor perde; o tamanho do byte exato, seção 4 da especificação). Primitivas do GS: o alfa de cada
    vértice; VU1: o color0 do bloco, ou o alfa de cada vértice nas camadas 3 e 4 (programas 8 e 7). */
+#include "../../include/gs_alfa.h"
 static void alfa_alto(void) {
     CadeiaEscopo ca(CA_QUADRO, CA_ALFA);
     const GsQuadro *q = sQ;
     uint32_t n, k;
+    static int confere = -1;
+    unsigned diferentes = 0, desenhos = 0, altos = 0;
+    if (confere < 0) confere = env_num("BT3_ALFA_CONFERE", 0) != 0;
     for (n = 0; n < q->drawCount; n++) {
         const GsDraw *d = &q->draws[n];
         int alto = 0;
         if (d->native != 0 || d->count == 0 || !(sPipes[d->pipeline].wmask & GS_CC_A)) {
             continue;
         }
-        if (d->vu) {
+        if (q->alfa != NULL) {
+            alto = gs_alfa_metadado(q, n, sPipes[d->pipeline].wmask);
+        } else if (d->vu) {
             const Vu0Uniform *u = &q->vuUni[d->uniform];
             alto = u->color0[3] > 128.0f;
             if (u->misc[3] == 3.0f) {
@@ -5277,9 +5283,14 @@ static void alfa_alto(void) {
                 alto = q->verts[d->first + k].a > 0x80;
             }
         }
+        if (confere && q->alfa != NULL && alto != gs_alfa_referencia(q, d, sPipes[d->pipeline].wmask)) diferentes++;
+        desenhos++;
+        altos += alto;
         sConta.alfaAltoDes++;
         sConta.alfaAlto += alto;
     }
+    if (confere) Diario_Escrever("alfa: quadro %u desenhos %u altos %u, %u diferentes%s", q->quadro,
+                               desenhos, altos, diferentes, diferentes ? " FALHA" : "");
 }
 
 /* ---- as nativas: o autoteste do boot e os ajustes (F5, etapa 7, segunda parte) ------------------------------- */

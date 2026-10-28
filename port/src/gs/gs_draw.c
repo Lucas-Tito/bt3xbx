@@ -138,6 +138,18 @@ typedef struct GsJogo {
 } GsJogo;
 static GsJogo sJogos[2];
 static int sJogo; /* o jogo da gravação */
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+#include "../../x360/include/gs_alfa.h"
+static unsigned char sAlfa[2][MAX_DRAWS]; /* 32 KiB, sem cópia dos vértices */
+static int sAlfaModo = -1, sAlfaCpu, sAlfaVu;
+static int alfa_ligado(void) {
+    if (sAlfaModo < 0) {
+        const char *e = getenv("BT3_ALFA_FORA");
+        sAlfaModo = e != NULL && atoi(e) != 0;
+    }
+    return sAlfaModo;
+}
+#endif
 static uint32_t *sVuFaixa; /* a vuFaixa do jogo da gravação */
 #define JOGO_BYTES ((unsigned)(MAX_DRAWS * sizeof(GsDraw) + MAX_VERTS * sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u + \
                                MAX_VU_UNIFORMS * sizeof(Vu0Uniform) + MAX_DRAWS * 8u))
@@ -1243,6 +1255,9 @@ static void put(const GsVertex *v, float x, float y, float s, float t, float q, 
     o->y = y;
     o->z = (float)((double)v->z / zmax);
     o->r = r; o->g = g; o->b = b; o->a = a;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    if (alfa_ligado()) sAlfaCpu |= a > 0x80;
+#endif
     o->s = s; o->t = t; o->q = q;
 }
 
@@ -1702,6 +1717,9 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
         d.orig[0] = tw;
         d.orig[1] = th;
     }
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    sAlfaCpu = 0;
+#endif
     d.first = gsVertCount;
     if (type == 6) { /* sprite: two corners, flat colour and depth of the second vertex */
         const GsVertex *a = &v[0], *b = &v[1];
@@ -1801,8 +1819,14 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
     if (last != NULL && same_state(last, &d)) {
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+        if (alfa_ligado()) gs_alfa_junta(sAlfa[sJogo], gsDrawCount - 1, sAlfaCpu, 1);
+#endif
         last->count += d.count; /* same state as the previous primitive: one draw call */
     } else {
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+        if (alfa_ligado()) gs_alfa_junta(sAlfa[sJogo], gsDrawCount, sAlfaCpu, 0);
+#endif
         gsDraws[gsDrawCount++] = d;
     }
 }
@@ -1918,6 +1942,10 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
 #else
     if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
 #endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+        if (alfa_ligado()) gs_alfa_junta(sAlfa[sJogo], gsDrawCount - 1,
+            gs_alfa_vu(pu, sAlfaVu, d->count), 1);
+#endif
         vu_faixa(gsDrawCount - 1, lo, hi, 1);
         last->count += d->count;
 #ifdef PORT_X360
@@ -1932,6 +1960,10 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
     }
 #endif
     d->uniform = (int)gsVuUniCount++; /* (pu é a vaga gsVuUni[gsVuUniCount]) */
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    if (alfa_ligado()) gs_alfa_junta(sAlfa[sJogo], gsDrawCount,
+        gs_alfa_vu(pu, sAlfaVu, d->count), 0);
+#endif
     vu_faixa(gsDrawCount, lo, hi, 0);
     gsDraws[gsDrawCount++] = *d;
 #ifdef PORT_X360
@@ -2290,6 +2322,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    sAlfaVu = 0;
+#endif
     d.vu = 1;
     d.first = gsVuIdxCount;
 #ifdef BT3_GS_ESPERAS
@@ -2308,6 +2343,11 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                     continue;
                 }
             }
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+            if (alfa_ligado() && layer == 3 && !sAlfaVu) {
+                sAlfaVu = gs_alfa_triangulo(vertices, i);
+            }
+#endif
             idx[n] = base + i;
             idx[n + 1] = base + i + 1;
             idx[n + 2] = base + i + 2;
@@ -4667,6 +4707,9 @@ static void backend_frame_end(void) {
     q->vuIdx = gsVuIdx;
     q->vuIdxCount = gsVuIdxCount;
     q->vuFaixa = sVuFaixa;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    q->alfa = alfa_ligado() ? sAlfa[sJogo] : NULL;
+#endif
     q->vuUni = gsVuUni;
     q->vuUniCount = gsVuUniCount;
     q->targets = gsTargets;
@@ -5266,6 +5309,9 @@ static void desenho_entrega(void) {
     sRetrato.vuVerts = gsVuVerts;
     sRetrato.vuIdx = gsVuIdx;
     sRetrato.vuFaixa = sVuFaixa;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+    sRetrato.alfa = alfa_ligado() ? sAlfa[sJogo] : NULL;
+#endif
     sRetrato.vuUni = gsVuUni;
     sRetrato.drawCount = c[0];
     sRetrato.vertCount = c[1];
