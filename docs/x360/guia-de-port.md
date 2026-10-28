@@ -2533,6 +2533,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   passa pelo `c89.py`, não pelo `cl` do backend: a chave do `build_f2.sh` tem de chegar aos dois, como o alfa.
   O relógio por desenho (`BT3_RELOGIO_GRAV`) escreve os carimbos pela thread de desenho, depois do `cadeia_fim`,
   quatro linhas por quadro, para não pôr o diário no tempo do quadro medido.
+- **O controle da mesma build precisa da sua própria linha.** Com `BT3_PICOS=36` um quadro que melhora some do log
+  (seção 37); comparar a abertura com a medida contra uma sem ela pelo picos perde justamente os quadros bons. O
+  relógio fecha cada quadro da lista com G, P e U desde J, e `BT3_RELOGIO_MARCAS=0` tira só os carimbos.
 - **Uma integração que muda dependência e tempo ao mesmo tempo não se prova.** O `BT3_GS_LOTES` começou pelas duas
   consultas ao futuro (plano previsto, DATE curto) com o envio ainda na entrega: a captura igual prova a imagem sem
   o envio por lotes no meio, e só depois o envio muda o tempo.

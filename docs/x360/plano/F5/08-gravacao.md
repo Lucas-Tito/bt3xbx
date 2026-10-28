@@ -5149,7 +5149,8 @@ comparados (o `cmp` visto falhar), e as unidades e mutantes das ferramentas nova
 execução da seção 28 (roteiros, listas, `divergencias.py`, save) não têm o que mudar. **[Medido, WSL]** Em `adf640e8`
 (`~/f5-lotes/wsl1/provas.resumo`): as quatro builds de base e final ligam, a `.text` da x86 é a mesma
 (`9f2cdb49...`), os objetos sem depuração só diferem no `x360_passos.o` (o carimbo) nas quatro, os stubs são iguais e
-as unidades e mutantes passam: tudo certo, em 4,5 min.
+as unidades e mutantes passam: tudo certo, em 4,5 min. Repetido em `cb396826` (o código das builds do console, com o
+controle do relógio; `~/f5-lotes/wsl2/provas.resumo`): o mesmo resultado, a mesma `.text`, em 5 min.
 
 ### As rodadas de console prontas
 
