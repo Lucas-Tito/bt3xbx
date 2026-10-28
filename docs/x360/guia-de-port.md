@@ -2470,6 +2470,8 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   PPM iguais. Corrigido no `roteiros.py imagens` (a segunda luta é `luta_2`, as outras 20 listas ficam
   iguais), e o `compara_imagens` passou a recusar nome repetido na lista pelo nome, antes da âncora: um
   rótulo fixo para um evento que se repete é o erro a procurar. Em `f6_final`/`f6_final_start`, a marca de retorno e `fim` coincidem; falta o desenho seguinte
-  para capturar a marca nas duas arquiteturas. Registrar como captura/âncora reprovada, sem afirmar
+  para capturar a marca nas duas arquiteturas: era a armadilha do Torneio (9c-3, acima) de novo. O
+  roteiro ganhou `quadros 2` depois da marca, e a referência muda só na linha do `fim`. Antes de rodar um
+  roteiro novo com `IMG=1`, conferir que nenhuma `marca` é a última linha antes de `fim`. Registrar como captura/âncora reprovada, sem afirmar
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.

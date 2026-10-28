@@ -16,4 +16,5 @@ quadros 180                     # cobre a saída da seleção; no console já es
 espera tela 6 max 10000          # 4.200 imagens no console; na x86 o filme termina sem janela
 quadros 120
 marca final retorno
+quadros 2                       # deixa a captura da marca chegar ao GS antes de encerrar (como no Torneio)
 fim
