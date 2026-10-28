@@ -945,6 +945,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     `BT3_NAMEFONT_TEST`: sem a correção a PPC não diz nada; com ela corta as 36 e as 24 legendas como a x86. As
     imagens de teste ainda diferem em uns 3% dos bytes (causa não achada; só vale para estágio ou música de fora do
     disco, que o 360 não tem: `plano/F4/05.md`).
+- **Coleta conjunta de memórias e imagens (28/10/2026).** Com `SEMMAPA=1`, `RAPIDO=1` é o padrão:
+  a PPC normal coleta a memória final, todas as telas e as imagens numa passagem; a x86 de memória faz o mesmo.
+  `BT3_MEMORIAS` lista os vblanks e destinos, e o gancho de teste grava dump, páginas e subalocações sem sair.
+  Continuam as janelas de pintura, as comparações de tipos e donos e os mesmos arquivos para os verificadores.
+  `RAPIDO=0` conserva o modo separado; `MEM=menu` conserva o fluxo da guarda. O gravador fica separado para provar
+  que abri-lo não muda o jogo. Em `historia_novo`, os arquivos da rodada da F6 de 28/10 delimitam 4968 s no total,
+  4265 s de PPC, sendo 1880 s nas imagens e 1851 s nas passagens PPC que a coleta pode retirar. O custo acrescido
+  de calcular hashes com as imagens precisa entrar na medida do ganho. O inventário, o protocolo de equivalência,
+  a integração da `.text` dos conferentes F5/F6 e os caminhos das medidas estão em
+  [medicoes/roteiros-rapido.md](medicoes/roteiros-rapido.md). Cada execução grava sua duração em `tempos.tsv`.
+  `REUSA=1` continua julgando todas as memórias e imagens; uma cópia estragada precisa falhar também neste modo.
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**
   - **O rasterizador pintando todo quadro leva umas três horas por roteiro na PPC** (no qemu, uns 30 quadros por
     minuto nos menus; a x86, 7 minutos). O que custa é pintar: com o GS ligado e nada pintado (`BT3_GS_FROM` alto) a

@@ -56,6 +56,8 @@
 #   REUSA=x86   reaproveita só as rodadas da x86 e da x86r (e o mapa); roda as da PPC (PPC=1, SEMMAPA=1) de novo: depois
 #               de mudar só conversores, ganchos (em PORT_BIG_ENDIAN) ou o port/x360, com a .text da x86 conferida igual
 #   O=pasta     onde ficam as saídas (port/build/roteiros); REFS=pasta, as referências (~/referencias)
+# RAPIDO=0 conserva as rodadas separadas para a prova de equivalência.
+# O padrão junta as memórias e as imagens na PPC normal e numa passagem adicional da x86.
 set -uo pipefail
 # Toda simbolização usa o DWARF da build local, sem consultar servidores de depuração do host.
 export DEBUGINFOD_URLS=
@@ -111,7 +113,12 @@ fi
 # (o que roda de novo: com REUSA=1 nada; com REUSA=x86 só a PPC)
 roda_x86() { [ -z "${REUSA:-}" ]; }
 roda_ppc() { [ "${REUSA:-}" != 1 ]; }
+# Medição de cada execução, inclusive gdb e donos. Não muda o ambiente do programa.
+timeout() {
+    /usr/bin/time -a -o "$D/tempos.tsv" -f "${BT3_SAVES:-sem-cartao}\t%e" timeout "$@"
+}
 for n in "${NOMES[@]}"; do
+    JUNTA=0
     D=$O/$n; roda_x86 && { rm -rf $D; mkdir -p $D; }
     R=port/x360/roteiros/$n.txt
     echo "== $n"
@@ -240,12 +247,52 @@ for n in "${NOMES[@]}"; do
         else
             V=$(python3 port/x360/tools/roteiros.py vblank_fim $D/telas_a.txt) || V=-1
         fi
+        JUNTA=0
+        if [ "${RAPIDO:-1}" = 1 ] && [ "${MEM:-fim}" != menu ]; then
+            JUNTA=1
+            PONTOS=(); [[ $n != f5_* ]] || PONTOS=(--pontos)
+            python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
+                falhou "vblanks_mem sem as telas"
+        fi
+        COLETA=(); DESENHO=()
+        if [ "$JUNTA" = 1 ] && roda_ppc; then
+            : > $D/memorias_x86.txt; : > $D/memorias_ppc.txt
+            while read -r t VT; do
+                M=$D/mem_$t
+                rm -rf $M; mkdir -p $M
+                printf '%s %s/hm.txt\n' "$VT" "$M" >> $D/memorias_x86.txt
+                printf '%s %s/hq.txt\n' "$VT" "$M" >> $D/memorias_ppc.txt
+            done < $D/mem_telas.txt
+            if [ -n "${IMG:-}" ]; then
+                LUTAARG=(--luta); [ "$IMG" != menus ] || LUTAARG=()
+                python3 port/x360/tools/roteiros.py imagens $D/telas_a.txt "${LUTAARG[@]}" > $D/imagens.txt
+                DESENHO=(BT3_GS=1 BT3_GS_FROM=1000000000 BT3_IMAGENS_JANELA=${JANELA:-8})
+                for b in x86 ppc; do
+                    rm -rf $D/img/$b; mkdir -p $D/img/$b
+                    cp $D/imagens.txt $D/img/$b/lista.txt
+                done
+            fi
+        fi
         if roda_ppc; then
             rm -rf $D/hm.txt* $D/hq.txt* $D/sq $D/sm
-            BT3_SOM=${SOM:+$D/som_p.txt} BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_LEU=1 \
-                BT3_ROTEIRO=$R BT3_SAVES=$D/sq BT3_HASH=$D/hq.txt BT3_HASH_AT=$V timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc \
+            [ "$JUNTA" != 1 ] || [ ! -s $D/memorias_ppc.txt ] || COLETA=(BT3_MEMORIAS=$D/memorias_ppc.txt)
+            [ "$JUNTA" != 1 ] || [ -z "${IMG:-}" ] || COLETA+=(BT3_IMAGENS=$D/img/ppc/lista.txt)
+            env "${COLETA[@]}" "${DESENHO[@]}" BT3_SOM=${SOM:+$D/som_p.txt} BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_LEU=1 \
+                BT3_ROTEIRO=$R BT3_SAVES=$D/sq BT3_HASH=$D/hq.txt BT3_HASH_AT=$V \
+                /usr/bin/time -a -o "$D/tempos.tsv" -f 'ppcsm\t%e' timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc \
                 > $D/ppcsm.txt 2>&1
-            BT3_ROTEIRO=$R BT3_SAVES=$D/sm BT3_HASH=$D/hm.txt BT3_HASH_AT=$V timeout 900 $B/x86/bt3_x86 > /dev/null 2>&1
+            COLETA=()
+            [ "$JUNTA" != 1 ] || [ ! -s $D/memorias_x86.txt ] || COLETA=(BT3_MEMORIAS=$D/memorias_x86.txt)
+            [ "$JUNTA" != 1 ] || [ -z "${IMG:-}" ] || COLETA+=(BT3_IMAGENS=$D/img/x86/lista.txt)
+            env "${COLETA[@]}" "${DESENHO[@]}" BT3_ROTEIRO=$R BT3_SAVES=$D/sm BT3_HASH=$D/hm.txt BT3_HASH_AT=$V \
+                /usr/bin/time -a -o "$D/tempos.tsv" -f 'x86mem\t%e' timeout 900 $B/x86/bt3_x86 > $D/x86mem.txt 2>&1
+            if [ "$JUNTA" = 1 ]; then
+                while read -r t VT; do cp $D/ppcsm.txt $D/mem_$t/ppc.txt; done < $D/mem_telas.txt
+                if [ -n "${IMG:-}" ]; then
+                    cp $D/ppcsm.txt $D/img/ppc/saida.txt
+                    cp $D/x86mem.txt $D/img/x86/saida.txt
+                fi
+            fi
         fi
         # quem alocou cada bloco vivo nesse vblank e o tipo que pediu (Heap_Alloc(sizeof(T))): o memdiff compara esses
         # blocos campo a campo (--donos). A x86 sob o gdb até o vblank; com REUSA=1, só se ainda não houver
@@ -326,7 +373,7 @@ for n in "${NOMES[@]}"; do
                 falhou "vblanks_mem sem as telas"
             while read -r t VT; do
                 M=$D/mem_$t
-                if roda_ppc; then
+                if [ "$JUNTA" != 1 ] && roda_ppc; then
                     rm -rf $M; mkdir -p $M
                     BT3_DATA=$D/dados BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_ROTEIRO=$R BT3_SAVES=$M/sq \
                         BT3_HASH=$M/hq.txt BT3_HASH_AT=$VT BT3_MEMORIA_SAIR=1 timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $M/ppc.txt 2>&1 \
@@ -369,7 +416,7 @@ for n in "${NOMES[@]}"; do
         [ -s $D/imagens.txt ] || falhou "imagens: lista vazia (o rastro da x86?)"
         IMGENV=(BT3_GS=1 BT3_GS_FROM=1000000000 BT3_IMAGENS_JANELA=${JANELA:-8})
         for b in x86 ppc; do
-            if { [ $b = x86 ] && roda_x86; } || { [ $b = ppc ] && roda_ppc; }; then
+            if [ "${JUNTA:-0}" != 1 ] && { { [ $b = x86 ] && roda_x86; } || { [ $b = ppc ] && roda_ppc; }; }; then
                 rm -rf $I/$b; mkdir -p $I/$b; cp $D/imagens.txt $I/$b/lista.txt
                 if [ $b = x86 ]; then
                     env "${IMGENV[@]}" BT3_IMAGENS=$I/$b/lista.txt BT3_ROTEIRO=$R BT3_SAVES=$I/$b/s timeout 900 \

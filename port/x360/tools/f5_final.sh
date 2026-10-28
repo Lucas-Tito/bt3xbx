@@ -38,7 +38,7 @@ termina() {
 trap termina EXIT
 # Ambiente herdado não pode ligar reuso, mapa, sabotagem, som ou desenho escondidos.
 while IFS= read -r v; do
-    case "$v" in BT3_*|PPC|SEMMAPA|IMG|REF|REFS|SOM|REUSA|DESENVOLVIMENTO|MEM|O|T|CARTAO|ALVO|TP|JANELA|GUARDA_SOM) unset "$v";; esac
+    case "$v" in BT3_*|PPC|SEMMAPA|IMG|REF|REFS|SOM|REUSA|DESENVOLVIMENTO|MEM|O|T|CARTAO|ALVO|TP|JANELA|GUARDA_SOM|RAPIDO) unset "$v";; esac
 done < <(compgen -e)
 export DEBUGINFOD_URLS= BT3_WIDE=1
 export BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1
@@ -82,8 +82,8 @@ done
 for nome in base final; do
     objcopy -O binary --only-section=.text "$I/$nome/port/build/x86/bt3_x86" "$I/text-$nome.bin"
     pa ".text $nome: $(sha1sum "$I/text-$nome.bin")"
-    [ "$(sha1sum "$I/text-$nome.bin" | cut -d' ' -f1)" = 43444ea4d03a6d448aa1ae74a631e35b356a7caa ]
 done
+passo text python3 port/x360/tools/f5_final_confere.py text "$I"
 passo objetos python3 port/x360/tools/f5_final_confere.py objetos "$I/base/port/build/x86" port/build/x86
 passo inventario python3 port/x360/tools/unpacks.py
 passo cores python3 port/x360/tools/cores.py
