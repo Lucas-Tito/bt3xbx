@@ -119,7 +119,7 @@ static void hexa(const unsigned char *p, unsigned n, char *s) {
 }
 
 /* A marca da ISO convertida no PC (decisão 23, docs/x360/formatos/iso-convertida.md): 512 bytes em 0x3DF400 que
-   começam por "BT3X360-ISO" e cinco zeros. A versão 2 exige o pacote de ícones (decisão 30). */
+   começam por "BT3X360-ISO" e cinco zeros. A versão 3 exige também as duas transições de cenário convertidas. */
 static int tem_marca(const char *caminho) {
     static unsigned char m[MARCA_TAM];
     static char md5[33], fontes[65], exe[65];

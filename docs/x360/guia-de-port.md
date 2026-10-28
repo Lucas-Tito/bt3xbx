@@ -2515,3 +2515,7 @@ Os triângulos têm cores RG/BA lidas como u16, que também precisam de troca.
 O teste negativo da assinatura acusou uma build de conversor anterior à guarda: recompilar a ferramenta após
 alterar seu fonte faz parte da prova, assim como recompilar o jogo. `headless.py` agora pode ser importado sem
 iniciar uma build; o caso isolado reutiliza suas flags e a preparação dos leitores originais.
+
+A instalação passa a exigir marca de versão 3 no instalador e no leitor do console. Uma ISO versão 2 já instalada
+continua com as transições cruas mesmo após recompilar o `.xex`. É preciso reconverter a ISO americana original,
+sem usar uma convertida como origem. `teste_iso_avisos.py` exercita também a recusa explícita da versão 2.
