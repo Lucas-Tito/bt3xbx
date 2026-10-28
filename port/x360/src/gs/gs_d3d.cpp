@@ -467,6 +467,7 @@ static struct {
 static struct { uint32_t chave; int src; unsigned n; } sTabTipo[8];
 static int sTabTipoN;
 static LARGE_INTEGER sFreq, sUltimoFim;
+#include "cadeia_cpu.h"
 static unsigned sAvisado; /* bits: o que já foi dito uma vez no log */
 /* (degrau 2, etapa 4) os contadores do trecho que a gravação escreve (o descarte, as brancas, as texturas novas e as
    recusadas); somados aos do log por grav_junta, na entrega (o desenho parado) ou, sem a divisão, no começo do frame_end.
@@ -1566,6 +1567,7 @@ static void cova(D3DTexture *r, int cl, unsigned bytes) {
 /* o que a GPU já soltou sai (no fim do quadro, depois de soltar as texturas do dispositivo e do InsertFence, e a cada
    pressão de memória) */
 static void cova_varre(void) {
+    CadeiaEscopo ca(CA_QUADRO, CA_LIMPEZA);
     int i, n = 0;
     for (i = 0; i < sCovaN; i++) {
         if (xg_ocupado(sCova[i])) {
@@ -2270,33 +2272,35 @@ static void aplica_blend(uint32_t bkey) {
 }
 
 static void aplica_pipe(int pipe) {
+    CadeiaEscopo ca(-1, CA_PIPE);
     Pipe *p = &sPipes[pipe];
     if (pipe == sCurPipe) {
         return;
     }
     sCurPipe = pipe;
     aplica_blend(p->bkey);
-    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, ((p->wmask & GS_CC_R) ? D3DCOLORWRITEENABLE_RED : 0) |
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetRenderState(D3DRS_COLORWRITEENABLE, ((p->wmask & GS_CC_R) ? D3DCOLORWRITEENABLE_RED : 0) |
                                                      ((p->wmask & GS_CC_G) ? D3DCOLORWRITEENABLE_GREEN : 0) |
                                                      ((p->wmask & GS_CC_B) ? D3DCOLORWRITEENABLE_BLUE : 0) |
-                                                     ((p->wmask & GS_CC_A) ? D3DCOLORWRITEENABLE_ALPHA : 0));
+                                                     ((p->wmask & GS_CC_A) ? D3DCOLORWRITEENABLE_ALPHA : 0)));
     /* (a chave de uma passada de tabela, bit 22, tem o teste NEVER: ela não usa a profundidade) */
-    sDev->SetRenderState(D3DRS_ZENABLE, p->fx ? FALSE : TRUE);
-    sDev->SetRenderState(D3DRS_ZWRITEENABLE, p->zwrite && !p->fx ? TRUE : FALSE);
-    sDev->SetRenderState(D3DRS_ZFUNC, p->ztst == 0 ? D3DCMP_NEVER : p->ztst == 1 ? D3DCMP_ALWAYS :
-                                      p->ztst == 2 ? D3DCMP_GREATEREQUAL : D3DCMP_GREATER);
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetRenderState(D3DRS_ZENABLE, p->fx ? FALSE : TRUE));
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetRenderState(D3DRS_ZWRITEENABLE, p->zwrite && !p->fx ? TRUE : FALSE));
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetRenderState(D3DRS_ZFUNC, p->ztst == 0 ? D3DCMP_NEVER : p->ztst == 1 ? D3DCMP_ALWAYS :
+                                      p->ztst == 2 ? D3DCMP_GREATEREQUAL : D3DCMP_GREATER));
 }
 
 /* bit 0 linear, bit 1 U preso na borda, bit 2 V (bit 3, os níveis menores de um pacote, não existe aqui) */
 static void aplica_sampler(DWORD estagio, int s) {
-    sDev->SetSamplerState(estagio, D3DSAMP_MINFILTER, (s & 1) ? D3DTEXF_LINEAR : D3DTEXF_POINT);
-    sDev->SetSamplerState(estagio, D3DSAMP_MAGFILTER, (s & 1) ? D3DTEXF_LINEAR : D3DTEXF_POINT);
-    sDev->SetSamplerState(estagio, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
-    sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSU, (s & 0x100) ? D3DTADDRESS_BORDER : (s & 2) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
-    sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSV, (s & 0x100) ? D3DTADDRESS_BORDER : (s & 4) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
+    CadeiaEscopo ca(-1, CA_SAMPLER);
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MINFILTER, (s & 1) ? D3DTEXF_LINEAR : D3DTEXF_POINT));
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MAGFILTER, (s & 1) ? D3DTEXF_LINEAR : D3DTEXF_POINT));
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MIPFILTER, D3DTEXF_NONE));
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSU, (s & 0x100) ? D3DTADDRESS_BORDER : (s & 2) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP));
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSV, (s & 0x100) ? D3DTADDRESS_BORDER : (s & 4) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP));
     if (s & 0x100) {
         /* (720p, etapa 2) um alvo como textura além da área: preto transparente, o que a parte limpa do alvo de 1024 dava */
-        sDev->SetSamplerState(estagio, D3DSAMP_BORDERCOLOR, 0);
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_BORDERCOLOR, 0));
     }
 }
 
@@ -2376,6 +2380,7 @@ static void fxaa_init(void) {
 
 /* a passada: devolve a textura que a cópia mostra (a do FXAA; t sem a chave ou sem imagem) */
 static D3DTexture *fxaa_passa(D3DTexture *t) {
+    CadeiaEscopo ca(CA_QUADRO, CA_FXAA);
     D3DVIEWPORT9 vp = {0, 0, (DWORD)sAlvoW, (DWORD)sAlvoH, 0.0f, 1.0f};
     float c9[4] = {(float)sAlvoW, (float)sAlvoH, 1.0f / sAlvoW, 1.0f / sAlvoH};
     float W = (float)sAlvoW, H = (float)sAlvoH;
@@ -2769,6 +2774,7 @@ static void ed_sai(void) {
    posto que é lido é o que está saindo (a cópia de um alvo para o seguinte, a cadeia do brilho, a página da sombra); sem
    a chave, a saída dele resolvia antes do desenho. Só o próprio alvo do desenho não (o gs_draw.c recusa; contado). */
 static void ed_leitura(GsTex tex, int alvo) {
+    CadeiaEscopo ca(-1, CA_EDRAM);
     int v;
     for (v = 0; v < sVagaN; v++) {
         int t = sVaga[v].dono;
@@ -2901,6 +2907,7 @@ static void entra_res(int i, int usaZ) {
    vaga grande (algum desenho com z: teste além do ALWAYS ou escrita; uma nativa; o filme). A: o que mais entra. Uma pequena,
    na ordem das entradas, para cada um dos outros que não precisa da grande e cabe no que sobra; o resto pela B. */
 static void ed_plano(const GsQuadro *q) {
+    CadeiaEscopo ca(CA_QUADRO, CA_PLANO);
     static int ent[MAX_TARGETS];
     static unsigned char grande[MAX_TARGETS];
     static Ret ext[MAX_TARGETS];
@@ -3149,6 +3156,7 @@ static void ed_log(unsigned t) {
    dono anterior volta para a textura dele, a EDRAM é limpa (0, como o gs_gl.c limpa um alvo novo) e a dele volta da
    textura. Uma visita sem z não toca na profundidade. Com BT3_Z=0 (sModoZ 0), o de antes: tudo limpo a cada entrada. */
 static void entra_na_edram(int i, int usaZ) {
+    CadeiaEscopo ca(-1, CA_EDRAM);
     Alvo *a = &sAlvoD[i];
     D3DVIEWPORT9 vp = {0, 0, sAlvoW, sAlvoH, 0.0f, 1.0f};
     DWORD limpa = D3DCLEAR_TARGET;
@@ -4041,6 +4049,7 @@ static void alvo_le_alem(const GsDraw *d) {
 }
 
 static int prepara(const GsDraw *d, int estado, Ret *area) {
+    CadeiaEscopo ca(-1, CA_PREPARA);
     static D3DPixelShader *sCurPs; /* (720p, retomada) o posto, que só vale com sEstadoGs == estado */
     float c[16];
     int x0 = d->scissor[0], y0 = d->scissor[1], x1 = d->scissor[0] + d->scissor[2], y1 = d->scissor[1] + d->scissor[3];
@@ -4065,28 +4074,28 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         alvo_le_alem(d);
     }
     if (sEstadoGs != chave) {
-        sDev->SetVertexDeclaration(estado >= 2 ? sDeclVu : af ? sDeclGsAf : sDeclGs);
-        sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : af ? sVsGsAf : sVsGs);
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetVertexDeclaration(estado >= 2 ? sDeclVu : af ? sDeclGsAf : sDeclGs));
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : af ? sVsGsAf : sVsGs));
         /* (F5, etapa 7, segunda parte) a VU1 com o recorte pelo w: a profundidade por pixel (ps_gsz, vu_pos); (720p,
            retomada) com as chaves, a variante do desenho (ps_escolhe) */
         if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
-        sDev->SetPixelShader(sCurPs = ps_escolhe(d, estado));
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetPixelShader(sCurPs = ps_escolhe(d, estado)));
         if (estado >= 2) {
             float c15[4] = {sCorte ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
-            sDev->SetVertexShaderConstantF(15, c15, 1);
+            CADEIA_CHAMADA(CA_UNIFORME, sDev->SetVertexShaderConstantF(15, c15, 1));
         }
-        sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE));
         if (estado >= 2) {
             /* (o DrawPrimitiveUP desfaz o fluxo 0: posto de novo a cada volta para cá) */
-            sDev->SetStreamSource(0, sVuVbQ, 0, 48);
-            sDev->SetIndices(sVuIbQ);
+            CADEIA_CHAMADA(CA_ESTADO, sDev->SetStreamSource(0, sVuVbQ, 0, 48));
+            CADEIA_CHAMADA(CA_ESTADO, sDev->SetIndices(sVuIbQ));
         }
         sEstadoGs = chave;
     } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE)) {
         D3DPixelShader *ps = ps_escolhe(d, estado);
         if (ps != sCurPs) {
             if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
-            sDev->SetPixelShader(ps);
+            CADEIA_CHAMADA(CA_ESTADO, sDev->SetPixelShader(ps));
             sCurPs = ps;
         }
     }
@@ -4095,7 +4104,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         D3DTexture *t = (D3DTexture *)(d->tex != 0 ? d->tex : (GsTex)sBranco);
         D3DSURFACE_DESC desc;
         if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
-        sDev->SetTexture(0, t);
+        CADEIA_CHAMADA(CA_TEXTURA, sDev->SetTexture(0, t));
         sCurTex = d->tex;
         /* o tamanho, para a arte 2D lida no ponto (gs_d3d.hlsl) */
         if (SUCCEEDED(t->GetLevelDesc(0, &desc))) {
@@ -4111,7 +4120,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     }
     if (af && (float)(d->sampler & 1) != sCurAfJogo) {
         float c8[4] = {(float)(d->sampler & 1), 0.0f, 0.0f, 0.0f};
-        sDev->SetPixelShaderConstantF(8, c8, 1); /* (só o ps_gs_af lê o c8; ninguém mais o escreve) */
+        CADEIA_CHAMADA(CA_UNIFORME, sDev->SetPixelShaderConstantF(8, c8, 1)); /* (só o ps_gs_af lê o c8; ninguém mais o escreve) */
         sCurAfJogo = c8[0];
     }
     if (d->misc[1] != 0.0f) {
@@ -4119,7 +4128,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         D3DTexture *f = sDateFonte != NULL ? sDateFonte : sDate;
         if (sCurDate != f) {
             if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
-            sDev->SetTexture(1, f);
+            CADEIA_CHAMADA(CA_TEXTURA, sDev->SetTexture(1, f));
             sCurDate = f;
         }
     }
@@ -4135,7 +4144,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         c[15] = (float)GS_H;
     }
     if (!sTemC || memcmp(c, sCurC, sizeof(c)) != 0) {
-        sDev->SetPixelShaderConstantF(0, c, 4);
+        CADEIA_CHAMADA(CA_UNIFORME, sDev->SetPixelShaderConstantF(0, c, 4));
         memcpy(sCurC, c, sizeof(c));
         sTemC = 1;
     }
@@ -4146,7 +4155,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
             e[1] = (float)GS_H / sAreaH;
         }
         if (e[0] != sCurEsc[0] || e[1] != sCurEsc[1]) {
-            sDev->SetPixelShaderConstantF(6, e, 1); /* (só o gs_pixel lê o c6; ninguém mais o escreve) */
+            CADEIA_CHAMADA(CA_UNIFORME, sDev->SetPixelShaderConstantF(6, e, 1)); /* (só o gs_pixel lê o c6; ninguém mais o escreve) */
             sCurEsc[0] = e[0];
             sCurEsc[1] = e[1];
         }
@@ -4154,14 +4163,14 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     if (d->blendc != sCurBlendc) {
         int b = (int)(d->blendc * 255.0f + 0.5f);
         b = b < 0 ? 0 : b > 255 ? 255 : b;
-        sDev->SetRenderState(D3DRS_BLENDFACTOR, D3DCOLOR_ARGB(b, b, b, b));
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetRenderState(D3DRS_BLENDFACTOR, D3DCOLOR_ARGB(b, b, b, b)));
         sCurBlendc = d->blendc;
     }
     if (!sTemScissor || sScissor[0] != x0 || sScissor[1] != y0 || sScissor[2] != x1 || sScissor[3] != y1) {
         RECT sc;
         sc.left = x0; sc.top = y0; sc.right = x1; sc.bottom = y1;
         if (sComumGpu && sTempo.quadro) sComumApi[C_TESOURA]++;
-        sDev->SetScissorRect(&sc);
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetScissorRect(&sc));
         sScissor[0] = x0; sScissor[1] = y0; sScissor[2] = x1; sScissor[3] = y1;
         sTemScissor = 1;
     }
@@ -4226,6 +4235,7 @@ static void desenha_comum(const GsDraw *d, uint32_t ini, const Ret *a) {
 }
 
 static void desenha(const GsDraw *d) {
+    CadeiaEscopo ca(CA_COMUM, CA_RESTO);
     Ret a;
 
     if (!prepara(d, 1, &a)) {
@@ -4238,13 +4248,14 @@ static void desenha(const GsDraw *d) {
 /* F5, etapa 6: um desenho da VU1 (d->vu 1 a 3; d->first e d->count são índices de gsVuIdx), já copiado para o par
    de buffers do quadro a partir do índice ini (vu_copia). As três famílias usam o mesmo Vu0Uniform (gs_draw.c). */
 static void desenha_vu(const GsDraw *d, uint32_t ini) {
+    CadeiaEscopo ca(d->vu >= 1 && d->vu <= 3 ? CA_VU0 + d->vu - 1 : CA_QUADRO, CA_RESTO);
     Ret a;
 
     if (!prepara(d, 1 + d->vu, &a)) {
         return;
     }
     if (d->uniform != sCurUni) {
-        sDev->SetVertexShaderConstantF(VU_C0, (const float *)&sQ->vuUni[d->uniform], sizeof(Vu0Uniform) / 16);
+        CADEIA_CHAMADA(CA_UNIFORME, sDev->SetVertexShaderConstantF(VU_C0, (const float *)&sQ->vuUni[d->uniform], sizeof(Vu0Uniform) / 16));
         sCurUni = d->uniform;
     }
     desenha_comum(d, ini, &a);
@@ -4308,6 +4319,7 @@ static void vu_plano(const GsQuadro *q) {
 }
 
 static void vu_copia(const GsQuadro *q) {
+    CadeiaEscopo ca(CA_QUADRO, CA_BUFFERS);
     uint32_t n, k, nv = 0;
     float *vb = NULL;
     uint32_t *ib = NULL;
@@ -4351,6 +4363,7 @@ static void vu_copia(const GsQuadro *q) {
 
 /* o máximo de um quadro em cada buffer fixo do gs_draw.c (no começo do frame_end, com a lista completa) */
 static void mem_buffers(const GsQuadro *q) {
+    CadeiaEscopo ca(CA_QUADRO, CA_BUFFERS);
     if (q->vertCount > sMem.maxVerts) sMem.maxVerts = q->vertCount;
     if (q->vuVertCount > sMem.maxVu) sMem.maxVu = q->vuVertCount;
     if (q->vuIdxCount > sMem.maxIdx) sMem.maxIdx = q->vuIdxCount;
@@ -5055,6 +5068,7 @@ static void filme_varre(DWORD cerca) {
 /* native 4 (GfxPost_CopyAlphaToDepth): o alfa do alvo agora, para o contorno e as tabelas pelos ids. A imagem do jogo
    inteira (fora do que já foi desenhado, a EDRAM está limpa: zero, como no PC) */
 static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
+    CadeiaEscopo ca(CA_NATIVA, CA_RESTO);
     D3DRECT fonte = {0, 0, sIdsW, sIdsH};
     D3DPOINT destino = {0, 0};
     if (!(sNativos & 3) || sIds == NULL) {
@@ -5077,6 +5091,7 @@ static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
 
 /* native 3: o byte (névoa pela profundidade, ou os ids) pela tabela do jogo, com a mistura e a máscara da chave */
 static void nat_tabela(const GsDraw *d, uint32_t n, int *cur) {
+    CadeiaEscopo ca(CA_NATIVA, CA_RESTO);
     int t = d->target, motivo, i;
     Ret r;
     uint32_t chave = sPipes[d->pipeline].key & (0x1FFu | (15u << 16));
@@ -5118,6 +5133,7 @@ static void nat_tabela(const GsDraw *d, uint32_t n, int *cur) {
 
 /* native 1 (ObjOutline_Draw): o contorno, lendo a cópia dos ids */
 static void nat_contorno(const GsDraw *d, uint32_t n, int *cur) {
+    CadeiaEscopo ca(CA_NATIVA, CA_RESTO);
     Ret r;
     if (!(sNativos & 1) || !sQ->targets[d->target].cleared || sIdsQuadro == 0) {
         sConta.semNativo[1]++;
@@ -5175,7 +5191,7 @@ static void chamadas_af(const GsDraw *d, D3DPRIMITIVETYPE tipo, uint32_t porPrim
             }
         }
         if (sComumGpu && sTempo.quadro) sComumApi[C_UP]++;
-        sDev->DrawPrimitiveUP(tipo, n / porPrim, sVtxAf, sizeof(VtxAf));
+        CADEIA_CHAMADA(CA_UP, sDev->DrawPrimitiveUP(tipo, n / porPrim, sVtxAf, sizeof(VtxAf)));
         feitos += n;
     }
 }
@@ -5187,7 +5203,7 @@ static void chamadas(const GsDraw *d, uint32_t ini) {
     uint32_t porPrim = p->topo == 0 ? 3 : p->topo == 1 ? 2 : 1, feitos = 0;
     if (d->vu) {
         if (sComumGpu && sTempo.quadro) sComumApi[C_INDICES]++;
-        sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count);
+        CADEIA_CHAMADA(CA_INDICES, sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count));
         return;
     }
     if (afiado_usa(d, 1)) { /* (o prepara pôs o vs_gs_af e a declaração com a caixa) */
@@ -5198,7 +5214,7 @@ static void chamadas(const GsDraw *d, uint32_t ini) {
         uint32_t n = d->count - feitos > MAX_UP ? MAX_UP : d->count - feitos;
         n -= n % porPrim;
         if (sComumGpu && sTempo.quadro) sComumApi[C_UP]++;
-        sDev->DrawPrimitiveUP(tipo, n / porPrim, &sQ->verts[d->first + feitos], sizeof(Vtx));
+        CADEIA_CHAMADA(CA_UP, sDev->DrawPrimitiveUP(tipo, n / porPrim, &sQ->verts[d->first + feitos], sizeof(Vtx)));
         feitos += n;
     }
 }
@@ -5238,6 +5254,7 @@ static void desenha_fba(const GsDraw *d, uint32_t ini) {
    saturado da cor perde; o tamanho do byte exato, seção 4 da especificação). Primitivas do GS: o alfa de cada
    vértice; VU1: o color0 do bloco, ou o alfa de cada vértice nas camadas 3 e 4 (programas 8 e 7). */
 static void alfa_alto(void) {
+    CadeiaEscopo ca(CA_QUADRO, CA_ALFA);
     const GsQuadro *q = sQ;
     uint32_t n, k;
     for (n = 0; n < q->drawCount; n++) {
@@ -5522,6 +5539,7 @@ static void nat_init(void) {
 /* A imagem mostrada na tela de 1280 x 720: o alvo `mostrado` (o buffer de vídeo do GS) no meio, em 4:3, e as barras da cor de
    fundo. Do fim do quadro e de GsD3d_Repete. */
 static void tela_copia(D3DTexture *t) {
+    CadeiaEscopo ca(CA_QUADRO, CA_TELA);
     D3DVIEWPORT9 vp = {0, 0, TELA_W, TELA_H, 0.0f, 1.0f};
     if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sTela);
@@ -5600,6 +5618,7 @@ static void frame_end(void) {
     D3DTexture *mtex;
     static int every = -1;
 
+    cadeia_inicio(q->quadro);
     QueryPerformanceCounter(&t0);
     sQ = q;
     memset(&sFilmeAtual, 0, sizeof(sFilmeAtual));
@@ -5826,7 +5845,7 @@ static void frame_end(void) {
     }
     QueryPerformanceCounter(&tp);
     gGsD3dEtapa = "fim do quadro: Present";
-    sDev->Present(NULL, NULL, NULL, NULL);
+    CADEIA_CHAMADA(CA_PRESENT, sDev->Present(NULL, NULL, NULL, NULL));
     sUltimoPresent = GetTickCount();
     msPresent = ms_desde(&tp);
     if (gPicos != 0) {
@@ -5870,6 +5889,7 @@ static void frame_end(void) {
 
     msFim = ms_desde(&t0);
     tempo_fecha_cpu(msFim, capturas == sConta.capturas);
+    cadeia_fim(capturas != sConta.capturas);
     ms = ms_desde(&sUltimoFim);
     QueryPerformanceCounter(&sUltimoFim);
     if (capturas == sConta.capturas) {

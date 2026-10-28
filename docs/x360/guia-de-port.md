@@ -2318,3 +2318,30 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   fina não são os 21/36 segmentos da classe de cor. O custo de uma classe inclui preparo e não é ganho de um
   shader novo. As duas cadeias de brilho somam cerca de 2,35 ms comuns no 6960, com conteúdo diferente entre elas;
   o comum inteiro tem 12,3 ms, dominado por sem textura geral (5,76) e leitura de alvos (3,45).
+
+### Projetar a cadeia inteira antes de acrescentar threads (F5, gravação, seção 32)
+
+- O orçamento é a distância entre entrega do jogo e fim GPU contra o prazo da imagem anterior. Em 28/10,
+  42,7 ms para 32,8 disponíveis deixam 9,9 de atraso, ou 10,9 de corte com margem. A cauda pós-Present
+  já exclui o trabalho GPU sobreposto ao envio CPU: não somar GPU total novamente. Identificar A, a imagem
+  retida, e B, o próximo quadro atrasado, antes de atribuir a causa.
+- `BT3_CADEIA_CPU=Q,Q` abre CPU por família e etapa sem comandos GPU novos, independente de `BT3_TEMPOS`.
+  `cadeia_cpu.py LOG --quadros Q` confere total, parcelas, soma e fim do Duelo. O teste nativo
+  `teste_cadeia_cpu.py --saida ~/prova --base bbc07118` compila o código C++03 real, conserva aninhamento e
+  retornos, prova ausência de leituras do relógio desligado e exige os controles negativos. Isso não compila
+  o backend XDK inteiro. Não ativar CPU fina junto da GPU fina para atribuir ganho ou aprovar apresentação.
+- A classe antiga `outros` contém a varredura estatística `alfa_alto`, antes do primeiro envio GPU; sua
+  contribuição ainda precisa de medida própria. A VU0 do perfil de desenho é a família dos lutadores
+  produzida pela VU1, não evidência de outro interpretador. Tempo de API pode incluir bloqueio/preempção;
+  não chamar a diferença CPU menos GPU de espera medida. GetLevelDesc fica em preparo no diagnóstico novo.
+- Envio à VRAM GS é trabalho CPU; envio de comandos D3D é outra coisa. Hash por geração, cache pela origem,
+  listas alternadas, VU1 direto e shaders compilados no build já existem. Qualquer cache novo precisa mostrar
+  trabalho ainda repetido. Nos alvos não houve textura nova/XG; não creditar criação evitada a eles.
+- Para consumir prefixos antes do fim da gravação, não basta acordar o desenho cedo: `ed_plano`, `usa_z`,
+  `date_area`, `vu_plano` e a entrega de versões dependem do quadro integral. Publicar só prefixos fechados,
+  com vida de recursos e última escrita comprovadas, adaptar as consultas ao futuro e conservar uma única
+  ordem D3D e um Present. A callback de rodízio VU1 e as liberações têm de ficar depois do último consumidor.
+- `reprojeto_console.py DIR --rodada ID` prepara 34 aberturas separadas: controles, CPU, rateio de gravação e
+  complemento gf29b. Saves distintos localmente não provam pastas vazias no console. Conferir inexistência
+  antes de usar e trocar o identificador inteiro se qualquer pasta já existir. Começar pelos controles e
+  CPU dos alvos; analisar antes de gastar os vizinhos. Todas as saídas ficam fora do git.
