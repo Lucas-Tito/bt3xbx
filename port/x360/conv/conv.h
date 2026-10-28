@@ -115,4 +115,13 @@ const char *Conv_FormatoSecao(const char *nome, int secao);
 /* um conversor de formato: converte [base, base+tam) de c */
 typedef void (*ConvFn)(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
+/* Pacote de arte fornecido pelo instalador; pixels PSMT4 e CLUT CT32 de 16 cores.
+   Conv_Icones360 recebe o boot já big-endian, exige 18 entradas, 10 a 27.
+   msg deve ter pelo menos 128 bytes. Retorna 1 ou -1, sem escrita parcial. */
+typedef struct ConvIcone360 {
+    unsigned indice, tamanho;
+    const conv_u8 *pixels, *paleta;
+} ConvIcone360;
+int Conv_Icones360(conv_u8 *buf, conv_ofs tam, const ConvIcone360 *arte, unsigned n, char *msg);
+
 #endif

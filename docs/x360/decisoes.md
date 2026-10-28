@@ -774,7 +774,7 @@ O estudo `pesquisa/04-icones-botoes.md` achou os 28 ícones numa folha só do ar
 que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
 
 1. **A troca é um passo da conversão da ISO** (opção a do estudo), no código de conversão comum, para valer na conversão
-   pelo PC (`iso_convertida.py`) e na conversão pelo próprio console quando ela vier (F8, pendência 2: o console detecta
+   pelo PC (`convert_iso.py`) e na conversão pelo próprio console quando ela vier (F8, pendência 2: o console detecta
    a ISO não convertida e faz a conversão). Reconverter não pesa: o repositório é privado, e a conversão que for
    publicada já sai com os ícones. A marca da ISO convertida muda de versão, e uma convertida sem os ícones é recusada.
 2. **Só os ícones do 360 no console.** Os do PS2 continuam nas builds de teste do WSL, que leem os dados originais.

@@ -16,6 +16,9 @@ seção, deslocamento, tamanho, formato e contagens. As imagens extraídas para 
 
 ---
 
+A implementação posterior segue a decisão 30: opção a, arte Kenney e SELECT preservado.
+Estado atual em [F8/02-icones](../plano/F8/02-icones.md); as alternativas abaixo são o estudo original.
+
 ## 1. Onde os ícones estão (com a prova)
 
 ### 1.1 A folha de ícones (a única fonte de imagem)
@@ -182,15 +185,15 @@ Trabalho comum às opções (a) e (b): o gerador de arte (Python, sem dependênc
 no WSL) e a codificação PSMT4 com as tabelas do `gs_core.c`, cuja volta fiel já está provada (seção 1.1).
 Estimativa: 0,5 a 1 dia para o desenho e o gerador.
 
-### (a) `iso_convertida.py` aplica a troca
+### (a) `convert_iso.py` aplica a troca
 
 Como o `00004.bin` não é BPE, a entrada 8 pode ser trocada no lugar, com o mesmo tamanho e os mesmos
 deslocamentos (a ISO convertida nunca recomprime BPE, decisão 23). O que muda:
 
 - **Conversor/ferramenta:** a troca tem de entrar no `conv_tool --saida` (um passo para a entrada de boot) ou num
-  passo novo do `iso_convertida.py`. Hoje o critério de reabertura exige que cada entrada convertida seja igual
+  passo novo do `convert_iso.py`. Hoje o critério de reabertura exige que cada entrada convertida seja igual
   ao `--saida` e todo o resto igual à original: uma troca por fora desse caminho quebra o critério.
-- **Marca:** a identidade dos fontes (SHA256 de `port/x360/conv/*.c|h` e `iso_convertida.py`) muda sozinha.
+- **Marca:** a identidade dos fontes (SHA256 de `port/x360/conv/*.c|h` e `convert_iso.py`) muda sozinha.
   Convém subir a versão do contrato (hoje 1) ou usar bytes reservados da marca para um campo "pacote de ícones"
   (hash do conjunto de arte), para que uma ISO convertida sem a troca seja recusada.
 - **Testes:** o `teste_iso_convertida.py` precisa de novos casos (a entrada trocada, a arte estragada numa cópia,

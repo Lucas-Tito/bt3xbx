@@ -6,7 +6,7 @@ Itens que o Lucas pediu para o acabamento ao longo das outras fases. Cada um vir
 
 ## A ISO (22/10/2026)
 
-Hoje (decisão 23, `port/x360/src/iso360.c`): o `iso_convertida.py` converte no PC e confere o tamanho, o MD5 e o SHA256
+Hoje (decisão 23, `port/x360/src/iso360.c`): o `convert_iso.py` converte no PC e confere o tamanho, o MD5 e o SHA256
 da SLUS-21678; no console, uma ISO sem a marca da convertida é recusada com uma caixa do sistema, e o jogo não começa.
 A mensagem é a mesma para qualquer ISO sem a marca.
 
@@ -31,6 +31,8 @@ A mensagem é a mesma para qualquer ISO sem a marca.
    mexer no `BT3_ISO` do `ambiente.txt`, que só o projeto usa. O texto deve dizer que a ISO não está na pasta raiz do
    jogo com o nome esperado, dizendo o nome. Os nomes que o usuário vê (a ISO convertida, o script de conversão)
    passam para inglês, e nenhuma caixa cita o `ambiente.txt`. Vale para as outras caixas da ISO também.
+   Implementado no WSL em [02-icones](02-icones.md): `bt3-x360.iso`, `convert_iso.py` e marca versão 2.
+   Aparência das caixas e ícones no console aguardam a revisão.
 
 ## Fechamento de gaps, antes do release (27/10/2026)
 

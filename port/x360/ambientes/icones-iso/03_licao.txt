@@ -1,0 +1,15 @@
+# Abertura 3: licao. Ver LEIA-ME.md. Pastas novas obrigatórias.
+BT3_ISO=game:\bt3-x360.iso
+BT3_SAVES=game:\ic2810k_03_licao_s
+BT3_SHOT_PASTA=ic2810k_03_licao
+BT3_GS=gpu
+BT3_SOM=1
+BT3_SOUND_TICKS=1
+BT3_NOMOVIE=1
+-BT3_DEMO
+-BT3_ROTEIRO
+-BT3_PAD_PLAY
+-BT3_DESBLOQUEIO
+-BT3_HASH
+-BT3_SHOT_LISTA
+BT3_SHOT=17

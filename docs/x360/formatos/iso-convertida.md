@@ -1,12 +1,12 @@
-# ISO convertida no PC, versão 1
+# ISO convertida no PC, versão 2
 
 [Decisão 23](../decisoes.md) | [tarefa da etapa 2](../tarefas/f5-etapa2-iso.md)
 
-O instalador `port/x360/tools/iso_convertida.py` lê a ISO original USA e usa os conversores existentes da
+O instalador `port/x360/tools/convert_iso.py` lê a ISO original USA e usa os conversores existentes da
 `conv_tool`, pelo `--saida`. Não altera o tamanho de 3.020.816.384 bytes, posições, tamanhos, tabelas ISO 9660,
 UDF ou AFS. A saída é exclusiva do port. O 360 exige esta ISO: `Iso_Iniciar` (`port/x360/src/iso360.c`) procura
 a identificação do volume e do `SYSTEM.CNF` antes da assinatura da marca. A recusa distingue original, versão não
-suportada e imagem ilegível, com mensagens em inglês; a busca automática prefere a convertida compatível
+suportada, conversão antiga e imagem ilegível, com mensagens em inglês; a busca automática prefere a convertida compatível
 ([F8, avisos](../plano/F8/01-avisos.md)). Da convertida, a carga só lê
 ([plano/F5/02.md](../plano/F5/02.md), "Lado do 360"). Os `mods/` continuam no formato do PS2, convertidos ao abrir,
 até as últimas fases.
@@ -28,7 +28,7 @@ região presumida ou somente tamanho. O MD5 e o SHA256 são novamente medidos an
 `conv_tool --lista-conversores` consulta `Conv_FormatoDe`, a mesma escolha do `--disco`, nas três partições.
 O instalador cruza a lista com todas as entradas reais da ISO, extrai só as selecionadas para um temporário,
 chama `--saida` em lotes e exige conversão com cobertura integral, lista completa e tamanho idêntico. Grava o
-resultado na posição original de cada entrada, numa cópia temporária da imagem. Os conversores não mudaram.
+resultado na posição original de cada entrada, numa cópia temporária da imagem. A instalação solicita também `--icones360`, descrito abaixo.
 Os nomes e as faixas não são duplicados no Python.
 
 Ficam preservados os fluxos BPE, suas caudas e as animações comprimidas. As tabelas dos pacotes e os dois
@@ -37,6 +37,33 @@ permanece em bytes (`Conv_Bytes`, em `menus.c`, `som.c` e `personagem.c`). Não 
 conteúdo para gravá-lo na ISO. O `--disco` continua conferindo também os
 conteúdos após a descompressão, que permanecem a cargo dos ganchos do jogo. SLUS, DBZP, som, filmes, módulos,
 nomes, datas, tabelas e preenchimento mantêm os bytes originais, exceto pela marca especificada abaixo.
+
+## Arte dos botões e nome público
+
+A saída deve se chamar `bt3-x360.iso` na raiz da pasta do jogo, junto de `default.xex`.
+O leitor prefere esse nome, depois tenta outras `.iso`; `BT3_ISO` explícito permanece
+prioritário para o projeto. Sem imagem, mostra a caixa de ISO ausente.
+
+O `conv_tool --icones360 --saida` chama `Conv_Icones360`, API C89 comum que recebe
+um pacote de pixels e paletas como entrada. Depois da conversão numérica do boot,
+troca somente pixels e CLUT das texturas 10 a 27 da entrada 8 de `00004.bin`.
+Preserva 0 a 9 (incluindo SELECT), metadados, pacotes GIF/VIF e tamanho/deslocamentos.
+Nenhum texto é alterado, inclusive "SELECT button" dentro da lição comprimida.
+
+`icones360.py --arte DIR` usa os dez PNG do Kenney e gera `conv/icones360_arte.h`,
+com PSMT4 e CLUT CT32 própria de 16 cores, alfa 0 a 128. A versão 2 inclui a arte
+na identidade dos fontes pelo cabeçalho gerado. `--conferir` exige igualdade entre
+PNG e cabeçalho; `--contato CAMINHO` grava uma folha fora do git.
+
+O `--saida` sem essa opção permanece com a arte original para os roteiros da PPC.
+O instalador e sua reabertura sempre pedem `--icones360`. A futura conversão no
+console pode chamar a mesma API, fornecendo o mesmo pacote. A API valida as
+18 entradas antes de escrever e recusa índices, tamanhos, formatos, limites e alfa
+incompatíveis. Não existe troca em tempo de desenho nem mudança dos controles.
+
+O console agora exige versão 2, marca de 512 bytes e tamanho de origem correto.
+Outra versão da conversão recebe caixa própria pedindo reconversão da original;
+imagem de outra região continua recebendo a caixa de versão do jogo.
 
 ## Região da marca e prova
 
@@ -84,7 +111,7 @@ Inteiros em little-endian, hashes em bytes binários. A marca inteira tem 512 by
 | Posição relativa | Tamanho | Conteúdo |
 |---|---|---|
 | `0` | 16 | ASCII `BT3X360-ISO`, seguido por cinco zeros |
-| `16` | 4 | Versão do contrato: 1 |
+| `16` | 4 | Versão do contrato: 2 |
 | `20` | 4 | Tamanho da marca: 512 |
 | `24` | 8 | Tamanho da origem: 3.020.816.384 |
 | `32` | 16 | MD5 da origem |
@@ -94,7 +121,7 @@ Inteiros em little-endian, hashes em bytes binários. A marca inteira tem 512 by
 | `144` | 368 | Zeros reservados |
 
 A identidade dos fontes é o SHA256 da concatenação de `nome ASCII + NUL + conteúdo`, para todos os `.c` e `.h`
-de `port/x360/conv/` em ordem de caminho, seguidos de `iso_convertida.py`. Identifica inclusive mudanças de
+de `port/x360/conv/` em ordem de caminho, seguidos de `convert_iso.py`. Identifica inclusive mudanças de
 conversores ainda não usadas nesta imagem. O hash do executável distingue builds de compiladores diferentes.
 A reabertura exige a mesma ferramenta e os mesmos fontes; conserve a `conv_tool` da instalação. A marca
 identifica procedência e versão, sem substituir a conferência dos bytes da imagem.
@@ -126,8 +153,8 @@ Compilar e converter, na raiz do repositório (Linux/WSL, GCC e Python 3):
 
 ```sh
 gcc -std=c89 -O2 -Wall -o port/build/conv_tool $(find port/x360/conv -maxdepth 1 -name '*.c' ! -name conv_jogo.c | sort)
-python3 port/x360/tools/iso_convertida.py /caminho/bt3.iso ~/bt3-convertida.iso
-python3 port/x360/tools/iso_convertida.py /caminho/bt3.iso ~/bt3-convertida.iso --conferir --dados gamedata
+python3 port/x360/tools/convert_iso.py /caminho/bt3.iso ~/bt3-x360.iso
+python3 port/x360/tools/convert_iso.py /caminho/bt3.iso ~/bt3-x360.iso --conferir --dados gamedata
 ```
 
 O critério completo recompila a ferramenta, converte, reabre contra os dados extraídos, provoca as recusas de
@@ -144,5 +171,6 @@ python3 port/x360/tools/teste_iso_convertida.py /srv/bt3/dados/iso/bt3.iso \
 ```
 
 A pasta de trabalho precisa ser nova; não se apaga uma rodada anterior automaticamente. Guarda os logs,
-commit, diff, hashes e uma ISO válida. As cópias estragadas são removidas. A conversão precisa de cerca de
-6 GB temporários, além da original; a rodada do critério precisa de espaço para uma cópia adicional.
+commit, diff, hashes e uma ISO válida. Os estragos na convertida são restaurados
+no lugar, sem segunda convertida; as cópias temporárias da original são removidas. A conversão precisa de cerca de
+6 GB temporários, além da original. Confira também o espaço físico do Windows no WSL.

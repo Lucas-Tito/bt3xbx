@@ -24,6 +24,7 @@ SHA256 = "93f1f911e9a2bbdf92e5794fc3075ddf3f87db3df4b1cb8cfbb0448721c91172"
 SETOR = 2048
 MARCA_POS = 0x3DF400
 MARCA_TAM = 512
+VERSAO = 2
 MAGIA = b"BT3X360-ISO".ljust(16, b"\0")
 BLOCO = 4 * 1024 * 1024
 
@@ -169,7 +170,7 @@ def converter(tool, dados, saida, nomes):
     saida.mkdir()
     for i in range(0, len(nomes), 200):
         lote = nomes[i:i + 200]
-        r = subprocess.run([tool, "--saida", str(saida), str(dados), *lote],
+        r = subprocess.run([tool, "--icones360", "--saida", str(saida), str(dados), *lote],
                            check=True, capture_output=True, text=True)
         linhas = r.stdout.splitlines()
         exigir(len(linhas) == len(lote), "conv_tool: faltam resultados do lote")
@@ -189,7 +190,7 @@ def marca(tool):
     for f in fontes:
         h.update(f.name.encode("ascii") + b"\0" + f.read_bytes())
     executavel = hashlib.sha256(Path(tool).read_bytes()).digest()
-    b = struct.pack("<16sIIQ16s32s32s32s", MAGIA, 1, MARCA_TAM, TAMANHO,
+    b = struct.pack("<16sIIQ16s32s32s32s", MAGIA, VERSAO, MARCA_TAM, TAMANHO,
                     bytes.fromhex(MD5), bytes.fromhex(SHA256), h.digest(), executavel)
     return b.ljust(MARCA_TAM, b"\0")
 
@@ -307,7 +308,7 @@ def main():
     try:
         executar(args)
     except (OSError, ValueError, subprocess.CalledProcessError, UnicodeError) as e:
-        print(f"iso_convertida: {e}", file=sys.stderr)
+        print(f"convert_iso: {e}", file=sys.stderr)
         if isinstance(e, subprocess.CalledProcessError):
             print(e.stdout or "", end="", file=sys.stderr)
             print(e.stderr or "", end="", file=sys.stderr)

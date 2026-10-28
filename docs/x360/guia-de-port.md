@@ -385,7 +385,7 @@ linha de todo log é "passos: origem COMMIT diff:HASH", o carimbo da build (`hea
 | detector de visões (`BT3_VISOES` no `rastreio.c`, `visoes.py`) | acusa memória gravada com uma largura e lida com outra (u8 de um s32, u64 sobre dois u32). A lista de pares já tratados fica em `visoes_resolvidas.tsv` |
 | `tipos.py` | liga cada leitura do rastreio a struct e campo do código (coluna do DWARF + AST JSON do clang) |
 | `port/x360/conv/` (`conv_tool`) | conversores por formato em C89, para o instalador do 360 e para o PC: troca in-place com limite conferido e cada byte marcado; `conv_tool --mapa` confere contra o rastreio e mede a cobertura (decisão 12); `--disco` termina com o censo dos arquivos de menu por faixa de id (quantos arquivos e contêineres BPE ainda sem conversor); `--pecas` valida cada peça comum dos menus (`formatos/menus-pecas.md`) só na seção dela, em todo pacote do disco que a usa (a tabela `sUsos`), antes de o pacote inteiro ganhar conversor, e com `--mapa` confere só as posições dessa seção. No `--mapa`, uma leitura de 2, 4 ou 8 bytes sobre texto que o conversor deixou em bytes (o laço do fim do rótulo do Flash vira `strlen` na x86r) conta à parte, "em cadeia de texto lida por inteiro". Arquivo e seção para formato numa tabela só (`sFaixas`, conv.c). A `conv_tool` se compila sem `conv_jogo.c`, a ponte do jogo, que cita funções dele. Cada conteúdo descomprimido (`ARQ@0xN#bpe`) se converte também pelo caminho do jogo (`Conv_FormatoBits`, o mapa de bits de `conv_jogo.c`): bytes, resultado e cobertura têm de ser os mesmos, e o conteúdo tem de caber em `CONV_JOGO_MAX` |
-| `iso_convertida.py` e `teste_iso_convertida.py` | instalação no PC da decisão 23: usa `conv_tool --lista-conversores` e `--saida`, publica uma ISO do mesmo tamanho só depois da reabertura integral; `--conferir --dados DIR` confere outra vez contra os dados extraídos. O teste completo provoca recusas e estragos e roda `--disco`. Contrato e comandos em `formatos/iso-convertida.md`; ainda não muda a carga do 360 |
+| `convert_iso.py` e `teste_iso_convertida.py` | instalação no PC da decisão 23: usa `conv_tool --lista-conversores` e `--saida`, publica uma ISO do mesmo tamanho só depois da reabertura integral; `--conferir --dados DIR` confere outra vez contra os dados extraídos. O teste completo provoca recusas e estragos e roda `--disco`. Contrato e comandos em `formatos/iso-convertida.md`; marca versão 2 com ícones Kenney e recusa de conversões antigas no 360 |
 | `teste_iso_avisos.py` | F8: o leitor `iso360.c` real sobre a API de teste do Linux, com cabeçalhos, diretórios e AFS inventados em imagens esparsas; confere identificação, recusas e escolha da convertida, exige falha numa cópia estragada e acusa seis mutantes em execução; sem console nem emulador |
 | `elfdados.py` | retipa as tabelas de dados do executável (o splat põe `.long` em tudo) pela largura lida |
 | `bitfields.py` | reescreve os campos de bits do C pré-processado para o GCC big-endian ter a ordem do PS2 (no 360 é `#pragma bitfield_order(lsb_to_msb)`) |
@@ -405,6 +405,22 @@ linha de todo log é "passos: origem COMMIT diff:HASH", o carimbo da build (`hea
 
 A F1 existe porque testar ordem de bytes no console custa uma rodada manual por tentativa. No qemu
 roda uma luta inteira em 20 minutos, com comparação automática.
+
+### Ícones na instalação e dados dos roteiros
+
+A troca dos ícones usa `conv_tool --icones360 --saida`, nunca o `--saida` comum dos
+roteiros. A PPC lê arquivos pré-convertidos por essa ferramenta: trocar a arte por
+padrão faria a PPC divergir da x86 apesar de ambas partirem do `gamedata` original.
+`teste_icones360.py` compara os dois caminhos: só a instalação muda 10 a 27.
+
+O `TEX0` de `TexEntry` é um u64 trocado inteiro por `Conv_U64`: depois da conversão,
+a palavra alta fica em +0x30 e a baixa em +0x34. Não usar a ordem de duas palavras
+do fluxo GIF para validar esse campo. A primeira conferência da troca recusou a
+folha válida por essa confusão; o teste da API cobre a folha convertida real.
+
+O PNG `xbox_lt.png` do Kenney é indexado de **4 bits**, enquanto os outros nove são
+de 8. O gerador sem dependências trata os dois e confere CRC e filtros. A primeira
+execução mostrou essa diferença; não recodifique os PNG originais no repositório.
 
 ### 3.1 O ciclo de um problema de ordem de bytes
 

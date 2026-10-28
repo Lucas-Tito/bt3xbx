@@ -8,7 +8,7 @@
  *   - mods/...    arquivo de verdade, como no PC;
  *   - disc/...    o arquivo da ISO (ISO 9660, sem extensões: nomes em maiúsculas com ";1");
  *   - pzsN/...    a entrada do AFS dentro da ISO.
- * A ISO tem de ser a convertida no PC (decisão 23, port/x360/tools/iso_convertida.py): Iso_Iniciar identifica o volume
+ * A ISO tem de ser a convertida no PC (decisão 23, port/x360/tools/convert_iso.py): Iso_Iniciar identifica o volume
  * e o SYSTEM.CNF antes de procurar a marca (docs/x360/formatos/iso-convertida.md); recusa a imagem incompatível,
  * ilegível ou original sem converter (Iso_Recusada; a main mostra a caixa
  * do sistema e o jogo não começa). Da ISO convertida, a entrada com conversor (Conv_FormatoDe, port/x360/conv) já
@@ -119,8 +119,7 @@ static void hexa(const unsigned char *p, unsigned n, char *s) {
 }
 
 /* A marca da ISO convertida no PC (decisão 23, docs/x360/formatos/iso-convertida.md): 512 bytes em 0x3DF400 que
-   começam por "BT3X360-ISO" e cinco zeros. Sem política de versão por enquanto (resposta do Lucas no
-   plano/F5/02.md): a convertida se reconhece pela assinatura, e o resto da marca só vai para o log. */
+   começam por "BT3X360-ISO" e cinco zeros. A versão 2 exige o pacote de ícones (decisão 30). */
 static int tem_marca(const char *caminho) {
     static unsigned char m[MARCA_TAM];
     static char md5[33], fontes[65], exe[65];
@@ -137,6 +136,11 @@ static int tem_marca(const char *caminho) {
                         zeros == MARCA_TAM ? "a região está zerada, como na ISO original" : "bytes desconhecidos");
         return zeros == MARCA_TAM ? 0 : -1;
     }
+    if (le32(m + 16) != ISO_MARCA_VERSAO) {
+        Diario_Escrever("iso: conversão versão %u, esperada %u: reconverta a original", le32(m + 16), ISO_MARCA_VERSAO);
+        return -2;
+    }
+    if (le32(m + 20) != MARCA_TAM || le32(m + 24) != 3020816384U || le32(m + 28) != 0) return -1;
     hexa(m + 32, 16, md5);
     hexa(m + 80, 32, fontes);
     hexa(m + 112, 32, exe);
@@ -272,7 +276,7 @@ static int tentar(const char *caminho) {
     motivo = identificar();
     if (motivo == ISO_OK) {
         marca = tem_marca(caminho);
-        motivo = marca > 0 ? ISO_OK : marca == 0 ? ISO_ORIGINAL : ISO_ILEGIVEL;
+        motivo = marca > 0 ? ISO_OK : marca == 0 ? ISO_ORIGINAL : marca == -2 ? ISO_CONVERSAO_ANTIGA : ISO_ILEGIVEL;
     }
     Diario_Escrever("iso: %s: identificação e marca, resultado %d", caminho, motivo);
     if (motivo != ISO_OK) {
@@ -303,11 +307,12 @@ void Iso_Iniciar(void) {
     if (pedida) {
         strncpy(caminho, escolhido, sizeof(caminho) - 1);
     } else {
+        /* Nome público preferido, mesmo com outras imagens na pasta. */
+        sRecusada = tentar("game:\\" ISO_NOME);
+        strcpy(sNomeIso, "game:\\" ISO_NOME);
+        if (sRecusada == ISO_OK) goto carregar;
         h = FindFirstFile("game:\\*.iso", &d);
-        if (h == INVALID_HANDLE_VALUE) {
-            Diario_Escrever("iso: nenhuma .iso em game:\\, os dados vêm de arquivos soltos");
-            return;
-        }
+        if (h == INVALID_HANDLE_VALUE) return;
     }
     do {
         if (!pedida) {
@@ -315,7 +320,7 @@ void Iso_Iniciar(void) {
         }
         caminho[sizeof(caminho) - 1] = '\0';
         motivo = tentar(caminho);
-        if (motivo == ISO_OK || sRecusada == ISO_OK || motivo == ISO_ORIGINAL) {
+        if (motivo == ISO_OK || sRecusada == ISO_OK || sRecusada == ISO_AUSENTE || motivo == ISO_ORIGINAL) {
             sRecusada = motivo;
             strncpy(sNomeIso, caminho, sizeof(sNomeIso) - 1);
         }
@@ -329,6 +334,7 @@ void Iso_Iniciar(void) {
     if (sRecusada != ISO_OK) {
         return;
     }
+carregar:
     Diario_Escrever("iso: %s; os arquivos com conversor já vêm convertidos: a carga só lê (sem Conv_Arquivo)", sNomeIso);
     /* (F6) as três tabelas aqui, antes das threads: a do PZS3US2.AFS (65.201 entradas, 509 KiB) era lida no primeiro
        ADX da partição 2, dentro do afs(), na thread do jogo e com a trava comum */
