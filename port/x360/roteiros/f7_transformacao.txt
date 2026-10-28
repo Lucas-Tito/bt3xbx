@@ -27,7 +27,7 @@ aperta X
 quadros 60
 aperta X
 quadros 60
-aperta BAIXO 4
+aperta CIMA 2                     # volta pela última linha até arena 5, sem células bloqueadas
 quadros 30
 aperta X
 espera luta max 3000

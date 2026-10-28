@@ -2485,3 +2485,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   a janela de formas; um X excedente passa a escolher o COM, e as direções seguintes
   atingem outra fase. O ensaio acusou ids 13/13 e arena 0; usar BAIXO e aguardar o
   carrossel preserva os quatro X do id 1 e os três X do adversário 25.
+- No New Game, BAIXO quatro vezes nos estágios desvia a coluna nas células
+  bloqueadas e termina na arena 3. CIMA duas vezes passa pelas linhas 5 e 4 na
+  coluna 0, ambas liberadas, e chega à arena 5. A conferência da luta montada
+  deve permanecer antes de testar recurso ou transformação.
