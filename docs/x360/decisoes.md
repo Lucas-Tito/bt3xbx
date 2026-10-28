@@ -788,3 +788,11 @@ que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
    como entrada, para trocar de fonte sem mexer no resto.
 5. **SELECT fica como está:** o 360 também tem o botão de selecionar, então nem o ícone 8 nem o texto "SELECT button"
    da lição mudam.
+
+## 31. F6: a igualdade x86 = PPC basta como referência do decodificador de filme (28/10/2026)
+
+A rodada final da F6 (etapa 9) exigia comparar o decodificador de filme do port com o programa de referência do
+libmpeg2 (`mpeg2test`), que não existe no clone do upstream. O Lucas escolheu aceitar a prova que já existe: os 7.010
+quadros dos filmes com hash RGBA idêntico entre x86 e PPC, mais os filmes vistos certos no console (22/10 e 28/10).
+O caso `filme-referencia-upstream` deixa de reprovar a rodada e passa a constar como dispensado por esta decisão;
+não se busca nem se compila o `mpeg2test`.
