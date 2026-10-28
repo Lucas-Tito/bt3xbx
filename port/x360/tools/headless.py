@@ -243,12 +243,13 @@ def construir(alvo):
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
-    extras = ["sem_janela", "roteiro", "imagens", "ponte_pow", "passos", "memoria", "som"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
+    extras = ["sem_janela", "roteiro", "receitas", "imagens", "ponte_pow", "passos", "memoria", "som"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else []) + (["gpu_falso"] if alvo.gpu else []) + (["gravador"] if alvo.gravador else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
         # (o roteiro lê o save do jogo pela estrutura dele, include/sys/save.h, com os tipos do jogo: port_compat.h)
-        tipos_jogo = ["-Iinclude", "-Iport/include", "-include", "port_compat.h"] if nome == "roteiro" else []
+        # (F7, etapa 2: as receitas de cartão, receitas.c, também: escrevem no save pelos setters do jogo)
+        tipos_jogo = ["-Iinclude", "-Iport/include", "-include", "port_compat.h"] if nome in ("roteiro", "receitas") else []
         # (F5, etapa 3: a medida de tempo diz no log de que commit a build saiu, o mesmo CARIMBO desta pasta)
         if nome == "passos":
             tipos_jogo = [f'-DBT3_CARIMBO="{carimbo().strip()}"']

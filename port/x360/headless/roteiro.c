@@ -385,7 +385,7 @@ void __wrap_BtlMember_SubBlast(void *chr, int amount) {
 /* ------------------------------------------------------------------ o roteiro */
 
 enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA,
-       P_FUNDE, P_DESEJO, P_RASTREIA, P_GIRA, P_MISSOES };
+       P_FUNDE, P_DESEJO, P_RASTREIA, P_GIRA, P_MISSOES, P_RECEITA };
 enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA, C_ACAO, C_SEQ, C_PAUSA, C_DANO, C_KI, C_JANELA, C_FORMA, C_BLAST };
 
 typedef struct Passo {
@@ -407,6 +407,15 @@ typedef struct Passo {
 } Passo;
 
 static Passo *sPassos;
+
+/* (F7, etapa 2) as receitas de cartão avançado (receitas.c, só nas builds sem janela): "receita aplica [NOME]" e
+   "receita confere antes|depois [NOME]"; sem NOME, o da BT3_RECEITA. A receita mora em ../receitas/NOME.txt a partir da
+   pasta do roteiro. Passo->valor: 0 aplica, 1 confere antes, 2 confere depois; Passo->n: o índice da receita. */
+#ifndef PORT_X360
+int Receita_Ler(const char *caminho, char *erro, size_t tam);
+int Receita_Aplica(int id, unsigned char *save, char *erro, size_t tam, void (*diz)(const char *));
+int Receita_Confere(int id, const unsigned char *save, int so_antes, char *erro, size_t tam, void (*diz)(const char *));
+#endif
 static int sN, sCap;
 static int sPasso, sT;          /* o passo atual e os quadros dele */
 static int sAtivo = -1;         /* -1: ainda não lido */
@@ -678,6 +687,28 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         if (p->luta[0] < 0 || p->luta[0] > 1 || p->luta[4] < 0 || p->luta[5] < p->luta[4])
             erro_linha(onde, "confere membro: lado/faixa de Blast inválidos", NULL);
         i = 8;
+    } else if (igual(pal[0], "receita")) {
+#ifdef PORT_X360
+        erro_linha(onde, "receita: só nas builds sem janela (código de teste da F7)", NULL);
+#else
+        char arq[400], erro[300];
+        const char *nome;
+        size_t k = (size_t)(sem_pasta(caminho) - caminho);
+        int mod = n >= 2 && igual(pal[1], "aplica") ? 0 : n >= 3 && igual(pal[1], "confere") && igual(pal[2], "antes") ? 1 :
+                  n >= 3 && igual(pal[1], "confere") && igual(pal[2], "depois") ? 2 : -1;
+        i = mod == 0 ? 2 : 3;
+        if (mod < 0 || n > i + 1) erro_linha(onde, "receita aplica [NOME] | receita confere antes|depois [NOME]", NULL);
+        nome = n > i ? pal[i] : getenv("BT3_RECEITA");
+        if (nome == NULL || nome[0] == '\0' || strchr(nome, '/') != NULL || k + strlen(nome) + 20 >= sizeof(arq))
+            erro_linha(onde, "receita sem NOME (nem BT3_RECEITA) ou nome inválido", nome);
+        memcpy(arq, caminho, k);
+        sprintf(arq + k, "../receitas/%s.txt", nome);
+        p = novo(onde, P_RECEITA);
+        p->valor = mod;
+        p->n = Receita_Ler(arq, erro, sizeof(erro));
+        if (p->n < 0) erro_linha(onde, "receita inválida", erro);
+        i = n;
+#endif
     } else if (igual(pal[0], "desbloqueia")) {
         p = novo(onde, P_DESBLOQUEIA);
         i = 1;
@@ -1095,6 +1126,27 @@ static unsigned quadro(void) {
             proximo();
             continue;
         }
+#ifndef PORT_X360
+        case P_RECEITA: {
+            char erro[300];
+            int r;
+            if (gSaveData == NULL) falha("receita: sem save na memória");
+            if (p->valor == 0) {
+                /* só no New Game da rodada (cartão vazio, BT3_DESBLOQUEIO=1) e no menu principal */
+                so_teste(p, "receita aplica");
+                if (tela_atual() != 4) falha("receita aplica: só no menu principal, depois do New Game");
+                r = Receita_Aplica(p->n, (unsigned char *)gSaveData, erro, sizeof(erro), diz);
+            } else {
+                r = Receita_Confere(p->n, (const unsigned char *)gSaveData, p->valor == 1, erro, sizeof(erro), diz);
+            }
+            if (r < 0) {
+                snprintf(s, sizeof(s), "%s: %s", p->onde, erro);
+                falha(s);
+            }
+            proximo();
+            continue;
+        }
+#endif
         case P_DESBLOQUEIA:
             so_teste(p, "desbloqueia");
             if (gSaveData == NULL) {
