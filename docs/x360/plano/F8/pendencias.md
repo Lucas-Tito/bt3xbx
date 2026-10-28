@@ -64,6 +64,12 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     fechamento, sobre a build do release. O resto da lista de console da F6 etapa 9 saiu: filme e escuta (item 10),
     frio e aquecido (a F5 já mede) e a queda provocada.
 
+13. **Falhar com elegância, não com uma tela vermelha solta** (pedido do Lucas, 28/10/2026, depois da queda do Final
+    Flash no Broly): hoje uma queda pinta a tela de vermelho e espera um botão, sem dizer nada. No release, a queda
+    mostra um aviso claro em inglês (o jogo encontrou um erro e vai voltar ao painel), guarda o log para quem quiser
+    reportar e volta ao painel limpo, sem deixar a FreeStyle em laço (o defeito do laço é tratado antes, na tarefa da
+    queda). As cores por fase continuam só para o desenvolvimento.
+
 ## A abertura do repositório, a última parte do plano (27/10/2026)
 
 8. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
