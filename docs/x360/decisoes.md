@@ -796,3 +796,15 @@ libmpeg2 (`mpeg2test`), que não existe no clone do upstream. O Lucas escolheu a
 quadros dos filmes com hash RGBA idêntico entre x86 e PPC, mais os filmes vistos certos no console (22/10 e 28/10).
 O caso `filme-referencia-upstream` deixa de reprovar a rodada e passa a constar como dispensado por esta decisão;
 não se busca nem se compila o `mpeg2test`.
+
+## 32. F5: o alfa exato vira padrão quando provado, e os prefixos vão para o D3D (28/10/2026)
+
+Com o reprojeto da decisão 29 em andamento, o Lucas respondeu às duas perguntas da seção 36 do `08-gravacao.md`:
+
+1. **O alfa exato vira o padrão da build** (a chave de compilação `BT3_ALFA_ORIGEM` passa a ser a da build normal)
+   quando o console confirmar o ganho nas repetições da rodada ap35a2810 e as provas da seção 28 mostrarem a mesma
+   imagem e o mesmo jogo. Na primeira abertura com o corte (alfa1, 28/10), a imagem longa do 6929 sumiu.
+2. **Os prefixos vão para o D3D** (`BT3_GS_LOTES`, desligado por padrão), começando pela medida do relógio da
+   gravação por faixa no Xenon. As duas consultas que mudam de lugar (o plano do quadro anterior e o limite do DATE)
+   exigem a prova de imagem igual antes de qualquer ganho valer. O teto do modelo no 6960 é de 13,0 a 15,9 ms contra
+   os 10,6 que faltam; se a medida no console mostrar que não fecha, os números voltam ao Lucas para a exceção E.
