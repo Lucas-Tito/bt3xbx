@@ -169,9 +169,12 @@ static int LerPilha(unsigned endereco, unsigned *valor) {
 
 static void RegistrarPilha(const CONTEXT *c) {
     unsigned inicio = (unsigned)c->Gpr1, atual = inicio, anterior, retorno;
-    Diario_Escrever("CRASH argumentos atuais: r3=%08X r4=%08X r5=%08X r6=%08X r7=%08X r8=%08X r9=%08X r10=%08X",
-                    (unsigned)c->Gpr3, (unsigned)c->Gpr4, (unsigned)c->Gpr5, (unsigned)c->Gpr6,
-                    (unsigned)c->Gpr7, (unsigned)c->Gpr8, (unsigned)c->Gpr9, (unsigned)c->Gpr10);
+    Diario_Escrever("CRASH argumentos atuais: r3=%016I64X r4=%016I64X r5=%016I64X r6=%016I64X",
+                    c->Gpr3, c->Gpr4, c->Gpr5, c->Gpr6);
+    Diario_Escrever("CRASH argumentos atuais: r7=%016I64X r8=%016I64X r9=%016I64X r10=%016I64X",
+                    c->Gpr7, c->Gpr8, c->Gpr9, c->Gpr10);
+    Diario_Escrever("CRASH preservados: r28=%016I64X r29=%016I64X r30=%016I64X r31=%016I64X",
+                    c->Gpr28, c->Gpr29, c->Gpr30, c->Gpr31);
     /* São candidatos a retorno, não um desenrolamento dos prólogos. Folhas e chamadas de cauda
        podem omitir quadros. Iar e Lr continuam sendo registrados separadamente. */
     for (unsigned i = 0; i < 12; i++) {

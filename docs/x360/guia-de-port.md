@@ -2492,7 +2492,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 ### Queda na relocação: diagnóstico da pilha (28/10/2026)
 
 O LR dentro de `Res_RelocateOffsets` pode apontar para a chamada da guarda dentro dela e não para quem pediu a
-relocação. O filtro do 360 registra agora r3..r10 atuais (podem ter mudado desde a entrada), identidade das threads,
+relocação. O filtro do 360 registra agora r3..r10 atuais e r28..r31 preservados, com os 64 bits (podem ter mudado desde a entrada), identidade das threads,
 vblank, quadro, fase e até 12 elos da cadeia do r1. No ABI do XDK, o elo em `0(r1)` aponta para o quadro anterior;
 o retorno salvo está em `anterior-8`, não em `r1+4` como no ABI Linux PPC. Referência: [exemplo de instrumentação
 Xbox 360 da GDC 2012, páginas 2 a 5](https://media.gdcvault.com/gdc2012/slides/Programming%20Track/Adisak_Pochanayon_CPU_Instrumentation_Handouts.pdf).
