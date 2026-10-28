@@ -962,6 +962,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   dados vivos, cabeçalhos e rodapés continuam byte a byte. Controles nas duas ordens de bytes provam os limites.
   Cada arquivo de páginas é recalculado sobre o dump original pela libxxhash, antes de normalizar os caminhos.
   `REUSA=1` continua julgando todas as memórias e imagens; uma cópia estragada precisa falhar também neste modo.
+  Na rodada final, Opções passou de 998,93 para 829,74 s (16,9%) e Duelo de 1676,15 para 1294,51 s (22,8%),
+  com 79 e 93 arquivos/provas equivalentes. A projeção dos roteiros da F6 é 13,71 para 9,79 h; da F5, 13,39 para
+  9,46 h, sem contar os testes fixos. As faixas e os limites da extrapolação estão no inventário.
+  Para controles com `SOM=1 REUSA=1`, colete e confira com `GUARDA_SOM=1`: os PCM são apagados por padrão,
+  e a primeira restauração da cópia reprovou por falta deles. Exija também a cópia restaurada com `tudo certo`.
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**
   - **O rasterizador pintando todo quadro leva umas três horas por roteiro na PPC** (no qemu, uns 30 quadros por
     minuto nos menus; a x86, 7 minutos). O que custa é pintar: com o GS ligado e nada pintado (`BT3_GS_FROM` alto) a

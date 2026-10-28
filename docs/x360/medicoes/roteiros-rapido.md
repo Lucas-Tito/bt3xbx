@@ -6,7 +6,8 @@ Base: `c57e807`, `SEMMAPA=1 IMG=1 SOM=1`, sem console. A conferência do branch
 mesmos nomes de arquivos e os mesmos critérios. A conferência da `.text` da F5 aceita a referência antiga para a base e exige
 `e6e284c6064a064a9230b88bea90c16b3efc31e7` no final, junto da prova dos
 objetos. O [patch de integração da F6](f6-roteiros-rapido.patch) delega essa
-mesma checagem a `f5_final_confere.texto`, sem tocar no branch que está rodando.
+mesma checagem a `f5_final_confere.texto` e limpa `RAPIDO` herdado no executor,
+sem tocar no outro branch.
 Foi aplicado numa cópia do conferente da F6 e testado com os dois binários;
 um byte alterado na `.text` final foi recusado com saída 1 nas duas CLIs.
 
@@ -80,8 +81,8 @@ Depois de compilar as cinco builds do mesmo commit limpo, executar os dois
 modos com cartões e saídas próprios, um processo de cada vez sob a trava:
 
 ```sh
-SEMMAPA=1 IMG=1 SOM=1 RAPIDO=0 O="$HOME/rapido/separado" port/x360/tools/roteiros.sh opcoes duelo
-SEMMAPA=1 IMG=1 SOM=1 O="$HOME/rapido/junto" port/x360/tools/roteiros.sh opcoes duelo
+SEMMAPA=1 IMG=1 SOM=1 GUARDA_SOM=1 RAPIDO=0 O="$HOME/rapido/separado" port/x360/tools/roteiros.sh opcoes duelo
+SEMMAPA=1 IMG=1 SOM=1 GUARDA_SOM=1 O="$HOME/rapido/junto" port/x360/tools/roteiros.sh opcoes duelo
 python3 port/x360/tools/compara_roteiros_rapido.py "$HOME/rapido/separado/opcoes" "$HOME/rapido/junto/opcoes"
 python3 port/x360/tools/compara_roteiros_rapido.py "$HOME/rapido/separado/duelo" "$HOME/rapido/junto/duelo"
 ```
@@ -106,7 +107,51 @@ momentos, a continuidade e cinco listas inválidas sem emulador. Os controles
 sobre a rodada real usam `REUSA=1` numa cópia, com memória truncada e pixel
 alterado, conservando as saídas originais.
 
-O ganho real, a tabela da rodada final e as estimativas da F5/F6 ficam no
-relatório `~/entrega-roteiros-rapido.md` (até 250 palavras), com os logs e
-`tempos.tsv` em `~/rapido/`. As projeções devem separar o custo retirado do
-custo de calcular hashes durante a rasterização, que antes não os calculava.
+## Medição final e estimativas (28/10/2026)
+
+A rodada limpa de `7fa20dee`, em `~/rapido-rodada.log`, terminou os quatro
+roteiros com `tudo certo`. Não se contam a tentativa anterior nem as builds.
+Cada modo foi executado uma vez, sequencialmente sob `flock ~/wsl.lock`.
+
+| Roteiro | Separado | Conjunto | Ganho | Equivalência | Imagens por arquitetura |
+|---|---:|---:|---:|---:|---:|
+| opcoes | 998,93 s | 829,74 s | 169,19 s (16,9%) | 79 arquivos/provas | 11 |
+| duelo | 1676,15 s | 1294,51 s | 381,64 s (22,8%) | 93 arquivos/provas | 9 |
+
+As passagens PPC caem de 4 para 2 nas Opções e de 7 para 2 no Duelo.
+As da x86, incluindo gdb e donos, caem de 10 para 8 e de 16 para 11.
+Todas as memórias finais e de tela, subalocações, imagens, leituras, rastros,
+amostras de luta e saves passaram na comparação dos dois modos.
+
+Para projetar, preserva-se o custo de imagens e do gravador e retiram-se as
+passagens de memória final e por tela da PPC e da x86. Soma-se de volta o
+acréscimo de hashes observado na passagem com rasterização: nas Opções,
+`(370,75 - 222,00) / 153,79 = 0,967` vezes a PPC sem imagens; no Duelo,
+`(639,47 - 474,62) / 168,98 = 0,976`. Na x86 os fatores são 2,693 e 1,306.
+Esses dois pares de fatores geram a faixa abaixo; a estimativa é sua média.
+Os custos históricos por passagem usam os mesmos limites de mtime do
+inventário. É extrapolação de duas amostras, sem intervalo estatístico nem
+promessa para o console. Os tempos medidos agora incluem a carga desta sessão.
+
+| Rodada | Roteiros | Antes, observado na F6 | Estimativa conjunta | Faixa |
+|---|---:|---:|---:|---:|
+| F5, somente roteiros | 19 | 13,39 h | 9,46 h | 9,42 a 9,51 h |
+| F6, somente roteiros | 21 | 13,71 h | 9,79 h | 9,74 a 9,83 h |
+
+A F6 observada soma outros 0,48 h de casos com duração válida: o subtotal
+comparável passa de 14,19 h para 10,26 h. Não entram espera externa, duração
+inválida por ajuste do relógio nem fases que não chegaram a rodar. Quatro dos
+21 roteiros históricos reprovaram referência ou imagem, embora tenham executado
+as passagens: a tabela estima custo, não aprova aquela rodada. A F5 completa
+ainda soma seus testes fixos, sem medida completa nesta tarefa. Portanto o
+relato de mais de 15 h não se confunde com 13,71 h de execuções de roteiros.
+
+O controle real de memória truncada e pixel alterado recusou as duas cópias.
+Sua primeira restauração falhou porque o teste não preservou `grav_*.bin`:
+`roteiros.sh` os apaga por padrão após julgar o mixer. Para reaplicar `SOM=1`
+com `REUSA=1`, é obrigatório coletar com `GUARDA_SOM=1` e manter essa variável
+nas verificações das cópias. A recuperação regenera apenas as duas gravações
+por roteiro, confere rastros e mixer e reaplica os julgamentos completos sem
+repetir as passagens caras de memórias e imagens. Isso não entra no tempo do
+ganho. O relatório de entrega registra o resultado final dos controles e os
+logs conservados em `~/rapido/`.
