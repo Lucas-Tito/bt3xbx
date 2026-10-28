@@ -364,7 +364,7 @@ typedef struct Vista {
     GsTarget *targets;
     int targetCount;
     unsigned quadro;
-    int anchor;
+    int anchor, fbp;
     unsigned skipped, native;
     int dividido;
 } Vista;
@@ -402,6 +402,8 @@ static void contagens(const Vista *q, uint32_t desenhos, int pipes) {
     }
 }
 
+#include "gpu_comum.h"
+
 static void fake_frame_end(void) {
     uint32_t i;
     uint64_t quadro = 1469598103934665603ull;
@@ -414,13 +416,15 @@ static void fake_frame_end(void) {
     q.draws = g->draws; q.drawCount = g->drawCount; q.verts = g->verts; q.vertCount = g->vertCount;
     q.vuVerts = g->vuVerts; q.vuVertCount = g->vuVertCount; q.vuIdx = g->vuIdx; q.vuIdxCount = g->vuIdxCount;
     q.vuUni = g->vuUni; q.vuUniCount = g->vuUniCount; q.targets = g->targets; q.targetCount = g->targetCount;
-    q.quadro = g->quadro; q.anchor = g->anchor; q.skipped = g->skipped; q.native = g->native; q.dividido = g->dividido;
+    q.fbp = g->fbp; q.quadro = g->quadro; q.anchor = g->anchor; q.skipped = g->skipped; q.native = g->native; q.dividido = g->dividido;
 #else
     q.draws = gsDraws; q.drawCount = gsDrawCount; q.verts = gsVerts; q.vertCount = gsVertCount;
     q.vuVerts = gsVuVerts; q.vuVertCount = gsVuVertCount; q.vuIdx = gsVuIdx; q.vuIdxCount = gsVuIdxCount;
     q.vuUni = gsVuUni; q.vuUniCount = gsVuUniCount; q.targets = gsTargets; q.targetCount = gsTargetCount;
-    q.quadro = gGsFrame; q.anchor = gsAnchor; q.skipped = gsSkipped; q.native = gsNative; q.dividido = 0;
+    q.fbp = gGsMainFbp; q.quadro = gGsFrame; q.anchor = gsAnchor; q.skipped = gsSkipped; q.native = gsNative; q.dividido = 0;
 #endif
+
+    comum_lista(&q);
 
     if (q.dividido) { /* a S_TEX e as contagens da gravação vieram na entrega */
         sSecao[S_TEX] = sEntregue.tex;

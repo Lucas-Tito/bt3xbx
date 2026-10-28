@@ -1224,13 +1224,16 @@ static void tela_apresentou(unsigned quadro, int repete) {
    "entradas na EDRAM" são a troca e a limpeza, e a "volta da cor" o desenho do conteúdo do alvo de volta por cima. */
 enum {
     T_OUTROS, T_COMUM, T_VU0, T_VU4, T_VU6, T_PROF, T_CONTORNO, T_TAB_IDS, T_TAB_PROF, T_IDS, T_FBA, T_DATE, T_COR_RES,
-    T_COR_ENTRA, T_COR_VOLTA, T_TELA, T_FILME, T_FXAA, T_MED, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
+    T_COR_ENTRA, T_COR_VOLTA, T_TELA, T_FILME, T_FXAA, T_MED,
+    T_C_SEM, T_C_VRAM, T_C_ALVO, T_C_PACOTE, T_C_AF, T_C_RAP_SEM, T_C_RAP_TEX, T_C_TRIV, T_GPU_N, /* da GPU (e da CPU); as de baixo, só da CPU */
     T_VU_COPIA = T_GPU_N, T_PRESENT, T_PREPARO, T_PLANO, T_LIMPEZA, T_N
 };
 static const char *const kTempoNome[T_N] = {"outros", "comum", "vu0", "vu4", "vu6", "profundidade", "contorno",
                                             "tabela pelos ids", "tabela pela profundidade", "cópia dos ids", "FBA",
                                             "DATE", "resolves de cor", "entradas na EDRAM", "volta da cor", "tela",
                                             "filme", "FXAA", "medição",
+                                            "comum sem", "comum VRAM", "comum alvo", "comum pacote", "comum afiado",
+                                            "comum rapido sem", "comum rapido textura", "comum trivial",
                                             "cópia da VU1", "Present", "preparo", "plano", "limpeza"};
 #define T_MARCAS 4096 /* por quadro; um quadro com mais é descartado (contado); 136 KB nos dois buffers */
 static volatile unsigned __int64 sMarcaGpu[2 * T_MARCAS]; /* o relógio quando a GPU chegou à marca (tempo_cb) */
@@ -1306,7 +1309,14 @@ static int tempo_valida(int b, unsigned n) {
    o limite da espera da GPU pela CPU (o trecho começou na GPU antes de a CPU terminar de pô-lo). */
 /* Diagnóstico pontual na janela da luta, independente de BT3_TEMPOS. Desligado por padrão.
    O quadro guardado é o emitido, nunca o que lê as marcas dois quadros depois. */
-static int sCortesGpu;
+static int sCortesGpu, sComumGpu;
+/* Metadados de cada trecho comum (96 KB adicionais). Sem leitura do dispositivo nem escrita na DPC.
+   As faixas são índices absolutos de desenho em blocos de 128, não marcas por desenho. */
+static int sComumAlvo[2 * T_MARCAS];
+static unsigned sComumIni[2 * T_MARCAS], sComumFim[2 * T_MARCAS];
+static unsigned sComumDesenho;
+enum { C_RESOLVE, C_LIMPA, C_PS, C_ALVO, C_TEX, C_TESOURA, C_UP, C_INDICES, C_API_N };
+static unsigned sComumApi[C_API_N];
 static unsigned sCortesGpuA, sCortesGpuB, sCortesGpuQ[2];
 static void tempo_le(int b) {
     const volatile unsigned __int64 *g = &sMarcaGpu[b * T_MARCAS];
@@ -1360,6 +1370,19 @@ static void tempo_le(int b) {
                             ((double)raw[c] - (double)seg[c] * vazio) / f, (double)esp[c] / f, seg[c]);
         }
     }
+    if (sComumGpu) {
+        for (k = 0; k + 1 < n; k++) {
+            unsigned i = b * T_MARCAS + k;
+            c = cl[k];
+            if (c >= T_C_SEM && c <= T_C_TRIV) {
+                unsigned __int64 t = g[k + 1] - g[k];
+                Diario_Escrever("cortes: comum quadro %u classe %s alvo %d desenhos %u:%u bruto %.6f liquido %.6f espera %.6f marcas 1",
+                                sCortesGpuQ[b], kTempoNome[c], sComumAlvo[i], sComumIni[i], sComumFim[i],
+                                (double)t / f, ((double)t - vazio) / f,
+                                cp[k + 1] > g[k] ? (double)(cp[k + 1] - g[k] < t ? cp[k + 1] - g[k] : t) / f : 0.0);
+            }
+        }
+    }
     total = g[n - 1] - g[0];
     for (c = 0; c < T_GPU_N; c++) {
         sTempo.gSoma[c] += raw[c];
@@ -1388,6 +1411,10 @@ static void tempo_comeca(void) {
     sTempo.quadro = sCortesGpu ? sQ->quadro >= sCortesGpuA && sQ->quadro <= sCortesGpuB : !Passos_Medindo();
     if (!sTempo.quadro) return;
     sCortesGpuQ[sTempo.buf] = sQ->quadro;
+    if (sComumGpu) {
+        memset(sComumIni + sTempo.buf * T_MARCAS, 0xFF, sizeof(unsigned) * T_MARCAS);
+        memset(sComumApi, 0, sizeof(sComumApi));
+    }
     memset(sTempo.cq, 0, sizeof(sTempo.cq));
     sTempo.desde = __mftb();
     sTempo.cpu = T_MED;
@@ -1440,6 +1467,11 @@ static void tempo_fecha_cpu(double msFim, int vale) {
             Diario_Escrever("cortes: cpu quadro %u classe %s %.6f ms", sCortesGpuQ[sTempo.buf], nome, (double)sTempo.cq[c] / sTempo.freq);
         }
     }
+    if (sComumGpu) {
+        Diario_Escrever("cortes: comum quadro %u API Resolves %u Clear %u pixelshader %u alvo %u textura %u tesoura %u UP %u indices %u",
+                        sCortesGpuQ[sTempo.buf], sComumApi[C_RESOLVE], sComumApi[C_LIMPA], sComumApi[C_PS], sComumApi[C_ALVO],
+                        sComumApi[C_TEX], sComumApi[C_TESOURA], sComumApi[C_UP], sComumApi[C_INDICES]);
+    }
     sTempo.cFim += msFim;
     sTempo.cQuadros++;
 }
@@ -1474,7 +1506,9 @@ static void cova_solta(int i) {
 static void cova_espera_primeira(void) {
     const char *antes = (const char *)gGsD3dEtapa;
     gGsD3dEtapa = "esperando a GPU soltar um recurso descartado";
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(1, NULL);
     esquece_estado();
     {
@@ -1852,6 +1886,7 @@ static int limpa_fora(const Alvo *a, int volta, DWORD limpa, int W, int H) {
         return 0;
     }
     if (limpa & ~(DWORD)D3DCLEAR_TARGET) {
+        if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
         sDev->Clear(0, NULL, limpa & ~(DWORD)D3DCLEAR_TARGET, 0x00000000, 0.0f, 0);
     }
     if (c->y0 > 0) {
@@ -1867,6 +1902,7 @@ static int limpa_fora(const Alvo *a, int volta, DWORD limpa, int W, int H) {
         r[n].x1 = c->x1; r[n].y1 = c->y0; r[n].x2 = W; r[n].y2 = c->y1; n++;
     }
     if (n > 0) {
+        if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
         sDev->Clear(n, r, D3DCLEAR_TARGET, 0x00000000, 0.0f, 0);
     }
     sOt.limpaN++;
@@ -2274,11 +2310,14 @@ static void quad(D3DTexture *t, D3DPixelShader *ps, int W, int H, float x0, floa
     q[3].x = cx1; q[3].y = cy1; q[3].u = u1; q[3].v = v1;
     sDev->SetVertexDeclaration(sDeclCopia);
     sDev->SetVertexShader(sVsCopia);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
     sDev->SetPixelShader(ps);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, t);
     aplica_sampler(0, (linear ? 1 : 0) | 2 | 4);
     sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_UP]++;
     sDev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, q, sizeof(q[0]));
     esquece_estado();
 }
@@ -2344,6 +2383,7 @@ static D3DTexture *fxaa_passa(D3DTexture *t) {
         return t;
     }
     tempo_poe(T_FXAA);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sEdramCor);
     sDev->SetDepthStencilSurface(NULL);
     sDev->SetViewport(&vp);
@@ -2353,10 +2393,12 @@ static D3DTexture *fxaa_passa(D3DTexture *t) {
     sDev->SetPixelShaderConstantF(9, c9, 1); /* (o copiaTam do ps_fxaa: zw um texel em uv) */
     quad(t, sPsFxaa, sAlvoW, sAlvoH, 0.0f, 0.0f, (float)sFxaaRet.x1, (float)sFxaaRet.y1, 0.0f, 0.0f, sFxaaRet.x1 / W,
          sFxaaRet.y1 / H, 1);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL); /* (a textura do FXAA, destino do Resolve, pode estar no estágio desde a cópia anterior) */
     sCurTex = (GsTex)-1;
     fonte.x1 = sFxaaRet.x0; fonte.y1 = sFxaaRet.y0; fonte.x2 = sFxaaRet.x1; fonte.y2 = sFxaaRet.y1;
     destino.x = 0; destino.y = 0;
+    if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sFxaaTex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
     sFxaaN++;
     return sFxaaTex;
@@ -2385,12 +2427,14 @@ static void prof_poe(Prof *z, const Ret *r, int modo) {
         }
         sDev->SetPixelShaderConstantF(7, zc, 1);
         sDev->SetDepthStencilSurface(NULL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
         sDev->SetRenderTarget(0, sEdramProfCor);
         sDev->SetViewport(&vpz);
         sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
         sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
         sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
         quad(z->cor, sPsZCor, sAlvoWZ, sAlvoH, x0, y0, x1, y1, x0 / W, y0 / H, x1 / W, y1 / H, 0);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
         sDev->SetRenderTarget(0, sCorPosta); /* (sEdramCor; com BT3_EDRAM_RESIDENTE, a vaga A ou B, do mesmo tamanho) */
         sDev->SetDepthStencilSurface(sEdramProf);
         sDev->SetViewport(&vp);
@@ -2402,6 +2446,7 @@ static void prof_poe(Prof *z, const Ret *r, int modo) {
         quad(z->tex, sPsZProf, sAlvoW, sAlvoH, x0, y0, x1, y1, x0 / W, y0 / H, x1 / W, y1 / H, 0);
     }
     /* (a textura não fica presa no estágio: ela é destino do próximo Resolve deste alvo) */
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
     sCurTex = (GsTex)-1;
 }
@@ -2412,6 +2457,7 @@ static void prof_tira(Prof *z, const Ret *r) {
     D3DPOINT destino;
     fonte.x1 = r->x0; fonte.y1 = r->y0; fonte.x2 = r->x1; fonte.y2 = r->y1;
     destino.x = r->x0; destino.y = r->y0;
+    if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
     sDev->Resolve(D3DRESOLVE_DEPTHSTENCIL, &fonte, z->tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
 }
 
@@ -2513,7 +2559,9 @@ static void prof_entrega(void) {
         Ret rz = sSujoZ;
         QueryPerformanceCounter(&t);
         tempo_poe(T_PROF);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(0, NULL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(1, NULL);
         sCurTex = (GsTex)-1;
         sCurDate = NULL;
@@ -2553,13 +2601,16 @@ static void sai_da_edram(void) {
     if (r.x1 > r.x0 && sAlvoD[sResidente].tex != NULL) {
         tempo_poe(T_COR_RES);
         /* o destino do Resolve não fica preso como textura (a cópia de volta deixou a dele no estágio 0) */
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(0, NULL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(1, NULL);
         sCurTex = (GsTex)-1;
         sCurDate = NULL;
         alinha8(&r);
         fonte.x1 = r.x0; fonte.y1 = r.y0; fonte.x2 = r.x1; fonte.y2 = r.y1;
         destino.x = r.x0; destino.y = r.y0;
+        if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
         sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sAlvoD[sResidente].tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
         ret_une(&sAlvoD[sResidente].conteudo, r.x0, r.y0, r.x1, r.y1);
         sConta.corResPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
@@ -2629,6 +2680,7 @@ static void ed_poe(int v) {
         c[0] = 2.0f * (float)sEscN / ((float)g->w * (float)sEscD); /* (2 / a largura da vaga em pixels do GS) */
         c[1] = 2.0f * (float)sEscN / ((float)g->h * (float)sEscD);
     }
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, g->cor);
     sDev->SetDepthStencilSurface(v < VG_P0 ? sEdramProf : NULL);
     sDev->SetViewport(&vp);
@@ -2659,11 +2711,14 @@ static void ed_descarrega(int t, int motivo) {
         return;
     }
     tempo_poe(T_COR_RES);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL); /* (o destino do Resolve não fica preso como textura) */
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(1, NULL);
     sCurTex = (GsTex)-1;
     sCurDate = NULL;
     if (v != posta) {
+        if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
         sDev->SetRenderTarget(0, g->cor);
         sDev->SetDepthStencilSurface(NULL);
     }
@@ -2673,6 +2728,7 @@ static void ed_descarrega(int t, int motivo) {
     }
     fonte.x1 = r.x0; fonte.y1 = r.y0; fonte.x2 = r.x1; fonte.y2 = r.y1;
     destino.x = r.x0; destino.y = r.y0;
+    if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sAlvoD[t].tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
     ret_une(&sAlvoD[t].conteudo, r.x0, r.y0, r.x1, r.y1);
     sConta.corResPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
@@ -2780,9 +2836,11 @@ static void entra_res(int i, int usaZ) {
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
     if (nova) {
         if (!(sOtim & OT_LIMPA) || !limpa_fora(a, sQ->targets[i].cleared, limpa, g->w, g->h)) {
+            if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
             sDev->Clear(0, NULL, limpa, 0x00000000, 0.0f, 0);
         }
     } else if (poeZ) {
+        if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
         sDev->Clear(0, NULL, limpa & ~(DWORD)D3DCLEAR_TARGET, 0x00000000, 0.0f, 0); /* (só a profundidade) */
     }
     if (!sQ->targets[i].cleared) {
@@ -3116,6 +3174,7 @@ static void entra_na_edram(int i, int usaZ) {
         }
     }
     tempo_poe(T_COR_ENTRA);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sEdramCor);
     sDev->SetDepthStencilSurface(sEdramProf);
     sDev->SetViewport(&vp);
@@ -3123,6 +3182,7 @@ static void entra_na_edram(int i, int usaZ) {
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
     if (!(sOtim & OT_LIMPA) || !limpa_fora(a, sQ->targets[i].cleared, limpa, sAlvoW, sAlvoH)) { /* (720p, retomada) */
+        if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
         sDev->Clear(0, NULL, limpa, 0x00000000, 0.0f, 0);
     }
     if (!sQ->targets[i].cleared) {
@@ -3195,6 +3255,7 @@ static void cr_zprof(void *z) { prof_poe((Prof *)z, &sInteiro, 2); }
 static void cr_corres(void *t) {
     D3DRECT fonte = {0, 0, sAlvoW, sAlvoH};
     D3DPOINT destino = {0, 0};
+    if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, (D3DTexture *)t, &destino, 0, 0, NULL, 0.0f, 0, NULL);
 }
 static void cr_correst(void *t) {
@@ -3260,15 +3321,19 @@ static void prof_autoteste(void) {
     for (modo = 0; modo <= 2; modo++) { /* (o 0 é o controle: sem restauro) */
         /* o padrão como cor na profundidade da EDRAM (uns 4 x 4 pixels por texel, os 13 tiles) e resolvido em A */
         sDev->SetDepthStencilSurface(NULL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
         sDev->SetRenderTarget(0, sEdramProfCor);
         sDev->SetViewport(&vpz);
         copia(pad, sAlvoWZ, sAlvoH, 0.0f, 0.0f, (float)sAlvoWZ, (float)sAlvoH, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(0, NULL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
         sDev->SetRenderTarget(0, sEdramCor);
         sDev->SetDepthStencilSurface(sEdramProf);
         sDev->SetViewport(&vp);
         prof_tira(&za, &sInteiro);
         sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
         sDev->Clear(0, NULL, D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0, 0.0f, 0);
         if (modo != 0) {
             prof_poe(&za, &sInteiro, modo);
@@ -3289,12 +3354,15 @@ static void prof_autoteste(void) {
     ms[1] = prof_cronometra(cr_zcor, &za, 8);
     ms[2] = prof_cronometra(cr_zprof, &za, 8);
     /* a cor, com a EDRAM e o sDate zerados (o sDate continua zerado, como foi criado) */
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, TRUE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
     sDev->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0, 0.0f, 0);
     sMsCorRes = prof_cronometra(cr_corres, sDate, 8);
     sMsCorRest = prof_cronometra(cr_correst, sDate, 8);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
     sDev->BlockUntilIdle();
     if (forcado == 1 || forcado == 2) {
@@ -3321,6 +3389,7 @@ static void prof_autoteste(void) {
     pad->Release();
     sMem.vivos[CL_PROF] -= 2 * tam_alvo();
     sMem.nVivos[CL_PROF] -= 2;
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sTela);
     sDev->SetDepthStencilSurface(NULL);
     esquece_estado();
@@ -3558,7 +3627,9 @@ static void tempo_init(void) {
     int ok, controle;
     unsigned k;
     {
-        const char *e = getenv("BT3_CORTES_GPU");
+        const char *fino = getenv("BT3_COMUM_GPU");
+        const char *e = fino != NULL && atoi(fino) > 0 ? fino : getenv("BT3_CORTES_GPU");
+        sComumGpu = fino != NULL && atoi(fino) > 0;
         sCortesGpu = e != NULL && atoi(e) > 0;
         sCortesGpuA = sCortesGpuB = 6960;
         if (e != NULL && atoi(e) != 1) sscanf(e, "%u,%u", &sCortesGpuA, &sCortesGpuB);
@@ -3595,6 +3666,7 @@ static void tempo_init(void) {
     usGpu = ok ? (double)(sMarcaGpu[63] - sMarcaGpu[0]) / 63.0 / sTempo.freq * 1000.0 : 0.0;
     usCpu = (double)(m1 - m0) / 64.0 / sTempo.freq * 1000.0;
     /* a cópia de um alvo inteiro, 8 vezes, entre duas marcas e com a GPU parada (o autoteste da profundidade) */
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sEdramCor);
     sDev->SetDepthStencilSurface(sEdramProf);
     sDev->SetViewport(&vp);
@@ -3608,7 +3680,9 @@ static void tempo_init(void) {
     __lwsync();
     msMarcas = tempo_valida(0, 2) ? ((double)(sMarcaGpu[1] - sMarcaGpu[0]) / sTempo.freq - usGpu / 1000.0) / 8.0 : -1.0;
     msParada = prof_cronometra(cr_correst, sDate, 8);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sTela);
     sDev->SetDepthStencilSurface(NULL);
     esquece_estado();
@@ -3858,7 +3932,9 @@ static void captura(int alvo, D3DTexture *tex, const char *arquivo = NULL) {
     fbw = arquivo != NULL ? 512 : (fbw ? fbw : 10) * 64;
     if (fbw > 640) fbw = 640;
     /* textura presa no dispositivo fica ocupada para sempre (IsBusy): o LockRect esperaria sem fim */
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(1, NULL);
     esquece_estado();
     sDev->BlockUntilIdle();
@@ -3982,6 +4058,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : af ? sVsGsAf : sVsGs);
         /* (F5, etapa 7, segunda parte) a VU1 com o recorte pelo w: a profundidade por pixel (ps_gsz, vu_pos); (720p,
            retomada) com as chaves, a variante do desenho (ps_escolhe) */
+        if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
         sDev->SetPixelShader(sCurPs = ps_escolhe(d, estado));
         if (estado >= 2) {
             float c15[4] = {sCorte ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f};
@@ -3997,6 +4074,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE)) {
         D3DPixelShader *ps = ps_escolhe(d, estado);
         if (ps != sCurPs) {
+            if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
             sDev->SetPixelShader(ps);
             sCurPs = ps;
         }
@@ -4005,6 +4083,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     if (d->tex != sCurTex) {
         D3DTexture *t = (D3DTexture *)(d->tex != 0 ? d->tex : (GsTex)sBranco);
         D3DSURFACE_DESC desc;
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(0, t);
         sCurTex = d->tex;
         /* o tamanho, para a arte 2D lida no ponto (gs_d3d.hlsl) */
@@ -4028,6 +4107,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         /* a cópia para o DATE: a do marcador nativo 5, ou a própria textura de um alvo fora da EDRAM */
         D3DTexture *f = sDateFonte != NULL ? sDateFonte : sDate;
         if (sCurDate != f) {
+            if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
             sDev->SetTexture(1, f);
             sCurDate = f;
         }
@@ -4069,6 +4149,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     if (!sTemScissor || sScissor[0] != x0 || sScissor[1] != y0 || sScissor[2] != x1 || sScissor[3] != y1) {
         RECT sc;
         sc.left = x0; sc.top = y0; sc.right = x1; sc.bottom = y1;
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TESOURA]++;
         sDev->SetScissorRect(&sc);
         sScissor[0] = x0; sScissor[1] = y0; sScissor[2] = x1; sScissor[3] = y1;
         sTemScissor = 1;
@@ -4082,8 +4163,42 @@ static void chamadas(const GsDraw *d, uint32_t ini);
 static void desenha_fba(const GsDraw *d, uint32_t ini);
 
 /* um desenho preparado: as chamadas (duas passadas no FBA com mistura pelo alfa da fonte) e o que ele sujou */
+/* A classe é a mesma escolha do ps_escolhe, sem chamá-lo de novo (ele tem contadores).
+   Mantém a fronteira antiga: o preparo do desenho seguinte ainda pertence ao trecho anterior.
+   Assim as subclasses substituem apenas T_COMUM; a soma deve conservar essa família. */
+static int comum_classe(const GsDraw *d, int af, int rapido, int trivial) {
+    if (trivial) return T_C_TRIV;
+    if (af) return T_C_AF;
+    if (rapido && d->misc[1] == 0.0f && d->misc[3] == 0.0f && d->mode[3] == 0 && d->mode[0] != 2)
+        return d->mode[0] ? T_C_RAP_TEX : T_C_RAP_SEM;
+    return d->mode[0] == 0 ? T_C_SEM : d->mode[0] == 1 ? T_C_VRAM : d->mode[0] == 2 ? T_C_ALVO : T_C_PACOTE;
+}
+
+static void comum_poe(const GsDraw *d) {
+    int c;
+    unsigned i, k;
+    if (!sComumGpu || !sTempo.quadro || d->vu) {
+        tempo_poe(d->vu >= 1 && d->vu <= 3 ? T_VU0 + d->vu - 1 : T_COMUM);
+        return;
+    }
+    c = comum_classe(d, afiado_usa(d, 1), (sOtim & OT_PS) != 0, (sPsTrivial & 1) != 0);
+    k = sTempo.n[sTempo.buf];
+    i = sTempo.buf * T_MARCAS + (k ? k - 1 : 0);
+    /* Trocar alvo ou faixa também fecha o trecho, mesmo com o mesmo shader. */
+    if (sTempo.cpu == c && k && (sComumAlvo[i] != d->target || sComumIni[i] / 128 != sComumDesenho / 128))
+        tempo_marca(c, 0);
+    else
+        tempo_poe(c);
+    k = sTempo.n[sTempo.buf];
+    if (!k || sTempo.transbordou) return;
+    i = sTempo.buf * T_MARCAS + k - 1;
+    if (sComumIni[i] == ~0u) sComumIni[i] = sComumDesenho;
+    sComumFim[i] = sComumDesenho;
+    sComumAlvo[i] = d->target;
+}
+
 static void desenha_comum(const GsDraw *d, uint32_t ini, const Ret *a) {
-    tempo_poe(d->vu >= 1 && d->vu <= 3 ? T_VU0 + d->vu - 1 : T_COMUM);
+    comum_poe(d);
     if (fba_duas(d)) {
         desenha_fba(d, ini);
     } else {
@@ -4572,6 +4687,7 @@ static int nat_ret(const GsDraw *d, Ret *r) {
 }
 
 static void nat_textura(DWORD estagio, D3DTexture *t) {
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(estagio, t);
     aplica_sampler(estagio, 2 | 4); /* no ponto, presa na borda */
 }
@@ -4590,12 +4706,15 @@ static void passada(D3DPixelShader *ps, const Ret *r) {
     }
     sDev->SetVertexDeclaration(sDeclCopia);
     sDev->SetVertexShader(sVsCopia);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
     sDev->SetPixelShader(ps);
     sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_UP]++;
     sDev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, q, sizeof(q[0]));
     for (k = 2; k <= 4; k++) {
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(k, NULL);
     }
     ret_une(&sSujo, r->x0, r->y0, r->x1, r->y1);
@@ -4787,6 +4906,7 @@ static void filme_desenha(const GsDraw *d, uint32_t n, int *cur) {
     sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     quad(&x->cab, sPsFilme, sPostaW, sPostaH, 0.0f, 0.0f, (float)w, (float)h, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
     sCurTex = (GsTex)-1;
     ret_une(&sSujo, 0, 0, w, h);
@@ -4903,6 +5023,7 @@ static void filme_varre(DWORD cerca) {
     }
     if (e == 2 && (livres == FILME_VAGAS || ++sFilmeSoltarQuadros >= 8) &&
         InterlockedCompareExchange(&sFilmeEstado, 3, 2) == 2) {
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(0, NULL);
         esquece_estado();
         for (k = 0; k < FILME_VAGAS; k++) {
@@ -4935,7 +5056,9 @@ static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
     }
     nat_entra(d->target, n, cur);
     tempo_poe(T_IDS);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(3, NULL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
     sIdsQuadro = sQ->quadro + 1;
     sConta.natIds++;
@@ -5040,6 +5163,7 @@ static void chamadas_af(const GsDraw *d, D3DPRIMITIVETYPE tipo, uint32_t porPrim
                 memcpy(sVtxAf[k + j].caixa, c, sizeof(c));
             }
         }
+        if (sComumGpu && sTempo.quadro) sComumApi[C_UP]++;
         sDev->DrawPrimitiveUP(tipo, n / porPrim, sVtxAf, sizeof(VtxAf));
         feitos += n;
     }
@@ -5051,6 +5175,7 @@ static void chamadas(const GsDraw *d, uint32_t ini) {
     D3DPRIMITIVETYPE tipo = p->topo == 0 ? D3DPT_TRIANGLELIST : p->topo == 1 ? D3DPT_LINELIST : D3DPT_POINTLIST;
     uint32_t porPrim = p->topo == 0 ? 3 : p->topo == 1 ? 2 : 1, feitos = 0;
     if (d->vu) {
+        if (sComumGpu && sTempo.quadro) sComumApi[C_INDICES]++;
         sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count);
         return;
     }
@@ -5061,6 +5186,7 @@ static void chamadas(const GsDraw *d, uint32_t ini) {
     while (feitos + porPrim <= d->count) {
         uint32_t n = d->count - feitos > MAX_UP ? MAX_UP : d->count - feitos;
         n -= n % porPrim;
+        if (sComumGpu && sTempo.quadro) sComumApi[C_UP]++;
         sDev->DrawPrimitiveUP(tipo, n / porPrim, &sQ->verts[d->first + feitos], sizeof(Vtx));
         feitos += n;
     }
@@ -5173,6 +5299,7 @@ static int at_le(D3DTexture *t, UINT w, UINT h, unsigned *lin) {
 static void at_resolve(D3DTexture *t) {
     D3DRECT fonte = {0, 0, 256, 256};
     D3DPOINT destino = {0, 0};
+    if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, t, &destino, 0, 0, NULL, 0.0f, 0, NULL);
 }
 
@@ -5216,22 +5343,28 @@ static void nat_autoteste(int forcado) {
         return;
     }
     gGsD3dEtapa = "autoteste das nativas";
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sEdramCor);
     sDev->SetDepthStencilSurface(sEdramProf);
     sDev->SetViewport(&vp);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
     sDev->Clear(0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0, 0.0f, 0);
     copia(tp, sAlvoW, sAlvoH, 0.0f, 0.0f, 256.0f, 256.0f, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
     {
         D3DRECT fonte = {0, 0, sIdsW, sIdsH};
         D3DPOINT destino = {0, 0};
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(3, NULL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
         sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
     }
     /* a tabela pelos ids, e o controle com a tabela trocada */
     for (k = 0; k < 2; k++) {
         sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
         sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0, 0.0f, 0);
         sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
         nat_tabela_passa(1, 0.0f, NULL, k ? t2 : t1, &r);
@@ -5248,6 +5381,7 @@ static void nat_autoteste(int forcado) {
     }
     /* o contorno sobre um cinza 0x80; o controle é a imagem sem a passada (bate só onde não há aresta) */
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
     sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF808080, 0.0f, 0);
     nat_contorno_passa(&r, 1.0f);
     at_resolve(res);
@@ -5272,15 +5406,20 @@ static void nat_autoteste(int forcado) {
         D3DRECT fonte = {0, 0, sAlvoW, sAlvoH};
         D3DPOINT destino = {0, 0};
         sDev->SetDepthStencilSurface(NULL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
         sDev->SetRenderTarget(0, sEdramProfCor);
         sDev->SetViewport(&vpz);
         copia(tp, sAlvoWZ, sAlvoH, 0.0f, 0.0f, (float)sAlvoWZ, (float)sAlvoH, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(0, NULL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
         sDev->SetRenderTarget(0, sEdramCor);
         sDev->SetDepthStencilSurface(sEdramProf);
         sDev->SetViewport(&vp);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
         sDev->Resolve(D3DRESOLVE_DEPTHSTENCIL, &fonte, zt, &destino, 0, 0, NULL, 0.0f, 0, NULL);
         sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+        if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
         sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0, 0.0f, 0);
         sDev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
         nat_tabela_passa(0, 65535.0f, zt, t1, &r);
@@ -5334,6 +5473,7 @@ static void nat_autoteste(int forcado) {
     if (zt != NULL) {
         zt->Release();
     }
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sTela);
     sDev->SetDepthStencilSurface(NULL);
     esquece_estado();
@@ -5372,11 +5512,13 @@ static void nat_init(void) {
    fundo. Do fim do quadro e de GsD3d_Repete. */
 static void tela_copia(D3DTexture *t) {
     D3DVIEWPORT9 vp = {0, 0, TELA_W, TELA_H, 0.0f, 1.0f};
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, sTela);
     sDev->SetDepthStencilSurface(NULL);
     sDev->SetViewport(&vp);
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;
     sDev->Clear(0, NULL, D3DCLEAR_TARGET, sCorFundo, 1.0f, 0);
     if (t != NULL) {
         /* 512 x 448 do GS na forma da imagem (4:3: 960 x 720 no meio da tela de 1280 x 720); (720p, etapa 3) a textura cobre
@@ -5516,6 +5658,7 @@ static void frame_end(void) {
     recorte_poe();
     for (n = 0; n < q->drawCount; n++) {
         const GsDraw *d = &q->draws[n];
+        if (sComumGpu) sComumDesenho = n;
         if (d->native >= 100) {
             /* (F6, etapa 6) a imagem do filme: com BT3_FILME=1, a vaga com o número dela; senão contada, como antes */
             if (d->first != 0 && (sFilmeEstado == 1 || sFilmeEstado == 2)) {
@@ -5545,8 +5688,10 @@ static void frame_end(void) {
                     alinha8(&r);
                     fonte.x1 = r.x0; fonte.y1 = r.y0; fonte.x2 = r.x1; fonte.y2 = r.y1;
                     destino.x = r.x0; destino.y = r.y0;
+                    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
                     sDev->SetTexture(1, NULL); /* (o destino do Resolve não pode estar em uso) */
                     sCurDate = NULL;
+                    if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
                     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sDate, &destino, 0, 0, NULL, 0.0f, 0, NULL);
                     sConta.dateRes++;
                 }
@@ -5686,7 +5831,9 @@ static void frame_end(void) {
     if (sFilmeLog) filme_apresentou();
     gGsD3dEtapa = "fim do quadro: texturas soltas";
     /* nada do quadro fica preso no dispositivo: as texturas soltas podem ir quando a GPU terminar com elas */
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(1, NULL);
     /* (F5, etapa 6) o par de buffers da VU1 também: preso no dispositivo, ficaria ocupado para sempre (IsBusy) */
     sDev->SetStreamSource(0, NULL, 0, 0);
@@ -5774,6 +5921,7 @@ extern "C" int GsD3d_Repete(void) {
     if (sTelaLiga) {
         tela_apresentou(sTelaUltQ, 1); /* (BT3_PICOS_TELA: a mesma imagem de novo) */
     }
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL);
     esquece_estado();
     gGsD3dEtapa = sDiv ? "esperando o retrato seguinte" : "jogo e gravação do quadro";

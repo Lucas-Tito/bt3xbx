@@ -2232,3 +2232,24 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `-isystem /usr/include/x86_64-linux-gnu` fornece os headers de sistema que faltavam na busca. O invólucro externo
   também usa `-D_FILE_OFFSET_BITS=64` para o `stat` e o `pread` da imagem esparsa de 3 GB; os `long` continuam com
   32 bits, como no `cl`. Não instalar `gcc-multilib`, que remove o cross da PPC (armadilha acima).
+
+### Abrir a classe comum da GPU (F5, gravação, seção 30)
+
+- A marca de `desenha_comum` vem depois de `prepara`. O intervalo atribuído ao desenho inclui o preparo do
+  seguinte, até a próxima mudança de classe. As subclasses de `BT3_COMUM_GPU` preservam essa fronteira para
+  substituir só `comum`; o líquido continua uma estimativa com o custo do trecho vazio descontado. Não chamar
+  o resultado de tempo isolado do shader, nem somar de novo as linhas detalhadas às classes agregadas.
+- O backend falso começa em `gsScale=2`, enquanto o 360 força 1. Para analisar tesouras e `misc.w` do console,
+  usar **`BT3_SCALE=1`** na x86gv/PPCg. Não dividir as posições por dois: elas já estão em pixels lógicos do GS.
+  `gpu_comum.py` recusa uma lista de outra escala. A escala de saída 1,33 é a fração **4/3**, não 133/100.
+- `BT3_GPU_LISTA` contém hashes, não os desenhos completos. `BT3_GPU_COMUM=pasta` e
+  `BT3_GPU_COMUM_QUADROS=6929,6930,...` exportam os estados e as posições comuns em JSONL, somente no falso.
+  Dados fora do git. Cobertura dos triângulos não é contagem exata de escritas: alfa, DATE, Z e máscara podem
+  recusá-las. O censo separa fragmentos, união por alvo e intervalo de escritas; não soma a segunda passada FBA,
+  a VU1, as nativas, limpezas ou Resolves à área comum.
+- Esperar a build terminar antes de lançar o roteiro: o executável anterior continua no caminho enquanto se
+  compila. Uma rodada iniciada antes do fim pode terminar normalmente sem o exportador novo. Juntar build e
+  execução num script sequencial sob a mesma trava; conferir carimbo e arquivos selecionados, além do fim.
+- Os quadros próximos de uma troca de cena podem mudar de fase entre arquiteturas. Na x86gv desta análise,
+  a segunda cadeia de brilho já entra no 6959; o perfil do console só muda no 6960. Comparar a estrutura
+  e os quadros vizinhos, sem transportar o tempo do 6959 do console para a lista 6959 da x86.
