@@ -26,6 +26,7 @@
 #include "iso360.h"
 #include "iso_avisos.h"
 #include "som/som360.h"
+#include "pilha360.h"
 
 extern "C" {
 void Port_MapMemory(void);              /* port/src/plat_mem.c, ramo PORT_X360 */
@@ -156,6 +157,33 @@ extern "C" void Port_Abortar(void) {
     Port_Sair(3);
 }
 
+/* Nunca desreferenciar a pilha danificada fora deste SEH. Não chama o filtro global de novo. */
+static int LerPilha(unsigned endereco, unsigned *valor) {
+    __try {
+        *valor = *(volatile unsigned *)endereco;
+        return 1;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+static void RegistrarPilha(const CONTEXT *c) {
+    unsigned inicio = (unsigned)c->Gpr1, atual = inicio, anterior, retorno;
+    Diario_Escrever("CRASH argumentos atuais: r3=%08X r4=%08X r5=%08X r6=%08X r7=%08X r8=%08X r9=%08X r10=%08X",
+                    (unsigned)c->Gpr3, (unsigned)c->Gpr4, (unsigned)c->Gpr5, (unsigned)c->Gpr6,
+                    (unsigned)c->Gpr7, (unsigned)c->Gpr8, (unsigned)c->Gpr9, (unsigned)c->Gpr10);
+    /* São candidatos a retorno, não um desenrolamento dos prólogos. Folhas e chamadas de cauda
+       podem omitir quadros. Iar e Lr continuam sendo registrados separadamente. */
+    for (unsigned i = 0; i < 12; i++) {
+        if (!Pilha360_Proximo(inicio, atual, LerPilha, &anterior, &retorno)) {
+            Diario_Escrever("CRASH pilha: fim ou elo inválido em %08X (quadro %u)", atual, i);
+            break;
+        }
+        Diario_Escrever("CRASH pilha %u: r1=%08X anterior=%08X retorno=%08X", i, atual, anterior, retorno);
+        atual = anterior;
+    }
+}
+
 static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
     if (p != NULL && p->ExceptionRecord != NULL && p->ContextRecord != NULL) {
         unsigned acesso = 0, onde = 0;
@@ -167,6 +195,10 @@ static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
                         (unsigned)p->ExceptionRecord->ExceptionCode, (unsigned)p->ContextRecord->Iar,
                         (unsigned)p->ContextRecord->Lr, (unsigned)p->ContextRecord->Gpr1,
                         acesso ? "escrevendo" : "lendo", onde, gPortStage);
+        Diario_Escrever("CRASH thread=%u jogo=%u gravação=%u desenho=%u vblank=%u quadro=%u luta_desde=%u",
+                        (unsigned)GetCurrentThreadId(), (unsigned)gThreadJogo, (unsigned)gThreadGravacao,
+                        (unsigned)gThreadDesenho, gPortVBlanks, gGsFrame, gX360Luta);
+        RegistrarPilha(p->ContextRecord);
     } else {
         Diario_Escrever("CRASH sem contexto (fase: %s)", gPortStage);
     }
@@ -227,6 +259,7 @@ static DWORD WINAPI Jogo(LPVOID arg) {
     if (MpegMede_Rodar()) { /* (F6, etapa 6) BT3_MPEG_MEDE=1: só a medição do decodificador dos filmes, e sai */
         Port_Sair(0);
     }
+    gPortStage = "jogo: inicialização";
     r = __real_main(1, argv);
     Port_Sair(r);
     return 0;

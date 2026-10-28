@@ -57,6 +57,7 @@ void Estado_Resumo(void) {
 void Port_Sair(int codigo);
 void Port_X360FecharSaida(void); /* posix360.c */
 int Passos_Medindo(void);        /* port/x360/headless/passos.c */
+extern const char *volatile gPortStage;
 extern int *gProgress; /* include/menu/menu_a.h, MenuProgress: o modo da tela está em +0x18 */
 
 void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
@@ -65,6 +66,7 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
     static unsigned ate = 0xFFFFFFFFu;
     static int modo = -1, luta = 0;
     (void)fightSize;
+    gPortStage = fight != NULL ? "jogo: luta" : "jogo: menus ou carga";
     QueryPerformanceCounter(&agora);
     if (sModo < 0) {
         const char *caminho = getenv("BT3_HASH");
