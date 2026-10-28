@@ -1,0 +1,9 @@
+# F7, etapa 2: vencer o primeiro do ranking de Disc Fusion (desafio para cima) dá o item de prêmio e leva ao topo
+# (menu_n_c.c:665-666, menu_n_d.c:154). Estado: segundo lugar (posição 1; 99 é o centésimo, save.c:138).
+marco discfusion_topo
+evento desafiar e vencer o primeiro lugar pelo fluxo do jogo, salvar em Opções
+exige discfusion.posicao = 99
+exige item[0x7F] = 0
+escreve discfusion.posicao = 1
+depois discfusion.posicao = 0
+depois item[0x7F] tem 1

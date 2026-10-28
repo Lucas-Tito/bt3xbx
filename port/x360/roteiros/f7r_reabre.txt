@@ -1,0 +1,6 @@
+# F7, etapa 2: reabrir o cartão pela carga normal (boot, McFlow 19 e 20, Continue) e conferir em memória o marco da
+# receita da BT3_RECEITA; nada se grava.
+inclui save_continua.txt
+receita confere depois
+quadros 60
+fim

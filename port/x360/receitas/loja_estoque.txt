@@ -1,0 +1,10 @@
+# F7, etapa 2: compra na loja do Evolution Z (Shop_Init/compra, menu_v_d.c:276-291,1111-1123): item listado e vendido
+# com nível de estoque até loja.nivel, saldo suficiente, não possuído; a compra liga posse e debita. Estado: dinheiro
+# pelo setter do jogo (Save_AddMoney); 500.000 ainda não foi conferido contra os preços do nível 0 do manifesto.
+# O item comprado e o preço exatos (manifesto da etapa 1) ainda não são conferidos: só o débito. Pendente na etapa 6.
+marco loja_estoque
+evento comprar o primeiro item da lista da loja e sair do Evolution Z (DcSave_Start grava)
+exige dinheiro = 0
+exige loja.nivel = 0
+chama Save_AddMoney 500000
+depois dinheiro <= 499999        # alguma compra debitou (nenhuma outra saída de dinheiro nesse fluxo)

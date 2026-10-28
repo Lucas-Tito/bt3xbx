@@ -1,0 +1,6 @@
+# F7, etapa 2: reabrir pela carga normal o cartão de antes do marco (f7r_antes.txt) e conferir em memória o estado da
+# receita da BT3_RECEITA; nada se grava.
+inclui save_continua.txt
+receita confere antes
+quadros 60
+fim

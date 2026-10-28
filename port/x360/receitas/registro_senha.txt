@@ -1,0 +1,11 @@
+# F7, etapa 2: uma senha válida digitada no Data Center grava um registro (DcPass_StoreRec, menu_z_d.c:426-431) e o
+# Data Center liga o bit 1 de datacenter.flags na primeira visita (menu_z_c.c:146-148). A senha é gerada pelo próprio
+# codificador do jogo (ChrPass_Encode) no teste, nunca extraída nem versionada. Estado: o do New Game (14 registros
+# vazios, chara -1).
+marco registro_senha
+evento digitar no Data Center uma senha gerada pelo codificador para um personagem liberado, gravar no registro 0
+exige registro.chara[0..13] = -1
+exige datacenter.flags = 0
+depois registro.chara[0] >= 0
+depois registro.chara[1..13] = -1
+depois datacenter.flags tem 1

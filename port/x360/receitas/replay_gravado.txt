@@ -1,0 +1,7 @@
+# F7, etapa 2: um replay gravado vai para um arquivo próprio do cartão, não para o save (McFlow 5, menu_za_d.c:527-533;
+# mcflow_a.c:158-173,2019: BASLUS-21678DBZT3R00..R06, 0x1AC00 bytes). Estado: o do New Game.
+marco replay_gravado
+evento duelo 1P/COM, ver o replay no resultado, gravar no slot 0 (ReplayMenu, McFlow 5)
+exige registro.chara[0] = -1
+arquivo BASLUS-21678DBZT3R00 0x1AC00
+depois registro.chara[0] = -1

@@ -1,0 +1,9 @@
+# F7, etapa 2: a Sobrevivência abre no 30º ganho (MisResult_Init, menu_p_b.c:163-166, bit 1 de ultimate.flags). A mesma
+# receita do piloto f7_missao29 ("prepara missoes 29", roteiro.c), escrita como receita: 29 cumpridas (1..29), a 0 inédita.
+marco missao_trinta
+evento ganhar a missão 0 pelo fluxo do jogo (f7r_missao_trinta.txt) e salvar em Opções
+exige missao.cumprida[0..99] = 0
+exige ultimate.flags = 0
+escreve missao.cumprida[1..29] = 1
+depois missao.cumprida[0] = 1
+depois ultimate.flags tem 1

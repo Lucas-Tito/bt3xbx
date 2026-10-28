@@ -1,0 +1,42 @@
+# F7, etapa 2: a receita missao_ultima (99 cumpridas) e a missão 99 (página 20, linha 5) ganha pelo fluxo do jogo,
+# vitória pelo dano do jogo; o centésimo ganho dá o bit e o item; salva em Opções.
+inclui boot_novo.txt
+receita aplica missao_ultima
+receita confere antes missao_ultima
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+aperta BAIXO                      # Missão 100
+quadros 30
+aperta X ate tela 14 max 600
+quadros 200
+aperta DIREITA 19                 # página 20 (MisSel_Input: direita passa a página)
+quadros 30
+aperta BAIXO 4                    # linha 5: a missão 99
+quadros 30
+aperta X                          # abre a janela da missão
+quadros 60
+aperta X ate tela 15 max 1200     # escolhe
+quadros 300
+repete ate luta max 6000          # o time: X escolhe e DIREITA muda o personagem, a forma, a cor ou a placa
+    aperta X
+    quadros 30
+    aperta DIREITA
+    quadros 30
+volta
+quadros 60
+termina luta vence max 20000
+espera tela 16 max 6000           # MisResult
+quadros 150
+repete ate tela 14 max 6000       # a contagem, a folha, o pagamento e as recompensas
+    aperta X
+    quadros 60
+volta
+receita confere depois missao_ultima
+aperta TRIANGULO ate tela 4 max 2000
+quadros 150
+aperta CIMA 2
+inclui f7r_salva.txt
+receita confere depois missao_ultima
+fim

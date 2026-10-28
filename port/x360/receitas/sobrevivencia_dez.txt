@@ -1,0 +1,14 @@
+# F7, etapa 2: dez adversários vencidos num curso de Sobrevivência dão o item de prêmio uma vez (SurvResult_Init,
+# menu_s_c.c:116-121: bit 8 de ultimate.flags, item 0x6A; vale também na derrota). Estado: a Sobrevivência aberta pelo
+# 30º ganho (30 missões cumpridas, bit 1) e nenhum recorde.
+marco sobrevivencia_dez
+evento curso 0, dez adversários derrubados e então o lutador do jogador (termina luta perde apos 10), salvar em Opções
+exige missao.cumprida[0..99] = 0
+exige ultimate.flags = 0
+exige sobrevivencia.vencidos[0..2] = 0
+exige item[0x6A] = 0
+escreve missao.cumprida[0..29] = 1
+ou ultimate.flags = 1
+depois sobrevivencia.vencidos[0] = 10
+depois ultimate.flags tem 8
+depois item[0x6A] tem 1

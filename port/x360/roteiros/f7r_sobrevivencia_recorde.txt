@@ -1,0 +1,36 @@
+# F7, etapa 2: a receita sobrevivencia_recorde e o curso 0 da Sobrevivência: 3 adversários derrubados pelo dano do jogo, um depois do
+# outro, e então o lutador do jogador (o fim é o do jogo); resultado, salvar em Opções.
+inclui boot_novo.txt
+receita aplica sobrevivencia_recorde
+receita confere antes sobrevivencia_recorde
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+aperta BAIXO 2                    # Sobrevivência (a terceira placa, aberta pelo bit 1 de ultimate.flags)
+quadros 30
+aperta X ate tela 17 max 600
+quadros 200
+aperta X                          # abre a janela do curso 0
+quadros 60
+aperta X ate tela 18 max 1200     # escolhe
+quadros 300
+repete ate luta max 6000          # o lutador: X no personagem, nas placas e na cor
+    aperta X
+    quadros 60
+volta
+quadros 60
+termina luta perde apos 3 max 40000
+espera tela 19 max 6000           # SurvResult
+quadros 150
+repete ate tela 17 max 6000       # a contagem, a folha, o pagamento e o prêmio
+    aperta X
+    quadros 60
+volta
+receita confere depois sobrevivencia_recorde
+aperta TRIANGULO ate tela 4 max 2000
+quadros 150
+aperta CIMA 2
+inclui f7r_salva.txt
+receita confere depois sobrevivencia_recorde
+fim

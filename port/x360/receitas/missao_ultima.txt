@@ -1,0 +1,18 @@
+# F7, etapa 2: o centésimo ganho de Missão 100 liga o bit 4 de ultimate.flags e dá o item de prêmio
+# (MisResult_MarkCleared, menu_p_b.c:42-44; MisResult_Init, menu_p_b.c:172-175, UbScore_GetRewardItem(2)).
+# Estado: 99 cumpridas (0..98), a 99 inédita na página 20 (missao.paginas = 20, como o SimEv17 deixa), o bit do 30º
+# ganho e o item do 50º, dado pelo setter do jogo. Recordes e dinheiro das 99 não reproduzidos (o marco não os lê).
+marco missao_ultima
+evento ganhar a missão 99 (página 20, linha 5) pelo fluxo do jogo (f7r_missao_ultima.txt) e salvar em Opções
+exige missao.cumprida[0..99] = 0
+exige ultimate.flags = 0
+exige missao.paginas = 5
+exige item[0x57] = 0
+exige item[0x6B] = 0
+escreve missao.cumprida[0..98] = 1
+escreve missao.paginas = 20
+ou ultimate.flags = 1
+chama Save_AddItem 0x57
+depois missao.cumprida[99] = 1
+depois ultimate.flags tem 4
+depois item[0x6B] tem 1

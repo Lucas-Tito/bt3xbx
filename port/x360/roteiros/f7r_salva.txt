@@ -1,0 +1,16 @@
+# F7, etapa 2: salvar pela página de Opções (McFlow_Start(0), como no opcoes.txt), do menu principal com o cursor já
+# em Opções. Sem "fim": incluído pelos roteiros f7r_*.
+aperta X ate tela 62 max 600      # Option
+quadros 150
+aperta X                          # salvar/carregar (o cursor começa nele)
+quadros 40
+aperta X                          # salvar
+espera mcflow 12 max 300          # "salvar?"
+repete ate mcflow 0 max 3000      # cada pergunta começa no "não": ESQUERDA e X
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+marca salvo
+quadros 90
