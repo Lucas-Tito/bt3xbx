@@ -956,7 +956,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   a integração da `.text` dos conferentes F5/F6 e os caminhos das medidas estão em
   [medicoes/roteiros-rapido.md](medicoes/roteiros-rapido.md). Cada execução grava sua duração em `tempos.tsv`.
   Na comparação entre modos, os caminhos absolutos são normalizados para o mesmo arquivo lógico e os dois
-  ponteiros temporários `gColWalkBox`/`gColWalkCtx` usam a dispensa já existente; o restante da memória é byte a byte.
+  ponteiros temporários `gColWalkBox`/`gColWalkCtx` usam a dispensa já existente. A primeira equivalência das Opções
+  mostrou também endereços malloc de `sMapa` e do IOP de `SndMgr`, e restos livres/enchimento do heap.
+  O comparador preserva NULL contra não NULL e aplica as mesmas exclusões de `memdiff --so-em-uso`;
+  dados vivos, cabeçalhos e rodapés continuam byte a byte. Controles nas duas ordens de bytes provam os limites.
   Cada arquivo de páginas é recalculado sobre o dump original pela libxxhash, antes de normalizar os caminhos.
   `REUSA=1` continua julgando todas as memórias e imagens; uma cópia estragada precisa falhar também neste modo.
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**

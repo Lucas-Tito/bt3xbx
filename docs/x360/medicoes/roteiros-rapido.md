@@ -91,8 +91,14 @@ iguais; subalocações e PPM byte a byte; capturas no mesmo quadro/vblank.
 A memória também é byte a byte, salvo os caminhos do host em `sMc.path`,
 `gPortAdxView.path` e `gPortMoviePath`, normalizados para o mesmo arquivo
 lógico, e os dois ponteiros de locais da pilha `gColWalkBox`/`gColWalkCtx`.
-São as mesmas dispensas já justificadas em `DIFERENTES_CONHECIDAS`, sem
-abrir outra. O nome lógico do arquivo e os campos numéricos continuam
+Também se normalizam os endereços malloc de `sMapa` e dos campos IOP de
+`SndMgr`, preservando NULL contra não NULL. São ponteiros do host já tratados
+em `DIFERENTES_CONHECIDAS`. No heap se excluem apenas bytes livres, enchimento
+e `unk1C`, como em `memdiff --so-em-uso`; cabeçalhos, tamanhos, rodapés e dados
+vivos continuam obrigatórios. A comparação bruta das Opções falhou nesses
+bytes entre processos, embora as provas oficiais dos dois modos passassem.
+Os controles exercitam dados vivos, metadados e as exclusões nas duas ordens
+de bytes; alterar um dado vivo, mesmo recalculando suas páginas, reprova. O nome lógico do arquivo e os campos numéricos continuam
 obrigatórios. As páginas são recalculadas sobre cada dump original pela
 `libxxhash.so.0`, antes da normalização, para provar sua integridade. `--mutantes` vê alteração e ausência de memória, imagem e hash
 falharem com saída 1. `teste_memorias.py` exercita três destinos em dois

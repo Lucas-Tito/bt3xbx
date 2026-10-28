@@ -4,6 +4,8 @@ import argparse
 import ctypes
 import ctypes.util
 import re
+import struct
+import memdiff
 from pathlib import Path
 import sys
 import tempfile
@@ -16,8 +18,8 @@ def exigir(c, motivo):
 
 
 # Os campos abaixo já estão em DIFERENTES_CONHECIDAS de roteiros.py. Aqui a
-# comparação é da mesma arquitetura: só caminhos do host e dois locais da pilha
-# podem variar. O restante, inclusive números de sMc/PortAdxView, é byte a byte.
+# comparação é da mesma arquitetura e conserva os dados vivos, com as mesmas
+# exclusões de --so-em-uso. Números de sMc/PortAdxView continuam byte a byte.
 SIMBOLOS = {}
 XXH = ctypes.CDLL(ctypes.util.find_library('xxhash') or 'libxxhash.so.0')
 XXH.XXH3_64bits.argtypes = (ctypes.c_void_p, ctypes.c_size_t)
@@ -35,7 +37,7 @@ def simbolos(alvo):
         linhas = [l.split() for l in r.stdout.splitlines()]
         SIMBOLOS[alvo] = {q[-1]: (int(q[0], 16), int(q[1], 16)) for q in linhas if len(q) == 4}
         for q in linhas:
-            if len(q) == 3 and q[-1] in ('gColWalkBox', 'gColWalkCtx'):
+            if len(q) == 3 and q[-1] in ('gColWalkBox', 'gColWalkCtx', 'gSndMgr'):
                 SIMBOLOS[alvo][q[-1]] = (int(q[0], 16), 4)
     return SIMBOLOS[alvo]
 
@@ -55,10 +57,44 @@ def caminho(dados, raiz, cartao):
     return texto.ljust(len(dados), b'\0')
 
 
+def ponteiro_host(dados, endian):
+    valor = int.from_bytes(dados, endian)
+    exigir(valor == 0 or valor >= 0x10000000 and valor % 4 == 0, 'ponteiro do host inválido')
+    # Preserva NULL contra não NULL; só o endereço alocado no host pode variar.
+    return int(bool(valor)).to_bytes(4, endian)
+
+
+def heap_vivo(dados, addr, be, snd):
+    endian = 'big' if be else 'little'
+    fmt = '>' if be else '<'
+    blocos = memdiff.blocos(dados, be)
+    exigir(blocos, 'heap sem blocos válidos')
+    for off, tam in blocos:
+        exigir(tam >= 0x24, 'bloco do heap menor que cabeçalho e rodapé')
+        usado = struct.unpack_from(fmt + 'I', dados, off + 4)[0]
+        exigir(usado in (0, 1), 'estado inválido no bloco do heap')
+        dados[off + 0x1C:off + 0x20] = bytes(4)
+        if not usado:
+            dados[off + 0x20:off + tam - 4] = bytes(tam - 0x24)
+            continue
+        data, pedido = struct.unpack_from(fmt + 'II', dados, off + 0x14)
+        ini = data - addr
+        exigir(off + 0x20 <= ini <= ini + pedido <= off + tam - 4, 'dados fora do bloco do heap')
+        dados[off + 0x20:ini] = bytes(ini - off - 0x20)
+        dados[ini + pedido:off + tam - 4] = bytes(off + tam - 4 - ini - pedido)
+        if data == snd:
+            exigir(pedido == 0x2A8, 'SndMgr com tamanho inesperado')
+            # include/sys/snd.h: SndBank.seqIop/hdIop e SndMgr.iopBuf.
+            for d in [k * 0x4C + j for k in range(8) for j in (4, 8)] + [0x260]:
+                dados[ini + d:ini + d + 4] = ponteiro_host(dados[ini + d:ini + d + 4], endian)
+    return dados
+
+
 def memoria(p, raiz):
     bruto = p.read_bytes()
     regioes, paginas = [], []
     o = 0
+    snd = None
     alvo = 'ppc' if p.name == 'hq.txt.dump' else 'x86'
     while o < len(bruto):
         fim = bruto.index(b'\n', o)
@@ -71,6 +107,16 @@ def memoria(p, raiz):
             paginas.append(f'{nome.decode()} {addr + off:x} {xxh(bytes(dados[off:off + 4096])):016x}')
         if nome == b'globals':
             syms = simbolos(alvo)
+            a_snd, _ = syms['gSndMgr']
+            if addr <= a_snd and a_snd + 4 <= addr + tam:
+                snd = int.from_bytes(dados[a_snd - addr:a_snd - addr + 4], 'big' if alvo == 'ppc' else 'little')
+            # sMapa é o ponteiro malloc do conversor, não estado do jogo. Na PPC
+            # seus outros campos e todos os dados convertidos continuam comparados.
+            if alvo == 'ppc' and 'sMapa' in syms:
+                a_mapa, n_mapa = syms['sMapa']
+                if addr <= a_mapa and a_mapa + n_mapa <= addr + tam:
+                    exigir(n_mapa == 4, 'sMapa com tamanho inesperado')
+                    dados[a_mapa - addr:a_mapa - addr + 4] = ponteiro_host(dados[a_mapa - addr:a_mapa - addr + 4], 'big')
             for s in ('gColWalkBox', 'gColWalkCtx'):
                 a, n = syms[s]
                 if addr <= a and a + n <= addr + tam:
@@ -85,6 +131,8 @@ def memoria(p, raiz):
                     ini = a - addr + k + desloc
                     fimcampo = ini + (n or tamanho)
                     dados[ini:fimcampo] = caminho(bytes(dados[ini:fimcampo]), raiz, s == 'sMc')
+        if nome == b'heap':
+            dados = heap_vivo(dados, addr, alvo == 'ppc', snd)
         regioes.append((nome, addr, bytes(dados)))
     exigir(regioes, f'dump vazio: {p.name}')
     arquivo_paginas = Path(str(p).removesuffix('.dump') + '.pages')
@@ -135,10 +183,37 @@ def comparar(a, b):
         exigir([l for l in x if l.startswith('imagem:')] == [l for l in y if l.startswith('imagem:')],
                f'momento de captura diferente: {alvo}')
     print(f'equivalência: {total} arquivos/provas iguais; imagens byte a byte; memórias byte a byte salvo\n'
-          'caminhos do host e gColWalkBox/gColWalkCtx já explicados no critério; páginas íntegras')
+          'caminhos/ponteiros do host e exclusões de --so-em-uso; páginas íntegras')
 
 
 def mutantes():
+    for be, fmt in ((False, '<'), (True, '>')):
+        usado = struct.pack(fmt + '8I', memdiff.MAGIC, 1, 0, 0x20, 0x40, 0x1020, 8, 0)
+        usado += bytes(0x1C) + struct.pack(fmt + 'I', 0x40)
+        livre = struct.pack(fmt + '8I', memdiff.MAGIC, 0, 0, 0x20, 0x40, 0, 0x20, 0)
+        livre += bytes(0x1C) + struct.pack(fmt + 'I', 0x40)
+        original = usado + livre
+        esperado = heap_vivo(bytearray(original), 0x1000, be, None)
+        for off in (0x1C, 0x28, 0x60):
+            copia = bytearray(original)
+            copia[off] ^= 1
+            exigir(heap_vivo(copia, 0x1000, be, None) == esperado, 'exclusão do alocador incorreta')
+        for off in (8, 0x20, 0x24):
+            copia = bytearray(original)
+            copia[off] ^= 1
+            exigir(heap_vivo(copia, 0x1000, be, None) != esperado, 'dado vivo ou metadado escondido')
+        snd = bytearray(struct.pack(fmt + '8I', memdiff.MAGIC, 1, 0, 0x20, 0x2D0, 0x1020, 0x2A8, 0))
+        snd += bytes(0x2AC) + struct.pack(fmt + 'I', 0x2D0)
+        for valor in (0x40000000, 0x50000000):
+            struct.pack_into(fmt + 'I', snd, 0x24, valor)
+            atual = heap_vivo(bytearray(snd), 0x1000, be, 0x1020)
+            if valor == 0x40000000:
+                esperado = atual
+            else:
+                exigir(atual == esperado, 'endereço do host não normalizado')
+        struct.pack_into(fmt + 'I', snd, 0x24, 0)
+        exigir(heap_vivo(snd, 0x1000, be, 0x1020) != esperado, 'NULL confundido com ponteiro')
+    print('controles do heap: dados vivos e metadados sensíveis; exclusões e ponteiros conferidos nas duas ordens')
     for cartao, x, y in ((True, b'/a/mem_62/sq/card1/save', b'/b/sq/card1/save'),
                          (False, b'/a/dados/disc/som', b'/b/dados/disc/som')):
         x, y = x.ljust(600, b'\0'), y.ljust(600, b'\0')
@@ -157,8 +232,9 @@ def mutantes():
                 f = raiz / nome
                 f.parent.mkdir(parents=True, exist_ok=True)
                 f.write_bytes(b'1 0000 0000 hp 10 10\n')
-            dados = b'00001010'
-            (raiz / 'mem_62/hq.txt.dump').write_bytes(b'heap 1000 8\n' + dados)
+            dados = struct.pack('>8I', memdiff.MAGIC, 1, 0, 0x20, 0x40, 0x1020, 8, 0)
+            dados += bytes(0x1C) + struct.pack('>I', 0x40)
+            (raiz / 'mem_62/hq.txt.dump').write_bytes(b'heap 1000 40\n' + dados)
             (raiz / 'mem_62/hq.txt.pages').write_text(f'heap 1000 {xxh(dados):016x}\n')
         def cli(rc, motivo):
             r = subprocess.run([sys.executable, __file__, str(a), str(b)], capture_output=True, text=True)
@@ -167,7 +243,11 @@ def mutantes():
         for nome in ('mem_62/hq.txt.dump', 'img/ppc/teste.ppm', 'hq.txt'):
             f = b / nome
             original = f.read_bytes()
-            alterado = original[:-1] + bytes([original[-1] ^ 1]) if nome.endswith('.dump') else original.replace(b'10', b'11')
+            if nome.endswith('.dump'):
+                ini = original.index(b'\n') + 1 + 0x20
+                alterado = original[:ini] + bytes([original[ini] ^ 1]) + original[ini + 1:]
+            else:
+                alterado = original.replace(b'10', b'11')
             f.write_bytes(alterado)
             paginas = b / 'mem_62/hq.txt.pages'
             paginas_originais = paginas.read_bytes()
