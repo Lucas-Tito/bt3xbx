@@ -158,6 +158,12 @@ static int fake_pipe_get(uint32_t key) {
     return sPipeCount++;
 }
 
+#ifdef BT3_GS_ESPERAS
+#include "prefixos.h"
+#else
+#define px_progresso() ((void)0)
+#endif
+
 /* ------------------------------------------------------------------------------------------------ o fim do quadro */
 /* o hash do quadro em seções (cada uma com a sua semente), para dizer onde duas builds divergem. (degrau 2) As seções
    depois da S_TEX se fazem num hash próprio (sH), do lado do desenho: com a divisão, o sHash continua recebendo, na
@@ -432,6 +438,7 @@ static void fake_frame_end(void) {
     const uint32_t *bytes;
 #ifdef BT3_GS_ESPERAS
     const GsQuadro *g = gsQuadro;
+    if (!g->dividido) px_final(g);
 #if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
     alfa_confere(g);
 #endif
@@ -584,6 +591,7 @@ static void fake_frame_end(void) {
    fechada no ponto em que o fim do quadro a fechava, as contagens, os bytes da cadeia, o hash normal dos desenhos); e a
    regra do gs_gpu.c para o cleared da gravação: também o alvo que recebe uma imagem enviada (native 100 e 101) */
 static void fake_entrega(const GsQuadro *q, unsigned char *limpa) {
+    px_final(q);
     uint32_t i;
     sEntregue.tex = sHash;
     sHash = 1469598103934665603ull;
@@ -792,6 +800,7 @@ void __wrap_GsGpu_Draw(int type, int ctx, const struct GsVertex *v) {
     }
     if (sJanelaB == 0) {
         __real_GsGpu_Draw(type, ctx, v);
+        px_progresso();
     }
 }
 
@@ -866,10 +875,12 @@ void __wrap_GsGpu_DrawVu0(int layer, int ctx, const float *v, uint32_t n, const 
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu0(layer, ctx, v, n, c);
+    px_progresso();
         return;
     }
     t0 = tique();
     __real_GsGpu_DrawVu0(layer, ctx, v, n, c);
+    px_progresso();
     conta(layer == 5 ? F_P1 : layer == 2 ? F_P2 : layer == 3 ? F_P8 : layer == 4 ? F_P7 : F_P0, t0, n, i0);
 }
 void __wrap_GsGpu_DrawVu4(int ctx, const float *v, uint32_t n, const float *c) {
@@ -877,10 +888,12 @@ void __wrap_GsGpu_DrawVu4(int ctx, const float *v, uint32_t n, const float *c) {
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu4(ctx, v, n, c);
+    px_progresso();
         return;
     }
     t0 = tique();
     __real_GsGpu_DrawVu4(ctx, v, n, c);
+    px_progresso();
     conta(F_P4, t0, n, i0);
 }
 void __wrap_GsGpu_DrawVu6(int ctx, const float *v, uint32_t n, const float *c) {
@@ -888,10 +901,12 @@ void __wrap_GsGpu_DrawVu6(int ctx, const float *v, uint32_t n, const float *c) {
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu6(ctx, v, n, c);
+    px_progresso();
         return;
     }
     t0 = tique();
     __real_GsGpu_DrawVu6(ctx, v, n, c);
+    px_progresso();
     conta(F_P6, t0, n, i0);
 }
 

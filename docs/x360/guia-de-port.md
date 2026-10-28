@@ -2456,3 +2456,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `BT3_ALFA_CONFERE=1` repete a varredura somente na amostra periódica e acusa diferenças no diário;
   essa abertura tem custo de oráculo e não serve para anunciar ganho em U. Nenhuma leitura dos buffers
   combinados foi movida para depois de Present. Os metadados viajam no mesmo rodízio das listas.
+
+### Ensaio dos prefixos no falso (F5, gravação, seção 35)
+
+- `BT3_GS_PREFIXOS=1` existe somente no backend falso. Publica até `drawCount-1`, pois a última vaga
+  ainda pode fundir. Uma fila de oito descritores tem um consumidor e drena antes da entrega normal;
+  o consumidor confere novamente os dados referidos, a sequência e versões lógicas de alvos. Atrasos
+  de 1/5/20 ms cobrem a primeira leitura de cada quadro. Não há interpretação de D3D concorrente.
+- Fechar geometria não libera o desenho: o ensaio marca explicitamente as cinco dependências integrais
+  do backend original. `liberados 0` significa que a fila apenas provou fechamento; não medir esse número
+  como ganho nem anunciar o ensaio como GPU progressiva. A versão lógica de alvo não é um snapshot dos
+  recursos D3D. Trocar o plano da EDRAM/DATE/Z e a entrega de versões continua exigindo suas próprias provas.
