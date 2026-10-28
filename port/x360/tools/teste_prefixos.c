@@ -12,9 +12,37 @@ float *gsVuVerts;
 uint32_t *gsVuIdx;
 Vu0Uniform *gsVuUni;
 int gsTargetCount;
+static uint32_t sPipeKey[4] = {0x10400u, 0x11400u, 0x410400u, 0x10800u}; /* 0 sem z, 1 escreve z, 2 fx, 3 testa z */
 #include "../headless/prefixos.h"
+/* (seção 36) as regras reais: visitas com e sem z, um DATE curto, um longo e o último marcador, em ordem */
+static void regras(void) {
+    GsDraw d[80];
+    GsQuadro q;
+    unsigned rel[80], i;
+    PxCenso c;
+    const char *m = getenv("BT3_PREFIXOS_MUTANTE");
+    memset(d, 0, sizeof(d)); memset(&q, 0, sizeof(q));
+    for (i = 0; i < 80; i++) { d[i].count = 1; d[i].target = 0; d[i].scissor[2] = 64; d[i].scissor[3] = 64; }
+    d[0].pipeline = 1;                         /* visita 0 com z no primeiro: decide em 0 */
+    d[1].target = 1; d[2].target = 1;          /* visita do 1 sem z: decide na troca, o 3 */
+    d[3].pipeline = 3;                         /* volta ao 0, testa z: decide em 3 */
+    d[4].native = 5;                           /* DATE curto: o próximo marcador é o 10 */
+    d[10].native = 5;                          /* DATE longo: o próximo é o 75 (65 adiante) */
+    d[75].native = 5;                          /* o último: até o fim, 5 adiante, curto */
+    d[76].target = 2; d[77].target = 2; d[78].target = 2; d[79].target = 2; /* visita final sem z: só no fim */
+    if (m && !strcmp(m, "regra_z")) d[3].pipeline = 0;
+    if (m && !strcmp(m, "regra_date")) d[10].native = 0;
+    q.draws = d; q.drawCount = 80; q.targetCount = 3;
+    px_regras(&q, sPipeKey, rel, &c);
+    px_exige(rel[0] == 1 && rel[1] == 4 && rel[2] == 4 && rel[3] == 4, "regra: z da visita");
+    px_exige(rel[4] == 10 && rel[9] == 10 && rel[10] == 11, "regra: DATE curto espera, longo não");
+    px_exige(rel[75] == 80 && rel[76] == 80 && c.liberados == 75, "regra: o último marcador e a visita final");
+    px_exige(c.dateLongos == 1 && c.zmax == 4, "regra: contagens");
+    puts("prefixos2: regras de z, DATE curto/longo e ordem: tudo certo");
+}
 int main(void) {
     GsQuadro q;
+    regras();
     GsDraw d[33];
     Vtx v[33];
     unsigned i;

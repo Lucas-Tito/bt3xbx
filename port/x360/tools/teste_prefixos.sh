@@ -13,9 +13,12 @@ for alvo in x86 ppc; do
     for atraso in 0 1 5 20; do
         env BT3_GS_PREFIXOS=1 BT3_PREFIXOS_ATRASO=$atraso "${exe[@]}" "$P/$alvo"
     done
-    for mutante in ordem versao barreira liberacao; do
-        if env BT3_GS_PREFIXOS=1 BT3_PREFIXOS_MUTANTE=$mutante "${exe[@]}" "$P/$alvo"; then echo "FALHA: $mutante aceito"; exit 1; fi
-        echo "$alvo: $mutante recusado"
+    for modo in 1 2; do
+        for mutante in ordem versao barreira liberacao regra_z regra_date; do
+            if env BT3_GS_PREFIXOS=$modo BT3_PREFIXOS_MUTANTE=$mutante "${exe[@]}" "$P/$alvo"; then echo "FALHA: $mutante aceito"; exit 1; fi
+            echo "$alvo: modo $modo, $mutante recusado"
+        done
     done
+    env BT3_GS_PREFIXOS=2 "${exe[@]}" "$P/$alvo"
 done
 echo 'tudo certo'
