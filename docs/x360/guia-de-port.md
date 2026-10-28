@@ -2259,3 +2259,20 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   por SHA256, carimbos, SHA1 da `.text` e filmes completos. Continua as redes independentes para diagnosticar,
   mas sai 1 em qualquer falha. `FIM` sozinho é término. As propostas antigas de p99 de trabalho não substituem
   o zero de imagens longas no combate da decisão 27; a soma de custo do som ainda tem limite próprio.
+- **No WSL, espaço livre no ext4 não mede o espaço do Windows.** Em 28/10 a rodada F6 encheu o disco do
+  Windows e morreu após quatro roteiros, apesar de `df` mostrar centenas de GiB livres no volume virtual.
+  Guardar todos os rastreios, partes, convertidos, dumps e imagens acumulou cerca de 16 GiB só nesta rodada.
+  Após julgamento, conservar logs textuais, gdb, rastro de som para negativos, carimbos e hashes; apagar os
+  intermediários de cada caso imediatamente. `f6_final_arquivo.py` não segue links e registra o descarte em
+  `retencao.json`. Isso impede repetir `REUSA=1` sobre o caso compactado; os logs conservam o julgamento,
+  não os insumos de uma nova comparação. Reservar provisoriamente 16 GiB adicionais no disco físico para
+  um caso ativo e a ISO, sem contar os dados existentes; `espaco.json` mede o pico amostrado a cada 20 s.
+  Os 40 GB disponíveis nesta retomada bastam para essa reserva, sem acumular saídas entre casos.
+- **Retomar conserva reprovações e proveniência.** `f6_final.sh COMMIT BASE DESTINO --retomar` valida a
+  origem, os SHA256 dos logs, worktrees limpos e os cinco carimbos. Pula todo caso já registrado, inclusive
+  falha; uma interrupção sem registro refaz só esse caso. Metadados são publicados por troca atômica.
+  O executor pode mudar apenas ferramentas/documentos/ambientes, mantendo os fontes ensaiados. Sua revisão
+  fica em `executores.txt`; não chamar builds antigas de builds do executor novo. Novas durações usam
+  `$SECONDS`: o relógio civil recuou 1 s na rodada original e deixou `filme-build` com duração negativa.
+  Esse registro é preservado e recusado pelo conferente. Um `.sh` versionado sem bit executável deve ser
+  invocado por `bash`; a tentativa original recusada permanece na tabela, com novo caso explícito para o teste.

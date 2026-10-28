@@ -10,6 +10,7 @@ import sys
 import tempfile
 
 from f5_final_confere import objetos, save_mc
+from f6_final_arquivo import atomico, compactar, conferir
 
 ROTEIROS = ('f5_duelo f5_treino duelo duelo_time treino opcoes historia historia_novo '
             'historia_perde ultimate missao sobrevivencia simdragon discfusion torneio '
@@ -19,7 +20,7 @@ FIXOS = ['build-base', 'build-final', 'objetos', 'text', 'inventario', 'cores', 
          'som-controles', 'filme-testes', 'filme-blocos', 'filme-build', 'filme-op-x86',
          'filme-op-ppc', 'filme-op-compara', 'filme-ed-x86', 'filme-ed-ppc', 'filme-ed-compara',
          'filme-referencia-upstream', 'deriva', 'save-mc', 'save-mc-julgamento', 'save-entre',
-         'soma', 'limpeza', 'negativos']
+         'soma', 'limpeza', 'negativos', 'negativos-retomada', 'filme-testes-bash']
 CASOS = FIXOS + ['roteiro-' + n for n in ROTEIROS]
 TEXT = '43444ea4d03a6d448aa1ae74a631e35b356a7caa'
 
@@ -58,8 +59,8 @@ def julgar(pasta):
     falhas = []
     for r in casos:
         log = pasta / (r['nome'] + '.log')
-        exigir(isinstance(r['rc'], int) and isinstance(r['segundos'], (int, float))
-               and r['segundos'] >= 0, 'resultado sem código ou duração')
+        exigir(isinstance(r['rc'], int) and isinstance(r['segundos'], (int, float)),
+               'resultado sem código ou duração')
         exigir(log.is_file() and log.stat().st_size > 0, f'log ausente/vazio: {r["nome"]}')
         exigir(hashlib.sha256(log.read_bytes()).hexdigest() == r['sha256'],
                f'log alterado: {r["nome"]}')
@@ -67,6 +68,8 @@ def julgar(pasta):
         print(f'| {r["nome"]} | {r["rc"]} | {r["segundos"]:.1f} s | {log.name} |')
         if r['rc'] != 0:
             falhas.append(r['nome'])
+        if r['segundos'] < 0:
+            falhas.append(r['nome'] + ' (duração inválida, relógio civil recuou)')
     exigir(not falhas, 'casos reprovados: ' + ', '.join(falhas))
     for alvo in ('x86', 'x86r', 'ppc', 'x86a', 'ppca'):
         c = (pasta / 'final/port/build' / alvo / 'CARIMBO').read_text().strip()
@@ -135,6 +138,40 @@ def negativos():
         subprocess.run(['gcc', '-g', '-c', str(fonte), '-o', str(p / 'final/obj/jogo.o')], check=True)
         cli(['objetos', p / 'base', p / 'final'], 1, 'objeto fora dos testes diferente')
         print('controle objeto do jogo alterado: saída 1 confirmada')
+        # Cópias sintéticas para a retomada e o descarte, sem qualquer dado do jogo.
+        q = p / 'retomada'; q.mkdir()
+        atomico(q / 'origem.json', dict(commit='a' * 40, base='b' * 40))
+        (q / 'teste.log').write_text('resultado\n')
+        linha = dict(nome='teste', rc=1, segundos=2,
+                     sha256=hashlib.sha256((q / 'teste.log').read_bytes()).hexdigest())
+        atomico(q / 'casos.json', [linha])
+        conferir(q, 'a' * 40, 'b' * 40)
+        arquivo = Path(__file__).with_name('f6_final_arquivo.py')
+        def recusa(motivo):
+            r = subprocess.run([sys.executable, str(arquivo), 'conferir', str(q),
+                                'a' * 40, 'b' * 40], capture_output=True, text=True)
+            exigir(r.returncode == 1 and motivo in r.stdout, 'retomada aceitou ' + motivo)
+            print('controle retomada ' + motivo + ': saída 1 confirmada')
+        atomico(q / 'origem.json', dict(commit='c' * 40, base='b' * 40))
+        recusa('origem diferente')
+        atomico(q / 'origem.json', dict(commit='a' * 40, base='b' * 40))
+        atomico(q / 'casos.json', [linha, linha]); recusa('duplicado')
+        atomico(q / 'casos.json', [linha])
+        (q / 'teste.log').write_text('estrago\n'); recusa('log alterado')
+        (q / 'teste.log').unlink(); recusa('log alterado')
+        d = q / 'roteiros/teste'; d.mkdir(parents=True)
+        (d / 'gdb.txt').write_text('prova\n')
+        (d / 'som_a.txt').write_text('controle posterior\n')
+        (d / 'rastreio.tsv').write_text('intermediário\n')
+        externo = p / 'somente-leitura'; externo.mkdir()
+        (externo / 'intocavel.bin').write_bytes(b'abc')
+        (d / 'dados').symlink_to(externo, target_is_directory=True)
+        compactar(q, 'roteiro-teste')
+        exigir((d / 'gdb.txt').read_text() == 'prova\n' and (d / 'som_a.txt').exists()
+               and not (d / 'rastreio.tsv').exists() and not (d / 'dados').exists()
+               and (externo / 'intocavel.bin').read_bytes() == b'abc', 'retenção incorreta')
+        compactar(q, 'roteiro-teste')
+        print('retenção: relatórios preservados, intermediários apagados, link não seguido, idempotente')
     print('negativos: tudo certo')
 
 
