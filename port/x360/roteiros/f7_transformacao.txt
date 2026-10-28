@@ -1,0 +1,53 @@
+# F7: id 1, traje 0 e variante 0, adversário 25 e arena 5, sem desbloqueio nem recurso injetado.
+inclui boot_novo.txt
+rastreia luta
+quadros 90
+aperta BAIXO 3
+aperta X ate tela 38
+quadros 120
+aperta X
+quadros 40
+aperta X
+espera tela 39 max 600
+quadros 150
+aperta DIREITA                    # segunda célula, Goku (Mid), id 1
+aperta X                         # grade
+quadros 60
+aperta X                         # forma base
+quadros 60
+aperta X                         # nenhum conjunto de itens
+quadros 60
+aperta X                         # traje 0
+quadros 60
+aperta DIREITA 3                  # COM: quinta célula, Kuririn 25
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta BAIXO 4
+quadros 30
+aperta X
+espera luta max 3000
+marca ponto carga
+espera seq 3 max 1200
+confere luta 1 0 25 0 5 0 4 13
+confere membro 0 1 0 0 0 99999
+marca negativo_antes
+aperta R3
+quadros 30
+confere membro 0 1 0 0 0 99999
+marca negativo_depois
+marca ponto antes
+espera blast 0 100000 max 6000
+marca positivo_antes
+aperta R3 ate acao 0 0xEC-0xF0 max 1200
+marca ponto transformacao
+espera forma 0 2 max 3000
+# Só após encerrar a animação: a direção precisa voltar a produzir uma ação de movimento.
+aperta DIREITA ate acao 0 0x0D-0x35 max 1500
+confere membro 0 2 0 0 0 99999
+marca ponto depois
+quadros 30
+fim

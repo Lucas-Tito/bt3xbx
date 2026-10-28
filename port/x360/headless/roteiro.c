@@ -90,6 +90,7 @@ extern struct { int count; unsigned char *chars; } *gBtlChars;
 #define LUT_MEMBRO_TAM 0xA4
 #define LUT_VIDA 0x40
 #define LUT_KI 0x4C
+#define LUT_BLAST 0x54 /* BtlMemberGauge.blast em membro +0x40 */
 
 #ifdef PORT_X360
 void Diario_Escrever(const char *formato, ...);
@@ -199,6 +200,16 @@ static const unsigned char *lutador(int lado) {
         }
     }
     return NULL;
+}
+
+/* Campos do membro ativo, apenas leitura, inclusive durante a troca de forma. */
+static int membro_de(int lado, int campo) {
+    const unsigned char *c = lutador(lado);
+    int ativo;
+    if (c == NULL) return -1;
+    ativo = *(const int *)(c + LUT_ATIVO);
+    if (ativo < 0 || ativo >= 5) return -1;
+    return *(const int *)(c + LUT_MEMBROS + ativo * LUT_MEMBRO_TAM + campo);
 }
 
 static int acao_de(int lado) {
@@ -336,11 +347,46 @@ static void luta_quadro(void) {
     sSeqVista = seq;
 }
 
+/* F7: mudanças de forma, pedido e débito do recurso, sem escrever na luta.
+   O custo é observado no quadro em que o estoque cai, sem confundir regeneração durante a animação. */
+static void f7_quadro(void) {
+    static int habilitado = -1, idAntes = -1, acaoAntes = -1, blastAntes = -1;
+    int id, acao, blast;
+    const unsigned char *c;
+    char s[300];
+    if (habilitado < 0) habilitado = getenv("BT3_F7") != NULL;
+    if (!habilitado || (c = lutador(0)) == NULL) return;
+    id = membro_de(0, 0); acao = acao_de(0); blast = membro_de(0, LUT_BLAST);
+    if (id != idAntes || (acao != acaoAntes && acao >= 0xEC && acao <= 0xF0) ||
+        (blastAntes >= 0 && blast < blastAntes)) {
+        sprintf(s, "f7: membro id %d traje %d variante %d blast %d anterior %d acao 0x%x pedido %d custo %d classe %d vblank %u quadro %u",
+                id, membro_de(0, 4), membro_de(0, 0x60), blast, blastAntes, (unsigned)acao,
+                *(const int *)(c + 0x12D0), *(const int *)(c + 0x12D8), *(const int *)(c + 0x12DC), gPortVBlanks, sQuadro);
+        diz(s);
+    }
+    idAntes = id; acaoAntes = acao; blastAntes = blast;
+}
+
+#ifndef PORT_X360
+/* Débito exato observado na chamada do jogo; só a ligação sem janela usa este desvio. */
+void __real_BtlMember_SubBlast(void *chr, int amount);
+void __wrap_BtlMember_SubBlast(void *chr, int amount) {
+    int antes = membro_de(0, LUT_BLAST);
+    char s[200];
+    __real_BtlMember_SubBlast(chr, amount);
+    if (getenv("BT3_F7") != NULL && chr == (void *)lutador(0)) {
+        sprintf(s, "f7: debito custo %d antes %d depois %d vblank %u quadro %u",
+                amount, antes, membro_de(0, LUT_BLAST), gPortVBlanks, sQuadro);
+        diz(s);
+    }
+}
+#endif
+
 /* ------------------------------------------------------------------ o roteiro */
 
 enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA,
-       P_FUNDE, P_DESEJO, P_RASTREIA, P_GIRA };
-enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA, C_ACAO, C_SEQ, C_PAUSA, C_DANO, C_KI, C_JANELA };
+       P_FUNDE, P_DESEJO, P_RASTREIA, P_GIRA, P_MISSOES };
+enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA, C_ACAO, C_SEQ, C_PAUSA, C_DANO, C_KI, C_JANELA, C_FORMA, C_BLAST };
 
 typedef struct Passo {
     int tipo;
@@ -489,6 +535,12 @@ static int condicao(Passo *p, char **pal, int n, int i) {
         p->cond = C_JANELA;
         p->valor = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
         i += 2;
+    } else if (i < n && (igual(pal[i], "forma") || igual(pal[i], "blast"))) {
+        p->cond = igual(pal[i], "forma") ? C_FORMA : C_BLAST;
+        p->lado = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
+        p->valor = numero(p->onde, i + 2 < n ? pal[i + 2] : NULL);
+        if (p->lado < 0 || p->lado > 1 || p->valor < 0) erro_linha(p->onde, "forma/blast L N: lado 0 ou 1, N >= 0", NULL);
+        i += 3;
     } else if (i < n && igual(pal[i], "ki")) { /* ki L N: o ki do lado L chegou a N (100000 a barra cheia) */
         p->cond = C_KI;
         p->lado = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
@@ -612,6 +664,20 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         }
         p = novo(onde, P_RASTREIA);
         i = 2;
+    } else if (igual(pal[0], "prepara") && n == 3 && igual(pal[1], "missoes")) {
+        p = novo(onde, P_MISSOES);
+        p->n = numero(onde, pal[2]);
+        if (p->n != 29) erro_linha(onde, "prepara missoes 29: receita fechada da F7", NULL);
+        i = 3;
+    } else if (igual(pal[0], "confere") && n > 1 && igual(pal[1], "membro")) {
+        int k;
+        if (n != 8) erro_linha(onde, "confere membro L ID TRAJE VARIANTE BLAST_MIN BLAST_MAX", NULL);
+        p = novo(onde, P_CONFERE);
+        p->cond = 5;
+        for (k = 0; k < 6; k++) p->luta[k] = numero(onde, pal[k + 2]);
+        if (p->luta[0] < 0 || p->luta[0] > 1 || p->luta[4] < 0 || p->luta[5] < p->luta[4])
+            erro_linha(onde, "confere membro: lado/faixa de Blast inválidos", NULL);
+        i = 8;
     } else if (igual(pal[0], "desbloqueia")) {
         p = novo(onde, P_DESBLOQUEIA);
         i = 1;
@@ -828,6 +894,10 @@ static int cumprida(Passo *p) {
             return 0;
         }
         return a >= 0 && a < p->ref;
+    case C_FORMA:
+        return membro_de(p->lado, 0) == p->valor;
+    case C_BLAST:
+        return membro_de(p->lado, LUT_BLAST) >= p->valor;
     case C_KI:
         a = barra_de(p->lado, LUT_KI);
         return a >= p->valor;
@@ -858,6 +928,9 @@ static void cond_texto(const Passo *p, char *s) {
         sprintf(s, "pausa %d", p->valor);
     } else if (p->cond == C_DANO) {
         sprintf(s, "dano %d (vida %d de %d)", p->lado, barra_de(p->lado, LUT_VIDA), p->ref);
+    } else if (p->cond == C_FORMA || p->cond == C_BLAST) {
+        sprintf(s, "%s %d %d (%d)", p->cond == C_FORMA ? "forma" : "blast", p->lado, p->valor,
+                membro_de(p->lado, p->cond == C_FORMA ? 0 : LUT_BLAST));
     } else if (p->cond == C_KI) {
         sprintf(s, "ki %d %d (%d)", p->lado, p->valor, barra_de(p->lado, LUT_KI));
     } else if (p->cond == C_JANELA) {
@@ -1008,6 +1081,20 @@ static unsigned quadro(void) {
             sLx = (unsigned char)(0x80 + p->lx);
             sLy = (unsigned char)(0x80 + p->ly);
             return consome(0);
+        case P_MISSOES: {
+            int k;
+            unsigned char *b = (unsigned char *)gSaveData;
+            so_teste(p, "prepara missoes");
+            if (gSaveData == NULL || tela_atual() != 4 || gSaveData->unk208 != 0 || b[0x28C] != 0)
+                falha("prepara missoes: exige New Game, menu principal e Sobrevivência fechada");
+            for (k = 1; k <= 29; k++) {
+                if (b[0x28C + 12 * k] != 0) falha("prepara missoes: exige registros ainda vazios");
+                b[0x28C + 12 * k] = 1;
+            }
+            diz("roteiro: receita 29 missoes, ids 1..29; missao 0 inédita; somente bytes cleared");
+            proximo();
+            continue;
+        }
         case P_DESBLOQUEIA:
             so_teste(p, "desbloqueia");
             if (gSaveData == NULL) {
@@ -1020,6 +1107,21 @@ static unsigned quadro(void) {
             proximo();
             continue;
         case P_CONFERE:
+            if (p->cond == 5) {
+                int l = p->luta[0], id = membro_de(l, 0), traje = membro_de(l, 4);
+                int variante = membro_de(l, 0x60), blast = membro_de(l, LUT_BLAST);
+                if (id != p->luta[1] || traje != p->luta[2] || variante != p->luta[3] ||
+                    blast < p->luta[4] || blast > p->luta[5]) {
+                    sprintf(s, "%s: membro lado %d id %d traje %d variante %d blast %d fora do esperado",
+                            p->onde, l, id, traje, variante, blast);
+                    falha(s);
+                }
+                sprintf(s, "roteiro: %s ok membro lado %d id %d traje %d variante %d blast %d vblank %u quadro %u",
+                        p->onde, l, id, traje, variante, blast, gPortVBlanks, sQuadro);
+                diz(s);
+                proximo();
+                continue;
+            }
             if (p->cond == 4) {
                 /* confere luta: o que o jogo montou, lido do BattleSetup com a luta andando */
                 const BattleSetup *b;
@@ -1373,6 +1475,7 @@ int Roteiro_Pad(int socket, unsigned char *data) {
         diz(s);
     }
     luta_quadro();
+    f7_quadro();
     b = quadro();
 #ifndef PORT_X360
     Imagens_Quadro(sQuadro);
