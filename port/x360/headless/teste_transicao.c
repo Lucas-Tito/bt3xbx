@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <execinfo.h>
+#include <signal.h>
+#include <unistd.h>
 #include "battle/eft_d.h"
 #include "sys/gfxm_b_b.h"
 
@@ -11,6 +14,13 @@ void *gCommonRes = comum;
 EftBurstRes gEftBurstRes;
 extern void EftBurst_Start(void);
 void Port_UnpackCheck(const char *onde) { (void)onde; }
+
+static void queda(int sinal) {
+    void *quadros[12];
+    int n = backtrace(quadros, 12);
+    backtrace_symbols_fd(quadros, n, 2);
+    _exit(128 + sinal);
+}
 
 #define EXIGE(c) do { if (!(c)) { fprintf(stderr, "FALHA transição: %s\n", #c); return 1; } } while (0)
 int main(int argc, char **argv) {
@@ -21,7 +31,9 @@ int main(int argc, char **argv) {
     EftBurstModel *m;
     TexFile *t;
     void *grupos, *texturas;
-    if (argc != 2) return 2;
+    if (argc < 2 || argc > 3) return 2;
+    signal(SIGSEGV, queda);
+    signal(SIGBUS, queda);
     f = fopen(argv[1], "rb");
     if (!f) return 2;
     fseek(f, 0, SEEK_END); tam = ftell(f); rewind(f);
@@ -31,6 +43,14 @@ int main(int argc, char **argv) {
     memcpy(comum + 0x34, &b, sizeof(b));
     printf("LEU %s: %ld bytes; EftBurst_Start\n", argv[1], tam);
     fflush(stdout);
+    if (argc == 3 && strcmp(argv[2], "texturas") == 0) {
+        /* Isola o primeiro leitor do TexFile da entrada 3, sem depender da relocação do cmdl. */
+        t = (TexFile *)(b + 0x2FC00);
+        Res_RelocateOffsets(&t, (unsigned char *)t, t);
+        EXIGE(t->count == 7 && t->ent == (TexEntry *)((unsigned char *)t + 0x20));
+        puts("transição: TexFile real: tudo certo");
+        return 0;
+    }
     EftBurst_Start();
     m = gEftBurstRes.model;
     t = (TexFile *)gEftBurstRes.texPack;
