@@ -19,8 +19,7 @@ static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto)
                  L"Copy the result to the root of the game folder as " ISO_LARGO(ISO_NOME) L", next to default.xex.";
     } else if (motivo == ISO_AUSENTE) {
         *titulo = L"ISO not found";
-        *texto = L"The ISO was not found in the root of the game folder with the expected name: " ISO_LARGO(ISO_NOME)
-                 L". Copy it there, next to default.xex. Create it on your PC with convert_iso.py from your original USA SLUS-21678 ISO.";
+        *texto = L"The ISO was not found in the root of the game folder with the expected name: " ISO_LARGO(ISO_NOME) L".";
     }
 }
 #endif

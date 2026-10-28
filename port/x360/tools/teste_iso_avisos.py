@@ -198,11 +198,12 @@ int main(void) {
     for (i = 1; i <= 4; i++) {
         Iso_Aviso(i, &titulo, &texto);
         if (!wcsstr(texto, L"bt3-x360.iso") || !wcsstr(texto, L"root of the game folder") ||
-            !wcsstr(texto, L"convert_iso.py") || wcsstr(texto, L"ambiente.txt") ||
+            (i != 2 && !wcsstr(texto, L"convert_iso.py")) || wcsstr(texto, L"ambiente.txt") ||
             wcsstr(texto, L"BT3_ISO")) return 1;
     }
     Iso_Aviso(2, &titulo, &texto);
-    if (wcscmp(titulo, L"ISO not found") || !wcsstr(texto, L"expected name")) return 1;
+    if (wcscmp(titulo, L"ISO not found") || !wcsstr(texto, L"expected name") ||
+        wcscmp(wcsstr(texto, L"bt3-x360.iso"), L"bt3-x360.iso.")) return 1;
     Iso_Aviso(1, &titulo, &texto);
     if (wcscmp(titulo, L"ISO conversion required")) return 1;
     puts("textos: tudo certo");
@@ -219,7 +220,8 @@ int main(void) {
     for j, (de, para) in enumerate([("root of the game folder", "ambiente.txt"),
                                   ("expected name", "nome esperado"),
                                   ("ISO conversion required", "Unsupported converted ISO version"),
-                                  ("convert_iso.py", "iso_convertida.py")]):
+                                  ("convert_iso.py", "iso_convertida.py"),
+                                  ('ISO_LARGO(ISO_NOME) L".";', 'ISO_LARGO(ISO_NOME) L". Copy it there.";')]):
         d = pasta / f"texto{j}"
         d.mkdir()
         (d / "iso_avisos.h").write_text(fonte.replace(de, para))
