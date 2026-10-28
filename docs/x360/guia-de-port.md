@@ -2298,3 +2298,23 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `T_FBA`. O teste deve incluir esse caso com área não nula: no Duelo analisado o único caso sem testes tem
   área zero, o que escondia um mínimo incorreto em entradas futuras. O máximo do censo permanece um limite
   conservador; não se acrescenta a área da segunda chamada à família comum.
+
+### Julgar o perfil fino do console (F5, gravação, seção 31)
+
+- Começar pela variação entre aberturas iguais. Nos três pares alternados de 28/10, os alvos da base variam até
+  0,1 ms de folga GPU e os de ambos 0,0, na precisão do log. O efeito de 0,3 a 0,4 ms da combinação se repete,
+  mas as duas imagens longas permanecem. Melhorar trabalho mediano ou uma parcela não certifica o prazo da tela.
+- `comum_console.py` seleciona **só um quadro por abertura**. Os quatro perfis finos de 28/10 não contêm subclasses
+  dos vizinhos 6929/6931/6959/6961; o perfil agregado desses vizinhos é da rodada anterior. Publicar a ausência
+  e a origem dos números antigos, em vez de interpolar custos ou tratar repetições como medição dos vizinhos.
+- Marcar só o alvo ainda altera os quadros seguintes. As duas aberturas do 6930 acrescentaram uma longa em
+  6931 → 6932, e as do 6960 pioraram seu atraso para 14,7 ms. O desconto vazio de cerca de 3,1/3,7 ms é menor
+  que a piora de prazo observada, cerca de 3,8 a 3,9/4,8 a 4,9 ms. Calibração não desfaz fase e esvaziamento
+  residual; o zero se julga exclusivamente sem essas marcas.
+- No perfil fino, a classe comum antiga fica zerada e as oito subclasses a substituem. Conferir os detalhes
+  contra cada subclasse, e depois as subclasses junto das outras famílias contra o total. No 6930/6960 são
+  69/90 trechos comuns; as 70/91 linhas incluem uma linha API. Não somar detalhes e agregados de novo.
+- Contar chamadas efetivas resolve uma ambiguidade, não demonstra redundância: 36/53 chamadas Resolve na rodada
+  fina não são os 21/36 segmentos da classe de cor. O custo de uma classe inclui preparo e não é ganho de um
+  shader novo. As duas cadeias de brilho somam cerca de 2,35 ms comuns no 6960, com conteúdo diferente entre elas;
+  o comum inteiro tem 12,3 ms, dominado por sem textura geral (5,76) e leitura de alvos (3,45).
