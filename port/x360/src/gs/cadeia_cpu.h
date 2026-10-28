@@ -1,11 +1,23 @@
 /* F5, decisão 29: rateio exclusivo da CPU, só na dona do dispositivo.
    Não insere comandos, cercas ou callbacks. O tempo de uma API inclui eventual
    espera interna; não distingue execução da CPU de bloqueio no driver.
-   Incluído depois de sFreq. O teste nativo fornece o mesmo relógio por contrato. */
+   Incluído depois de sFreq. O teste nativo fornece o mesmo relógio por contrato.
+   Só existe na build de perfil (-D BT3_PERFIL_CADEIA, build_f2.sh com BT3_PERFIL_CADEIA=1): mesmo desligadas, as marcas
+   custavam ~1,8 ms no fim do quadro 7170 e criaram uma imagem longa (seção 35 do 08-gravacao.md). Na build normal os
+   escopos são vazios e o código gerado é o de antes do diagnóstico; BT3_CADEIA_CPU é ignorada. */
 enum { CA_QUADRO, CA_COMUM, CA_VU0, CA_VU4, CA_VU6, CA_NATIVA, CA_GRUPOS };
 enum { CA_RESTO, CA_ALFA, CA_BUFFERS, CA_PLANO, CA_EDRAM, CA_PREPARA,
        CA_PIPE, CA_SAMPLER, CA_ESTADO, CA_TEXTURA, CA_UNIFORME, CA_INDICES,
        CA_UP, CA_PRESENT, CA_LIMPEZA, CA_FXAA, CA_TELA, CA_ETAPAS };
+#ifndef BT3_PERFIL_CADEIA
+class CadeiaEscopo {
+public:
+    CadeiaEscopo(int, int) {}
+};
+#define CADEIA_CHAMADA(e, chamada) do { chamada; } while (0)
+static void cadeia_inicio(unsigned) {}
+static void cadeia_fim(int) {}
+#else
 static const char *sCaGrupos[] = {"quadro", "comum", "vu0", "vu4", "vu6", "nativa"};
 static const char *sCaEtapas[] = {"resto", "alfa", "buffers", "plano", "edram", "prepara",
     "pipe", "sampler", "estado", "textura", "uniforme", "indices", "UP", "Present", "limpeza", "FXAA", "tela"};
@@ -94,3 +106,4 @@ static void cadeia_fim(int captura) {
     }
     Diario_Escrever("cadeia: cpu quadro %u soma %.6f ms", sCa.quadro, (double)soma * f);
 }
+#endif

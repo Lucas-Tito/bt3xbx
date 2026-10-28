@@ -2422,6 +2422,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Passos e imagens têm denominadores distintos: nesta rodada as antigas registram 2.335 imagens para
   2.334 passos, tanto em passos quanto em picos, com histograma conservado. Publicar ambos e conferir
   as associações. Não corrigir automaticamente a contagem nem fabricar uma imagem longa adicional.
+- **Como provar que a build normal voltou ao código antigo (feito em 28/10):** compilar o `gs_d3d.cpp` de cada
+  versão no XDK com as opções da `build_f2.sh` (a cópia numa pasta `gs/` com `som` ligado ao do port, por causa do
+  `#include "../som/..."`), desmontar com `link.exe /dump /disasm` (a imagem `collectionui-xdk:light` não tem
+  `dumpbin.exe`) e comparar com os rótulos `$M`/`$LN` normalizados, que mudam de número sem mudar o código. Funções
+  `inline` vazias ainda saem como COMDATs de um `blr`; conferir no `default.map` que o `-OPT:REF` as descartou.
+  Diagnóstico de tempo no caminho do desenho fica atrás de uma chave de **compilação**, nunca só de ambiente.
 
 ### A preparação da rodada final da F6 (`plano/F6/09.md`)
 

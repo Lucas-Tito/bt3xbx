@@ -4680,3 +4680,28 @@ de `~/f5-gpu-comum/base/port/build/x86/bt3_x86`, carimbo histórico `4c85c039 di
 Não estão provados: instrução exata causadora, recuperação de desempenho após a correção proposta,
 objetos XDK iguais, ganho líquido de alfa/prefixos, imagem/entrada sob reprojeto, três janelas longas,
 sessão livre, F7 ou 720p. Nenhuma nova rodada de console é solicitada por esta análise.
+
+### A correção aplicada: o diagnóstico só na build de perfil (28/10/2026, à noite)
+
+Feita pelo Claude durante a janela de 5 h do Codex, seguindo a proposta acima. `gs/cadeia_cpu.h` passa a ter dois lados:
+sem `BT3_PERFIL_CADEIA`, a build normal, `CadeiaEscopo` é uma classe vazia, `CADEIA_CHAMADA` só executa a chamada e
+`cadeia_inicio`/`cadeia_fim` são vazias; com `-D BT3_PERFIL_CADEIA` (`BT3_PERFIL_CADEIA=1 build_f2.sh`), o
+diagnóstico inteiro, como antes. Os nomes das famílias e etapas ficam fora da chave, porque o `gs_d3d.cpp` os cita.
+Na build normal, `BT3_CADEIA_CPU` no `ambiente.txt` é ignorada sem aviso (um aviso exigiria ler o ambiente no fim do
+quadro): toda rodada com o diagnóstico precisa da build de perfil, e o `cadeia_cpu.py` recusa um log sem as parcelas.
+
+**[Medido] O código gerado volta a ser o da c57e807.** O `gs_d3d.cpp` da c57e807 (antigo), o atual sem a chave (novo)
+e o atual com a chave (perfil), compilados no XDK com as mesmas opções da `build_f2.sh`, desmontados por
+`link /dump /disasm` e comparados com os rótulos internos `$M`/`$LN` normalizados:
+
+| Comparação | Resultado |
+|---|---|
+| antigo contra novo | todas as funções idênticas, instrução por instrução; a única diferença são três COMDATs novos de uma instrução (`blr`): o construtor vazio, `cadeia_inicio` e `cadeia_fim`, que nada chama |
+| build normal ligada (`default.map`) | nenhuma das três aparece: o `-OPT:REF` as descarta, e o executável fica com o código do backend da c57e807 |
+| antigo contra perfil | diferentes (26.383 contra 25.086 linhas), como devem: a comparação acusa as marcas quando elas existem |
+| `teste_cadeia_cpu.py` (agora com `-DBT3_PERFIL_CADEIA`) | tudo certo, com os cinco mutantes, a chamada adulterada e os seis negativos do leitor recusados |
+
+Comandos em `build/x360/cmp/` (fora do git): a cópia do `gs_d3d.cpp` e dos headers de cada versão numa pasta `gs/`
+com `som` ligado ao do port, o `cl.exe` da `build_f2.sh`, e `link.exe /dump /nologo /disasm` (a imagem do XDK não
+tem `dumpbin.exe`). Falta só a confirmação no console de que o 7170 volta a 2 longas com a build normal; os controles
+das próximas rodadas usam esta build, e o diagnóstico, a de perfil.
