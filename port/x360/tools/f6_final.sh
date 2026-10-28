@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Rodada integral F6, sem console. Uma trava cobre toda a fila de testes.
-# Uso: f6_final.sh COMMIT BASE DESTINO [--plano|--retomar]
+# Uso: f6_final.sh COMMIT BASE DESTINO [--plano|--retomar|--lacunas]
+# --lacunas (09.md, seção 7): destino novo, só os casos de LACUNAS (f6_final_confere.py) e a regravação revisada
+# das referências de REGRAVADAS em ~/referencias, guardando as antigas com outro nome.
 set -euo pipefail
 RAIZ=$(cd "$(dirname "$0")/../../.." && pwd)
 MODO=${1:-}
 if [ "$MODO" = --servico ] || [ "$MODO" = --travado ]; then shift; fi
-[ $# -ge 3 ] && [ $# -le 4 ] || { echo 'uso: f6_final.sh COMMIT BASE DESTINO [--plano|--retomar]'; exit 2; }
+[ $# -ge 3 ] && [ $# -le 4 ] || { echo 'uso: f6_final.sh COMMIT BASE DESTINO [--plano|--retomar|--lacunas]'; exit 2; }
 FINAL=$(git -C "$RAIZ" rev-parse --verify "$1^{commit}")
 BASE=$(git -C "$RAIZ" rev-parse --verify "$2^{commit}")
 I=$3
@@ -29,8 +31,9 @@ if [ "$MODO" != --servico ] && [ "$MODO" != --travado ]; then
     CMD=(systemd-run --user --unit="$UNIDADE" --property=MemoryMax=5G --collect
          bash "$RAIZ/port/x360/tools/f6_final.sh" --servico "$FINAL" "$BASE" "$I")
     [ "$RETOMAR" != --retomar ] || CMD+=(--retomar)
+    [ "$RETOMAR" != --lacunas ] || CMD+=(--lacunas)
     if [ "${4:-}" = --plano ]; then printf '%q ' "${CMD[@]}"; printf '\n'; exit 0; fi
-    [ $# = 3 ] || [ "$RETOMAR" = --retomar ]
+    [ $# = 3 ] || [ "$RETOMAR" = --retomar ] || [ "$RETOMAR" = --lacunas ]
     "${CMD[@]}"
     echo "unidade $UNIDADE; saída $I; esperar pelo shell, ver 09.md"
     exit 0
@@ -61,12 +64,17 @@ while IFS= read -r v; do
 done < <(compgen -e)
 export DEBUGINFOD_URLS= BT3_WIDE=1
 export BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1
+LISTA=
+[ "$RETOMAR" != --lacunas ] || LISTA=" $(python3 "$RAIZ/port/x360/tools/f6_final_confere.py" lacunas | tr '\n' ' ')"
 if [ "$RETOMAR" != --retomar ]; then
-python3 - "$I" "$FINAL" "$BASE" <<'PY'
+python3 - "$I" "$FINAL" "$BASE" "$LISTA" <<'PY'
 import json, sys
 from pathlib import Path
 p = Path(sys.argv[1])
-(p/'origem.json').write_text(json.dumps(dict(commit=sys.argv[2], base=sys.argv[3], curto=sys.argv[2][:8])))
+d = dict(commit=sys.argv[2], base=sys.argv[3], curto=sys.argv[2][:8])
+if sys.argv[4].strip():
+    d['casos'] = sys.argv[4].split()
+(p/'origem.json').write_text(json.dumps(d))
 (p/'casos.json').write_text('[]')
 PY
 arvore() {
@@ -106,6 +114,10 @@ PY
 passo() {
     local nome=$1; shift
     local inicio fim rc
+    if [ -n "$LISTA" ] && [[ "$LISTA" != *" $nome "* ]]; then
+        echo "FORA $nome (não refeito nas lacunas)"
+        return
+    fi
     if python3 - "$I/casos.json" "$nome" <<'PY'
 import json, sys
 sys.exit(0 if any(c['nome'] == sys.argv[2] for c in json.load(open(sys.argv[1]))) else 1)
@@ -177,6 +189,35 @@ PY
         OUT="$I/filmes" bash port/x360/tools/teste_filme.sh
     fi
 }
+regravar() {
+    # A regravação documentada (roteiros.sh com REF=1) das referências que o roteiro mudou, com a antiga guardada e
+    # a diferença revisada pelo conferente; reprovada a revisão, a antiga volta ao lugar.
+    local n ant R=$HOME/referencias rc=0
+    for n in $(python3 -c 'import sys; sys.path.insert(0,"port/x360/tools"); from f6_final_confere import REGRAVADAS; print(*REGRAVADAS)'); do
+        ant=$R/$n.telas.anterior-${FINAL:0:8}
+        [ -s "$R/$n.telas" ]
+        if [ -e "$ant" ]; then
+            # Outra rodada do mesmo commit: só vale se a atual é a nova que ele registrou, e a revisão é refeita.
+            awk -F'\t' -v n="$n.telas" -v c="commit $FINAL" -v s="nova $(sha256sum < "$R/$n.telas" | cut -c1-64)" \
+                '$2 == n && $3 == c && $NF == s { ok = 1 } END { exit !ok }' "$R/PROVENIENCIA.tsv"
+            python3 "$C" revisa-referencia "$n" "$ant" "$R/$n.telas"
+            echo "$n: já regravada por este commit (PROVENIENCIA.tsv)"
+            continue
+        fi
+        cp -p "$R/$n.telas" "$ant"
+        REF=1 REFS=$R O="$I/regravacao/roteiros" port/x360/tools/roteiros.sh "$n" || rc=1
+        python3 "$A" limpar "$I/regravacao" "roteiro-$n"
+        if [ $rc = 0 ] && python3 "$C" revisa-referencia "$n" "$ant" "$R/$n.telas"; then
+            printf '%s\t%s.telas\tcommit %s\trodada %s\tREF=1 roteiros.sh %s\tanterior %s %s\tnova %s\n' \
+                "$(date -Is)" "$n" "$FINAL" "$I" "$n" "${ant##*/}" "$(sha256sum < "$ant" | cut -c1-64)" \
+                "$(sha256sum < "$R/$n.telas" | cut -c1-64)" | tee -a "$R/PROVENIENCIA.tsv"
+        else
+            mv "$ant" "$R/$n.telas"   # a antiga volta ao lugar, e outra rodada do commit pode tentar de novo
+            echo "FALHA: referência $n não regravada; a anterior voltou"
+            return 1
+        fi
+    done
+}
 soma() {
     python3 port/x360/tools/roteiros.py soma "$I"/roteiros/*/gdb.txt --prog port/build/x86/bt3_x86
 }
@@ -215,6 +256,8 @@ for tipo in op ed; do
 done
 passo filme-referencia-upstream referencia_upstream
 passo deriva python3 port/x360/tools/som_deriva.py --autoteste
+# Só nas lacunas (fora da lista em rodada inteira), antes de copiar as referências para a rodada.
+[ -z "$LISTA" ] || passo referencias-regravadas regravar
 export O=$I/roteiros REFS=$I/referencias SEMMAPA=1 IMG=1 SOM=1
 [ -d "$REFS" ] || cp -r "$HOME/referencias" "$REFS"
 mapfile -t NOMES < <(python3 -c 'import sys; sys.path.insert(0,"port/x360/tools"); from f6_final_confere import ROTEIROS; print("\n".join(ROTEIROS))')

@@ -2465,13 +2465,26 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Essa medida da retomada não inclui temporários externos nem um pico entre amostras. Manter reserva de
   16 GiB físicos adicionais para uma rodada nova, ISO, temporários e margem; não confiar no `df` do ext4.
   Apagar permite reutilizar blocos do volume virtual, sem implicar compactação do VHDX no Windows.
-- **Falha de imagem pode ser de identidade ou ausência.** Em `discfusion`, duas lutas usam o mesmo nome
-  `luta`: a captura da segunda sobrescreve a primeira e o conferente recusa o quadro, mesmo com 26/26
-  PPM iguais. Corrigido no `roteiros.py imagens` (a segunda luta é `luta_2`, as outras 20 listas ficam
-  iguais), e o `compara_imagens` passou a recusar nome repetido na lista pelo nome, antes da âncora: um
-  rótulo fixo para um evento que se repete é o erro a procurar. Em `f6_final`/`f6_final_start`, a marca de retorno e `fim` coincidem; falta o desenho seguinte
-  para capturar a marca nas duas arquiteturas: era a armadilha do Torneio (9c-3, acima) de novo. O
-  roteiro ganhou `quadros 2` depois da marca, e a referência muda só na linha do `fim`. Antes de rodar um
-  roteiro novo com `IMG=1`, conferir que nenhuma `marca` é a última linha antes de `fim`. Registrar como captura/âncora reprovada, sem afirmar
-  diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
-  e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
+- **Falha de imagem pode ser de identidade ou ausência.** Em `discfusion`, duas lutas usavam o mesmo nome
+  `luta`: a captura da segunda sobrescrevia a primeira e o conferente recusava o quadro, mesmo com 26/26
+  PPM iguais. Corrigido no `roteiros.py imagens` (a segunda luta é `luta_2`; as outras 20 listas ficam
+  iguais), e o `compara_imagens` recusa nome repetido na lista pelo nome, antes da âncora: um rótulo fixo
+  para um evento que se repete é o erro a procurar. Em `f6_final`/`f6_final_start`, a marca de retorno e
+  `fim` coincidiam e faltava o desenho seguinte para capturar a marca nas duas arquiteturas: a armadilha
+  do Torneio (9c-3, acima) de novo. O roteiro ganhou `quadros 2` depois da marca. Antes de rodar um roteiro
+  novo com `IMG=1`, conferir que nenhuma `marca` é a última linha antes de `fim`. Nunca registrar falta ou
+  âncora errada como diferença de pixels, nem retirar a imagem exigida para passar.
+- **Referência de telas se regrava revisada, nunca para obter código zero.** A do Data Center era anterior
+  à senha e ao Replay (`eb968268`); as do final mudam no `fim` pelos dois quadros. A rodada das lacunas
+  (`f6_final.sh ... --lacunas`, 09.md seção 7) regrava as três pelo caminho documentado (`REF=1
+  roteiros.sh NOME`), guarda a antiga como `NOME.telas.anterior-SHA8`, e o `f6_final_confere.py
+  revisa-referencia` exige a diferença explicada pelo roteiro: o Data Center igual à antiga até a entrada
+  na senha (35 linhas, a menos dos números de linha) e terminando na linha 165; o final igual menos o
+  `fim`, dois quadros depois. Revisão reprovada devolve a antiga. Cada regravação aceita vai a
+  `~/referencias/PROVENIENCIA.tsv` (commit, rodada, SHA256 da antiga e da nova).
+- **Refazer só os reprovados é outra rodada, com lista fixa.** O `--retomar` não serve depois de mudar
+  roteiro ou ferramenta usada pela build ensaiada: as árvores isoladas são do commit antigo. O `--lacunas`
+  pede destino novo e commit novo, roda só a lista `LACUNAS` do conferente (os reprovados e o que eles
+  exigem: builds, objetos, `.text`, a ISO do leitor, os negativos) e grava a lista na origem; o conferente
+  recusa outra lista e nunca imprime a frase da aprovação integral nesse modo, porque os outros casos são
+  de outra build.
