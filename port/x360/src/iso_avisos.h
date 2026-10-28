@@ -21,11 +21,6 @@ static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto)
         *titulo = L"ISO not found";
         *texto = L"The ISO was not found in the root of the game folder with the expected name: " ISO_LARGO(ISO_NOME)
                  L". Copy it there, next to default.xex. Create it on your PC with convert_iso.py from your original USA SLUS-21678 ISO.";
-    } else if (motivo == ISO_CONVERSAO_ANTIGA) {
-        *titulo = L"Unsupported converted ISO version";
-        *texto = L"This converted ISO version is not supported. Convert your original USA SLUS-21678 ISO again "
-                 L"with the current convert_iso.py on your PC. Copy the new result to the root of the game folder as "
-                 ISO_LARGO(ISO_NOME) L", next to default.xex.";
     }
 }
 #endif

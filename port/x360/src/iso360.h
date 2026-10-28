@@ -10,8 +10,7 @@ enum {
     ISO_ORIGINAL = 1,
     ISO_AUSENTE = 2,
     ISO_NAO_SUPORTADA = 3,
-    ISO_ILEGIVEL = 4,
-    ISO_CONVERSAO_ANTIGA = 5
+    ISO_ILEGIVEL = 4
 };
 #define ISO_NOME "bt3-x360.iso"
 #define ISO_MARCA_VERSAO 2

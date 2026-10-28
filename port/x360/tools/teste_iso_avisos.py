@@ -145,7 +145,7 @@ def rodada(exe, pasta, anunciar=True):
     for versao in (0, 1, 3, 0xFFFFFFFF):
         imagem(p)
         troca(p, MARCA + 16, struct.pack("<I", versao))
-        casos.append((f"conversão versão {versao} recusada", conferir(exe, pasta, 5, p, p)))
+        casos.append((f"conversão versão {versao} recusada", conferir(exe, pasta, 1, p, p)))
     p.unlink()
     casos.append(("caminho explícito ausente", conferir(exe, pasta, 2, p, p)))
     casos.append(("sem ISO mostra caixa com nome esperado", conferir(exe, pasta, 2, "game:\\bt3-x360.iso")))
@@ -195,7 +195,7 @@ def textos(raiz, pasta):
 int main(void) {
     const wchar_t *titulo, *texto;
     int i;
-    for (i = 1; i <= 5; i++) {
+    for (i = 1; i <= 4; i++) {
         Iso_Aviso(i, &titulo, &texto);
         if (!wcsstr(texto, L"bt3-x360.iso") || !wcsstr(texto, L"root of the game folder") ||
             !wcsstr(texto, L"convert_iso.py") || wcsstr(texto, L"ambiente.txt") ||
@@ -203,8 +203,8 @@ int main(void) {
     }
     Iso_Aviso(2, &titulo, &texto);
     if (wcscmp(titulo, L"ISO not found") || !wcsstr(texto, L"expected name")) return 1;
-    Iso_Aviso(5, &titulo, &texto);
-    if (wcscmp(titulo, L"Unsupported converted ISO version") || !wcsstr(texto, L"again")) return 1;
+    Iso_Aviso(1, &titulo, &texto);
+    if (wcscmp(titulo, L"ISO conversion required")) return 1;
     puts("textos: tudo certo");
     return 0;
 }
@@ -218,7 +218,7 @@ int main(void) {
         raise ValueError("textos públicos incompatíveis")
     for j, (de, para) in enumerate([("root of the game folder", "ambiente.txt"),
                                   ("expected name", "nome esperado"),
-                                  ("Unsupported converted ISO version", "ISO conversion required"),
+                                  ("ISO conversion required", "Unsupported converted ISO version"),
                                   ("convert_iso.py", "iso_convertida.py")]):
         d = pasta / f"texto{j}"
         d.mkdir()

@@ -776,7 +776,8 @@ que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
 1. **A troca é um passo da conversão da ISO** (opção a do estudo), no código de conversão comum, para valer na conversão
    pelo PC (`convert_iso.py`) e na conversão pelo próprio console quando ela vier (F8, pendência 2: o console detecta
    a ISO não convertida e faz a conversão). Reconverter não pesa: o repositório é privado, e a conversão que for
-   publicada já sai com os ícones. A marca da ISO convertida muda de versão, e uma convertida sem os ícones é recusada.
+   publicada já sai com os ícones. A marca da ISO convertida muda de versão, e uma convertida sem os ícones é recusada com a mesma caixa
+   da original, sem caixa própria de versão (o Lucas não quer: só a conversão publicada vai existir).
 2. **Só os ícones do 360 no console.** Os do PS2 continuam nas builds de teste do WSL, que leem os dados originais.
 3. **O "voltar" dos menus continua no Y**, fiel ao físico (o jogo volta com o triângulo): só a arte muda, nenhuma
    mudança de entrada.
