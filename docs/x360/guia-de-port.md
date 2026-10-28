@@ -2467,7 +2467,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Apagar permite reutilizar blocos do volume virtual, sem implicar compactação do VHDX no Windows.
 - **Falha de imagem pode ser de identidade ou ausência.** Em `discfusion`, duas lutas usam o mesmo nome
   `luta`: a captura da segunda sobrescreve a primeira e o conferente recusa o quadro, mesmo com 26/26
-  PPM iguais. Em `f6_final`/`f6_final_start`, a marca de retorno e `fim` coincidem; falta o desenho seguinte
+  PPM iguais. Corrigido no `roteiros.py imagens` (a segunda luta é `luta_2`, as outras 20 listas ficam
+  iguais), e o `compara_imagens` passou a recusar nome repetido na lista pelo nome, antes da âncora: um
+  rótulo fixo para um evento que se repete é o erro a procurar. Em `f6_final`/`f6_final_start`, a marca de retorno e `fim` coincidem; falta o desenho seguinte
   para capturar a marca nas duas arquiteturas. Registrar como captura/âncora reprovada, sem afirmar
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
