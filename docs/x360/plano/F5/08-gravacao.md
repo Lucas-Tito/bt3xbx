@@ -4489,3 +4489,194 @@ Comandos finais e saídas em `~/f5-rp-analise2/final.sh` e `final.log`. `.text` 
 carimbo histórico `4c85c039 diff:da39a3ee5e`. É referência preexistente, não build deste commit nem
 prova nova de objetos compilados. Não estão provados: causa da regressão/7170, ganho causal de aquecimento,
 ganho de alfa/prefixos, igualdade de imagem/entrada sob reprojeto, três janelas longas, sessão livre, F7 ou 720p.
+
+## 35. Complemento rp33a2810: o 7170 confirma regressão da build nova (28/10/2026)
+
+**Resposta: é regressão da build nova, reproduzida nas três duplas alternadas da mesma sessão.**
+A antiga não apresenta a longa 7169 → 7170 em nenhuma das três aberturas; a nova apresenta nas três,
+com o perfil CPU desligado. Isso resolve a alternativa entre build e sessão deixada nas seções 33 e 34.
+O diagnóstico inativo é a causa provável; a instrução ou transformação do compilador responsável ainda
+não foi isolada. O aceite de zero longas continua reprovado nas duas builds, pelos outros dois alvos.
+
+Análise em `codex/f5-7170`, base efetiva `2dc531b7` (já era `troca/main` ao começar, posterior ao
+`11e818b` citado na tarefa). Só documentação foi alterada. Sem console, emulador, build do jogo ou acesso
+às tarefas f5-alfa-prefixos e roteiros-rapido. Evidências e verificadores locais em `~/f5-7170/`.
+
+### Proveniência e conferência dos oito originais
+
+**[Lido, informação do Lucas]** Aberturas na ordem da tabela, em 28/10, depois da rp32a2810.
+Antiga: `c57e807`, `default.xex` MD5 `60eb18cfa9e4cb56545bac7002e962a8`.
+Nova e cpu7170: `8c1ec1d`, MD5 `af2a4861d74a3c2fc9401231fa779a29`.
+`.dat`/`.swap` iguais (`4fe9d049`/`2e97a3e5`); só `.xex` e ambiente foram trocados.
+Identidades dos binários e inexistência prévia dos oito saves foram informadas, não conferidas no console.
+
+**[Medido]** Carimbos literais `c57e807 diff:da39a3ee5e` nos três antiga* e
+`8c1ec1d diff:da39a3ee5e` nos outros cinco. Todos os ambientes conferem integralmente com
+`~/f5-rp-analise/console-rp33a2810/ambiente_NOME.txt`, inclusive ausência de DEMO, hardware 3,
+som, 16:9, escala 1,33, FXAA, origem, VU1 direto e envio rápido ligados; constantes/fecho 0/0,
+tempos/cortes/GPU comum 0. CPU 0 nos seis controles, `7170,7170` nos dois perfis;
+saves distintos `game:\sv_rp33a2810_NOME`. Nenhum ambiente duplicado.
+
+Originais preservados em `~/sessao_2810b/rp33/NOME/bt3xbx.log`. SHA256 dos **bytes completos**,
+medido antes da análise e reconferido na rodada final; usados somente os recortes até o primeiro
+`f5_duelo.txt:99 fim`, vblank 12570/quadro 8378. Todas as continuações foram excluídas do julgamento.
+
+| Abertura, na ordem real | SHA256 original | Linhas usadas / totais |
+|---|---|---:|
+| antiga1 | `de6a510b5f8cd32871c28c65134fbc74d1f09e5f585e37e21f33b7d9089f71c1` | 2813 / 2965 |
+| nova1 | `14fef3071982a94660beb5ffca2301f03f1866bb40eb3b36d482a1c9e703ed46` | 2809 / 3517 |
+| antiga2 | `17e9da1bcf2e631b327402481263bcc14fe8df7df39981dde981598c3fdba592` | 2816 / 2892 |
+| nova2 | `b1b248fb3187e7d9aadccb157a7df473870c608b463cccf54982fc1e8a3796a5` | 2811 / 3264 |
+| antiga3 | `cd6e63d4c6ea5e85a66fb4bef2b61dd036bb6971f4a367219aa388690e603912` | 2813 / 3216 |
+| nova3 | `75c8c9f8406ff93196aede3a909b27f2e3a37be365ec27c732abd13f1b40da67` | 2811 / 4197 |
+| cpu7170_1 | `e2d0a83250ee1c8f13a3a719fa3552f5ec59d5705bca3c0d6ba48729128a9cae` | 2849 / 3026 |
+| cpu7170_2 | `ab0cd41b44efcc3983d0ac05b6360eb7f0d0f156212113ae46f357bb51972848` | 2851 / 4463 |
+
+**[Medido]** Em todas: j1/j2 com 684/2.334 passos, 1.368/4.668 vblanks, todos os passos de dois
+vblanks, razão parede/esperado 0,9972; resultado estado 4, vencedor 0x2, razão 0x1, vida 0/27160,
+vblank 11478/quadro 7757. Zero erro/queda/vigia/amostra indisponível. Descartes requeridos,
+pressões, esperas de descarte, texturas recusadas, brancas, alvos sem textura, leituras sem Resolve,
+VU puladas e falta de espaço zero. Os 88 resumos de recursos de cada abertura foram conferidos,
+sem somar contadores cumulativos. Primitivas só do PS2 continuam fora dos descartes requeridos.
+
+Associações completas nas dezesseis janelas: nenhuma repetição, troca sem quadro, imagem pulada ou
+marca GPU ausente; histograma conserva trocas e linhas individuais das imagens excepcionais.
+J1 tem sempre 684 imagens de dois vblanks. Em j2, antiga*: **2.335 imagens**, histograma
+1/2/3/4+ = **4/2329/2/0**; nova* e cpu*: **2.334**, **3/2328/3/0**. Os resumos de picos e passos
+concordam, inclusive na antiga. Portanto há uma imagem a mais que passos na antiga, não uma longa
+adicional nem associação perdida. Publicar os dois denominadores, sem forçar 2.334 imagens em todos.
+
+### Comparação alternada e variação entre repetições
+
+**[Medido]** F é `frame_end`; U é a folga da GPU até o prazo da imagem anterior; valores em ms.
+Os dois perfis ativos ficam separados dos controles de desempenho.
+
+| Abertura | Longas em j2 / imagens | 7169 → 7170 | F do 7170 | Gravação ocupada do 7170 | Folga j2 mín./p1/p10/p50 |
+|---|---:|---|---:|---:|---|
+| antiga1 | 2 / 2335 | ausente | 16,0 | 21,1 | -9,9 / 2,3 / 6,3 / 8,4 |
+| nova1 | 3 / 2334 | 3 vblanks, U=-0,1 | 17,8 | 20,8 | -9,6 / 2,4 / 5,9 / 7,8 |
+| antiga2 | 2 / 2335 | ausente | 16,0 | 21,2 | -9,9 / 2,3 / 6,3 / 8,4 |
+| nova2 | 3 / 2334 | 3 vblanks, U=-0,1 | 17,8 | 20,8 | -9,6 / 2,3 / 5,9 / 7,8 |
+| antiga3 | 2 / 2335 | ausente | 16,1 | 21,1 | -9,9 / 2,3 / 6,3 / 8,4 |
+| nova3 | 3 / 2334 | 3 vblanks, U=-0,1 | 17,8 | 20,8 | -9,6 / 2,4 / 5,9 / 7,8 |
+| cpu7170_1 | 3 / 2334 | 3 vblanks, U=-4,5 | 22,3 | 20,8 | -9,6 / 2,4 / 5,9 / 7,8 |
+| cpu7170_2 | 3 / 2334 | 3 vblanks, U=-4,5 | 22,3 | 20,8 | -9,7 / 2,3 / 5,9 / 7,8 |
+
+As duas longas comuns são 6929 → 6930 e 6959 → 6960; nenhuma imagem 4+ em qualquer abertura.
+F do 7170 varia apenas 0,1 na antiga e 0,0 na nova, contra **+1,7 a +1,8** entre builds;
+apresentação CPU do quadro passa de 39,9 a 40,0 para 40,6, sem substituir a medida da tela.
+A folga p50 de j2 cai 0,6, p10 cai 0,4. A longa nova repete 3/3 contra 0/3, voltando ao controle
+antigo entre cada execução nova. A hipótese de simples variação entre sessões não explica essa separação.
+O U individual antigo do 7170 não está impresso, pois só imagens excepcionais recebem essa linha;
+a associação completa prova ausência da longa, sem inventar sua folga numérica.
+
+Nos controles, U do 6930 fica -2,7 a -2,8 na antiga e -2,6 a -2,7 na nova; do 6960, -9,9/-9,6.
+F do 6960 também sobe, 5,9 → 6,5. A pequena melhora em U dos alvos anteriores não restaura ausência
+de regressão. No 7170 novo, J/G/P/U até o prazo são **49,5/28,7/10,9/-0,1**; com marcas CPU,
+**49,5/28,7/6,4/-4,5**. A marca ativa perde mais ~4,4 ms de folga e não serve de controle sem marcas.
+
+Em todos os oito picos do 7170: 204 envios/1.590 KB, 197 recálculos de hash, 2.633 lotes VU1,
+2.325 desenhos, 2.904 vértices CPU e 35.728 VU, 87.174 índices. Textura nova, XG, disco, descarte
+e escritora do diário zero nesse pico. As contagens iguais restringem causas diretas de recursos,
+mas não provam listas byte a byte iguais nem excluem efeitos de cache, driver ou preempção.
+
+### O perfil exato do 7170 e o limite da atribuição causal
+
+**[Medido, diagnóstico ativo]** `cadeia_cpu.py --quadros 7170` conserva total/soma e parcelas nas duas
+aberturas, com **37.499 entradas de escopo** em cada uma. Tempos exclusivos em ms, sem calibração
+para retirar o custo dos relógios; grupos e suas parcelas não se somam duas vezes.
+
+| Família ou parcela | cpu7170_1 | cpu7170_2 | Chamadas por abertura, quando parcela |
+|---|---:|---:|---:|
+| quadro, total | 6,692060 | 6,747420 | |
+| quadro/alfa | 4,723460 | 4,780720 | 1 |
+| quadro/resto | 1,302980 | 1,305900 | 0 |
+| quadro/plano | 0,336580 | 0,326840 | 1 |
+| comum, total | 1,410680 | 1,393600 | |
+| VU0, total | 14,037340 | 13,979780 | |
+| VU0/prepara, excluindo filhos | 3,519300 | 3,486900 | 2156 |
+| VU0/pipe | 1,557400 | 1,567520 | 2156 |
+| VU0/sampler | 0,831580 | 0,822860 | 2012 |
+| VU0/estado | 1,930860 | 1,930940 | 18147 |
+| VU0/textura | 0,409740 | 0,402440 | 2044 |
+| VU0/uniforme | 0,958580 | 0,949000 | 4206 |
+| VU0/indices | 3,170080 | 3,166560 | 2156 |
+| VU0/resto | 1,659800 | 1,653560 | 2156 |
+| VU4, total | 0,038240 | 0,038060 | |
+| VU6, total | 0 | 0 | |
+| nativa, total | 0,098280 | 0,098200 | |
+| **Total** | **22,276600** | **22,257060** | |
+
+**[Lido + medido]** Há uma varredura `alfa_alto` antes das submissões, agora medida no 7170 em ~4,7 ms.
+Ela já existe na build antiga e sua regra de amostragem não mudou no diff: `sConta.quadros == 30 &&
+sConta.alfaAltoDes == 0`. O 7170 combina estatística periódica com carga pesada de lutadores (2.156
+desenhos VU0 no perfil). Não é prova de shader frio nem de uma troca de cena; a leitura de buffers
+combinados continua candidata ao alfa exato. Os 4,7 ms não são os 1,7 a 1,8 ms de regressão.
+
+**[Hipótese principal]** Construtores/destrutores de `CadeiaEscopo` e `CADEIA_CHAMADA` continuam nos
+caminhos frequentes quando `sCa.ativo` é zero: testes da chave, estado local e efeitos no inlining,
+registradores, pilha e layout do código. As 37.499 chamadas ativas mostram a frequência desses pontos,
+não quantas instruções o XDK conserva com a chave zero. Os 14 ms VU0 incluem instrumentação e possíveis
+esperas de API. Sem perfil equivalente antigo ou código gerado comparado não há rateio causal do acréscimo
+por família. Não subtrair 22,3 menos 17,8 de uma parcela nem usar CPU menos GPU como espera eliminável.
+
+### Diff, correção proposta e prova sem console
+
+**[Conferido no git]** Em `c57e807..8c1ec1d`, os únicos arquivos de execução alterados são
+`port/x360/src/gs/gs_d3d.cpp` e o novo `cadeia_cpu.h`. As outras diferenças de `port/` são ferramentas
+Python, incluindo F7, fora do executável; `src/`, `include/`, shaders, som, gravação, compilação e
+ligação não mudaram. O backend desta tarefa ainda é exatamente o de `8c1ec1d`.
+
+**[Prova executada sem jogo]** `teste_cadeia_cpu.py --saida ~/f5-7170/prova-nativa --base c57e807`
+passou: aninhamento, retornos, faixa e zero relógios desligado, cinco sabotagens C++03 acusadas,
+chamada adulterada, captura inválida e seis mutantes do leitor recusados. `prova-fontes.py` também
+passou com controle negativo: retirando somente as marcas do backend novo numa cópia, recupera
+**byte a byte o fonte antigo**, SHA256 `7f861cb194af8d608e0ad650698a133d1d654c9c1f64647dda8be8617f0d6a41`.
+Cópias `~/f5-7170/gs_d3d-producao-proposto.cpp` e `gs_d3d-c57e807.cpp`, sem alterar o backend do branch.
+Isso delimita o diff e a reversão conservadora; o teste de zero relógios não prova desempenho igual.
+
+**[Proposta para a implementação]** Restaurar o caminho de produção anterior às marcas; deixar a
+instrumentação numa variante selecionada na compilação, ausente por padrão, conservando a faixa de
+`BT3_CADEIA_CPU` somente na build de perfil. Não basta envolver cada chamada em mais um `if` de execução,
+nem retirar apenas `cadeia_inicio/fim`: os escopos quentes precisam desaparecer da tradução de produção.
+Aplicar alfa exato depois, sobre essa base restaurada, mantendo o oráculo e a estatística originais.
+
+**[Prova exigida para integrar a correção, sem pedir nova sessão de console]** No Linux da revisão,
+mesmo XDK/headers/shaders, caminhos e flags `-Ox -Oi -fp:precise -fp:except- -GS- -Gy -GF -MT -TP
+-EHsc -GR-`, compilar o controle antigo e a restauração antes de alfa/prefixos. Exigir fonte
+pré-processado de produção equivalente e `gs_d3d.obj` igual sem depuração/metadados de tempo;
+comparar seções de código, dados e relocações por símbolo, incluindo todos os helpers e `frame_end`,
+e recusar diferenças de instrução, constante, tamanho ou destino simbólico de chamada. Conferir também
+todos os demais objetos usados e a ordem de ligação; a única exceção de origem é o carimbo de passos.
+Remover só depuração não autoriza ignorar bytes diferentes de `.text`. Se houver diferença pelo layout,
+restaurar a unidade original e manter o diagnóstico fora da build normal; não certificar por um teste nativo.
+A igualdade do código executado fornece a prova de retirada dessa regressão sem console. Ela não
+certifica o desempenho do reprojeto seguinte nem o zero da F5. O WSL provou fonte/contratos, não compilou
+nem comparou objetos XDK. Essa etapa fica explicitamente como condição da correção proposta.
+
+Para **f5-alfa-prefixos**, comunicar este resultado: parar de tratar o 7170 como variação de sessão,
+restaurar e provar primeiro o controle sem diagnóstico, depois medir alfa/prefixos contra ele. Não mexi
+em seu código, clone, worktree ou pasta. Incluir 7170 e vizinhos entre alvos; não usar número de quadro
+como gatilho do produto, deslocar a varredura para depois do Present ou aceitar a longa como cena.
+Os ~4,7 ms no 7170 reforçam alfa exato como candidato, sem ganho líquido certificado; não se transferem
+para o 6960, onde não houve alfa. Continuam as provas e limites de parada da seção 34 e o zero da decisão 29.
+
+### Rodada final da análise e limites
+
+| Conferência, no commit final | Resultado |
+|---|---|
+| SHA256, ambiente, carimbo, passos, resultado, recursos e associações dos oito | tudo certo, até o primeiro fim |
+| `passos.py`, estrutura / aceite com `--console --janelas 2 --minimo 600` | 0 / **1 nos oito**; zero longas reprovado |
+| `cadeia_cpu.py`, dois perfis exatos do 7170 | tudo certo, 0, total e soma exclusivos conservados |
+| Extrator novo visto falhar em cópias | 17 mutantes recusados, incluindo ausência de pico/recurso e ambiente duplicado |
+| Teste C++03 e prova dos fontes, com controles negativos | tudo certo; fonte restaurado igual ao antigo; não prova código gerado XDK |
+| Entradas `src/`, `include/`, `port/` contra `2dc531b7` | nenhuma alteração; nenhuma build/objeto do jogo produzido |
+| `.text` x86 histórica reextraída e comparada à seção 34 | SHA1 `43444ea4d03a6d448aa1ae74a631e35b356a7caa`, `cmp` igual |
+
+Comandos e resultados em `~/f5-7170/final.sh` e `final.log`; recortes, saídas integrais de passos/cadeia,
+dados JSON e mutantes na subpasta `rodada`. Extração segura por `objcopy -O binary --only-section=.text`
+de `~/f5-gpu-comum/base/port/build/x86/bt3_x86`, carimbo histórico `4c85c039 diff:da39a3ee5e`.
+É referência preexistente, não build deste commit nem prova nova de objetos.
+Não estão provados: instrução exata causadora, recuperação de desempenho após a correção proposta,
+objetos XDK iguais, ganho líquido de alfa/prefixos, imagem/entrada sob reprojeto, três janelas longas,
+sessão livre, F7 ou 720p. Nenhuma nova rodada de console é solicitada por esta análise.
