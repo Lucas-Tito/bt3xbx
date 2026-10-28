@@ -2244,3 +2244,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `-isystem /usr/include/x86_64-linux-gnu` fornece os headers de sistema que faltavam na busca. O invólucro externo
   também usa `-D_FILE_OFFSET_BITS=64` para o `stat` e o `pread` da imagem esparsa de 3 GB; os `long` continuam com
   32 bits, como no `cl`. Não instalar `gcc-multilib`, que remove o cross da PPC (armadilha acima).
+
+### A preparação da rodada final da F6 (`plano/F6/09.md`)
+
+- **Serviço de usuário precisa do barramento da sessão.** Neste WSL o systemd está ativo, mas a sessão do agente
+  pode chegar sem `XDG_RUNTIME_DIR`. `systemctl --user` então diz `No medium found`; usar
+  `/run/user/$(id -u)`, sem elevar usuário nem criar outro serviço root. `f6_final.sh` define essa variável e
+  mantém uma única chamada bloqueante de `flock` para a fila inteira, com logs em `~/`.
+- **A rede do filme não se reduz às quatro capturas.** O escopo pede hash RGBA por imagem nas duas arquiteturas:
+  `f6_filme_hash.c` decodifica os 7010 índices, `f6_final_confere.py filmes` recusa corte, índice repetido e hash
+  diferente. O modelo inclui o decodificador real, sem mudar upstream. O `mpeg2test` citado no escopo não está
+  neste clone; a referência independente fica explicitamente reprovada, sem renomear o mesmo código como oráculo.
+- **Finalizar a fila não significa aprovar a rodada.** O conferente F6 exige todos os casos, códigos, logs íntegros
+  por SHA256, carimbos, SHA1 da `.text` e filmes completos. Continua as redes independentes para diagnosticar,
+  mas sai 1 em qualquer falha. `FIM` sozinho é término. As propostas antigas de p99 de trabalho não substituem
+  o zero de imagens longas no combate da decisão 27; a soma de custo do som ainda tem limite próprio.
