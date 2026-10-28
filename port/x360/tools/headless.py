@@ -511,4 +511,5 @@ def main():
     construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1, a.gravador, a.teste_som, a.fluxo))
 
 
-main()
+if __name__ == "__main__":
+    main()

@@ -2501,3 +2501,17 @@ São candidatos a retorno: folhas, prólogos incompletos e chamadas de cauda lim
 `teste_pilha360.py` exercita memória sintética; `--mutante` retira a guarda de progressão numa cópia e tem de falhar.
 A fase passa da inicialização para menus/carga ou luta no `Port_StateLog`, em vez de conservar o rótulo da reserva
 inicial durante toda a sessão. A integração SEH e os endereços reais ainda exigem compilação XDK e console.
+
+
+### Arquivos fora das faixas cadastradas: transições de cenário
+
+`conv_tool --disco` passou sem erro mesmo sem os ids 0x1BF/0x1C0. Eles ficam entre o fim dos cenários (0x1BE)
+e o início dos menus (0x1C1), e `BtlLoad_StepStageChange` os lê diretamente, sem `Sprite_Unpack`.
+O verificador dos ganchos não cobre esse leitor. Conferir também as chamadas `File_Request3` e os ids derivados;
+um censo de formatos cadastrados não mede as omissões do próprio cadastro.
+O formato está em [transicao.md](formatos/transicao.md); os dois arquivos têm a mesma estrutura completa.
+O modelo da transição usa deslocamentos de imagem em bytes; o `TexFile` das partículas usa palavras.
+Os triângulos têm cores RG/BA lidas como u16, que também precisam de troca.
+O teste negativo da assinatura acusou uma build de conversor anterior à guarda: recompilar a ferramenta após
+alterar seu fonte faz parte da prova, assim como recompilar o jogo. `headless.py` agora pode ser importado sem
+iniciar uma build; o caso isolado reutiliza suas flags e a preparação dos leitores originais.
