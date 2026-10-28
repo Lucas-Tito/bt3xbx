@@ -8,6 +8,7 @@ SOM=$RAIZ/port/x360/src/som
 T=$(mktemp -d)
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$OUT/referencia/op" "$OUT/referencia/ed"
+python3 "$RAIZ/port/x360/tools/teste_filme_envio.py"
 cp "$SOM/som_nucleo.c" "$SOM/som_nucleo.h" "$SOM/filme_tempo.h" "$T/"
 compila() {
     gcc -std=c89 -pedantic -Wall -Wextra -Werror -O2 -I"$1" "$1/som_nucleo.c" "$SOM/teste/teste_filme.c" -o "$1/teste"

@@ -1402,6 +1402,18 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **A imagem 0 do filme não é o quadro 0 do GS e pode estar sob o fade.** `BT3_FILME_SHOTS=1` escolhe o índice local,
   captura a conversão da GPU antes do fade e nomeia pelo filme e índice. A rodada de captura fixa escala 1 para a
   redução ser a identidade. Medir ritmo e deriva em outra abertura, sem capturas.
+- **Esperar a thread do GS não consome um DMA da GIF ainda armado.** Na rodada de 27/10 a imagem 0 da primeira
+  abertura não chegou ao desenho e a captura global 1 esperou 2 s. `MovieTag_Send` só arma CHCR; o port executa no
+  próximo `Port_DmaChcr`. Sem consumi-lo no `sceGsSyncPath`, o próximo envio já tinha publicado outra imagem e
+  reescrito TADR. No 360, consumir DMA 2 antes de esperar a gravação. O teste `teste_filme_envio.py` liga o DMA
+  real ao corpo extraído do SyncPath e exige falha por asserção sem a correção e com a ordem invertida.
+- **Uma captura faltante não deve esconder as outras nem virar aprovação parcial.** `filme.py compara` continua
+  pelas quatro imagens, mostra as três presentes idênticas e sai com 1 se a 0 faltar. Dois conjuntos da abertura
+  deram essa recusa; os quatro do final deram igualdade exata. Já `filme.py log` recusou boot e final por BGM sem
+  geração na primeira observação, apesar da escuta normal. Não descartar o começo nem preencher com zero.
+- **Pasta por abertura aceita nome, não um segundo volume.** `BT3_SHOT_PASTA` aceita também `game:\nome`, tirando
+  o prefixo uma vez. Nome simples até 30 caracteres, inválido com erro e sem captura; não cair silenciosamente em
+  `shots`. O mesmo caminho serve ao filme. Saves e capturas têm nomes únicos na pasta `ambientes/f6-etapa7b`.
 - **Memória física livre não conta os buffers retirados de um heap já reservado.** O teto do filme soma também
   `Movie_Open`, o `sFrame` estático e o ES do decodificador; a diferença de `dwAvailPhys` sozinha subestima o custo.
 

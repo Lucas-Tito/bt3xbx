@@ -1,0 +1,4 @@
+# Variante para pular a abertura do boot, sem alterar o boot.txt compartilhado.
+# START repetido desde as logos até o título; o Movie_Run preserva seu fade de 0,5 s.
+# Sem janela o filme já é pulado por contrato. Não usar para medir a abertura inteira.
+aperta START ate tela 1 max 20000

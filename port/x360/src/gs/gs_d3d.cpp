@@ -43,6 +43,7 @@
  *                     número do quadro do GS dele; BT3_SHOT_FROM / BT3_SHOT_TO limitam a faixa;
  *   BT3_SHOT_LISTA=G,G...  só esses quadros do GS (até 32), com ou sem o BT3_SHOT: os das imagens da etapa 6 da F4
  *                     (a linha "imagem: ... gs G" da build sem janela), para medir os menus contra elas;
+ *   BT3_SHOT_PASTA=shots  pasta em game:\, nome simples de até 30 caracteres; aceita também game:\nome;
  *   BT3_SHOT_CHEIA=1  (720p, etapa 3) com BT3_ESCALA maior que 1, as capturas na resolução interna; sem ela, reduzidas a
  *                     640 x 448 (a média dos pixels de saída de cada pixel do GS), comparáveis às da escala 1;
  *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado, e a
@@ -113,6 +114,7 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 
 #include "../som/som360.h"
 #include "escala.h"
+#include "captura_pasta.h" /* BT3_SHOT_PASTA, também para as capturas do filme */
 #include "vblank_alvo.h" /* (F5, etapa 8, seção 20: a conta da espera pelo vblank de hardware) */
 /* (F5, etapa 8, 720p, etapa 2) O tamanho dos alvos, das profundidades e do par da EDRAM, em pixels de saída: a área de
    BT3_ALVO_AREA vezes a escala (escala.h, area_init; docs/x360/plano/F5/08-720p.md). Sem a chave, 1024 x 1024 (o alvo
@@ -3818,9 +3820,10 @@ static int na_lista(unsigned quadro) {
    resolução interna (960 x 672 ou 1280 x 896). Os buffers maiores são pedidos na primeira captura, só nessas escalas. */
 static void captura(int alvo, D3DTexture *tex, const char *arquivo = NULL) {
     static int criou, cheia = -1, sw, sh;
+    static char pasta[40];
     static unsigned linear1[640 * 448], *linear, *red;
     static unsigned char ppm1[16 + 640 * 448 * 3], *ppm;
-    char cab[32], nome[64];
+    char cab[32], nome[96];
     HANDLE h;
     DWORD n;
     RECT ret;
@@ -3833,9 +3836,17 @@ static void captura(int alvo, D3DTexture *tex, const char *arquivo = NULL) {
 
     QueryPerformanceCounter(&t0);
     if (!criou) {
-        CreateDirectory("game:\\shots", NULL);
-        criou = 1;
+        criou = captura_pasta(getenv("BT3_SHOT_PASTA"), pasta) ? 1 : -1;
+        if (criou < 0) {
+            Diario_Escrever("gs_d3d: ERRO: BT3_SHOT_PASTA inválida: use 1 a 30 letras, números ou _, prefixo game:\\ opcional; nenhuma captura");
+        } else if (!CreateDirectory(pasta, NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+            Diario_Escrever("gs_d3d: ERRO: não criou a pasta das capturas %s", pasta);
+            criou = -1;
+        } else {
+            Diario_Escrever("gs_d3d: capturas em %s", pasta);
+        }
     }
+    if (criou < 0) return;
     if (cheia < 0) {
         cheia = sEscN != sEscD && env_num("BT3_SHOT_CHEIA", 0) != 0;
         sw = esc_px(640, sEscN, sEscD);
@@ -3890,8 +3901,8 @@ static void captura(int alvo, D3DTexture *tex, const char *arquivo = NULL) {
             o[2] = (unsigned char)c;
         }
     }
-    if (arquivo != NULL) _snprintf(nome, sizeof(nome), "game:\\shots\\%s", arquivo);
-    else _snprintf(nome, sizeof(nome), "game:\\shots\\gpu_%05u.ppm", sQ->quadro);
+    if (arquivo != NULL) _snprintf(nome, sizeof(nome), "%s\\%s", pasta, arquivo);
+    else _snprintf(nome, sizeof(nome), "%s\\gpu_%05u.ppm", pasta, sQ->quadro);
     h = CreateFile(nome, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h != INVALID_HANDLE_VALUE) {
         if (!WriteFile(h, ppm, (DWORD)(o - ppm), &n, NULL) || n != (DWORD)(o - ppm))

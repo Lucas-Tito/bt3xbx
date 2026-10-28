@@ -47,7 +47,14 @@ int sceGsExecStoreImage() { return 0; }
 /* (F5, etapa 8, degrau 1) o ponto onde o jogo espera o GS acabar a lista do quadro anterior: com a gravação em thread
    (BT3_GS_THREAD) é aqui que o jogo espera a thread; sem ela, Port_GsEspera não faz nada */
 extern void Port_GsEspera(void);
+#ifdef PORT_X360
+/* O DMA da GIF é consumido no acesso ao CHCR. Sem isto, o primeiro envio do filme só seria lido depois de
+   publicar a imagem seguinte, no próximo MovieTag_Send. Consumir antes de esperar a gravação, como no PS2. */
+extern volatile uint32_t *Port_DmaChcr(int channel);
+int sceGsSyncPath() { Port_DmaChcr(2); Port_GsEspera(); return 0; }
+#else
 int sceGsSyncPath() { Port_GsEspera(); return 0; }
+#endif
 #else
 int sceGsSyncPath() { return 0; }
 #endif
