@@ -73,6 +73,7 @@ for n in "${casos[@]}"; do
     case "$n" in
         f7_missao) reabre=missao;; f7_missao29) reabre=missao29;; historia_novo) reabre=historia;; *) reabre=;;
     esac
+    reabre_inicio=$EPOCHREALTIME
     if [ -n "$reabre" ]; then
         for a in x86 ppc; do
             if [ "$a" = x86 ]; then cartao=sa; exe=(port/build/x86/bt3_x86); else cartao=sq; exe=(qemu-ppc port/build/ppc/bt3_ppc); fi
@@ -82,6 +83,7 @@ for n in "${casos[@]}"; do
         done
         python3 port/x360/tools/save_entre.py campos "$D/sa" "$D/sq" > "$S/$n-campos.txt"
     fi
+    printf '%s\t%s\t%s\n' "$n" "$reabre_inicio" "$EPOCHREALTIME" >> "$S/reabertura.tsv"
     python3 port/x360/tools/f7_pilotos.py --caso "$n" --pasta "$D" --tempos "$S/$n-tempos.tsv" \
         --saida "$S/$n.json" --negativos "$S/negativos-$n" | tee "$S/$n-verificador.log"
     du -sb "$S/atual" | tee "$S/$n-bytes.txt"
@@ -94,7 +96,38 @@ for n in "${casos[@]}"; do
     mkdir -p "$S/coleta/roteiros/$n"
     cp "$D/gdb.txt" "$S/coleta/roteiros/$n/gdb.txt"
     sha256sum "$D"/img/{x86,ppc}/*.ppm > "$S/$n-imagens.sha256"
+    [ -e "$S/conv_tool" ] || cp "$S/atual/conv_tool" "$S/conv_tool"
     rm -rf "$S/atual"
     tail -1 "$S/$n.log"
 done
-echo 'pilotos: tudo certo'
+# A auditoria completa deve continuar reprovando as lacunas: os pilotos são uma amostra.
+"$S/conv_tool" --disco gamedata > "$S/coleta/disco.log"
+cp port/build/x86/bt3_x86 "$S/bt3_x86"
+python3 - "$S" <<'PY2'
+from datetime import datetime, timezone
+import hashlib
+import json
+from pathlib import Path
+import sys
+s = Path(sys.argv[1]); coleta = s / 'coleta'
+logs = sorted(coleta.glob('roteiros/*/gdb.txt'))
+arquivos = [dict(nome=str(p.relative_to(coleta)), tamanho=p.stat().st_size,
+                 sha256=hashlib.sha256(p.read_bytes()).hexdigest()) for p in logs]
+agora = datetime.now(timezone.utc).isoformat()
+meta = dict(inicio_utc=agora, fim_utc=agora, rodada=str(s), prog=str(s / 'bt3_x86'),
+            sha256_prog=hashlib.sha256((s / 'bt3_x86').read_bytes()).hexdigest(), arquivos=arquivos,
+            limite='coleta própria dos pilotos concluídos, sem crédito para casos ausentes')
+(coleta / 'coleta.json').write_text(json.dumps(meta, indent=2) + '\n')
+(coleta / 'origem.json').write_text(json.dumps(dict(commit=(s / 'commit.txt').read_text().strip(), maquina='Deck')) + '\n')
+(coleta / 'casos.json').write_text(json.dumps({p.parent.name: 0 for p in logs}) + '\n')
+PY2
+set +e
+python3 port/x360/tools/f7_cobertura.py conferir --coleta "$S/coleta" \
+    --justificativas port/x360/tools/f7_justificativas.json --saida "$S/cobertura.json" > "$S/cobertura.log"
+cobertura_rc=$?
+set -e
+[ "$cobertura_rc" = 1 ] && [ -s "$S/cobertura.json" ]
+python3 port/x360/tools/teste_f7.py --coleta "$S/coleta" --dados "$(realpath gamedata)" \
+    --saida "$S/negativos-cobertura" | tee "$S/negativos-cobertura.log"
+python3 port/x360/tools/f7_manifesto.py --dados gamedata --saida "$S/manifesto.jsonl" > "$S/manifesto.log"
+echo 'pilotos: tudo certo; cobertura completa continua pendente'
