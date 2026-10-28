@@ -41,3 +41,4 @@ ou loja.flags = 1
 depois saga.vencidos[6] = 0xF
 depois saga.flags[6] tem 4
 depois saga.flags[8] tem 3
+depois saga.novos[6] sem 8         # o ModeMenu tira o "novo" ao jogar o episódio (menu_a_d.c:719)

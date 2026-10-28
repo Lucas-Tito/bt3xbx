@@ -1,0 +1,46 @@
+# F7, etapa 2: a receita historia_final e o último episódio da saga 6 (o 3) jogado pelo fluxo da História: a vitória pelo dano do
+# jogo (o roteiro de evento do episódio grava o resultado), o resultado, o fim da saga e o filme final e o HistSave pelo McFlow.
+inclui boot_novo.txt
+receita aplica historia_final
+receita confere antes historia_final
+quadros 90
+aperta X ate tela 6               # História (o primeiro item)
+quadros 300
+aperta X                          # o modo história (foco 0), e o carrossel das sagas (foco 1)
+quadros 120
+ritmo 4 60                        # (o carrossel anima: um toque por vez)
+aperta DIREITA 6                  # a saga 6 (DIREITA anda no carrossel, HistSel_Input)
+quadros 60
+ritmo 4 8
+repete ate tela 7 max 3000        # escolhe a saga (já apresentada: sem as falas do guia)
+    aperta X
+    quadros 120
+volta
+quadros 300
+ritmo 4 60
+aperta DIREITA 3                   # o episódio 3 (ModeMenu_Input: DIREITA anda na lista)
+quadros 60
+ritmo 4 8
+repete ate luta max 6000          # o episódio e a apresentação dele
+    aperta X
+    quadros 150
+volta
+quadros 60
+termina luta vence max 20000
+espera tela 8 max 6000            # HistResult
+quadros 150
+repete ate tela 10 max 12000      # os pontos, as recompensas, o fim da saga e o filme final
+    aperta X
+    quadros 60
+volta
+espera mcflow 12 max 600          # "salvar?" (McFlow_Start(0) do HistSave)
+repete ate mcflow 0 max 3000
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+marca salvo
+receita confere depois historia_final
+quadros 150
+fim
