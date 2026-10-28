@@ -45,8 +45,13 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
    temporárias do WSL; propor ao upstream as correções do cache que valem também para o PC (a colisão das tabelas do
    `f5-clut` e as 16 cores do `codex/f5-clut16`).
 
+7. **Todos os logs desligados por padrão** (pedido do Lucas, 28/10/2026): no release, o jogo não grava nada que só
+   serve ao desenvolvimento. O `bt3xbx.log` e o diário, as medidas (picos, tempos, cortes, perfis da GPU e da CPU,
+   deriva do som, filme) e as capturas ficam desligados sem `ambiente.txt`, e continuam ligáveis por ele para teste.
+   Conferir no console que, desligados, não custam nada no quadro nem gravam arquivo.
+
 ## A abertura do repositório, a última parte do plano (27/10/2026)
 
-7. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
+8. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
    guia de instalação e o de contribuição; e o GitHub configurado para receber as contribuições.
 
