@@ -2,7 +2,8 @@
 # F7, etapa 2 (docs/x360/plano/F7/02.md; no WSL, na raiz): os cartões avançados nativos das receitas
 # (port/x360/receitas) gerados, reabertos e conferidos numa build, fora do git.
 #   F7_SAIDA=~/f7e2/rodada port/x360/tools/f7_receitas.sh x86 MARCO...
-#   F7_SAIDA=~/f7e2/rodada port/x360/tools/f7_receitas.sh ppc MARCO...   (qemu-ppc sem mapa, dentro de flock ~/wsl.lock)
+#   F7_SAIDA=~/f7e2/rodada port/x360/tools/f7_receitas.sh ppc MARCO...   (qemu-ppc sem mapa, dentro de flock ~/wsl.lock;
+#                                                                         no Deck, TRAVA=~/deck.lock)
 #   F7_SAIDA=... port/x360/tools/f7_receitas.sh antes MARCO...           (só o cartão de antes, x86: confere os "exige"
 #                                                                         da receita contra o New Game real)
 #   F7_SAIDA=... port/x360/tools/f7_receitas.sh verificadores            (x86: tabela e receitas estragadas em cópias,
@@ -106,7 +107,7 @@ if [ "$modo" = verificadores ]; then
     exit 0
 fi
 if [ "$modo" = ppc ]; then
-    exec 9> "$HOME/wsl.lock"
+    exec 9> "${TRAVA:-$HOME/wsl.lock}"  # (no Deck: TRAVA=~/deck.lock)
     flock 9
     if pgrep -x qemu-ppc > /dev/null || pgrep -f '[r]oteiros.sh' > /dev/null; then echo 'emulador ocupado sem a trava'; exit 1; fi
 fi
