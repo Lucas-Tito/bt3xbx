@@ -4211,3 +4211,281 @@ para `~/f5-rp-analise/x86-preexistente.text`. Não é build deste commit nem pro
 Nenhuma entrada de compilação mudou nesta tarefa. Os testes nativos e a matriz completa anteriores não são
 reatribuídos à análise. Não estão provados: causa exata da regressão/7170, aquecimento implícito do driver,
 ganho de alfa/prefixos, identidade de imagem/entrada sob reprojeto, aceite das três janelas longas, F7 ou 720p.
+
+## 34. As oito aberturas seguintes: custo sustentado dos lutadores e fecho pequeno, 7170 ainda por localizar (28/10/2026)
+
+**Resposta:** o salto dos lutadores permanece no 6961; aquecimento não tem ganho demonstrado a creditar.
+Manter o complemento **rp33a2810 como está** para isolar a regressão. A primeira implementação continua sendo
+alfa exato com chave desligada, depois o ensaio de prefixos, sujeitos à ausência de regressão da decisão 29.
+O zero segue reprovado. Esta tarefa só analisa logs e documenta o próximo trabalho: nenhum corte implementado.
+Branch `codex/f5-rp-analise2`, base `4575152d`. Sem console, emulador ou compilação nesta análise.
+
+### Proveniência, recorte e conferência
+
+**[Lido, informação do Lucas]** As oito aberturas foram executadas na ordem da tabela, na mesma sessão de
+28/10 e build main `8c1ec1d`, `default.xex` MD5 `af2a4861d74a3c2fc9401231fa779a29`, com os ambientes de
+`~/f5-reprojeto/console/` e saves novos `sv_rp32a2810_NOME`. A identidade do binário e a inexistência prévia dos
+saves são informações recebidas; não houve consulta ao console. `grav6930_b` tem uma única execução:
+a tentativa que não abriu o jogo não tem log e não entra como repetição. O complemento rp33a2810 não rodou.
+
+**[Medido nos logs]** Todos têm carimbo literal **`8c1ec1d diff:da39a3ee5e`** e ambiente integralmente igual
+a `ambiente_NOME.txt`: hardware 3, som, 16:9, escala 1,33, FXAA, origem, VU1 direto, envio rápido, tempos 0.
+Nos grav*, CPU e GPU finas desligadas, `BT3_CORTES=Q,Q`, constantes/fecho 0/0 em b, 2/1 em a;
+nos cpu*, somente `BT3_CADEIA_CPU=Q,Q`, constantes/fecho 0/0. `BT3_DEMO` ausente.
+Originais preservados em `~/sessao_2810b/rp/rp_NOME/bt3xbx.log`.
+SHA256 dos bytes completos abaixo; o recorte de análise termina no **primeiro** `f5_duelo.txt:99 fim`,
+vblank 12570/quadro 8378. A continuação, maior em grav6960_a e grav6930_a, não é janela de aceite adicional.
+
+| Abertura, ordem real | SHA256 original | Linhas usadas / original |
+|---|---|---:|
+| grav6960_b | `42006433d28b9580113e0026e397e8d6d4d5e023ec4ce653e20e8d75767799a7` | 2806 / 2958 |
+| grav6960_a | `7db654b73941f859a4da99ba86112b5108a8c0fc9b32f92ee9b2c3a81783bf7c` | 2811 / 4272 |
+| grav6930_b | `9ede44e41a0b3061b51d340a9562b8a6f8f0c03670beecf9f4279785f80eb5a5` | 2806 / 3134 |
+| grav6930_a | `e3733ad9f6d80477d0113d9fd7cbfb5a66d2cd978c319fd6a08cba81035c20d3` | 2807 / 3593 |
+| cpu6959_1 | `d8ca29b7ed9b3e6042bcea00d312f4696705931307813e0c50fcd5a1f856ca75` | 2849 / 3177 |
+| cpu6961_1 | `87f89d1e76e244fafce2a2b1ce44012c6a716b28ec14f7853aa350d0a1de9b75` | 2849 / 2900 |
+| cpu6959_2 | `2b80f49bfb64bf00a27bd69b604b6e571dd71d50ad41f3aa6e3839439591e722` | 2847 / 3225 |
+| cpu6961_2 | `687c2a1271a7093366a8d019dab8585cfe8790526faaba95498d5153bbdbd251` | 2844 / 3222 |
+
+**[Medido]** As dezesseis janelas têm 684/2.334 passos e 1.368/4.668 vblanks, todos os passos de dois vblanks;
+parede/esperado 0,9972. Resultado idêntico: estado 4, vencedor 0x2, razão 0x1, vida 0/27160,
+vblank 11478/quadro 7757. Zero FALHA/CRASH/ERRO/vigia/amostra indisponível, descartes requeridos,
+pressões/esperas de descarte, texturas recusadas/brancas e alvos sem textura. Primitivas só do PS2 ficam
+à parte, não são descartes requeridos. Zero repetições, trocas sem quadro, puladas e marcas GPU ausentes;
+histogramas conservados e todas as imagens excepcionais presentes.
+
+**Fronteira:** nos dois grav*_a, o resumo `picos: tela` de j2 conta 2.335 trocas, histograma **3/2330/2/0**;
+`passos: janela 2 tela` conta 2.334, **3/2329/2/0**. A única diferença é uma imagem de dois vblanks na fronteira
+de fechamento, sem mudar longas. Nas outras seis, ambos contam 2.334. Não misturar esses denominadores.
+J1 sempre 0/684/0/0. A tabela usa histogramas de **passos**, mas folgas de **picos: tela**; tempos em ms.
+
+| Abertura | J2, imagens 1/2/3/4+ | Folga GPU j2, mínimo/p1/p10/p50 | Trabalho j2 p50/p99/máximo |
+|---|---|---|---|
+| grav6960_b | 3/2328/3/0 | -11,4 / 2,4 / 6,0 / 7,9 | 24,94 / 30,52 / 32,13 |
+| grav6960_a | 3/2329/2/0 | -11,0 / 2,7 / 5,8 / 7,8 | 24,52 / 29,99 / 31,59 |
+| grav6930_b | 3/2328/3/0 | -9,6 / 2,3 / 5,8 / 7,7 | 24,92 / 30,48 / 32,13 |
+| grav6930_a | 3/2329/2/0 | -9,2 / 2,7 / 5,9 / 7,9 | 24,50 / 29,94 / 31,57 |
+| cpu6959_1 | 3/2328/3/0 | -9,6 / 2,3 / 5,9 / 7,8 | 24,91 / 30,48 / 32,09 |
+| cpu6961_1 | 3/2328/3/0 | -9,6 / 2,3 / 5,9 / 7,9 | 24,90 / 30,45 / 32,17 |
+| cpu6959_2 | 3/2328/3/0 | -9,5 / 2,4 / 5,8 / 7,6 | 24,90 / 30,56 / 32,11 |
+| cpu6961_2 | 3/2328/3/0 | -9,7 / 2,3 / 5,8 / 7,7 | 24,92 / 30,52 / 32,14 |
+
+**[Medido]** Cada longa tem três vblanks. A é a imagem retida, B o quadro seguinte; J/G/P/U são as folgas
+até o mesmo prazo de entrega do jogo, da gravação, Present e fim GPU. F é o `frame_end` impresso,
+não necessariamente todo o intervalo G→P. Textura nova/decodificação zero em todas as linhas.
+
+| Abertura | A → B | J/G/P/U (ms) | Gravação ocupada / F (ms) |
+|---|---|---|---|
+| grav6960_b | 6929 → 6930 | 32,9 / 18,5 / 11,7 / -2,6 | 14,5 / 6,8 |
+| grav6960_b | 6959 → 6960 | 32,8 / 11,2 / 4,6 / -11,4 | 21,7 / 6,7 |
+| grav6960_b | 7169 → 7170 | 49,5 / 28,7 / 10,9 / -0,2 | 20,8 / 17,8 |
+| grav6960_a | 6929 → 6930 | 32,9 / 18,8 / 12,1 / -2,2 | 14,1 / 6,8 |
+| grav6960_a | 6959 → 6960 | 32,8 / 11,6 / 5,0 / -11,0 | 21,2 / 6,6 |
+| grav6930_b | 6929 → 6930 | 32,9 / 17,4 / 10,9 / -3,4 | 15,6 / 5,7 |
+| grav6930_b | 6959 → 6960 | 32,8 / 13,0 / 6,4 / -9,6 | 19,8 / 6,6 |
+| grav6930_b | 7169 → 7170 | 49,5 / 28,7 / 10,7 / -0,3 | 20,8 / 18,0 |
+| grav6930_a | 6929 → 6930 | 32,9 / 17,7 / 10,9 / -3,4 | 15,2 / 6,8 |
+| grav6930_a | 6959 → 6960 | 32,8 / 13,4 / 6,9 / -9,2 | 19,5 / 6,5 |
+| cpu6959_1 | 6929 → 6930 | 32,9 / 18,5 / 11,7 / -2,6 | 14,5 / 6,8 |
+| cpu6959_1 | 6959 → 6960 | 32,8 / 13,0 / 6,4 / -9,6 | 19,9 / 6,6 |
+| cpu6959_1 | 7169 → 7170 | 49,5 / 28,7 / 10,8 / -0,2 | 20,8 / 17,9 |
+| cpu6961_1 | 6929 → 6930 | 32,9 / 18,5 / 11,7 / -2,6 | 14,5 / 6,8 |
+| cpu6961_1 | 6959 → 6960 | 32,8 / 13,0 / 6,4 / -9,6 | 19,8 / 6,6 |
+| cpu6961_1 | 7169 → 7170 | 49,5 / 28,7 / 10,8 / -0,2 | 20,8 / 17,9 |
+| cpu6959_2 | 6929 → 6930 | 32,9 / 18,5 / 11,7 / -2,6 | 14,5 / 6,8 |
+| cpu6959_2 | 6959 → 6960 | 32,8 / 13,0 / 6,4 / -9,5 | 19,8 / 6,6 |
+| cpu6959_2 | 7169 → 7170 | 49,5 / 28,7 / 10,8 / -0,3 | 20,8 / 17,9 |
+| cpu6961_2 | 6929 → 6930 | 32,9 / 18,5 / 11,7 / -2,6 | 14,5 / 6,8 |
+| cpu6961_2 | 6959 → 6960 | 32,8 / 12,9 / 6,3 / -9,7 | 19,9 / 6,6 |
+| cpu6961_2 | 7169 → 7170 | 49,5 / 28,7 / 10,8 / -0,2 | 20,8 / 17,9 |
+
+`passos.py LOG --carimbo '8c1ec1d diff:da39a3ee5e'` passou nos oito recortes (estrutura, saída 0).
+Com `--console --janelas 2 --minimo 600`, **saída 1 nos oito**, corretamente pelas longas em j2;
+1 janela aprovada de 2 exigidas. O texto genérico da saída estrutural menciona emulador; os arquivos de entrada
+são do console, nenhuma execução de emulador ocorreu. `cadeia_cpu.py LOG --quadros Q` passou nos quatro cpu*
+(saída 0). O extrator `~/f5-rp-analise2/confere.py`, dados JSON, recortes, comandos e saídas ficam fora do git.
+
+### Gravação atual: parcelas exclusivas e efeito b contra a
+
+**[Medido, com marcas]** Um quadro por abertura. Formato e tolerância de conservação de `cortes.py`,
+sem inventar rodapé `gpu_falso` nem exigir os dois alvos numa abertura que marca só um. As onze parcelas somam
+o total com erro inferior a 0,00001 ms. Célula em ms **b / a**, chamadas iguais nos dois caminhos:
+
+| Parcela | 6930 b / a | Chamadas | 6960 b / a | Chamadas |
+|---|---|---:|---|---:|
+| dma | 0,189682 / 0,189726 | 0 | 0,238580 / 0,238742 | 0 |
+| vif | 1,392778 / 1,380622 | 2510 | 1,930560 / 1,903400 | 3196 |
+| gif | 1,312737 / 1,309160 | 2472 | 2,074780 / 2,071381 | 4077 |
+| cpu | 1,815443 / 1,812795 | 679 | 2,366400 / 2,372425 | 1058 |
+| vu1 | 2,598013 / 2,582398 | 2276 | 4,480780 / 4,504127 | 3150 |
+| unpack | 1,195595 / 1,190996 | 3811 | 1,839620 / 1,843379 | 5565 |
+| envio | 3,462325 / 3,490205 | 172 | 3,467300 / 3,447396 | 245 |
+| entrega | 0,069481 / 0,068342 | 1 | 0,413900 / 0,413524 | 1 |
+| hash | 2,029666 / 2,051602 | 321 | 2,272480 / 2,229983 | 404 |
+| constantes | 0,563887 / 0,646940 | 1768 | 1,265580 / 1,340834 | 3170 |
+| fecho | 0,920812 / 0,500775 | 1768 | 1,279740 / 0,853469 | 3170 |
+| **Total** | **15,550420 / 15,223560** | | **21,629720 / 21,218660** | |
+
+**[Medido]** Fecho diminui **0,420037/0,426271 ms** no 6930/6960, mas constantes **aumentam
+0,083053/0,075254**. O saldo dessas duas parcelas é **0,336984/0,351017**; no total, **0,326860/0,411060**.
+O restante contribui -0,010124/+0,060043. Não atribuir o saldo total só a constantes ou inferir redundância
+pelo número igual de chamadas. Há um par b/a por alvo; não é repetição estatística do ganho isolado.
+
+Envio+hash: **5,491991/5,541807 no 6930 b/a**, **5,739780/5,677379 no 6960**. VIF+GIF:
+**2,705515/2,689782** e **4,005340/3,974781**. A gravação continua repartida entre transferência,
+parser/estado, primitivas e VU, sem um bloco removível que feche o déficit. Hash tem 321/404 chamadas de parcela,
+incluindo acertos, contra 276/293 recálculos nos picos. Envios: 172/2.181 KB e 245/2.290 KB; lotes VU1:
+2.276/3.150; desenhos: 213/1.408. Mesmas contagens b/a. Zero textura nova, XG, disco e pressão nos picos dos alvos.
+Não há medida por formato, igualdade dos bytes ou invalidação; não propor pular escrita por endereço/tamanho.
+
+**[Medido]** A instrumentação de gravação piora U no alvo 6960 para **-11,4/-11,0 ms** (b/a), contra
+-9,6/-9,2 nos controles sem marcas da seção 33: +1,8 ms de atraso em ambos. No 6930 marcado U é **-3,4/-3,4**,
+contra -2,6 e -2,3 a -2,2 nos controles. Logo os 0,327 ms de gravação não viram ganho demonstrado de U nesse par.
+O grav6930_b imprime F=5,7, enquanto G→P pelos carimbos é ~6,5; conservar ambos, sem usar a diferença como
+parcela causal. Tempos ocupados, carimbos arredondados e APIs concorrentes não são um orçamento aditivo exato.
+O aceite e a meta de corte continuam apoiados nos controles sem essas marcas.
+
+### 6959 → 6960 → 6961: o salto permanece
+
+**[Medido]** Reextraídos também os dois cpu6960 da seção 33, dos originais, com os verificadores desta worktree;
+carimbo e ambientes iguais, totais conservados. Sua proveniência/hashes continuam na seção 33 e em
+`~/f5-rp-analise2/comparacao.json`. Perfil exclusivo de CPU, em ms; cada célula contém **_1 / _2**:
+
+| Família | 6959 | 6960 | 6961 |
+|---|---|---|---|
+| quadro | 0,579980 / 1,620700 | 1,234060 / 1,230420 | 1,336880 / 1,358220 |
+| comum | 2,059020 / 1,056600 | 1,048140 / 1,049160 | 1,075720 / 1,084580 |
+| vu0 | 0,174980 / 0,172740 | 5,977780 / 5,956940 | 5,972780 / 5,966840 |
+| vu4 | 0,259000 / 0,257660 | 0,199720 / 0,202500 | 0,199980 / 0,208500 |
+| vu6 | 0,000000 / 0,000000 | 0,000000 / 0,000000 | 0,000000 / 0,000000 |
+| nativa | 0,057660 / 0,059720 | 0,080640 / 0,078360 | 0,080820 / 0,079540 |
+| Total | 3,130640 / 3,167420 | 8,540340 / 8,517380 | 8,666180 / 8,697680 |
+
+| VU0, etapa | 6959 _1 / _2 | 6960 _1 / _2 | 6961 _1 / _2 |
+|---|---|---|---|
+| resto | 0,039560 / 0,036680 | 0,771500 / 0,768140 | 0,770340 / 0,768740 |
+| prepara | 0,073440 / 0,073840 | 1,616900 / 1,609660 | 1,618280 / 1,612320 |
+| pipe | 0,005340 / 0,005460 | 0,731320 / 0,726720 | 0,729800 / 0,730580 |
+| sampler | 0,000000 / 0,000000 | 0,396220 / 0,392660 | 0,391200 / 0,391340 |
+| estado | 0,002340 / 0,002280 | 0,899760 / 0,908000 | 0,903820 / 0,906740 |
+| textura | 0,007360 / 0,007620 | 0,166820 / 0,166740 | 0,169980 / 0,168620 |
+| uniforme | 0,021700 / 0,022140 | 0,485200 / 0,482860 | 0,484500 / 0,483380 |
+| indices | 0,025240 / 0,024720 | 0,910060 / 0,902160 | 0,904860 / 0,905120 |
+
+**[Medido]** VU0 passa de **48** desenhos no 6959 a **1.220** tanto em 6960 como em 6961, mantendo as mesmas
+contagens em todas as suas etapas nos dois últimos. São 2.410 escopos no 6959 e 22.303 em cada vizinho pesado.
+Entre 6960/6961, o custo VU0 muda só **-0,005000/+0,009900 ms**, sem queda sistemática, e o total de desenho
+**aumenta 0,125840/0,180300**. Não há chamada de alfa nesses três quadros marcados. O salto dos lutadores é
+custo sustentado pelo menos até o vizinho seguinte, não um impulso demonstrado de primeira submissão.
+Isso não certifica o custo de todos os quadros posteriores nem isola aquecimento do driver.
+
+No 6959 o comum/UP muda **1,274760 → 0,260260** entre aberturas, enquanto quadro/resto muda
+**0,215540 → 1,258360**, e o total fica **3,130640/3,167420**. Não chamar esse ~1 ms de shader frio:
+a redistribuição entre parcelas e uma API podem incluir espera/preempção, sem marca que identifique a causa.
+No 6961 marcado os picos dão F=8,7, gravação ocupada 20,6 a 20,7, contra F~8,5 no 6960 marcado da seção 33;
+mesmos 245 envios/2.290 KB e 293 recálculos, zero textura nova/XG/disco. Os lotes VU1 mudam 3.150 → 3.147,
+portanto nem esses vizinhos são cargas byte a byte idênticas. Não descontar relógios por família nem transportar
+a diferença CPU menos GPU para uma espera supostamente eliminável.
+
+**[Lido]** Shaders já são binários criados no boot; a estatística de alfa é periódica, não aquecimento.
+**[Estimado, crédito conservador]** Aquecimento demonstrado cobre **0 ms** do déficit: não há criação direta
+nos alvos e a submissão pesada persiste. Cache/driver implícito permanece sem medida causal. Um aquecimento
+futuro só pode antecipar trabalho independente da entrada, com igualdade, custo/memória e controle frio/quente;
+não usar o número 6960 como gatilho nem transferir trabalho para o próximo quadro.
+
+**[Medido, controles sem marcas da seção 33]** Prazo relativo a J no 6960: **32,8 ms**; G em J+19,8,
+P em J+26,4 e U em J+42,4 na base, atraso **9,6**. Ambos chega a U=J+42,0, atraso **9,2**.
+**[Estimado, requisito de margem >=1 ms]** Ainda faltam **10,6/10,2 ms** na base/ambos; no 6930,
+**3,6/3,2 a 3,3**. Os novos rateios não descontam novamente os ~0,4 já observados com ambos.
+Manter **10,9/10,5 ms** como orçamento conservador entre builds/sessões até fechar os controles cruzados.
+Nem aquecimento, nem retirada fictícia de todo envio/hash instrumentado fornece ganho creditável para mudar essa meta.
+
+### 7170: reforço da ocorrência, sem localização causal
+
+**[Medido]** A longa 7169 → 7170 está nos dois grav*_b e nos quatro cpu* novos: U **-0,2 a -0,3 ms**,
+F **17,8 a 18,0**, gravação ocupada **20,8**. Nos dois grav*_a não há longa nesse par, mas F continua
+**17,8/17,7**, contra **15,9 a 16,1** dos controles antigos da seção 33; isso não restaura ausência de regressão.
+Seis novas ocorrências, somadas às já documentadas, não são seis controles sem marcas independentes:
+todas as oito aberturas marcam um quadro anterior e nenhuma alterna a build antiga com a nova.
+Os dois a reproduzem o padrão de ambos2/3, que já não tinham a longa marginal; não comprovam correção.
+
+No 7170, as oito aberturas têm 204 envios/1.590 KB, 197 recálculos, 2.633 lotes VU1, 2.325 desenhos,
+2.904 vértices CPU, 35.728 VU e 87.174 índices. Textura nova, XG, disco, descarte e diário no pico zero.
+Esses zeros restringem candidatos diretos naquele pico, mas não localizam custo implícito das APIs.
+Nenhuma linha `cadeia: cpu quadro 7170` nem `cortes: gravacao quadro 7170` foi produzida.
+**[Lido/hipótese]** 7170-6930=240 é compatível com a estatística por trechos de 60 e com a regra
+`sConta.quadros == 30 && sConta.alfaAltoDes == 0`; não prova que alfa explica F nem seus ~2 ms extras.
+A marca do 6930 não deve ser extrapolada para ele.
+
+**Recomendação:** manter **rp33a2810 integralmente**, sem reaproveitar saves: três pares alternados
+antiga1/nova1, antiga2/nova2, antiga3/nova3, builds c57e807/8c1ec1d e sem marcas; depois cpu7170_1/_2 na nova
+com a chave já existente `BT3_CADEIA_CPU=7170,7170`. O diretório preparado
+`~/f5-rp-analise/console-rp33a2810/` não foi alterado. Conferir carimbo, recursos e inexistência dos oito saves
+antes de abrir; se algum existir, gerar outra rodada inteira. Os cpu7170 localizam o custo atual; para atribuir
+a diferença especificamente ao diagnóstico, pode ainda ser necessário comparar código gerado ou perfilar a
+build antiga com instrumentação equivalente, depois de conhecer as parcelas. Não acrescentar essa rodada às cegas.
+A regra da decisão 29 continua: **nenhuma mudança entra sem provar ausência de regressão**, inclusive desligada.
+
+### Primeira implementação e ponto de parada da exceção E
+
+**[Lido/proposto, tarefa futura com emulador autorizado]** Primeiro localizar/restaurar o controle desligado,
+sem certificar desempenho só por zero leituras de relógio. Se escopos inativos forem a causa, selecionar o
+caminho de perfil fora do laço quente e preservar o original desligado, comparando o código gerado no XDK.
+
+1. **Alfa exato, `BT3_ALFA_FORA=1`, ausente/0 original.** Produzir metadados em memória comum na passagem
+   que já escreve os vértices/índices; decidir apenas com o desenho fechado, considerando fusões, máscara,
+   nativa/count, uniforme `color0[3]`, `misc[3]`, índices realmente referidos, limite de vértices e os mesmos
+   predicados/ordem do original. Preservar a amostragem e os dois contadores da estatística. Caminho antigo como
+   oráculo por desenho, adulterações de máscara/misc/índice/uniforme/fusão vistas falhar; imagem e logs iguais.
+   Não reler buffers combinados no caminho novo nem mover a varredura para depois de Present. **[Estimado]**
+   teto bruto de ~5,4 ms no 6930, menos custo de produzir metadados, ganho em U ainda não demonstrado;
+   **nenhum alfa medido a retirar no 6960**. Medir 7170 e os seguintes também.
+2. **Prefixos depois, `BT3_GS_PREFIXOS=1` no falso antes de `BT3_GS_LOTES=1` no D3D**, ausente/0 integral.
+   Descritores fechados, estado e versões imutáveis, fila limitada, um consumidor, mesma ordem/quadro e um Present;
+   resolver `ed_plano`, `usa_z`, `date_area`, `vu_plano`, última escrita e último leitor. Sem fila de quadro extra,
+   sem mover entrada, descartar sob pressão ou liberar VU/retrato/recursos antes do consumidor final.
+   Medir cópias, fila, mínimo livre e limites, inclusive duas vistas; nenhuma memória extra presumida autorizada.
+
+Conservar todas as provas da seção 33: matriz da seção 28, chaves 0/1 e combinações, Duelo/Treino e threads,
+listas/hashes/estados/saves, atrasos 1/5/20 ms e mutantes de ordem/versão/liberação; objetos sem depuração iguais
+salvo teste/carimbo, `.text`, `divergencias.py --normal`,
+`REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino`, `SEMMAPA=1 IMG=1 roteiros.sh duelo` e `save_mc.sh`
+com dados não vazios. No console: intermediários/final byte a byte na mesma arquitetura e ambas as escalas,
+mesmo vblank/botão/estado/hash/primeiro quadro que reage, áudio, pressão, Guide/saída e duas vistas.
+Esses comandos não foram executados nesta análise de documentação.
+
+**[Estimado, modelo e parada]** Usando só como escala a GPU calibrada histórica de ~22,8 ms, para U<=J+31,8
+precisa haver trabalho útil até **J+9,0**, sem lacunas; início cedo sozinho não basta. Medir por lote
+`r_i/c_i/g_i`, simular `C_i=max(r_i,C_anterior)+c_i`, `U_i=max(C_i,U_anterior)+g_i`, incluir dependências finais,
+descontar fila/cópias e medir U sem marcas. Não somar tetos sobrepostos nem creditar o alfa do 6930 ao 6960.
+Antes do D3D, parar esta partição se o modelo não puder cobrir **10,6/10,2** líquidos, usando **10,9/10,5**
+enquanto a comparação entre sessões não fechar, ou se dependências do sufixo impedirem o início necessário
+sem outro ganho independente. Após a primeira integração, no máximo dois ajustes de lote sem folga >=1 ms
+repetível nos alvos: recalcular o teto e parar sem candidato para o resto. Limites da seção 32 mantidos:
+uma rodada diagnóstica, dois dias de ensaio e dois de integração; bloqueio além do dobro exige registrar e parar.
+
+A volta ao Lucas deve levar o déficit/teto restante do protótipo, ocorrência/quadro de cada longa,
+J/G/P/U, mínimo/p1/p10/p50, entrada e memória, mais os controles cruzados. Referência atual sem marcas:
+**2 a 3 longas/2.334**, nenhuma 4+, atrasos **2,2 a 2,6/9,2 a 9,6 ms** nos alvos; 7170 marginal
+até -0,2 nas bases da seção 33, agora até -0,3 nas aberturas marcadas. A exceção E só pode admitir três vblanks
+em trocas de cena, nenhuma 4+, após três janelas longas e termos exatos voltarem ao Lucas, também para F7.
+**7170 não está provado como troca de cena**: corrigir/localizar, não incluí-lo automaticamente na exceção.
+As janelas curtas e os zeros de recursos não provam imagem/entrada iguais nem autorizam relaxar o aceite.
+
+### Conferência final e limites desta análise
+
+| Conferência sem executar o jogo | Resultado |
+|---|---|
+| Oito originais, SHA256, ambiente/carimbo, passos/resultado/recursos/associações | tudo certo, recorte no primeiro fim; fronteira +1 de dois vblanks nos dois a explicitada |
+| `passos.py`, estrutura / aceite do console | 0 / **1 nos oito**; zero reprovado |
+| `cadeia_cpu.py`, quatro vizinhos e dois cpu6960 reextraídos | tudo certo, 0, quadro exato e soma exclusiva conservada |
+| Quatro gravações, onze parcelas/campos de chamadas | tudo certo, alvo exato, soma conservada, chamadas b/a iguais |
+| Extrator novo visto falhar em cópias | 17 mutantes recusados: fim, associação, imagem, duração, resultado, save, carimbo, recurso, descarte; gravação total/parcela/quadro/ausência; CPU total/parcela/quadro/classe |
+| Entradas de compilação contra `4575152d` | nenhuma alteração em `src/`, `include/`, `port/`; nenhuma build/objeto produzido |
+| `.text` x86 preexistente, extraída outra vez e comparada à extração da seção 33 | SHA1 `43444ea4d03a6d448aa1ae74a631e35b356a7caa`, `cmp` igual |
+
+Comandos finais e saídas em `~/f5-rp-analise2/final.sh` e `final.log`. `.text` reextraída com
+`objcopy -O binary --only-section=.text` de `~/f5-gpu-comum/base/port/build/x86/bt3_x86`,
+carimbo histórico `4c85c039 diff:da39a3ee5e`. É referência preexistente, não build deste commit nem
+prova nova de objetos compilados. Não estão provados: causa da regressão/7170, ganho causal de aquecimento,
+ganho de alfa/prefixos, igualdade de imagem/entrada sob reprojeto, três janelas longas, sessão livre, F7 ou 720p.
