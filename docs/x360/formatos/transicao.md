@@ -53,3 +53,8 @@ O caso não comprova o combate, a GPU nem a volta para o dashboard.
 
 Para a rodada anterior à correção, guardar o conversor antigo e os dados crus. O `--disco` só percorre os
 formatos cadastrados: passar com todos os cadastrados convertidos não significa cobrir todos os leitores.
+
+O censo dos 68.601 arquivos das três partições, exigindo tabela externa válida de três entradas,
+primeira assinatura CMAn e segunda cmdl, encontrou exatamente esses dois pacotes.
+O teste integral da ISO versão 3 passou: 3.327 arquivos e 712 conteúdos expandidos sem erro,
+4.039 conversões com cobertura integral. A ISO original permaneceu intacta.
