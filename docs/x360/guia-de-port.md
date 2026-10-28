@@ -2471,3 +2471,19 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   para capturar a marca nas duas arquiteturas. Registrar como captura/âncora reprovada, sem afirmar
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
+
+### Alfa ap35a2810: medir o que saiu do filtro e conferir os descartes dos picos (F5, seção 37)
+
+- Com `BT3_PICOS=36`, a melhora pode retirar o quadro inteiro do log: `picos_escreve` só publica se o intervalo
+  de apresentação ou o período do jogo ultrapassar o limiar. `picos: tela` só publica permanências diferentes de
+  dois vblanks. Associações completas e histogramas conservados provam a ausência da longa, mas não fornecem
+  J/G/P/U ou F individuais, nem margem de 1 ms. Não transformar os 5,4 ms do perfil histórico ou um teto de
+  modelo em ganho líquido medido. U do quadro A, retido na tela, é diferente de U do seguinte B atrasado; a
+  linha de B pode ainda revelar a folga anterior de A, quando existe.
+- Uma mutação sem âncora de `descarte: 0 pressões` pode atingir primeiro `picos:   quadro` no boot, em vez de
+  `gs_d3d:   descarte:`. O primeiro negativo da ap35 foi aceito pelo leitor que só conferia o resumo. Conferir
+  os dois formatos e ver os dois negativos saírem com 1; também exigir que a mutação alterou o texto e que a
+  recusa veio da regra pretendida. Zero em `passos` não substitui os recursos individuais e os resumos.
+- A ap35 testou o alfa selecionado por ambiente, antes da chave de compilação: base perdeu 0,3 a 0,4 ms no
+  6960 contra main, alfa perdeu mais 0,2 a 0,3. Não transferir esse custo à versão com os blocos ausentes da
+  compilação, nem usar o ganho repetido de uma versão para certificar o código gerado ou a imagem da outra.
