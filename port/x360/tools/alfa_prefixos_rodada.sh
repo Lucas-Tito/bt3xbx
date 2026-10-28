@@ -142,6 +142,7 @@ import re,sys
 p=Path(sys.argv[1]); esperado=int(sys.argv[2])//2; padrao=re.compile(r'^alfa: quadro (\d+) desenhos (\d+) altos (\d+), 0 diferentes$',re.M)
 n=0
 for x in sorted(p.glob('*x86gvl*.log')):
+    if x.name.startswith('build-'): continue
     v=padrao.findall(x.read_text(errors='replace'))
     assert v,x.name
     outro=p/x.name.replace('x86gvl','ppcgl')
