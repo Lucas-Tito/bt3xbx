@@ -5063,31 +5063,41 @@ linhas por quadro, depois do `cadeia_fim` (fora do tempo do quadro):
 relogio: quadro 6960 desenhos 1408 marcados 1407; desde a entrega do jogo (J), ms: primeiro desenho ..., entrega da gravação (G) ...
 relogio: quadro 6960 de 0 a 99 us t0 t1 ... t99          (cem carimbos por linha, us desde J)
 relogio: curva quadro 6960 desenhos 1408 ms G milesimos m0 ... m16   (dezesseis avos de J a G, o formato do falso)
+relogio: fim quadro 6960 desenhos 1408 marcados 1407; ms desde J: G ..., marca da GPU posta (P) ..., GPU acabou (U) ...
 ```
+
+A linha do fim espera a GPU chegar à marca do quadro (até seis quadros; sem ela, -1) e sai também com
+`BT3_RELOGIO_MARCAS=0`, que tira só os carimbos por desenho: é o controle da mesma build, que diz o que os carimbos
+custam em G, P e U do mesmo quadro sem depender do limiar do picos (com `BT3_PICOS=36`, um quadro que melhora some do
+log, seção 37). O desenho escreve primeiro a vaga mais velha (o anel do picos guarda 16 quadros).
 
 Só existe com `BT3_PERFIL_CADEIA=1 build_f2.sh`, que agora passa a chave também ao `c89.py` (o `gs_draw.c` é C do
 jogo); na build normal `GS_RELOGIO()` é `((void)0)` e o `RELOGIO_ESCREVE` também. Com a chave e
-`BT3_RELOGIO_GRAV=0`, um teste por desenho anexado, sem ler o relógio: é o controle da mesma build. Exige `BT3_PICOS`
+`BT3_RELOGIO_GRAV=0` ou `BT3_RELOGIO_MARCAS=0`, um teste por desenho anexado, sem ler o relógio. Exige `BT3_PICOS`
 (sem ele, os carimbos saem desde o primeiro desenho, e o leitor recusa o quadro).
 
 **[Medido, teste nativo]** `teste_relogio.py --saida PASTA` compila os dois blocos com g++ e um `mftb` de mentira,
-grava quadros sintéticos (1.408 desenhos, um descarte no meio, quadros fora da lista, uma vaga perdida) e lê o
-diário pelo leitor do teto: os carimbos voltam iguais. Sete sabotagens acusadas (fechar um a mais, sem recomeço, J
-ou G trocados, linha pulada, vaga que não esvazia, quadro fora da lista escrito).
+grava quadros sintéticos (1.408 desenhos, um descarte no meio, quadros fora da lista, uma vaga perdida, uma GPU que
+chega tarde à marca), com e sem os carimbos, e lê o diário pelo leitor do teto: carimbos, G, P e U voltam iguais. Dez
+sabotagens acusadas (fechar um a mais, sem recomeço, J ou G trocados, linha pulada, vaga que não esvazia, quadro fora
+da lista escrito, U lido da marca, fim sem esperar a GPU, carimbos sem as marcas).
 
 ### O teto com o relógio do console
 
-`prefixos_teto.py LISTAS DADOS --console LOG` acrescenta o modelo C: a fração de J a G em que cada desenho ficou
+`prefixos_teto.py LISTAS DADOS --console LOG` (o log de uma abertura rel) acrescenta o modelo C: a fração de J a G em que cada desenho ficou
 pronto na abertura, aplicada ao G sem marcas, com a mesma convenção do falso (a liberação que pede k desenhos usa o
-k-ésimo carimbo: conservador por um desenho). `--console LOG --so-relogio` só confere as linhas. O leitor recusa
-lacuna, repetição, desordem, carimbo depois de G, quadro sem J, contagem que não fecha, curva que não confere com os
-carimbos e lista do console de outro tamanho que a da x86gv (as listas são iguais por construção desde a seção 30;
-se não forem, o modelo não vale): oito mutantes novos, treze no total.
+k-ésimo carimbo: conservador por um desenho). `--console LOG --so-relogio` só confere as linhas e lista J, G, P e U por quadro (rel ou ctl). O
+leitor recusa lacuna, repetição, desordem, carimbo depois de G, quadro sem J, contagem que não fecha, curva que não
+confere com os carimbos, fim ausente, U antes de P, G do fim trocado, controle com carimbos ou no modelo e lista do
+console de outro tamanho que a da x86gv (as listas são iguais por construção desde a seção 30; se não forem, o modelo
+não vale): treze mutantes novos, dezoito no total.
 
 **Como ler.** A sensibilidade da seção 36 diz o que procurar: no 6960, com o desenho 1152 (começo da segunda cadeia
 de brilho) pronto a 50/60/70/80/90% de G, a folga do teto fica em 7,8/7,2/6,5/4,8/3,0 ms. O modelo C dá o número com
-o progresso real; o ponto de parada continua o da seção 34: se o teto C não passar dos 10,6 ms no 6960, os números
-voltam ao Lucas para a exceção E (decisão 32), antes da segunda parte.
+o progresso real. Com o alfa, a seção 37 pôs a meta do 6960 em 11,5 ms (U 10,5 ms depois do prazo, mais 1 de margem),
+contra o teto de 13,0 a 15,9 do modelo: se o teto C não passar dos 11,5, os números voltam ao Lucas para a exceção E
+(decisão 32), antes da segunda parte. O controle (ctl contra rel) diz quanto os carimbos movem G; o que mover tem de
+sair do G antes de usar a fração.
 
 ### A primeira parte do BT3_GS_LOTES: as duas consultas mudam de lugar
 
@@ -5126,7 +5136,7 @@ dependem da linha normalizados (`$M`, `$LN`, `$rotulo$NNN`) e as funções do `.
 `-OPT:REF` apareceria; os `__unwind$N` contam por objeto). Cinco mutantes recusados e uma diferença real vista falhar
 (saída 1).
 
-| Builds comparadas (commit `2689be1`, código igual ao final) | Resultado |
+| Builds comparadas (commit `dc2785f`) | Resultado |
 |---|---|
 | normal x main `c3dcc4d` normal | 348 objetos iguais, 9.617 funções iguais |
 | normal x base `d3b96c07` normal | 348 iguais |
@@ -5136,20 +5146,23 @@ dependem da linha normalizados (`$M`, `$LN`, `$rotulo$NNN`) e as funções do `.
 **[WSL, `lotes_wsl.sh BASE SAIDA`, serviço `bt3-lotes-wsl-adf640e8`, sem emulador]** As duas mudanças só existem no
 console; base e final compiladas em x86, x86gv, PPCg e PPCg com o alfa, objetos sem depuração, `.text` e stubs
 comparados (o `cmp` visto falhar), e as unidades e mutantes das ferramentas novas. Com os objetos iguais, as provas de
-execução da seção 28 (roteiros, listas, `divergencias.py`, save) não têm o que mudar. Resultado em
-`~/f5-lotes/wsl1/provas.resumo` (abaixo).
+execução da seção 28 (roteiros, listas, `divergencias.py`, save) não têm o que mudar. **[Medido, WSL]** Em `adf640e8`
+(`~/f5-lotes/wsl1/provas.resumo`): as quatro builds de base e final ligam, a `.text` da x86 é a mesma
+(`9f2cdb49...`), os objetos sem depuração só diferem no `x360_passos.o` (o carimbo) nas quatro, os stubs são iguais e
+as unidades e mutantes passam: tudo certo, em 4,5 min.
 
 ### As rodadas de console prontas
 
-Geradas por `lotes_console.py relogio|imagem SAIDA --rodada R`, que confere os ambientes (sete estragos do relógio e
-quatro da imagem recusados, e as rodadas já usadas). Builds do commit `2689be1` (carimbo `2689be1 diff:da39a3ee5e`),
+Geradas por `lotes_console.py relogio|imagem SAIDA --rodada R`, que confere os ambientes (oito estragos do relógio e
+quatro da imagem recusados, e as rodadas já usadas). Builds do commit `dc2785f` (carimbo `dc2785f diff:da39a3ee5e`; os
+commits seguintes só mexem em documentos),
 na máquina do XDK, em `/home/lucas-tito/Documentos/bt3xbx-lotes/build/x360/console-<rodada>/` com `builds/<build>/`
 (`default.xex` e `.map`), `ordem.txt`, `manifesto.json`, os `ambiente_<abertura>.txt` e `LEIA.txt`:
 
 | Rodada | Aberturas, em ordem | Builds (md5 do `.xex`) | O que dá |
 |---|---|---|---|
-| `rl37a2810` | rel1 ctl1 rela1 ctla1 rel2 ctl2 rela2 ctla2 | perfil `5b68d773...`, perfil+alfa `5a8acd3c...` | o relógio nos quadros 6900, 6930, 6960, 7000 e 7170 (rel*), o mesmo sem ele (ctl*), J/G/P/U pela tela por imagem |
-| `li37a2810` | nor1 lot1 lct1 nor2 lot2 lct2 | normal `cf51ee86...`, lotes `954ecf0b...` | 22 capturas cheias por abertura nas trocas de cena (6928 a 6932, 6958 a 6962, 7168 a 7172) e fora delas, em `game:\shots_li37a2810_<abertura>` |
+| `rl37a2810` | rel1 ctl1 rela1 ctla1 rel2 ctl2 rela2 ctla2 | perfil `759be0af5a97b41df00c83ce5ffd1da3`, perfil+alfa `ce6cda5cc75ebc8008763f058b034d60` | os carimbos por desenho e J/G/P/U nos quadros 6900, 6930, 6960, 7000 e 7170 (rel), só J/G/P/U dos mesmos (ctl, `BT3_RELOGIO_MARCAS=0`) |
+| `li37a2810` | nor1 lot1 lct1 nor2 lot2 lct2 | normal `5d2e4c29a0c3691fc2bd0eabe757a1af`, lotes `36b9c15421c1058bb23c7cacd60178ca` | 22 capturas cheias por abertura nas trocas de cena (6928 a 6932, 6958 a 6962, 7168 a 7172) e fora delas, em `game:\shots_li37a2810_<abertura>` |
 
 Todas com a cadeia desligada, picos e tela por imagem ligados, saves `sv_<rodada>_<abertura>` novos. A prova da
 imagem: `compara_quadros.py` de lot e lct contra nor com todos os pixels iguais em todos os quadros, e no log
