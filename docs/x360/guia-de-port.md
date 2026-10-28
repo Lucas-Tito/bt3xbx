@@ -2489,3 +2489,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   bloqueadas e termina na arena 3. CIMA duas vezes passa pelas linhas 5 e 4 na
   coluna 0, ambas liberadas, e chega à arena 5. A conferência da luta montada
   deve permanecer antes de testar recurso ou transformação.
+
+- Reabrir um cartão não muda a ordem dos arquivos do jogo: a x86 deve continuar lendo
+  `gamedata` original, e só a PPC recebe `BT3_DATA` e `BT3_CONVERTIDOS` da conversão.
+  Passar os dois à x86 derrubou o reabrir depois da Missão 0 no Deck (RC 139).
+  O executor dos pilotos usa `~/wsl.lock` por padrão e mede também o espaço físico
+  livre do C: antes das builds e de cada roteiro; `F7_MAQUINA=Deck` conserva a prova
+  e a trava específicas do Deck. A estimativa de rodadas retomadas no WSL usa suas medidas.

@@ -1,25 +1,37 @@
 #!/usr/bin/env bash
-# Pilotos F7 no Deck: uma fila, saídas próprias e compactação depois da conferência.
+# Pilotos F7: uma fila, saídas próprias e compactação depois da conferência.
 # Uso: F7_SAIDA=~/f7-pilotos-RODADA port/x360/tools/f7_pilotos.sh [ensaio|lote] [CASO...]
-# Executar no contêiner bt3; o lançador persistente e a espera da prova ficam no guia 1.2b.
+# WSL por padrão; F7_MAQUINA=Deck conserva a fila e a prova do contêiner (guia 1.2b).
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 : "${F7_SAIDA:?defina F7_SAIDA fora do repositório}"
 S=$(realpath -m "$F7_SAIDA")
 case "$S/" in "$(pwd)/"*) echo 'saída dentro do repositório recusada'; exit 1;; esac
 mkdir -p "$S"
-exec 9> "$HOME/deck.lock"
+maquina=${F7_MAQUINA:-WSL}
+case "$maquina" in
+    WSL) trava="$HOME/wsl.lock";;
+    Deck) trava="$HOME/deck.lock";;
+    *) echo 'F7_MAQUINA deve ser WSL ou Deck'; exit 1;;
+esac
+exec 9> "$trava"
 flock 9
-# A prova anterior tem de estar encerrada e aprovada antes de usar a fila.
-grep -q '^FIM$' "$HOME/prova2810.resumo"
-grep -q 'roteiro duelo .* RC=0' "$HOME/prova2810.resumo"
-grep -q '43444ea4d03a6d448aa1ae74a631e35b356a7caa (igual' "$HOME/prova2810.resumo"
+if [ "$maquina" = Deck ]; then
+    grep -q '^FIM$' "$HOME/prova2810.resumo"
+    grep -q 'roteiro duelo .* RC=0' "$HOME/prova2810.resumo"
+    grep -q '43444ea4d03a6d448aa1ae74a631e35b356a7caa (igual' "$HOME/prova2810.resumo"
+fi
 if pgrep -ax qemu-ppc || pgrep -af '[r]oteiros.sh'; then echo 'fila ocupada sem a trava'; exit 1; fi
 export DEBUGINFOD_URLS= BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1 BT3_F7=1
 livre() {
     local bytes
     bytes=$(df -B1 --output=avail "$HOME" | tail -1 | tr -d ' ')
     echo "disco antes de $1: $bytes bytes livres" | tee -a "$S/disco.txt"
+    if [ "$maquina" = WSL ]; then
+        bytes=$(df -B1 --output=avail /mnt/c | tail -1 | tr -d ' ')
+        echo "Windows antes de $1: $bytes bytes livres" | tee -a "$S/disco.txt"
+        [ "$bytes" -ge 17179869184 ] || { echo 'menos de 16 GiB livres no Windows'; exit 1; }
+    fi
     [ "$bytes" -ge 4294967296 ] || { echo 'menos de 4 GiB livres, pare e preserve o estado'; exit 1; }
 }
 livre builds
@@ -32,7 +44,9 @@ done
 # Objetos do jogo da base aprovada, sem depuração; só roteiro/passos são testes.
 mkdir -p "$S/objetos"
 : > "$S/objetos.txt"
-for base in "$HOME/bt3xbx/port/build/x86/obj/"*.o; do
+base_obj=${F7_BASE_OBJ:-port/build/base-reference/port/build/x86/obj}
+[ -d "$base_obj" ] || { echo 'defina F7_BASE_OBJ com os objetos da base aprovada'; exit 1; }
+for base in "$base_obj/"*.o; do
     nome=$(basename "$base")
     objcopy --strip-debug "$base" "$S/objetos/base.o"
     objcopy --strip-debug "port/build/x86/obj/$nome" "$S/objetos/novo.o"
@@ -76,9 +90,13 @@ for n in "${casos[@]}"; do
     reabre_inicio=$EPOCHREALTIME
     if [ -n "$reabre" ]; then
         for a in x86 ppc; do
-            if [ "$a" = x86 ]; then cartao=sa; exe=(port/build/x86/bt3_x86); else cartao=sq; exe=(qemu-ppc port/build/ppc/bt3_ppc); fi
-            BT3_DATA="$D/dados" BT3_CONVERTIDOS="$D/dados/mods/convertidos.txt" \
-                BT3_ROTEIRO="port/x360/roteiros/f7_reabre_$reabre.txt" BT3_SAVES="$D/$cartao" \
+            if [ "$a" = x86 ]; then
+                cartao=sa; exe=(env -u BT3_DATA -u BT3_CONVERTIDOS port/build/x86/bt3_x86)
+            else
+                cartao=sq; exe=(env BT3_DATA="$D/dados" BT3_CONVERTIDOS="$D/dados/mods/convertidos.txt"
+                               qemu-ppc port/build/ppc/bt3_ppc)
+            fi
+            BT3_ROTEIRO="port/x360/roteiros/f7_reabre_$reabre.txt" BT3_SAVES="$D/$cartao" \
                 timeout 900 "${exe[@]}" > "$D/reabre_$a.txt" 2>&1
         done
         python3 port/x360/tools/save_entre.py campos "$D/sa" "$D/sq" > "$S/$n-campos.txt"
@@ -103,7 +121,7 @@ done
 # A auditoria completa deve continuar reprovando as lacunas: os pilotos são uma amostra.
 "$S/conv_tool" --disco gamedata > "$S/coleta/disco.log"
 cp port/build/x86/bt3_x86 "$S/bt3_x86"
-python3 - "$S" <<'PY2'
+python3 - "$S" "$maquina" <<'PY2'
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -118,7 +136,7 @@ meta = dict(inicio_utc=agora, fim_utc=agora, rodada=str(s), prog=str(s / 'bt3_x8
             sha256_prog=hashlib.sha256((s / 'bt3_x86').read_bytes()).hexdigest(), arquivos=arquivos,
             limite='coleta própria dos pilotos concluídos, sem crédito para casos ausentes')
 (coleta / 'coleta.json').write_text(json.dumps(meta, indent=2) + '\n')
-(coleta / 'origem.json').write_text(json.dumps(dict(commit=(s / 'commit.txt').read_text().strip(), maquina='Deck')) + '\n')
+(coleta / 'origem.json').write_text(json.dumps(dict(commit=(s / 'commit.txt').read_text().strip(), maquina=sys.argv[2])) + '\n')
 (coleta / 'casos.json').write_text(json.dumps({p.parent.name: 0 for p in logs}) + '\n')
 PY2
 set +e
