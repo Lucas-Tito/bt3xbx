@@ -780,7 +780,8 @@ que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
 2. **Só os ícones do 360 no console.** Os do PS2 continuam nas builds de teste do WSL, que leem os dados originais.
 3. **O "voltar" dos menus continua no Y**, fiel ao físico (o jogo volta com o triângulo): só a arte muda, nenhuma
    mudança de entrada.
-4. **Arte do projeto**, feita por um gerador no repositório (A verde, B vermelho, X azul, Y amarelo, LB/RB, LT/RT,
-   cliques e BACK); nunca a arte da Microsoft, nenhum byte do jogo no repositório.
-5. **O texto "SELECT button"** da lição do Treino está dentro de um conteúdo comprimido (BPE): muda junto com o
-   compressor BPE, a etapa posterior da decisão 23.
+4. **A arte ainda não está escolhida:** o Lucas quer ver antes como fica. As opções são uma arte própria feita por
+   gerador ou ícones já prontos sem direitos autorais; nunca a arte da Microsoft, nenhum byte do jogo no repositório.
+   O passo da conversão recebe a arte como entrada, para trocar de fonte sem mexer no resto.
+5. **SELECT fica como está:** o 360 também tem o botão de selecionar, então nem o ícone 8 nem o texto "SELECT button"
+   da lição mudam.
