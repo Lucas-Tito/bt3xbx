@@ -24,6 +24,7 @@
 #include <string.h>
 #include "diario.h"
 #include "iso360.h"
+#include "iso_avisos.h"
 #include "som/som360.h"
 
 extern "C" {
@@ -249,43 +250,12 @@ static DWORD WINAPI Preparar(LPVOID arg) {
    abriu e fechou: o OK leva direto ao dashboard (o jogo nunca começou). Se não abriu, a tela parada e um botão voltam
    ao dashboard. */
 static bool MostrarRecusa(D3DDevice *dev, int motivo) {
-    static const WCHAR kTituloOriginal[] = L"ISO conversion required";
-    static const WCHAR kTituloAusente[] = L"ISO not found";
-    static const WCHAR kTituloVersao[] = L"Unsupported game version";
-    static const WCHAR kTituloIlegivel[] = L"Cannot read ISO";
-    static const WCHAR kTextoOriginal[] =
-        L"Convert the original USA ISO on your PC with port/x360/tools/iso_convertida.py, "
-        L"then copy the converted ISO to the game folder. Update BT3_ISO in ambiente.txt if set.";
-    static const WCHAR kTextoVersao[] =
-        L"Only the USA SLUS-21678 is supported. Use the original USA ISO and convert it on your PC "
-        L"with port/x360/tools/iso_convertida.py.";
-    static const WCHAR kTextoIlegivel[] =
-        L"The ISO is unreadable, incomplete or damaged. Copy it again, or create a new image from your disc.";
-    static const WCHAR kPrefixoAusente[] = L"The ISO file was not found. Check BT3_ISO in ambiente.txt: ";
-    static WCHAR sTextoAusente[600]; /* estático: o sistema o usa depois da chamada voltar */
-    const WCHAR *kTitulo = kTituloIlegivel;
-    const WCHAR *kTexto = kTextoIlegivel;
+    const wchar_t *kTitulo, *kTexto;
     static LPCWSTR kBotoes[1] = {L"OK"};
     static MESSAGEBOX_RESULT sResultado;
     static XOVERLAPPED sOv;
     DWORD r, inicio = GetTickCount(), fim = 0;
-    if (motivo == ISO_ORIGINAL) {
-        kTitulo = kTituloOriginal;
-        kTexto = kTextoOriginal;
-    } else if (motivo == ISO_NAO_SUPORTADA) {
-        kTitulo = kTituloVersao;
-        kTexto = kTextoVersao;
-    } else if (motivo == ISO_AUSENTE) {
-        const char *c = Iso_Pedida();
-        size_t n = wcslen(kPrefixoAusente), i;
-        wcscpy(sTextoAusente, kPrefixoAusente);
-        for (i = 0; c[i] != '\0' && n < 598; i++) {
-            sTextoAusente[n++] = (WCHAR)(unsigned char)c[i];
-        }
-        sTextoAusente[n] = 0;
-        kTitulo = kTituloAusente;
-        kTexto = sTextoAusente;
-    }
+    Iso_Aviso(motivo, &kTitulo, &kTexto);
     for (;;) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);

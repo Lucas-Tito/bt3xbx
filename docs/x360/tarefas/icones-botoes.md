@@ -28,7 +28,7 @@ exemplo em `~/icones/`).
    A do 360 confirma e o B volta); os gatilhos L2/R2 viram LT/RT; SELECT vira Back. Liste os casos ambíguos (por
    exemplo, ícones de analógico pressionado, L3/R3).
 4. **As opções de troca**, com o custo de cada: (a) a ferramenta do PC que gera a ISO convertida
-   (`port/x360/tools/iso_convertida.py`, decisão 23) aplica a troca, com ícones desenhados pelo projeto (nunca a arte
+   (`port/x360/tools/convert_iso.py`, decisão 23) aplica a troca, com ícones desenhados pelo projeto (nunca a arte
    da Microsoft copiada), (b) troca em tempo de carga no 360, (c) outra que você achar. Diga também o que muda nos
    conversores e na marca da ISO, e o que isso faz com os roteiros de teste (as imagens de referência mudam).
 5. **Os riscos**: textos que citam os botões por nome em vez de ícone, ícones dentro de imagens maiores (telas de

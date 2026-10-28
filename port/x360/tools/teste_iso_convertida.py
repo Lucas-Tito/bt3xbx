@@ -8,11 +8,13 @@ Recompila o conv_tool, guarda logs e uma ISO válida em --trabalho. As cópias e
 import argparse
 from pathlib import Path
 import re
+import shutil
+import struct
 import subprocess
 import sys
 import tempfile
 
-import iso_convertida as iso
+import convert_iso as iso
 
 
 def rodar(cmd, log, esperado=0, trecho=None):
@@ -40,6 +42,10 @@ def executar(args):
     fontes = sorted((iso.RAIZ / "port/x360/conv").glob("*.c"))
     fontes = [f for f in fontes if f.name != "conv_jogo.c"]
     rodar(["gcc", "-std=c89", "-O2", "-Wall", "-o", tool, *fontes], trabalho / "build.log")
+    rodar([sys.executable, iso.RAIZ / "port/x360/tools/icones360.py", "--conferir"],
+          trabalho / "arte.log", trecho="tudo certo")
+    rodar([sys.executable, iso.RAIZ / "port/x360/tools/teste_icones360.py",
+           "--dados", args.dados, "--conv-tool", tool], trabalho / "icones.log", trecho="tudo certo")
     (trabalho / "commit.txt").write_text(subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=iso.RAIZ, text=True))
     (trabalho / "diff.txt").write_text(subprocess.check_output(
@@ -48,8 +54,8 @@ def executar(args):
         antes = iso.hashes(f)
         entradas = iso.inventario(f)
     iso.exigir(antes == (iso.MD5, iso.SHA256), "origem dos testes incompatível")
-    comando = [sys.executable, iso.RAIZ / "port/x360/tools/iso_convertida.py"]
-    convertida = trabalho / "convertida.iso"
+    comando = [sys.executable, iso.RAIZ / "port/x360/tools/convert_iso.py"]
+    convertida = trabalho / "bt3-x360.iso"
     base = ["--conv-tool", tool]
     rodar([*comando, args.origem, convertida, *base], trabalho / "conversao.log", trecho="tudo certo")
     verifica = [*comando, args.origem, convertida, *base, "--conferir", "--dados", args.dados]
@@ -81,8 +87,9 @@ def executar(args):
             f.truncate(iso.TAMANHO - 1)
         recusar(copia, saida, "truncada", "ISO truncada")
         copia.unlink()
-        # A já convertida também é recusada numa cópia, sem tocar na saída válida.
-        subprocess.run(["cp", "--reflink=auto", "--sparse=always", convertida, copia], check=True)
+        # A já convertida é recusada como origem, sem qualquer escrita nela.
+        # Uma única convertida ocupa o disco: estraga e restaura no lugar, sem segunda ISO.
+        copia = convertida
         recusar(copia, saida, "convertida", "ISO já convertida")
         existente = trabalho / "existente.iso"
         existente.write_text("saída anterior que deve permanecer intacta\n")
@@ -104,12 +111,37 @@ def executar(args):
             "tabela-iso": (16 * iso.SETOR + 84, "ordens de bytes discordam"),
             "folga-afs": (0x3DF000 + 24, "folga inesperada"),
             "marca": (iso.MARCA_POS + 16, "marca, versão ou conversor incompatível"),
+            "arte": (entradas["pzs3us1/00004.bin"][0] + 0x19A40 + 0x9E8 * 4 + 96,
+                     "conversão diferente em pzs3us1/00004.bin"),
         }
         for nome, (pos, mensagem) in casos.items():
             alterar(copia, pos)
+            try:
+                rodar([*comando, args.origem, copia, *base, "--conferir", "--dados", args.dados],
+                      trabalho / f"estrago-{nome}.log", 1, mensagem)
+            finally:
+                alterar(copia, pos)
+
+        with copia.open("r+b") as f:
+            f.seek(iso.MARCA_POS + 16)
+            f.write(struct.pack("<I", 1))
+        try:
             rodar([*comando, args.origem, copia, *base, "--conferir", "--dados", args.dados],
-                  trabalho / f"estrago-{nome}.log", 1, mensagem)
-            alterar(copia, pos)
+                  trabalho / "estrago-marca-antiga.log", 1, "marca, versão ou conversor incompatível")
+        finally:
+            with copia.open("r+b") as f:
+                f.seek(iso.MARCA_POS + 16)
+                f.write(struct.pack("<I", iso.VERSAO))
+        arte = Path(t) / "arte"
+        shutil.copytree(iso.RAIZ / "port/x360/arte/kenney", arte)
+        png = arte / "xbox_button_color_a.png"
+        alterar(png, 50)
+        rodar([sys.executable, iso.RAIZ / "port/x360/tools/icones360.py", "--arte", arte, "--conferir"],
+              trabalho / "estrago-png.log", 1, "CRC PNG inválido")
+        cab = Path(t) / "arte.h"
+        cab.write_text((iso.RAIZ / "port/x360/conv/icones360_arte.h").read_text().replace("0x00", "0x01", 1))
+        rodar([sys.executable, iso.RAIZ / "port/x360/tools/icones360.py", "--cabecalho", cab, "--conferir"],
+              trabalho / "estrago-gerador.log", 1, "arte gerada diverge")
 
         # Uma saída que aparece na última hora nunca é substituída pelo rename.
         temporario, ocupado = Path(t) / "temporario", Path(t) / "ocupado"

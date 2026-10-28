@@ -1,7 +1,7 @@
 /*
  * Ferramenta de PC da conversão (e o teste dos conversores na F1).
  *
- *   conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--marcas DIR] [--detalhe N] DADOS ARQUIVO...
+ *   conv_tool [--formato F] [--mapa MAPA.tsv] [--icones360] [--saida DIR] [--marcas DIR] [--detalhe N] DADOS ARQUIVO...
  *   conv_tool --disco DADOS        todos os arquivos que algum conversor conhece (pzs3us0..2), sem gravar: a
  *                                  validação estrutural (contagens, deslocamentos, enchimento) no disco inteiro;
  *                                  depois, o conteúdo descomprimido que o jogo converte em tempo de jogo (folhas da
@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 
 #include "conv.h"
+#include "icones360_arte.h"
 #include "conv_menus.h"
 
 typedef struct Trecho { unsigned long ofs, n; int w; } Trecho;
@@ -78,6 +79,7 @@ static void criar_pastas(char *caminho) {
 }
 
 static const char *formato, *mapa, *saida, *marcas;
+static int icones;
 static int detalhe = 10;
 static long sMaiorJogo; /* o maior conteúdo descomprimido convertido (o que o jogo converte em tempo de jogo) */
 static char sMaiorJogoNome[96];
@@ -454,6 +456,13 @@ static int um(const char *dados, const char *rel) {
     }
     if (saida != NULL && r > 0 && !bpe) {
         FILE *lista;
+        if (icones && strcmp(rel, "pzs3us1/00004.bin") == 0 &&
+            Conv_Icones360(buf, (conv_ofs)tam, icones360, sizeof(icones360) / sizeof(icones360[0]), msg) < 0) {
+            printf("%s: %s\n", rel, msg);
+            free(buf);
+            free(feito);
+            return falhas + 1;
+        }
         sprintf(caminho, "%s/%s", saida, rel);
         criar_pastas(caminho);
         fp = fopen(caminho, "wb");
@@ -773,6 +782,8 @@ int main(int argc, char **argv) {
             formato = argv[++i];
         } else if (strcmp(argv[i], "--mapa") == 0 && i + 1 < argc) {
             mapa = argv[++i];
+        } else if (strcmp(argv[i], "--icones360") == 0) {
+            icones = 1;
         } else if (strcmp(argv[i], "--saida") == 0 && i + 1 < argc) {
             saida = argv[++i];
         } else if (strcmp(argv[i], "--marcas") == 0 && i + 1 < argc) {
@@ -790,7 +801,7 @@ int main(int argc, char **argv) {
         }
     }
     if (dados == NULL) {
-        fprintf(stderr, "uso: conv_tool [--formato F] [--mapa MAPA.tsv] [--saida DIR] [--marcas DIR] [--detalhe N] [--disco] [--pecas] DADOS "
+        fprintf(stderr, "uso: conv_tool [--formato F] [--mapa MAPA.tsv] [--icones360] [--saida DIR] [--marcas DIR] [--detalhe N] [--disco] [--pecas] DADOS "
                         "ARQUIVO...\n");
         return 2;
     }

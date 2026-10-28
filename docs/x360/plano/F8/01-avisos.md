@@ -24,10 +24,10 @@ Os textos de diagnóstico locais ficam em português. Não se traduziu o código
 
 | Motivo | Título em inglês | Orientação |
 |---|---|---|
-| `ISO_ORIGINAL` | `ISO conversion required` | Converter no PC com `port/x360/tools/iso_convertida.py`, copiar a convertida e atualizar `BT3_ISO` se estiver definido |
+| `ISO_ORIGINAL` | `ISO conversion required` | Converter com `convert_iso.py` e copiar como `bt3-x360.iso` para a raiz do jogo |
 | `ISO_NAO_SUPORTADA` | `Unsupported game version` | `Only the USA SLUS-21678 is supported.` e indicação da conversão no PC |
 | `ISO_ILEGIVEL` | `Cannot read ISO` | Imagem ilegível, incompleta ou danificada: copiar novamente ou criar outra imagem do disco |
-| `ISO_AUSENTE` | `ISO not found` | Conferir `BT3_ISO` em `ambiente.txt`, mostrando o caminho pedido |
+| `ISO_AUSENTE` | `ISO not found` | Indicar a raiz do jogo, o nome `bt3-x360.iso` e `default.xex` |
 
 `iso360.h` compartilha os motivos entre leitor e interface. Antes da marca, o leitor confere:
 
@@ -42,18 +42,17 @@ leitura dão ilegível. `SYSTEM.CNF` ausente num volume USA, nulo interno e tama
 
 A identificação é estrutural, sem hash de 3 GB no console. Uma imagem alterada que conserve volume, tamanho e
 identificação pública pode se parecer com a revisão aceita. A autenticação integral continua no instalador do PC,
-pelos hashes da decisão 23. Também permanece a política de aceitar a assinatura sem exigir uma versão da marca.
+pelos hashes da decisão 23. Desde [02-icones](02-icones.md), a marca precisa ter a versão 2; versões antigas recebem caixa própria.
 
 ## Busca e opções conservadoras
 
-Sem `BT3_ISO`, tenta cada `game:\*.iso` até achar uma convertida compatível. Fecha cada imagem recusada e o enumerador;
+Sem `BT3_ISO`, prefere `game:\bt3-x360.iso` e depois tenta cada `game:\*.iso` até achar uma convertida compatível. Fecha cada imagem recusada e o enumerador;
 só depois carrega as tabelas AFS e abre o handle de áudio da escolhida. Sem convertida, prefere orientar a conversão
-de uma USA original encontrada; caso contrário, mantém o primeiro diagnóstico. Sem `.iso`, conserva os arquivos
-soltos. `BT3_ISO` explícito é definitivo, inclusive se faltar ou apontar à original. A caixa continua assíncrona, com
+de uma USA original encontrada; caso contrário, mantém o primeiro diagnóstico. Sem `.iso`, recusa como ausente, com o nome público esperado. `BT3_ISO` explícito é definitivo, inclusive se faltar ou apontar à original. A caixa continua assíncrona, com
 buffers estáticos e apresentação da tela enquanto aguarda o sistema; o jogo não começa após recusa.
 
-Não foi necessário perguntar: conservar caminho explícito, arquivos soltos e política da marca evita mudar os usos
-de desenvolvimento existentes. Cores de falha permanecem cores, sem criar outra interface nesta tarefa.
+Não foi necessário perguntar: conservar caminho explícito e busca de outras imagens mantém os usos
+de desenvolvimento; a decisão 30 exige rever a versão da marca e o item 9 pede a caixa sem ISO. Cores de falha permanecem cores, sem criar outra interface nesta tarefa.
 
 ## Provas sem console
 

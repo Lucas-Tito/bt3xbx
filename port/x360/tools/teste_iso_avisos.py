@@ -57,7 +57,7 @@ def imagem(p, marca=True, volume=b"SLUS_21678", cnf=CNF, setores=TAMANHO // SETO
             f.write(b"TESTE-ISO")
         if marca:
             f.seek(MARCA)
-            f.write(b"BT3X360-ISO".ljust(512, b"\0"))
+            f.write(struct.pack("<16sIIQ", b"BT3X360-ISO", 2, 512, TAMANHO).ljust(512, b"\0"))
 
 
 def troca(p, pos, b):
@@ -126,6 +126,8 @@ def rodada(exe, pasta, anunciar=True):
         ("SYSTEM.CNF ausente", 18 * SETOR + 68 + 33, b"X"),
         ("SYSTEM.CNF com nulo", 20 * SETOR + 5, b"\0"),
         ("marca desconhecida", MARCA, b"X"),
+        ("tamanho da marca inválido", MARCA + 20, struct.pack("<I", 1)),
+        ("tamanho da origem inválido", MARCA + 24, struct.pack("<Q", 1)),
     ]:
         imagem(p)
         troca(p, pos, b)
@@ -140,9 +142,13 @@ def rodada(exe, pasta, anunciar=True):
         with p.open("r+b") as f:
             f.truncate(tam)
         casos.append((f"truncada em {tam}", conferir(exe, pasta, 4, p, p)))
+    for versao in (0, 1, 3, 0xFFFFFFFF):
+        imagem(p)
+        troca(p, MARCA + 16, struct.pack("<I", versao))
+        casos.append((f"conversão versão {versao} recusada", conferir(exe, pasta, 5, p, p)))
     p.unlink()
     casos.append(("caminho explícito ausente", conferir(exe, pasta, 2, p, p)))
-    casos.append(("sem ISO mantém arquivos soltos", conferir(exe, pasta, 0, "")))
+    casos.append(("sem ISO mostra caixa com nome esperado", conferir(exe, pasta, 2, "game:\\bt3-x360.iso")))
     a, b, c = (pasta / n for n in ("a.iso", "b.iso", "c.iso"))
     imagem(a, marca=False)
     imagem(b, base=36)
@@ -162,6 +168,12 @@ def rodada(exe, pasta, anunciar=True):
     casos.append(("busca só com imagem inválida", conferir(exe, pasta, 4, "game:\\a.iso")))
     imagem(a, volume=b"OUTRA_REGIAO")
     casos.append(("busca só com região incompatível", conferir(exe, pasta, 3, "game:\\a.iso")))
+    imagem(b)
+    nome_publico = pasta / "bt3-x360.iso"
+    imagem(nome_publico, base=52)
+    casos.append(("nome público preferido à outra convertida", conferir(exe, pasta, 0, "game:\\bt3-x360.iso")))
+    nome_publico.unlink()
+    b.unlink()
     a.unlink()
     for nome, r in casos:
         if anunciar:
@@ -169,6 +181,51 @@ def rodada(exe, pasta, anunciar=True):
         elif r.returncode:
             return r
     return None
+
+
+def textos(raiz, pasta):
+    fonte = (raiz / "port/x360/src/iso_avisos.h").read_text()
+    principal = (raiz / "port/x360/src/f2/main360.cpp").read_text()
+    if 'Iso_Aviso(motivo, &kTitulo, &kTexto);' not in principal:
+        raise ValueError("interface não usa os textos conferidos")
+    programa = pasta / "textos.c"
+    programa.write_text(r'''#include <wchar.h>
+#include <stdio.h>
+#include "iso_avisos.h"
+int main(void) {
+    const wchar_t *titulo, *texto;
+    int i;
+    for (i = 1; i <= 5; i++) {
+        Iso_Aviso(i, &titulo, &texto);
+        if (!wcsstr(texto, L"bt3-x360.iso") || !wcsstr(texto, L"root of the game folder") ||
+            !wcsstr(texto, L"convert_iso.py") || wcsstr(texto, L"ambiente.txt") ||
+            wcsstr(texto, L"BT3_ISO")) return 1;
+    }
+    Iso_Aviso(2, &titulo, &texto);
+    if (wcscmp(titulo, L"ISO not found") || !wcsstr(texto, L"expected name")) return 1;
+    Iso_Aviso(5, &titulo, &texto);
+    if (wcscmp(titulo, L"Unsupported converted ISO version") || !wcsstr(texto, L"again")) return 1;
+    puts("textos: tudo certo");
+    return 0;
+}
+''')
+    def executar(d):
+        exe = d / "textos"
+        subprocess.run([os.environ.get("CC", "gcc"), "-std=c89", "-Wall", "-Wextra", "-Werror",
+                        "-I"+str(d), "-I"+str(raiz / "port/x360/src"), str(programa), "-o", str(exe)], check=True)
+        return subprocess.run([str(exe)], capture_output=True)
+    if executar(pasta).returncode:
+        raise ValueError("textos públicos incompatíveis")
+    for j, (de, para) in enumerate([("root of the game folder", "ambiente.txt"),
+                                  ("expected name", "nome esperado"),
+                                  ("Unsupported converted ISO version", "ISO conversion required"),
+                                  ("convert_iso.py", "iso_convertida.py")]):
+        d = pasta / f"texto{j}"
+        d.mkdir()
+        (d / "iso_avisos.h").write_text(fonte.replace(de, para))
+        if executar(d).returncode != 1:
+            raise ValueError("verificador dos textos aceitou mutante: "+de)
+        print("ok: texto estragado recusado: "+de, flush=True)
 
 
 def main():
@@ -184,6 +241,7 @@ def main():
             exigir(conferir(exe, pasta, 0, p, p), "imagem fornecida")
             return
         rodada(exe, pasta)
+        textos(args.raiz, pasta)
         # Entrada estragada: o mesmo verificador externo precisa recusar, com código 1, uma cópia sintética.
         p = pasta / "estragada.iso"
         imagem(p)
@@ -200,6 +258,8 @@ def main():
             ("BOOT2 ignorado", '!cnf_valor(cnf, "BOOT2", "cdrom0:\\\\SLUS_216.78;1")', '0'),
             ("revisão ignorada", '!cnf_valor(cnf, "VER", "1.00")', '0'),
             ("tamanho ignorado", 'sIsoTam != sVolumeTam', 'sIsoTam < 0'),
+            ("versão dispensada", 'le32(m + 16) != ISO_MARCA_VERSAO', '0'),
+            ("nome público ignorado", 'tentar("game:\\\\" ISO_NOME)', 'ISO_AUSENTE'),
             ("marca dispensada", 'marca > 0 ? ISO_OK', 'marca >= 0 ? ISO_OK'),
             ("busca para na primeira", 'while (FindNextFile(h, &d))', 'while (0 && FindNextFile(h, &d))'),
         ]
