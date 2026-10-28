@@ -195,6 +195,13 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 
 ### Roteiros de controle (F4, etapa 4)
 
+[Lido] **Cobertura ao escopar a F7:** `roteiros.py soma` imprime quantas chamadas com gancho foram observadas,
+mas sua saída 1 só exige as pendências do essencial. Com os 82 ganchos instalados, pode sair 0 com chamadas
+ausentes. Para afirmar cobertura completa, compare nominalmente `unpacks.levantar()` com as chamadas dos logs,
+e os arquivos das faixas do `--disco` com os `LEU`. Gancho, conversão e comportamento concluído são provas
+distintas. `Roteiro_Pad` atualmente só fornece entrada ao `socket=0`; os dois controles dados como ligados pelo
+teste não provam o jogador 2 nem a tela dividida. Levantamento e limites em [F7/00-escopo](plano/F7/00-escopo.md).
+
 O controle do jogador 1 sai de um arquivo de texto (`BT3_ROTEIRO=arquivo`), lido por `port/x360/headless/roteiro.c`
 nas três builds: x86 e PPC sem janela (pelo `Port_PadRead` do `sem_janela.c`) e 360 (pelo `pad360.c`, que com um
 roteiro dá os dois controles como ligados e não lê o XInput). Sem a variável nada muda. Os roteiros ficam em
