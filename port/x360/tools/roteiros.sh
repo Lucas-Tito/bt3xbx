@@ -419,12 +419,12 @@ for n in "${NOMES[@]}"; do
             if [ "${JUNTA:-0}" != 1 ] && { { [ $b = x86 ] && roda_x86; } || { [ $b = ppc ] && roda_ppc; }; }; then
                 rm -rf $I/$b; mkdir -p $I/$b; cp $D/imagens.txt $I/$b/lista.txt
                 if [ $b = x86 ]; then
-                    env "${IMGENV[@]}" BT3_IMAGENS=$I/$b/lista.txt BT3_ROTEIRO=$R BT3_SAVES=$I/$b/s timeout 900 \
+                    env "${IMGENV[@]}" BT3_IMAGENS=$I/$b/lista.txt BT3_ROTEIRO=$R BT3_SAVES=$I/$b/s /usr/bin/time -a -o "$D/tempos.tsv" -f 'imagem-x86\t%e' timeout 900 \
                         $B/x86/bt3_x86 > $I/$b/saida.txt 2>&1 < /dev/null
                 else
                     env "${IMGENV[@]}" BT3_IMAGENS=$I/$b/lista.txt BT3_DATA=$D/dados \
                         BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_ROTEIRO=$R BT3_SAVES=$I/$b/s \
-                        timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $I/$b/saida.txt 2>&1 < /dev/null
+                        /usr/bin/time -a -o "$D/tempos.tsv" -f 'imagem-ppc\t%e' timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $I/$b/saida.txt 2>&1 < /dev/null
                 fi
             fi
             python3 port/x360/tools/roteiros.py telas $I/$b/saida.txt > $I/$b/telas.txt
