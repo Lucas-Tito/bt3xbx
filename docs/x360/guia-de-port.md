@@ -195,6 +195,27 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 
 ### Roteiros de controle (F4, etapa 4)
 
+F7, etapa 1, sem emulador ([nota](plano/F7/01.md)): `f7_manifesto.py --dados ORIGEM --saida ~/manifesto.jsonl`
+gera itens, condições originais e leitores a partir da árvore extraída ou ISO convertida. Só código/ids/campos
+no git; saída e dados fora dele. `f7_cobertura.py coletar --rodada DIR --saida DIR_NOVO` preserva uma leitura
+dos resultados existentes; `conferir --coleta DIR --justificativas JSON --saida ~/cobertura.json` exige a diferença
+nominal de **todos** os sítios Sprite_Unpack e arquivos contra LEU, além dos resultados do `--disco`.
+Sem justificativa nominal sai 1. `f7_justificativas.json` começa vazio; pendência justificada continua pendência.
+`teste_f7.py --coleta DIR --dados ORIGEM --saida DIR_NOVO` testa em cópias a retirada de chamada, LEU, resultado
+do disco e justificativa, e dados inválidos. Não executa jogo, não escreve na rodada alheia.
+
+Cuidados encontrados nessa leitura, já corrigidos nas ferramentas:
+
+- O `--disco` reconhece `sFaixas` **mais `do_lutador`**, que acrescenta 1.610 arquivos. Ler só a tabela produz
+  1.715 em vez de 3.325 e deixa modelos fora da obrigação de cobertura. Exigir a igualdade nominal com o log.
+- A ISO convertida troca cabeçalhos BPE, preservando o fluxo comprimido. Depois de expandir, os números ainda
+  estão na ordem PS2 até o gancho do jogo. Carregar a ordem junto do bloco evita aplicar big-endian ao miolo.
+- `BtlParam.transDefault` é signed: 0xFF é -1. O teste `def >= 0` em `BtlAct_CheckTransformInput` impede chamar
+  17 relações de impossíveis por interpretar 255 como slot padrão. Direção explícita continua escolhendo o slot.
+- `missionPages` em +0x20C começa em 5 e aumenta no SimEv17; o save tem registros de missão com passo 12.
+  As 100 entradas em disco não significam que o New Game oferece todas. O estado da campanha Sim em gProgress
+  é zerado pelo SimTop; distinguir isso dos recordes/prêmios persistentes antes de escrever uma receita de save.
+
 [Lido] **Cobertura ao escopar a F7:** `roteiros.py soma` imprime quantas chamadas com gancho foram observadas,
 mas sua saída 1 só exige as pendências do essencial. Com os 82 ganchos instalados, pode sair 0 com chamadas
 ausentes. Para afirmar cobertura completa, compare nominalmente `unpacks.levantar()` com as chamadas dos logs,

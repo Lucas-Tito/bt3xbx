@@ -3,8 +3,13 @@
 [Índice do plano](../../plano.md) | anterior: [F6](../F6/00-escopo.md)
 
 [Lido] Estudo de 28/10/2026, base `c57e807f`, branch `codex/f7-escopo`. **Escopo aprovado em 28/10 (decisão 28; as
-respostas estão no fim).** Esta tarefa só altera documentação: não executou jogo, emulador, build ou console. As
+respostas estão no fim).** O estudo inicial só alterou documentação: não executou jogo, emulador, build ou console. As
 sete seções seguem o modelo da F6.
+
+[Medido] **Etapa 1, parte sem emulador, concluída em 28/10:** [manifesto e denominadores](01.md), gerados tanto
+da árvore original quanto da ISO convertida, iguais por `cmp`; verificador de diferenças nominais com negativos;
+auditoria de um instantâneo parcial da F6, reprovada por ausências sem justificativa; três pilotos escritos,
+**ainda sem executar**, por determinação da tarefa. Não altera o aceite do console nem aprova conteúdo executado.
 
 [Lido] Legenda: **[medido]** é contagem nos dados ou resultado de log identificado, inclusive de uma rodada
 anterior; **[lido]** é comportamento encontrado em fonte ou documento, sem prova nova de execução;
@@ -257,6 +262,16 @@ exatos pelo conteúdo selecionável; divergência com o censo inicial exige expl
 Nenhum caso ausente vira aprovado por equivalência presumida. Toda família terá ao menos uma conclusão manual
 no console, além das provas de lote; uma falha nova abre correção/regressão, sem transferi-la automaticamente à F8.
 
+[Medido] Denominadores fechados em [01](01.md): 48 episódios; 100 missões (25 iniciais, expansão pelo SimEv17);
+três cursos de 50; cinco cursos Disc Fusion com 5/6/8/7/8 adversários; 100 postos, 99 regras de oponente e 37
+intrusos; 37 eventos Sim e sete rodadas; 161 ids, 349 pares e 698 modelos; 101/20 relações admitidas sob
+condições dos leitores, sem exclusão estática; 35 versões normais e 35 divididas; 350 itens, com 114 compráveis
+e 20 só na coleção; 34 aulas e 374 páginas selecionáveis, 347 imagens carregáveis entre 398 arquivos;
+cinco tipos de torneio em três níveis; 14 registros, sete replays e 15 desejos em três listas.
+Os critérios abaixo passam a usar esses denominadores, sem afirmar que todas essas ações já foram executadas.
+O estado corrente da campanha Sim só persiste na sessão: `SimTop_Init` o zera; após reinício conferir os
+campos originais salvos (ranking, conclusão, páginas, prêmios). Retomada nova da campanha exigiria decisão do Lucas.
+
 | Item | Critério mensurável proposto [estimado] |
 |---|---|
 | Inventário e conversão | 82/82 sítios observados na união final, ou cada ausência justificada pelo leitor e aprovada; zero pendência/erro de gancho; `--disco` e ISO sem erro, 100% dos bytes reconhecidos; todos os arquivos selecionáveis ligados a formato e caso, zero arquivo sem classificação. Conteúdo inativo preservado e separado. |
@@ -266,7 +281,7 @@ no console, além das provas de lote; uma falha nova abre correção/regressão,
 | História | Todas as sagas e os 48 índices de script selecionáveis inventariados, todos os episódios selecionáveis iniciados e concluídos, finais de saga e final do jogo pelo fluxo normal. Ambas as séries de texto/boca exercitadas por cena em lote; comandos/ramos únicos de evento, R3, troca de personagem/arena, vitória/derrota e recompensas com estado conferido. Exercitar cada classe de recompensa inédita e reler o cartão. Os dois scripts adicionais em disco precisam de leitor identificado ou declaração de inatividade. |
 | Missão 100 | As 100 missões iniciadas e ganhas em lote, resultado e byte persistido; derrota/cancelamento e trava/destrava da Sobrevivência conferidos. Vitória dada pode abreviar o resultado, mas cada regra especial de missão exige caso que a execute. |
 | Sobrevivência | Três cursos de 50 adversários até o fim em lote, substituição de membros e recorde conferidos; derrota parcial e posterior recorde menor sem apagar o maior. Sem concluir que os três primeiros adversários provam os 50. |
-| Sim Dragon | Todos os roteiros de evento/dias selecionáveis classificados, cada evento alcançável executado em lote com semente/estado conhecido, treino, descanso, item, luta, derrota, continuar e término; salvar/sair/retomar com estatísticas e progresso conservados. Definir o total pelo `SimDay` e leitores antes de fechar o caso. |
+| Sim Dragon | Os 37 handlers classificados, cada evento alcançável executado em lote com semente/estado conhecido, treino, descanso, item, luta, derrota, continuar e término nas sete rodadas; conservar estatísticas entre dias/lutas da sessão e reler os campos originais persistentes após salvar/sair (ranking, conclusão, páginas e prêmios). `SimTop_Init` reinicia a campanha; não exigir serialização nova sem decisão específica ([01](01.md)). |
 | Disc Fusion | Dois ramos acessíveis pelo X real no console, cinco cursos concluídos e ranking até o topo por sequência do jogo, com persistência conferida e derrota incluída. Cartões próximos dos marcos podem abreviar regressões, sem substituir a primeira prova da progressão. |
 | Torneio | Cada tipo e restrição da tabela até campeão e premiação; derrota, eliminação, regeneração/vida carregada quando houver, ring-out e chave avançada conferidos. Confronto de dois humanos efetivamente dividido e torneio com participantes humanos alternados sem trocar seus controles. |
 | Duelo e Treino | Duelo simples/time, 1P/COM, COM/COM e 1P/2P, trocas de membros, resultado, revanche e saída; aulas/páginas selecionáveis percorridas (398 arquivos classificados), treino livre e respectivas opções. Regressão `f5_*` integral. |
@@ -286,12 +301,12 @@ de dois lutadores, item, roupa e arena. A decisão 4 abaixo fixa essa divisão a
 ## 4. Etapas e dependências
 
 [Estimado] Um dia útil representa 6 h efetivas de uma pessoa familiarizada com o port, incluindo teste e correção
-local. Filas de máquina/console e resolução do desempenho ainda aberto da F5 são separadas. Todas as etapas estão
-**por fazer**; a leitura deste estudo não é sua execução.
+local. Filas de máquina/console e resolução do desempenho ainda aberto da F5 são separadas. A etapa 1 tem sua parte
+sem emulador concluída em [01](01.md); faltam os pilotos. As demais etapas continuam por fazer.
 
 | # | Onde | Entrega e dependência | Critério de saída | Trabalho [estimado] |
 |---|---|---|---|---|
-| 1 | WSL/Deck, só leitura inicialmente | Manifesto completo, condições de progresso, denominadores, fechar decisões 1 a 4 | Redes e critério da seção 3 aprovados, cada arquivo/ação com leitor e caso, medir custo de três casos piloto | 2 a 3 dias |
+| 1 | WSL/Deck, só leitura inicialmente | Manifesto, progresso, denominadores e verificador concluídos; decisões 1 a 4 aprovadas; três pilotos escritos sem executar ([01](01.md)) | Parte sem emulador concluída; custo real dos pilotos ainda pendente na próxima tarefa | 2 a 3 dias, previsão inicial |
 | 2 | WSL/Deck | Receitas de cartões e verificadores de cobertura/save, após 1 | Cartões nativos repetíveis, progressão inédita salva/recarregada, negativos recusados; sem bytes do jogo no git | 2 a 4 dias |
 | 3 | WSL, depois 2; console curto | Entrada dos dois jogadores no teste, menus e primeiro Duelo dividido | Rastros x86/PPC, duas câmeras/metades, resultado e controles reais conferidos; perfil comparativo cedo | 2 a 4 dias |
 | 4 | WSL/Deck, depois 1/2 | Elenco, trajes, transformações/fusões, estágios e transições | Denominadores da seção 3 fechados, memória/listas/imagens e ações reais iguais, lote retomável por caso | 4 a 7 dias |
