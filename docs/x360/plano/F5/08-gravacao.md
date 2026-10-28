@@ -3104,3 +3104,168 @@ A `.text` do binário x86 **preexistente** em `port/build/x86/bt3_x86` (carimbo 
 novamente com `objcopy -O binary --only-section=.text`, deu SHA1 **`43444ea4d03a6d448aa1ae74a631e35b356a7caa`**.
 Não é build nova deste branch. Só documentação muda: nenhum fonte, objeto ou binário foi alterado; não há nova
 prova de execução x86/PPC ou build 360 nesta entrega. As provas anteriores da seção 28 não são reatribuídas a ela.
+
+## 30. Abrir a passada comum: listas, cobertura e o perfil fino (28/10/2026)
+
+Branch `codex/f5-gpu-comum`, base `4c85c039`. Sem console, sem alteração de padrão, apresentação, conteúdo ou entrada.
+A meta da decisão 27 continua zero imagens de três vblanks no combate. Não há novo ganho de GPU medido nesta tarefa.
+
+### O que foi contado e o que ainda não se mede
+
+**[Medido, reconstrução x86gv]** `BT3_GPU_COMUM=pasta` com
+`BT3_GPU_COMUM_QUADROS=6900,6929,6930,6931,6959,6960,6961` exporta JSONL por quadro, antes de o falso consumir a lista.
+Inclui todos os estados, alvos e pipelines e as posições das primitivas comuns; não exporta pixels nem transforma VU1.
+`BT3_SCALE=1` é obrigatório: o falso começa em 2 e o 360 força 1. `gpu_comum.py` faz o censo por shader, alvo e chave
+completa de pipeline, com cobertura dos triângulos pela tesoura. Saídas em `~/f5-gpu-comum/`, fora do git.
+
+**[Lido]** Com os padrões do console, as subclasses relevantes são `ps_gs` sem textura mas com arte 2D ou testes,
+`ps_gs` lendo alvos, `ps_gs_af` para o HUD, `ps_gs_tex` para primitivas com textura sem testes e `ps_gs_sem` para as
+sem textura que o predicado atual já especializa. VU0/4/6, nativas, a segunda passada FBA, DATE, Resolve e limpeza
+não entram na área comum. A máscara dos principais pipelines é RGBA (`f`), só alfa (`8`) ou só RGB (`7`).
+`0xf0445` e `0xf0545` misturam com Z sempre, `0xf0845`/`0xf0815` misturam com teste GEQUAL;
+`0xf1400` escreve RGBA e Z sem mistura. O censo guarda as demais chaves, sem colapsá-las pela aparência.
+
+A área abaixo é **fragmentos geométricos antes de alfa/DATE/Z**, somados por triângulo e por alvo, em uma chamada
+comum. A coluna de 4/3 usa centros de pixels na grade de 854 x 598 que contém a área lógica de 640 x 448; a alocação
+real do console é 864 x 608 (648 x 456 lógicos). Não é largura de viewport mudada para 854, nem rasterização capturada
+do Xenos. A sobreposição é soma menos união de pixels por alvo; não significa trabalho removível.
+Para as escritas, o mínimo conta somente máscara não vazia, Z sempre e nenhum teste de alfa ou DATE; o máximo
+admite todos os fragmentos. Não afirmar um total exato dos pixels escritos pelos desenhos com testes sem reproduzir
+seus buffers e texturas. A quantização das bordas no Xenos também pode diferir desta reconstrução.
+
+| Q | Todos os desenhos | Comuns | Vértices comuns | Fragmentos, escala 1 | Fragmentos, 4/3 | Escritas, intervalo 4/3 |
+|---|---:|---:|---:|---:|---:|---:|
+| 6900, referência de combate com muita geometria | 2.377 | 131 | 3.144 | 7.731.158 | 13.745.897 | 7.469.231 a 13.745.897 |
+| 6929 | 214 | 95 | 2.235 | 4.809.417 | 8.548.658 | 4.715.065 a 8.548.658 |
+| 6930 | 213 | 94 | 2.247 | 5.035.606 | 8.953.036 | 4.716.973 a 8.953.036 |
+| 6931 | 213 | 94 | 2.238 | 4.609.900 | 8.194.995 | 4.719.501 a 8.194.995 |
+| 6959 | 1.408 | 116 | 3.276 | 6.184.995 | 10.996.111 | 7.353.381 a 10.996.111 |
+| 6960 | 1.408 | 116 | 3.270 | 6.523.730 | 11.597.707 | 7.353.381 a 11.597.707 |
+| 6961 | 1.408 | 116 | 3.273 | 6.421.400 | 11.415.026 | 7.353.381 a 11.415.026 |
+| 7000, referência de combate após a troca | 1.409 | 113 | 2.694 | 6.463.038 | 11.490.914 | 6.738.280 a 11.490.914 |
+
+O 7000 tem 34 leituras de alvos: mantém as duas cadeias de brilho e perde quatro cópias do caminho
+da sombra. Por shader, tem 17 desenhos GS sem textura, 34 de alvo, 42 afiados, 7 rápidos com textura e
+13 rápidos sem textura. Sua cobertura é próxima da do 6960; a troca acrescenta trabalho e muda a fase da cadeia,
+sem produzir uma carga de área exclusiva e inteiramente descartável no alvo problemático.
+
+A união comum é 319.488 pixels a 1 e 568.406 a 4/3 nos sete, somando as superfícies distintas. No 6930,
+8.384.630 dos 8.953.036 fragmentos a 4/3 se sobrepõem a outros no mesmo alvo; no 6960, 11.029.301 dos
+11.597.707. Há mistura em 91 dos 94 desenhos comuns do 6930 e 112 dos 116 do 6960. Misturas, máscaras de alfa,
+Z e leituras de resultados anteriores impedem tratar essa sobreposição como cobertura opaca descartável.
+
+| Shader/estado, comum | Desenhos 6930 / 6960 | Vértices 6930 / 6960 | Fragmentos 6930 / 6960, a 4/3 |
+|---|---:|---:|---:|
+| `ps_gs`, sem textura, com arte/testes | 11 / 17 | 516 / 954 | 2.856.547 / 4.720.113 |
+| `ps_gs`, alvo como textura | 22 / 38 | 690 / 984 | 1.906.115 / 2.692.113 |
+| `ps_gs_af`, VRAM e arte no quadro | 44 / 42 | 498 / 498 | 273.279 / 261.161 |
+| `ps_gs_tex`, VRAM sem arte/testes | 4 / 6 | 465 / 756 | 3.774.212 / 3.781.437 |
+| `ps_gs_sem`, sem textura especializado | 13 / 13 | 78 / 78 | 142.883 / 142.883 |
+
+**[Medido, listas]** No 6960 os alvos comuns são o quadro (0, FBP 0), com 79 desenhos/2.466 vértices e
+10.187.755 fragmentos a 4/3; o 3 (FBP 336), 9/492 e 1.032.207; o 4 (368), 6/168 e 204.345;
+o 5 (502), 12/84 e 101.150; o 6 (504), 10/60 e 72.250. O quadro alterna com o alvo 2 (FBP 112)
+nos ímpares. Os alvos 1 (FBP 140) e os outros sem desenho não contam como área escrita.
+
+### Onde dobra e quais trocas a lista permite contar
+
+**[Medido, x86gv]** No 6960 há duas cadeias de brilho, nos desenhos **109 a 125** e **1261 a 1277**.
+Cada uma tem a limpeza por primitivas e dezesseis desenhos que leem alvos, **901.776 fragmentos a 4/3**.
+Elas passam do quadro a 256, 128, 64, alternam os alvos 5/6 dez vezes e ampliam de volta ao quadro.
+Entre as duas há geometria de VU1; elas não leem a mesma imagem. Há ainda sombra, tabela, cópia dos ids e contorno.
+A duplicação é desse percurso, não de todo o HUD nem de todos os pixels comuns: no 6930 há uma cadeia de brilho,
+22 leituras de alvos no total; no 6960, duas e 38 leituras. A referência 6900 também tem duas e 38 leituras,
+mas 2.377 desenhos totais; menos desenhos totais no 6960 não implica menor área comum.
+
+**[Medido]** A segunda cadeia já aparece no **6959 da x86gv**; no console, a mudança do perfil ocorre no 6960.
+O 6958 da x86gv ainda tem 210 desenhos, 94 comuns e 22 leituras. A lista do 6930 e a do 6960 têm as contagens
+publicadas nos picos do console (213/2.247 e 1.408/3.270), mas isso não torna todos os seus vizinhos equivalentes.
+Não atribuir os 8,538 ms do 6959 do console à lista mais pesada do 6959 da x86.
+
+**[Medido, transições da lista inteira, incluindo VU/nativas]** Do 6930 ao 6960: alvo 21 a 39, pipeline 57 a 1.191,
+textura 191 a 1.331, sampler 31 a 1.157, modo 65 a 1.194, misc 61 a 71, tesoura 31 a 42.
+São diferenças entre registros consecutivos, não chamadas D3D: o cache de estado, as nativas e a residência de
+EDRAM podem evitar ou acrescentar chamadas. O salto de pipeline/textura é sobretudo a geometria VU intercalada.
+**[Medido, console anterior]** As marcas de Resolve de cor são 21/36 no 6930/6960 e custam 0,832/1,166 ms líquidos
+estimados (seção 29). São segmentos, não contagem certificada de `Resolve`. **[Lido]** Uma leitura de alvo só resolve
+se sua versão na EDRAM estiver suja; a cópia DATE e as nativas têm chamadas próprias. A lista não registra esses
+comandos do backend 360. O perfil novo registra as chamadas efetivas para resolver essa lacuna na próxima rodada.
+
+### O perfil fino preparado, desligado por padrão
+
+**[Lido e testado por simulação]** `BT3_COMUM_GPU=A,B`, `=1` somente 6960, seleciona os quadros inclusive dentro da
+janela de passos, como `BT3_CORTES_GPU`. Se ambas forem ligadas, a chave fina escolhe a faixa. Ausente ou 0 mantém
+o perfil antigo. Divide somente a família comum por fonte/shader: sem textura, VRAM, alvo, pacote, afiado,
+rápido sem textura, rápido com textura e trivial. Trocar alvo ou faixa absoluta de **128 desenhos** fecha um trecho,
+mesmo mantendo o shader. Não põe marca em cada desenho. O limite continua 4.096 marcas por quadro; transbordo ou
+captura invalidam a amostra explicitamente.
+
+Linhas `cortes: gpu ... classe comum ...` são os agregados. `cortes: comum ... classe ... alvo ... desenhos I:F`
+são os trechos que os compõem, com bruto, líquido calibrado, limite da espera CPU e marcas. Somar os trechos
+por classe deve reproduzir o agregado, nunca acrescentá-los a ele. O desconto continua um trecho vazio por marca;
+valores líquidos negativos não são truncados. FBA e as demais classes continuam separadas. Preserva a fronteira
+antiga depois de `prepara`: parte do preparo seguinte é atribuída ao trecho anterior, logo isto não isola o shader.
+Os metadados ficam nos mesmos dois buffers, com o quadro emitido, e são drenados fora da faixa.
+
+A linha `cortes: comum quadro Q API` conta chamadas efetivas de Resolve, Clear, pixel shader, render target,
+textura, tesoura, UP e índices, somente no quadro selecionado, incluindo outras famílias e as chamadas da limpeza
+final. Conta comandos, não estados distintos ou custo. A DPC continua só com o relógio e a barreira; sem log,
+float, desenho ou acesso ao dispositivo. Os metadados acrescentam 96 KB estáticos, sem alocação na luta.
+
+`comum_console.py ~/f5-gpu-comum/console --rodada gc2810a` preparou dez ambientes, `boot.txt`, `f5_duelo.txt`
+e `ordem.txt`, sem build nem FTP: três pares alternados `base1/ambos1` a `base3/ambos3` sem marcas finas, depois
+`g6930_1/g6960_1` e `g6930_2/g6960_2`, cada um marcando **só o alvo**, com constantes/fecho desligados.
+Saves `sv_gc2810a_NOME`, todos distintos. Repetição exige outro identificador e diretório novo. Na revisão Linux,
+compilar este commit e preparar os ambientes ao lado da build; conferir carimbo, recursos e ordem antes da rodada.
+
+Aberturas com marcas localizam custo, não aprovam a tela. Em cada alvo conferir classes, trechos completos,
+conservação bruto/custo/líquido, nenhuma amostra indisponível, quantidade de chamadas e o prazo medido sem marcas.
+Nos controles, publicar todas as imagens longas, folga, jogo/gravação/desenho e resultado; aplicar
+`passos.py LOG --console --janelas 2 --minimo 600 --carimbo CARIMBO_REAL`. Exigir associação completa,
+684/2.334 passos, vencedor 0x2, razão 0x1 e vida 0/27160. Isso não substitui as três janelas longas da F5.
+
+### Candidatos, ganhos ainda estimados no 6960
+
+Nenhum corte foi implementado. A área não determina o tempo, o preparo contamina as classes e os resultados
+intermediários do brilho mudam entre as cadeias. O perfil fino é necessário para escolher um candidato com ganho
+atribuível. Não há demonstração de um corte que recupere os **10,6 ms na cadeia**. Não somar estimativas abaixo como
+se fossem parcelas independentes: há sobreposição de execução e candidatos concorrentes sobre os mesmos fragmentos.
+
+| Candidato [lido] | Ganho no 6960 [estimado, hipótese a testar] | Risco de imagem e prova necessária |
+|---|---|---|
+| Tesoura mais apertada, geometria fora de 640x448 e padding da alocação | 0 ms de área adicional demonstrável: nos sete quadros, a cobertura em 648x456 é igual à de 640x448. A tesoura já recusa a geometria excedente | Recortar a coluna que o bilinear, FXAA, ids ou uma redução lê muda a borda. Provar a região de leitura incluindo halos e comparar todos os intermediários e a captura final, nas duas escalas |
+| Desenhos cobertos | 0 ms creditado; o teto de remover todos os 12,123 ms comuns não é realizável | A maioria mistura; há máscaras só alfa, DATE e dependência Z. Exigir cobertura opaca e prova de que nenhum leitor futuro usa a versão anterior; equivalência de listas normalizadas e imagens, com mutante que omita um leitor |
+| Especializar mais `ps_gs`, sobretudo sem textura e com `misc.w` não nulo, e os estados de cópia de alvo | 0 a 3 ms como faixa de investigação, sem tempo fino disponível. O shader sem textura já existe, mas o predicado exclui arte 2D; o HUD afiado é só 0,261 M de 11,598 M fragmentos | Preservar DATE, alfa, FBA, UV preso, borda e gradientes. Provar predicado e saída de todos os estados elegíveis, mutantes, x86/PPC e capturas iguais; medir cada subclasse no Xenos antes/depois. Não desligar afiado nem usar o trivial como solução |
+| Reduzir o alcance do brilho e das cópias de alvos | 0 a 2 ms, condicionado a regiões realmente vazias; duas cadeias somam 1,804 M fragmentos a 4/3, não todo o comum | Blur amplia suporte; o conteúdo entre as duas cadeias difere. Propagar região útil e halo pelas dez alternâncias, provar intermediários e finais idênticos; não omitir a segunda cadeia |
+| Resolve/limpeza redundantes | 0 a 0,5 ms plausíveis, teto não realizável de 1,166 ms para toda a cor e 0,175 para entradas do perfil antigo | A residência, limpeza fora do conteúdo e cache por geração já existem. Exigir log de chamadas novas e versões sujas/lidas; um mutante que pule Resolve obrigatório deve falhar. Capturas dos intermediários mais o quadro final |
+| Trabalho no quadro anterior | 0 ms creditado à GPU sem especulação. Não há texturas novas nesses alvos; a geometria e a segunda cadeia dependem do quadro corrente | Pré-alocar recursos pode adiantar CPU, mas não mover desenho/Resolve que lê o quadro atual. Provar dependências, ordem, fase e latência pelos carimbos sem marcas; não acrescentar fila nem vblank |
+
+Para qualquer protótipo futuro, executar o conjunto da seção 28, incluindo `divergencias.py`, negativos, objetos
+planos sem depuração e capturas, antes de medir o console. Nesta entrega as comparações de listas certificam o
+exportador; não são prova de equivalência de um shader novo, pois o backend falso não rasteriza shaders D3D.
+
+### Conferência local e limites
+
+**[Medido]** Builds da base `4c85c039` e do código novo, com `BT3_SCALE=1`, `BT3_TEX_ORIGEM=1`, sem threads:
+
+| Conferência | Resultado |
+|---|---|
+| x86gv, Duelo completo, base contra exportador ligado | 8.380 quadros, `divergencias.py --normal`: 0 diferentes; hash cru `fba506996b28cdae` igual |
+| PPCg real no qemu, Duelo completo, `SEMMAPA=1`, mesmos dados convertidos da rodada anterior | 8.380 quadros, 0 diferentes; hash cru `807d95bd0dfc40ee` igual; nenhuma textura já solta |
+| Censo x86gv contra PPCg, nove quadros, incluindo 6928 e 6958 | JSON de resultados inteiro igual byte a byte; ambas veem a segunda cadeia no 6959 |
+| x86gv, Duelo completo, duas threads e exportação de 6800/7000/7100 | 8.380 quadros; listas normais iguais às da base sem threads |
+| `teste_gpu_comum.py`, código real com dispositivo simulado | seleção, shader, alvo, faixa, VU, dreno e conservação passam; cinco mutantes recusados |
+| Censo, entradas copiadas e estragadas | desenho ausente, posições truncadas, ordem e alvo inválidos recusados; um JSONL real truncado sai 1 |
+| `teste_cortes.py` | diagnóstico anterior, dreno e seus controles negativos continuam passando |
+| `divergencias.py` e `cmp`, cópias adulteradas | hash normal do 6960 e byte de objeto alterados: saída 1 nos dois |
+| Ambientes | dez saves únicos; tentativa de sobrescrever diretório existente recusada |
+| x86 plana, base contra final, `objcopy --strip-debug` e `cmp` | 396 de 397 objetos iguais; apenas `x360_passos.o`, o carimbo de teste, difere |
+| `.text` das duas builds planas | SHA1 `43444ea4d03a6d448aa1ae74a631e35b356a7caa` igual |
+
+Não há corte de execução nesta entrega; a matriz extensa da seção 28, `roteiros.sh`/`save_mc.sh` e novas capturas
+não foram repetidos como prova de uma otimização inexistente. O roteiro completo aqui é o Duelo no backend falso,
+com estados/listas comparados à base, nas duas arquiteturas. Não chamar o seu tempo de GPU.
+Os artefatos, logs, builds e carimbos ficam em `~/f5-gpu-comum/`; a rodada do commit final e seus limites estão
+no relatório `~/entrega-f5-gpu-comum.md`.
+A build do XDK, as subclasses medidas no Xenos, a contagem efetiva de chamadas D3D e o zero de imagens longas
+continuam pendentes da revisão e do console. Não houve console nesta tarefa.
