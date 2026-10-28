@@ -875,7 +875,7 @@ void __wrap_GsGpu_DrawVu0(int layer, int ctx, const float *v, uint32_t n, const 
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu0(layer, ctx, v, n, c);
-    px_progresso();
+        px_progresso();
         return;
     }
     t0 = tique();
@@ -888,7 +888,7 @@ void __wrap_GsGpu_DrawVu4(int ctx, const float *v, uint32_t n, const float *c) {
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu4(ctx, v, n, c);
-    px_progresso();
+        px_progresso();
         return;
     }
     t0 = tique();
@@ -901,7 +901,7 @@ void __wrap_GsGpu_DrawVu6(int ctx, const float *v, uint32_t n, const float *c) {
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu6(ctx, v, n, c);
-    px_progresso();
+        px_progresso();
         return;
     }
     t0 = tique();

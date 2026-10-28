@@ -116,6 +116,24 @@ for a in x86gv ppcg; do
         done
     done
 done
+# Os dois contadores de alfa por quadro também têm de concordar entre arquiteturas.
+python3 - "$I" <<'PYALFA'
+from pathlib import Path
+import re,sys
+p=Path(sys.argv[1]); padrao=re.compile(r'^alfa: quadro (\d+) desenhos (\d+) altos (\d+), 0 diferentes$',re.M)
+n=0
+for x in sorted(p.glob('*x86gv*.log')):
+    v=padrao.findall(x.read_text(errors='replace'))
+    if not v: continue
+    outro=p/x.name.replace('x86gv','ppcg')
+    assert outro.exists(),outro
+    w=padrao.findall(outro.read_text(errors='replace'))
+    assert len(v)==len({q for q,_,_ in v}) and v==w,x.name
+    n+=1
+assert n==54,n
+print(f'alfa: {n} pares x86/PPC, dois contadores iguais em cada quadro')
+PYALFA
+pa 'estatística de alfa por quadro igual entre arquiteturas'
 # O verificador por quadro precisa recusar também um resultado real adulterado.
 python3 - "$I/final-x86gv-f5_duelo-t00-c00-a1.log" "$I/lista-estragada.log" <<'PY'
 from pathlib import Path
