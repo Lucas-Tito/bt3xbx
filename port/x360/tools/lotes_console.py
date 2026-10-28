@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""F5, seção 37: prepara a rodada de console do relógio da gravação, sem executar build nem tocar no console.
+"""F5, seção 37: prepara as rodadas de console do relógio da gravação e da imagem do BT3_GS_LOTES, sem executar build
+nem tocar no console.
 
-Duas builds do mesmo commit, as duas de perfil (o relógio só existe nelas), pela build_f2.sh:
+relogio: duas builds do mesmo commit, as duas de perfil (o relógio só existe nelas), pela build_f2.sh:
   perfil       BT3_PERFIL_CADEIA=1
   perfil+alfa  BT3_PERFIL_CADEIA=1 BT3_ALFA_ORIGEM=1      (o log diz "gs_d3d: alfa exato na origem")
 Cada build abre alternando com o relógio ligado (BT3_RELOGIO_GRAV com os quadros) e desligado (controle da mesma build:
 diz o que os carimbos custam em G, P e U). As marcas da cadeia ficam desligadas (BT3_CADEIA_CPU=0) e o picos e a tela
 por imagem ligados (J e G do relógio vêm do anel do picos). Saves novos e únicos por abertura.
 
-    relogio_console.py SAIDA --rodada rl37a2810 [--quadros 6900,6930,6960,7000,7170] [--repeticoes 2]
-    relogio_console.py --mutantes   (os ambientes estragados têm de ser recusados pelo conferidor)
+imagem: a build normal e a dos lotes (BT3_GS_LOTES=1) do mesmo commit, e a dos lotes com BT3_LOTES=0 (o controle da
+mesma build), alternadas, capturando os mesmos quadros na resolução interna (BT3_SHOT_LISTA, BT3_SHOT_CHEIA=1), cada
+abertura na sua pasta. A prova do plano previsto e do DATE curto é a captura igual byte a byte à da normal, mais os
+contadores do log (fora da vaga, alvo lido sem Resolve e DATE lendo fora em 0).
+
+    lotes_console.py relogio SAIDA --rodada rl37a2810 [--quadros 6900,6930,6960,7000,7170] [--repeticoes 2]
+    lotes_console.py imagem SAIDA --rodada li37a2810 [--quadros ...] [--repeticoes 2]
+    lotes_console.py --mutantes   (os ambientes estragados têm de ser recusados pelo conferidor)
 """
 import argparse
 import json
@@ -20,6 +27,7 @@ import sys
 import tempfile
 
 ANTIGAS = ('rp32a2810', 'rp33a2810', 'ap35a2810')
+QUADROS_IMAGEM = '6900,6928,6929,6930,6931,6932,6958,6959,6960,6961,6962,7000,7100,7168,7169,7170,7171,7172,7300,7500,8000,8300'
 COMUM = ['-BT3_DEMO', 'BT3_NOMOVIE=1', 'BT3_DESBLOQUEIO=1', r'BT3_ROTEIRO=game:\f5_duelo.txt',
          'BT3_GS_THREAD=1', 'BT3_GS_DESENHO=1', 'BT3_GS_DESENHO_HW=3', 'BT3_SOM=1', 'BT3_WIDE=1',
          'BT3_ESCALA=1.33', 'BT3_FXAA=1', 'BT3_VU1_DIRETO=1', 'BT3_ENVIO_RAPIDO=1', 'BT3_TEX_ORIGEM=1',
@@ -27,32 +35,53 @@ COMUM = ['-BT3_DEMO', 'BT3_NOMOVIE=1', 'BT3_DESBLOQUEIO=1', r'BT3_ROTEIRO=game:\
          'BT3_VU_FECHO=0', 'BT3_CADEIA_CPU=0', 'BT3_CORTES=0', 'BT3_CORTES_GPU=0', 'BT3_COMUM_GPU=0']
 
 
-def prepara(saida, rodada, quadros, repeticoes):
+def prepara(saida, rodada, quadros, repeticoes, modo='relogio'):
     if not rodada.isascii() or not rodada.isalnum() or not 1 <= len(rodada) <= 12:
         raise ValueError('identificador ASCII alfanumérico de 1 a 12 caracteres')
     if rodada in ANTIGAS:
         raise ValueError(f'a rodada {rodada} já foi usada')
-    if not quadros or len(quadros) > 16 or any(q <= 0 for q in quadros):
-        raise ValueError('de 1 a 16 quadros positivos')
+    if not quadros or len(quadros) > (16 if modo == 'relogio' else 32) or any(q <= 0 for q in quadros):
+        raise ValueError('de 1 a 16 quadros positivos (32 nas imagens)')
     saida.mkdir(parents=True, exist_ok=False)
     raiz = Path(__file__).resolve().parents[3]
     for n in ('boot', 'f5_duelo'):
         shutil.copyfile(raiz / 'port/x360/roteiros' / (n + '.txt'), saida / (n + '.txt'))
     casos = []
-    for i in range(1, repeticoes + 1):  # builds e relógio alternados na mesma sessão
-        casos += [(f'rel{i}', 'perfil', 1), (f'ctl{i}', 'perfil', 0), (f'rela{i}', 'perfil+alfa', 1), (f'ctla{i}', 'perfil+alfa', 0)]
+    for i in range(1, repeticoes + 1):  # builds e chaves alternadas na mesma sessão
+        if modo == 'relogio':
+            casos += [(f'rel{i}', 'perfil', 1), (f'ctl{i}', 'perfil', 0), (f'rela{i}', 'perfil+alfa', 1), (f'ctla{i}', 'perfil+alfa', 0)]
+        else:
+            casos += [(f'nor{i}', 'normal', 0), (f'lot{i}', 'lotes', 1), (f'lct{i}', 'lotes', 0)]
     lista = ','.join(map(str, quadros))
     manifesto = []
     for nome, build, liga in casos:
         save = f'sv_{rodada}_{nome}'
         if len(save) > 42:
             raise ValueError('save excede FATX')
-        linhas = COMUM + [f'BT3_RELOGIO_GRAV={lista if liga else 0}', f'BT3_SAVES=game:\\{save}']
+        if modo == 'relogio':
+            extra = [f'BT3_RELOGIO_GRAV={lista if liga else 0}']
+            m = {'relogio': lista if liga else '0'}
+        else:
+            pasta = f'shots_{rodada}_{nome}'
+            extra = ['BT3_RELOGIO_GRAV=0', f'BT3_LOTES={liga}', f'BT3_SHOT_LISTA={lista}', 'BT3_SHOT_CHEIA=1', f'BT3_SHOT_PASTA={pasta}']
+            m = {'relogio': '0', 'lotes': liga, 'pasta': pasta}
+        linhas = COMUM + extra + [f'BT3_SAVES=game:\\{save}']
         (saida / f'ambiente_{nome}.txt').write_text('\n'.join(linhas) + '\n')
-        manifesto.append({'abertura': nome, 'build': build, 'save': save, 'relogio': lista if liga else '0'})
+        manifesto.append(dict({'abertura': nome, 'build': build, 'save': save, 'modo': modo}, **m))
     (saida / 'manifesto.json').write_text(json.dumps(manifesto, indent=2) + '\n')
     (saida / 'ordem.txt').write_text('\n'.join(f'{c[0]} {c[1]}' for c in casos) + '\n')
     shutil.copyfile(saida / f'ambiente_{casos[0][0]}.txt', saida / 'ambiente.txt')
+    if modo == 'imagem':
+        (saida / 'LEIA.txt').write_text(f'''Rodada {rodada}: a imagem do BT3_GS_LOTES, primeira parte (F5, seção 37 do 08-gravacao.md).
+Duas builds do mesmo commit (ordem.txt: abertura e build): normal (build_f2.sh) e lotes (BT3_GS_LOTES=1). Antes de abrir:
+conferir o carimbo, a linha "gs_d3d: lotes (BT3_GS_LOTES), primeira parte ligada" só nas lot* ("desligada" nas lct*), e a
+inexistência de TODOS os saves e pastas de captura do manifesto. Se qualquer um existir, gerar outra rodada inteira.
+Executar na ordem, cada abertura com o ambiente_<nome>.txt como ambiente.txt. Trazer o log e a pasta game:\\<pasta> de cada uma.
+A prova: compara_quadros.py <pasta lot> <pasta nor> com todos os pixels iguais em todos os quadros {lista}, e o mesmo para
+lct contra nor (o controle); no log das lot, "lotes, no trecho" com planos previstos e, em todas, "fora da vaga 0", "alvo lido
+sem Resolve 0" e o DATE "lendo fora do que o alvo tinha" em 0 na normal. Imagem igual não é ganho: o envio ainda espera a entrega.
+''')
+        return manifesto
     (saida / 'LEIA.txt').write_text(f'''Rodada {rodada}: o relógio da gravação por desenho no Xenon (F5, seção 37 do 08-gravacao.md).
 Duas builds de perfil do mesmo commit (ordem.txt: abertura e build): perfil (BT3_PERFIL_CADEIA=1) e perfil+alfa
 (BT3_PERFIL_CADEIA=1 BT3_ALFA_ORIGEM=1). Antes de abrir: conferir o carimbo, a linha "gs_d3d: alfa exato na origem" só
@@ -79,12 +108,20 @@ def confere(pasta, rodada):
         rel = [x for x in t if x.startswith('BT3_RELOGIO_GRAV=')]
         if rel != [f'BT3_RELOGIO_GRAV={m["relogio"]}'] or not re.fullmatch(r'0|\d+(,\d+){0,15}', m['relogio']):
             raise ValueError(f'{m["abertura"]}: relógio diferente do manifesto')
-        if (m['abertura'].startswith('rel')) == (m['relogio'] == '0'):
+        if m['modo'] == 'relogio' and (m['abertura'].startswith('rel')) == (m['relogio'] == '0'):
             raise ValueError(f'{m["abertura"]}: abertura de relógio sem relógio, ou controle com ele')
         if t[-1] != f'BT3_SAVES=game:\\{m["save"]}':
             raise ValueError(f'{m["abertura"]}: save diferente do manifesto')
-        if m['build'] not in ('perfil', 'perfil+alfa'):
+        if m['modo'] == 'relogio' and m['build'] not in ('perfil', 'perfil+alfa'):
             raise ValueError(f'{m["abertura"]}: build {m["build"]} sem o relógio')
+        if m['modo'] == 'imagem':
+            pastas = [x['pasta'] for x in man]
+            if len(set(pastas)) != len(pastas) or len(m['pasta']) > 30 or not m['pasta'].startswith(f'shots_{rodada}_'):
+                raise ValueError(f'{m["abertura"]}: pasta de captura repetida, longa ou de outra rodada')
+            if f'BT3_SHOT_PASTA={m["pasta"]}' not in t or f'BT3_LOTES={m["lotes"]}' not in t or 'BT3_SHOT_CHEIA=1' not in t:
+                raise ValueError(f'{m["abertura"]}: captura ou lotes diferentes do manifesto')
+            if (m['build'] == 'lotes') != m['abertura'].startswith('l') or (m['lotes'] == 1) != m['abertura'].startswith('lot'):
+                raise ValueError(f'{m["abertura"]}: build ou chave trocada')
     if (pasta / 'ambiente.txt').read_text() != (pasta / f'ambiente_{man[0]["abertura"]}.txt').read_text():
         raise ValueError('ambiente.txt não é o da primeira abertura')
     return len(man)
@@ -114,6 +151,24 @@ def mutantes():
                 print(f'mutante recusado: {nome} ({e})')
             else:
                 raise AssertionError(f'mutante aceito: {nome}')
+        img = Path(d) / 'img'
+        prepara(img, 'teste2', [6930, 6960], 2, 'imagem')
+        assert confere(img, 'teste2') == 6
+        for nome, (arq, f) in {
+            'lotes desligado na lot': ('ambiente_lot1.txt', lambda s: s.replace('BT3_LOTES=1', 'BT3_LOTES=0')),
+            'pasta repetida': ('ambiente_lct2.txt', lambda s: s.replace('shots_teste2_lct2', 'shots_teste2_lot2')),
+            'build trocada': ('manifesto.json', lambda s: s.replace('"build": "normal"', '"build": "lotes"', 1)),
+            'captura reduzida': ('ambiente_nor2.txt', lambda s: s.replace('BT3_SHOT_CHEIA=1', 'BT3_SHOT_CHEIA=0')),
+        }.items():
+            c = Path(d) / ('i_' + re.sub(r'\W', '_', nome))
+            shutil.copytree(img, c)
+            (c / arq).write_text(f((c / arq).read_text()))
+            try:
+                confere(c, 'teste2')
+            except ValueError as e:
+                print(f'mutante recusado: {nome} ({e})')
+            else:
+                raise AssertionError(f'mutante aceito: {nome}')
         for ruim in ('rp33a2810', 'nome-ruim'):
             try:
                 prepara(Path(d) / ruim, ruim, [6960], 1)
@@ -121,21 +176,22 @@ def mutantes():
                 print(f'rodada recusada: {ruim} ({e})')
             else:
                 raise AssertionError(f'rodada aceita: {ruim}')
-    print('tudo certo nos mutantes do relogio_console')
+    print('tudo certo nos mutantes do lotes_console')
 
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('saida', type=Path, nargs='?'); p.add_argument('--rodada')
-    p.add_argument('--quadros', default='6900,6930,6960,7000,7170'); p.add_argument('--repeticoes', type=int, default=2)
+    p.add_argument('modo', nargs='?', choices=('relogio', 'imagem')); p.add_argument('saida', type=Path, nargs='?')
+    p.add_argument('--rodada'); p.add_argument('--quadros'); p.add_argument('--repeticoes', type=int, default=2)
     p.add_argument('--mutantes', action='store_true')
     a = p.parse_args()
     if a.mutantes:
         mutantes(); sys.exit(0)
-    if a.saida is None or not a.rodada:
-        p.error('informe SAIDA e --rodada')
+    if a.modo is None or a.saida is None or not a.rodada:
+        p.error('informe o modo, SAIDA e --rodada')
+    qs = a.quadros or ('6900,6930,6960,7000,7170' if a.modo == 'relogio' else QUADROS_IMAGEM)
     try:
-        m = prepara(a.saida, a.rodada, [int(x) for x in a.quadros.split(',')], a.repeticoes)
+        m = prepara(a.saida, a.rodada, [int(x) for x in qs.split(',')], a.repeticoes, a.modo)
         confere(a.saida, a.rodada)
     except (ValueError, OSError) as e:
         p.exit(1, f'FALHA: {e}\n')
