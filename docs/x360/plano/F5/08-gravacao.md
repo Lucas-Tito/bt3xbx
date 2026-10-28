@@ -3850,3 +3850,364 @@ da seção 28 fica especificada acima para a tarefa de implementação autorizad
 nem certificada aqui. Igualdade de comandos por leitura/teste não substitui execução no XDK e capturas.
 Ainda não estão provados o diagnóstico no Xenon, a hipótese de alfa, os prefixos, nenhum ganho novo, imagem/entrada
 sob reprojeto, zero nas três janelas longas, sessão livre, duas vistas ou resolução maior.
+
+
+## 33. Rodada rp32a2810: alfa confirmado, VU0 distribuída e regressão com o perfil desligado (28/10/2026)
+
+**Resposta:** manter os prefixos como candidato para fechar a cadeia, mas antes corrigir e medir a estatística de
+alfa e a regressão dos controles novos. O zero continua reprovado. Não executar as 24 aberturas automaticamente:
+oito delas têm utilidade imediata; as demais ficam adiadas. Nenhum ganho novo foi implementado ou certificado.
+Branch `codex/f5-rp-analise`, base `ba34d540`. Sem console, emulador, build ou alteração de fonte nesta análise.
+
+### Proveniência e conferência das dez aberturas
+
+**[Lido, informação do Lucas]** Aberturas em 28/10, na ordem publicada abaixo, build main `8c1ec1d`,
+`default.xex` MD5 `af2a4861d74a3c2fc9401231fa779a29`, `.dat` `4fe9d049` e `.swap` `2e97a3e5`.
+Essas identidades de binários foram fornecidas, não recalculadas aqui. **[Medido nos logs]** O carimbo literal
+é **`8c1ec1d diff:da39a3ee5e` em todas as dez**. Os ambientes coincidem integralmente com
+`~/f5-reprojeto/console/ambiente_NOME.txt`, inclusive hardware 3, som, 16:9, escala 1,33, FXAA, origem,
+VU1 direto, envio rápido, tempos 0 e saves `sv_rp32a2810_NOME`. Constantes/fecho 0/0 na base e CPU,
+2/1 em ambos; CPU só Q,Q nos quatro cpu*, todos os demais diagnósticos 0.
+A inexistência prévia dos saves foi informada pelo Lucas; não foi consultada no console nesta tarefa.
+
+Originais: `~/sessao_2810b/rp/rp_NOME/bt3xbx.log`, preservados. SHA256 calculado sobre os bytes originais,
+incluindo toda a continuação; análise somente até o primeiro `f5_duelo.txt:99 fim`, vblank 12570/quadro 8378.
+Todos têm continuação, especialmente base2 (8.372 linhas, usadas 2.807) e ambos3 (6.511, usadas 2.808).
+O hash do arquivo inteiro não é o hash do recorte com que os verificadores trabalham.
+
+| Abertura, na ordem real | SHA256 original |
+|---|---|
+| base1 | `81918d89e5906accdbbc341673c7331a20522a296f41ed9329b6b8de71b485f5` |
+| ambos1 | `838c132bd555044229cef4856b68ceac477a612f9a69c7e8f98cb80f52eb0ecc` |
+| base2 | `c112b26d76b4d53428840a5cb5271e89bfed9c19442fdb47153277ae7b3ce596` |
+| ambos2 | `393b31bd523210d240951db8829ffe6ecfebb32174e6266c50072c2ef04910ff` |
+| base3 | `5cf0100f85dfab9e16723472c1ced2b010d7a45fb00dd1663a1f2d4a8ef17362` |
+| ambos3 | `b96670a7dd9d5ac522cfe86734dac82dcc4645d3b176b42eb8a839aed3c43ba3` |
+| cpu6930_1 | `7f9f026a50d7299d069a0d76dacfa1639dd41f37552d0de450aced903bf9b0ea` |
+| cpu6930_2 | `1a12706e7a2ede3cd604e3fdb1e2a9013bb32862e5c59147ff7389d151b8ab11` |
+| cpu6960_1 | `6e2b9996b5bae02d454aee0f37f7e9b79091a7e02b2f0c56bc7d2eb6c6e33766` |
+| cpu6960_2 | `2c870733d4f2dd25f8b6a8947305a476f1ae07356630a05044e3578b494c2cb8` |
+
+**[Medido]** Nas vinte janelas: 684/2.334 passos, 1.368/4.668 vblanks, todos os passos com dois vblanks,
+parede/esperado 0,9972; resultado estado 4, vencedor 0x2, razão 0x1, vida 0/27160, quadro 7757/vblank 11478.
+Zero FALHA/CRASH/ERRO/vigia/amostra indisponível; descartes requeridos, pressões, esperas de descarte,
+texturas recusadas, brancas e alvos sem textura zero. As primitivas só do PS2 continuam contadas à parte,
+sem serem confundidas com descartes requeridos. Associação completa: zero repetições, trocas sem quadro,
+puladas ou marcas GPU ausentes. Cada histograma conserva suas trocas e cada imagem excepcional tem linha.
+As duas janelas têm 684/2.334 trocas, também nos resumos por imagem, sem a diferença de fronteira antiga.
+
+`~/f5-rp-analise/confere.py` reproduz a extração e a conferência estrita de ambiente, carimbo, resultado,
+recursos, associações e somas. `rodada/dados.json`, recortes, comandos e saídas ficam nessa pasta, fora do git.
+Em cada recorte foi executado `passos.py LOG --console --janelas 2 --minimo 600
+--carimbo '8c1ec1d diff:da39a3ee5e'`: **saída 1 nas dez**, corretamente reprovadas pelas longas em j2.
+O mesmo leitor sem `--console` passa nas dez (estrutura, saída 0). `cadeia_cpu.py LOG --quadros Q`
+passa nos quatro cpu* (saída 0), com quadros exatos, parcelas exclusivas e total/soma conservados.
+Não transformar a saída 1 do aceite em sucesso; a análise está conferida, o zero não está aprovado.
+
+**[Medido]** Tempos em ms; folga positiva termina antes do prazo. As tabelas separam controles e marcas.
+J1 é sempre 0/684/0/0 em imagens de 1/2/3/4+ vblanks. J2:
+
+| Abertura | Tipo | J2, imagens 1/2/3/4+ | Folga GPU j1, mínimo/p1/p10/p50 | Folga GPU j2, mínimo/p1/p10/p50 | Trabalho j2, p50/p99/máximo |
+|---|---|---|---|---|---|
+| base1 | controle | 3/2328/3/0 | 4,7 / 5,4 / 6,1 / 8,4 | -9,6 / 2,4 / 5,9 / 7,9 | 24,93 / 30,51 / 32,07 |
+| ambos1 | controle | 3/2328/3/0 | 4,7 / 5,3 / 6,0 / 8,4 | -9,2 / 2,6 / 5,9 / 7,7 | 24,57 / 29,99 / 31,50 |
+| base2 | controle | 3/2328/3/0 | 4,6 / 5,4 / 6,1 / 8,4 | -9,6 / 2,4 / 6,0 / 7,9 | 24,92 / 30,54 / 32,06 |
+| ambos2 | controle | 3/2329/2/0 | 4,7 / 5,4 / 6,1 / 8,4 | -9,2 / 2,7 / 5,9 / 7,9 | 24,53 / 29,97 / 31,48 |
+| base3 | controle | 3/2328/3/0 | 4,7 / 5,4 / 6,1 / 8,4 | -9,6 / 2,4 / 5,9 / 7,7 | 24,90 / 30,54 / 32,07 |
+| ambos3 | controle | 3/2329/2/0 | 4,7 / 5,4 / 6,1 / 8,4 | -9,2 / 2,7 / 5,8 / 7,8 | 24,45 / 29,96 / 31,57 |
+| cpu6930_1 | CPU marcada | 3/2328/3/0 | 4,7 / 5,4 / 6,1 / 8,4 | -9,6 / 2,4 / 5,9 / 7,8 | 24,91 / 30,47 / 32,11 |
+| cpu6930_2 | CPU marcada | 3/2328/3/0 | 4,7 / 5,4 / 6,0 / 8,4 | -9,6 / 2,4 / 5,9 / 7,7 | 24,93 / 30,53 / 32,08 |
+| cpu6960_1 | CPU marcada | 3/2328/3/0 | 4,7 / 5,4 / 6,1 / 8,4 | -9,7 / 2,4 / 5,8 / 7,7 | 24,89 / 30,49 / 32,12 |
+| cpu6960_2 | CPU marcada | 3/2328/3/0 | 4,7 / 5,4 / 6,1 / 8,4 | -9,7 / 2,3 / 5,8 / 7,7 | 24,90 / 30,51 / 32,14 |
+
+**[Medido]** Todas as longas estão abaixo, cada uma com três vblanks. A é a imagem retida, B o quadro
+seguinte. J/G/P/U são folgas de entrega do jogo, gravação, Present e fim GPU; G ocupada/F são CPU.
+Texturas novas e decodificação são zero em todas. Não somar o período do jogo à cadeia do mesmo quadro.
+`-0,0` no 7170 de base1 é o arredondamento do log; a permanência medida foi três, não dois vblanks.
+
+| Abertura | A → B | J/G/P/U (ms) | Jogo/G ocupada/F (ms) |
+|---|---|---|---|
+| base1 | 6929 → 6930 | 32,9 / 18,5 / 11,7 / -2,6 | 33,3 / 14,5 / 6,8 |
+| base1 | 6959 → 6960 | 32,8 / 13,0 / 6,4 / -9,6 | 33,4 / 19,9 / 6,5 |
+| base1 | 7169 → 7170 | 49,5 / 28,8 / 11,0 / -0,0 | 33,3 / 20,7 / 17,8 |
+| ambos1 | 6929 → 6930 | 32,9 / 18,9 / 12,1 / -2,3 | 33,3 / 14,1 / 6,8 |
+| ambos1 | 6959 → 6960 | 32,8 / 13,4 / 6,8 / -9,2 | 33,4 / 19,5 / 6,6 |
+| ambos1 | 7169 → 7170 | 49,5 / 28,8 / 11,0 / -0,1 | 33,3 / 20,7 / 17,9 |
+| base2 | 6929 → 6930 | 32,9 / 18,4 / 11,6 / -2,6 | 33,3 / 14,5 / 6,8 |
+| base2 | 6959 → 6960 | 32,8 / 13,0 / 6,4 / -9,6 | 33,4 / 19,8 / 6,6 |
+| base2 | 7169 → 7170 | 49,5 / 28,7 / 10,9 / -0,1 | 33,3 / 20,8 / 17,8 |
+| ambos2 | 6929 → 6930 | 32,9 / 18,8 / 12,1 / -2,3 | 33,3 / 14,1 / 6,8 |
+| ambos2 | 6959 → 6960 | 32,8 / 13,4 / 6,8 / -9,2 | 33,4 / 19,5 / 6,5 |
+| base3 | 6929 → 6930 | 32,9 / 18,5 / 11,7 / -2,6 | 33,3 / 14,5 / 6,8 |
+| base3 | 6959 → 6960 | 32,8 / 13,0 / 6,4 / -9,6 | 33,4 / 19,9 / 6,6 |
+| base3 | 7169 → 7170 | 49,5 / 28,7 / 10,8 / -0,2 | 33,3 / 20,8 / 17,9 |
+| ambos3 | 6929 → 6930 | 32,9 / 18,9 / 12,1 / -2,2 | 33,3 / 14,1 / 6,8 |
+| ambos3 | 6959 → 6960 | 32,8 / 13,4 / 6,8 / -9,2 | 33,4 / 19,5 / 6,6 |
+| cpu6930_1 | 6929 → 6930 | 32,9 / 18,5 / 11,5 / -2,7 | 33,3 / 14,5 / 7,0 |
+| cpu6930_1 | 6959 → 6960 | 32,8 / 12,9 / 6,4 / -9,6 | 33,4 / 19,9 / 6,6 |
+| cpu6930_1 | 7169 → 7170 | 49,5 / 28,7 / 10,9 / -0,1 | 33,3 / 20,8 / 17,8 |
+| cpu6930_2 | 6929 → 6930 | 32,9 / 18,4 / 11,4 / -2,8 | 33,3 / 14,6 / 7,0 |
+| cpu6930_2 | 6959 → 6960 | 32,8 / 13,0 / 6,4 / -9,6 | 33,4 / 19,9 / 6,6 |
+| cpu6930_2 | 7169 → 7170 | 49,5 / 28,7 / 10,8 / -0,2 | 33,3 / 20,8 / 17,9 |
+| cpu6960_1 | 6929 → 6930 | 32,9 / 18,4 / 11,7 / -2,6 | 33,3 / 14,5 / 6,8 |
+| cpu6960_1 | 6959 → 6960 | 32,8 / 13,0 / 4,5 / -9,7 | 33,4 / 19,9 / 8,5 |
+| cpu6960_1 | 7169 → 7170 | 49,5 / 28,7 / 10,8 / -0,3 | 33,3 / 20,8 / 17,9 |
+| cpu6960_2 | 6929 → 6930 | 32,9 / 18,5 / 11,7 / -2,7 | 33,3 / 14,5 / 6,8 |
+| cpu6960_2 | 6959 → 6960 | 32,8 / 13,0 / 4,5 / -9,7 | 33,4 / 19,9 / 8,5 |
+| cpu6960_2 | 7169 → 7170 | 49,5 / 28,7 / 10,8 / -0,2 | 33,3 / 20,8 / 17,9 |
+
+### O perfil desligado não passou a prova de ausência de regressão
+
+**[Medido]** Reextraídos os seis controles antigos de `~/sessao_2810/gpu/`, carimbo
+`c57e807 diff:da39a3ee5e`, com o extrator da seção 32 e `passos.py` desta worktree. Estrutura 0,
+aceite 1 nos seis. Mesmos resultados, recursos e associações; não são builds deste branch.
+
+| Medida dos controles sem marcas | Antigos, três bases | Novos, três bases | Antigos, três ambos | Novos, três ambos |
+|---|---|---|---|---|
+| Longas em j2 por abertura | 2/2/2 | **3/3/3** | 2/2/2 | **3/2/2** |
+| Folga U do 6930 (ms) | -2,7 a -2,8 | -2,6 | -2,4 | -2,3 a -2,2 |
+| Folga U do 6960 (ms) | -9,8 a -9,9 | -9,6 | -9,5 | -9,2 |
+| Folga GPU j2, p10/p50 (ms) | 6,3/8,4 | 5,9 a 6,0/7,7 a 7,9 | 6,3/8,4 | 5,8 a 5,9/7,7 a 7,9 |
+| F do 6960 (ms) | 5,8 a 5,9 | 6,5 a 6,6 | 5,8 a 5,9 | 6,5 a 6,6 |
+| F do 7170, mesmo quadro nos picos (ms) | 15,9 a 16,1 | 17,8 a 17,9 | 15,9 a 16,0 | 17,7 a 17,9 |
+
+A melhora de 0,2 a 0,3 ms em U dos alvos não compensa a nova longa **7169 → 7170**, nem a queda de
+0,4 a 0,7 ms na mediana de folga de j2. A apresentação por CPU do 7170 já era 39,8 a 40,0 ms nos picos
+antigos, mas sem longa na tela; agora é 40,5 a 40,6 nas bases e perde o prazo em 0,0 a 0,2 ms.
+Não confundir esses intervalos CPU com a permanência de três vblanks na tela.
+
+**[Lido/hipótese]** Os escopos desligados ainda testam a chave em chamadas frequentes, e as alterações podem
+mudar o código gerado; ausência de leitura do relógio não demonstra custo zero. O 7170 é compatível com
+outra varredura periódica de alfa, mas não recebeu perfil CPU. Os logs não isolam a causa da regressão,
+nem excluem variação entre sessões/builds. Por isso, **não certificar ausência de regressão** nem atribuir
+os 1,7 a 2,0 ms adicionais exclusivamente ao código do diagnóstico. O próximo controle deve alternar
+as duas builds na mesma sessão, com saves novos, e localizar 7170 com a chave já existente.
+
+### Onde a CPU gastou, por família e etapa
+
+**[Medido, com marcas]** Tempos exclusivos abaixo, em ms. Em cada célula, abertura _1/_2.
+Ausência de uma parcela no log significa zero tiques e zero chamadas; VU6 inteira é zero nos dois alvos.
+Famílias e etapas não são outra execução somável ao total. O diagnóstico inclui relógios, preempção e eventual
+espera dentro das APIs; não possui calibração para descontar seu próprio custo por escopo.
+
+| Família | Total 6930, _1/_2 | Total 6960, _1/_2 |
+|---|---|---|
+| quadro | 5,840240 / 5,837820 | 1,234060 / 1,230420 |
+| comum | 0,785660 / 0,781840 | 1,048140 / 1,049160 |
+| vu0 | 0,128340 / 0,125140 | 5,977780 / 5,956940 |
+| vu4 | 0,211780 / 0,207240 | 0,199720 / 0,202500 |
+| vu6 | 0,000000 / 0,000000 | 0,000000 / 0,000000 |
+| nativa | 0,045580 / 0,045240 | 0,080640 / 0,078360 |
+| **Total** | **7,011600 / 6,997280** | **8,540340 / 8,517380** |
+
+| Família/etapa | 6930, _1/_2 (ms) | Chamadas em cada abertura | 6960, _1/_2 (ms) | Chamadas em cada abertura |
+|---|---|---:|---|---:|
+| quadro/resto | 0,160760 / 0,161380 | 0 | 0,725940 / 0,728040 | 0 |
+| quadro/alfa | 5,397080 / 5,389980 | 1 | 0,000000 / 0,000000 | 0 |
+| quadro/buffers | 0,000660 / 0,000800 | 1 | 0,000740 / 0,000880 | 1 |
+| quadro/plano | 0,067240 / 0,065720 | 1 | 0,216000 / 0,218940 | 1 |
+| quadro/edram | 0,167800 / 0,169620 | 44 | 0,239700 / 0,229420 | 78 |
+| quadro/sampler | 0,003740 / 0,003660 | 8 | 0,003460 / 0,003780 | 8 |
+| quadro/estado | 0,005320 / 0,005300 | 40 | 0,005340 / 0,005120 | 40 |
+| quadro/Present | 0,022820 / 0,024940 | 1 | 0,023640 / 0,024800 | 1 |
+| quadro/limpeza | 0,000340 / 0,000300 | 1 | 0,000320 / 0,000340 | 1 |
+| quadro/FXAA | 0,006340 / 0,007320 | 1 | 0,007200 / 0,006880 | 1 |
+| quadro/tela | 0,008140 / 0,008800 | 1 | 0,011720 / 0,012220 | 1 |
+| comum/resto | 0,169260 / 0,168740 | 94 | 0,190080 / 0,191140 | 116 |
+| comum/prepara | 0,232900 / 0,230620 | 94 | 0,331360 / 0,333860 | 116 |
+| comum/pipe | 0,040540 / 0,040600 | 94 | 0,055720 / 0,056000 | 116 |
+| comum/sampler | 0,021920 / 0,021860 | 57 | 0,030980 / 0,031060 | 79 |
+| comum/estado | 0,119400 / 0,117020 | 815 | 0,153540 / 0,151600 | 1149 |
+| comum/textura | 0,016600 / 0,017220 | 100 | 0,019800 / 0,020180 | 121 |
+| comum/uniforme | 0,011000 / 0,011120 | 91 | 0,013180 / 0,013160 | 113 |
+| comum/UP | 0,174040 / 0,174660 | 109 | 0,253480 / 0,252160 | 131 |
+| vu0/resto | 0,029180 / 0,028760 | 48 | 0,771500 / 0,768140 | 1220 |
+| vu0/prepara | 0,060000 / 0,059160 | 48 | 1,616900 / 1,609660 | 1220 |
+| vu0/pipe | 0,003700 / 0,003740 | 48 | 0,731320 / 0,726720 | 1220 |
+| vu0/sampler | 0,000000 / 0,000000 | 0 | 0,396220 / 0,392660 | 1119 |
+| vu0/estado | 0,001700 / 0,001700 | 10 | 0,899760 / 0,908000 | 10103 |
+| vu0/textura | 0,005400 / 0,004720 | 32 | 0,166820 / 0,166740 | 1152 |
+| vu0/uniforme | 0,011700 / 0,010920 | 81 | 0,485200 / 0,482860 | 2376 |
+| vu0/indices | 0,016660 / 0,016140 | 48 | 0,910060 / 0,902160 | 1220 |
+| vu4/resto | 0,039540 / 0,038720 | 56 | 0,035500 / 0,035360 | 53 |
+| vu4/prepara | 0,076820 / 0,076200 | 56 | 0,073860 / 0,074280 | 53 |
+| vu4/pipe | 0,014860 / 0,014940 | 56 | 0,012460 / 0,012400 | 53 |
+| vu4/estado | 0,011420 / 0,010800 | 86 | 0,009880 / 0,009740 | 70 |
+| vu4/textura | 0,017280 / 0,016180 | 57 | 0,015720 / 0,018200 | 54 |
+| vu4/uniforme | 0,015980 / 0,015420 | 107 | 0,021040 / 0,021140 | 101 |
+| vu4/indices | 0,035880 / 0,034980 | 71 | 0,031260 / 0,031380 | 64 |
+| nativa/resto | 0,030900 / 0,030820 | 4 | 0,058120 / 0,055800 | 8 |
+| nativa/pipe | 0,002940 / 0,002840 | 4 | 0,004060 / 0,003900 | 6 |
+| nativa/sampler | 0,004380 / 0,004320 | 12 | 0,006840 / 0,006920 | 19 |
+| nativa/estado | 0,007360 / 0,007260 | 76 | 0,011620 / 0,011740 | 119 |
+
+**[Medido]** A hipótese de `alfa_alto` **se confirma no 6930**: 5,397080/5,389980 ms, uma chamada,
+variação de apenas 0,007100 ms; cerca de 77% do total marcado. O antigo `outros` tinha 5,380 a 5,384 ms,
+em outra abertura/instrumentação. A coincidência localiza a causa, não autoriza subtrair os dois tempos.
+No 6960 não há chamada de alfa. Não transportar seus 5,4 ms para os 10,6 ms exigidos nesse alvo.
+**[Lido]** A estatística percorre desenhos e, em certos programas VU, índices e alfa dos vértices; com VU1 direto,
+esses buffers estão em `PAGE_WRITECOMBINE`. Ela roda quando `sConta.quadros == 30` e ainda não contou desenhos
+com alfa, antes de `tempo_abre`. É periódica por trecho de 60, não trabalho de primeira criação de shader.
+O log atual prova o tempo da função; não mede isoladamente a penalidade de leitura de memória combinada.
+
+**[Medido]** No 6960, VU0 soma **5,977780/5,956940 ms** (70% da amostra), com 1.220 desenhos em cada
+abertura. Seu preparo exclusivo é 1,616900/1,609660; estado 0,899760/0,908000 em 10.103 chamadas;
+índices 0,910060/0,902160 em 1.220 chamadas; pipe 0,731320/0,726720; uniforme 0,485200/0,482860;
+sampler 0,396220/0,392660; textura 0,166820/0,166740; resto 0,771500/0,768140.
+A maior diferença de parcela na VU0 é 0,008240 ms, em estado. Total varia 0,022960 ms; família VU0, 0,020840.
+`prepara` exclui seus filhos; `pipe`/`sampler` excluem as APIs de estado, que entram em `estado`.
+`GetLevelDesc` permanece no preparo, sem medida separada. `indices` mede `DrawIndexedVertices`,
+não reconstrução de índices pela CPU. Não existe um único bloco de 6 ms identificado como espera removível.
+
+**[Medido]** São 2.453/22.303 entradas de escopo no 6930/6960, contagens idênticas entre _1 e _2.
+A marcação leva F de 6,8 a ~7,0 no 6930 e de 6,5 a 6,6 a ~8,5 no 6960. No segundo alvo,
+P recua 1,9 ms (6,4 → 4,5 de folga), mas U só 0,1 (-9,6 → -9,7): grande parte do acréscimo se sobrepõe
+à GPU. Isso demonstra a necessidade do controle sem marcas, não fornece desconto exato de 1,9 ms por família.
+Não substituir os 4,167 a 4,238 ms da classe VU0 antiga pelo total novo como se o produto tivesse piorado
+1,8 ms nessa família. Também não fazer CPU menos GPU para inventar uma espera medida.
+
+### Envio à VRAM, orçamento e quanto o aquecimento cobre
+
+**[Medido]** O envio D3D está repartido acima entre preparo, estado, uniforme, textura, índices, UP,
+EDRAM, FXAA/tela e Present. Present é só 0,022820 a 0,024940 ms nos quatro perfis, não os 16 ms da cauda.
+O envio de imagens à VRAM GS pertence à **gravação**, que `BT3_CADEIA_CPU` não instrumenta.
+As quatro cpu* não contêm `cortes: gravacao`; seria falso publicar um rateio novo dessa transferência.
+Os picos sem marcas têm, nas três bases e três ambos, as mesmas contagens:
+
+| Alvo | Envios/KB | Recálculos de hash | Lotes VU1 | Desenhos | Texturas novas/XG/disco/descarte |
+|---|---|---:|---:|---:|---|
+| 6930 | 172/2.181 | 276 | 2.276 | 213 | todos zero |
+| 6960 | 245/2.290 | 293 | 3.150 | 1.408 | todos zero |
+
+**[Medido histórico, reextraído, não medição da build nova]** Em 27/10, carimbo
+`ba63dab diff:4bcb7b67df`, o 6960 instrumentado conservava 21,741600 ms: envio 3,496 e hash 2,237,
+VU1 restante/constantes/fecho 4,517/1,259/1,338, DMA/VIF/GIF/CPU 0,240/1,978/2,072/2,371,
+Unpack 1,824 e entrega 0,410 (valores arredondados). Esses 5,733 de envio/hash não são ganho disponível,
+nem rateio dos 19,8 a 19,9 atuais. Formato, igualdade real dos bytes, invalidação e parte paralelizável
+continuam sem medida; nenhuma economia lhes é creditada. As quatro grav* preparadas fecham o rateio atual,
+sem pretender responder por formato/igualdade, que pede ganchos e oráculos em tarefa com emulador.
+
+**[Medido]** Nova base, 6960: J-U = **42,4 ms** para prazo a J+32,8, atraso **9,6** nas três aberturas.
+G chega em J+19,8, P em J+26,4 e U em J+42,4; G ocupada 19,8 a 19,9, F 6,5 a 6,6, cauda P→U **16,0**.
+Em ambos, U chega em J+42,0: atraso **9,2**. A repetição alternada mostra ganho de **0,4 ms** no 6960,
+com amplitude 0,0 na precisão publicada; no 6930, 0,3 a 0,4, amplitude até 0,1 em ambos.
+**[Estimado, requisito de margem]** Para folga >=1,0 ms, recuperar **10,6 ms na base** ou **10,2 sobre ambos**.
+No 6930, a meta correspondente é 3,6 na base e 3,2 a 3,3 em ambos. São requisitos, não ganhos prometidos.
+Os **10,9/10,5** continuam o orçamento conservador entre sessões até esclarecer a regressão e repetir controles;
+a diferença de 0,3 entre rodadas não é ganho atribuído à instrumentação desligada.
+
+**[Medido]** O custo direto de criação/decodificação/XG/disco no pico é zero. Shaders já são binários criados
+no boot **[lido]**. Reaberturas _1/_2 medem execuções novas, não a primeira utilização seguida da utilização
+aquecida do mesmo estado. Elas não provam que aquecer retiraria 6 ms de VU0.
+No perfil histórico de 27/10, VU0 CPU é **3,859404 no 6960 e 3,822404 no 6961**: diferença 0,037 ms,
+~1%; F inclusive sobe 5,772360 → 5,998180. GPU líquida calibrada 22,562 → 22,437, diferença 0,125 ms,
+comum 12,123 → 12,158. Esses vizinhos não são cargas idênticas e a instrumentação muda a fase:
+a diferença não isola causalmente aquecimento. É evidência contra creditar todo o pico à primeira vez.
+**[Estimado] Ganho de aquecimento creditável hoje: 0 ms demonstrados** dos 10,6; custo implícito de cache/driver
+permanece desconhecido, não provado inexistente. Mesmo chamar ficticiamente os 0,037 de ganho CPU deixaria
+10,563 ms, e não se deve somá-los aos 0,125 GPU de uma execução sobreposta. Os 5,4 de alfa são recorrentes,
+não aquecimento. Não há base para preparar shaders/texturas por hardcode de quadro.
+
+### Aberturas restantes e complemento sem marcas novas
+
+**[Lido/proposto]** Das 24 não executadas, **oito são necessárias para a próxima atribuição CPU**:
+as quatro grav* atualizam as parcelas e o efeito de ambos nesta build; cpu6959/6961 nas duas repetições
+separam o salto dos lutadores de custo transitório de uma primeira submissão. cpu6929/6931 (quatro)
+ficam adiadas: alfa já tem marca própria e repetição, e esses vizinhos não localizam o 7170.
+As doze q* ficam adiadas: o perfil GPU dos dois alvos já sustenta a escolha arquitetural e drenagens
+adicionais não explicam a regressão CPU. Elas passam a necessárias se surgir um candidato concreto de shader,
+residência ou Resolve, antes de atribuir ganho a ele. Não são dispensadas de uma futura prova de GPU.
+
+Ordem das oito **já preparadas no console**, sem reaproveitar as dez executadas:
+
+`grav6960_b`, `grav6960_a`, `grav6930_b`, `grav6930_a`,
+`cpu6959_1`, `cpu6961_1`, `cpu6959_2`, `cpu6961_2`.
+
+O novo alvo 7170 usa a **marca existente** `BT3_CADEIA_CPU=7170,7170`; nenhum gancho novo é necessário.
+Antes da integração, usar o complemento preparado em `~/f5-rp-analise/console-rp33a2810/`,
+rodada **rp33a2810**, oito ambientes/saves novos e distintos `sv_rp33a2810_NOME`:
+três pares `antiga1/nova1`, `antiga2/nova2`, `antiga3/nova3` sem marcas, alternando as builds carimbadas
+c57e807/8c1ec1d, depois `cpu7170_1`, `cpu7170_2` na nova. `ordem.txt` indica o carimbo exigido por abertura;
+`boot.txt`/`f5_duelo.txt` são cópias dos roteiros preparados. Não há binários nessas pastas.
+A revisão deve conferir as duas builds, recursos e inexistência de **todos** os saves antes de abrir;
+se algum existir, gerar outro identificador/diretório inteiro. Nenhum save foi reutilizado nem consultado por FTP.
+Os controles cruzados são a porta de ausência de regressão; os cpu7170 localizam a diferença, sem aprovar a tela.
+
+### Recomendação revisada e porta da exceção E
+
+**[Lido/proposto]** Prefixos continuam o candidato maior com orçamento compatível, ainda sem ganho provado.
+Acrescentar trabalhadores VU ou aquecer recursos não tem medida que cubra o déficit. A ordem passa a ser:
+
+1. Localizar 7170 e restaurar a ausência de regressão desligada. Se o custo vier dos escopos inativos, manter
+   o corpo original no caminho desligado e despachar o perfil fora do laço quente, conferindo comandos e o XDK.
+   Não aceitar só o teste nativo de zero relógios como prova de desempenho.
+2. Primeiro corte funcional, **futuro `BT3_ALFA_FORA=1`, ausente/0 mantém o original**: produzir metadados exatos
+   de alfa junto dos vértices/índices já percorridos, em memória comum, antes de escrever no buffer combinado.
+   Conservar a mesma decisão por desenho fechado, índices realmente referidos, `color0`, `misc.w`, filtros de
+   máscara/nativa e política de amostragem do quadro; não reler o buffer combinado nem descartar a estatística.
+   O caminho antigo fica como oráculo, comparando contagens e resultados por desenho, inclusive alterações e
+   fusões de desenhos. Não basta mover a varredura para depois de Present e atrasar o próximo quadro.
+   **[Estimado]** 0 a ~5,4 ms brutos no 6930, menos produção dos metadados; ganho em U ainda zero demonstrado,
+   sem parcela de alfa a retirar no 6960. Medir também 7170 e os quadros seguintes.
+3. Ensaio futuro **`BT3_GS_PREFIXOS=1`**, ausente/0 integral, no falso antes do D3D: publicar apenas descritores
+   fechados e recursos/versionamentos imutáveis do mesmo quadro em fila limitada, consumidor único e ordem
+   original. Resolver `ed_plano`, `usa_z`, `date_area`, `vu_plano`, última escrita e vida de cada recurso;
+   não liberar VU/retrato/recursos antes do último consumidor. Depois, `BT3_GS_LOTES=1` no D3D, um dono e um Present,
+   sem fila de outro quadro, sem mover entrada, sem descartar em pressão. Medir memória e o custo das cópias.
+
+**Prova de igualdade antes de aceitar cada corte:** executar toda a matriz da seção 28, com chaves 0/1 e
+combinações, Duelo/Treino, sem threads/com gravação/com desenho, listas normalizadas, hashes, estados e saves
+iguais, atrasos 1/5/20 ms, zero `race:`/uso após soltar/descartes, mutantes de ordem/versão/liberação e da
+estatística. No alfa, adulterar máscara, `misc`, índice, uniforme e fusão e exigir falha do oráculo.
+Comparar objetos planos sem depuração com `cmp` e SHA1 da `.text`, ressalvando só carimbo de teste.
+Rodar `divergencias.py --normal`, `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino`,
+`SEMMAPA=1 IMG=1 roteiros.sh duelo` e `save_mc.sh` com dados não vazios. Essa implementação é tarefa futura
+com emulador autorizado; **nenhuma dessas execuções foi feita ou certificada aqui**.
+No console, igualdade byte a byte na mesma arquitetura dos intermediários e final, ambas as escalas,
+mesmo vblank de entrada/botão/estado/hash/primeiro quadro que reage, sem vblank ou fila extra, Guide/saída,
+carga/pressão e áudio sem falha. Testar cedo duas vistas, sem afirmar que estes logs as cobrem.
+
+**Medida que decide:** com todas as marcas retiradas, controles alternados devem adiantar **U**, não apenas P,
+restaurar o 7170 e dar folga >=1 ms nos alvos; depois três janelas longas fria/aquecidas e sessão livre,
+zero longas e nenhuma de quatro ou mais. Publicar jogo/G/F/U, mínimo/p1/p10/p50, latência e mínimo livre.
+Os três pares curtos atuais não substituem essas janelas.
+
+**[Estimado, modelo de prefixos]** Prazo J+32,8, meta J+31,8, GPU calibrada histórica ~22,8:
+primeiro trabalho útil precisaria começar até **J+9,0**, sem lacunas, antes de G atual em J+19,8.
+Não é reconstrução da GPU desta rodada: não houve perfil GPU novo. Medir `r_i`, `c_i`, `g_i`, simular
+`C_i=max(r_i,C_anterior)+c_i`, `U_i=max(C_i,U_anterior)+g_i`, incluindo dependências finais;
+descontar custo da fila/cópias e validar sem marcas. Ganhos C/E/F só entram uma vez nesse cronograma.
+O alfa pode resolver o 6930, mas não torna o 6960 viável automaticamente.
+
+**Ponto de parada para voltar ao Lucas, decisão 29:** antes do D3D, parar esta partição se o modelo medido
+não puder recuperar **10,6/10,2 ms** líquidos nos controles novos (usar **10,9/10,5** enquanto a comparação
+entre sessões não estiver fechada), ou se as consultas ao sufixo impedirem o início até J+9,0 sem outro ganho
+independente. Após a primeira integração, no máximo dois ajustes de lote sem folga >=1 ms repetível: recalcular
+o restante e parar se não houver candidato comprovável para cobri-lo. Manter os limites propostos na seção 32:
+uma rodada diagnóstica, dois dias de ensaio e dois de integração; ao travar além do dobro, registrar e parar.
+Isso limita esta abordagem, não demonstra impossibilidade de todo reprojeto.
+
+A devolução deve incluir **2 a 3 longas/2.334**, 0 de quatro ou mais nos controles atuais,
+atrasos de 2,2 a 2,6 no 6930 e 9,2 a 9,6 no 6960, nova longa no 7170 até 0,2 ms nas bases,
+folga de j2 mediana 7,7 a 7,9, latência/memória e teto restante já medidos no protótipo.
+A longa do 7170 **não está demonstrada como troca de cena**, e não cabe automaticamente na exceção E.
+Os termos voltam ao Lucas antes de valer; zero, imagem, entrada e F7 continuam exigidos.
+
+### Rodada final da análise e limites
+
+| Conferência sem executar jogo | Resultado |
+|---|---|
+| Dez originais, ambientes/carimbo/recursos/resultados/associações | tudo certo na estrutura, recorte no primeiro fim e SHA256 preservados |
+| `passos.py`, dez novos e seis controles antigos | estrutura 0; **aceite console 1 em todos**, zero reprovado |
+| `cadeia_cpu.py`, quatro cpu* | tudo certo, saída 0, totais e parcelas exclusivos conservados |
+| Extrator novo visto falhar em cópias | 13 negativos recusados: fim, associação, imagem, duração, resultado, save, carimbo, recurso, descarte, total, parcela, quadro e classe |
+| Preparador do complemento | oito ambientes/saves distintos; identificador inválido e diretório existente recusados com saída 1 |
+| Fontes/objetos/builds | só documentação muda; nenhum objeto ou build produzido, nenhuma prova de execução nova |
+| `.text` x86 preexistente, extraída novamente | `43444ea4d03a6d448aa1ae74a631e35b356a7caa` |
+
+A `.text` foi reextraída com `objcopy -O binary --only-section=.text` de
+`~/f5-gpu-comum/base/port/build/x86/bt3_x86`, carimbo já registrado `4c85c039 diff:da39a3ee5e`,
+para `~/f5-rp-analise/x86-preexistente.text`. Não é build deste commit nem prova nova de objetos compilados.
+Nenhuma entrada de compilação mudou nesta tarefa. Os testes nativos e a matriz completa anteriores não são
+reatribuídos à análise. Não estão provados: causa exata da regressão/7170, aquecimento implícito do driver,
+ganho de alfa/prefixos, identidade de imagem/entrada sob reprojeto, aceite das três janelas longas, F7 ou 720p.
