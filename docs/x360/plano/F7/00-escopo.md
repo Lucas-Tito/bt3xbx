@@ -11,6 +11,10 @@ da árvore original quanto da ISO convertida, iguais por `cmp`; verificador de d
 auditoria de um instantâneo parcial da F6, reprovada por ausências sem justificativa; três pilotos escritos,
 **ainda sem executar**, por determinação da tarefa. Não altera o aceite do console nem aprova conteúdo executado.
 
+[Medido] **Etapa 2, parte x86, feita em 28/10:** [receitas de cartão nativo e verificador de save](02.md): 14
+receitas, 11 marcos gerados pelo fluxo do jogo, salvos, reabertos pela carga normal e conferidos, com negativos
+recusados; a PPC fica especificada, sem rodar.
+
 [Lido] Legenda: **[medido]** é contagem nos dados ou resultado de log identificado, inclusive de uma rodada
 anterior; **[lido]** é comportamento encontrado em fonte ou documento, sem prova nova de execução;
 **[estimado]** é proposta de trabalho, hipótese ou limite de aceite ainda sujeito à aprovação. A marca no início

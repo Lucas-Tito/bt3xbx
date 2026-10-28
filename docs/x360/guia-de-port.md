@@ -2478,3 +2478,24 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - `espera forma L ID`, `espera blast L N` e `confere membro L ID TRAJE VARIANTE MIN MAX`
   observam o membro ativo. `BT3_F7=1` registra pedido, classe, custo e queda do estoque, sem
   chamar a função que pede transformação. As imagens e a memória incluem os pontos do piloto.
+
+### Receitas de cartão da F7 (etapa 2, 28/10/2026)
+
+- **Cartão avançado é receita, não arquivo.** `port/x360/receitas/NOME.txt` diz o que exigir do New Game, o que
+  escrever (só campos de `campos.txt`, ou `Save_AddItem`/`Save_AddMoney`) e o que o jogo tem de produzir. O roteiro
+  aplica com `receita aplica [NOME]` (cartão vazio, `BT3_DESBLOQUEIO=1`, menu principal) e confere em memória com
+  `receita confere antes|depois [NOME]`; `f7_receitas.sh x86|ppc|antes|verificadores` gera e confere tudo fora do
+  git ([F7/02](plano/F7/02.md)). Nunca versionar o cartão; a receita e a assinatura dela bastam para refazê-lo.
+- **Medir o New Game antes de acreditar na leitura.** O `exige` de cada receita é conferido contra a memória: a música 7
+  que o filme final "liga" já vem ligada no New Game, e a receita parou ali. Gere o cartão de antes (`modo antes`) de
+  toda receita nova antes de escrever o roteiro do marco.
+- **Os menus mudam com o estado da receita.** Com a Sobrevivência fechada o Ultimate pula a placa (Disc Fusion a dois
+  `BAIXO`, não três); a lista do menu principal é montada no `MainMenu_Init` (esferas escritas depois só mostram o
+  Shenlong após sair e voltar); o carrossel da História e a lista de episódios perdem toques sem `ritmo 4 60`; a
+  confirmação da loja abre em "cancelar" e a placa "comprado" só fecha com X. Roteiro copiado de um caso com
+  `desbloqueia` não vale sem conferir a contagem de toques.
+- **A x86 sem janela não escreve `mc: gravou`.** A prova de gravação ali é a sequência 15, 16, 0 do McFlow depois da
+  receita, mais o próprio cartão. Um negativo de soma que só vira um bit de byte ímpar deixa uma palavra conferindo, e
+  o jogo aceita (regra do PS2): procure um estrago que `save_entre.preve` recuse de fato.
+- **O cartão de antes tem de recusar o marco.** Uma receita cujos `depois` já valem antes do evento não prova nada (a
+  primeira versão do recorde da Sobrevivência só conferia preservação); o `valida` e o `confere --antes` recusam.
