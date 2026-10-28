@@ -50,7 +50,7 @@ troca somente pixels e CLUT das texturas 10 a 27 da entrada 8 de `00004.bin`.
 Preserva 0 a 9 (incluindo SELECT), metadados, pacotes GIF/VIF e tamanho/deslocamentos.
 Nenhum texto é alterado, inclusive "SELECT button" dentro da lição comprimida.
 
-`icones360.py --arte DIR` usa os dez PNG do Kenney e gera `conv/icones360_arte.h`,
+`icones360.py --arte DIR` usa os doze PNG do Kenney e gera `conv/icones360_arte.h`,
 com PSMT4 e CLUT CT32 própria de 16 cores, alfa 0 a 128. A versão 2 inclui a arte
 na identidade dos fontes pelo cabeçalho gerado. `--conferir` exige igualdade entre
 PNG e cabeçalho; `--contato CAMINHO` grava uma folha fora do git.

@@ -8,7 +8,7 @@ e as paletas de 10 a 27, depois da conversão numérica do boot. Mantém o taman
 da entrada 8, seus deslocamentos e cabeçalhos, os ícones 0 a 9 e todo o texto.
 SELECT não muda. A versão 1 é recusada em caixa própria, pedindo reconversão.
 
-Os dez PNG sem alteração, a licença original e os créditos de Kenney, www.kenney.nl,
+Os doze PNG sem alteração, a licença original e os créditos de Kenney, www.kenney.nl,
 estão em `port/x360/arte/kenney/`. Há crédito também no README do port.
 `icones360.py --arte DIR` reduz o conteúdo visível mantendo a proporção, quantiza
 para 16 cores por textura, converte o alfa para 0 a 128 e produz PSMT4. Desenha o ▼
@@ -30,6 +30,9 @@ Coordenadas exclusivas no fim, por célula 32x32, medidas pelo alfa original:
 A arte nova cabe nessas caixas. O mapeamento continua físico: círculo B, quadrado X,
 triângulo Y, xis A, L1/L2/L3 LB/LT/clique esquerdo e R1/R2/R3 RB/RT/clique direito.
 Voltar continua Y e remapeamentos da luta mantêm a limitação já existente no PS2.
+Nas variantes de segurar do L3 e do R3 (26 e 27) a arte é o analógico do Kenney **sem** a seta de clique
+(`xbox_stick_l`/`r`), porque o ▼ amarelo do jogo já faz esse papel: escolha do Lucas em 28/10/2026, numa
+comparação com o analógico com clique e com os do Xelu.
 A folha completa fica **fora do git**, em `~/icones/contato_kenney.png`.
 
 ## Caixas e busca

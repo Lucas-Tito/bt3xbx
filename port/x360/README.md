@@ -12,7 +12,7 @@ original se a ISO foi feita com a versão 1.
 ## Créditos dos ícones
 
 Ícones de Kenney, **www.kenney.nl**, pacote Input Prompts 1.5A, domínio público
-CC0. Os dez PNG utilizados, a licença original e a origem estão em
+CC0. Os doze PNG utilizados, a licença original e a origem estão em
 [arte/kenney/CREDITOS.md](arte/kenney/CREDITOS.md). O script
 `tools/icones360.py` reduz essa arte para as paletas e os tamanhos do jogo.
 O marcador amarelo e o estado apertado são acrescentados pelo script.

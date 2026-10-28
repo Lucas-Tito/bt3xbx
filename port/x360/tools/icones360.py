@@ -17,7 +17,7 @@ NOMES = dict(enumerate(['button_color_b', 'button_color_x', 'button_color_y',
                        'button_color_a', 'lb', 'lt', 'stick_l_press', 'rb', 'rt',
                        'stick_r_press', 'button_color_b', 'button_color_x',
                        'button_color_y', 'button_color_a', 'button_color_x',
-                       'button_color_y', 'stick_l_press', 'stick_r_press'], 10))
+                       'button_color_y', 'stick_l', 'stick_r'], 10))
 CAIXAS = {i: (0, 4, 20, 29) for i in range(10, 28)}
 CAIXAS.update({i: (0, 6, 29, 27) for i in (14, 15, 17, 18)})
 CAIXAS.update({i: (0, 3, 31, 31) for i in (16, 19)})
