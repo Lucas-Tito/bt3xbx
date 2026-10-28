@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 import struct
 
-from iso_convertida import inventario, ler, MARCA_POS, MARCA_TAM, MAGIA
+from convert_iso import inventario, ler, MARCA_POS, MARCA_TAM, MAGIA
 
 
 def exigir(condicao, mensagem):

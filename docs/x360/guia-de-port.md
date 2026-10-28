@@ -2465,3 +2465,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   para capturar a marca nas duas arquiteturas. Registrar como captura/âncora reprovada, sem afirmar
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
+
+### Pilotos da F7 no Deck (28/10/2026)
+
+- O módulo do instalador foi renomeado de `iso_convertida.py` para `convert_iso.py`. A leitura
+  da F7 precisa importar o nome novo; caso contrário manifesto, cobertura e negativos nem iniciam
+  (`ModuleNotFoundError`). Conferir a importação na base atual antes de reservar o emulador.
+- `f7_missao_fluxo.txt` conserva a sequência de `missao.txt` entre boot e fim, que continuam intactos
+  no roteiro original. Os pilotos acrescentam a saída e a gravação por Opções. O cartão 29/30
+  nasce em `boot_novo.txt`; `prepara missoes 29` só escreve os bytes cleared dos ids 1..29,
+  com as mesmas proteções dos passos de teste. Não prepara o ganho nem o bit de Sobrevivência.
+- `espera forma L ID`, `espera blast L N` e `confere membro L ID TRAJE VARIANTE MIN MAX`
+  observam o membro ativo. `BT3_F7=1` registra pedido, classe, custo e queda do estoque, sem
+  chamar a função que pede transformação. As imagens e a memória incluem os pontos do piloto.
