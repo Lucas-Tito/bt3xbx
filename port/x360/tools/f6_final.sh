@@ -218,6 +218,12 @@ regravar() {
         fi
     done
 }
+leitor_iso() {
+    # O teste_iso_convertida.py grava a ISO como bt3-x360.iso desde 99b6e18 (antes convertida.iso).
+    local iso=$I/iso/bt3-x360.iso
+    [ -s "$iso" ] || { echo "FALHA: ISO convertida ausente: $iso"; return 1; }
+    port/x360/tools/teste_iso.sh "$iso"
+}
 soma() {
     python3 port/x360/tools/roteiros.py soma "$I"/roteiros/*/gdb.txt --prog port/build/x86/bt3_x86
 }
@@ -237,7 +243,7 @@ passo cores python3 port/x360/tools/cores.py
 passo pacotes64 python3 port/x360/tools/pacotes64.py port/build/x86/obj
 passo disco disco
 passo iso python3 port/x360/tools/teste_iso_convertida.py /srv/bt3/dados/iso/bt3.iso --dados gamedata --trabalho "$I/iso"
-passo leitor-iso port/x360/tools/teste_iso.sh "$I/iso/convertida.iso"
+passo leitor-iso leitor_iso
 passo som-ambiente python3 port/x360/tools/som_ambiente.py --mutantes
 passo som360 port/x360/tools/teste_som360.sh
 passo som-amostras env T="$I/som-amostras" port/x360/tools/som.sh amostras

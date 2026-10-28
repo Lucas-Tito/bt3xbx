@@ -2487,4 +2487,6 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   pede destino novo e commit novo, roda só a lista `LACUNAS` do conferente (os reprovados e o que eles
   exigem: builds, objetos, `.text`, a ISO do leitor, os negativos) e grava a lista na origem; o conferente
   recusa outra lista e nunca imprime a frase da aprovação integral nesse modo, porque os outros casos são
-  de outra build.
+  de outra build. Ao refazer com commit novo, conferir os nomes que a rodada usa entre casos: o
+  `teste_iso_convertida.py` passou a gravar `bt3-x360.iso` (`99b6e18`), e o `leitor-iso` ainda pedia
+  `convertida.iso`, o que daria tudo FALTA; agora o caso exige a ISO presente antes de testar.
