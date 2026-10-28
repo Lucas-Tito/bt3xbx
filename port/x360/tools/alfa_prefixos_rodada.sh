@@ -51,9 +51,10 @@ def compara(a,b):
     a,b=a/'obj',b/'obj'
     assert {x.name for x in a.glob('*.o')}=={x.name for x in b.glob('*.o')},(a,b)
     dif=set()
+    oc='powerpc-linux-gnu-objcopy' if a.parent.name.startswith('ppc') else 'objcopy'  # (o objcopy do x86 não lê PowerPC)
     for x in sorted(a.glob('*.o')):
         for obj,n in ((x,'obj-a'),(b/x.name,'obj-b')):
-            subprocess.run(['objcopy','--strip-debug',str(obj),str(out/n)],check=True)
+            subprocess.run([oc,'--strip-debug',str(obj),str(out/n)],check=True)
         if subprocess.run(['cmp','-s',str(out/'obj-a'),str(out/'obj-b')]).returncode: dif.add(x.name)
     return dif
 B,F=base/'port/build',final/'port/build'
