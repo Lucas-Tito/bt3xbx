@@ -26,6 +26,11 @@ A mensagem é a mesma para qualquer ISO sem a marca.
    `saida.txt`) pode seguir em português. Fazer o levantamento dos textos visíveis (as chamadas de `XShowMessageBoxUI`,
    as telas de cor por fase e os textos desenhados pelo port) antes de traduzir.
    Levantamento e tradução em [01-avisos](01-avisos.md); as telas de cor não tinham texto.
+9. **A caixa de ISO ausente fala com o usuário comum** (visto pelo Lucas no console, 28/10/2026): a recusa funciona
+   (a caixa aparece e o jogo não começa), mas o texto mistura inglês com os nomes em português dos arquivos e manda
+   mexer no `BT3_ISO` do `ambiente.txt`, que só o projeto usa. O texto deve dizer que a ISO não está na pasta raiz do
+   jogo com o nome esperado, dizendo o nome. Os nomes que o usuário vê (a ISO convertida, o script de conversão)
+   passam para inglês, e nenhuma caixa cita o `ambiente.txt`. Vale para as outras caixas da ISO também.
 
 ## Fechamento de gaps, antes do release (27/10/2026)
 
@@ -55,3 +60,11 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
 8. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
    guia de instalação e o de contribuição; e o GitHub configurado para receber as contribuições.
 
+## Fora do plano do port (28/10/2026)
+
+10. **As provas da F6 que ficaram por fazer no console** (o Lucas tirou do plano: não são importantes o suficiente).
+    Etapa 7: a abertura pelo modo 2 do título, o START no meio da abertura e o final da História; as capturas da
+    abertura já bateram com a referência e o boot foi visto e ouvido perfeito (28/10). A medida do sincronismo da
+    abertura recusa porque as duas primeiras imagens saem antes de o BGM ter posição (`geracao=0`, uns 33 ms, ninguém
+    percebe); fica como está. Etapa 8: a escuta de 11 min com a Guide, o tom de 1 kHz e o Treino sem som. Os
+    ambientes estão prontos em `build/sessao_2810b/subir/` (`f6e7b_03` a `08`) se um dia valer rodar.
