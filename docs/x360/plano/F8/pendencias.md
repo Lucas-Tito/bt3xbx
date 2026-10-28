@@ -57,6 +57,13 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
    deriva do som, filme) e as capturas ficam desligados sem `ambiente.txt`, e continuam ligáveis por ele para teste.
    Conferir no console que, desligados, não custam nada no quadro nem gravam arquivo.
 
+11. **As duas provas de console que restam da F6** (decisão do Lucas, 28/10/2026, para não repetir depois): a
+    sessão longa (uns 30 min de jogo livre, com ciclos de luta e menu e a Guide algumas vezes, a memória no mesmo
+    estado depois de cada ciclo e o som sem desandar) e a saída para o dashboard pela Guide (o BT3 não tem opção de
+    sair e o port não criou uma), sem travar nem deixar som preso. Ficam para a sessão final de console do
+    fechamento, sobre a build do release. O resto da lista de console da F6 etapa 9 saiu: filme e escuta (item 10),
+    frio e aquecido (a F5 já mede) e a queda provocada.
+
 ## A abertura do repositório, a última parte do plano (27/10/2026)
 
 8. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
