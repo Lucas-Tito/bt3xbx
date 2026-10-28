@@ -3849,6 +3849,9 @@ static int d3d_init(void) {
                         "de fato (as repetições somadas) que não ficou 2 vblanks na tela, com o quadro seguinte e os momentos "
                         "dele até o prazo, e um resumo no fim de cada janela");
     }
+#ifdef GS_ALFA
+    Diario_Escrever("gs_d3d: alfa exato na origem (build com BT3_ALFA_ORIGEM)");
+#endif
     Diario_Escrever("gs_d3d: pronto; alvo %dx%d, EDRAM: cor %u + profundidade %u de %u tiles; %u MB livres", sAlvoW, sAlvoH,
                     tilesCor, tilesProf, (unsigned)EDRAM_TILES, mb_livres());
     if (tilesCor + tilesProf > EDRAM_TILES) {
@@ -5253,7 +5256,40 @@ static void desenha_fba(const GsDraw *d, uint32_t ini) {
 /* Num quadro por trecho: os desenhos que escrevem alfa e quantos deles têm alfa de vértice acima de 0x80 (o que o alfa
    saturado da cor perde; o tamanho do byte exato, seção 4 da especificação). Primitivas do GS: o alfa de cada
    vértice; VU1: o color0 do bloco, ou o alfa de cada vértice nas camadas 3 e 4 (programas 8 e 7). */
+#ifndef GS_ALFA
+static void alfa_alto(void) {
+    CadeiaEscopo ca(CA_QUADRO, CA_ALFA);
+    const GsQuadro *q = sQ;
+    uint32_t n, k;
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        int alto = 0;
+        if (d->native != 0 || d->count == 0 || !(sPipes[d->pipeline].wmask & GS_CC_A)) {
+            continue;
+        }
+        if (d->vu) {
+            const Vu0Uniform *u = &q->vuUni[d->uniform];
+            alto = u->color0[3] > 128.0f;
+            if (u->misc[3] == 3.0f) {
+                for (k = 0; k < d->count && !alto; k++) {
+                    uint32_t v = q->vuIdx[d->first + k];
+                    alto = v < q->vuVertCount && q->vuVerts[v * 12 + 7] > 128.0f;
+                }
+            }
+        } else {
+            for (k = 0; k < d->count && !alto; k++) {
+                alto = q->verts[d->first + k].a > 0x80;
+            }
+        }
+        sConta.alfaAltoDes++;
+        sConta.alfaAlto += alto;
+    }
+}
+#else
+/* (F5, seção 36, BT3_ALFA_ORIGEM) os mesmos dois contadores pelo alfa que a gravação calculou ao escrever os vértices e os
+   índices, sem reler os buffers combinados; BT3_ALFA_CONFERE=1 confere cada desenho com a varredura de antes */
 #include "../../include/gs_alfa.h"
+extern "C" const int gGsAlfaOrigem;
 static void alfa_alto(void) {
     CadeiaEscopo ca(CA_QUADRO, CA_ALFA);
     const GsQuadro *q = sQ;
@@ -5267,7 +5303,7 @@ static void alfa_alto(void) {
         if (d->native != 0 || d->count == 0 || !(sPipes[d->pipeline].wmask & GS_CC_A)) {
             continue;
         }
-        if (q->alfa != NULL) {
+        if (q->alfa != NULL && gGsAlfaOrigem) {
             alto = gs_alfa_metadado(q, n, sPipes[d->pipeline].wmask);
         } else if (d->vu) {
             const Vu0Uniform *u = &q->vuUni[d->uniform];
@@ -5292,6 +5328,7 @@ static void alfa_alto(void) {
     if (confere) Diario_Escrever("alfa: quadro %u desenhos %u altos %u, %u diferentes%s", q->quadro,
                                desenhos, altos, diferentes, diferentes ? " FALHA" : "");
 }
+#endif
 
 /* ---- as nativas: o autoteste do boot e os ajustes (F5, etapa 7, segunda parte) ------------------------------- */
 

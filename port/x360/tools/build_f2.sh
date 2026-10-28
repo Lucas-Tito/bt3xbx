@@ -30,7 +30,10 @@ rm -f $OUT/c89/*.c
 # do headless.py: o commit e o sha1 da diferença para ele, com os arquivos novos (da39a3ee5e: sem diferença)
 CARIMBO="$(git rev-parse --short HEAD) diff:$( { git diff HEAD; git ls-files -o --exclude-standard -z | xargs -0 -r cat; } | sha1sum | cut -c1-10)"
 echo "   carimbo: $CARIMBO"
-docker run --rm --user "$(id -u):$(id -g)" -e BT3_CARIMBO="$CARIMBO" -v "$RAIZ":/app -w /app bt3xbx-ferramentas python3 port/x360/tools/c89.py $OUT/c89 | tail -2
+# (F5, seção 36) BT3_ALFA_ORIGEM=1: a build com o alfa exato calculado na gravação, nos dois lados (gs_draw.c pelo c89.py e o
+# backend); a normal não o tem. O log da build com ele diz "gs_d3d: alfa exato na origem"; o carimbo é o mesmo commit.
+ALFA=""; [ "${BT3_ALFA_ORIGEM:-0}" = 1 ] && ALFA="-D BT3_ALFA_ORIGEM" && echo "   build com o alfa na origem: BT3_ALFA_ORIGEM"
+docker run --rm --user "$(id -u):$(id -g)" -e BT3_CARIMBO="$CARIMBO" -e BT3_ALFA_ORIGEM="${BT3_ALFA_ORIGEM:-0}" -v "$RAIZ":/app -w /app bt3xbx-ferramentas python3 port/x360/tools/c89.py $OUT/c89 | tail -2
 
 echo "== 2. compilação (cl.exe)"
 CLFLAGS="-c -Ox -Oi -fp:precise -fp:except- -GS- -Gy -GF -MT -W3 -Zi"
@@ -54,7 +57,7 @@ docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app 
   for f in port/x360/src/gs/*.cpp; do
     n=$(basename ${f%.*})
     INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX -D PORT_X360 -D PORT_BIG_ENDIAN \
-      '"$CLFLAGS $PERFIL"' -TP -EHsc -GR- -Iport/x360/src -Iport/src/gs -Iport/x360/src/gs/cl -I'"$OUT"'/shaders \
+      '"$CLFLAGS $PERFIL $ALFA"' -TP -EHsc -GR- -Iport/x360/src -Iport/src/gs -Iport/x360/src/gs/cl -I'"$OUT"'/shaders \
       -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
   done
   for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp port/x360/src/som/*.c port/x360/src/som/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do

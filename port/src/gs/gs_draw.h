@@ -153,6 +153,12 @@ typedef struct GsSolta {
     int alvo;        /* -1: textura */
     unsigned quadro; /* o gGsFrame da gravação no pedido */
 } GsSolta;
+/* (F5, seção 36) BT3_ALFA_ORIGEM: o alfa exato calculado na gravação (port/x360/include/gs_alfa.h) só existe na build que
+   define a chave (build_f2.sh com BT3_ALFA_ORIGEM=1, headless.py --alfa). A build normal compila como antes, sem chave a
+   testar no put nem no fecho: mesmo desligada, uma chave em caminho quente custou ~1,8 ms no 7170 (seção 35). */
+#if defined(BT3_ALFA_ORIGEM) && (defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1))
+#define GS_ALFA 1
+#endif
 typedef struct GsQuadro {
     const GsDraw *draws;
     uint32_t drawCount;
@@ -181,8 +187,8 @@ typedef struct GsQuadro {
     /* (F5, etapa 8, BT3_VU1_DIRETO) o jogo de buffers do backend em que a gravação gravou os vértices e os índices da VU1
        (vuVerts e vuIdx apontam para ele; o backend desenha dali sem copiar) e o número de ordem dele, que o backend devolve
        pelo vuFeito quando a GPU acabar de lê-lo; -1: nas listas do gs_draw.c, como antes (o backend copia) */
-#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
-    const unsigned char *alfa; /* memória comum do jogo de listas, nunca escrita combinada */
+#ifdef GS_ALFA
+    const unsigned char *alfa; /* (F5, seção 36) o alfa exato de cada desenho, em memória comum, nunca escrita combinada */
 #endif
     int vuJogo;
     uint32_t vuSeq;

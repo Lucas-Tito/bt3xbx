@@ -18,6 +18,8 @@
                                                                       -> port/build/<alvo>g/bt3_<alvo>g
     --vu1        (x86 com --gpu) compila também com -DBT3_TESTE_VU1: a otimização da gravação da VU1, que na PPC vem
                  com o PORT_BIG_ENDIAN, para medir e provar a mesma mudança na x86 -> port/build/x86gv/bt3_x86gv
+    --alfa       (com --gpu; na x86 com --vu1) compila com -DBT3_ALFA_ORIGEM: o alfa exato calculado na gravação (F5,
+                 seção 36), que a build normal não tem              -> port/build/<alvo>g[v]l/bt3_<alvo>g[v]l
     --gravador   (F6, etapa 2, rede 4) o som com o dispositivo gravador (port/x360/headless/gravador.c) no lugar dos stubs
                  da SDL: o snd_adx.c e o snd_se.c do port dentro de grava_adx.c e grava_se.c, com -DBT3_GRAVADOR; com
                  BT3_SOUND=1 o dispositivo abre e BT3_GRAVADOR=arquivo grava o PCM de cada fluxo por vblank
@@ -58,15 +60,16 @@ SEM_RASTREIO = {"state", "namefont"}
 
 
 class Alvo:
-    def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False, gravador=False, teste_som=False, fluxo=False):
-        self.nome, self.rastreio, self.chamadas, self.gpu, self.vu1 = nome, rastreio, chamadas, gpu, vu1
+    def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False, gravador=False, teste_som=False, fluxo=False,
+                 alfa=False):
+        self.nome, self.rastreio, self.chamadas, self.gpu, self.vu1, self.alfa = nome, rastreio, chamadas, gpu, vu1, alfa
         self.gravador, self.teste_som, self.fluxo = gravador, teste_som, fluxo
         self.be = nome == "ppc"  # big-endian: campos de bits na ordem do PS2 (bitfields.py)
         # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
         # diverge no quadro 2755).
         self.opt = "-O2"
         pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
-            ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "")
+            ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "") + ("l" if alfa else "")
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
         self.exe = self.b / f"bt3_{pasta}"
@@ -91,6 +94,9 @@ class Alvo:
             if vu1:  # (F5, etapa 8) a otimização da gravação da VU1, que na PPC já vem com o PORT_BIG_ENDIAN
                 self.soft += ["-DBT3_TESTE_VU1"]
                 self.hard += ["-DBT3_TESTE_VU1"]
+        if alfa:  # (F5, seção 36) o alfa exato na origem, só nesta build (port/src/gs/gs_draw.h, GS_ALFA)
+            self.soft += ["-DBT3_ALFA_ORIGEM"]
+            self.hard += ["-DBT3_ALFA_ORIGEM"]
         # Rastreio: uma chamada antes de cada leitura/escrita (rastreio.c), cópias de estrutura via memcpy.
         # As leituras de variáveis locais também: o jogo copia um vetor do arquivo para a pilha e lê um
         # componente dali (o ASan pularia por "provar" o acesso seguro).
@@ -497,6 +503,7 @@ def main():
     ap.add_argument("--gravador", action="store_true", help="(F6, rede 4) o som com o dispositivo gravador")
     ap.add_argument("--teste-som", action="store_true", help="(F6, rede 3) só o teste das amostras dos decodificadores")
     ap.add_argument("--fluxo", action="store_true", help="(F6, etapa 5, com --teste-som) o ADX lido em blocos, como no 360")
+    ap.add_argument("--alfa", action="store_true", help="(F5, seção 36, com --gpu) o alfa exato na origem (BT3_ALFA_ORIGEM)")
     a = ap.parse_args()
     if a.fluxo and not a.teste_som:
         sys.exit("--fluxo só vale com --teste-som")
@@ -508,7 +515,9 @@ def main():
         sys.exit("--gpu não se combina com --rastreio nem com --chamadas")
     if a.vu1 and not (a.gpu and a.alvo == "x86"):
         sys.exit("--vu1 só vale com --alvo x86 --gpu (na PPC a otimização já vem com o PORT_BIG_ENDIAN)")
-    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1, a.gravador, a.teste_som, a.fluxo))
+    if a.alfa and not (a.gpu and (a.alvo == "ppc" or a.vu1)):
+        sys.exit("--alfa só vale com --gpu (e --vu1 na x86): o alfa mora na gravação da VU1 otimizada")
+    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1, a.gravador, a.teste_som, a.fluxo, a.alfa))
 
 
 main()

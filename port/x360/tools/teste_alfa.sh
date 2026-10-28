@@ -12,7 +12,7 @@ pgrep -af 'qemu|roteiros' || true
 if pgrep -x qemu-ppc; then exit 1; fi
 for alvo in x86 ppc; do
     if [ "$alvo" = x86 ]; then cc=(gcc -m32); exe=(); else cc=(powerpc-linux-gnu-gcc -static -fsigned-char); exe=(qemu-ppc); fi
-    "${cc[@]}" -O2 -DPORT_BIG_ENDIAN "$R/port/x360/tools/teste_alfa.c" -o "$P/$alvo"
+    "${cc[@]}" -O2 -DPORT_BIG_ENDIAN -DBT3_ALFA_ORIGEM "$R/port/x360/tools/teste_alfa.c" -o "$P/$alvo"
     "${exe[@]}" "$P/$alvo"
     if "${exe[@]}" "$P/$alvo" estragado; then echo 'FALHA: metadado adulterado aceito'; exit 1; fi
     echo "$alvo: metadado adulterado recusado"
@@ -33,7 +33,7 @@ pares={
 a,b=pares[sys.argv[2]]; assert a in s
 p.write_text(original+s.replace(a,b,1))
 PYM
-        "${cc[@]}" -O2 -DPORT_BIG_ENDIAN "$P/port/x360/tools/teste_alfa.c" -o "$P/ruim"
+        "${cc[@]}" -O2 -DPORT_BIG_ENDIAN -DBT3_ALFA_ORIGEM "$P/port/x360/tools/teste_alfa.c" -o "$P/ruim"
         if "${exe[@]}" "$P/ruim"; then echo "FALHA: $alvo aceitou $mutante"; exit 1; fi
         echo "$alvo: $mutante recusado"
     done

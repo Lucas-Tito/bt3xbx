@@ -410,11 +410,15 @@ static void contagens(const Vista *q, uint32_t desenhos, int pipes) {
 
 #include "gpu_comum.h"
 
-#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+#ifdef GS_ALFA
 #include "../include/gs_alfa.h"
+extern const int gGsAlfaOrigem;
 static void alfa_confere(const GsQuadro *q) {
     unsigned n, des = 0, alto = 0;
-    if (q->alfa == NULL) return;
+    if (q->alfa == NULL || !gGsAlfaOrigem) {
+        fprintf(stderr, "FALHA: alfa sem metadado no quadro %u\n", q->quadro);
+        abort();
+    }
     for (n = 0; n < q->drawCount; n++) {
         unsigned mascara = (sPipeKey[q->draws[n].pipeline] >> 16) & 15;
         int ref = gs_alfa_referencia(q, &q->draws[n], mascara);
@@ -439,7 +443,7 @@ static void fake_frame_end(void) {
 #ifdef BT3_GS_ESPERAS
     const GsQuadro *g = gsQuadro;
     if (!g->dividido) px_final(g);
-#if defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1)
+#ifdef GS_ALFA
     alfa_confere(g);
 #endif
     q.draws = g->draws; q.drawCount = g->drawCount; q.verts = g->verts; q.vertCount = g->vertCount;
