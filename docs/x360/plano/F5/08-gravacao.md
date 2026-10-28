@@ -4489,3 +4489,85 @@ Comandos finais e saídas em `~/f5-rp-analise2/final.sh` e `final.log`. `.text` 
 carimbo histórico `4c85c039 diff:da39a3ee5e`. É referência preexistente, não build deste commit nem
 prova nova de objetos compilados. Não estão provados: causa da regressão/7170, ganho causal de aquecimento,
 ganho de alfa/prefixos, igualdade de imagem/entrada sob reprojeto, três janelas longas, sessão livre, F7 ou 720p.
+
+## 35. Alfa exato desligado e ensaio limitado dos prefixos (28/10/2026)
+
+**Resultado: candidato de alfa preparado; prefixos somente no falso, sem GPU progressiva nem ganho certificado.**
+Branch `codex/f5-alfa-prefixos`, base `80fd1358`. Sem console/XDK nesta tarefa. Mantidos zero, imagem,
+entrada e a decisão 29. A descoberta do 7170 e a rodada rp33a2810 continuam independentes e intactas.
+
+### O alfa na origem, sem reler a escrita combinada
+
+`feda23df`: `BT3_ALFA_FORA=1`, ausente/0 conserva a varredura. Dois jogos de 16.384 bytes em memória
+comum acompanham as listas, sem alterar os 128 bytes de `GsDraw`. O `put` registra o alfa de CPU;
+a geração dos índices da camada 3 consulta somente os três vértices de origem que está referindo.
+O fecho combina `color0[3]`, `misc[3]` e o resultado dos índices, somente com count não nulo.
+Uma fusão faz a união; o uniforme continua protegido pela igualdade completa existente. Nativas,
+count e máscara são julgados no desenho fechado. `>128`, inclusive floats/NaNs, mantém o predicado original.
+
+O backend falso confere cada desenho de cada quadro ligado contra a varredura anterior, incluindo
+os não participantes. No D3D, o instante de amostragem e os dois contadores não mudam.
+`BT3_ALFA_CONFERE=1` acrescenta o oráculo no quadro amostrado e escreve desenhos/altos/diferentes;
+não usar essa abertura para medir ganho. Nenhuma varredura foi transferida para depois de Present.
+O perfil `BT3_CADEIA_CPU=Q,Q` já mede alfa; repetir 6930, 6960 e 7170 desligado/ligado.
+
+**[Medido, teste nativo]** 512 fronteiras de alfa, índice fora do limite, máscara, nativa, vazio,
+uniforme e fusão; cópia inconsistente e cinco mutantes recusados: máscara, misc, índice, uniforme e fusão.
+A conferência x86/PPC, a matriz completa, objetos e critérios oficiais estão no roteiro reproduzível
+`port/x360/tools/alfa_prefixos_rodada.sh`; a execução final e sua tabela ficam em
+`~/entrega-f5-alfa-prefixos.md` e `~/f5-alfa-prefixos/final/provas.resumo`.
+
+**[Estimado, sem novo crédito]** Até ~5,4 ms brutos no 6930, descontando a produção do metadado.
+Não se mediu alfa a retirar do 6960. O 7170 não recebeu causa por extrapolação.
+32 KiB novos estáticos precisam entrar na conta de memória do console, inclusive desligado;
+ausência de regressão de tempo no Xenon continua dependendo dos controles da mesma sessão.
+
+### Prefixos fechados não são prefixos liberados
+
+`9c9d4be0`: `BT3_GS_PREFIXOS=1` existe apenas no falso. Um produtor publica até `drawCount-1`,
+pois a última vaga ainda pode fundir, e fecha a última na entrega. Um consumidor, fila de oito
+snapshots de estado, sem outra lista/VRAM completa. A fila bloqueia em pressão, conserva ordem/quadro,
+confere hashes dos dados referidos e versões lógicas de escrita/leitura dos alvos; drena antes da
+entrega normal. O hash final integral acusa alteração de dados já fechados. A memória da fila e
+da vaga do consumidor é 2.592 bytes na x86 e 2.664 na PPC, além de pilha/thread do teste e estruturas
+fixas. Esse valor não é orçamento autorizado para um novo trabalhador no console.
+
+**[Medido, teste nativo]** 33 descritores, fila 8/8, atrasos 0/1/5/20 ms, hash
+`9b3728724d06c871` conservado. Os quatro mutantes de ordem, versão, barreira e liberação foram
+recusados. O leitor do censo recusou oito cópias adulteradas: liberação, barreira, capacidade,
+memória, contagem, fim, total e quadro. `BT3_PREFIXOS_ATRASO` atrasa a primeira leitura de cada
+quadro, não cada descritor. O roteiro final repete os ensaios na PPC e com Duelo/Treino.
+
+**[Lido, limitação da partição]** O ensaio conserva as cinco dependências integrais da seção 32:
+`ed_plano`, `usa_z`, `date_area`, `vu_plano` e entrega de versões. Cada descritor declara essa
+barreira, e o censo imprime separadamente fechados, liberados e bloqueados. Versões lógicas são
+um oráculo de sequência, não snapshots de recursos D3D nem prova de última utilização GPU.
+Não se implementaram versões D3D, plano conservador por lote nem consumidores antecipados de texturas.
+
+**Ponto de parada aplicado a esta partição:** conservar o plano integral libera **0 desenhos antes
+G**, com teto de adiantamento **0 ms**, contra os **10,9/10,5 ms** conservadores exigidos.
+No modelo de escala de 22,8 ms de GPU, o início necessário seria até J+9,0; G histórico fica em
+J+19,8 a 20,2, pelo menos 10,8 ms depois. Isso é um limite da partição que preserva as consultas
+integrais, não medida de um novo pipeline Xenon nem prova de inviabilidade universal dos prefixos.
+A fila sozinha não resolve essa barreira. Sem liberar trabalho útil, não houve integração
+`BT3_GS_LOTES`, tentativa de ganho GPU, vblank de fila nem mudança de entrada.
+O cronograma `r_i/c_i/g_i` de um backend que substitua essas consultas ainda não existe.
+
+O teste não certifica conteúdo/vida de recursos D3D, últimos leitores da GPU, capturas intermediárias,
+entrada por vblank, áudio, Guide, pressão real ou duas vistas. Essas lacunas da seção 33 permanecem;
+não se aprova ausência de regressão no console por igualdade das listas do falso.
+
+### Rodada nova preparada, sem reaproveitar saves
+
+`a5843701`: `alfa_console.py SAIDA --rodada ID` prepara 19 aberturas: três sequências
+base/alfa/ambos/junto sem marcas, seis perfis CPU separados nos três alvos e um oráculo.
+Diretório local `~/f5-alfa-prefixos/console-ap35a2810`, saves `sv_ap35a2810_*`, todos distintos,
+sem reutilizar rp32a2810/rp33a2810. O gerador foi visto recusar diretório existente e identificador inválido.
+Conferir inexistência dos 19 saves no console antes de abrir; qualquer colisão exige outro ID inteiro.
+
+Os controles da mesma build isolam alfa e sua combinação com constantes/fecho. Comparar também a
+build anterior ao controle desligado desta build, sem misturar a investigação causal do rp33a2810.
+Os perfis e o oráculo vêm depois, separados do aceite. O LEIA da rodada conserva as cobranças de
+J/G/P/U, longas, folgas, recursos, entrada, imagem nas duas escalas, áudio, Guide e duas vistas.
+Não há ambiente que finja ligar prefixos no D3D: esse candidato parou antes da integração.
+Nenhuma medida, imagem ou aceite do console foi produzido nesta worktree.
