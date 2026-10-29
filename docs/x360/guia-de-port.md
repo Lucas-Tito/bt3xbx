@@ -2585,3 +2585,6 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   comparar base e final com dados equivalentes, sem confundir mudança de ligação com mudança dos fontes.
 - Com envio parcial, `msFim` vai do primeiro lote ao fecho e inclui os intervalos em que a gravação trabalhou e a dona
   D3D ficou ociosa. Não compará-lo como CPU ocupada nem como F integral antigo: medir prazo da imagem e J/G/P/U.
+- Sessão de agente sem `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS`: `systemd-run --user` pode dizer `No medium found`
+  mesmo com o gerenciador do usuário vivo. Conferir `/run/user/$(id -u)/bus` e passar explicitamente essas duas
+  variáveis ao disparo e ao comando do marcador de espera. Não deixar marcador que sai falso só por faltar o barramento.
