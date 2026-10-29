@@ -2663,3 +2663,20 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   varrer a linha com sete DIREITA. Os estágios 4 e 27 não estão no Duelo, só no Torneio.
 - **Ssh dentro de um script lido pelo stdin come o resto do script.** `echo ... | bash` com um `ssh deck "..."` no
   meio parou em silêncio depois dele; use `ssh -n` ou grave o script num arquivo antes de rodar.
+
+### A vibração (F8, `plano/F8/07-vibracao.md`)
+
+- **Ver se o jogo manda todo quadro antes de desenhar paradas.** O `Pad_Update` manda o pedido de vibração aos dois
+  controles em todo quadro, zero quando não há pedido: a opção desligada, a pausa e os menus param os motores pelo
+  próprio jogo. O port só precisa cobrir o que o jogo não vê: a Guide (o jogo não pausa nela) e a thread do jogo
+  parada (queda, saída, carga presa), com uma vigia fora dela e sem tocar a saída e a queda do `main360.cpp`.
+- **Dois ouvintes de `XNOTIFY_SYSTEM` convivem** (a amostra `RichPresence` do XDK cria um próprio além do da
+  `AtgSignIn`): o módulo novo abre o seu em vez de depender do do som, que só existe com `BT3_SOM`.
+- **O `xdk_objetos.py` não está na main**, está no branch `claude/f5-lotes` (usar de outra worktree, sem copiar). A
+  build de base precisa ser feita **antes** de editar a worktree (o `build_f2.sh` lê os fontes em dois passos e o
+  carimbo no começo) e copiada com `obj/`, `x360/`, `dados/` e o `.map`: sem `dados/` a lista de objetos difere e
+  ele falha antes de comparar. Um objeto com estáticas novas muda a desmontagem das funções que não mudaram
+  (registradores e endereços): ele inteiro vai no `--espera-diferente`.
+- **Provar o x86 sem WSL quando a mudança é só um `#ifdef PORT_X360`:** `gcc -E -P` do arquivo da main e do branch,
+  com os `-I` do `compile_flags.txt` e sem `PORT_X360`, tem de dar o mesmo texto (com e sem `PORT_BIG_ENDIAN`, a PPC
+  do WSL); com `PORT_X360` tem de diferir, para ver o verificador falhando.
