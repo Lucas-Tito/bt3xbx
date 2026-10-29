@@ -160,6 +160,10 @@ O log está em `$S/teste_pacote.log` (scratchpad desta sessão, fora do git).
 
 ## 5. Escolhas feitas sem base, para o Lucas decidir
 
+**Respostas do Lucas (29/10/2026):** 1, sem resposta específica (fica como está); 2, as mensagens do `convert_iso.py`
+traduzidas para o inglês (o README diz "all done"); 3, Linux e WSL bastam; 5 e 6, a linha "Copyright (c) 2026 Lucas
+Tito (Xbox 360 port)" no `LICENSE`; 8, pediu explicação antes de decidir; 9, ok.
+
 1. **O leiaute `pc-tools/port/x360/...`** no zip, para o `convert_iso.py` ir sem mudança. A outra saída é mudar o
    script para achar os fontes ao lado dele (muda a identidade dos fontes na marca, que o console não confere).
 2. **As mensagens do `convert_iso.py` estão em português** ("tudo certo", "ISO truncada..."). O README avisa e
