@@ -109,8 +109,8 @@ Option A: on the console (recommended)
 2. A box appears:
 
      Convert ISO
-     Convert your original USA ISO for Xbox 360? This takes up to 40 minutes and needs 3 GB of
-     free space. Your original will be kept.
+     Convert your original USA ISO for Xbox 360? It needs 3 GB of free space. Your original
+     will be kept.
 
    Cancel is selected first. Move to Convert and press A.
 3. A progress screen shows the step (Checking ISO..., Copying ISO..., Converting ISO...,
