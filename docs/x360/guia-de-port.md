@@ -2634,3 +2634,22 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   o jogo aceita (regra do PS2): procure um estrago que `save_entre.preve` recuse de fato.
 - **O cartão de antes tem de recusar o marco.** Uma receita cujos `depois` já valem antes do evento não prova nada (a
   primeira versão do recorde da Sobrevivência só conferia preservação); o `valida` e o `confere --antes` recusam.
+
+### Censo do elenco da F7 (etapa 4, 29/10/2026)
+
+- **Escolha por estado, não por toques.** A condição `time L CAMPO N` lê a TeamSel (personagem sob o cursor,
+  passo da escolha, traje, linha, coluna, placa, estágio, membro em escolha): cada `aperta ... ate time ...` para
+  no quadro em que a tela chegou lá, e o rastro diz o que o jogo deu. A grade (15 linhas de 7, com volta nas duas
+  direções) e a lista de estágios do Duelo saem da própria x86 (`f7_elenco.py sonda`, gdb), fora do git.
+- **Uma luta em time carrega dez personagens.** Cinco contra cinco no Duelo e `termina luta perde apos 4 troca`:
+  cada KO faz o jogo trocar o membro e carregar o próximo pelo `BtlLoad_StepChara`. Sem o `troca`, o golpe no
+  lado 0 sai dois quadros depois do quarto KO do lado 1 e o quinto membro dele nunca carrega (a recarga do slot
+  fixo é uma por vez). O `rastreia elenco` registra cada carga concluída lendo o slot fixo e a forma do lado.
+- **O que depende de quê.** O rosto do HUD é `8 + id * 2 + lado` (cada id dos dois lados); a voz é `0xC7B + id`
+  com a voz do New Game e `0xBDA + id` com a outra (Opções, página do som, voz); a variante 1 (danificada) não é
+  selecionável, só o choque de raios perdido e o Ultimate com a bandeira 0x2000 a carregam.
+- **Sair das Opções com algo mudado pergunta se grava** (McFlow 4, estado 32): `aperta TRIANGULO ate mcflow 32` e
+  o laço do "sim" do `opcoes.txt`. Na grade de estágios, a placa da música é a coluna 6 e nela o BAIXO não anda:
+  varrer a linha com sete DIREITA. Os estágios 4 e 27 não estão no Duelo, só no Torneio.
+- **Ssh dentro de um script lido pelo stdin come o resto do script.** `echo ... | bash` com um `ssh deck "..."` no
+  meio parou em silêncio depois dele; use `ssh -n` ou grave o script num arquivo antes de rodar.
