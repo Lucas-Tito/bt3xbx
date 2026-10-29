@@ -55,5 +55,5 @@ The full list, with colours and meanings, is in [labels.yml](labels.yml): `crash
 
 ## Code
 
-Before a pull request, open an issue to talk about it. Never add game files, or anything taken
-from the game, to a commit: no ISO and no data extracted from it.
+Never add game files, or anything taken from the game, to a commit: no ISO and no data extracted
+from it.
