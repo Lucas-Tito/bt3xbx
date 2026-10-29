@@ -106,15 +106,15 @@ def main():
         contexto_errado(task+0x28,struct.pack('>I',errado),f'classe dona de {classe}')
     brilho=ctx.x.global_('gEftGlow')
     if brilho:
-        base=ctx.x.u32(brilho+8)
+        pb=ctx.x.u32(brilho+8)
         contexto_errado(brilho+0x14,struct.pack('>I',71),'brilho acima do limite de entrega')
-        contexto_errado(brilho+8,struct.pack('>I',base+4),'dono das partículas do brilho')
+        contexto_errado(brilho+8,struct.pack('>I',pb+4),'dono das partículas do brilho')
         for off in (0xc,0x10):
             cur=ctx.x.u32(brilho+off)
             if cur:
                 contexto_errado(cur+0xb0,struct.pack('>I',cur),'ciclo ou elo diferente no brilho')
                 if off==0x10:
-                    numero(cur,ctx.aloc[base][2][cur-base:cur-base+0xc0],'partícula viva do brilho')
+                    numero(cur,ctx.aloc[pb][2][cur-pb:cur-pb+0xc0],'partícula viva do brilho')
     for a,m,rec,tipo in ctx.formas_vivas:
         numero(a,m,f'forma {tipo}')
         contexto_errado(rec+0x70,struct.pack('>I',9),f'tipo dono de {tipo}')
