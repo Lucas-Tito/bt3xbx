@@ -6233,7 +6233,9 @@ static void frame_end(void) {
         sLtExec.msVu = msVu;
         sLtExec.faixas++;
         sLtExec.desenhos += ate - de;
-        sDev->KickOff(); /* sem despacho, os comandos podem continuar só na CPU */
+        /* Sem despacho, os comandos podem continuar só na CPU. O D3DDevice do XDK 2.0.21256 não tem KickOff
+           (só o D3DXps); o InsertFence manda à GPU o que está na fila, sem esperar, desta thread dona. */
+        sDev->InsertFence();
         return;
     }
     if (de && (q->quadro == 6900 || q->quadro == 6929 || q->quadro == 6930 ||

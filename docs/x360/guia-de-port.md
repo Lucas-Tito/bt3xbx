@@ -2592,3 +2592,6 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   quadros do duelo desde a etapa das threads; a conferência dos lotes exigiu zero e perdeu a rodada depois de duas horas.
   Antes de armar, rodar cada comparador nos logs da última rodada de referência e escrever o critério como "igual ao da
   normal" (mesmos quadros e hashes), com cópias de um quadro a mais, um a menos e um hash trocado vistas falhando.
+- **O GCC do WSL não compila o `gs_d3d.cpp`.** Um método de `D3DDevice` que o XDK não tem só aparece no `cl.exe`: o
+  `KickOff` é do `D3DXps`; no `D3DDevice`, quem manda a fila à GPU sem esperar é o `InsertFence` (só na thread dona,
+  fora de tiling). A auditoria do protocolo confere cada chamada contra a lista conferida no `d3d9.h`.

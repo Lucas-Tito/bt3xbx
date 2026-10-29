@@ -5410,7 +5410,7 @@ mesma rodada e SHA1 **`9f2cdb4962397877eb90171bc8d7cfe9af3abc08`**. É artefato 
 ## 40. Segunda parte dos lotes: uma faixa CPU por vez e a GPU durante a gravação (29/10/2026)
 
 **Resultado da implementação.** Candidato `BT3_GS_LOTES=1`, ausente da build normal. A gravação publica prefixos
-fechados para a dona do D3D antes da entrega final; cada faixa despacha comandos com `KickOff`. A primeira versão
+fechados para a dona do D3D antes da entrega final; cada faixa despacha comandos com `InsertFence`. A primeira versão
 conserva exclusão entre as duas CPUs: a gravação espera o consumo CPU da faixa e continua enquanto a GPU trabalha.
 Não acrescenta quadro à fila nem vblank. **Não há ganho real medido, imagem D3D aprovada ou aceite da F5 nesta nota.**
 O teto C da seção 39 não prevê a serialização CPU, os Resolves adicionais ou a barreira DATE desta versão.
@@ -5427,7 +5427,7 @@ O teto C da seção 39 não prevê a serialização CPU, os Resolves adicionais 
 - O estado 4 consome o que está disponível e retorna ao laço da dona do dispositivo. Não espera o próximo lote.
   `frame_parte` conserva o começo do quadro, o estado das nativas e o `cleared` do desenho por versão de alvo.
   O `cleared` da gravação só muda na entrega final: antecipá-lo muda a escolha de texturas em `draw_state`.
-- Cada faixa termina com `ed_fim`, `prof_entrega` e `KickOff`; a Guide pode usar a EDRAM entre faixas. Só há consumo
+- Cada faixa termina com `ed_fim`, `prof_entrega` e `InsertFence`; a Guide pode usar a EDRAM entre faixas. Só há consumo
   antecipado com profundidade restaurável, cor e z existentes para os alvos usados, EDRAM residente, plano anterior
   válido e a imagem completa anterior na textura própria do FXAA. Fora dessas condições, usa entrega integral.
   Isso também impede repetir um alvo que o quadro parcial já modificou quando o FXAA está desligado ou falhou.
@@ -5448,8 +5448,9 @@ implementação. Remover a restrição exige outra solução de posse/snapshot e
 
 **[Medido, sem jogo]** `teste_lotes_envio.py`: as fronteiras DATE/Z e o transporte de produção, sete faixas com atrasos
 1/5/20 ms; cinco cópias sabotadas recusadas (sem testemunho, corte DATE, último fundível, ordem, espera CPU).
-`teste_lotes_protocolo.py` é auditoria de fonte, com dez sabotagens recusadas: publicação/barreira, ponte `sync`, preparo,
-filas, despacho, cor, z, imagem anterior para Guide, `cleared` e retorno ao laço. Não é execução de D3D.
+`teste_lotes_protocolo.py` é auditoria de fonte, com onze sabotagens recusadas: publicação/barreira, ponte `sync`, preparo,
+filas, despacho, cor, z, imagem anterior para Guide, `cleared`, retorno ao laço e um método de `D3DDevice` fora do
+XDK. Não é execução de D3D.
 `lotes_envio_igual.py 979cc928` compara os tokens dos três fontes na configuração normal, preservando as inclusões
 como sentinelas, e recusa uma cópia adulterada de cada fonte. Não substitui objetos do XDK.
 O `c89.py` preparou `gs_draw.c` com lotes, alfa e perfil ligados, sem falha.
@@ -5479,6 +5480,16 @@ dos comandos/dados e dessas imagens não prova os Resolves, o restauro ou a Guid
 ficam no relatório `~/entrega-f5-lotes-envio.md` e em `~/f5-lotes-envio/rodada-final/provas.resumo`; só contam com
 `tudo certo`, builds do commit conferido e árvore limpa. Previsão de execução depois da trava: até duas horas; limite
 quatro horas. A fila e o marcador de espera evitam manter uma sessão esperando o emulador.
+
+**[Medido, primeira rodada]** A rodada do `d49f87fa` parou com RC=1 depois das 24 listas contra a normal: no `f5_duelo`,
+`x86gv` e `ppcg` diferem nos mesmos 11 quadros (4918 a 4937) com os mesmos hashes na normal e nas seis variantes,
+diferença que já existia desde a etapa das threads (`08-threads.md`), e o roteiro exigia zero. Com o critério novo, as
+14 comparações refeitas a partir desses logs passam, e as cópias com um quadro a mais, um hash trocado e um quadro a
+menos são recusadas. As sabotagens no falso, as imagens dos roteiros e o save não rodaram; a conferência foi rearmada
+em `~/f5-lotes-envio/rodada-final2`. No XDK, todas as builds com `BT3_GS_LOTES` falhavam em `D3DDevice::KickOff`, que
+o XDK 2.0.21256 não tem (só o `D3DXps`): o despacho da faixa passou a `InsertFence`, que pela documentação do XDK manda
+à GPU os comandos pendentes sem esperar. Ele só vale na thread dona do dispositivo e fora de tiling, Z-prepass e XPS;
+a faixa sai do `frame_end`, a mesma função que já chamava `InsertFence` no fecho.
 
 ### Rodadas preparadas para o Lucas
 
