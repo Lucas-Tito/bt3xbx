@@ -828,3 +828,15 @@ O escopo da F8 (`plano/F8/00-escopo.md`, seção 6) pediu onze escolhas. O Lucas
 11. **Publicação:** o repositório vira público e a release sai junto com a abertura dele. Os relatórios de queda vão
     para as issues do GitHub, com regras contra spam (modelo de issue com campos obrigatórios, o `crash.txt` e a versão,
     rótulos e o que não é aceito).
+
+## 34. F8: o brilho somado do 360 igual ao do port de PC, a 60% (29/10/2026)
+
+Na pendência 5 da F8 (o deserto à noite escuro demais no console), a H9 da F5 (`plano/F5/09.md`) apontava o brilho
+somado do 360 mais fraco e deslocado que o do rasterizador x86. O port de PC soma o brilho e o clarão a 60% do que as
+passadas do jogo dão (`GLOW_DEFAULT 60`, `port/src/gs/gs_draw.h`, escolha do upstream de 06/10). O Lucas decidiu:
+
+1. **O brilho do 360 fica igual ao do port de PC com 60%**: forma, posição e força do halo como as do caminho de GPU do
+   PC. **Não sobe para os 100% do PS2** ("não quero que fique muito brilhoso").
+2. A referência das medidas é a do PC, não a do PS2: o rasterizador x86 só serve com o filtro bilinear do GS, o alfa
+   preso do PC e o `BT3_GLOW` (o diagnóstico `port/x360/tools/diag_bilinear.patch`, só no WSL); sem eles ele lê a cadeia
+   do brilho no ponto e desloca o halo (`plano/F8/05-brilho.md`).
