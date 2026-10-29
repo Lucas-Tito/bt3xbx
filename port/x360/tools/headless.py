@@ -96,7 +96,7 @@ class Alvo:
         # jogo, a newlib do PS2 e a camada do port). Sem ela o clang da x86 dobra, ao mais próximo, contas que só
         # aparecem depois de propagar variáveis ou desenrolar laços (o EftGlow_BuildTables), fora do modelo do PS2 que o
         # softfloat_ps2.c aplica em tempo de execução; o GCC da PPC e o compilador do PS2 fazem essas contas em tempo de
-        # execução. Desligada por padrão: muda a .text das duas builds, e o aceite é o da pesquisa 06.
+        # execução. Ligada por padrão desde 29/10 (decisão do Lucas): muda a .text das duas builds; o aceite é o da pesquisa 06.
         self.sem_dobra = os.environ.get("BT3_SEM_DOBRA", "1") != "0"  # ligada por padrão (decisão do Lucas, 29/10); BT3_SEM_DOBRA=0 desliga
         if self.sem_dobra:
             self.soft += ["-frounding-math"]
