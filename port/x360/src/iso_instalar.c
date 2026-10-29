@@ -42,7 +42,7 @@ static int espaco(void *ctx) {
 }
 static int iniciar(void *ctx) {
     Instalar *c = (Instalar *)ctx;
-    if (GetFileAttributes("game:\\" ISO_NOME) != INVALID_FILE_ATTRIBUTES)
+    if (GetFileAttributes("game:\\" ISO_NOME) != (DWORD)-1)
         return 0;
     c->tmp = CreateFile("game:\\" IC_TEMP, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_NEW,
                         FILE_ATTRIBUTE_NORMAL, NULL);

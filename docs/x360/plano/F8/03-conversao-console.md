@@ -131,6 +131,19 @@ o commit final; as provas de conversão da implementação anterior permanecem r
 A regressão do áudio achou a imagem sintética ainda com marca versão 2. Agora ela usa `ISO_MARCA_VERSAO` do leitor;
 o script inclui esse cabeçalho também na compilação do teste. Nenhum comportamento do som mudou.
 
+### Correção após a recusa do XDK (29/10/2026)
+
+O XDK recusou `INVALID_FILE_ATTRIBUTES`, que a simulação oferecia indevidamente. O adaptador agora compara
+`GetFileAttributes` com `(DWORD)-1`, seguindo `f2/posix360.c`; a simulação retorna esse valor e deixa de definir
+a constante. Antes da correção, compilar o adaptador real com esse cabeçalho reduzido reproduziu o erro.
+
+A revisão das adições encontrou `GetFileAttributes` e `GetDiskFreeSpaceEx`, ambos presentes na camada de teste;
+não há chamada nova a `GetFileAttributesEx` ou `MoveFileEx`, nem uso de flags `MOVEFILE_*`. A publicação usa
+`MoveFile`, já usado no port, sem substituir o destino. As demais flags e constantes de arquivo usadas estão
+declaradas na simulação. Os headers de `~/Documentos/CollectionUI/sdk/XDK` não estão acessíveis neste WSL:
+essa revisão não comprova disponibilidade ou contrato das APIs no XDK. A compilação nativa e os testes do
+adaptador usam agora o cabeçalho sem a constante; logs e escopo da rodada ficam no relatório externo.
+
 A tabela da rodada final, os hashes, commits e o SHA1 da `.text` ficam no relatório externo
 `~/entrega-conv-console.md`. Build XDK, contratos efetivos das APIs FATX, aparência das caixas/barra, reinício,
 interrupção elétrica, desempenho Xenon e Guide real continuam para a revisão do Lucas. As simulações não os aprovam.

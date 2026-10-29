@@ -24,7 +24,7 @@ typedef union {
     unsigned long long QuadPart;
 } ULARGE_INTEGER;
 #define INVALID_HANDLE_VALUE (-1)
-#define INVALID_FILE_ATTRIBUTES ((DWORD) - 1)
+/* O XDK não define INVALID_FILE_ATTRIBUTES; não oferecer a constante desktop aqui. */
 #define GENERIC_READ 1
 #define GENERIC_WRITE 2
 #define FILE_SHARE_READ 1
@@ -131,7 +131,7 @@ static BOOL GetDiskFreeSpaceEx(const char *p, ULARGE_INTEGER *a, ULARGE_INTEGER 
 static DWORD GetFileAttributes(const char *p) {
     struct stat s;
     char b[1024];
-    return lstat(caminho(p, b), &s) ? INVALID_FILE_ATTRIBUTES : 0;
+    return lstat(caminho(p, b), &s) ? (DWORD)-1 : 0;
 }
 static BOOL DeleteFile(const char *p) {
     char b[1024];

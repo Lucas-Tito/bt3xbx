@@ -2528,6 +2528,10 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
 
 ### Instalação inicial no console (F8, conversão)
 
+- O `xtl.h` do XDK não define `INVALID_FILE_ATTRIBUTES`. Comparar `GetFileAttributes` com `(DWORD)-1`,
+  como já faz `posix360.c`. A camada `teste_instalar/xtl.h` também não deve definir essa constante:
+  removê-la fez o compilador nativo recusar o adaptador antigo com o mesmo identificador ausente do XDK.
+  As APIs simuladas não comprovam disponibilidade no SDK; sem seus headers no WSL, a build XDK segue pendente.
 - A marca versão 3 inclui o SHA256 do **executável PC**, além dos fontes. Não comparar `.xex` ou ferramenta
   nativa recompilada com outro compilador esperando a mesma marca. `preparar_iso_console.py` gera no host o selo
   e conserva o `conv_tool` que deve ser passado ao `convert_iso.py --conv-tool` na prova de igualdade literal.
