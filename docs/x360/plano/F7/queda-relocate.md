@@ -36,6 +36,17 @@ Não há prova de thread do título sobrevivendo a um lançamento concluído. Os
 a GPU e o tratador/plugin do ambiente continuam hipóteses para o laço; não há log da FreeStyle para distingui-las.
 Não se alterou o encerramento com cancelamento forçado de threads ou liberação especulativa de memória.
 
+Há uma hipótese adicional anterior à tela vermelha: na tabela crua das transições, o deslocamento 2 vale
+0x80020000 quando lido como big-endian, e o 3 vale 0x00FC0200. O primeiro entra em
+`EftBurst_RelocateModel`, que também **escreve** no cabeçalho e nos grupos antes de chegar ao TexFile.
+Se o console mapear esse endereço fora da RAM emulada como memória gravável, pode haver corrupção antes da
+leitura que finalmente lançou a exceção. Isso também é compatível com um ambiente residente só recuperado
+após desligar. Não foi medido o mapeamento físico desse endereço no console.
+Se a instrução em Iar estiver lendo `hdr+4`, o endereço registrado admite a base de pacote 0x01B2AC80:
+base + 0x00FC0200 + 4 = 0x02AEAE84. Nessa hipótese o modelo apontaria para 0x81B4AC80.
+É uma inferência testável pelos novos registradores e pelo código de máquina, não uma prova fornecida pelo mapa.
+
+
 ## Prova segura no console, pendente
 
 1. Compilar este branch no XDK e guardar `.map`, `.xex`, `.dat` e `.swap` correspondentes. Manter cópia do save.
