@@ -64,6 +64,11 @@ sha1sum "$S/text.bin" > "$S/text.sha1"
 passo inventario python3 port/x360/tools/unpacks.py
 passo novos env BT3_DOIS=1 SEMMAPA=1 IMG=1 O="$S/roteiros" REFS="$S/referencias" \
     bash port/x360/tools/roteiros.sh f7_dividido f7_simples
+for ponto in cheia dividido_volta; do
+    M=$S/roteiros/f7_dividido/mem_ponto_$ponto
+    passo "memoria-negativos-$ponto" python3 port/x360/tools/teste_memoria_luta.py \
+        "$M/hm.txt.dump" "$M/hq.txt.dump" port/build/x86/bt3_x86 port/build/ppc/bt3_ppc "$M/donos"
+done
 passo regressao env SEMMAPA=1 IMG=1 O="$S/regressao" bash port/x360/tools/roteiros.sh duelo
 # Gravação efetiva da entrada no scePad2Read, independente do log do Roteiro_Pad.
 for b in x86 ppc; do

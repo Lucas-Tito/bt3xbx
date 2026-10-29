@@ -160,6 +160,7 @@ class Contexto:
             self.aloc[a] = (n, tipo, m, f'slot {slot} geração {ger} ordem {ordem} dono {dono}:{info[3]}')
         self.formas()
         self.auras()
+        self.brilhos()
         self.tarefas()
         for a, (n, tipo, m, dono) in self.aloc.items():
             if mascara & (2 << infos[str(a)][0]):
@@ -308,6 +309,38 @@ class Contexto:
         self.mapas[base]=m
         self.rotulos.append(f'objetos vivos: {len(vistos)} donos conferidos, push.xyz comparado')
 
+    def brilhos(self):
+        # EftGlow_AllocPart entrega no máximo 70 entradas; FreeParts/StepParts só conservam next nas livres.
+        mgr = self.x.global_('gEftGlow')
+        exigir(mgr == self.p.global_('gEftGlow'), 'gerente do brilho diferente')
+        if not mgr:
+            return
+        exigir(mgr in self.aloc, 'gerente do brilho sem dono')
+        base = self.par(mgr, mgr, 8)
+        cap = self.par(mgr, mgr, 4)
+        usados = self.par(mgr, mgr, 0x14)
+        exigir(base in self.aloc and self.aloc[base][0] == cap * 0xc0 and usados <= min(70, cap),
+               'partículas do brilho fora da capacidade')
+        marcas = self.aloc[base][2]
+        marcas[usados*0xc0:] = b'\xff' * (len(marcas)-usados*0xc0)
+        vistos = set()
+        vivos = 0
+        for off, vivo in ((0xc, False), (0x10, True)):
+            cur = self.par(mgr, mgr, off)
+            while cur:
+                exigir(base <= cur < base+usados*0xc0 and (cur-base) % 0xc0 == 0 and cur not in vistos,
+                       'partícula do brilho fora do vetor ou repetida nas listas')
+                vistos.add(cur)
+                o = cur-base
+                if vivo:
+                    vivos += 1
+                else:
+                    marcas[o:o+0xc0] = b'\xff' * 0xc0
+                    marcas[o+0xb0:o+0xb4] = b'\x84\x80\x80\x80'
+                cur = self.par(cur, cur, 0xb0)
+        exigir(len(vistos) == usados, 'partícula do brilho sem dono na geração corrente')
+        self.rotulos.append(f'brilho: {vivos} partículas vivas, {usados-vivos} livres, {cap-usados} nunca usadas')
+
     def tarefas(self):
         # As listas são a autoridade da vida útil, não a aparência dos bytes de uma tarefa antiga.
         for addr, (n, tipo, marcas, dono) in self.aloc.items():
@@ -370,6 +403,12 @@ class Contexto:
                             # EftBlade contém a vista EftBladeTrail em t e os 16 bytes próprios do init.
                             exigir(candidatos <= {'EftBlade', 'EftBladeTrail'}, 'vista nova do trabalho da lâmina')
                             candidatos = {'EftBlade'}
+                        if fx == 'EftChain_Init':
+                            # Init/Update/Term usam EftArc completo; Draw lê a vista parcial EftChainWork
+                            # nos mesmos deslocamentos antes de delegar a EftChain_DrawStrands (EftArc).
+                            exigir({'EftArc'} <= candidatos <= {'EftArc', 'EftChainWork'},
+                                   'vista nova ou incompleta do trabalho da corrente')
+                            candidatos = {'EftArc'}
                         exigir(len(candidatos) <= 1, f'visões conflitantes do trabalho de {fx}: {sorted(candidatos)}')
                         tipo = next(iter(candidatos), None)
                         if fx == 'EftShotNullGroup_Init':
@@ -393,7 +432,9 @@ class Contexto:
                             else:
                                 sub = self.mapa(tipo, passo)
                         # Enchimento copiado dos argumentos, nunca consultado pelos callbacks destas classes.
-                        sem_leitor = {'EftAnimPart_Init':(0x8c,), 'EftPtcl_Init':(0x3c,), 'EftBill_Init':(0x3c,)}
+                        # EftChainArg termina em +0x3C: EftArcArg.unk3C é só o enchimento copiado pelo init.
+                        sem_leitor = {'EftAnimPart_Init':(0x8c,), 'EftPtcl_Init':(0x3c,), 'EftBill_Init':(0x3c,),
+                                      'EftChain_Init':(0x3c,)}
                         sub = bytearray(sub)
                         for o in sem_leitor.get(fx, ()):
                             sub[o:o+4] = b'\xff'*4

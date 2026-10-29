@@ -2531,3 +2531,17 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   os objetos sem depuração com essa base; `x360_roteiro.o` e o carimbo de `x360_passos.o` podem diferir. Preservar
   também a cópia de ligação `ligar/menu_menu_za_d.o`, gerada de `obj/menu_menu_za_d.o` por
   `objcopy --redefine-sym pow=Port_PowDuplo`, ao usar o verificador recursivo de objetos da F5.
+- **A corrente tem duas descrições do mesmo trabalho.** `EftChain_Init`/`Update`/`Term` usam `EftArc` (0xF10);
+  `EftChain_Draw` usa a vista parcial `EftChainWork`, lê `arg.objId`, `type` e `flags` nos mesmos deslocamentos
+  e delega a `DrawStrands`. O contexto deve escolher `EftArc` completo, exigindo esse conjunto de vistas, em vez
+  de recusar a classe ou aceitar só o tipo parcial. O +0x3C do argumento é enchimento de `EftChainArg`, copiado
+  como `EftArcArg.unk3C` no init e sem leitor; só esses quatro bytes ficam inativos.
+- **Brilho devolvido à lista livre ainda guarda posições calculadas.** `EftGlow_FreeParts`/`StepParts`
+  conservam só `next` nas partículas livres. Na volta da investida, 70 livres e nenhuma ativa produziram
+  116 palavras `float-proximo` e 11 fora do formato na arena. Conferir dono, capacidade, limite de 70 entregues,
+  alinhamento, elos, ausência de ciclos e partição das listas nas duas arquiteturas, como na aura. Comparar
+  integralmente as partículas ativas; nas livres, só `next`. Não ampliar tolerância nem aceitar classes por teto.
+  `teste_memoria_luta.py` adultera também o dono, a contagem e os elos do brilho, e as flags da corrente.
+- Uma rodada interrompida sem `FIM RC=0` não passou, mesmo se as imagens coincidirem. Preservar os artefatos,
+  corrigir a causa demonstrada nos dumps e lançar pasta nova com **as duas** variáveis `F7_SAIDA` e `BASE_X86`.
+  Retomar o script sem `BASE_X86` só recusa a chamada, antes de criar serviço ou conferir qualquer rede.

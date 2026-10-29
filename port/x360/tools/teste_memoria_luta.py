@@ -98,9 +98,23 @@ def main():
         contexto_errado(ap+o,struct.pack('>I',3-kind),f'kind da requisição {i}')
     for a,m,task,classe in ctx.trabalhos_vivos:
         numero(a,m,f'trabalho vivo {classe}')
+        if classe == 'EftChain_Init':
+            assert m[0x3c:0x40] == b'\xff'*4, 'enchimento do argumento da corrente não identificado'
+            numero(a+0xe80,m[0xe80:0xe84],'flags lidas pela vista parcial da corrente')
         outros=[t for _,_,t,c in ctx.trabalhos_vivos if c!=classe]
         errado=ctx.p.u32(outros[0]+0x28) if outros else 0
         contexto_errado(task+0x28,struct.pack('>I',errado),f'classe dona de {classe}')
+    brilho=ctx.x.global_('gEftGlow')
+    if brilho:
+        base=ctx.x.u32(brilho+8)
+        contexto_errado(brilho+0x14,struct.pack('>I',71),'brilho acima do limite de entrega')
+        contexto_errado(brilho+8,struct.pack('>I',base+4),'dono das partículas do brilho')
+        for off in (0xc,0x10):
+            cur=ctx.x.u32(brilho+off)
+            if cur:
+                contexto_errado(cur+0xb0,struct.pack('>I',cur),'ciclo ou elo diferente no brilho')
+                if off==0x10:
+                    numero(cur,ctx.aloc[base][2][cur-base:cur-base+0xc0],'partícula viva do brilho')
     for a,m,rec,tipo in ctx.formas_vivas:
         numero(a,m,f'forma {tipo}')
         contexto_errado(rec+0x70,struct.pack('>I',9),f'tipo dono de {tipo}')
