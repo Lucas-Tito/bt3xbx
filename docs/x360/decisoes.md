@@ -808,3 +808,23 @@ Com o reprojeto da decisão 29 em andamento, o Lucas respondeu às duas pergunta
    gravação por faixa no Xenon. As duas consultas que mudam de lugar (o plano do quadro anterior e o limite do DATE)
    exigem a prova de imagem igual antes de qualquer ganho valer. O teto do modelo no 6960 é de 13,0 a 15,9 ms contra
    os 10,6 que faltam; se a medida no console mostrar que não fecha, os números voltam ao Lucas para a exceção E.
+
+## 33. F8: as escolhas do escopo da primeira release (29/10/2026)
+
+O escopo da F8 (`plano/F8/00-escopo.md`, seção 6) pediu onze escolhas. O Lucas respondeu:
+
+1. **Sem prévia antes da F7 completa:** uma release só, a `1.0.0`.
+2. **Sem opções do port nem remapeamento** na primeira release: padrões fixos e a configuração de controle do próprio jogo.
+3. **16:9 seguindo o ajuste de tela do painel:** aprovado, mas fica para depois da primeira release (até lá, 16:9 fixo).
+4. **Vibração:** entra na primeira release.
+5. **Importar e exportar saves:** fora da primeira release.
+6. **Conversão da ISO:** o README dá as duas opções, a conversão no próprio console e o `convert_iso.py` no PC.
+7. **Nome e versão:** `1.0.0`, e o pacote sem o "xbx" do nome do repositório (`bt3-x360-1.0.0.zip`).
+8. **O `release.yml` do upstream:** desligado no GitHub em 29/10. No futuro, pensar num workflow de release do 360,
+   se o upstream ainda não tiver um.
+9. **README do usuário:** os oito pontos do escopo.
+10. **Gaps de imagem:** só o deserto à noite escuro entra na primeira release; o preto de Namek no Shenlong não importa
+    para ela e fica para depois.
+11. **Publicação:** o repositório vira público e a release sai junto com a abertura dele. Os relatórios de queda vão
+    para as issues do GitHub, com regras contra spam (modelo de issue com campos obrigatórios, o `crash.txt` e a versão,
+    rótulos e o que não é aceito).
