@@ -91,6 +91,15 @@ class Alvo:
             if vu1:  # (F5, etapa 8) a otimização da gravação da VU1, que na PPC já vem com o PORT_BIG_ENDIAN
                 self.soft += ["-DBT3_TESTE_VU1"]
                 self.hard += ["-DBT3_TESTE_VU1"]
+        # (F7, a matemática igual nas três plataformas: docs/x360/pesquisa/06-libm.md) BT3_SEM_DOBRA=1: o compilador do
+        # host não dobra conta de float inexata na compilação (-frounding-math), nas fontes de float em software (o
+        # jogo, a newlib do PS2 e a camada do port). Sem ela o clang da x86 dobra, ao mais próximo, contas que só
+        # aparecem depois de propagar variáveis ou desenrolar laços (o EftGlow_BuildTables), fora do modelo do PS2 que o
+        # softfloat_ps2.c aplica em tempo de execução; o GCC da PPC e o compilador do PS2 fazem essas contas em tempo de
+        # execução. Ligada por padrão desde 29/10 (decisão do Lucas): muda a .text das duas builds; o aceite é o da pesquisa 06.
+        self.sem_dobra = os.environ.get("BT3_SEM_DOBRA", "1") != "0"  # ligada por padrão (decisão do Lucas, 29/10); BT3_SEM_DOBRA=0 desliga
+        if self.sem_dobra:
+            self.soft += ["-frounding-math"]
         # Rastreio: uma chamada antes de cada leitura/escrita (rastreio.c), cópias de estrutura via memcpy.
         # As leituras de variáveis locais também: o jogo copia um vetor do arquivo para a pilha e lê um
         # componente dali (o ASan pularia por "provar" o acesso seguro).
@@ -271,7 +280,8 @@ def construir(alvo):
     for f, r in falhas:
         erro = next((l for l in r.stderr.splitlines() if "rror" in l), r.stderr.strip()[:200])
         print("FALHOU", pathlib.Path(str(f)).name, erro[:220])
-    print(f"{alvo.nome}{' (rastreio)' if alvo.rastreio else ''}: {len(objs)} objetos, {len(falhas)} falhas")
+    print(f"{alvo.nome}{' (rastreio)' if alvo.rastreio else ''}{' (BT3_SEM_DOBRA=1)' if alvo.sem_dobra else ''}: "
+          f"{len(objs)} objetos, {len(falhas)} falhas")
     if falhas:
         sys.exit(1)
     ligar(alvo, objs)

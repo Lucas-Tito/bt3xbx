@@ -840,3 +840,18 @@ passadas do jogo dão (`GLOW_DEFAULT 60`, `port/src/gs/gs_draw.h`, escolha do up
 2. A referência das medidas é a do PC, não a do PS2: o rasterizador x86 só serve com o filtro bilinear do GS, o alfa
    preso do PC e o `BT3_GLOW` (o diagnóstico `port/x360/tools/diag_bilinear.patch`, só no WSL); sem eles ele lê a cadeia
    do brilho no ponto e desloca o halo (`plano/F8/05-brilho.md`).
+
+## 35. F7: os lotes de conteúdo ficam para depois da primeira release, e a PPC roda por amostra (29/10/2026)
+
+A etapa 4 da F7 (elenco, trajes, transformações, fusões, estágios) foi estimada em 256 a 316 h de máquina no ritmo do
+Deck (`plano/F7/04.md`, seção 2), e as etapas 4, 5 e 6 juntas em 360 a 500 h: de uma a três semanas com o WSL e o Deck
+ligados. Quase todo esse custo é a PPC no qemu, que só prova que o código big-endian se comporta como o x86, coisa já
+provada nas F4 e F6 e nos pilotos da F7 (e aceita como referência na decisão 31). O Lucas decidiu:
+
+1. **As etapas 4, 5 e 6 da F7 não rodam para a primeira release.** O lote do elenco, pronto e provado na x86 em
+   laboratório, foi desarmado antes de rodar. A primeira release não espera a F7 inteira; o critério de conteúdo da F8
+   passa a ser a F7 sem essas três etapas.
+2. **Quando os lotes voltarem, a x86 roda todos os casos** (memória e imagens) e **a PPC roda uma amostra**: um ou dois
+   casos por família, os mais diferentes entre si (forma gigante, fusão, estágio que muda), e todo caso em que a x86
+   mostrar algo fora do esperado. O console segue com a inspeção por família.
+

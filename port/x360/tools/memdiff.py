@@ -53,6 +53,16 @@ de um bloco do tamanho, não se decide: uma linha "marcas ambíguas" para cada c
 arquivos que reclamam o bloco tenham o mesmo conteúdo (.orig) e as mesmas marcas (F4, etapa 9a: o diálogo do save da
 História é o da tela do cartão): então as marcas são as mesmas, e uma linha "marcas iguais: heap#N = a, b" diz quais.
 
+Cauda de buffer reaproveitado (F7, piloto da transformação): num bloco com o arquivo achado pelo --marcas-vivas que
+seja um dos três buffers fixos dos recursos do lutador (BUFFERS_FIXOS: modelo, anim0 e anim1, src/battle/btl_obj.c,
+zerados no BtlObj_Init e recarregados no mesmo lugar pela troca de forma, BtlRes_SetFileId), o que fica depois do
+arquivo é o resto do arquivo anterior maior. Esse resto se confere pelas marcas do arquivo anterior, achado pelo
+conteúdo da x86 só nesse trecho (metade dos trechos de 64 bytes não nulos), em camadas se houver mais de um; o que
+sobra depois da maior camada tem de ser igual byte a byte nas duas. Uma linha "marcas heap#N cauda ARQ [ini, fim): ..."
+por camada e uma "marcas heap#N resto [ini, fim): ...", com a mesma forma "conforme N, fora-do-formato M". Dois
+arquivos que conferem no mesmo trecho e dizem coisas diferentes ali: "marcas ambíguas" e a saída 2. Sem arquivo
+anterior que confira, nada muda (o resto segue pela classe por palavra).
+
 --so-em-uso (F4, etapa 5b): os blocos livres do heap e, nos blocos em uso, o enchimento do alocador (entre o cabeçalho
 de 0x20 bytes e os dados alinhados, e do fim do tamanho pedido ao rodapé) e o HeapBlock.unk1C (que src/sys/heap.c
 nunca grava) ficam fora da comparação por palavra: é resto de uso anterior que o jogo não recebe; uma linha "livres:
@@ -77,6 +87,9 @@ from collections import Counter
 
 BASE = 0x20000000  # -Ttext-segment de headless.py
 MAGIC = 0x53484254
+# (F7) os buffers fixos dos recursos do lutador (include/battle/btl_obj.h: BTL_RES_MODEL_SIZE, BTL_RES_ANIM0_SIZE,
+# BTL_RES_ANIM1_SIZE), pelo tamanho pedido: a cauda de um arquivo anterior maior se confere pelas marcas dele
+BUFFERS_FIXOS = {0xCE000: "modelo", 0x160800: "anim0", 0xCE800: "anim1"}
 # as classes que são certas para uma largura e erradas para outra (ou arredondamento): fora de um bloco com marcas,
 # o roteiros.py memoria exige que cada uma seja explicada (CLASSES_CONHECIDAS)
 SUSPEITAS = {"igual-sem-inverter", "2xu16", "u64", "u64-com-zero", "misto", "float-proximo"}
@@ -196,12 +209,12 @@ def pares_heap(nome, ax, dx, ap, dp):
     return out
 
 
-def pelo_formato(ax, dx, dp, marcas):
-    """Compara [data, data + len(marcas)) do bloco pela marcação do conversor. Devolve (início, fim, classes,
-    trechos fora do formato) com início e fim relativos ao bloco."""
+def pelo_formato(ax, dx, dp, marcas, de=0):
+    """Compara [data + de, data + len(marcas)) do bloco pela marcação do conversor. Devolve (início, fim, classes,
+    trechos fora do formato) com início e fim relativos ao bloco (o início é o dos dados, sem o de)."""
     ini = struct.unpack_from("<I", dx, 0x14)[0] - ax  # HeapBlock.data
     fim = min(ini + len(marcas), len(dx), len(dp))
-    classes, trechos, k = Counter(), [], ini
+    classes, trechos, k = Counter(), [], ini + de
     while k < fim:
         m = marcas[k - ini]
         w = m if m in (2, 4, 8) else 1
@@ -603,6 +616,55 @@ def main():
         print(f"marcas pelo tamanho: {b} = {arqs[0].rsplit('/', 1)[-1]}")
         marcas[b] = open(arqs[0], "rb").read()
         nome_marcas[b] = arqs[0]
+    # (F7, piloto da transformação) A cauda dos buffers fixos dos recursos do lutador (BUFFERS_FIXOS): um arquivo menor
+    # carregado no mesmo buffer deixa depois dele o resto do arquivo anterior. As camadas se acham como o --marcas-vivas
+    # acha o arquivo vivo, pelo conteúdo da x86 (o .orig, metade dos trechos de 64 bytes não nulos), mas só no trecho
+    # depois do fim da camada de cima; o maior arquivo que confere ali vira a camada seguinte, e assim por diante.
+    caudas, conteudos = {}, {}
+
+    def orig_de(arq):
+        o = arq[:-len(".marcas")] + ".orig"
+        if o not in conteudos:
+            conteudos[o] = open(o, "rb").read() if os.path.exists(o) else None
+        return conteudos[o]
+
+    def resto_de(d, orig, de):
+        """o trecho [de, len(orig)) da x86 (d, a partir dos dados do bloco) guarda o fim de orig?"""
+        zero = bytes(64)
+        trechos = [k for k in range(de, len(orig), 64) if orig[k:k + 64] != zero[:len(orig[k:k + 64])]]
+        if len(trechos) < 4:
+            return False
+        return sum(d[k:k + 64] == orig[k:k + 64] for k in trechos) * 2 >= len(trechos)
+
+    for b in sorted(marcas):
+        if nome_marcas.get(b) not in vivas or orig_de(nome_marcas[b]) is None:
+            continue  # (só um bloco achado pelo conteúdo: o arquivo de cima é o que o --marcas-vivas provou vivo)
+        ax, dx = dados_x86[b]
+        pedido = struct.unpack_from("<i", dx, 0x18)[0]
+        if pedido not in BUFFERS_FIXOS:
+            continue
+        d = dx[struct.unpack_from("<I", dx, 0x14)[0] - ax:]
+        pos, camadas = len(marcas[b]), []
+        while pos < pedido:
+            achados = [a for a in vivas if orig_de(a) is not None and pos < len(orig_de(a)) <= pedido and
+                       resto_de(d, orig_de(a), pos)]
+            if not achados:
+                break
+            maior = max(achados, key=lambda a: len(orig_de(a)))
+            mm = open(maior, "rb").read()
+            # (dois arquivos que conferem no mesmo trecho têm de dizer o mesmo nele: conteúdo e marcas)
+            outros = [a for a in achados if orig_de(a)[pos:] != orig_de(maior)[pos:len(orig_de(a))] or
+                      open(a, "rb").read()[pos:] != mm[pos:len(orig_de(a))]]
+            if outros or len(mm) != len(orig_de(maior)):
+                print(f"marcas ambíguas: {b} cauda [{pos:#x}, ...) com " +
+                      ", ".join(a.rsplit('/', 1)[-1] for a in [maior] + outros))
+                ambiguas += 1
+                camadas = []
+                break
+            camadas.append((pos, len(mm), maior, mm))
+            pos = len(mm)
+        if camadas:
+            caudas[b] = (camadas, pos, pedido)
     if vivas:
         vivos = {a for b, arqs in reclamados.items() if len(arqs) == 1 for a in arqs}
         print(f"--marcas-vivas: {len(vivas)} arquivos e conteúdos, {len(vivos)} vivos em "
@@ -699,6 +761,30 @@ def main():
             trechos += [tuple(t) for t in tf]
             print(f"marcas {nx} {nome_marcas[nx].rsplit('/', 1)[-1]}: conforme {cf['conforme']}, "
                   f"fora-do-formato {cf['fora-do-formato']}")
+            if nx in caudas:
+                # cada camada pelas marcas do arquivo dela, e o que sobra depois da maior igual byte a byte nas duas
+                # (o BtlObj_Init zera o buffer; a leitura só grava o arquivo)
+                camadas, ultimo, pedido_c = caudas[nx]
+                for de, ate, arq, mm in camadas:
+                    _, _, cc, tc = pelo_formato(ax, dx, dp, mm, de)
+                    classes.update(cc)
+                    trechos += [tuple(t) for t in tc]
+                    print(f"marcas {nx} cauda {arq.rsplit('/', 1)[-1]} [{de:#x}, {ate:#x}): conforme {cc['conforme']}, "
+                          f"fora-do-formato {cc['fora-do-formato']}")
+                cr = Counter()
+                for o in range(fmt_ini + ultimo, fmt_ini + pedido_c, 4):
+                    w = min(4, fmt_ini + pedido_c - o)
+                    ok = dx[o:o + w] == dp[o:o + w]
+                    cr["conforme" if ok else "fora-do-formato"] += 1
+                    if not ok:
+                        if trechos and o - trechos[-1][1] <= 16:
+                            trechos[-1] = (trechos[-1][0], o + w)
+                        else:
+                            trechos.append((o, o + w))
+                classes.update(cr)
+                print(f"marcas {nx} resto [{ultimo:#x}, {pedido_c:#x}): conforme {cr['conforme']}, "
+                      f"fora-do-formato {cr['fora-do-formato']}")
+                fmt_fim = fmt_ini + pedido_c
         for o in range(0, n, 4):
             if fmt_ini <= o < fmt_fim or fmt_ini < o + 4 <= fmt_fim:
                 continue

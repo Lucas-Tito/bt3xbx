@@ -367,6 +367,150 @@ static void f7_quadro(void) {
     idAntes = id; acaoAntes = acao; blastAntes = blast;
 }
 
+/* (F7, etapa 4) A seleção de times (TeamSel, include/menu/menu_e.h e menu_f.h), só lida, pelos deslocamentos, como os
+   lutadores acima: o lado L em gTeamSel + 0x8E8 + 4L e a grade dele em + 0x9B0 + 4L; no lado, os cinco membros de 0x30
+   bytes (col +0, row +4, color +0x18), o membro em escolha (cur, +0x12C), a contagem (+0x134), o personagem sob o
+   cursor (chara, +0x138) e o passo (state, +0x13C); a célula (TsCell, 0x24 bytes): id +0, formCount +4, form[7] +8;
+   o estágio sob o cursor da grade de estágios (TeamSelStage em +0x950, stage +0x3C). Fora da tela 40, -1. Campo 3
+   (celula): `id` se a célula sob o cursor tem esse personagem, -1 se não; com `id` -2, o id da célula. */
+extern unsigned char *gTeamSel;
+#define TELA_TIME 40 /* o modo da TeamSel (TeamSel_Run) */
+static int time_campo(int lado, int campo, int id) {
+    const unsigned char *s, *m, *c;
+    int cur, k, n;
+    if (tela_atual() != TELA_TIME || gTeamSel == NULL) {
+        return -1;
+    }
+    s = *(unsigned char *const *)(gTeamSel + 0x8E8 + lado * 4);
+    if (s == NULL) {
+        return -1;
+    }
+    cur = *(const int *)(s + 0x12C);
+    switch (campo) {
+    case 0:
+        return *(const int *)(s + 0x138);
+    case 1:
+        return *(const int *)(s + 0x13C);
+    case 4:
+        return *(const int *)(s + 0x134);
+    case 8:
+        return *(const int *)(gTeamSel + 0x950 + 0x3C);
+    case 9:
+        return cur;
+    }
+    if (cur < 0 || cur >= 5) {
+        return -1;
+    }
+    m = s + cur * 0x30;
+    switch (campo) {
+    case 2:
+        return *(const int *)(m + 0x18);
+    case 5:
+        return *(const int *)(m + 4);
+    case 6:
+        return *(const int *)(m + 0);
+    case 7:
+        return *(const int *)(m + 0x14);
+    }
+    /* celula: a da linha e coluna do membro em escolha na grade do lado */
+    c = *(unsigned char *const *)(gTeamSel + 0x9B0 + lado * 4);
+    if (c == NULL) {
+        return -1;
+    }
+    c += (*(const int *)(m + 4) * 7 + *(const int *)(m + 0)) * 0x24;
+    if (id == -2) {
+        return *(const int *)c; /* (para o rastro: o id da célula) */
+    }
+    if (*(const int *)c == id) {
+        return id;
+    }
+    n = *(const int *)(c + 4);
+    for (k = 0; k < n && k < 7; k++) {
+        if (*(const int *)(c + 8 + k * 4) == id) {
+            return id;
+        }
+    }
+    return -1;
+}
+
+/* (F7, etapa 4) O elenco carregado na luta, com o passo "rastreia elenco": no começo de cada luta, os membros que ela
+   montou (BattleSetup: personagem e traje de cada membro de cada lado), e uma linha por carga de personagem
+   concluída em cada lado: os três arquivos do slot fixo do lado (BtlResWork em gBtlObjWork + 0x6B3EC,
+   include/battle/btl_obj.h: fixed[2] em +0x2A0, 0x38 bytes cada, file[k].id em +k*0x10+8, number em +0x34; pending em
+   +0x344) quando mudam, sem troca pendente, sem a carga em andamento (BATTLE_FLAG_LOAD_CHARA) e com o modelo igual ao
+   da forma do lado (BattleSide.form: o que a carga pediu). Só lê. */
+extern unsigned char *gBtlObjWork;
+static int sRastroElenco;
+static int sCargas[2]; /* cargas concluídas em cada lado desde o começo (o "perde apos N troca" as conta) */
+static void elenco_quadro(void) {
+    static int visto[2][3] = {{-1, -1, -1}, {-1, -1, -1}};
+    static int naLuta;
+    const unsigned char *res, *f;
+    BattleWork *w;
+    BattleSide *sd;
+    int lado, k, j, modelo, ids[3];
+    char s[400], *q;
+    if (!sRastroElenco) {
+        return;
+    }
+    if (tela_atual() != TELA_LUTA) {
+        if (naLuta) {
+            naLuta = 0;
+            for (lado = 0; lado < 2; lado++) {
+                visto[lado][0] = visto[lado][1] = visto[lado][2] = -1;
+            }
+        }
+        return;
+    }
+    w = Battle_GetWork();
+    if (!naLuta) {
+        naLuta = 1;
+        for (lado = 0; lado < 2; lado++) {
+            sd = &w->setup.sides[lado];
+            q = s + sprintf(s, "roteiro: elenco time lado %d membros %d:", lado, sd->memberCount);
+            for (k = 0; k < sd->memberCount && k < 5; k++) {
+                q += sprintf(q, " %d/%d/%d", sd->members[k].chara, sd->members[k].costume, sd->members[k].variant);
+            }
+            sprintf(q, " estagio %d dividida %d vblank %u quadro %u", w->setup.rule.stage, w->setup.rule.screenMode,
+                    gPortVBlanks, sQuadro);
+            diz(s);
+        }
+    }
+    if (gBtlObjWork == NULL || (w->flags & BATTLE_FLAG_LOAD_CHARA)) {
+        return;
+    }
+    res = gBtlObjWork + 0x6B3EC;
+    if (*(const int *)(res + 0x344) >= 0) {
+        return; /* uma troca de modelo ainda não confirmada */
+    }
+    for (lado = 0; lado < 2; lado++) {
+        sd = &w->setup.sides[lado];
+        for (k = 0; k < 2; k++) {
+            f = res + 0x2A0 + k * 0x38;
+            if (*(const int *)(f + 0x34) == sd->modelSlot) {
+                break;
+            }
+        }
+        if (k == 2) {
+            continue;
+        }
+        for (j = 0; j < 3; j++) {
+            ids[j] = *(const int *)(f + j * 0x10 + 8);
+        }
+        modelo = 0x590 + sd->form.chara * 10 + sd->form.costume + (sd->form.variant != 0 ? 4 : 0);
+        if (ids[0] != modelo || (ids[0] == visto[lado][0] && ids[1] == visto[lado][1] && ids[2] == visto[lado][2])) {
+            continue;
+        }
+        sprintf(s, "roteiro: elenco carga lado %d id %d traje %d variante %d modelo %d anim %d %d vblank %u quadro %u",
+                lado, sd->form.chara, sd->form.costume, sd->form.variant, ids[0], ids[1], ids[2], gPortVBlanks, sQuadro);
+        diz(s);
+        sCargas[lado]++;
+        for (j = 0; j < 3; j++) {
+            visto[lado][j] = ids[j];
+        }
+    }
+}
+
 #ifndef PORT_X360
 /* Débito exato observado na chamada do jogo; só a ligação sem janela usa este desvio. */
 void __real_BtlMember_SubBlast(void *chr, int amount);
@@ -386,7 +530,7 @@ void __wrap_BtlMember_SubBlast(void *chr, int amount) {
 
 enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA,
        P_FUNDE, P_DESEJO, P_RASTREIA, P_GIRA, P_MISSOES, P_RECEITA };
-enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA, C_ACAO, C_SEQ, C_PAUSA, C_DANO, C_KI, C_JANELA, C_FORMA, C_BLAST };
+enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA, C_ACAO, C_SEQ, C_PAUSA, C_DANO, C_KI, C_JANELA, C_FORMA, C_BLAST, C_TIME };
 
 typedef struct Passo {
     int tipo;
@@ -550,6 +694,29 @@ static int condicao(Passo *p, char **pal, int n, int i) {
         p->valor = numero(p->onde, i + 2 < n ? pal[i + 2] : NULL);
         if (p->lado < 0 || p->lado > 1 || p->valor < 0) erro_linha(p->onde, "forma/blast L N: lado 0 ou 1, N >= 0", NULL);
         i += 3;
+    } else if (i < n && igual(pal[i], "time")) {
+        /* (F7, etapa 4) time L CAMPO N: a seleção de times (TeamSel) do lado L; CAMPO chara (o personagem sob o
+           cursor), estado (o passo da escolha, TEAMSEL_ST_*), cor (o traje no membro em escolha), celula (a célula sob
+           o cursor tem o personagem N, como célula ou como forma), membros (quantos o time já tem), linha e coluna (o
+           cursor na grade), placa (o conjunto de itens), estagio (o estágio sob o cursor da grade de estágios, o
+           mesmo nos dois lados) ou cursor (o membro em escolha; 5 a placa de time completo) */
+        static const char *const campos[] = {"chara", "estado", "cor", "celula", "membros", "linha", "coluna",
+                                            "placa", "estagio", "cursor"};
+        int k;
+        p->cond = C_TIME;
+        p->lado = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
+        p->ate = -1;
+        for (k = 0; k < 10 && i + 2 < n; k++) {
+            if (igual(pal[i + 2], campos[k])) {
+                p->ate = k;
+            }
+        }
+        p->valor = numero(p->onde, i + 3 < n ? pal[i + 3] : NULL);
+        if (p->lado < 0 || p->lado > 1 || p->ate < 0 || p->valor < -1) {
+            erro_linha(p->onde, "time L chara|estado|cor|celula|membros|linha|coluna|placa|estagio|cursor N: lado 0 "
+                       "ou 1", NULL);
+        }
+        i += 4;
     } else if (i < n && igual(pal[i], "ki")) { /* ki L N: o ki do lado L chegou a N (100000 a barra cheia) */
         p->cond = C_KI;
         p->lado = numero(p->onde, i + 1 < n ? pal[i + 1] : NULL);
@@ -668,10 +835,12 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         p = novo(onde, P_DESEJO);
         i = 2;
     } else if (igual(pal[0], "rastreia")) { /* (F5, etapa 3) rastreia luta: a luta no rastro (sRastroLuta) */
-        if (n != 2 || !igual(pal[1], "luta")) {
-            erro_linha(onde, "rastreia luta", NULL);
+        /* (F7, etapa 4) rastreia elenco: as cargas de personagem da luta no rastro (sRastroElenco) */
+        if (n != 2 || !(igual(pal[1], "luta") || igual(pal[1], "elenco"))) {
+            erro_linha(onde, "rastreia luta|elenco", NULL);
         }
         p = novo(onde, P_RASTREIA);
+        p->valor = igual(pal[1], "elenco");
         i = 2;
     } else if (igual(pal[0], "prepara") && n == 3 && igual(pal[1], "missoes")) {
         p = novo(onde, P_MISSOES);
@@ -743,11 +912,13 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         }
         i = 10;
     } else if (igual(pal[0], "confere")) { /* confere som N | confere saga N: o save em memória (gSaveData) */
-        if (n < 2 || !(igual(pal[1], "som") || igual(pal[1], "saga"))) {
-            erro_linha(onde, "confere som N | confere saga N", n > 1 ? pal[1] : NULL);
+        /* (F7, etapa 4) confere voz N: o conjunto de vozes da luta (SAVE_FLAG_VOICE, gSaveData->flags +0x1608 bit 0;
+           1 o do New Game, com os bancos 0xC7B + id, 0 a outra voz das Opções, 0xBDA + id) */
+        if (n < 2 || !(igual(pal[1], "som") || igual(pal[1], "saga") || igual(pal[1], "voz"))) {
+            erro_linha(onde, "confere som N | confere saga N | confere voz N", n > 1 ? pal[1] : NULL);
         }
         p = novo(onde, P_CONFERE);
-        p->cond = igual(pal[1], "saga"); /* 0: som, 1: saga */
+        p->cond = igual(pal[1], "voz") ? 6 : igual(pal[1], "saga"); /* 0: som, 1: saga, 6: voz */
         p->valor = numero(onde, n > 2 ? pal[2] : NULL);
         if (p->cond && (p->valor < 0 || p->valor >= 8)) {
             erro_linha(onde, "confere saga N: N de 0 a 7", pal[2]);
@@ -772,6 +943,13 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
                     erro_linha(onde, "perde apos N: N de 1 em diante", pal[i + 1]);
                 }
                 i += 2;
+                /* (F7, etapa 4) perde apos N troca: o lado 0 só cai depois de o lado 1 carregar os N membros que entram
+                   (o "rastreia elenco" conta as cargas concluídas). Sem isso, o golpe no lado 0 sai dois quadros depois
+                   do N-ésimo KO, e a troca do lado 1 nunca acontece (a recarga do slot fixo é uma por vez) */
+                if (i < n && igual(pal[i], "troca")) {
+                    p->ate = 1;
+                    i++;
+                }
             }
         }
         if (i < n && igual(pal[i], "max")) {
@@ -934,6 +1112,8 @@ static int cumprida(Passo *p) {
         return a >= p->valor;
     case C_JANELA:
         return Passos_NaJanela() >= (unsigned)p->valor;
+    case C_TIME:
+        return time_campo(p->lado, p->ate, p->valor) == p->valor;
     }
     return 0;
 }
@@ -966,6 +1146,10 @@ static void cond_texto(const Passo *p, char *s) {
         sprintf(s, "ki %d %d (%d)", p->lado, p->valor, barra_de(p->lado, LUT_KI));
     } else if (p->cond == C_JANELA) {
         sprintf(s, "janela %d", p->valor);
+    } else if (p->cond == C_TIME) {
+        static const char *const campos[] = {"chara", "estado", "cor", "celula", "membros", "linha", "coluna",
+                                            "placa", "estagio", "cursor"};
+        sprintf(s, "time %d %s %d (%d)", p->lado, campos[p->ate], p->valor, time_campo(p->lado, p->ate, -2));
     } else {
         strcpy(s, "luta");
     }
@@ -1219,6 +1403,17 @@ static unsigned quadro(void) {
                 sprintf(s, "%s: confere sem save na memória", p->onde);
                 falha(s);
             }
+            if (p->cond == 6) {
+                if ((gSaveData->flags & 1) != p->valor) {
+                    sprintf(s, "%s: voz %d (gSaveData->flags 0x%x, bit 0), esperado %d", p->onde, (int)(gSaveData->flags & 1),
+                            (unsigned)gSaveData->flags, p->valor);
+                    falha(s);
+                }
+                sprintf(s, "roteiro: %s ok voz %d vblank %u quadro %u", p->onde, p->valor, gPortVBlanks, sQuadro);
+                diz(s);
+                proximo();
+                continue;
+            }
             if (p->cond >= 2) {
                 /* confere save u8|s32 DESL N */
                 const unsigned char *b = (const unsigned char *)gSaveData + p->n;
@@ -1305,7 +1500,17 @@ static unsigned quadro(void) {
             if (!p->n) {
                 sDerrubados1 = 0; /* (a primeira vez do passo na luta) */
             }
+            if (!p->n) {
+                p->ref = sCargas[1];
+            }
             sDerruba = p->valor || sDerrubados1 < p->par ? 1 : 0;
+            if (sDerruba == 0 && p->ate && sCargas[1] - p->ref < p->par) {
+                if (!sRastroElenco) {
+                    sprintf(s, "%s: perde apos N troca pede o rastreia elenco antes", p->onde);
+                    falha(s);
+                }
+                sDerruba = -1; /* o membro seguinte do lado 1 ainda não entrou */
+            }
             strcpy(sDerrubaOnde, p->onde);
             p->n = 1;
             if (sT >= p->max) {
@@ -1348,8 +1553,13 @@ static unsigned quadro(void) {
             proximo();
             continue;
         case P_RASTREIA:
-            sRastroLuta = 1;
-            sprintf(s, "roteiro: %s rastreia luta vblank %u quadro %u", p->onde, gPortVBlanks, sQuadro);
+            if (p->valor) {
+                sRastroElenco = 1;
+            } else {
+                sRastroLuta = 1;
+            }
+            sprintf(s, "roteiro: %s rastreia %s vblank %u quadro %u", p->onde, p->valor ? "elenco" : "luta",
+                    gPortVBlanks, sQuadro);
             diz(s);
             proximo();
             continue;
@@ -1528,6 +1738,7 @@ int Roteiro_Pad(int socket, unsigned char *data) {
     }
     luta_quadro();
     f7_quadro();
+    elenco_quadro();
     b = quadro();
 #ifndef PORT_X360
     Imagens_Quadro(sQuadro);

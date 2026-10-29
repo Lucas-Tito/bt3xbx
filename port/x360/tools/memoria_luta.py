@@ -19,6 +19,32 @@ def exigir(ok, texto):
         raise ContextoErro(texto)
 
 
+def campos_marcas(m):
+    """[(início, fim)] de cada campo de uma marcação: o byte que o começa e as continuações 0x80 que o seguem"""
+    out, i = [], 0
+    while i < len(m):
+        j = i + 1
+        while j < len(m) and m[j] == 0x80:
+            j += 1
+        out.append((i, j))
+        i = j
+    return out
+
+
+def uniao_vistas(a, b, nome):
+    """(F7, piloto da transformação) A união de duas vistas do mesmo trabalho: cada campo de uma cai inteiro sobre
+    bytes opacos (0xFE, os unk e vetores de bytes da decomp) da outra ou é o mesmo campo nas duas. O campo tipado vence
+    o opaco; largura ou tipo diferente no mesmo byte é recusado, e nada é deixado de comparar por isso."""
+    exigir(len(a) == len(b), f'{nome}: vistas de tamanhos diferentes')
+    for x, y in ((a, b), (b, a)):
+        for i, j in campos_marcas(x):
+            if x[i] == 0xFE:
+                continue
+            exigir(y[i:j] == x[i:j] or all(c == 0xFE for c in y[i:j]),
+                   f'{nome}: vistas com larguras ou tipos conflitantes em +{i:#x}')
+    return bytes(y if x == 0xFE else x for x, y in zip(a, b))
+
+
 class Memoria:
     def __init__(self, regs, nm, be):
         self.regs = regs
@@ -157,6 +183,19 @@ class Contexto:
                 # 0x54: float32 calculado pela libm, com o mesmo limite de 64 ULP da F4.
                 for i in range(20):
                     for o in (0x164+i*16,0x168+i*16):m[o]=0x54
+            if tipo == 'struct EftPGlowPart':
+                # (F7, piloto da transformação) EftGlow_StepParts (src/battle/eft_p_b.c) copia dir[shape] do perfil
+                # acima, gira por Mtx_RotateZ, leva ao mundo e normaliza: dir.xyz (+0x90) e worldDir.xyz (+0xA0) de toda
+                # parte herdam a diferença dos y/z do perfil, com o mesmo código 0x54 e o mesmo limite de 64 ULP. Visto:
+                # 34 palavras de 0 a 56 ULP, só nas partes de shape 8; posição, ponto, cor e o resto, iguais.
+                # A diferença do perfil não é da libm: é o clang da x86 dobrando o laço do EftGlow_BuildTables na
+                # compilação (docs/x360/pesquisa/06-libm.md). Com BT3_SEM_DOBRA=1 ligada por padrão, esta regra e a
+                # do perfil saem.
+                exigir(n % 0xc0 == 0, 'vetor de partes do brilho com tamanho inesperado')
+                for i in range(n // 0xc0):
+                    for o in (0x90, 0x94, 0x98, 0xa0, 0xa4, 0xa8):
+                        exigir(m[i*0xc0+o:i*0xc0+o+4] == b'\x44\x80\x80\x80', 'EftPGlowPart sem float em dir ou worldDir')
+                        m[i*0xc0+o] = 0x54
             self.aloc[a] = (n, tipo, m, f'slot {slot} geração {ger} ordem {ordem} dono {dono}:{info[3]}')
         self.formas()
         self.auras()
@@ -370,6 +409,17 @@ class Contexto:
                             # EftBlade contém a vista EftBladeTrail em t e os 16 bytes próprios do init.
                             exigir(candidatos <= {'EftBlade', 'EftBladeTrail'}, 'vista nova do trabalho da lâmina')
                             candidatos = {'EftBlade'}
+                        disco = None
+                        if fx == 'EftDisc_Init':
+                            # (F7, piloto da transformação) O trabalho de 0x4C0 bytes da tarefa de disco tem duas
+                            # declarações: EftODisc (include/battle/eft_o.h), de EftDisc_Init e EftDisc_Update
+                            # (eft_o_c.c), e EftDisc (include/battle/eft_p.h), dos outros seis callbacks (eft_p.c).
+                            # Compara-se pela união das duas marcações (uniao_vistas: o tipado vence o opaco, conflito
+                            # recusa). Visto: nunca discordam; EftODisc tipa 8 bytes que EftDisc deixa opacos, e
+                            # EftDisc tipa 98 que EftODisc deixa opacos.
+                            exigir(candidatos <= {'EftDisc', 'EftODisc'}, 'vista nova do trabalho do disco')
+                            disco = uniao_vistas(self.tipos['EftDisc'], self.tipos['EftODisc'], 'EftDisc/EftODisc')
+                            candidatos = {'EftDisc'}
                         exigir(len(candidatos) <= 1, f'visões conflitantes do trabalho de {fx}: {sorted(candidatos)}')
                         tipo = next(iter(candidatos), None)
                         if fx == 'EftShotNullGroup_Init':
@@ -390,13 +440,27 @@ class Contexto:
                                 sub[o:o+len(self.tipos['EftSet'])] = self.tipos['EftSet']
                                 if fx == 'EftMultiMgr_Init': sub[8:0x210] = self.tipos['EftAeTexSet32']
                                 sub += b'\xff'*(passo-len(sub))
+                            elif disco is not None:
+                                exigir(passo == len(disco), 'trabalho do disco com tamanho inesperado')
+                                sub = disco
                             else:
                                 sub = self.mapa(tipo, passo)
-                        # Enchimento copiado dos argumentos, nunca consultado pelos callbacks destas classes.
-                        sem_leitor = {'EftAnimPart_Init':(0x8c,), 'EftPtcl_Init':(0x3c,), 'EftBill_Init':(0x3c,)}
+                        # Enchimento copiado dos argumentos, nunca consultado pelos callbacks destas classes:
+                        # (deslocamento, bytes).
+                        sem_leitor = {'EftAnimPart_Init':((0x8c,4),), 'EftPtcl_Init':((0x3c,4),), 'EftBill_Init':((0x3c,4),),
+                                      # (F7, piloto da transformação) EftDisc.atk +0x40 e +0x42..+0x4F: BtlFx_FireKiBlast
+                                      # (src/battle/btl_char_fx.c) preenche o FxHitArg2 local até unk3C e unk41, sem
+                                      # gravar unk40 nem unk42[0xE]; EftDisc_Throw (por EftDisc_SetHeldAtk) e EftDisc_SpawnFromNode
+                                      # (eft_p.c) copiam os 0x50 bytes por valor. Lixo da pilha, outro em cada build.
+                                      # Leitores do atk: os registros de golpe, pela vista EftHitAtk de 0x34 bytes
+                                      # (eft_a.c: objId, unk16, kind, unk1A, unk1B, unk20, level), e os callbacks do
+                                      # disco pela EftDiscAtk até scale (+0x28); unk2C[0x24] nunca é lido e a vista
+                                      # EftODisc (u8 atk[0x50]) não é lida em eft_o_c.c. O byte +0x41, gravado, segue
+                                      # comparado.
+                                      'EftDisc_Init':((0xd0,1),(0xd2,0xe))}
                         sub = bytearray(sub)
-                        for o in sem_leitor.get(fx, ()):
-                            sub[o:o+4] = b'\xff'*4
+                        for o, w in sem_leitor.get(fx, ()):
+                            sub[o:o+w] = b'\xff'*w
                         if fx == 'EftRibbon_Init':
                             # O helper EftRibbon_SetTexPair lê EftAbTexEntry, dois u64, não os Vec4 da outra vista.
                             sub[0x130:0x1b0] = self.tipos['EftAbTexEntry']*8
