@@ -76,16 +76,24 @@ if [ "${1:-}" = --um ]; then
     exit 0
 fi
 
+# --- as builds, também dentro da trava (não disputar a CPU com a rodada de outra tarefa) ---
+if [ "${1:-}" = --builds ]; then
+    livre builds || exit 1
+    for a in x86 'x86 --rastreio' ppc; do
+        python3 port/x360/tools/headless.py --alvo $a > "$S/build-${a// /_}.log" 2>&1 || { diz "PARADO: build $a"; exit 1; }
+    done
+    grep -q '^104 stubs; link OK' "$S/build-x86.log" ||
+        { diz "PARADO: a x86 não ligou com 104 stubs ($(tail -1 "$S/build-x86.log")): o port/build/gen?"; exit 1; }
+    objcopy -O binary -j .text port/build/x86/bt3_x86 "$S/text.bin" && sha1sum "$S/text.bin" | cut -d' ' -f1 > "$S/text.sha1"
+    rm -f "$S/text.bin"
+    exit 0
+fi
+
 # --- o lote ---
 [ -z "$(git status --porcelain --untracked-files=normal)" ] || { diz 'PARADO: árvore com alterações fora de commit'; exit 1; }
 git rev-parse HEAD > "$S/commit.txt"
-diz "lote em $maquina, commit $(git rev-parse --short HEAD), trava $trava"
-livre builds || exit 1
-for a in x86 'x86 --rastreio' ppc; do
-    python3 port/x360/tools/headless.py --alvo $a > "$S/build-${a// /_}.log" 2>&1 || { diz "PARADO: build $a"; exit 1; }
-done
-grep -q '^104 stubs; link OK' "$S/build-x86.log" || { diz "PARADO: a x86 não ligou com 104 stubs ($(tail -1 "$S/build-x86.log")): o port/build/gen?"; exit 1; }
-objcopy -O binary -j .text port/build/x86/bt3_x86 "$S/text.bin" && sha1sum "$S/text.bin" | cut -d' ' -f1 > "$S/text.sha1" && rm "$S/text.bin"
+diz "lote em $maquina, commit $(git rev-parse --short HEAD), trava $trava; esperando a trava para as builds"
+flock "$trava" "$0" --builds || { echo "FIM RC=1" >> "$S/resumo.txt"; exit 1; }
 diz "builds prontas; .text da x86 $(cat "$S/text.sha1")"
 python3 port/x360/tools/f7_elenco.py confere > "$S/elenco-confere.txt" 2>&1 || { diz "PARADO: $(tail -1 "$S/elenco-confere.txt")"; exit 1; }
 casos=("$@")
