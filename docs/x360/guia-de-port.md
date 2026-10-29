@@ -1646,6 +1646,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   callbacks; o `memoria_luta.py` recusava as duas e o fim da luta não chegou a ser julgado. `uniao_vistas` junta as
   marcações: cada campo de uma cai inteiro sobre opacos (0xFE) da outra ou é o mesmo campo; largura ou tipo
   diferente recusa. O negativo é um campo que as duas tipam igual virando dois u16.
+- **A cópia por valor de um argumento leva o lixo da pilha junto, e cada build tem o seu.** O `FxHitArg2` de
+  `BtlFx_FireKiBlast` não grava `unk40` nem `unk42`, e o disco copia os 0x50 bytes; os leitores (a vista
+  `EftHitAtk` de 0x34 bytes e os callbacks até +0x2B) nunca passam de +0x33. `sem_leitor` aceita
+  `(deslocamento, bytes)`, para deixar comparado o byte gravado no meio (+0x41).
 - **A fonte do menu mede também o cabeçalho de sprites.** Itens negativos chamam `Font_GetWidth` sobre
   o count u32 da folha. O ramo big-endian de `BtlMenu_GetWidth` reconstitui as duas metades como u16
   temporários; converter o cabeçalho como texto estragaria a relocação. As posições do `--mapa` têm

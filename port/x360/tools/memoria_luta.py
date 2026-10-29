@@ -432,11 +432,22 @@ class Contexto:
                                 sub = disco
                             else:
                                 sub = self.mapa(tipo, passo)
-                        # Enchimento copiado dos argumentos, nunca consultado pelos callbacks destas classes.
-                        sem_leitor = {'EftAnimPart_Init':(0x8c,), 'EftPtcl_Init':(0x3c,), 'EftBill_Init':(0x3c,)}
+                        # Enchimento copiado dos argumentos, nunca consultado pelos callbacks destas classes:
+                        # (deslocamento, bytes).
+                        sem_leitor = {'EftAnimPart_Init':((0x8c,4),), 'EftPtcl_Init':((0x3c,4),), 'EftBill_Init':((0x3c,4),),
+                                      # (F7, piloto da transformação) EftDisc.atk +0x40 e +0x42..+0x4F: BtlFx_FireKiBlast
+                                      # (src/battle/btl_char_fx.c) preenche o FxHitArg2 local até unk3C e unk41, sem
+                                      # gravar unk40 nem unk42[0xE]; EftDisc_Throw (por EftDisc_SetHeldAtk) e EftDisc_SpawnFromNode
+                                      # (eft_p.c) copiam os 0x50 bytes por valor. Lixo da pilha, outro em cada build.
+                                      # Leitores do atk: os registros de golpe, pela vista EftHitAtk de 0x34 bytes
+                                      # (eft_a.c: objId, unk16, kind, unk1A, unk1B, unk20, level), e os callbacks do
+                                      # disco pela EftDiscAtk até scale (+0x28); unk2C[0x24] nunca é lido e a vista
+                                      # EftODisc (u8 atk[0x50]) não é lida em eft_o_c.c. O byte +0x41, gravado, segue
+                                      # comparado.
+                                      'EftDisc_Init':((0xd0,1),(0xd2,0xe))}
                         sub = bytearray(sub)
-                        for o in sem_leitor.get(fx, ()):
-                            sub[o:o+4] = b'\xff'*4
+                        for o, w in sem_leitor.get(fx, ()):
+                            sub[o:o+w] = b'\xff'*w
                         if fx == 'EftRibbon_Init':
                             # O helper EftRibbon_SetTexPair lê EftAbTexEntry, dois u64, não os Vec4 da outra vista.
                             sub[0x130:0x1b0] = self.tipos['EftAbTexEntry']*8
