@@ -1,0 +1,30 @@
+# Triagem das issues do port do 360: relatório de queda sem crash.txt fecha na hora (e reabre quando o
+# arquivo chega), e os rótulos de motivo dão a resposta pronta. A lógica e o teste estão em .github/scripts/.
+name: Issue triage
+
+on:
+  issues:
+    types: [opened, edited, reopened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: issue-${{ github.event.issue.number }}
+
+jobs:
+  triage:
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const triagem = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/triagem.js`);
+            core.info(await triagem({ github, context }));

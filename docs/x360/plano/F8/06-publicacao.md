@@ -189,6 +189,27 @@ Tito (Xbox 360 port)" no `LICENSE`; 8, pediu explicação antes de decidir; 9, o
 10. **O que o `crash.txt` leva:** o README diz que não há dado pessoal (é o carimbo, os registradores e a pilha,
     `04-queda-e-logs.md`); conferir num `crash.txt` real.
 
+## 5a. A triagem automática das issues (29/10/2026, pedido do Lucas)
+
+O Lucas não quis fechar nada por prazo (os 14 dias saíram das regras e dos rótulos) e pediu duas automações:
+
+1. **Queda sem `crash.txt` fecha na hora.** O formulário "Crash report" põe o rótulo `crash`; a ação
+   (`.github/workflows/issues-x360.yml`, lógica em `.github/scripts/triagem.js`) procura no texto o cabeçalho que o
+   jogo grava (`BT3 crash report`, `Build:` e `IAR:`, de `port/x360/src/queda360.h` do branch da queda) ou um anexo
+   `crash*.txt` do GitHub. Sem nenhum dos dois: `needs-crash-txt`, comentário explicando e fechada. Se o autor editar a
+   issue ou comentar com o arquivo, ela reabre sozinha. Quem cuida do repositório pode reabrir à mão sem o arquivo.
+   O "Bug report" (defeito sem queda) não exige `crash.txt`.
+2. **Rótulo de motivo dá a resposta pronta:** `duplicate`, `not-supported`, `off-topic`, `known-issue`,
+   `feature-request` (rótulo novo) e `wontfix` comentam e fecham; `piracy` comenta, fecha e tranca (apagar a issue e
+   bloquear a conta continuam à mão, o token da ação não pode); `needs-crash-txt` e `needs-info` só comentam. A mesma
+   resposta não sai duas vezes (marca escondida no comentário).
+
+**Prova** (`node .github/scripts/teste_triagem.js`, GitHub falso): 16 casos, `tudo certo`. Vista falhando com seis
+cópias estragadas da triagem, cada uma acusada com saída 1: aceitar qualquer texto como `crash.txt` (4 falhas), anexo
+de qualquer nome (1), não fechar a queda sem arquivo (1), não trancar a pirataria (2), reabrir por comentário de
+qualquer pessoa (2), comentar a mesma resposta de novo (2). Não roda no GitHub de verdade até o repositório subir;
+na primeira issue real, conferir a execução na aba Actions.
+
 ## 6. O que o Lucas deve auditar
 
 | Arquivo | O que conferir |
@@ -203,7 +224,8 @@ Tito (Xbox 360 port)" no `LICENSE`; 8, pediu explicação antes de decidir; 9, o
 | `.github/ISSUE_TEMPLATE/bug_report.yml` | Os mesmos campos para defeito sem queda, com o ajuste de vídeo da TV |
 | `.github/ISSUE_TEMPLATE/config.yml` | A issue em branco desligada e os dois links (README, upstream do PC) |
 | `.github/CONTRIBUTING.md` | O que não se aceita, os prazos, o que acontece com quem descumpre |
-| `.github/labels.yml` | Nomes, cores e descrições dos 13 rótulos, para criar no GitHub na abertura |
+| `.github/labels.yml` | Nomes, cores e descrições dos 14 rótulos (com `feature-request`), para criar no GitHub na abertura |
+| `.github/scripts/triagem.js` e `.github/workflows/issues-x360.yml` | Os textos das respostas prontas (em inglês) e o que cada rótulo faz; a regra do `crash.txt` |
 | `docs/x360/plano/F8/06-publicacao.md` | Este documento: a prova da seção 4 e as escolhas da seção 5 |
 
 [Estimado] Antes da release, além da checagem final do escopo (4.4): rodar o `pacote.py --estrito` na árvore do

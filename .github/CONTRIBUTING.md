@@ -29,8 +29,9 @@ These issues are closed (or deleted) without an answer:
 * **Consoles without RGH or JTAG, and emulators.** The port is made for a modified Xbox 360
   running unsigned code.
 * **Duplicates.** Closed with a link to the first report.
-* **A crash without `crash.txt`.** Marked `needs-crash-txt` and closed if the file does not arrive
-  in 14 days.
+* **A crash report without `crash.txt`.** Closed automatically at once, with the label
+  `needs-crash-txt`. Attach the file (or paste its content) by editing the issue or in a comment,
+  and it reopens by itself.
 * **Reports with fields left empty or filled with nonsense,** and reports of something already in
   the known issues of README.txt.
 * **Problems of the PC version.** They belong to
@@ -40,8 +41,8 @@ These issues are closed (or deleted) without an answer:
 
 ## What happens to those who break the rules
 
-1. The issue is closed with a label saying why (`duplicate`, `not-supported`, `needs-crash-txt`,
-   `off-topic`).
+1. The issue gets a label saying why (`duplicate`, `not-supported`, `off-topic`, `known-issue`,
+   `feature-request`); a short reply explaining it is posted automatically and the issue is closed.
 2. Repeating it after being pointed to these rules, or being rude, gets the conversation locked.
 3. Anything about getting the game (`piracy`), spam or abuse is deleted, and the account is
    blocked from the repository.
@@ -50,7 +51,7 @@ These issues are closed (or deleted) without an answer:
 
 The full list, with colours and meanings, is in [labels.yml](labels.yml): `crash`, `bug`,
 `needs-triage`, `needs-crash-txt`, `needs-info`, `confirmed`, `known-issue`, `fixed-next`,
-`duplicate`, `not-supported`, `piracy`, `off-topic` and `wontfix`.
+`duplicate`, `not-supported`, `piracy`, `off-topic`, `feature-request` and `wontfix`.
 
 ## Code
 

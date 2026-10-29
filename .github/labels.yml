@@ -1,5 +1,6 @@
 # Labels of the repository's issues (name, colour without "#", description).
-# Kept here as a list; nothing creates them automatically. The issue forms use crash, bug and needs-triage.
+# Kept here as a list; nothing creates them automatically. The issue forms use crash, bug and needs-triage;
+# the reason labels trigger the ready replies of .github/scripts/triagem.js.
 - name: crash
   color: b60205
   description: The game closed with the "Unexpected error" box (crash report form)
@@ -11,10 +12,10 @@
   description: New report, not looked at yet
 - name: needs-crash-txt
   color: fef2c0
-  description: A crash report without crash.txt; closed if it does not arrive in 14 days
+  description: A crash report without crash.txt; closed at once, reopens by itself when the file arrives
 - name: needs-info
   color: fef2c0
-  description: A field is missing or unclear; closed if the answer does not arrive in 14 days
+  description: A field is missing or unclear; waiting for the author
 - name: confirmed
   color: 0e8a16
   description: Reproduced by the maintainer
@@ -36,6 +37,9 @@
 - name: off-topic
   color: e4e669
   description: Not about this port (PC version, other games, general help)
+- name: feature-request
+  color: a2eeef
+  description: A request for something new; not tracked as an issue for now
 - name: wontfix
   color: ffffff
   description: Will not be changed

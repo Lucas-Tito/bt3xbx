@@ -34,7 +34,7 @@ body:
     id: crash
     attributes:
       label: crash.txt
-      description: Attach the crash.txt file (drag it into this box) or paste its whole content. A crash report without crash.txt is closed.
+      description: Attach the crash.txt file (drag it into this box) or paste its whole content. A crash report without crash.txt is closed automatically; it reopens when you add the file.
     validations:
       required: true
   - type: textarea
