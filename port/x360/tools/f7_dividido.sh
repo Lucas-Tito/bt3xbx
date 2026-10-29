@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # F7/03: uma fila oficial no WSL, builds do HEAD e saídas próprias fora do git.
 # F7_SAIDA=~/f7e3-rodada BASE_X86=~/f7e3/base bash port/x360/tools/f7_dividido.sh [--servico]
+# RETOMA=1 com a mesma F7_SAIDA refaz as builds (o carimbo é o do HEAD) e pula os outros passos que já têm OK no resumo.
 # --servico arma um serviço de usuário que espera a trava sozinho. Não cria worktrees nem usa o Deck.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
@@ -9,7 +10,7 @@ cd "$(dirname "$0")/../../.."
 S=$(realpath -m "$F7_SAIDA")
 BASE_X86=$(realpath "$BASE_X86")
 case "$S/" in "$(pwd)/"*) echo 'saída dentro do repositório recusada'; exit 1;; esac
-[ ! -e "$S" ] || { echo 'a pasta da rodada já existe'; exit 1; }
+[ ! -e "$S" ] || [ -n "${RETOMA:-}" ] || { echo 'a pasta da rodada já existe'; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo 'árvore fora de commit'; exit 1; }
 H=$(git rev-parse HEAD)
 if [ "${1:-}" = --servico ]; then
@@ -22,7 +23,7 @@ if [ "${1:-}" = --servico ]; then
 fi
 [ "${F7_COMMIT:-$H}" = "$H" ] || { echo 'HEAD mudou enquanto o serviço esperava'; exit 1; }
 mkdir -p "$S"
-exec > >(tee "$S/rodada.log") 2>&1
+exec > >(tee ${RETOMA:+-a} "$S/rodada.log") 2>&1
 fim() {
     local rc=$?
     trap - EXIT
@@ -37,11 +38,14 @@ done < <(compgen -e)
 export DEBUGINFOD_URLS= BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1 BT3_WIDE=1
 passo() {
     local n=$1; shift
+    if [ -n "${RETOMA:-}" ] && [[ $n != build-* ]] && grep -q "^OK $n " "$S/resumo.txt" 2>/dev/null; then
+        echo "PULADO $n (já OK na rodada retomada)" | tee -a "$S/resumo.txt"; return 0
+    fi
     echo "INÍCIO $n $(date -Is)" | tee -a "$S/resumo.txt"
     "$@" 2>&1 | tee "$S/$n.log" > /dev/null
     echo "OK $n $(date -Is)" | tee -a "$S/resumo.txt"
 }
-echo "$H" > "$S/commit.txt"
+if [ -n "${RETOMA:-}" ]; then echo "$H" >> "$S/commit.txt"; else echo "$H" > "$S/commit.txt"; fi
 # Uma única espera e uma única trava para todos os passos dependentes.
 exec 9> "$HOME/wsl.lock"
 echo 'aguardando a trava do WSL' | tee -a "$S/resumo.txt"
