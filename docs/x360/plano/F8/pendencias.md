@@ -71,6 +71,13 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     reportar e volta ao painel limpo, sem deixar a FreeStyle em laço (o defeito do laço é tratado antes, na tarefa da
     queda). As cores por fase continuam só para o desenvolvimento.
 
+15. **Análise do suporte a mods** (pedido do Lucas, 29/10/2026, para o fechamento): estudar o que seria preciso para o
+    port do 360 aceitar (a) os mods do BT3 que a comunidade usa (personagens, trajes, estágios, texturas, sons; hoje a
+    pasta `mods/` é recusada ou convertida na carga, decisões 18, 23 e 24) e (b) o Tag Team na versão do port de PC (o fork
+    nativo do autor sobre o Tenkaichi3Decomp e a branch `tagteam-exp` do upstream, `pesquisa/05-tag-team.md`). Só
+    análise: formatos, conversão para big-endian, memória e desempenho no Xenon, e a licença (o código do Tag Team de PC
+    é AGPL-3.0; trazê-lo muda a licença do port, decisão a tomar então). Não mexe na decisão 16 nem antecipa a F9.
+
 ## A abertura do repositório, a última parte do plano (27/10/2026)
 
 8. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
