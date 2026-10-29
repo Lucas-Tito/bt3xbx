@@ -48,6 +48,18 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
    [F5/09](../F5/09.md) e os branches `f5-shenlong` e `codex/f5-namek`.
 5. **O estágio do deserto à noite escuro demais** (visto pelo Lucas jogando, 23/10): talvez o mesmo brilho somado
    mais fraco no 360 (a H9 de [F5/09](../F5/09.md)); sem captura ainda.
+   **Estado em 29/10** ([05-brilho](05-brilho.md), decisão 34: o brilho igual ao do PC a 60%): a H9 não mostrou defeito
+   do 360. A referência dela, o rasterizador x86, lê no ponto a cadeia do brilho que o jogo pede bilinear, e isso
+   desloca o halo dele 40 pixels em x (o modelo da cadeia prevê 40,5; as capturas dão 40) e o estreita; os 39% são os
+   60% do port vezes 0,615, e o que falta nos 0,615 tem candidato comum ao PC (o alfa acima de 0x80 que o PC e o 360
+   prendem). Nenhuma mudança no 360. Armado no WSL (`bt3-brilho-ref`, esperando a trava): o rasterizador com o bilinear
+   do GS e o alfa do PC contra as capturas da H9. Preparada a rodada curta de console: o Shenlong na configuração de
+   release a 60% e a 0%, e o deserto à noite em luta a 60, 0 e 100 (ambientes em [05-ambientes](05-ambientes/)).
+   **Problema conhecido (decisão do Lucas, 29/10):** sem mais teste. A rodada de console e a prova no WSL não serão
+   feitas (o serviço `bt3-brilho-ref` foi desarmado antes de rodar). Vai para os problemas conhecidos do README da
+   release: os estágios à noite podem parecer escuros demais no console. Fica em dúvida se a causa é o jogo ou a TV do
+   Lucas (os "Níveis de referência" de vídeo do console contra a faixa que a TV espera escurecem os tons baixos); o
+   brilho do 360 segue o do PC a 60% pelo que se mediu.
 6. **Arrumação para a finalização** (27/10/2026): o 360 achar a ISO convertida quando há a original e a convertida na
    mesma pasta (hoje a busca pega a primeira `.iso`); a numeração repetida das seções das notas da F5; as pastas
    temporárias do WSL; propor ao upstream as correções do cache que valem também para o PC (a colisão das tabelas do
