@@ -1641,6 +1641,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Não confunda ordem de bytes com a libm já conhecida.** A concessão da F4 de até 64 ULP para as direções
   de `EftGlow_BuildTables` fica nos campos y/z produzidos por cosf/sinf, com código de tipo próprio e
   contagem `libm-host`. Sai o teto genérico da arena; nenhum outro float ganha essa concessão.
+- **Duas declarações do mesmo trabalho: compare pela união, nunca escolha uma.** (F7, a transformação) O trabalho
+  de 0x4C0 bytes da tarefa de disco é `EftODisc` para `EftDisc_Init`/`Update` e `EftDisc` para os outros seis
+  callbacks; o `memoria_luta.py` recusava as duas e o fim da luta não chegou a ser julgado. `uniao_vistas` junta as
+  marcações: cada campo de uma cai inteiro sobre opacos (0xFE) da outra ou é o mesmo campo; largura ou tipo
+  diferente recusa. O negativo é um campo que as duas tipam igual virando dois u16.
 - **A fonte do menu mede também o cabeçalho de sprites.** Itens negativos chamam `Font_GetWidth` sobre
   o count u32 da folha. O ramo big-endian de `BtlMenu_GetWidth` reconstitui as duas metades como u16
   temporários; converter o cabeçalho como texto estragaria a relocação. As posições do `--mapa` têm

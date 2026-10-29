@@ -19,6 +19,32 @@ def exigir(ok, texto):
         raise ContextoErro(texto)
 
 
+def campos_marcas(m):
+    """[(início, fim)] de cada campo de uma marcação: o byte que o começa e as continuações 0x80 que o seguem"""
+    out, i = [], 0
+    while i < len(m):
+        j = i + 1
+        while j < len(m) and m[j] == 0x80:
+            j += 1
+        out.append((i, j))
+        i = j
+    return out
+
+
+def uniao_vistas(a, b, nome):
+    """(F7, piloto da transformação) A união de duas vistas do mesmo trabalho: cada campo de uma cai inteiro sobre
+    bytes opacos (0xFE, os unk e vetores de bytes da decomp) da outra ou é o mesmo campo nas duas. O campo tipado vence
+    o opaco; largura ou tipo diferente no mesmo byte é recusado, e nada é deixado de comparar por isso."""
+    exigir(len(a) == len(b), f'{nome}: vistas de tamanhos diferentes')
+    for x, y in ((a, b), (b, a)):
+        for i, j in campos_marcas(x):
+            if x[i] == 0xFE:
+                continue
+            exigir(y[i:j] == x[i:j] or all(c == 0xFE for c in y[i:j]),
+                   f'{nome}: vistas com larguras ou tipos conflitantes em +{i:#x}')
+    return bytes(y if x == 0xFE else x for x, y in zip(a, b))
+
+
 class Memoria:
     def __init__(self, regs, nm, be):
         self.regs = regs
@@ -370,6 +396,17 @@ class Contexto:
                             # EftBlade contém a vista EftBladeTrail em t e os 16 bytes próprios do init.
                             exigir(candidatos <= {'EftBlade', 'EftBladeTrail'}, 'vista nova do trabalho da lâmina')
                             candidatos = {'EftBlade'}
+                        disco = None
+                        if fx == 'EftDisc_Init':
+                            # (F7, piloto da transformação) O trabalho de 0x4C0 bytes da tarefa de disco tem duas
+                            # declarações: EftODisc (include/battle/eft_o.h), de EftDisc_Init e EftDisc_Update
+                            # (eft_o_c.c), e EftDisc (include/battle/eft_p.h), dos outros seis callbacks (eft_p.c).
+                            # Compara-se pela união das duas marcações (uniao_vistas: o tipado vence o opaco, conflito
+                            # recusa). Visto: nunca discordam; EftODisc tipa 8 bytes que EftDisc deixa opacos, e
+                            # EftDisc tipa 98 que EftODisc deixa opacos.
+                            exigir(candidatos <= {'EftDisc', 'EftODisc'}, 'vista nova do trabalho do disco')
+                            disco = uniao_vistas(self.tipos['EftDisc'], self.tipos['EftODisc'], 'EftDisc/EftODisc')
+                            candidatos = {'EftDisc'}
                         exigir(len(candidatos) <= 1, f'visões conflitantes do trabalho de {fx}: {sorted(candidatos)}')
                         tipo = next(iter(candidatos), None)
                         if fx == 'EftShotNullGroup_Init':
@@ -390,6 +427,9 @@ class Contexto:
                                 sub[o:o+len(self.tipos['EftSet'])] = self.tipos['EftSet']
                                 if fx == 'EftMultiMgr_Init': sub[8:0x210] = self.tipos['EftAeTexSet32']
                                 sub += b'\xff'*(passo-len(sub))
+                            elif disco is not None:
+                                exigir(passo == len(disco), 'trabalho do disco com tamanho inesperado')
+                                sub = disco
                             else:
                                 sub = self.mapa(tipo, passo)
                         # Enchimento copiado dos argumentos, nunca consultado pelos callbacks destas classes.
