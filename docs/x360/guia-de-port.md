@@ -2500,7 +2500,7 @@ Cada leitura usa SEH local; alinhamento de 16, progressão crescente e alcance d
 São candidatos a retorno: folhas, prólogos incompletos e chamadas de cauda limitam a interpretação.
 `teste_pilha360.py` exercita memória sintética; `--mutante` retira a guarda de progressão numa cópia e tem de falhar.
 A fase passa da inicialização para menus/carga ou luta no `Port_StateLog`, em vez de conservar o rótulo da reserva
-inicial durante toda a sessão. A integração SEH e os endereços reais ainda exigem compilação XDK e console.
+inicial durante toda a sessão. O encerramento e a saída ao dashboard também recebem rótulos próprios. A integração SEH e os endereços reais ainda exigem compilação XDK e console.
 
 
 ### Arquivos fora das faixas cadastradas: transições de cenário

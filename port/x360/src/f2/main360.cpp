@@ -135,6 +135,7 @@ extern "C" void Port_GsDesenhoPartida(void) {
 extern "C" void Port_Sair(int codigo) {
     Diario_Escrever("saída do jogo com código %d (%s)", codigo, gPortStage);
     Estado_Resumo();
+    gPortStage = "jogo: encerramento";
     Som360_Parar(); /* (F6, etapa 3) StopEngine e as vozes soltas antes de a thread do jogo acabar */
     Port_X360FecharSaida();
     _flushall();
@@ -170,11 +171,11 @@ static int LerPilha(unsigned endereco, unsigned *valor) {
 static void RegistrarPilha(const CONTEXT *c) {
     unsigned inicio = (unsigned)c->Gpr1, atual = inicio, anterior, retorno;
     Diario_Escrever("CRASH argumentos atuais: r3=%016I64X r4=%016I64X r5=%016I64X r6=%016I64X",
-                    c->Gpr3, c->Gpr4, c->Gpr5, c->Gpr6);
+                    (unsigned __int64)c->Gpr3, (unsigned __int64)c->Gpr4, (unsigned __int64)c->Gpr5, (unsigned __int64)c->Gpr6);
     Diario_Escrever("CRASH argumentos atuais: r7=%016I64X r8=%016I64X r9=%016I64X r10=%016I64X",
-                    c->Gpr7, c->Gpr8, c->Gpr9, c->Gpr10);
+                    (unsigned __int64)c->Gpr7, (unsigned __int64)c->Gpr8, (unsigned __int64)c->Gpr9, (unsigned __int64)c->Gpr10);
     Diario_Escrever("CRASH preservados: r28=%016I64X r29=%016I64X r30=%016I64X r31=%016I64X",
-                    c->Gpr28, c->Gpr29, c->Gpr30, c->Gpr31);
+                    (unsigned __int64)c->Gpr28, (unsigned __int64)c->Gpr29, (unsigned __int64)c->Gpr30, (unsigned __int64)c->Gpr31);
     /* São candidatos a retorno, não um desenrolamento dos prólogos. Folhas e chamadas de cauda
        podem omitir quadros. Iar e Lr continuam sendo registrados separadamente. */
     for (unsigned i = 0; i < 12; i++) {
@@ -257,12 +258,12 @@ static DWORD WINAPI Jogo(LPVOID arg) {
     int r;
     (void)arg;
     _controlfp(_RC_CHOP, _MCW_RC); /* soma e multiplicação truncadas, como no PS2 (decisões 4 e 5) */
+    gPortStage = "jogo: inicialização";
     Diario_Escrever("jogo começando (%s)", gPortStage);
     gCor = 0xFF2040C0; /* azul */
     if (MpegMede_Rodar()) { /* (F6, etapa 6) BT3_MPEG_MEDE=1: só a medição do decodificador dos filmes, e sai */
         Port_Sair(0);
     }
-    gPortStage = "jogo: inicialização";
     r = __real_main(1, argv);
     Port_Sair(r);
     return 0;
@@ -430,6 +431,7 @@ void __cdecl main() {
         }
     }
 
+    gPortStage = "saída: dashboard";
     Diario_Escrever("voltando ao dashboard");
     if (t != NULL) {
         /* (com a thread de gravação, a do jogo pode ficar presa esperando uma que caiu, ou a de gravação esperando a de desenho:
