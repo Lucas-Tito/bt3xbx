@@ -75,6 +75,15 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
 8. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
    guia de instalação e o de contribuição; e o GitHub configurado para receber as contribuições.
 
+## Depois da primeira release (29/10/2026)
+
+14. **Otimizar a GPU para subir a resolução** (pedido do Lucas): hoje a resolução é limitada pela GPU, não pela CPU. Na
+    escala 1,33 a GPU tem uns 8 ms de folga na mediana e uns 2 ms nos quadros pesados do Duelo de teste; a escala 1,5
+    mediu 32 ms de GPU na mediana e 45 nos trechos pesados (22/10, `plano/F5/08-720p.md`). Caminhos já levantados: o
+    desenho comum sem textura, as leituras de alvos e a cadeia do brilho (perfil fino de 28/10, seção 31 do
+    `plano/F5/08-gravacao.md`), os efeitos de tela na escala 1 (`BT3_ESCALA_FX`, 3 a 5 ms estimados) e o ganho de tabela
+    dos prefixos. Começa por uma rodada curta medindo a GPU em 1,33, 1,4 e 1,5 sobre a build da release.
+
 ## Fora do plano do port (28/10/2026)
 
 10. **As provas da F6 que ficaram por fazer no console** (o Lucas tirou do plano: não são importantes o suficiente).
