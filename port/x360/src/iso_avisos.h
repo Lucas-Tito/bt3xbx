@@ -5,9 +5,9 @@
 #include "iso360.h"
 #define ISO_LARGO_(s) L##s
 #define ISO_LARGO(s) ISO_LARGO_(s)
-/* Propostas provisórias para aprovação do Lucas. Toda frase da instalação fica aqui. */
-static const wchar_t *const ISO_CONV_TITULO = L"Prepare ISO";
-static const wchar_t *const ISO_CONV_PERGUNTA = L"Prepare your original USA ISO for Xbox 360? This requires 3 GB of free space. Your original will be kept.";
+/* Textos aprovados pelo Lucas em 29/10/2026. Toda frase da instalação fica aqui. */
+static const wchar_t *const ISO_CONV_TITULO = L"Convert ISO";
+static const wchar_t *const ISO_CONV_PERGUNTA = L"Convert your original USA ISO for Xbox 360? This takes up to 40 minutes and needs 3 GB of free space. Your original will be kept.";
 static const wchar_t *const ISO_CONV_SIM = L"Convert";
 static const wchar_t *const ISO_CONV_NAO = L"Cancel";
 static const wchar_t *const ISO_CONV_OK = L"OK";
@@ -16,8 +16,8 @@ static const wchar_t *const ISO_CONV_PRONTA = L"Conversion complete. The game wi
 static const wchar_t *const ISO_CONV_ESPACO_TITULO = L"Not enough space";
 static const wchar_t *const ISO_CONV_ESPACO = L"Free at least 3 GB in the game drive and try again.";
 static const wchar_t *const ISO_CONV_FALHA_TITULO = L"Conversion failed";
-static const wchar_t *const ISO_CONV_FALHA = L"The ISO could not be prepared. Check your original USA disc image and storage, then try again.";
-static const wchar_t *const ISO_CONV_DESTINO = L"Keep your original as bt3.iso. Conversion needs the name bt3-x360.iso to be available. Existing files were kept.";
+static const wchar_t *const ISO_CONV_FALHA = L"The ISO could not be converted. Check your original USA disc image and storage, then try again.";
+static const wchar_t *const ISO_CONV_DESTINO = L"Rename your original ISO to bt3.iso and try again. The name bt3-x360.iso is reserved for the converted ISO.";
 static const char *const ISO_CONV_PROGRESSO[] = { "Checking ISO...", "Copying ISO...", "Converting ISO...", "Verifying ISO...", "Finishing..." };
 static const char *const ISO_CONV_AGUARDE = "Please wait. Do not turn off the console.";
 static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto) {

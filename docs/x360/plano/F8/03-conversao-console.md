@@ -36,8 +36,8 @@ instaladores diferentes. O ensaio nativo usa o mesmo selo e a mesma ferramenta d
 - A instalação roda na thread de hardware 2, antes de criar jogo/áudio. As threads 4 e 5 nunca recebem E/S.
   A main só apresenta, lê os dois contadores por operações interlocked e usa caixas assíncronas com buffers
   estáticos. A tela de progresso tem texto e barra, sem arquivo de fonte nem shader novo.
-- A caixa pergunta se deve converter e seleciona Cancel por padrão. As frases estão **provisórias**, em inglês,
-  num único arquivo `iso_avisos.h`, para aprovação individual pelo Lucas. Não há nomes de chaves ou `ambiente.txt`.
+- A caixa pergunta se deve converter e seleciona Cancel por padrão. As frases em inglês foram **aprovadas pelo
+  Lucas em 29/10/2026** e ficam num único arquivo `iso_avisos.h`. Não há nomes de chaves ou `ambiente.txt`.
 - Antes da pergunta, uma thread apaga apenas `game:\bt3-x360.tmp`, o nome reservado para a instalação interrompida.
   Não há retomada parcial. Falha em removê-lo recusa a operação; cancelamento também descarta o parcial anterior.
 - A origem abre somente para leitura, compartilhando somente leitura. Exige 3 GiB livres no volume de destino,
@@ -54,6 +54,28 @@ instaladores diferentes. O ensaio nativo usa o mesmo selo e a mesma ferramenta d
 - Depois do sucesso, fecha a interface, libera D3D e relança `game:\default.xex` pela thread de saída existente.
   Isso preserva a ordem do arranque: o heap fixo do PS2 precisa ser reservado antes das alocações do D3D.
   Cancelamento ou falha levam ao dashboard. A abertura seguinte prefere a convertida publicada.
+
+## Textos aprovados pelo Lucas (29/10/2026)
+
+| Uso | Texto literal |
+|---|---|
+| Título da pergunta | `Convert ISO` |
+| Pergunta | `Convert your original USA ISO for Xbox 360? This takes up to 40 minutes and needs 3 GB of free space. Your original will be kept.` |
+| Botões da pergunta | `Convert` / `Cancel` (padrão) |
+| Progresso | `Checking ISO...`, `Copying ISO...`, `Converting ISO...`, `Verifying ISO...`, `Finishing...` |
+| Orientação do progresso | `Please wait. Do not turn off the console.` |
+| Título de sucesso | `ISO ready` |
+| Sucesso | `Conversion complete. The game will restart.` |
+| Título sem espaço | `Not enough space` |
+| Sem espaço | `Free at least 3 GB in the game drive and try again.` |
+| Título de falha e nome ocupado | `Conversion failed` |
+| Falha | `The ISO could not be converted. Check your original USA disc image and storage, then try again.` |
+| Nome ocupado | `Rename your original ISO to bt3.iso and try again. The name bt3-x360.iso is reserved for the converted ISO.` |
+| Botão dos avisos | `OK` |
+
+Só mudaram o título e o corpo da pergunta, o corpo da falha e a orientação para nome ocupado. Os demais textos
+e Cancel como padrão foram mantidos. O prazo na pergunta é o texto aprovado; a estimativa continua sem medição
+no console, conforme abaixo.
 
 ## Tempo e como medir no Xenon
 
@@ -100,6 +122,11 @@ saída existente, reconversão e encerramento real do processo durante a cópia.
 `teste_iso_tela.py` compila o fluxo C++ real sobre uma UI e fila de threads simuladas. Verifica cancelamento,
 falhas, sucesso, espera pela Guide e apresentação contínua. Mutantes compilados têm de falhar em execução:
 afinidade 4, espera bloqueante, confirmação como padrão e limpeza omitida. Não prova a aparência ou a Guide real.
+
+`teste_iso_avisos.py` também compara literalmente todas as frases aprovadas da instalação, incluindo os botões
+e as cinco fases em ordem. Compila cópias do cabeçalho adulteradas nos quatro textos alterados e exige saída 1
+em execução de cada uma. Para o ajuste de textos, a rodada final repete esse teste e `teste_iso_tela.py` sobre
+o commit final; as provas de conversão da implementação anterior permanecem registradas no relatório externo.
 
 A regressão do áudio achou a imagem sintética ainda com marca versão 2. Agora ela usa `ISO_MARCA_VERSAO` do leitor;
 o script inclui esse cabeçalho também na compilação do teste. Nenhum comportamento do som mudou.
