@@ -2,7 +2,8 @@
 
 [Índice do plano](../../plano.md)
 
-Itens que o Lucas pediu para o acabamento ao longo das outras fases. Cada um vira etapa quando a F8 for escopada.
+Itens que o Lucas pediu para o acabamento ao longo das outras fases. O [escopo da F8](00-escopo.md) (29/10/2026)
+dá a situação de cada um, a etapa em que entra e as perguntas que faltam responder.
 
 ## A ISO (22/10/2026)
 
