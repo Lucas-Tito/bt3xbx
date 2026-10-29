@@ -33,13 +33,21 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 - **Todo verificador novo tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer.
 - Todo aprendizado que custou uma rodada entra no guia, no mesmo commit da correção.
 - Processo longo: rode com `tee` para um log em `~/` (o `/tmp` do WSL some quando a distribuição para).
-- **Esperar é com o shell, não com você.** Para esperar a trava, um serviço ou um processo longo, rode **um único
+- **Esperar é com o shell, não com você** (para esperas curtas; as longas, veja o item seguinte). Para esperar a trava, um serviço ou um processo, rode **um único
   comando bloqueante** em primeiro plano, com o maior tempo limite que a ferramenta aceitar, que só devolve quando
   acabar e imprime só o fim: o próprio `flock ~/wsl.lock <comando>`, ou um laço como
   `while pgrep -f bt3-xxx >/dev/null; do sleep 300; done; tail -5 ~/log`. Se o tempo limite cortar, rode o mesmo
   comando de novo, sem ler logs no meio. Nada de conferir de tempo em tempo (cada olhada gasta a cota sem avançar)
   nem de lançar vários `flock` em segundo plano: a ordem em que pegam a trava não é garantida. Junte os passos
   dependentes num script só, dentro de um `flock`.
+- **Espera longa não é com você: arme, marque e termine.** Se o próximo passo depender de algo que leva mais de uns
+  20 minutos (a trava do emulador, um serviço seu, uma rodada no Deck), arme o trabalho como serviço que espera sozinho
+  e grave em `~/espera/<tarefa>` (o nome da tarefa da fila) **uma linha** com um comando de shell que sai com 0
+  enquanto for para continuar esperando, por exemplo `systemctl --user is-active --quiet bt3-xxx.service` ou
+  `ssh deck pgrep -f f7_pilotos.sh`. Deixe no relatório o estado e o que fazer com o resultado, e **termine a sessão**.
+  A fila espera de graça e chama você de novo, com o pedido de julgar e entregar, quando o comando sair diferente de 0.
+  Ficar em laço esperando (mesmo com um comando bloqueante repetido) relê todo o contexto a cada volta e gastou a
+  cota de um dia inteiro em 29/10.
 - Não mexa no console (FTP) sem a tarefa pedir.
 
 ## Como entregar
