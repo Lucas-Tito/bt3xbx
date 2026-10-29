@@ -183,6 +183,16 @@ class Contexto:
                 # 0x54: float32 calculado pela libm, com o mesmo limite de 64 ULP da F4.
                 for i in range(20):
                     for o in (0x164+i*16,0x168+i*16):m[o]=0x54
+            if tipo == 'struct EftPGlowPart':
+                # (F7, piloto da transformação) EftGlow_StepParts (src/battle/eft_p_b.c) copia dir[shape] do perfil
+                # acima, gira por Mtx_RotateZ, leva ao mundo e normaliza: dir.xyz (+0x90) e worldDir.xyz (+0xA0) de toda
+                # parte herdam a diferença dos y/z do perfil, com o mesmo código 0x54 e o mesmo limite de 64 ULP. Visto:
+                # 34 palavras de 0 a 56 ULP, só nas partes de shape 8; posição, ponto, cor e o resto, iguais.
+                exigir(n % 0xc0 == 0, 'vetor de partes do brilho com tamanho inesperado')
+                for i in range(n // 0xc0):
+                    for o in (0x90, 0x94, 0x98, 0xa0, 0xa4, 0xa8):
+                        exigir(m[i*0xc0+o:i*0xc0+o+4] == b'\x44\x80\x80\x80', 'EftPGlowPart sem float em dir ou worldDir')
+                        m[i*0xc0+o] = 0x54
             self.aloc[a] = (n, tipo, m, f'slot {slot} geração {ger} ordem {ordem} dono {dono}:{info[3]}')
         self.formas()
         self.auras()
