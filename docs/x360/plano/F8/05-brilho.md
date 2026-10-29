@@ -20,7 +20,7 @@ prova que fecha a questão no WSL está armada (seção 4) e a rodada curta de c
   acima e à esquerda** e três vezes mais estreito. O caminho de GPU (PC e 360, o mesmo `gs_draw.c`) tira meio pixel das
   coordenadas dos desenhos de alvo em alvo justamente para ler onde o GS lê.
 - **O modelo da cadeia** (os oito passos com as coordenadas do `gfxm_a.c` e do `BT3_GS_DUMP`, uma faixa de 16 pixels em
-  três posições, nos dois eixos; script no scratchpad, números abaixo) dá, do ponto para o bilinear: o centro anda
+  três posições, nos dois eixos; `brilho_modelo.py`) dá, do ponto para o bilinear: o centro anda
   **+40,5 pixels em x e +35 em y**, a largura vai de 4,6 para 13,8 pixels (x) e de 4,0 para 12,2 (y), a soma é a mesma.
   O halo do bilinear fica a 3 pixels da fonte.
 - **As capturas da H9 contra o modelo** (`brilho_ajuste.py`, quadro 3500; A = (abertura `glow100` menos `clut`) / 0,4, o
@@ -75,6 +75,7 @@ fator 0,4); com `--desloca 24,16` o melhor encaixe anda de (+40, +16) para (+64,
 
 | Arquivo | O que faz |
 |---|---|
+| `brilho_modelo.py` | a cadeia do brilho em uma dimensão, no ponto e com o bilinear do GS: centro, largura e soma da resposta (sem dados do jogo; roda em qualquer máquina) |
 | `brilho_ajuste.py A_COM A_SEM B_COM B_SEM` | o brilho de A (com menos sem) contra o de B, em blocos: soma média, encaixe sem mexer, melhor deslocamento e borrão, ganho e correlação; `--fator`, `--desloca` (o teste dele), `--testa DX,DY`. Só a biblioteca padrão (o WSL não tem numpy) |
 | `diag_bilinear.patch` | o diagnóstico do rasterizador da seção 2; aplica no `6dde9c6` (o das parciais da H9) e na main |
 | `brilho_ref.sh REF SAIDA` | sob a trava: aplica o patch no REF, recompila a x86, roda as parciais de 3500 (v1 sem chave, que tem de dar as da H9 byte a byte; v2 bilinear e alfa do PC; v3 só bilinear; v4 o quadro inteiro a 60%) e o `brilho_ajuste.py` do console contra a H9, a v3 e a v2 em `SAIDA/resultado.txt` |
