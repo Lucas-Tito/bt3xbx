@@ -84,8 +84,13 @@ livres e garante a original.
 
 O caminho anterior lia `5T + S` e escrevia `T + S`, com T = 3.020.816.384 e S = 1.395.101.552 bytes.
 O novo caminho lê T da original e escreve T da saída, sem remendar entradas após a cópia. O inventário antecipa
-552.004 bytes de metadados e os conserva em cache imutável; esses bytes entram no SHA256 na ordem da ISO, mas
-não são relidos da origem. O ensaio conta intervalos efetivos de `ReadFile` e exige T bytes e nenhuma sobreposição.
+552.004 bytes de metadados e os conserva em cache imutável. Na passagem, cada lote vem inteiro da original
+num `ReadFile` só, com começo e tamanho múltiplos de 2048 e destino no início de um buffer alinhado a 128, e o
+cache é comparado com os bytes do lote (relê os 552.004 bytes; nada é emendado por `memcpy` num buffer que
+recebe DMA). O ensaio exige T bytes lidos além dos índices, nenhuma outra sobreposição e o contrato do DMA na
+leitora. O SHA256 da origem é conferido a cada 64 MiB contra `conv/iso_marcos.h`; o primeiro marco errado para
+a passagem e o log diz a janela e o lote. Motivo: a primeira passagem no console (29/10 à noite) recusou a ISO
+íntegra, com lotes em posições fora do setor e índices emendados no meio do buffer.
 
 Há três buffers de 8 MiB + 1, com início alinhado a 128 bytes, e uma cobertura reutilizada de 8 MiB + 1.
 As lacunas são divididas em peças de até 4 MiB; peças consecutivas são agrupadas em lotes normalmente

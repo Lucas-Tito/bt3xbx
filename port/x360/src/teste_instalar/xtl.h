@@ -211,13 +211,27 @@ static BOOL ReadFile(HANDLE h, void *p, unsigned n, DWORD *l, void *a) {
         return 1;
     }
     assert(teste_hw != 0 && teste_hw != 4 && teste_hw != 5);
+    /* Contrato do DMA do 360 na leitora (thread 3), que lê os 3 GB: começo e
+       tamanho em setores de 2048 e buffer alinhado a 128. Os índices pequenos
+       do inventário, na thread da instalação, são lidos antes da passagem. */
+    if (teste_hw == 3) {
+        off_t atual = lseek(h, 0, SEEK_CUR);
+        assert(atual % 2048 == 0 && n % 2048 == 0 && ((uintptr_t)p & 127) == 0);
+    }
     if (h == teste_origem) {
         off_t pos = lseek(h, 0, SEEK_CUR);
         unsigned i;
-        for (i = 0; i < teste_nfaixas; i++)
-            if ((unsigned long long)pos < (unsigned long long)teste_faixas[i].pos + teste_faixas[i].n &&
-                (unsigned long long)pos + n > teste_faixas[i].pos)
-                teste_duplicados++;
+        /* Bytes relidos: a passagem só pode repetir os índices do inventário. */
+        for (i = 0; i < teste_nfaixas; i++) {
+            unsigned long long a = (unsigned long long)pos > teste_faixas[i].pos ? (unsigned long long)pos
+                                                                                 : teste_faixas[i].pos;
+            unsigned long long b = (unsigned long long)pos + n < (unsigned long long)teste_faixas[i].pos +
+                                                                     teste_faixas[i].n
+                                       ? (unsigned long long)pos + n
+                                       : (unsigned long long)teste_faixas[i].pos + teste_faixas[i].n;
+            if (a < b)
+                teste_duplicados += (unsigned)(b - a);
+        }
         assert(teste_nfaixas < 16000);
         teste_faixas[teste_nfaixas].pos = (unsigned)pos;
         teste_faixas[teste_nfaixas++].n = n;

@@ -2569,3 +2569,20 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   no começo, mas o Python recalcula a identidade dos fontes no fim. Uma rodada de desenvolvimento recusou a
   marca porque os fontes foram editados durante as sabotagens, embora a C tivesse concluído: não comparar
   selos de instantes diferentes. Recompilar do commit final e não editar esses fontes até acabar a conferência.
+
+### A passagem única que autenticou errado no console (F8, 29/10/2026 à noite)
+
+- A primeira conversão acelerada no 360 recusou a ISO USA íntegra em 66% ("identidade SHA256 da original não
+  confere"), depois de passar no ensaio nativo com a mesma ISO. O que só ela fazia, e a versão lenta (que
+  converteu de manhã) não: lotes começando em posições fora do setor (fim de entrada de tamanho quebrado) e
+  índices do cache emendados por `memcpy` no meio do buffer, com `ReadFile` do resto a partir de posição e
+  endereço quebrados. O `ReadFile` do XDK faz DMA direto no buffer do título; a documentação só promete o DMA
+  direto com começo e tamanho em setores e buffer alinhado. Correção: todo lote começa e termina em múltiplo de
+  2048 (o setor do USB; o do HD é 512), cai inteiro no início de um buffer alinhado a 128 num `ReadFile` só, e o
+  cache dos índices é comparado com o lote em vez de emendado (relê 552.004 bytes dos 3 GB).
+- O ensaio nativo não pegou porque o `ReadFile` simulado é um `read` POSIX, que não tem alinhamento. Agora a
+  leitora simulada (thread 3) exige o contrato do DMA, e a versão quebrada é vista caindo nele; um núcleo
+  mutante sem a regra do setor também cai.
+- A causa não foi vista no console (sem xbdm): é a diferença que sobrou. Por isso o núcleo leva o estado do
+  SHA256 da origem a cada 64 MiB (`iso_marcos.h`, resumos, nenhum byte do jogo) e para no primeiro marco errado,
+  dizendo no log a janela e o lote. Se voltar a falhar, o log já aponta onde.

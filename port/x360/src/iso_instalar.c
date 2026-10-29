@@ -8,8 +8,10 @@
 #include "iso_conv.h"
 #include "iso_selo.h"
 #include "diario.h"
-/* A leitura dos índices é antecipada, mas os bytes ficam em cache e não são
-   relidos da origem na passagem sequencial. Cache imutável após iniciar(). */
+/* A leitura dos índices é antecipada e fica em cache imutável após iniciar().
+   Na passagem sequencial o lote vem inteiro da original, num ReadFile só, e o
+   cache é comparado com ele: nada é emendado por memcpy no meio de um buffer
+   que recebe DMA (a primeira passagem no console, 29/10, autenticou errado). */
 #define MAX_META 16
 typedef struct Meta {
     conv_u32 pos;
@@ -81,26 +83,17 @@ static int ler(void *ctx, int qual, conv_u32 pos, void *buf, unsigned n) {
         memcpy(buf, m->buf, n);
         return 1;
     }
-    while (n) {
-        unsigned z = n;
-        const Meta *achou = NULL;
-        for (i = 0; i < c->nmeta; i++) {
-            const Meta *m = c->meta + i;
-            if (pos >= m->pos && pos - m->pos < m->n) {
-                achou = m;
-                z = m->n - (pos - m->pos) < z ? m->n - (pos - m->pos) : z;
-                break;
-            }
-            if (m->pos > pos && m->pos - pos < z)
-                z = m->pos - pos;
-        }
-        if (achou)
-            memcpy(dest, achou->buf + pos - achou->pos, z);
-        else if (!ler_direto(c, 0, pos, dest, z))
+    if (!ler_direto(c, 0, pos, dest, n))
+        return 0;
+    /* Os índices usados no inventário precisam ser os bytes autenticados. */
+    for (i = 0; i < c->nmeta; i++) {
+        const Meta *m = c->meta + i;
+        conv_u32 a = m->pos > pos ? m->pos : pos, b = m->pos + m->n < pos + n ? m->pos + m->n : pos + n;
+        if (a < b && memcmp(dest + (a - pos), m->buf + (a - m->pos), b - a)) {
+            Diario_Escrever("conversão: índice em cache difere da original em %u, lote em %u", (unsigned)a,
+                            (unsigned)pos);
             return 0;
-        pos += z;
-        dest += z;
-        n -= z;
+        }
     }
     return 1;
 }
@@ -343,6 +336,7 @@ int IsoInstalar_Executar(const char *origem) {
             sprintf(hash + i * 2, "%02x", (unsigned)io.sha_saida[i]);
         Diario_Escrever("conversão: SHA256 saída %s, relidos %u bytes", hash, (unsigned)io.relidos);
     }
+    Diario_Escrever("conversão: %u lotes alinhados a 2048 bytes", (unsigned)io.lotes);
     Diario_Escrever("conversão: hash origem %u ms, conversores %u ms, hash releitura %u ms", (unsigned)io.hash_origem_ms,
                     (unsigned)io.conversao_ms, (unsigned)io.hash_releitura_ms);
     /* Tempos acumulados dentro de ReadFile/WriteFile, sem os hashes: a taxa do disco. */

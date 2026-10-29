@@ -27,7 +27,7 @@ typedef struct IsoConvIO {
     void *(*alocar)(unsigned); /* buffers de E/S alinhados a 128 bytes */
     void (*liberar)(void *);
     conv_u8 sha_saida[32];
-    conv_u32 relidos, hash_origem_ms, conversao_ms, hash_releitura_ms;
+    conv_u32 relidos, hash_origem_ms, conversao_ms, hash_releitura_ms, lotes;
     conv_u32 (*relogio)(void);
     int (*espaco)(void *); /* pelo menos 3 GiB livres, além da original */
     int (*iniciar)(void *);

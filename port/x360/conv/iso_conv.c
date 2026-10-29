@@ -7,6 +7,12 @@
 #define BLOCO (4U * 1024U * 1024U)
 #define MAX_ENTRADAS 4096
 #define MAX_ARQUIVO (8U * 1024U * 1024U)
+/* Toda leitura em fluxo da original começa e termina num setor de 2048 bytes
+   (o do USB; o do HD é 512) e cai no início de um buffer alinhado a 128: o
+   ReadFile do 360 faz DMA direto no buffer do título, e a primeira passagem
+   única no console (29/10) leu, entre lotes em posições quebradas e índices
+   emendados por memcpy, bytes que não batem com a original. */
+#define SETOR 2048U
 typedef struct Entrada {
     conv_u32 pos, tam;
     char nome[32];
@@ -146,7 +152,10 @@ static unsigned planejar(Entrada *e, unsigned n, Peca *v) {
             a->entrada = (int)i;
             a->tam = e[i++].tam;
         } else {
-            a->tam = fim - p > BLOCO ? BLOCO : fim - p;
+            /* Depois de uma entrada de tamanho quebrado, a primeira peça da
+               lacuna só completa o setor; as demais começam alinhadas. */
+            conv_u32 lim = p % SETOR ? SETOR - p % SETOR : BLOCO;
+            a->tam = fim - p > lim ? lim : fim - p;
         }
         if (!a->tam || !cabe(p, a->tam))
             return 0;
@@ -155,7 +164,8 @@ static unsigned planejar(Entrada *e, unsigned n, Peca *v) {
     return k;
 }
 /* Agrupa peças consecutivas para evitar uma chamada FATX por arquivo pequeno.
-   Nunca corta uma entrada nem passa de 8 MiB; normalmente envia de 4 a 8 MiB. */
+   Nunca corta uma entrada nem passa de 8 MiB; normalmente envia de 4 a 8 MiB.
+   Um lote só fecha num limite de setor; um lote fora do setor recusa o plano. */
 typedef struct Lote {
     conv_u32 pos, tam;
     unsigned primeira, fim;
@@ -172,10 +182,38 @@ static unsigned agrupar(Peca *v, unsigned n, Lote *l) {
         }
         atual->tam += v[i].tam;
         atual->fim = i + 1;
-        if (atual->tam >= BLOCO)
+        if (atual->tam >= BLOCO && (atual->pos + atual->tam) % SETOR == 0)
             atual = NULL;
     }
+    for (i = 0; i < k; i++)
+        if (l[i].pos % SETOR || l[i].tam % SETOR || l[i].tam > MAX_ARQUIVO)
+            return 0;
     return k;
+}
+/* Estado do SHA256 da original a cada 64 MiB (múltiplo de 64 bytes, então o
+   estado intermediário só depende do prefixo). Uma divergência para a passagem
+   no primeiro marco errado e diz qual janela de 64 MiB leu bytes diferentes. */
+#define MARCO (64U * 1024U * 1024U)
+#define NMARCOS (IC_TAMANHO / MARCO)
+static const conv_u32 marcos[NMARCOS][8] = {
+#include "iso_marcos.h"
+};
+/* Alimenta o SHA da origem com os bytes do lote em pos; devolve 0 no primeiro
+   marco divergente e põe em *janela o seu número (1 = primeiros 64 MiB). */
+static int autenticar(IsoSha *s, const conv_u8 *b, conv_u32 pos, conv_u32 n, unsigned *janela) {
+    while (n) {
+        conv_u32 resto = MARCO - pos % MARCO, z = n < resto ? n : resto;
+        IsoSha_Atualizar(s, b, z);
+        b += z;
+        pos += z;
+        n -= z;
+        if (pos % MARCO == 0 && pos / MARCO <= NMARCOS &&
+            memcmp(s->h, marcos[pos / MARCO - 1], sizeof(marcos[0]))) {
+            *janela = pos / MARCO;
+            return 0;
+        }
+    }
+    return 1;
 }
 int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro, unsigned nmsg) {
     static const conv_u8 esperado[32] = {0x93, 0xf1, 0xf9, 0x11, 0xe9, 0xa2, 0xbb, 0xdf, 0x92, 0xe5, 0x79,
@@ -186,7 +224,8 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     Peca *v = NULL;
     Lote *l = NULL;
     IsoSha origem, releitura;
-    unsigned n = 0, i, j, k, quantos, nlotes;
+    static char detalhe[200];
+    unsigned n = 0, i, j, k, quantos, nlotes, janela = 0;
     /* Unidades do progresso em KiB; IC_TAMANHO é múltiplo de 2048. */
     const conv_u32 iso = IC_TAMANHO >> 10, total = 3 * iso;
     conv_u32 tam, inicio, pos;
@@ -212,7 +251,10 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     if (memcmp(selo, "BT3X360-ISO\0\0\0\0\0", 16) || le32(selo + 16) != 3 || le32(selo + 20) != 512 ||
         le32(selo + 24) != IC_TAMANHO || le32(selo + 28) != 0 || !(quantos = planejar(e, n, v)))
         goto fim;
-    nlotes = agrupar(v, quantos, l);
+    msg = "lotes fora do limite de setor";
+    if (!(nlotes = agrupar(v, quantos, l)))
+        goto fim;
+    io->lotes = nlotes;
     r = IC_ESPACO;
     msg = "menos de 3 GiB livres";
     if (!io->espaco(io->ctx))
@@ -242,7 +284,14 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
         /* Thread 2: identidade da origem antes de qualquer alteração e conversão.
            Thread 1: SHA256 de saída e gravação. Thread 3: próxima leitura. */
         inicio = io->relogio();
-        IsoSha_Atualizar(&origem, b, atual->tam);
+        if (!autenticar(&origem, b, atual->pos, atual->tam, &janela)) {
+            r = IC_ORIGEM;
+            sprintf(detalhe,
+                    "identidade SHA256 da original não confere entre %u e %u MiB (lote %u de %u, em %u, %u bytes)",
+                    (janela - 1) * 64, janela * 64, k + 1, nlotes, (unsigned)atual->pos, (unsigned)atual->tam);
+            msg = detalhe;
+            goto fim;
+        }
         io->hash_origem_ms += io->relogio() - inicio;
         for (i = atual->primeira; i < atual->fim; i++) {
             Peca *a = v + i;

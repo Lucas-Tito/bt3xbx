@@ -26,10 +26,14 @@ def hashes(p):
 
 
 def validar_fluxo(texto, sha=None):
-    exigir(f"origem={pc.TAMANHO} escrita={pc.TAMANHO}" in texto and "duplicados=0" in texto,
-           "E/S repetiu bytes da origem ou não escreveu exatamente uma ISO")
+    # Cada byte da original lido uma vez na passagem; só os índices do inventário
+    # (menos de 1 MiB) são lidos de novo, para conferir o cache com o lote inteiro.
+    m = re.search(r"origem=(\d+) escrita=(\d+) relidos=(\d+) duplicados=(\d+)", texto)
+    exigir(m and int(m[2]) == pc.TAMANHO and int(m[1]) - int(m[4]) == pc.TAMANHO and int(m[4]) < 1024 * 1024,
+           "E/S repetiu bytes da origem além dos índices ou não escreveu exatamente uma ISO")
+    exigir(re.search(rf"conversão: \d+ lotes alinhados a 2048 bytes", texto), "lotes ausentes do registro")
     # Releitura integral: a ISO inteira mais índices e selo, nada a menos.
-    m = re.search(r"relidos=(\d+) duplicados=0", texto)
+    m = re.search(r"relidos=(\d+) duplicados=", texto)
     exigir(m and pc.TAMANHO <= int(m[1]) < pc.TAMANHO + 2 * 1024 * 1024, "releitura não cobriu a ISO inteira")
     for etapa in ("leitura da original", "gravação", "releitura"):
         exigir(re.search(rf"conversão: {etapa} {pc.TAMANHO} bytes em \d+ ms, \d+\.\d MB/s", texto),
@@ -114,6 +118,25 @@ def main():
         # O mutante do buffer já criou o temporário antes da primeira escrita.
         (d / "bt3-x360.tmp").unlink(missing_ok=True)
         print(f"ok: mutante de {nome} recusado em execução", flush=True)
+    # Lotes fora do setor (o plano da primeira passagem no console, 29/10): o
+    # contrato do DMA na leitora simulada precisa recusar o núcleo sem a regra.
+    nucleo = (pc.RAIZ / "port/x360/conv/iso_conv.c").read_text()
+    regras = (("if (atual->tam >= BLOCO && (atual->pos + atual->tam) % SETOR == 0)", "if (atual->tam >= BLOCO)"),
+              ("if (l[i].pos % SETOR || l[i].tam % SETOR || l[i].tam > MAX_ARQUIVO)", "if (l[i].tam > MAX_ARQUIVO)"))
+    for de_, para_ in regras:
+        exigir(de_ in nucleo, "mutação do setor não encontrou alvo")
+        nucleo = nucleo.replace(de_, para_)
+    mutante = d / "setor"
+    mutante.mkdir()
+    (mutante / "iso_conv.c").write_text(nucleo)
+    ruim = compilar(mutante, nucleo=mutante / "iso_conv.c")
+    env = dict(os.environ, TESTE_GAME=str(d))
+    env.pop("TESTE_FALHA", None)
+    env.pop("TESTE_CORROMPER", None)
+    r = subprocess.run([str(ruim), str(args.origem)], env=env, capture_output=True, text=True, timeout=600)
+    (d / "bt3-x360.tmp").unlink(missing_ok=True)
+    exigir(r.returncode != 0 and "atual % 2048 == 0" in r.stderr, f"lote fora do setor não foi acusado: {r.stderr}")
+    print("ok: mutante com lotes fora do setor recusado em execução", flush=True)
     # A rotina de SHA é vista falhando no comparador com um digest adulterado.
     for b in (b"", b"abc", b"a" * 55, b"a" * 56, b"a" * 64, b"a" * 1000000):
         obtido = subprocess.check_output([str(exe), "--sha"], input=b).decode().strip()
@@ -198,8 +221,10 @@ def main():
     print("ok: retomada do zero, saída existente e reconversão recusada", flush=True)
     validar_fluxo(sucesso.stdout, h[1])
     # O verificador das métricas precisa rejeitar cópias de um registro real.
-    for de, para in (("origem=3020816384", "origem=3020816385"),
-                     ("duplicados=0", "duplicados=1"),
+    origem = re.search(r"origem=(\d+)", sucesso.stdout)
+    duplicados = re.search(r"duplicados=(\d+)", sucesso.stdout)
+    for de, para in ((origem[0], f"origem={int(origem[1]) + 1}"),
+                     (duplicados[0], f"duplicados={int(duplicados[1]) + 1}"),
                      (re.search(r"gravações=\d+", sucesso.stdout)[0], "gravações=10000"),
                      (re.search(r"relidos=\d+", sucesso.stdout)[0], f"relidos={pc.TAMANHO - 1}"),
                      (re.search(r"relidos=\d+", sucesso.stdout)[0], "relidos=1451394452"),
