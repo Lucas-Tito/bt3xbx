@@ -1,0 +1,112 @@
+name: Crash report
+description: The game closed with the "Unexpected error" box and saved crash.txt.
+title: "[Crash] "
+labels: ["crash", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. Please read the rules first: [CONTRIBUTING.md](https://github.com/Lucas-Tito/bt3xbx/blob/main/.github/CONTRIBUTING.md).
+
+        * One crash per issue. Search the [open issues](https://github.com/Lucas-Tito/bt3xbx/issues?q=is%3Aissue+label%3Acrash) first; if your crash is already there, add your crash.txt to that issue instead.
+        * crash.txt is in the game folder on the console, next to default.xex. Copy it before starting the game again.
+        * Never post links to the game, ISOs or game files. Those issues are deleted.
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Before you send
+      options:
+        - label: I use my own ISO of the USA release, SLUS-21678, unmodified (no mods, no patches).
+          required: true
+        - label: My console is an Xbox 360 with RGH or JTAG (not an emulator).
+          required: true
+        - label: I read the known issues in README.txt and searched the existing issues.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The version of the package (in the name of the zip and at the top of README.txt).
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: textarea
+    id: crash
+    attributes:
+      label: crash.txt
+      description: Attach the crash.txt file (drag it into this box) or paste its whole content. A crash report without crash.txt is closed.
+    validations:
+      required: true
+  - type: textarea
+    id: doing
+    attributes:
+      label: What were you doing when it crashed?
+      description: The last things you did, in order. For example "Ultimate Battle, Mission 100, chose Goku and Vegeta, the fight loaded, I used a Kamehameha and it crashed".
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - Dragon History (story)
+        - Ultimate Battle
+        - Duel
+        - World Tournament
+        - Training
+        - Evolution Z or Data Center
+        - Shop or other menu
+        - Opening, ending or other movie
+        - While starting the game
+        - During the ISO conversion
+        - Other (say it in the description)
+    validations:
+      required: true
+  - type: input
+    id: characters
+    attributes:
+      label: Characters
+      description: The characters in the fight (and their costume or form), or "none" in a menu.
+      placeholder: "Goku (Super Saiyan 3) vs Broly"
+    validations:
+      required: true
+  - type: input
+    id: stage
+    attributes:
+      label: Stage
+      description: The stage and the time of day, or "none" in a menu.
+      placeholder: "Namek, day"
+    validations:
+      required: true
+  - type: dropdown
+    id: conversion
+    attributes:
+      label: How did you convert the ISO?
+      options:
+        - On the console (the game's Convert ISO box)
+        - On a PC with convert_iso.py
+    validations:
+      required: true
+  - type: dropdown
+    id: again
+    attributes:
+      label: Does it happen again?
+      options:
+        - Every time I do the same thing
+        - Sometimes
+        - It happened once
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Console setup
+      description: Dashboard and version, kernel, and where the game is (internal hard drive or USB).
+      placeholder: "FreeStyle 3.0.780, kernel 2.0.17150, internal hard drive"
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Optional. Photos of the screen, other details.

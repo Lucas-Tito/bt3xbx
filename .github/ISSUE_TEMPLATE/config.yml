@@ -1,0 +1,9 @@
+# Only the forms in this folder: no blank issues.
+blank_issues_enabled: false
+contact_links:
+  - name: Read the README first (installing, converting the ISO, controls, known issues)
+    url: https://github.com/Lucas-Tito/bt3xbx/blob/main/port/x360/package/README.txt
+    about: Most questions are answered there, including what to do after a crash.
+  - name: Problems with the PC port (Tenkaichi3Decomp)
+    url: https://github.com/z3xox/Tenkaichi3Decomp/issues
+    about: This project is only the Xbox 360 version. Problems of the PC version go to its own project.

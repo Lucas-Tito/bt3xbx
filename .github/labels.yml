@@ -1,0 +1,41 @@
+# Labels of the repository's issues (name, colour without "#", description).
+# Kept here as a list; nothing creates them automatically. The issue forms use crash, bug and needs-triage.
+- name: crash
+  color: b60205
+  description: The game closed with the "Unexpected error" box (crash report form)
+- name: bug
+  color: d73a4a
+  description: Something works wrong without a crash (bug report form)
+- name: needs-triage
+  color: fbca04
+  description: New report, not looked at yet
+- name: needs-crash-txt
+  color: fef2c0
+  description: A crash report without crash.txt; closed if it does not arrive in 14 days
+- name: needs-info
+  color: fef2c0
+  description: A field is missing or unclear; closed if the answer does not arrive in 14 days
+- name: confirmed
+  color: 0e8a16
+  description: Reproduced by the maintainer
+- name: known-issue
+  color: c5def5
+  description: Already listed in the known issues of README.txt
+- name: fixed-next
+  color: 1d76db
+  description: Fixed in the code, comes in the next release
+- name: duplicate
+  color: cfd3d7
+  description: Already reported; see the linked issue
+- name: not-supported
+  color: 5319e7
+  description: Other game version, modified ISO, mods, console without RGH or JTAG, or an emulator
+- name: piracy
+  color: 000000
+  description: Asks for or links the game or game files; deleted, and the author may be blocked
+- name: off-topic
+  color: e4e669
+  description: Not about this port (PC version, other games, general help)
+- name: wontfix
+  color: ffffff
+  description: Will not be changed

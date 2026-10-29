@@ -1,0 +1,89 @@
+name: Bug report
+description: Something works wrong but the game does not crash (picture, sound, menus, controls, saves).
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. Please read the rules first: [CONTRIBUTING.md](https://github.com/Lucas-Tito/bt3xbx/blob/main/.github/CONTRIBUTING.md).
+
+        * If the game showed the "Unexpected error" box, use the **Crash report** form instead.
+        * Read the known issues in README.txt: a problem listed there does not need a new issue.
+        * One problem per issue. Search the [open issues](https://github.com/Lucas-Tito/bt3xbx/issues) first.
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Before you send
+      options:
+        - label: I use my own ISO of the USA release, SLUS-21678, unmodified (no mods, no patches).
+          required: true
+        - label: My console is an Xbox 360 with RGH or JTAG (not an emulator).
+          required: true
+        - label: I read the known issues in README.txt and searched the existing issues.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The version of the package (in the name of the zip and at the top of README.txt).
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What goes wrong?
+      description: What you see or hear, and what the PlayStation 2 game does there instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to see it
+      description: The steps from the main menu, in order.
+      placeholder: |
+        1. Duel, 1P vs CPU
+        2. Goku vs Frieza, Planet Namek
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Mode, characters and stage
+      placeholder: "Duel, Goku vs Frieza, Namek (day)"
+    validations:
+      required: true
+  - type: dropdown
+    id: conversion
+    attributes:
+      label: How did you convert the ISO?
+      options:
+        - On the console (the game's Convert ISO box)
+        - On a PC with convert_iso.py
+    validations:
+      required: true
+  - type: dropdown
+    id: again
+    attributes:
+      label: Does it happen again?
+      options:
+        - Every time I do the same thing
+        - Sometimes
+        - It happened once
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Console and TV setup
+      description: Dashboard and version, kernel, where the game is, and for picture problems the TV and the console's video settings.
+      placeholder: "FreeStyle 3.0.780, kernel 2.0.17150, internal hard drive, HDMI 720p, Reference Levels Standard"
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Photos or video
+      description: Optional, but a photo of the screen helps a lot with picture problems.
