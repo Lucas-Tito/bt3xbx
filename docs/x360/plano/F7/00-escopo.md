@@ -9,7 +9,9 @@ sete seções seguem o modelo da F6.
 [Medido] **Etapa 1, parte sem emulador, concluída em 28/10:** [manifesto e denominadores](01.md), gerados tanto
 da árvore original quanto da ISO convertida, iguais por `cmp`; verificador de diferenças nominais com negativos;
 auditoria de um instantâneo parcial da F6, reprovada por ausências sem justificativa; três pilotos escritos,
-**ainda sem executar**, por determinação da tarefa. Não altera o aceite do console nem aprova conteúdo executado.
+**ainda sem executar naquela entrega**, por determinação da tarefa. Em 29/10, os [pilotos no Deck](02-pilotos.md)
+aprovaram Missão 0, marco 29/30 e Episódio 0; a transformação foi executada e reprovou na memória.
+A reserva revisada é 360 a 500 h de máquina serializada. Não altera o aceite do console nem fecha a F7.
 
 [Lido] Legenda: **[medido]** é contagem nos dados ou resultado de log identificado, inclusive de uma rodada
 anterior; **[lido]** é comportamento encontrado em fonte ou documento, sem prova nova de execução;
@@ -302,11 +304,12 @@ de dois lutadores, item, roupa e arena. A decisão 4 abaixo fixa essa divisão a
 
 [Estimado] Um dia útil representa 6 h efetivas de uma pessoa familiarizada com o port, incluindo teste e correção
 local. Filas de máquina/console e resolução do desempenho ainda aberto da F5 são separadas. A etapa 1 tem sua parte
-sem emulador concluída em [01](01.md); faltam os pilotos. As demais etapas continuam por fazer.
+sem emulador concluída em [01](01.md); os [pilotos](02-pilotos.md) estão medidos, com reprovação na memória
+da transformação. Os pilotos não substituem os critérios das demais etapas.
 
 | # | Onde | Entrega e dependência | Critério de saída | Trabalho [estimado] |
 |---|---|---|---|---|
-| 1 | WSL/Deck, só leitura inicialmente | Manifesto, progresso, denominadores e verificador concluídos; decisões 1 a 4 aprovadas; três pilotos escritos sem executar ([01](01.md)) | Parte sem emulador concluída; custo real dos pilotos ainda pendente na próxima tarefa | 2 a 3 dias, previsão inicial |
+| 1 | WSL/Deck, só leitura inicialmente | Manifesto, progresso, denominadores e verificador concluídos; decisões 1 a 4 aprovadas; três pilotos executados e medidos ([02-pilotos](02-pilotos.md)) | Parte sem emulador concluída; Missão 0, marco 29/30 e Episódio 0 aprovados; transformação com memória reprovada | 2 a 3 dias, previsão inicial |
 | 2 | WSL/Deck | Receitas de cartões e verificadores de cobertura/save, após 1 | Cartões nativos repetíveis, progressão inédita salva/recarregada, negativos recusados; sem bytes do jogo no git | 2 a 4 dias |
 | 3 | WSL, depois 2; console curto | Entrada dos dois jogadores no teste, menus e primeiro Duelo dividido | Rastros x86/PPC, duas câmeras/metades, resultado e controles reais conferidos; perfil comparativo cedo | 2 a 4 dias |
 | 4 | WSL/Deck, depois 1/2 | Elenco, trajes, transformações/fusões, estágios e transições | Denominadores da seção 3 fechados, memória/listas/imagens e ações reais iguais, lote retomável por caso | 4 a 7 dias |
@@ -325,8 +328,10 @@ o provado e parar conforme o AGENTS, sem manter um emulador preso.
 incluindo execuções repetidas por memória/imagem/som. O primeiro `f5_duelo` levou 5.392 s e `f5_treino` 4.124 s.
 Esses tempos são daquela máquina/rodada; o custo de um novo caso curto não é o de um roteiro longo completo.
 
-[Estimado] Reserva inicial de máquina: **120 a 240 h serializadas** para expansão e regressões de lote, a rever
-pelos pilotos (uma missão, um episódio com evento e uma forma com transformação). Não multiplicar 21 roteiros
+[Estimado] Reserva de máquina revista em 29/10 pela [medição dos pilotos](02-pilotos.md):
+**360 a 500 h serializadas** no ritmo do Deck; com Deck e WSL à mesma velocidade e 20% serial,
+**216 a 300 h de parede**, sem velocidade relativa comprovada. Substitui as **120 a 240 h** iniciais
+para expansão e regressões de lote; as hipóteses e parcelas estão na nota. Não multiplicar 21 roteiros
 por 698 modelos com todas as redes: fazer censo e cargas curtas em lote, rastrear os caminhos novos e conservar
 casos longos representativos. Depois de provar a equivalência, dividir casos independentes entre WSL e Deck pode
 aproximar a duração de parede da metade; não reduz o trabalho nem autoriza dois emuladores no WSL.

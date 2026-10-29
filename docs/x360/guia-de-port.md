@@ -2549,3 +2549,45 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   de outra build. Ao refazer com commit novo, conferir os nomes que a rodada usa entre casos: o
   `teste_iso_convertida.py` passou a gravar `bt3-x360.iso` (`99b6e18`), e o `leitor-iso` ainda pedia
   `convertida.iso`, o que daria tudo FALTA; agora o caso exige a ISO presente antes de testar.
+
+### Pilotos da F7 no Deck (28/10/2026)
+
+- O módulo do instalador foi renomeado de `iso_convertida.py` para `convert_iso.py`. A leitura
+  da F7 precisa importar o nome novo; caso contrário manifesto, cobertura e negativos nem iniciam
+  (`ModuleNotFoundError`). Conferir a importação na base atual antes de reservar o emulador.
+- `f7_missao_fluxo.txt` conserva a sequência de `missao.txt` entre boot e fim, que continuam intactos
+  no roteiro original. Os pilotos acrescentam a saída e a gravação por Opções. O cartão 29/30
+  nasce em `boot_novo.txt`; `prepara missoes 29` só escreve os bytes cleared dos ids 1..29,
+  com as mesmas proteções dos passos de teste. Não prepara o ganho nem o bit de Sobrevivência.
+- `espera forma L ID`, `espera blast L N` e `confere membro L ID TRAJE VARIANTE MIN MAX`
+  observam o membro ativo. `BT3_F7=1` registra pedido, classe, custo e queda do estoque, sem
+  chamar a função que pede transformação. As imagens e a memória incluem os pontos do piloto.
+
+- A grade de personagens tem sete colunas: o id 1 fica na primeira coluna da segunda
+  linha, não na segunda célula. Confirmar a célula por `gCharSel->cells` no gdb antes
+  de repetir a rede inteira. Com New Game, a segunda célula só tem a forma 13 e pula
+  a janela de formas; um X excedente passa a escolher o COM, e as direções seguintes
+  atingem outra fase. O ensaio acusou ids 13/13 e arena 0; usar BAIXO e aguardar o
+  carrossel preserva os quatro X do id 1 e os três X do adversário 25.
+- No New Game, BAIXO quatro vezes nos estágios desvia a coluna nas células
+  bloqueadas e termina na arena 3. CIMA duas vezes passa pelas linhas 5 e 4 na
+  coluna 0, ambas liberadas, e chega à arena 5. A conferência da luta montada
+  deve permanecer antes de testar recurso ou transformação.
+
+- Reabrir um cartão não muda a ordem dos arquivos do jogo: a x86 deve continuar lendo
+  `gamedata` original, e só a PPC recebe `BT3_DATA` e `BT3_CONVERTIDOS` da conversão.
+  Passar os dois à x86 derrubou o reabrir depois da Missão 0 no Deck (RC 139).
+  O executor dos pilotos usa `~/wsl.lock` por padrão e mede também o espaço físico
+  livre do C: antes das builds e de cada roteiro; `F7_MAQUINA=Deck` conserva a prova
+  e a trava específicas do Deck. Identificar a máquina nos tempos: a rodada final de 29/10
+  voltou ao Deck, e não fornece uma razão de velocidade medida contra o WSL.
+- **O lote pode acabar sem passar pela auditoria final.** O `set -e` do executor para no
+  `roteiros.sh` reprovado; na transformação da F7 ele deixou de medir os bytes, conferir
+  comportamento/negativos, produzir cobertura e chamar `save_mc.sh`. Conferir `RC` e `FIM`
+  antes de chamar o lote aprovado. Completar as conferências sobre as saídas preservadas
+  e rodar a prova do cartão sob a mesma trava, sem esconder o RC=1 nem repetir horas de emulação.
+- **Comportamento, pixels e hashes não dispensam memória.** O piloto transformou pelo R3,
+  debitou o custo e retornou ao movimento em todas as redes; os 1.728 hashes e 14 PPM eram
+  iguais. Ainda assim, `memdiff` recusou o contexto conflitante `EftDisc`/`EftODisc` no fim
+  e regiões do trabalho da luta e do buffer de modelo nos pontos. Guardar um único caso
+  reprovado para diagnóstico; não ampliar classes conhecidas sem explicar bytes, leitor e vida útil.

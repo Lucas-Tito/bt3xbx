@@ -1,0 +1,23 @@
+# F7: missão simples com boot.txt, vitória dada e gravação normal em Opções.
+inclui boot.txt
+inclui f7_missao_fluxo.txt
+# Sai da seleção da missão, volta do Ultimate ao menu principal.
+aperta TRIANGULO ate tela 4 max 2000
+quadros 150
+aperta CIMA 3                     # Ultimate, História, Shenlong, Opções
+aperta X ate tela 62 max 600
+quadros 150
+aperta X
+quadros 40
+aperta X
+espera mcflow 12 max 300
+repete ate mcflow 0 max 3000
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+marca salvo
+quadros 90
+confere save u8 0x28C 1
+fim

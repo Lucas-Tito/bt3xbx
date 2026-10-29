@@ -1,0 +1,5 @@
+# F7: reler o cartão nativo pelo boot e Continue, sem escrita.
+inclui save_continua.txt
+confere save u8 0x28C 1
+quadros 60
+fim

@@ -103,6 +103,8 @@ if [ ${#ORIGEM[@]} -gt 0 ]; then
         exit 1
     fi
 fi
+# Relógio de parede optativo por rede, sem mudar as execuções ou seus julgamentos.
+mede() { [ -z "${MEDIDAS:-}" ] || printf '%s\t%s\t%s\n' "$n" "$1" "$EPOCHREALTIME" >> "$MEDIDAS"; }
 LOGS=()
 # a largura de cada byte das globais da x86 pelo tipo do DWARF, para o memdiff comparar as globais campo a campo
 # (memdiff.py --tipos; sem isso um u16 ou um byte numa palavra saíam como classe ambígua, sem julgamento)
@@ -122,6 +124,7 @@ for n in "${NOMES[@]}"; do
     D=$O/$n; roda_x86 && { rm -rf $D; mkdir -p $D; }
     R=port/x360/roteiros/$n.txt
     echo "== $n"
+    mede x86
     for v in a b; do
         if roda_x86; then
             BT3_SOM=${SOM:+$D/som_$v.txt} BT3_ROTEIRO=$R BT3_SAVES=$D/s$v BT3_HASH=$D/h$v.txt timeout 900 $B/x86/bt3_x86 > $D/x86_$v.txt 2>&1
@@ -176,11 +179,13 @@ for n in "${NOMES[@]}"; do
         r=$?; sed 's/^/   /' $D/passos.txt
         [ $r = 0 ] || falhou "passos: a medida de tempo por passo incompleta (passos.py)"
     fi
+    mede gdb
     roda_x86 && BT3_ROTEIRO=$R BT3_SAVES=$D/sg BT3_HASH=$D/hg.txt timeout 900 gdb -batch -nx -x $O/unpack.gdb \
         --args $B/x86/bt3_x86 > $D/gdb.txt 2>&1
     grep -aq '^roteiro: .* fim ' $D/gdb.txt || falhou "x86 sob o gdb sem chegar ao fim do roteiro"
     LOGS+=($D/gdb.txt)
     echo "   Sprite_Unpack alcançados:"; python3 port/x360/tools/roteiros.py chamadas $D/gdb.txt --prog $B/x86/bt3_x86
+    mede x86r
     roda_x86 && BT3_RASTREIO_BITS=24 BT3_ROTEIRO=$R BT3_SAVES=$D/sr BT3_HASH=$D/hr.txt \
         BT3_RASTREIO=$D/rastreio.tsv timeout 3600 setarch -R $B/x86r/bt3_x86r > $D/x86r.txt 2>&1
     echo "   x86r: $(grep -a '^rastreio:' $D/x86r.txt)"
@@ -189,6 +194,7 @@ for n in "${NOMES[@]}"; do
     python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $D/telas_r.txt > /dev/null || falhou "x86r com outro rastro"
     # (o rastreio.py guarda tudo na memória, e os 13 milhões de posições da Ultimate Battle não cabem nos 8 GB do WSL:
     # o rastreio vai em partes, cada arquivo inteiro numa só, e os mapas das partes se juntam; e um roteiros.sh por vez)
+    mede mapa
     if roda_x86; then
         rm -rf $D/partes; python3 port/x360/tools/roteiros.py partes $D/rastreio.tsv $D/partes | sed 's/^/   /'
         ok=1; : > $D/mapa.txt
@@ -205,6 +211,7 @@ for n in "${NOMES[@]}"; do
         grep -v -e '^ELF:' -e '^disc/' | sort -u > $D/lidos.txt
     # (com --saida: os arquivos que têm conversor, convertidos para a PPC do passo 4, como no f1.sh)
     # (os convertidos de agora: o conv_tool --saida acrescenta à lista, e um REUSA a duplicaria)
+    mede conversao
     rm -rf $D/dados/mods; mkdir -p $D/dados/mods; for d in gamedata/*; do [ -e $D/dados/$(basename $d) ] || ln -s "$(realpath "$d")" $D/dados/; done
     $O/conv_tool --mapa $D/mapa.tsv --saida $D/dados/mods gamedata $(cat $D/lidos.txt) > $D/conv.txt
     r=$?
@@ -240,6 +247,7 @@ for n in "${NOMES[@]}"; do
         grep -a '^guarda: ' $D/ppc.txt | sed 's/ (retorno.*//' | sort | uniq -c | sed 's/^/   /'
     fi
     if [ -n "${SEMMAPA:-}" ]; then
+        mede ppc_sem_mapa
         # (a memória das duas builds no último vblank antes do passo fim, o critério da etapa 5; com MEM=menu, no
         # último vblank da primeira visita ao menu principal, o da etapa 5a)
         if [ "${MEM:-fim}" = menu ]; then
@@ -250,7 +258,7 @@ for n in "${NOMES[@]}"; do
         JUNTA=0
         if [ "${RAPIDO:-1}" = 1 ] && [ "${MEM:-fim}" != menu ]; then
             JUNTA=1
-            PONTOS=(); [[ $n != f5_* ]] || PONTOS=(--pontos)
+            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao ]] || PONTOS=(--pontos)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
         fi
@@ -281,6 +289,7 @@ for n in "${NOMES[@]}"; do
                 BT3_ROTEIRO=$R BT3_SAVES=$D/sq BT3_HASH=$D/hq.txt BT3_HASH_AT=$V \
                 /usr/bin/time -a -o "$D/tempos.tsv" -f 'ppcsm\t%e' timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc \
                 > $D/ppcsm.txt 2>&1
+            mede memoria
             COLETA=()
             [ "$JUNTA" != 1 ] || [ ! -s $D/memorias_x86.txt ] || COLETA=(BT3_MEMORIAS=$D/memorias_x86.txt)
             [ "$JUNTA" != 1 ] || [ -z "${IMG:-}" ] || COLETA+=(BT3_IMAGENS=$D/img/x86/lista.txt)
@@ -368,7 +377,7 @@ for n in "${NOMES[@]}"; do
             # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
             # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
             # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela
-            PONTOS=(); [[ $n != f5_* ]] || PONTOS=(--pontos)
+            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao ]] || PONTOS=(--pontos)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
             while read -r t VT; do
@@ -402,6 +411,7 @@ for n in "${NOMES[@]}"; do
         fi
     fi
     if [ -n "${IMG:-}" ]; then
+        mede imagens
         # as imagens das telas (F4, etapa 6): o rasterizador de software na x86 e na PPC sem mapa (os mesmos arquivos
         # convertidos do passo 5), no mesmo momento de cada tela, ancorado no rastro (roteiros.py imagens: a entrada e
         # a saída de cada tela de menu do essencial, a carga, cada marca, cada "ok som", cada pergunta do cartão; e
@@ -438,6 +448,7 @@ for n in "${NOMES[@]}"; do
         sed 's/^/   /' $D/imagens_compara.txt
         [ $r = 0 ] || falhou "imagens das telas diferentes entre a x86 e a PPC"
     fi
+    mede fim
     rm -f bt3_crash.txt
 done
 echo "== todos juntos"
