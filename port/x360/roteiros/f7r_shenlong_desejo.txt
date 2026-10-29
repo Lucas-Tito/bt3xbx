@@ -1,0 +1,37 @@
+# F7, etapa 2: a receita shenlong_desejo (as sete esferas) e o Shenlong pelo menu principal: o dragão sorteado pelo
+# jogo, cada desejo escolhido na lista e confirmado (o primeiro item ainda não possuído), e o ShenSave pelo McFlow.
+# A lista do menu principal é montada no MainMenu_Init: a receita entra depois dele, então o roteiro passa pelo Ultimate
+# e volta para o menu ser montado de novo, já com o Shenlong.
+inclui boot_novo.txt
+receita aplica shenlong_desejo
+receita confere antes shenlong_desejo
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+aperta TRIANGULO ate tela 4 max 2000
+quadros 150
+aperta CIMA 2                     # Ultimate, História, Shenlong
+aperta X ate tela 70 max 600
+quadros 900
+repete ate tela 71 max 8000       # cada desejo (como no shenlong.txt): X no item, CIMA para o "sim", X; X no prêmio
+    aperta X
+    quadros 60
+    aperta CIMA
+    aperta X
+    quadros 120
+    aperta X
+    quadros 120
+volta
+espera mcflow 12 max 600          # ShenSave (McFlow_Init(1))
+repete ate mcflow 0 max 3000
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+marca salvo
+espera tela 4 max 1200
+receita confere depois shenlong_desejo
+quadros 60
+fim

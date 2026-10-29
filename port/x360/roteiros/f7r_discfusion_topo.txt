@@ -1,0 +1,44 @@
+# F7, etapa 2: a receita discfusion_topo (segundo lugar) e o ranking do Disc Fusion: os dois discos lidos na sessão
+# ("funde discos", como no discfusion.txt), o desafio ao primeiro lugar, a vitória pelo dano do jogo, o resultado com o
+# prêmio, a volta ao menu e a gravação em Opções.
+inclui boot_novo.txt
+receita aplica discfusion_topo
+receita confere antes discfusion_topo
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+funde discos                      # (antes do DiscFusion_Init, que lê os discos)
+aperta BAIXO 2                    # Disc Fusion (a quarta placa; a Sobrevivência fechada é pulada)
+quadros 30
+aperta X ate tela 24 max 600
+quadros 300
+aperta X ate tela 25 max 1200     # a placa do ranking
+quadros 300
+repete ate tela 26 max 3000       # X no personagem, nas placas e na cor
+    aperta X
+    quadros 100
+volta
+quadros 300
+aperta CIMA                       # o primeiro lugar, acima do jogador
+quadros 30
+repete ate luta max 6000          # X no lugar, o anúncio e o versus
+    aperta X
+    quadros 100
+volta
+quadros 60
+termina luta vence max 20000
+espera tela 27 max 6000           # UbResult do ranking
+quadros 150
+repete ate tela 26 max 6000
+    aperta X
+    quadros 60
+volta
+quadros 300
+receita confere depois discfusion_topo
+aperta TRIANGULO ate tela 4 max 4000
+quadros 150
+aperta CIMA 2
+inclui f7r_salva.txt
+receita confere depois discfusion_topo
+fim

@@ -1,0 +1,16 @@
+# F7, etapa 2: o 50º ganho de Missão 100 dá o item de prêmio (MisResult_Init, menu_p_b.c:163-176: só com a contagem
+# exatamente 50 e a missão inédita; UbScore_GetRewardItem(1)). Estado: 49 missões cumpridas (1..49), a 0 inédita, e o
+# que o 30º ganho já teria dado (o bit 1 de ultimate.flags, que não é retroativo). Os recordes (rank, tempo, total) das
+# 49 ficam zerados e o dinheiro das missões não é somado: o marco não os lê.
+marco missao_cinquenta
+evento ganhar a missão 0 pelo fluxo do jogo (f7r_missao_cinquenta.txt) e salvar em Opções
+exige missao.cumprida[0..99] = 0
+exige ultimate.flags = 0
+exige missao.paginas = 5
+exige item[0x57] = 0
+escreve missao.cumprida[1..49] = 1
+ou ultimate.flags = 1
+escreve missao.paginas = 10       # as 49 cumpridas pedem dez páginas na lista; a 0 continua na primeira
+depois missao.cumprida[0] = 1
+depois item[0x57] tem 1
+depois ultimate.flags sem 4

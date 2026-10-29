@@ -1,0 +1,19 @@
+# F7, etapa 2: um resultado menor não apaga o recorde do curso (UbScore_SaveBestB, menu_p_d.c:268: troca só com total
+# maior). Estado: Sobrevivência aberta e um recorde de 12 vencidos com total alto no curso 0; o prêmio dos dez ainda
+# não dado (assim a corrida curta também prova que três vencidos não o dão). O que muda é o pagamento da corrida.
+marco sobrevivencia_recorde
+evento curso 0, três adversários derrubados e então o lutador do jogador (termina luta perde apos 3), salvar em Opções
+exige missao.cumprida[0..99] = 0
+exige ultimate.flags = 0
+exige sobrevivencia.vencidos[0..2] = 0
+exige sobrevivencia.total[0..2] = 0
+exige item[0x6A] = 0
+exige dinheiro = 0
+escreve missao.cumprida[0..29] = 1
+ou ultimate.flags = 1
+escreve sobrevivencia.vencidos[0] = 12
+escreve sobrevivencia.total[0] = 2000000000
+depois sobrevivencia.vencidos[0] = 12
+depois ultimate.flags sem 8
+depois item[0x6A] = 0
+depois dinheiro >= 1              # o pagamento da corrida (o que o jogo produz aqui)

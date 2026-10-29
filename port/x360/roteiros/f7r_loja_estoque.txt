@@ -1,0 +1,44 @@
+# F7, etapa 2: a receita loja_estoque (dinheiro pelo setter do jogo) e uma compra na loja do Evolution Z: comprar, o
+# primeiro item da lista, "comprar" na confirmação (que abre em "cancelar") (Shop: Save_AddItem e o débito do preço), e a saída do Evolution Z,
+# que grava pelo DcSave (McFlow), como no evolution.txt.
+inclui boot_novo.txt
+receita aplica loja_estoque
+receita confere antes loja_estoque
+quadros 90
+aperta BAIXO 4                    # Evolution Z
+aperta X ate tela 48 max 600
+quadros 200
+aperta BAIXO
+quadros 30
+aperta X ate tela 50 max 600      # loja
+quadros 200
+aperta X                          # comprar
+quadros 90
+aperta X                          # o primeiro item da lista
+quadros 90
+aperta CIMA                       # a confirmação abre em "cancelar" (Shop_Input: cursor 1); CIMA vai a "comprar"
+quadros 30
+aperta X
+quadros 150
+marca comprado
+aperta X                          # a placa "comprado" (SHOP_LV_BOUGHT) só fecha com X
+quadros 90
+repete ate tela 48 max 3000
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 200
+receita confere depois loja_estoque
+aperta TRIANGULO                  # a saída do Evolution Z pede o DcSave
+espera mcflow 12 max 600
+repete ate mcflow 0 max 3000
+    quadros 50
+    aperta ESQUERDA
+    quadros 10
+    aperta X
+volta
+marca salvo
+espera tela 4 max 600
+receita confere depois loja_estoque
+quadros 60
+fim

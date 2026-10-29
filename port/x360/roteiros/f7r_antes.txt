@@ -1,0 +1,10 @@
+# F7, etapa 2: o cartão de antes do marco. New Game nativo, a receita da BT3_RECEITA (port/x360/receitas) por cima do
+# save do Save_SetDefaults, e a gravação pelo McFlow em Opções. Pede BT3_DESBLOQUEIO=1 e o cartão vazio.
+inclui boot_novo.txt
+receita aplica
+receita confere antes
+quadros 90
+aperta CIMA                       # Opções (a lista do menu principal foi montada antes da receita: sem Shenlong)
+inclui f7r_salva.txt
+receita confere antes
+fim

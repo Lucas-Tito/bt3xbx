@@ -1,0 +1,44 @@
+# F7, etapa 2: a receita discfusion_cursos (cursos 0..3 cumpridos) e o curso 4 do Disc Fusion: os dois discos lidos na
+# sessão ("funde discos"), os oito adversários derrubados pelo dano do jogo um depois do outro, o resultado com o
+# prêmio, a volta ao menu e a gravação em Opções.
+inclui boot_novo.txt
+receita aplica discfusion_cursos
+receita confere antes discfusion_cursos
+quadros 90
+aperta BAIXO                      # Ultimate Battle
+aperta X ate tela 13
+quadros 200
+funde discos
+aperta BAIXO 2                    # Disc Fusion (a Sobrevivência fechada é pulada)
+quadros 30
+aperta X ate tela 24 max 600
+quadros 300
+aperta BAIXO                      # a placa dos cursos
+quadros 30
+aperta X ate tela 28 max 1200
+quadros 300
+aperta CIMA                       # o curso 4 (UbzSel_Input: CIMA do 0 vai ao último)
+quadros 60
+aperta X                          # a ficha do curso
+quadros 60
+aperta X ate tela 29 max 1200     # escolhe
+quadros 300
+repete ate luta max 6000          # X no personagem, nas placas e na cor
+    aperta X
+    quadros 100
+volta
+quadros 60
+termina luta vence max 40000      # (os adversários do curso entram um depois do outro)
+espera tela 30 max 6000           # UbResult do curso
+quadros 150
+repete ate tela 28 max 6000
+    aperta X
+    quadros 60
+volta
+receita confere depois discfusion_cursos
+aperta TRIANGULO ate tela 4 max 4000
+quadros 150
+aperta CIMA 2
+inclui f7r_salva.txt
+receita confere depois discfusion_cursos
+fim

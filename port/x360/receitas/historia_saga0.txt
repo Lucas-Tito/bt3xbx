@@ -1,0 +1,20 @@
+# F7, etapa 2: o último episódio da saga 0 (três episódios, ids 0..2; menu_c_c.c:26) cumprido fecha a saga: todos os bits
+# de vencidos (HistResult_IsMenuCleared, menu_c_c.c:152) e o fim visto (HistOutro_Init, bit 4 de saga.flags,
+# menu_b_c.c:238). Estado: episódios 0 e 1 vencidos, o 2 liberado e novo; a saga já apresentada (bit 8) para não tocar a
+# introdução do guia. Recompensas dos episódios 0 e 1 (manifesto, comando 16 dos GSCF) não reproduzidas: o fim da saga
+# não as lê; a da vitória do episódio 2 vem do jogo.
+marco historia_saga0
+evento jogar e vencer o episódio 2 da saga 0 com os eventos do roteiro do jogo, ver o fim da saga e salvar (HistSave)
+exige saga.flags[0] = 3
+exige saga.liberados[0] = 1
+exige saga.vencidos[0] = 0
+exige saga.novos[0] = 1
+exige desbloqueio = 0
+escreve saga.flags[0] = 9
+escreve saga.liberados[0] = 7
+escreve saga.vencidos[0] = 3
+escreve saga.novos[0] = 4
+ou desbloqueio = 0x80              # a introdução do Goku já ouvida (menu_c.h:85-87)
+depois saga.vencidos[0] = 7
+depois saga.flags[0] tem 4
+depois saga.novos[0] sem 4

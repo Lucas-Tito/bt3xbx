@@ -1,0 +1,12 @@
+# F7, etapa 2: Sim Dragon até o turno final (69) dá o prêmio uma vez e entra no ranking (SimResult_Init,
+# menu_r_c.c:137-142; UbScore_AddRanking, menu_r_c.c:754). A campanha vive na sessão (gProgress+0x64C..0x683) e
+# SimTop_Init a zera: o save não leva a perto do fim (decisão do escopo, 01.md, "Sim Dragon"). Por isso a receita não
+# escreve nada: o estado é o do New Game, e o evento é a campanha inteira numa sessão (etapa 5).
+marco sim_premio
+evento as sete rodadas do Sim Dragon numa sessão até o resultado final, salvar em Opções
+exige sim.premio = 0
+exige sim.ranking.fim[0..9] = 0
+exige item[0x7E] = 0
+depois sim.premio = 1
+depois sim.ranking.fim[0] = 1
+depois item[0x7E] tem 1

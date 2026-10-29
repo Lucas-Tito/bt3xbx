@@ -1,0 +1,44 @@
+# F7, etapa 2: o último episódio da saga 6 (quatro episódios) cumprido leva ao filme final, que liga slot 8 (o item
+# "Ending" da lista, não uma saga) e a música 7 (menu_b_c.c:823,930-943). Estado: sagas 0..5 inteiras vencidas, vistas,
+# apresentadas e com o evento de guia feito (1|4|8|0x20), e o que os fins das sagas 1, 4 e 5 já teriam dado à loja
+# (OUTRO_COUNT, menu_b_c.c:62-66: nível 3 e o bit 1). Saga 6: episódios 0..2 vencidos, o 3 liberado e novo.
+# Recompensas de episódio (personagens, estágios, itens, dinheiro, esferas) das sagas anteriores não reproduzidas: o
+# final não as lê; ficam para a progressão real (etapa 5). A música 7 que o filme liga (menu_b_c.c:936) já vem ligada
+# no New Game (medido: o "exige musica[7] = 0" falhou na x86), então não serve de prova do final.
+marco historia_final
+evento jogar e vencer o episódio 3 da saga 6, ver o fim da saga e o filme final, e salvar (HistSave)
+exige saga.flags[0] = 3
+exige saga.flags[1..8] = 0
+exige saga.liberados[0] = 1
+exige saga.liberados[1..8] = 0
+exige saga.vencidos[0..8] = 0
+exige saga.novos[0] = 1
+exige saga.novos[1..8] = 0
+exige desbloqueio = 0
+exige loja.nivel = 0
+exige loja.flags = 0
+escreve saga.flags[0..5] = 0x2D
+escreve saga.liberados[0] = 7
+escreve saga.vencidos[0] = 7
+escreve saga.liberados[1] = 0xF
+escreve saga.vencidos[1] = 0xF
+escreve saga.liberados[2] = 0x7F
+escreve saga.vencidos[2] = 0x7F
+escreve saga.liberados[3] = 0x1F
+escreve saga.vencidos[3] = 0x1F
+escreve saga.liberados[4] = 0xFFFF
+escreve saga.vencidos[4] = 0xFFFF
+escreve saga.liberados[5] = 0x1F
+escreve saga.vencidos[5] = 0x1F
+escreve saga.novos[0] = 0
+escreve saga.flags[6] = 9
+escreve saga.liberados[6] = 0xF
+escreve saga.vencidos[6] = 7
+escreve saga.novos[6] = 8
+ou desbloqueio = 0x80
+escreve loja.nivel = 3
+ou loja.flags = 1
+depois saga.vencidos[6] = 0xF
+depois saga.flags[6] tem 4
+depois saga.flags[8] tem 3
+depois saga.novos[6] sem 8         # o ModeMenu tira o "novo" ao jogar o episódio (menu_a_d.c:719)

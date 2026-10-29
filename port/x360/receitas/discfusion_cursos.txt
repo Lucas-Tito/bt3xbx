@@ -1,0 +1,12 @@
+# F7, etapa 2: o quinto curso de Disc Fusion cumprido liga o bit 0x10 de ultimate.flags e dá o item de prêmio
+# (UbResult_MarkCourseCleared, menu_n_d.c:28-36,143-148). Estado: cursos 0..3 cumpridos, o 4 não. As flags de disco são
+# da sessão (gProgress+0x684, menu_o_b.c:318-320,547), não do save.
+marco discfusion_cursos
+evento curso 4 (oito adversários) vencido pelo fluxo do jogo, salvar em Opções
+exige discfusion.curso[0..4] = 0
+exige ultimate.flags = 0
+exige item[0x80] = 0
+escreve discfusion.curso[0..3] = 1
+depois discfusion.curso[4] = 1
+depois ultimate.flags tem 0x10
+depois item[0x80] tem 1

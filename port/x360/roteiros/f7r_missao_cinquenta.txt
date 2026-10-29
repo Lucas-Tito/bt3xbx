@@ -1,0 +1,13 @@
+# F7, etapa 2: a receita missao_cinquenta (port/x360/receitas/missao_cinquenta.txt) e a missão 0 ganha pelo fluxo do jogo
+# (f7_missao_fluxo.txt, vitória pelo dano do jogo), conferida em memória, salva em Opções e conferida de novo.
+inclui boot_novo.txt
+receita aplica missao_cinquenta
+receita confere antes missao_cinquenta
+inclui f7_missao_fluxo.txt
+receita confere depois missao_cinquenta
+aperta TRIANGULO ate tela 4 max 2000
+quadros 150
+aperta CIMA 2                     # Ultimate, História, Opções (sem Shenlong)
+inclui f7r_salva.txt
+receita confere depois missao_cinquenta
+fim

@@ -1,0 +1,9 @@
+# F7, etapa 2: com as sete esferas (bits 0-6 de desbloqueio) o menu principal lista o Shenlong (menu_a.c:159); o desejo
+# consome as esferas (Shen_Init, late_a.c:607) e grava (ShenSave_Run, late_a_c.c:48-62). O dragão sorteado
+# (Rand_Range, late_a.c:480-509) e o prêmio dependem da semente: o verificador só exige as esferas consumidas; o prêmio
+# fica no registro (semente e hashes).
+marco shenlong_desejo
+evento entrar no Shenlong pelo menu principal, pedir o primeiro desejo e deixar o jogo gravar
+exige desbloqueio = 0
+escreve desbloqueio = 0x7F
+depois desbloqueio sem 0x7F

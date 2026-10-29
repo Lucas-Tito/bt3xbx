@@ -1,0 +1,41 @@
+# F7, etapa 2: os campos identificados do save (o bloco de 0x4000 bytes, include/sys/save.h), os únicos que uma receita
+# pode exigir, escrever ou conferir. Lidos igual por port/x360/headless/receitas.c e port/x360/tools/f7_receitas.py.
+# Colunas: nome, tipo (u8, u16, s32; b32/b64: um bit por elemento em palavras de 32/64 bits), deslocamento, quantidade de
+# elementos, passo entre elementos (0 nos campos de bits) e a fonte (onde o leitor/escritor do jogo mostra o campo).
+# Nenhum campo opaco entra aqui sem um leitor tipado antes.
+desbloqueio              s32  0x0008  1    4     include/menu/menu_c.h:85-87 (bits 0-6 esferas, 0x80, 0x100, 0x200); menu_c_c.c:121,144-149; late_a.c:607
+dificuldade              s32  0x000C  1    4     menu_b_d.c:702,786 (HistSel: copiado para o nível do episódio)
+saga.flags               s32  0x0010  9    16    menu_c.h:77-82 (MSLOT_*); menu_b_c.c:238,415,930-943 (HistOutro, filme final no 8)
+saga.liberados           s32  0x0014  9    16    SaveSlot.val[0]: menu_c_c.c:136-140; menu_a_d.c:229-233
+saga.vencidos            s32  0x0018  9    16    SaveSlot.val[1]: menu_c_c.c:197 (HistResult_Init); menu_c_c.c:152 (IsMenuCleared)
+saga.novos               s32  0x001C  9    16    SaveSlot.val[2]: menu_a_d.c:719
+ultimate.flags           s32  0x0208  1    4     UbSaveBody.ubFlags (menu_p.h:212): menu_p_b.c:44,166; menu_s_c.c:117-121; menu_n_d.c:34-36
+missao.paginas           s32  0x020C  1    4     menu_o_d.c:222,418 (MisSel); save.c:137; menu_s_d.c:1529 (SimEv17)
+sim.ranking.chara        s32  0x0210  10   12    UbSaveRank.chara (menu_p.h:182-186); UbScore_AddRanking, menu_p_d.c:233
+sim.ranking.pontos       s32  0x0214  10   12    UbSaveRank.score
+sim.ranking.fim          u8   0x0218  10   12    UbSaveRank.cleared
+sim.premio               u8   0x0288  1    1     UbSaveBody.unk288, escrito como byte em menu_r_c.c:137-142 (SimResult_Init)
+missao.cumprida          u8   0x028C  100  12    UbSaveBest.cleared (menu_p.h:191-198); MisResult_MarkCleared, menu_p_b.c:29-46
+missao.rank              u8   0x028D  100  12    UbSaveBest.rank: menu_p_d.c:253; menu_o_d.c:277
+missao.total             s32  0x0294  100  12    UbSaveBest.total: menu_p_d.c:256 (só troca se maior)
+sobrevivencia.vencidos   s32  0x073C  3    12    UbSaveBestB.value (menu_p.h:201-208): UbScore_SaveBestB, menu_p_d.c:268; menu_s_c.c:116
+sobrevivencia.total      s32  0x0740  3    12    UbSaveBestB.total (a troca do recorde compara este)
+sobrevivencia.rank       u8   0x0744  3    12    UbSaveBestB.rank
+discfusion.posicao       s32  0x077C  1    4     UbSaveBody.unk778[1]: save.c:138 (99); menu_n_c.c:666 (desce um ao vencer para cima)
+discfusion.curso         u8   0x0780  5    12    UbSaveBest.cleared de bestC: UbResult_MarkCourseCleared, menu_n_d.c:28
+discfusion.total         s32  0x0788  5    12    UbSaveBest.total de bestC: UbScore_SaveBestC, menu_p_d.c:284
+torneio.flags            s32  0x0A08  1    4     menu_j_b.c:22-28,565,653 (bits 0-4 convite, 0x20, 0x40)
+torneio.hora             s32  0x0A0C  1    4     menu_a.c:387-391; menu_j_b.c:33-44,66-67
+torneio.nivel            s32  0x0A10  1    4     menu_j_b.c:460
+personagem               b64  0x0C10  161  0     charaBits: ChrGrid_Build, BattleSetup_InitCharaBits; save.c:70-106
+estagio                  b64  0x0C28  35   0     stageBits: StgGrid_ApplyUnlocks; save.c:107-
+musica                   b32  0x0C30  25   0     bgmBits: BgmList_ApplyUnlocks; menu_b_c.c:936 (bit 7 no filme final)
+loja.flags               s32  0x1008  1    4     menu_v_d.c:39-40,1316-1318; menu_b_c.c:65 (OUTRO_COUNT)
+loja.nivel               s32  0x100C  1    4     Shop_CheckStockLevel, menu_v_d.c:34-38,289; menu_b_c.c:62-66
+datacenter.flags         s32  0x1208  1    4     DcMenu_Start, menu_z_c.c:146-148
+custom.exp               s32  0x1838  97   0x38  SaveCustom.unk30: menu_v_b.c:389-397; menu_u_g.c:165-184
+custom.nivel             u16  0x183C  97   0x38  SaveCustom.level: ChrTbl_GetLevel
+registro.nivel           u16  0x2D54  14   0x1C  SaveRec.level: DcPass_StoreRec, menu_z_d.c:426-431
+registro.chara           s32  0x2D58  14   0x1C  SaveRec.chara (-1 vazio): menu_z_d.c:426-431; menu_y_b.c:889
+item                     u8   0x2EC8  350  1     SAVE_ITEM_* (1 possui, 2 novo): Save_AddItem, save.c:176
+dinheiro                 s32  0x3028  1    4     Save_AddMoney, save.c:184
