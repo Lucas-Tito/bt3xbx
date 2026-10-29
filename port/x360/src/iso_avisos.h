@@ -7,7 +7,7 @@
 #define ISO_LARGO(s) ISO_LARGO_(s)
 /* Textos aprovados pelo Lucas em 29/10/2026. Toda frase da instalação fica aqui. */
 static const wchar_t *const ISO_CONV_TITULO = L"Convert ISO";
-static const wchar_t *const ISO_CONV_PERGUNTA = L"Convert your original USA ISO for Xbox 360? This takes up to 40 minutes and needs 3 GB of free space. Your original will be kept.";
+static const wchar_t *const ISO_CONV_PERGUNTA = L"Convert your original USA ISO for Xbox 360? It needs 3 GB of free space. Your original will be kept.";
 static const wchar_t *const ISO_CONV_SIM = L"Convert";
 static const wchar_t *const ISO_CONV_NAO = L"Cancel";
 static const wchar_t *const ISO_CONV_OK = L"OK";

@@ -63,7 +63,7 @@ instaladores diferentes. O ensaio nativo usa o mesmo selo e a mesma ferramenta d
 | Uso | Texto literal |
 |---|---|
 | Título da pergunta | `Convert ISO` |
-| Pergunta | `Convert your original USA ISO for Xbox 360? This takes up to 40 minutes and needs 3 GB of free space. Your original will be kept.` |
+| Pergunta | `Convert your original USA ISO for Xbox 360? It needs 3 GB of free space. Your original will be kept.` |
 | Botões da pergunta | `Convert` / `Cancel` (padrão) |
 | Progresso | `Checking ISO...`, `Copying ISO...`, `Converting ISO...`, `Verifying ISO...`, `Finishing...` |
 | Orientação do progresso | `Please wait. Do not turn off the console.` |
@@ -77,8 +77,8 @@ instaladores diferentes. O ensaio nativo usa o mesmo selo e a mesma ferramenta d
 | Botão dos avisos | `OK` |
 
 Só mudaram o título e o corpo da pergunta, o corpo da falha e a orientação para nome ocupado. Os demais textos
-e Cancel como padrão foram mantidos. O prazo na pergunta é o texto aprovado; a estimativa continua sem medição
-no console, conforme abaixo.
+e Cancel como padrão foram mantidos. Em 29/10 à noite o Lucas tirou o prazo da pergunta: ela só pede 3 GB
+livres e garante a original.
 
 ## Otimização pedida pelo Lucas em 29/10/2026
 
@@ -148,7 +148,7 @@ releitura na 2 enquanto a 3 lê, escondida pela leitura (75 a 201 s de E/S). Par
 reservar 30 a 80 ms/MB de 1395,102 MB, de 42 a 112 s, mais pequenas transferências, movimento de cabeças e flush.
 As faixas são hipóteses, não benchmark Xenon; o custo de 264 ms para converter 6,7 MB medido na decisão 18 serve
 apenas de ordem de grandeza. Estimativa nova: **6 a 17 minutos** em HD/USB saudável, com possibilidade de exceder
-em mídia lenta. O texto aprovado continua dizendo até 40 minutos.
+em mídia lenta. A primeira passagem no console (29/10) levou 193 s até a recusa em 66%; a pergunta não cita prazo.
 
 Medir do botão Convert à caixa de sucesso, com mídia, espaço livre, abertura fria/repetida e Guide anotados.
 O diário registra, por conversão:

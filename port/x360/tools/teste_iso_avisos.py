@@ -200,7 +200,7 @@ int main(void) {
     };
     int i;
     if (wcscmp(ISO_CONV_TITULO, L"Convert ISO") ||
-        wcscmp(ISO_CONV_PERGUNTA, L"Convert your original USA ISO for Xbox 360? This takes up to 40 minutes and needs 3 GB of free space. Your original will be kept.") ||
+        wcscmp(ISO_CONV_PERGUNTA, L"Convert your original USA ISO for Xbox 360? It needs 3 GB of free space. Your original will be kept.") ||
         wcscmp(ISO_CONV_SIM, L"Convert") || wcscmp(ISO_CONV_NAO, L"Cancel") || wcscmp(ISO_CONV_OK, L"OK") ||
         wcscmp(ISO_CONV_SUCESSO, L"ISO ready") ||
         wcscmp(ISO_CONV_PRONTA, L"Conversion complete. The game will restart.") ||
@@ -241,7 +241,7 @@ int main(void) {
                                   ("convert_iso.py", "iso_convertida.py"),
                                   ('ISO_LARGO(ISO_NOME) L".";', 'ISO_LARGO(ISO_NOME) L". Copy it there.";'),
                                   ('L"Convert ISO"', 'L"Prepare ISO"'),
-                                  ("This takes up to 40 minutes and needs", "This requires"),
+                                  ("? It needs 3 GB", "? This takes up to 40 minutes and needs 3 GB"),
                                   ("The ISO could not be converted.", "The ISO could not be prepared."),
                                   ("Rename your original ISO to bt3.iso and try again.", "Keep your original as bt3.iso.")]):
         if de not in fonte:
