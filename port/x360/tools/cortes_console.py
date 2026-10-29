@@ -31,7 +31,7 @@ for nome, constantes, fecho, diag, gpu in [
         f'BT3_CORTES={diag}', f'BT3_CORTES_GPU={gpu}',
         f'BT3_SAVES=game:\\sv_{a.rodada}_{nome}',
     ]
-    (a.saida / ('ambiente_' + nome + '.txt')).write_text('\n'.join(linhas) + '\n')
-shutil.copyfile(a.saida / 'ambiente_base.txt', a.saida / 'ambiente.txt')
+    (a.saida / ('environment_' + nome + '.txt')).write_text('\n'.join(linhas) + '\n')
+shutil.copyfile(a.saida / 'environment_base.txt', a.saida / 'environment.txt')
 print('ambientes e roteiros preparados em', a.saida)
 print('A build do 360 e a rodada são feitas na revisão. Use saves novos em toda abertura.')

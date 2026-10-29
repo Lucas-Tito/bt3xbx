@@ -1,10 +1,10 @@
 /*
  * F2: o pedaço de POSIX e de biblioteca C que o port usa e a CRT do Xbox 360 não tem, sobre a API do console. As
  * declarações que o código do jogo e do port vê estão em port/x360/shim (o c89.py pré-processa com elas).
- *   - ambiente: getenv lê uma tabela (padrões da build sem janela + game:\ambiente.txt, linhas NOME=VALOR, e
+ *   - ambiente: getenv lê uma tabela (padrões da build sem janela + game:\environment.txt, linhas NOME=VALOR, e
  *     -NOME para tirar uma variável, como BT3_DEMO para rodar os menus);
  *   - arquivos: caminhos com '/' viram '\' e caminho relativo vai para game:\ (a pasta do .xex);
- *   - saída de texto (stdout, stderr, printf): game:\saida.txt, com buffer; o commit ("c") é da thread do diário (a cada
+ *   - saída de texto (stdout, stderr, printf): game:\output.txt, com buffer; o commit ("c") é da thread do diário (a cada
  *     50 ms, só com algo no buffer), não da thread do jogo (F5/08.md, "Os logs e os engasgos");
  *   - tempo, pastas, threads (pthread sobre threads e seções críticas) e os atômicos do GCC.
  */
@@ -53,7 +53,7 @@ void Port_X360FecharSaida(void);
 static void depois_do_ambiente(void);
 
 /* As chaves do diário (diario.c, que não lê o ambiente): BT3_LOG_SINCRONO=1 (uma linha, um flush, como antes do anel) e
-   BT3_LOG_FLUSH_MS=<ms> (a idade máxima de uma linha gravada sem flush). Também liga o game:\saida.txt à thread do
+   BT3_LOG_FLUSH_MS=<ms> (a idade máxima de uma linha gravada sem flush). Também liga o game:\output.txt à thread do
    diário. Chamada nos dois fins de Ambiente_Carregar. */
 static void diario_ambiente(void) {
     const char *l = getenv("BT3_LOG"), *s, *m;
@@ -75,7 +75,7 @@ void Ambiente_Carregar(const char *caminho) {
     /* o jogo como ele roda (23/10/2026, pedido do Lucas): sem a luta de demonstração, desenhando pela GPU com a VU1 em
        HLSL, a gravação e o desenho em threads próprias (F5, etapa 8), o som do jogo (F6) e o 16:9 (decisão 26); a 1,33,
        o afiado, o FXAA, os alvos residentes, o envio por linhas e a VU1 direto já são padrão no backend. Os testes que
-       queriam o de antes dizem no ambiente.txt (BT3_DEMO=1, BT3_GS=none, -BT3_SOM, -BT3_WIDE...) */
+       queriam o de antes dizem no environment.txt (BT3_DEMO=1, BT3_GS=none, -BT3_SOM, -BT3_WIDE...) */
     definir("BT3_GS", "gpu");
     definir("BT3_VU1", "1");
     definir("BT3_VU_VERTS", "98304");
@@ -93,7 +93,7 @@ void Ambiente_Carregar(const char *caminho) {
     definir("BT3_DATA", "game:\\gamedata");
     definir("BT3_SAVES", "game:\\saves");
     /* BT3_HASH (a linha por quadro do estado360.c) não tem padrão: o hash.txt do console não é critério (decisão 17, F5/08.md)
-       e custa uma escrita que estende o arquivo no FATX a cada 4 KB; liga-se com BT3_HASH=game:\hash.txt no ambiente.txt */
+       e custa uma escrita que estende o arquivo no FATX a cada 4 KB; liga-se com BT3_HASH=game:\hash.txt no environment.txt */
     /* o item 4 do menu principal (Dragon Net Battle, src/menu/menu_a.c) fica escondido, como nos roteiros sem
        janela (menus.sh): o mesmo menu nas três builds, e os roteiros de controle não se desalinham (decisão 22) */
     definir("BT3_MENU_ITEM4", "0");
@@ -167,7 +167,7 @@ static void mods_no_boot(void) {
     const char *raiz;
     char m[512], c[512];
     DWORD at;
-#pragma warning(suppress : 4996) /* (o getenv é o daqui, que lê o ambiente.txt) */
+#pragma warning(suppress : 4996) /* (o getenv é o daqui, que lê o environment.txt) */
     raiz = getenv("BT3_DATA");
     if (raiz == NULL || raiz[0] == '\0') {
         return;
@@ -186,7 +186,7 @@ FILE *Port_X360Saida(void);
 static void depois_do_ambiente(void) {
     diario_ambiente();
     mods_no_boot();
-    /* (F6) o game:\saida.txt criado aqui, na main antes das threads: o primeiro fprintf(stderr) do jogo o criava na
+    /* (F6) o game:\output.txt criado aqui, na main antes das threads: o primeiro fprintf(stderr) do jogo o criava na
        thread do jogo (o do dispositivo de som, snd_adx.c, dentro de um RPC; o suspeito do RPC de 54 ms da rodada do
        console, plano/F6/05.md) */
     Port_X360Saida();
@@ -310,7 +310,7 @@ FILE *Port_X360Saida(void) {
         /* nunca _IONBF: sem buffer, o _flsbuf da CRT do XDK faz _write(fh, &ch, 1) com ch int
            (Source/crt/_flsbuf.c:189), e no PowerPC sai o byte alto, 0, de cada caractere. "c": fflush e
            _flushall chamam FlushFileBuffers (_commit), como o diario.c */
-        sSaida = fopen("game:\\saida.txt", "wc");
+        sSaida = fopen("game:\\output.txt", "wc");
     }
     return sSaida;
 }

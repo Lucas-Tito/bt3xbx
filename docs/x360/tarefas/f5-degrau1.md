@@ -7,7 +7,7 @@ Branch: `cursor/f5-degrau1` (a partir de `troca/main`). Relatório: `~/entrega-f
 Leia antes, inteiro, `docs/x360/plano/F5/08-threads.md` (o estudo; você o escreveu) e a seção "Rodada no console
 (18/10/2026)" do `docs/x360/plano/F5/08.md`. O Lucas aprovou a recomendação do estudo, com as respostas conservadoras
 da seção 9 (as capacidades das listas não encolhem agora; o gatilho da decisão 24, resposta 5, vale só para o degrau
-1, desligável pelo `ambiente.txt`; a thread de desenho dona do dispositivo com a main só vigiando; gravação na thread
+1, desligável pelo `environment.txt`; a thread de desenho dona do dispositivo com a main só vigiando; gravação na thread
 de hardware 0, desenho na 1, nunca na 3 até medir). Faça, nesta ordem, cada parte com commit próprio:
 
 1. **As medições baratas da seção 8** que rodam no WSL: o contador de bytes por quadro nas builds `--gpu`, e a rodada
@@ -22,7 +22,7 @@ de hardware 0, desenho na 1, nunca na 3 até medir). Faça, nesta ordem, cada pa
    `#ifdef PORT_BIG_ENDIAN` (ou de uma chave de teste que só as builds de teste definem, como o `BT3_TESTE_VU1` da
    etapa 8), provada no WSL pelas listas de desenho quadro a quadro e pelo `BT3_GS_RACE` nos `f5_duelo` e `f5_treino`
    (nenhum quadro divergente). A parte do 360 (a thread, a posse do dispositivo, a saída, a Guide, o vigia) em
-   `port/x360/src`, desligável por uma chave no `ambiente.txt` (por exemplo `BT3_GS_THREAD`); você NÃO consegue compilar
+   `port/x360/src`, desligável por uma chave no `environment.txt` (por exemplo `BT3_GS_THREAD`); você NÃO consegue compilar
    o 360: escreva no C89 do `cl.exe` (declarações no começo do bloco, sem `inline`) e no C++ do backend, com cuidado, e
    diga no relatório o que não pôde ser conferido.
 
@@ -34,7 +34,7 @@ de hardware 0, desenho na 1, nunca na 3 até medir). Faça, nesta ordem, cada pa
   teste, provado pelos objetos.
 - Cada verificador novo visto falhando de propósito.
 - Ao fim, a seção "Degrau 1" no `08-threads.md` com o que foi feito, as provas, a estimativa de ganho no 360, o que
-  falta compilar e conferir no console e o roteiro da rodada (o `ambiente.txt` com a chave ligada e desligada).
+  falta compilar e conferir no console e o roteiro da rodada (o `environment.txt` com a chave ligada e desligada).
 
 ## Limites
 

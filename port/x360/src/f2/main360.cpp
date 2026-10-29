@@ -7,14 +7,14 @@
  *   amarelo  um instante, entre o D3D e o jogo
  *   azul     a luta rodando
  *   verde    terminou bem; qualquer botão volta para o dashboard
- *   vermelho falhou (o log diz onde: game:\bt3xbx.log, game:\saida.txt)
+ *   vermelho falhou (o log diz onde: game:\bt3xbx.log, game:\output.txt)
  * Sem log, o fundo é preto. Uma exceção gera crash.txt e uma caixa do sistema.
  * A ISO recusada tem uma caixa do sistema sobre o preto, e o jogo não começa (decisão 23).
  * O jogo roda noutra thread, com pilha grande e a FPU em truncamento (o modelo do PS2 para soma e multiplicação).
  * Com BT3_GS=gpu (F3, etapa 7) o jogo desenha: o dispositivo passa para a thread do jogo, que apresenta um quadro por
  * quadro do GS (port/x360/src/gs/gs_d3d.cpp), e a main só espera; quando o jogo termina, ela pega o dispositivo de
  * volta para a cor do fim.
- * Por quadro: game:\hash.txt, só com BT3_HASH no ambiente.txt (o mesmo formato da build de PC, para
+ * Por quadro: game:\hash.txt, só com BT3_HASH no environment.txt (o mesmo formato da build de PC, para
  * port/x360/tools/compara.py), e o tempo de cada
  * quadro no log (port/x360/src/f2/estado360.c).
  */
@@ -129,7 +129,7 @@ extern "C" void Port_GsThreadPartida(void) {
    queda dela tem ramo próprio no AoMorrer) e o processador, pelo BT3_GS_DESENHO_HW: 3 (o padrão, a irmã do jogo, no núcleo
    1) ou 1 (a irmã da gravação, no núcleo 0), para comparar. Nunca a 4 nem a 5 (o áudio), nem a 0 e a 2 (gravação e jogo). */
 extern "C" void Port_GsDesenhoPartida(void) {
-#pragma warning(suppress : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
+#pragma warning(suppress : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt) */
     const char *e = getenv("BT3_GS_DESENHO_HW");
     int hw = e != NULL ? atoi(e) : 3;
     _controlfp(_RC_CHOP, _MCW_RC); /* (o mesmo arredondamento do frame_end na thread de gravação) */
@@ -358,7 +358,7 @@ void __cdecl main() {
 
     gThreadPrincipal = GetCurrentThreadId();
     SetUnhandledExceptionFilter(AoMorrer);
-    Ambiente_Carregar("game:\\ambiente.txt");
+    Ambiente_Carregar("game:\\environment.txt");
     Diario_Escrever("bt3xbx F2, jogo sem janela (" __DATE__ " " __TIME__ "), pilha da main perto de %08X",
                     (unsigned)(size_t)&local);
     QuedaTeste_Configurar(getenv("BT3_QUEDA_TESTE"), getenv("BT3_QUEDA_TESTE_THREAD"));
@@ -390,7 +390,7 @@ void __cdecl main() {
     }
 
     /* BT3_GS=gpu: quem desenha é o jogo (gs_d3d.cpp pega o dispositivo no começo do desenho) */
-#pragma warning(suppress : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt, não o da CRT) */
+#pragma warning(suppress : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt, não o da CRT) */
     gpu = !recusada && getenv("BT3_GS") != NULL && strcmp(getenv("BT3_GS"), "gpu") == 0;
     gX360Dev = dev;
     sTelaSaida = dev;

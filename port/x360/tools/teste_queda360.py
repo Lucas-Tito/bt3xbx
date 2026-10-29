@@ -35,6 +35,8 @@ def main():
             if r.returncode:
                 raise SystemExit(r.stderr)
         mutantes = (
+            ('nome antigo do ambiente', 'main360.cpp', r'Ambiente_Carregar("game:\\environment.txt");',
+             r'Ambiente_Carregar("game:\\environment.txt");'.replace('environment', 'ambiente'), 'jogo'),
             ('sem relatório', 'queda360.h', 'InterlockedExchange(&sRelatorioSalvo, Queda_Gravar());',
              'InterlockedExchange(&sRelatorioSalvo, 1); (void)&Queda_Gravar;', 'jogo'),
             ('registro truncado', 'main360.cpp', '(unsigned __int64)c->Gpr3;', '(unsigned)c->Gpr3;', 'jogo'),

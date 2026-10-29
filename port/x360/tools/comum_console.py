@@ -32,8 +32,8 @@ for nome, constantes, fecho, gpu in ordem:
               'BT3_TEMPOS=0', 'BT3_TEX_ORIGEM=1', 'BT3_PICOS=36', 'BT3_PICOS_TELA=1',
               f'BT3_VU_CONSTANTES={constantes}', f'BT3_VU_FECHO={fecho}',
               'BT3_CORTES=0', 'BT3_CORTES_GPU=0', f'BT3_COMUM_GPU={gpu}', f'BT3_SAVES=game:\\{save}']
-    (a.saida/f'ambiente_{nome}.txt').write_text('\n'.join(linhas)+'\n')
-shutil.copyfile(a.saida/'ambiente_base1.txt', a.saida/'ambiente.txt')
+    (a.saida/f'environment_{nome}.txt').write_text('\n'.join(linhas)+'\n')
+shutil.copyfile(a.saida/'environment_base1.txt', a.saida/'environment.txt')
 (a.saida/'ordem.txt').write_text('\n'.join(x[0] for x in ordem)+'\n')
 print('10 ambientes preparados:', a.saida)
 print('Seis controles sem marcas, depois quatro diagnósticos, um quadro por abertura.')

@@ -62,14 +62,14 @@ def main():
         for nome in ('comum_console.py','cortes_console.py','reprojeto_console.py'):
             saida=p/nome
             subprocess.run(['python3',str(RAIZ/'port/x360/tools'/nome),str(saida),'--rodada','logs360'],check=True,capture_output=True)
-            gerados=list(saida.glob('ambiente*.txt'))
+            gerados=list(saida.glob('environment*.txt'))
             if not gerados or any('BT3_LOG=1' not in f.read_text().splitlines() for f in gerados):raise ValueError('gerador sem log: '+nome)
             print(f'gerador {nome}: {len(gerados)} ambientes conferidos')
         if a.mutantes:
             copia=p/'copia'
             for nome in nomes|{str(TABELA)}:
                 dest=copia/nome;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(RAIZ/nome,dest)
-            amb=copia/'port/x360/ambientes/teste/ambiente.txt';amb.parent.mkdir(parents=True);amb.write_text('BT3_GS=gpu\n')
+            amb=copia/'port/x360/ambientes/teste/environment.txt';amb.parent.mkdir(parents=True);amb.write_text('BT3_GS=gpu\n')
             try:conferir(copia)
             except ValueError as e:print('mutante ambiente sem log: acusado:',e)
             else:raise ValueError('mutante ambiente não acusado')

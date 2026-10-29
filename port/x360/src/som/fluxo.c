@@ -17,7 +17,7 @@
 #ifdef _XBOX
 #include <xtl.h>
 #include "diario.h"
-#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
+#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt) */
 #else
 #include <pthread.h>
 #include <time.h>

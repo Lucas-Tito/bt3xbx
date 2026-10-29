@@ -66,6 +66,10 @@ Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddr
 
 ## Lições das ferramentas do port que custaram horas
 
+- Diagnóstico do projeto: `environment.txt` configura o título, `output.txt` recebe stdout/stderr e
+  `bt3xbx.log` mantém o diário. Modelos para copiar ao console usam `environment_*.txt`.
+  Conteúdo e chaves continuam em português. O título só lê o nome atual da configuração.
+
 - **Roteiros na PPC: `SEMMAPA=1`, nunca `PPC=1`.** A PPC com o mapa passa do menu principal e trava no Flash da tela
   seguinte, que o mapa por posição não inverte: uma hora por roteiro sem resultado (a etapa 5a da F4 perdeu quatro).
   A PPC sem mapa para na guarda em minutos. Detalhes no guia, "Roteiros na etapa 5a da F4".

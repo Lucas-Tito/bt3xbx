@@ -55,11 +55,11 @@ int main(int argc,char **argv) {
     bool ligado=strcmp(argv[1],"ligado")==0;
     bool vazio=strcmp(argv[1],"ausente")==0;
     if(!vazio) {
-        FILE *f=fopen("ambiente.txt","w");
+        FILE *f=fopen("environment.txt","w");
         fprintf(f,"BT3_LOG=%s\nBT3_LOG_SINCRONO=1\nBT3_TEMPOS=1\nBT3_SHOT=1\nBT3_HASH=hash.txt\n",ligado?"1":argv[1]);
         fclose(f);
     }
-    Ambiente_Carregar("ambiente.txt");
+    Ambiente_Carregar("environment.txt");
     for(int i=0;i<100;++i) {
         Port_Printf("teste %d",i);
         Port_X360Fprintf(Port_X360Saida(),"erro %d",i);
@@ -129,6 +129,15 @@ def executar(exe, pasta, caso):
     return subprocess.run([str(exe),caso],cwd=pasta,capture_output=True,text=True,timeout=5)
 
 
+def conferir_arquivos(pasta, nome, caso):
+    criados={a.name for a in pasta.iterdir()}
+    esperados=set() if caso=='ausente' or nome!='ambiente' else {'environment.txt'}
+    if caso=='ligado': esperados|={'game:\\bt3xbx.log','game:\\output.txt'}
+    if criados!=esperados:
+        raise ValueError(f'FALHA arquivos {nome}/{caso}: {criados} != {esperados}')
+    return sorted(criados)
+
+
 def codigos():
     posix = (SRC/'f2/posix360.c').read_text()
     a = posix.index('#define MAX_VARS'); b=posix.index('/* ------------------------------------------------------------------ arquivos */')
@@ -173,11 +182,15 @@ def main():
                 pasta=p/(nome+'-'+caso)
                 r=executar(exe,pasta,caso)
                 if r.returncode: raise SystemExit(f'{nome}/{caso}: {r.stderr}')
-                criados={a.name for a in pasta.iterdir()}
-                esperados=set() if caso=='ausente' or nome!='ambiente' else {'ambiente.txt'}
-                if caso=='ligado': esperados|={'game:\\bt3xbx.log','game:\\saida.txt'}
-                if criados!=esperados: raise SystemExit(f'FALHA arquivos {nome}/{caso}: {criados} != {esperados}')
-                print(f'{nome}/{caso}: tudo certo; arquivos={sorted(criados)}')
+                criados=conferir_arquivos(pasta,nome,caso)
+                print(f'{nome}/{caso}: tudo certo; arquivos={criados}')
+        codigo=fontes['ambiente'].replace('output.txt','saida'+'.txt')
+        exe=compilar(p,'nome-antigo',codigo)
+        pasta=p/'caso-nome-antigo'; r=executar(exe,pasta,'ligado')
+        if r.returncode: raise SystemExit(f'sabotagem não chegou à conferência dos arquivos: {r.stderr}')
+        try: conferir_arquivos(pasta,'ambiente','ligado')
+        except ValueError as e: print('mutante saída com nome antigo: acusado:',e)
+        else: raise SystemExit('mutante saída com nome antigo não acusado')
         mutantes=(
             ('log ligado por padrão','ambiente','gX360Log = l != NULL && strcmp(l, "1") == 0;', 'gX360Log = l == NULL || strcmp(l, "1") == 0;', 'ausente'),
             ('saída sem guarda','ambiente','if (!gX360Log) return NULL;', '', 'ausente'),

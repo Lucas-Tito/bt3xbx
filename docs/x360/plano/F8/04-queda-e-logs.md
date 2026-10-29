@@ -82,11 +82,11 @@ com os nomes do cartão americano (`BASLUS-21678DBZT3`, `icon.sys` e arquivos de
 `crash.txt` na queda. Nomes da árvore já estavam em inglês e não foram trocados; os dados binários
 continuam no formato do jogo. `.tmp` e `.new` são estados transitórios da gravação atômica.
 As configurações do port ficam desativadas pelo padrão `BT3_SETTINGS` vazio. Capturas, hash,
-gravações de controle e rastros exigem chaves de diagnóstico. Não se cria `ambiente.txt`.
+gravações de controle e rastros exigem chaves de diagnóstico. Não se cria `environment.txt`.
 
-Com diagnóstico, continuam os nomes de projeto `bt3xbx.log`, `saida.txt` e o arquivo de entrada
-`ambiente.txt`, com conteúdo em português permitido. Capturas usam a pasta configurada ou `shots`,
-e outros rastros usam os caminhos configurados. A decisão de traduzir esses arquivos fica com o Lucas.
+Com diagnóstico, usam-se os nomes de projeto `bt3xbx.log`, `output.txt` e o arquivo de entrada
+`environment.txt`, com conteúdo em português permitido. Capturas usam a pasta configurada ou `shots`,
+e outros rastros usam os caminhos configurados. A tradução dos nomes foi aprovada pelo Lucas.
 As cores de fase só são apresentadas com `BT3_LOG=1`; sem ele, o fundo dos avisos e da saída é preto.
 
 ## Provas locais e sabotagens

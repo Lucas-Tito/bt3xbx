@@ -77,7 +77,7 @@ O anel do diário pode perder as últimas mensagens se a própria E/S ou sua tra
 
 ## Queda controlada, desligada por padrão
 
-Em `ambiente.txt`, usar apenas uma variante por execução:
+Em `environment.txt`, usar apenas uma variante por execução:
 
 ```text
 BT3_QUEDA_TESTE=180

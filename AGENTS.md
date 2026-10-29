@@ -41,6 +41,8 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
   nem de lançar vários `flock` em segundo plano: a ordem em que pegam a trava não é garantida. Junte os passos
   dependentes num script só, dentro de um `flock`.
 - Não mexa no console (FTP) sem a tarefa pedir.
+- Arquivos de diagnóstico do projeto: `environment.txt` (entrada), `output.txt` (saída) e `bt3xbx.log`.
+  Modelos para copiar ao console usam `environment_*.txt`; não há leitura alternativa dos nomes anteriores.
 
 ## Como entregar
 

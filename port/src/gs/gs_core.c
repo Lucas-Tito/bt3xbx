@@ -1970,7 +1970,11 @@ static int gs_on(void) {
             /* BT3_GS_THREAD=1: the back end and the list run on the render thread (experimental: the game was seen
                to change data a list still refers to, which shows as a jumping camera). Default: this thread. */
 #ifdef BT3_GS_ESPERAS
+#ifdef PORT_X360
+            /* (degrau 1) no environment.txt do 360: BT3_GS_THREAD=1 liga; sem a linha, ou com 0, fica na thread do jogo */
+#else
             /* (degrau 1) no ambiente.txt do 360: BT3_GS_THREAD=1 liga; sem a linha, ou com 0, fica na thread do jogo */
+#endif
             sThreaded = getenv("BT3_GS_THREAD") != NULL && strcmp(getenv("BT3_GS_THREAD"), "0") != 0;
 #else
             sThreaded = getenv("BT3_GS_THREAD") != NULL;

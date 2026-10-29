@@ -18,7 +18,7 @@ formatado depois por outra thread, descarregado só em momentos seguros) e o **C
 
 1. **Inventário do que o nosso 360 grava em disco durante o jogo**, com a frequência: o diário
    (`port/x360/src/diario.c`: `WriteFile` + `FlushFileBuffers` por linha, com trava, pela regra do `CLAUDE.md`), o
-   `game:\hash.txt` por quadro (`port/x360/src/f2/estado360.c`), a saída de texto `game:\saida.txt` com `fflush` por
+   `game:\hash.txt` por quadro (`port/x360/src/f2/estado360.c`), a saída de texto `game:\output.txt` com `fflush` por
    `printf` (`port/x360/src/f2/posix360.c`), as linhas periódicas do backend (`gs_d3d.cpp`, a cada 60 quadros), as
    capturas (`BT3_SHOT`), e qualquer outro. Em que thread cada um roda (a do jogo, a de desenho, a main).
 2. **Comparação** com os dois projetos: o que eles fazem diferente (buffer em memória, thread própria, descarga em
@@ -30,7 +30,7 @@ formatado depois por outra thread, descarregado só em momentos seguros) e o **C
 4. **Proposta e implementação** de um diário que não trave: por exemplo, linhas num anel em memória e uma thread de
    baixa prioridade que grava em lote, com a regra do `CLAUDE.md` preservada onde ela importa (numa queda, o que já
    foi escrito tem de estar no disco: o filtro de exceção descarrega o anel antes de terminar); o `hash.txt` por
-   quadro desligado por padrão nas builds de jogo (ligável pelo `ambiente.txt`) se ele custar; o `fflush` por
+   quadro desligado por padrão nas builds de jogo (ligável pelo `environment.txt`) se ele custar; o `fflush` por
    `printf` revisto. A interface `Diario_Escrever` não muda (outros arquivos a chamam). **Não mexa em
    `port/x360/src/gs/gs_d3d.cpp`**: outra frente está mexendo nele agora.
 

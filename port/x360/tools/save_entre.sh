@@ -73,8 +73,8 @@ if [ -n "${CARTAO:-}" ]; then
     python3 $P analisa $arq | sed 's/^/   /'
     prev=$(python3 $P preve $arq --build ppc); echo "   previsão na ppc: $prev"
     [ -n "$(roteiro_de "$prev")" ] || { echo "   >> previsão sem roteiro: $prev"; exit 1; }
-    roda ppc "$(roteiro_de "$prev")" $k/cartao $k/saida.txt
-    python3 $P julga $k/saida.txt --espera "$(espera_de "$prev")" --codigo "$(cat $k/saida.txt.codigo)" | sed 's/^/   /'
+    roda ppc "$(roteiro_de "$prev")" $k/cartao $k/output.txt
+    python3 $P julga $k/output.txt --espera "$(espera_de "$prev")" --codigo "$(cat $k/output.txt.codigo)" | sed 's/^/   /'
     exit ${PIPESTATUS[0]}
 fi
 
@@ -145,11 +145,11 @@ for caso in "${CASOS[@]}"; do
     rotulo="o save da $fonte"; [ "$estrago" = - ] || rotulo="$rotulo, $estrago"
     echo "-- $n ($rotulo, na $b): previsto $prev"
     [ -n "$rot" ] || { falhou "$n: previsão sem roteiro ($prev)"; continue; }
-    [ -n "${REUSA:-}" ] || roda $b $rot $k/cartao $k/saida.txt
-    python3 $P julga $k/saida.txt --espera $esp --codigo "$(cat $k/saida.txt.codigo 2>/dev/null || echo 999)" | sed 's/^/   /'
+    [ -n "${REUSA:-}" ] || roda $b $rot $k/cartao $k/output.txt
+    python3 $P julga $k/output.txt --espera $esp --codigo "$(cat $k/output.txt.codigo 2>/dev/null || echo 999)" | sed 's/^/   /'
     [ ${PIPESTATUS[0]} = 0 ] || falhou "$n: o rastro não cumpre a previsão ($esp) ou caiu"
-    grep -a '^mc: leu ' $k/saida.txt | head -1 | sed 's/^/   /'
-    python3 port/x360/tools/roteiros.py telas $k/saida.txt > $k/telas.txt
+    grep -a '^mc: leu ' $k/output.txt | head -1 | sed 's/^/   /'
+    python3 port/x360/tools/roteiros.py telas $k/output.txt > $k/telas.txt
     if [ "$esp" = danificado ]; then
         # o New Game gravou por cima um save da ordem desta build, que ela mesma carrega
         novo=$k/cartao/card1/$DADOS/$DADOS

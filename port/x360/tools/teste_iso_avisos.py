@@ -199,6 +199,7 @@ int main(void) {
         Iso_Aviso(i, &titulo, &texto);
         if (!wcsstr(texto, L"bt3-x360.iso") || !wcsstr(texto, L"root of the game folder") ||
             (i != 2 && !wcsstr(texto, L"convert_iso.py")) || wcsstr(texto, L"ambiente.txt") ||
+            wcsstr(texto, L"environment.txt") ||
             wcsstr(texto, L"BT3_ISO")) return 1;
     }
     Iso_Aviso(2, &titulo, &texto);
@@ -218,6 +219,7 @@ int main(void) {
     if executar(pasta).returncode:
         raise ValueError("textos públicos incompatíveis")
     for j, (de, para) in enumerate([("root of the game folder", "ambiente.txt"),
+                                  ("root of the game folder", "environment.txt"),
                                   ("expected name", "nome esperado"),
                                   ("ISO conversion required", "Unsupported converted ISO version"),
                                   ("convert_iso.py", "iso_convertida.py"),

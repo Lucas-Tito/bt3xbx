@@ -22,12 +22,12 @@ void Diario_Fechar(void); /* grava o que falta, com flush, para a thread e fecha
    (um flush); pode custar de 30 a 40 ms no HD: só para o filtro de exceção, a saída do jogo e os pontos sem volta. */
 void Diario_Descarregar(void);
 
-/* O ambiente.txt: sincrono != 0 volta a gravar e dar flush em cada linha, na thread de quem escreve (BT3_LOG_SINCRONO,
+/* O environment.txt: sincrono != 0 volta a gravar e dar flush em cada linha, na thread de quem escreve (BT3_LOG_SINCRONO,
    para comparar com o anel); flushMs é a idade máxima de uma linha gravada sem flush (BT3_LOG_FLUSH_MS, 0 = padrão). */
 void Diario_Configurar(int sincrono, int flushMs);
 
 /* Uma função chamada pela thread escritora a cada lote (a cada 50 ms): trabalho de disco de outro módulo que não
-   deve ficar na thread do jogo (posix360.c a usa para o game:\saida.txt). */
+   deve ficar na thread do jogo (posix360.c a usa para o game:\output.txt). */
 void Diario_Gancho(void (*funcao)(void));
 
 /* 1 se a thread escritora trabalha (o diário não grava na thread de quem escreve); 0 no jeito síncrono. Quem depende

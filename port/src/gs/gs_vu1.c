@@ -76,7 +76,7 @@ volatile unsigned gGsVu1Instr, gGsVu1Prog;
    na lista do quadro), [1] rodados no interpretador, [2] não executados (BT3_VU1 desligado ou quadro só refeito). */
 unsigned gGsVu1Lotes[4][3];
 unsigned gGsVu1Desconhecido[8][2]; /* tamanho, chamadas (os 8 primeiros tamanhos; o resto soma em gGsVu1Lotes[3]) */
-unsigned gGsVu1InstrDesc;          /* instruções que o interpretador não conhece (também no saida.txt) */
+unsigned gGsVu1InstrDesc;          /* instruções que o interpretador não conhece (também no output.txt) */
 double gGsVu1Ms;                   /* tempo dentro de GsVu1_Call neste quadro, em ms (o backend lê e zera) */
 double GsD3d_Ms(uint64_t tiques);  /* gs_d3d.cpp */
 uint64_t GsD3d_Tique(void);

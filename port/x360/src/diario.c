@@ -11,7 +11,7 @@
  *     (sem exceção) perde as últimas centenas de ms, não a execução;
  *   - Diario_Descarregar é síncrono (grava o anel e faz o flush antes de voltar): o filtro de exceção a chama logo
  *     depois da linha CRASH, e Port_Sair ao sair; Diario_Fechar também;
- *   - BT3_LOG_SINCRONO=1 no ambiente.txt volta ao jeito antigo (gravar e dar flush na própria chamada), para medir uma
+ *   - BT3_LOG_SINCRONO=1 no environment.txt volta ao jeito antigo (gravar e dar flush na própria chamada), para medir uma
  *     coisa contra a outra com a mesma build; sem a thread (CreateThread falhou) o diário também cai nesse jeito.
  * Anel cheio: a linha é descartada e contada, e a escritora grava "[... N linhas perdidas ...]" (o jogo nunca espera
  * pelo disco). Seguro entre threads. Chamável de C e de C++. Nada aqui usa getenv: quem lê o ambiente (posix360.c)
@@ -239,7 +239,7 @@ static DWORD WINAPI Escritora(LPVOID arg) {
             sujo = 1;
         }
         if (sGancho != NULL) {
-            sGancho(); /* (posix360.c: o que o jogo imprimiu em game:\saida.txt vai ao disco aqui, fora da thread dele) */
+            sGancho(); /* (posix360.c: o que o jogo imprimiu em game:\output.txt vai ao disco aqui, fora da thread dele) */
         }
         agora = GetTickCount();
         if (sujo && agora - ultimoFlush >= (DWORD)sFlushMs) {

@@ -82,7 +82,10 @@ void Port_X360FecharSaida() {}
 const char *Port_Carimbo360() { return "teste-123 diff:limpo"; }
 void Port_MapMemory() {}
 int MpegMede_Rodar() { return 0; }
-void Ambiente_Carregar(const char *) { gX360Log=caso=="log-ligado"; }
+void Ambiente_Carregar(const char *caminho) {
+    Exigir(strcmp(caminho,"game:\\environment.txt")==0,"nome do arquivo de ambiente");
+    gX360Log=caso=="log-ligado";
+}
 void Estado_Resumo() {}
 const char *volatile gPortStage="starting";
 void GsD3d_Soltar() {}

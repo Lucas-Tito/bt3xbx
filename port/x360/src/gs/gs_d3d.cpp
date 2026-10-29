@@ -55,7 +55,7 @@
  * Memória (F5, etapa 1; o contrato de posse está em docs/x360/plano/F5/01.md): os bytes reais de cada classe
  * (texturas decodificadas, alvos, buffers fixos, o que espera a GPU na cova), um piso de memória física livre e um
  * teto para as texturas. Quando uma textura ou um alvo novo não cabe, o backend diz quanto falta e o frontend
- * (gs_draw.c, GsDraw_X360Abre) descarta as texturas do cache usadas há mais tempo. Ajustes no ambiente.txt:
+ * (gs_draw.c, GsDraw_X360Abre) descarta as texturas do cache usadas há mais tempo. Ajustes no environment.txt:
  *   BT3_MEM_PISO_MB=32   memória física que fica sempre livre (o piso; abaixo dele, descarte e, sem o que
  *                        descartar, recusa com diagnóstico);
  *   BT3_MEM_TEX_MB=128   teto das texturas decodificadas, vivas e pendentes (acima dele, descarte; sem o que
@@ -187,7 +187,7 @@ static D3DTexture *sBranco, *sDate;
 static D3DTexture *sDateFonte; /* o que os desenhos com DATE leem: sDate, ou a textura de um alvo fora da EDRAM */
 
 /* F5, etapa 7, segunda parte: as passadas nativas (nat_*, docs/x360/formatos/gs-nativos.md), o FBA e o recorte da
-   VU1 pelo w. Ajustes no ambiente.txt, cada um desligável para comparar:
+   VU1 pelo w. Ajustes no environment.txt, cada um desligável para comparar:
      BT3_NATIVOS=7  bits: 1 o contorno (native 1), 2 as passadas de tabela pelos ids (a chave, o brilho de objeto),
                     4 as de tabela pela profundidade (a tinta, o brilho do céu, a névoa); a cópia dos ids (native 4)
                     acontece se 1 ou 2 estiver ligado. Desligado: contado e pulado, como antes.

@@ -13,7 +13,7 @@
  * conta), e uma falha dentro da mistura (o código do jogo roda ali) é pega por __try: a mistura passa a dar silêncio,
  * a trava é devolvida e o vigia escreve onde foi (Iar, Lr), sem derrubar o jogo.
  *
- * Chaves do ambiente.txt (o getenv do posix360.c):
+ * Chaves do environment.txt (o getenv do posix360.c):
  *   BT3_SOM=1          o som do jogo: o SDL_InitSubSystem do snd_adx.c passa a abrir o dispositivo. Sem ela, o jogo
  *                      fica como antes da etapa 3. Só tem efeito com desenho (BT3_GS=gpu), como no PC
  *   BT3_SOM_TESTE=1    o tom de teste no começo, pelo mesmo caminho (fluxos do núcleo), em cinco fases
@@ -51,7 +51,7 @@ extern unsigned gPortVBlanks, gGsFrame;
 extern volatile unsigned gX360Luta;
 }
 
-#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
+#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt) */
 
 #define BLOCO 512   /* quadros por buffer: 10,7 ms */
 #define NBUF 4      /* buffers na fila: até 42,7 ms de folga para o retorno atrasar */
@@ -154,7 +154,7 @@ extern "C" void som_destravar(void) {
 
 extern "C" const char *SDL_GetError(void) {
     if (!sJogo) {
-        return "som do jogo desligado (BT3_SOM=1 no ambiente.txt liga)";
+        return "som do jogo desligado (BT3_SOM=1 no environment.txt liga)";
     }
     if (!sLigado) {
         return "o XAudio2 não abriu (ver o diário)";

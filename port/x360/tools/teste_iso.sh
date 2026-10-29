@@ -84,7 +84,7 @@ gcc -std=gnu99 -O2 -w -Iport/x360/src/som/teste/xtl -Iport/x360/src -Iport/x360/
 } > "$T/pares.txt"
 echo "conferindo $(wc -l < "$T/pares.txt") arquivos; com conversor: $(ls $T/ref/pzs3us1 | wc -l)"
 status=0
-BT3_ISO="$ISO" "$T/teste" < "$T/pares.txt" > "$T/saida.txt" || status=$?
-grep -v "^FALTA\|^DIFERENTE\|^iso: pzs" "$T/saida.txt" | head -20 || true
-grep "^FALTA\|^DIFERENTE" "$T/saida.txt" | head -10 || true
+BT3_ISO="$ISO" "$T/teste" < "$T/pares.txt" > "$T/output.txt" || status=$?
+grep -v "^FALTA\|^DIFERENTE\|^iso: pzs" "$T/output.txt" | head -20 || true
+grep "^FALTA\|^DIFERENTE" "$T/output.txt" | head -10 || true
 exit $status

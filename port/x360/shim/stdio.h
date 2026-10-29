@@ -3,7 +3,7 @@
 #include <stddef.h>
 struct _iobuf { char *_ptr; int _cnt; char *_base; int _flag; int _file; int _charbuf; int _bufsiz; char *_tmpfname; };
 typedef struct _iobuf FILE;
-/* no 360 a saída de texto do port vai para game:\saida.txt, e os caminhos passam pela tradução de
+/* no 360 a saída de texto do port vai para game:\output.txt, e os caminhos passam pela tradução de
    port/x360/src/f2/posix360.c ('/' para '\', relativo à pasta do .xex) */
 FILE *Port_X360Saida(void);
 FILE *Port_X360Fopen(const char *, const char *);

@@ -393,7 +393,7 @@ saindo 0, a `.text` a mesma e o git sem alterados.
 
 ### A rodada no console: o que olhar
 
-A build: `build/x360/f2/default.xex` do worktree, com o `ambiente.txt` de lá (`BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`,
+A build: `build/x360/f2/default.xex` do worktree, com o `environment.txt` de lá (`BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`,
 `BT3_VU1=1`, `BT3_VU_VERTS=98304`, piso de 32 MB, teto de textura de 128 MB, `BT3_SHOT=600`, a ISO convertida e os saves
 `saves19`). O roteiro: START pula o filme; Duelo, Goku contra Kuririn, estágio 5; 60 s de luta; a pausa com uns 3 s de espera e a
 Guide.
@@ -409,7 +409,7 @@ Guide.
 4. O resto como no degrau 2: a linha `gs: divisão` (0 sem cópia), as capturas `BT3_SHOT=600` sem textura errada (em especial a
    névoa e os ids das passadas de tabela, que o corte 4 toca), a Guide no menu, na carga e na pausa, nenhum `vigia:` novo.
 5. O custo da própria medida: são umas 24 mil leituras do `mftb` por quadro. Se a parede da janela parecer alta, uma abertura
-   a mais com `BT3_TEMPOS=0` no `ambiente.txt` (sem as linhas, e sem os tempos do backend) dá o período sem ela.
+   a mais com `BT3_TEMPOS=0` no `environment.txt` (sem as linhas, e sem os tempos do backend) dá o período sem ela.
 
 ### A rodada do critério e o console (21/10/2026) [medido]
 
@@ -526,8 +526,8 @@ em série `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino` e `SEMMAPA=1 IM
 ### A rodada no console: o que olhar
 
 A build: `build/x360/f2/default.xex` do worktree `bt3xbx-a` (`f33df29754d2e25b90dcf074dc27dae0`), em duas aberturas: o
-`ambiente_ab1.txt` (com `BT3_TEMPOS=0`, o desempenho) e o `ambiente_ab2.txt` (sem ele, o rateio por família), copiado como
-`ambiente.txt`. Os dois com `-BT3_DEMO`, a ISO convertida, `BT3_GS=gpu`, os saves `saves19`, piso de 32 MB, teto de textura de
+`environment_ab1.txt` (com `BT3_TEMPOS=0`, o desempenho) e o `environment_ab2.txt` (sem ele, o rateio por família), copiado como
+`environment.txt`. Os dois com `-BT3_DEMO`, a ISO convertida, `BT3_GS=gpu`, os saves `saves19`, piso de 32 MB, teto de textura de
 128 MB, `BT3_VU1=1`, `BT3_VU_VERTS=98304`, `BT3_SHOT=600`, `BT3_GS_THREAD=1` e `BT3_GS_DESENHO=1`. O roteiro: START pula o
 filme; Duelo, Goku contra Kuririn, estágio 5; 60 s de luta; a pausa com uns 3 s de espera e a Guide.
 
@@ -700,7 +700,7 @@ Só mede, não muda nada no caminho do quadro.
 
 ### O que se mede
 
-Só no 360 (`PORT_X360`; nas outras builds o código pré-processado não muda). Ligado por `BT3_PICOS=L` no `ambiente.txt`, o limiar
+Só no 360 (`PORT_X360`; nas outras builds o código pré-processado não muda). Ligado por `BT3_PICOS=L` no `environment.txt`, o limiar
 em ms; ausente ou 0, desligado (os contadores inteiros andam sempre, os relógios e as linhas só com o limiar). Por quadro, cada
 thread escreve o seu lado na fronteira dela, numa vaga de um anel de 16 pelo número do quadro do GS:
 
@@ -771,7 +771,7 @@ refeito) sai com `-1` nos tempos.
 
 ### A build e a rodada no console
 
-`build/x360/f2/default.xex` do worktree `bt3xbx-k`, com o `ambiente.txt` de lá: o da seção 10 (`-BT3_DEMO`, a ISO convertida,
+`build/x360/f2/default.xex` do worktree `bt3xbx-k`, com o `environment.txt` de lá: o da seção 10 (`-BT3_DEMO`, a ISO convertida,
 `BT3_GS=gpu`, os saves `saves19`, piso de 32 MB, teto de textura de 128 MB, `BT3_VU1=1`, `BT3_VU_VERTS=98304`, `BT3_SHOT=600`,
 `BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`, `BT3_TEMPOS=0`) mais `BT3_PICOS=40`. O roteiro: START pula o filme; Duelo, Goku contra
 Kuririn, estágio 5; uns 90 s de luta, com golpes especiais e o voo para frente com o A; a pausa com uns 3 s de espera e a Guide.
@@ -997,21 +997,21 @@ cada janela a linha `passos: janela K (...): N passos, parede, esperado ...; tra
 janelas**: a 1 até a pausa do roteiro e a 2 da volta da pausa ao fim do combate. Na referência do WSL (`~/referencias/f5_duelo.telas`)
 são **684 e 2.334 passos**, o resultado `vencedor 0x2 razao 0x1 vida 0 27160` (o COM vence por KO) no quadro 7.757 e o `fim` no
 quadro 8.378. **Os passos por janela e o resultado iguais aos do WSL provam que o console jogou a mesma luta**; os vblanks não
-precisam bater. Com o `ambiente_med.txt`, uns 50 trechos de `gravação por família` com `60 na janela`, cada um com a linha `VU1 por
+precisam bater. Com o `environment_med.txt`, uns 50 trechos de `gravação por família` com `60 na janela`, cada um com a linha `VU1 por
 dentro`.
 
 **Os arquivos** (em `build/x360/f2/` do worktree `bt3xbx-w`): `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
-`port/x360/roteiros/`), `ambiente_sem.txt` (`BT3_TEMPOS=0`, a mediana) e `ambiente_med.txt` (a medição ligada), os dois com
+`port/x360/roteiros/`), `environment_sem.txt` (`BT3_TEMPOS=0`, a mediana) e `environment_med.txt` (a medição ligada), os dois com
 `-BT3_DEMO`, a ISO convertida, `BT3_GS=gpu`, piso de 32 MB, teto de textura de 128 MB, `BT3_VU1=1`, `BT3_VU_VERTS=98304`,
 `BT3_GS_THREAD=1`, `BT3_GS_DESENHO=1`, `BT3_NOMOVIE=1`, `BT3_ROTEIRO=game:\f5_duelo.txt`, `BT3_DESBLOQUEIO=1` e a sua pasta de
-saves; sem `BT3_SHOT` (as capturas são picos artificiais) e sem `BT3_PICOS`. O `ambiente.txt` é a cópia do `ambiente_sem.txt`.
+saves; sem `BT3_SHOT` (as capturas são picos artificiais) e sem `BT3_PICOS`. O `environment.txt` é a cópia do `environment_sem.txt`.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_sem.txt build/x360/f2/ambiente_med.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_sem.txt build/x360/f2/environment_med.txt
 # abertura 1 (sem medição); depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_med.txt
 # abertura 2 (medição ligada); baixar o log de novo
 ```
 
@@ -1133,16 +1133,16 @@ em `~/rodada-estado.resumo` (uma linha por passo com `RC=`, a `.text`, o git no 
 ### A rodada no console pelo roteiro
 
 Os arquivos em `build/x360/f2/` do worktree `bt3xbx-e`: `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
-`port/x360/roteiros/`), `ambiente_sem.txt` (`BT3_TEMPOS=0`, saves `saves_e1`) e `ambiente_med.txt` (a medição ligada, saves
-`saves_e2`), o resto como na seção 14; o `ambiente.txt` é a cópia do `ambiente_sem.txt`. Duas pastas de saves novas, porque o roteiro
+`port/x360/roteiros/`), `environment_sem.txt` (`BT3_TEMPOS=0`, saves `saves_e1`) e `environment_med.txt` (a medição ligada, saves
+`saves_e2`), o resto como na seção 14; o `environment.txt` é a cópia do `environment_sem.txt`. Duas pastas de saves novas, porque o roteiro
 só aceita o cartão vazio.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_sem.txt build/x360/f2/ambiente_med.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_sem.txt build/x360/f2/environment_med.txt
 # abertura 1 (sem medição); depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_med.txt
 # abertura 2 (medição ligada); baixar o log de novo
 ```
 
@@ -1226,15 +1226,15 @@ a `.text` a mesma e o git sem alterados.
 ### A rodada no console pelo roteiro
 
 Os arquivos em `build/x360/f2/` do worktree `bt3xbx-i`: `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
-`port/x360/roteiros/`), `ambiente_sem.txt` (`BT3_TEMPOS=0`, saves `saves_i1`) e `ambiente_med.txt` (a medição ligada, saves
-`saves_i2`), o resto como na seção 14; o `ambiente.txt` é a cópia do `ambiente_sem.txt`.
+`port/x360/roteiros/`), `environment_sem.txt` (`BT3_TEMPOS=0`, saves `saves_i1`) e `environment_med.txt` (a medição ligada, saves
+`saves_i2`), o resto como na seção 14; o `environment.txt` é a cópia do `environment_sem.txt`.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_sem.txt build/x360/f2/ambiente_med.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_sem.txt build/x360/f2/environment_med.txt
 # abertura 1 (sem medição); depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_med.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_med.txt
 # abertura 2 (medição ligada); baixar o log de novo
 ```
 
@@ -1396,16 +1396,16 @@ da main (993, arquivo por arquivo), os mesmos 103 stubs, `default.dat` `fb489b2f
 ### A rodada no console proposta
 
 Os arquivos em `build/x360/f2/` do worktree `bt3xbx-tex`: `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e `boot.txt` (cópias de
-`port/x360/roteiros/`), `ambiente_t0.txt` (`BT3_TEX_RAPIDA=0`, saves `saves_tx0`) e `ambiente_t1.txt` (`BT3_TEX_RAPIDA=1`, saves
-`saves_tx1`), os dois como o `ambiente_picos.txt` da main (o `f5_duelo` pelo roteiro, `BT3_TEMPOS=0`, `BT3_PICOS=36`,
-`BT3_WIDE=1`, decisão 26); o `ambiente.txt` é a cópia do `ambiente_t0.txt`.
+`port/x360/roteiros/`), `environment_t0.txt` (`BT3_TEX_RAPIDA=0`, saves `saves_tx0`) e `environment_t1.txt` (`BT3_TEX_RAPIDA=1`, saves
+`saves_tx1`), os dois como o `environment_picos.txt` da main (o `f5_duelo` pelo roteiro, `BT3_TEMPOS=0`, `BT3_PICOS=36`,
+`BT3_WIDE=1`, decisão 26); o `environment.txt` é a cópia do `environment_t0.txt`.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_t0.txt build/x360/f2/ambiente_t1.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_t0.txt build/x360/f2/environment_t1.txt
 # abertura 1 (chave desligada); depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_t1.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_t1.txt
 # abertura 2 (chave ligada); baixar o log de novo
 ```
 
@@ -1644,17 +1644,17 @@ main), 0 no `gs_d3d.cpp`, no `main360.cpp`, no `plat_stub.c` e no `passos.c`, os
 ### A rodada no console proposta
 
 Os arquivos em `build/x360/f2/` do worktree `bt3xbx-vblank` (a build do `3ae20e6`): `default.xex`/`.dat`/`.swap`, `f5_duelo.txt` e
-`boot.txt` (cópias de `port/x360/roteiros/`), `ambiente_vb0.txt` (`BT3_VBLANK_HW=0`, o `Sleep`, saves `saves_vb0`) e
-`ambiente_vb1.txt` (`BT3_VBLANK_HW=1`, o vblank de hardware, saves `saves_vb1`), os dois como o `ambiente_sx1.txt` da última rodada
+`boot.txt` (cópias de `port/x360/roteiros/`), `environment_vb0.txt` (`BT3_VBLANK_HW=0`, o `Sleep`, saves `saves_vb0`) e
+`environment_vb1.txt` (`BT3_VBLANK_HW=1`, o vblank de hardware, saves `saves_vb1`), os dois como o `environment_sx1.txt` da última rodada
 da seção 17 (o `f5_duelo` pelo roteiro, `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_WIDE=1`, decisão 26, e `BT3_SOM=1`, o som ligado); o
-`ambiente.txt` é a cópia do `ambiente_vb0.txt`.
+`environment.txt` é a cópia do `environment_vb0.txt`.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_vb0.txt build/x360/f2/ambiente_vb1.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_vb0.txt build/x360/f2/environment_vb1.txt
 # abertura 1 (o Sleep); depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_vb1.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_vb1.txt
 # abertura 2 (o vblank de hardware); baixar o log de novo
 # cada log à parte (as duas janelas do combate, 684 e 2.334 passos na referência):
 python3 port/x360/tools/passos.py bt3xbx_vb1.log --console --janelas 2 --minimo 600 --carimbo "3ae20e6 diff:da39a3ee5e"
@@ -1815,18 +1815,18 @@ prova a cobertura; o alinhamento está no `dumpbin` e tem a guarda).
 ### A rodada no console proposta
 
 Os arquivos em `build/x360/f2/` do worktree `bt3xbx-envio`: `default.xex`/`.dat`/`.swap` do `b2e1629`, `f5_duelo.txt` e
-`boot.txt` (cópias de `port/x360/roteiros/`), `ambiente_e0.txt`, `ambiente_e1.txt` e `ambiente_e2.txt` (`BT3_ENVIO_RAPIDO` 0, 1
-e 2, saves `saves_ev0`, `saves_ev1` e `saves_ev2`), os três como o `ambiente_t1.txt` da seção 17 (o `f5_duelo` pelo roteiro,
-`BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_WIDE=1`, decisão 26); o `ambiente.txt` é a cópia do `ambiente_e0.txt`.
+`boot.txt` (cópias de `port/x360/roteiros/`), `environment_e0.txt`, `environment_e1.txt` e `environment_e2.txt` (`BT3_ENVIO_RAPIDO` 0, 1
+e 2, saves `saves_ev0`, `saves_ev1` e `saves_ev2`), os três como o `environment_t1.txt` da seção 17 (o `f5_duelo` pelo roteiro,
+`BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_WIDE=1`, decisão 26); o `environment.txt` é a cópia do `environment_e0.txt`.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_e0.txt build/x360/f2/ambiente_e1.txt build/x360/f2/ambiente_e2.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_e0.txt build/x360/f2/environment_e1.txt build/x360/f2/environment_e2.txt
 # abertura 1 (chave 0); depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_e1.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_e1.txt
 # abertura 2 (chave 1); baixar o log de novo
-# (opcional) abertura 3 com o ambiente_e2.txt: separa o dcbt do dcbz128
+# (opcional) abertura 3 com o environment_e2.txt: separa o dcbt do dcbz128
 ```
 
 **O que olhar:**
@@ -1917,10 +1917,10 @@ stubs (`diff` com o `stubs.txt` anterior), `default.dat` `fb489b2f6e00d0e4de7e39
 
 Uma abertura só, `BT3_VBLANK_HW=1` (o padrão), com saves novos. Os arquivos em `build/x360/f2/` do worktree `bt3xbx-vblank`:
 `default.xex`/`.dat`/`.swap` do `67f97a0`, `f5_duelo.txt` e `boot.txt` (iguais aos de `port/x360/roteiros/`) e
-`ambiente_vb2.txt` (o `ambiente_vb1.txt` com `BT3_SAVES=game:\saves_vb2`), do qual o `ambiente.txt` é a cópia.
+`environment_vb2.txt` (o `environment_vb1.txt` com `BT3_SAVES=game:\saves_vb2`), do qual o `environment.txt` é a cópia.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt
 # a abertura; depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
 python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "67f97a0 diff:da39a3ee5e"
@@ -2069,17 +2069,17 @@ serviço ficou na fila: as provas da lista ficam para quem ler o resumo. Sem ela
 ### A rodada no console: o que olhar
 
 Os arquivos em `build/x360/f2/` do worktree `bt3xbx-vu1copia`: `default.xex`/`.dat`/`.swap` (o `.xex` da build refeita no commit
-desta nota; o md5 está no relatório da etapa), `f5_duelo.txt` e `boot.txt` (cópias de `port/x360/roteiros/`), `ambiente_d0.txt`
-(`BT3_VU1_DIRETO=0`, saves `saves_vd0`) e `ambiente_d1.txt` (`=1`, saves `saves_vd1`), os dois como o `ambiente_picos.txt` da main
+desta nota; o md5 está no relatório da etapa), `f5_duelo.txt` e `boot.txt` (cópias de `port/x360/roteiros/`), `environment_d0.txt`
+(`BT3_VU1_DIRETO=0`, saves `saves_vd0`) e `environment_d1.txt` (`=1`, saves `saves_vd1`), os dois como o `environment_picos.txt` da main
 (`-BT3_DEMO`, o `f5_duelo` pelo roteiro, `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_WIDE=1`, decisão 26, as duas threads); o
-`ambiente.txt` é a cópia do `ambiente_d0.txt`.
+`environment.txt` é a cópia do `environment_d0.txt`.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_d0.txt build/x360/f2/ambiente_d1.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_d0.txt build/x360/f2/environment_d1.txt
 # abertura 1 (chave desligada); depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_d1.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_d1.txt
 # abertura 2 (chave ligada); baixar o log de novo
 ```
 
@@ -2256,16 +2256,16 @@ de poucos ms e as imagens longas passarem do prazo por poucos ms, cortar a cadei
 ### A rodada no console proposta
 
 Os arquivos em `build/x360/f2/` do worktree `bt3xbx-zero`: `default.xex`/`.dat`/`.swap` do `dac2466`, `f5_duelo.txt` e `boot.txt`
-(iguais aos de `port/x360/roteiros/`), `ambiente_z1.txt` e `ambiente_z2.txt` (o jogo como ele roda, com os padrões da main e o
-som, mais `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_PICOS_TELA=1`; saves novos `saves_zero_z1` e `saves_zero_z2`); o `ambiente.txt` é a
-cópia do `ambiente_z1.txt`. As duas aberturas iguais: o dobro de casos.
+(iguais aos de `port/x360/roteiros/`), `environment_z1.txt` e `environment_z2.txt` (o jogo como ele roda, com os padrões da main e o
+som, mais `BT3_TEMPOS=0`, `BT3_PICOS=36`, `BT3_PICOS_TELA=1`; saves novos `saves_zero_z1` e `saves_zero_z2`); o `environment.txt` é a
+cópia do `environment_z1.txt`. As duas aberturas iguais: o dobro de casos.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_z1.txt build/x360/f2/ambiente_z2.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_z1.txt build/x360/f2/environment_z2.txt
 # abertura 1; depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_z2.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_z2.txt
 # abertura 2; baixar o log de novo
 python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "dac2466 diff:da39a3ee5e"
 grep 'picos: tela' bt3xbx.log
@@ -2401,16 +2401,16 @@ rodada mostrar o 5338 ainda acima do período, o próximo passo é medir esse re
 ### A rodada no console proposta
 
 Os arquivos em `build/x360/f2/` do worktree `bt3xbx-texcache`: `default.xex`/`.dat`/`.swap` do `bf7f96c`, `f5_duelo.txt` e
-`boot.txt` (iguais aos de `port/x360/roteiros/`), `ambiente_o0.txt` e `ambiente_o1.txt` (os `ambiente_z1.txt` da seção 25, o jogo
+`boot.txt` (iguais aos de `port/x360/roteiros/`), `environment_o0.txt` e `environment_o1.txt` (os `environment_z1.txt` da seção 25, o jogo
 como ele roda com `BT3_TEMPOS=0`, `BT3_PICOS=36` e `BT3_PICOS_TELA=1`, mais `BT3_TEX_ORIGEM=0` e `=1`; saves novos `saves_tc_o0` e
-`saves_tc_o1`); o `ambiente.txt` é a cópia do `ambiente_o0.txt`.
+`saves_tc_o1`); o `environment.txt` é a cópia do `environment_o0.txt`.
 
 ```
-port/x360/tools/subir_f2.sh build/x360/f2/ambiente.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
-    build/x360/f2/ambiente_o0.txt build/x360/f2/ambiente_o1.txt
+port/x360/tools/subir_f2.sh build/x360/f2/environment.txt build/x360/f2/f5_duelo.txt build/x360/f2/boot.txt \
+    build/x360/f2/environment_o0.txt build/x360/f2/environment_o1.txt
 # abertura 1 (chave 0); depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log
-python3 port/x360/tools/subir.py --nome ambiente.txt build/x360/f2/ambiente_o1.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environment_o1.txt
 # abertura 2 (chave 1); baixar o log de novo
 python3 port/x360/tools/passos.py bt3xbx.log --console --janelas 2 --minimo 600 --carimbo "bf7f96c diff:da39a3ee5e"
 grep 'picos: tela' bt3xbx.log
@@ -4687,7 +4687,7 @@ Feita pelo Claude durante a janela de 5 h do Codex, seguindo a proposta acima. `
 sem `BT3_PERFIL_CADEIA`, a build normal, `CadeiaEscopo` é uma classe vazia, `CADEIA_CHAMADA` só executa a chamada e
 `cadeia_inicio`/`cadeia_fim` são vazias; com `-D BT3_PERFIL_CADEIA` (`BT3_PERFIL_CADEIA=1 build_f2.sh`), o
 diagnóstico inteiro, como antes. Os nomes das famílias e etapas ficam fora da chave, porque o `gs_d3d.cpp` os cita.
-Na build normal, `BT3_CADEIA_CPU` no `ambiente.txt` é ignorada sem aviso (um aviso exigiria ler o ambiente no fim do
+Na build normal, `BT3_CADEIA_CPU` no `environment.txt` é ignorada sem aviso (um aviso exigiria ler o ambiente no fim do
 quadro): toda rodada com o diagnóstico precisa da build de perfil, e o `cadeia_cpu.py` recusa um log sem as parcelas.
 
 **[Medido] O código gerado volta a ser o da c57e807.** O `gs_d3d.cpp` da c57e807 (antigo), o atual sem a chave (novo)

@@ -65,10 +65,10 @@ for ((i = 0; i < ${#MUT[@]}; i += 2)); do
   fi
   python3 -c 'import sys; t=open(sys.argv[1]).read(); open(sys.argv[2],"w").write(t.replace(sys.argv[3], sys.argv[4]))' \
     "$T/som_nucleo.c" "$d/som_nucleo.c" "$de" "$para"
-  if compila "$d" >/dev/null 2>&1 && "$d/prog" > "$d/saida.txt"; then
+  if compila "$d" >/dev/null 2>&1 && "$d/prog" > "$d/output.txt"; then
     echo "mutante $((i / 2)) ($para): NÃO acusado"; falhas=$((falhas + 1))
   else
-    echo "mutante $((i / 2)) ($para): acusado; $(grep -m1 '^FALHA' "$d/saida.txt" 2>/dev/null || echo 'não compilou')"
+    echo "mutante $((i / 2)) ($para): acusado; $(grep -m1 '^FALHA' "$d/output.txt" 2>/dev/null || echo 'não compilou')"
   fi
 done
 # 3. a leitura em blocos
@@ -105,10 +105,10 @@ for ((i = 0; i < ${#MUTF[@]}; i += 2)); do
   fi
   python3 -c 'import sys; t=open(sys.argv[1]).read(); open(sys.argv[2],"w").write(t.replace(sys.argv[3], sys.argv[4]))' \
     "$T/fluxo.c" "$d/fluxo.c" "$de" "$para"
-  if compila_fluxo "$d" >/dev/null 2>&1 && timeout 120 "$d/prog_fluxo" "$d" > "$d/saida.txt"; then
+  if compila_fluxo "$d" >/dev/null 2>&1 && timeout 120 "$d/prog_fluxo" "$d" > "$d/output.txt"; then
     echo "mutante do fluxo $((i / 2)) ($para): NÃO acusado"; falhas=$((falhas + 1))
   else
-    echo "mutante do fluxo $((i / 2)) ($para): acusado; $(grep -m1 '^FALHA' "$d/saida.txt" 2>/dev/null || echo 'não compilou ou não terminou')"
+    echo "mutante do fluxo $((i / 2)) ($para): acusado; $(grep -m1 '^FALHA' "$d/output.txt" 2>/dev/null || echo 'não compilou ou não terminou')"
   fi
 done
 # 4. os mutantes do iso360.c: a thread do jogo esperando a leitura de outra thread
@@ -129,10 +129,10 @@ for ((i = 0; i < ${#MUTI[@]}; i += 2)); do
   fi
   python3 -c 'import sys; t=open(sys.argv[1]).read(); open(sys.argv[2],"w").write(t.replace(sys.argv[3], sys.argv[4]))' \
     "$T/iso360.c" "$d/iso360.c" "$de" "$para"
-  if compila_fluxo "$d" >/dev/null 2>&1 && timeout 120 "$d/prog_fluxo" "$d" > "$d/saida.txt"; then
+  if compila_fluxo "$d" >/dev/null 2>&1 && timeout 120 "$d/prog_fluxo" "$d" > "$d/output.txt"; then
     echo "mutante do iso360 $((i / 2)) ($para): NÃO acusado"; falhas=$((falhas + 1))
   else
-    echo "mutante do iso360 $((i / 2)) ($para): acusado; $(grep '^FALHA' "$d/saida.txt" 2>/dev/null | grep -m1 esperou || echo 'não compilou ou não terminou')"
+    echo "mutante do iso360 $((i / 2)) ($para): acusado; $(grep '^FALHA' "$d/output.txt" 2>/dev/null | grep -m1 esperou || echo 'não compilou ou não terminou')"
   fi
 done
 if [ $falhas -eq 0 ]; then

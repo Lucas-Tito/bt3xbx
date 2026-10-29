@@ -2,7 +2,7 @@
  * (F6, etapa 6, docs/x360/plano/F6/06.md, seção 5) O filme desenhado no console, pelo atalho da decisão 6 (b): a imagem
  * decodificada vai direto para uma textura do backend, uma cópia por pixel, sem passar pela memória do GS imitada.
  *
- * Com BT3_FILME=1 no ambiente.txt:
+ * Com BT3_FILME=1 no environment.txt:
  *   - a leitura: o .PSS do decodificador em blocos de BT3_FILME_BLOCO_KB (256; 0 volta à leitura a cada fread), o
  *     seguinte adiantado numa thread (iso360.c, f2/blocos.c); a leitura do jogo pelo ADXF_ReadNw, que o port ignora,
  *     não vai mais à ISO (plat_file.c): o jogo vê os mesmos setores contados e a mesma posição;
@@ -30,7 +30,7 @@
 #include <string.h>
 #include "diario.h"
 
-#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
+#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt) */
 
 typedef struct Mpeg2 Mpeg2;
 int Mpeg2_NextPlanes(Mpeg2 *m, const unsigned char **y, const unsigned char **cb, const unsigned char **cr, int *stride);

@@ -34,8 +34,8 @@ def prepara(saida, rodada):
                   'BT3_PICOS=36', 'BT3_PICOS_TELA=1', f'BT3_VU_CONSTANTES={constantes}',
                   f'BT3_VU_FECHO={fecho}', f'BT3_CADEIA_CPU={cpu}', f'BT3_CORTES={grav}',
                   'BT3_CORTES_GPU=0', f'BT3_COMUM_GPU={gpu}', f'BT3_SAVES=game:\\{save}']
-        (saida/f'ambiente_{nome}.txt').write_text('\n'.join(linhas)+'\n')
-    shutil.copyfile(saida/'ambiente_base1.txt', saida/'ambiente.txt')
+        (saida/f'environment_{nome}.txt').write_text('\n'.join(linhas)+'\n')
+    shutil.copyfile(saida/'environment_base1.txt', saida/'environment.txt')
     (saida/'ordem.txt').write_text('\n'.join(c[0] for c in casos)+'\n')
     return len(casos)
 
