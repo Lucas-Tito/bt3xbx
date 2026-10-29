@@ -1,0 +1,62 @@
+Third-party parts of Budokai Tenkaichi 3 for Xbox 360
+=====================================================
+
+The port's own code is under the MIT licence in LICENSE.txt. The parts below were made by
+others and keep their own terms.
+
+
+1. The game's code
+------------------
+
+The game logic in default.xex is compiled from the BT3-Decompiled decompilation
+(https://github.com/z3xox/BT3-Decompiled). That code is the game's, not ours: it belongs to
+the game's rights holders and is not covered by LICENSE.txt. This package contains none of the
+game's data (no models, textures, sounds, movies or text): those come from your own disc image
+when you play.
+
+
+2. Tenkaichi3Decomp
+-------------------
+
+The PC port this one is built on, by z3xox and contributors, under the MIT licence
+(https://github.com/z3xox/Tenkaichi3Decomp). Its copyright notice and licence are the ones in
+LICENSE.txt. This port is based on the version of 10 October 2026, which was under MIT.
+
+
+3. Maths library of newlib (fdlibm)
+-----------------------------------
+
+default.xex contains float maths functions (sine, cosine, tangent, arc functions, power,
+square root and helpers) from the maths library of newlib, which comes from fdlibm. Their
+notice:
+
+  Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+
+  Developed at SunPro, a Sun Microsystems, Inc. business.
+  Permission to use, copy, modify, and distribute this
+  software is freely granted, provided that this notice
+  is preserved.
+
+The float versions were converted by Ian Lance Taylor, Cygnus Support. The full newlib licence
+collection is in licenses/COPYING.NEWLIB.txt.
+
+
+4. Button pictures: Input Prompts by Kenney
+-------------------------------------------
+
+The Xbox 360 button pictures that the ISO conversion puts into the game come from "Input
+Prompts" version 1.5A, created and distributed by Kenney (www.kenney.nl), under Creative
+Commons Zero (CC0), public domain:
+http://creativecommons.org/publicdomain/zero/1.0/
+
+The licence does not ask for credit; we credit Kenney gladly. The original licence file is in
+licenses/Kenney-Input-Prompts-License.txt. The pictures were reduced to 32x32 and 16 colours
+for the game; they travel inside the converter's sources (pc-tools) and inside default.xex.
+
+
+5. Microsoft Xbox 360 libraries
+-------------------------------
+
+default.xex is built with the Xbox 360 development kit and contains its runtime libraries
+(graphics, audio, input, system). They are Microsoft's. No part of the development kit is
+distributed in this package other than what the build places inside default.xex.
