@@ -17,8 +17,9 @@ typedef struct IsoConvIO {
     int (*tamanho)(void *, int, conv_u32 *);
     int (*ler)(void *, int, conv_u32, void *, unsigned);
     /* Um pedido de leitura e um de escrita podem coexistir. O buffer pertence
-       ao pedido até esperar_* devolver; mesmo na falha, esperar drena o pedido. */
-    int (*antecipar)(void *, conv_u32, void *, unsigned);
+       ao pedido até esperar_* devolver; mesmo na falha, esperar drena o pedido.
+       antecipar lê da original (0) ou do temporário reaberto (1), como ler. */
+    int (*antecipar)(void *, int, conv_u32, void *, unsigned);
     int (*esperar_leitura)(void *);
     int (*enviar)(void *, conv_u32, const void *, unsigned);
     int (*esperar_gravacao)(void *);
@@ -26,7 +27,7 @@ typedef struct IsoConvIO {
     void *(*alocar)(unsigned); /* buffers de E/S alinhados a 128 bytes */
     void (*liberar)(void *);
     conv_u8 sha_saida[32];
-    conv_u32 relidos, hash_origem_ms, conversao_ms;
+    conv_u32 relidos, hash_origem_ms, conversao_ms, hash_releitura_ms;
     conv_u32 (*relogio)(void);
     int (*espaco)(void *); /* pelo menos 3 GiB livres, além da original */
     int (*iniciar)(void *);
@@ -34,7 +35,10 @@ typedef struct IsoConvIO {
     int (*conferir_indices)(void *, conv_u32 *);
     int (*publicar)(void *);
     void (*descartar)(void *);
-    void (*progresso)(void *, int, conv_u32, conv_u32);
+    /* Progresso do processo inteiro, em KiB lidos ou gravados: a passagem lê e
+       grava a ISO (2 partes de 3) e a releitura a lê de novo (1 parte). feito
+       nunca diminui e chega a total na publicação; a fase só avança. */
+    void (*progresso)(void *, int, conv_u32 feito, conv_u32 total);
 } IsoConvIO;
 int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro, unsigned n);
 /* SHA256 portátil, sem acesso desalinhado nem dependência da ordem do host. */

@@ -328,7 +328,13 @@ static DWORD GetTickCount(void) {
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (DWORD)(t.tv_sec * 1000 + t.tv_nsec / 1000000);
 }
-static LONG InterlockedExchange(volatile LONG *p, LONG v) { return __sync_lock_test_and_set(p, v); }
+/* O ensaio observa cada publicação do progresso, não amostras por tempo. */
+void Teste_Progresso(void);
+static LONG InterlockedExchange(volatile LONG *p, LONG v) {
+    LONG r = __sync_lock_test_and_set(p, v);
+    Teste_Progresso();
+    return r;
+}
 static LONG InterlockedCompareExchange(volatile LONG *p, LONG v, LONG c) {
     return __sync_val_compare_and_swap(p, c, v);
 }

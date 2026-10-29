@@ -1,11 +1,10 @@
-/* Conversão sequencial: autentica a passagem única antes de publicar. */
+/* Conversão sequencial: autentica a passagem única e relê a saída inteira antes de publicar. */
 #include "iso_conv.h"
 #include "icones360_arte.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #define BLOCO (4U * 1024U * 1024U)
-#define AMOSTRA (64U * 1024U)
 #define MAX_ENTRADAS 4096
 #define MAX_ARQUIVO (8U * 1024U * 1024U)
 typedef struct Entrada {
@@ -109,20 +108,6 @@ static int inventario(IsoConvIO *io, Entrada *e, unsigned *cont) {
             return 0;
     return *cont == 3327;
 }
-/* CRC32 IEEE: conferência rápida da persistência; a identidade usa SHA256. */
-static conv_u32 crc(const conv_u8 *b, unsigned n) {
-    conv_u32 tab[256], c = 0xffffffffU, x;
-    unsigned i, j;
-    for (i = 0; i < 256; i++) {
-        x = i;
-        for (j = 0; j < 8; j++)
-            x = (x >> 1) ^ (0xedb88320U & (0U - (x & 1)));
-        tab[i] = x;
-    }
-    for (i = 0; i < n; i++)
-        c = tab[(c ^ b[i]) & 255] ^ (c >> 8);
-    return c ^ 0xffffffffU;
-}
 static int converter(const Entrada *e, conv_u8 *buf, conv_u8 *feito) {
     conv_u32 i;
     char msg[240];
@@ -135,12 +120,11 @@ static int converter(const Entrada *e, conv_u8 *buf, conv_u8 *feito) {
     return strcmp(e->nome, "pzs3us1/00004.bin") ||
            Conv_Icones360(buf, e->tam, icones360, sizeof(icones360) / sizeof(icones360[0]), msg) >= 0;
 }
-/* Peças em ordem: entradas inteiras e lacunas de até 4 MiB. O primeiro MiB
-   preservado cobre descritores ISO/UDF. As outras lacunas têm início e fim de
-   64 KiB relidos. */
+/* Peças em ordem: entradas inteiras e lacunas de até 4 MiB. A conferência
+   relê a ISO inteira, então nenhuma peça guarda amostra. */
 typedef struct Peca {
-    conv_u32 pos, tam, crc[2];
-    int entrada, inteira;
+    conv_u32 pos, tam;
+    int entrada;
 } Peca;
 #define MAX_PECAS (MAX_ENTRADAS * 3)
 static unsigned planejar(Entrada *e, unsigned n, Peca *v) {
@@ -161,12 +145,8 @@ static unsigned planejar(Entrada *e, unsigned n, Peca *v) {
         if (p == fim && i <= n) {
             a->entrada = (int)i;
             a->tam = e[i++].tam;
-            a->inteira = 1;
         } else {
             a->tam = fim - p > BLOCO ? BLOCO : fim - p;
-            if (!p && a->tam > 1024U * 1024U)
-                a->tam = 1024U * 1024U;
-            a->inteira = !p || a->tam <= 2 * AMOSTRA;
         }
         if (!a->tam || !cabe(p, a->tam))
             return 0;
@@ -205,9 +185,11 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     Entrada *e = NULL;
     Peca *v = NULL;
     Lote *l = NULL;
-    IsoSha origem;
+    IsoSha origem, releitura;
     unsigned n = 0, i, j, k, quantos, nlotes;
-    conv_u32 tam, inicio;
+    /* Unidades do progresso em KiB; IC_TAMANHO é múltiplo de 2048. */
+    const conv_u32 iso = IC_TAMANHO >> 10, total = 3 * iso;
+    conv_u32 tam, inicio, pos;
     int r = IC_IO, criado = 0, leitura = 0, escrita = 0;
     const char *msg = "falha de leitura, escrita ou sincronização";
     for (i = 0; i < 3; i++)
@@ -218,6 +200,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     l = (Lote *)malloc(MAX_PECAS * sizeof(*l));
     if (!buf[0] || !buf[1] || !buf[2] || !feito || !e || !v || !l)
         goto fim;
+    progresso(io, IC_IDENTIFICAR, 0, total);
     r = IC_ORIGEM;
     msg = "origem ou índices incompatíveis com a ISO USA";
     /* Ainda não autenticada: todos os limites do inventário são conferidos. Os
@@ -243,7 +226,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     msg = "falha durante a gravação";
     IsoSha_Iniciar(&origem);
     leitura = 1;
-    if (!io->antecipar(io->ctx, l[0].pos, buf[0], l[0].tam))
+    if (!io->antecipar(io->ctx, 0, l[0].pos, buf[0], l[0].tam))
         goto fim;
     for (k = 0; k < nlotes; k++) {
         Lote *atual = l + k;
@@ -253,7 +236,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
         leitura = 0;
         if (k + 1 < nlotes) {
             leitura = 1;
-            if (!io->antecipar(io->ctx, l[k + 1].pos, buf[(k + 1) % 3], l[k + 1].tam))
+            if (!io->antecipar(io->ctx, 0, l[k + 1].pos, buf[(k + 1) % 3], l[k + 1].tam))
                 goto fim;
         }
         /* Thread 2: identidade da origem antes de qualquer alteração e conversão.
@@ -284,17 +267,14 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
                 }
             }
             io->conversao_ms += io->relogio() - inicio;
-            a->crc[0] = crc(trecho, a->inteira ? a->tam : AMOSTRA);
-            if (!a->inteira)
-                a->crc[1] = crc(trecho + a->tam - AMOSTRA, AMOSTRA);
         }
         if (escrita && !io->esperar_gravacao(io->ctx))
             goto fim;
         escrita = 1;
         if (!io->enviar(io->ctx, atual->pos, b, atual->tam))
             goto fim;
-        /* Cópia e conversão são uma passagem, com uma só barra. */
-        progresso(io, IC_CONVERTER, atual->pos + atual->tam, IC_TAMANHO);
+        /* Cópia e conversão são uma passagem: cada byte lido e gravado conta. */
+        progresso(io, IC_CONVERTER, 2 * ((atual->pos + atual->tam) >> 10), total);
     }
     if (escrita && !io->esperar_gravacao(io->ctx))
         goto fim;
@@ -305,35 +285,53 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     if (memcmp(hash, esperado, 32))
         goto fim;
     io->hash_saida(io->ctx, io->sha_saida);
+    progresso(io, IC_VERIFICAR, 2 * iso, total);
     r = IC_IO;
     msg = "falha ao sincronizar, fechar ou reabrir";
     if (!io->reabrir(io->ctx))
         goto fim;
     r = IC_CONFERE;
-    msg = "saída reaberta difere dos trechos gravados";
+    msg = "saída reaberta difere do SHA256 calculado na gravação";
     if (!io->tamanho(io->ctx, 1, &tam) || tam != IC_TAMANHO)
         goto fim;
     io->relidos = 0;
+    /* Releitura integral dos bytes gravados, depois de sincronizar e reabrir:
+       thread 3 lê o próximo bloco do temporário enquanto esta calcula o SHA256
+       do atual. Corrupção silenciosa em qualquer byte muda o digest. */
+    IsoSha_Iniciar(&releitura);
+    leitura = 1;
+    if (!io->antecipar(io->ctx, 1, 0, buf[0], MAX_ARQUIVO))
+        goto fim;
+    for (pos = 0, k = 0; pos < IC_TAMANHO; k++) {
+        conv_u32 z = IC_TAMANHO - pos > MAX_ARQUIVO ? MAX_ARQUIVO : IC_TAMANHO - pos;
+        conv_u8 *b = buf[k & 1];
+        if (!io->esperar_leitura(io->ctx))
+            goto fim;
+        leitura = 0;
+        if (z < IC_TAMANHO - pos) {
+            conv_u32 prox = pos + z;
+            leitura = 1;
+            if (!io->antecipar(io->ctx, 1, prox, buf[(k + 1) & 1],
+                               IC_TAMANHO - prox > MAX_ARQUIVO ? MAX_ARQUIVO : IC_TAMANHO - prox))
+                goto fim;
+        }
+        inicio = io->relogio();
+        IsoSha_Atualizar(&releitura, b, z);
+        io->hash_releitura_ms += io->relogio() - inicio;
+        pos += z;
+        io->relidos += z;
+        progresso(io, IC_VERIFICAR, 2 * iso + (pos >> 10), total);
+    }
+    IsoSha_Final(&releitura, hash);
+    if (memcmp(hash, io->sha_saida, 32))
+        goto fim;
+    /* Índices e selo também têm comparação literal com o esperado. */
     if (!io->conferir_indices(io->ctx, &io->relidos))
         goto fim;
-    for (k = 0; k < quantos; k++) {
-        Peca *a = v + k;
-        unsigned z = a->inteira ? a->tam : AMOSTRA;
-        if (!io->ler(io->ctx, 1, a->pos, buf[0], z) || crc(buf[0], z) != a->crc[0])
-            goto fim;
-        io->relidos += z;
-        if (!a->inteira) {
-            if (!io->ler(io->ctx, 1, a->pos + a->tam - AMOSTRA, buf[0], AMOSTRA) || crc(buf[0], AMOSTRA) != a->crc[1])
-                goto fim;
-            io->relidos += AMOSTRA;
-        }
-        progresso(io, IC_VERIFICAR, k + 1, quantos);
-    }
-    /* O selo também tem comparação literal, além do CRC da peça inteira. */
     if (!io->ler(io->ctx, 1, IC_MARCA_POS, buf[0], IC_MARCA_TAM) || memcmp(buf[0], selo, IC_MARCA_TAM))
         goto fim;
     io->relidos += IC_MARCA_TAM;
-    progresso(io, IC_PUBLICAR, 0, 1);
+    progresso(io, IC_PUBLICAR, total, total);
     r = IC_DESTINO;
     msg = "publicação recusada; destino preservado";
     if (!io->publicar(io->ctx))

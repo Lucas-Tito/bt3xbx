@@ -28,8 +28,16 @@ def hashes(p):
 def validar_fluxo(texto, sha=None):
     exigir(f"origem={pc.TAMANHO} escrita={pc.TAMANHO}" in texto and "duplicados=0" in texto,
            "E/S repetiu bytes da origem ou não escreveu exatamente uma ISO")
+    # Releitura integral: a ISO inteira mais índices e selo, nada a menos.
     m = re.search(r"relidos=(\d+) duplicados=0", texto)
-    exigir(m and 1395101552 < int(m[1]) < 1500000000, "releitura fora do limite esperado")
+    exigir(m and pc.TAMANHO <= int(m[1]) < pc.TAMANHO + 2 * 1024 * 1024, "releitura não cobriu a ISO inteira")
+    for etapa in ("leitura da original", "gravação", "releitura"):
+        exigir(re.search(rf"conversão: {etapa} {pc.TAMANHO} bytes em \d+ ms, \d+\.\d MB/s", texto),
+               f"{etapa}: bytes ou velocidade ausentes do registro")
+    for etapa in ("identificar", "converter", "verificar", "publicar"):
+        exigir(re.search(rf"conversão: etapa {etapa} em \d+ ms", texto), f"tempo da etapa {etapa} ausente")
+    exigir("progresso: 101 valores distintos, de 0 a 100, fase final 4, retrocessos=0" in texto,
+           "porcentagem não foi única e monotônica de 0 a 100")
     sobrepostas = re.search(r"pedidos sobrepostos=(\d+)", texto)
     exigir(sobrepostas and int(sobrepostas[1]) > 0, "nenhuma E/S sobreposta foi pedida")
     gravacoes = re.search(r"gravações=(\d+)", texto)
@@ -38,7 +46,7 @@ def validar_fluxo(texto, sha=None):
         exigir(f"SHA256 saída {sha}" in texto, "hash em fluxo diferente da saída reaberta")
 
 
-def compilar(pasta, adaptador=None):
+def compilar(pasta, adaptador=None, nucleo=None):
     raiz = pc.RAIZ
     preparar(pasta / "selo")
     exe = pasta / "teste_instalar"
@@ -49,7 +57,8 @@ def compilar(pasta, adaptador=None):
                     "-I" + str(raiz / "port/x360/src"), "-I" + str(raiz / "port/x360/conv"),
                     "-I" + str(pasta / "selo"), str(adaptador or raiz / "port/x360/src/iso_instalar.c"),
                     str(raiz / "port/x360/src/teste_instalar/teste_instalar.c"),
-                    *(str(f) for f in fontes if f.name not in ("conv_tool.c", "conv_jogo.c")),
+                    *(str(nucleo if nucleo and f.name == "iso_conv.c" else f) for f in fontes
+                      if f.name not in ("conv_tool.c", "conv_jogo.c")),
                     "-o", str(exe)], check=True)
     return exe
 
@@ -135,7 +144,31 @@ def main():
         else:
             exigir(not convertido.exists(), f"publicou falha: {falha}")
         print(f"ok: sabotagem {falha}", flush=True)
-    # Byte convertido, preservado, índices ISO/AFS, folga/UDF, selo e cauda.
+    # Porcentagem de etapa que volta a zero na releitura (o comportamento antigo)
+    # num núcleo mutante: converte certo, mas o verificador do registro recusa.
+    nucleo = (pc.RAIZ / "port/x360/conv/iso_conv.c").read_text()
+    de = "progresso(io, IC_VERIFICAR, 2 * iso + (pos >> 10), total);"
+    exigir(de in nucleo, "mutação do progresso não encontrou alvo")
+    mutante = d / "progresso"
+    mutante.mkdir()
+    (mutante / "iso_conv.c").write_text(nucleo.replace(
+        de, "progresso(io, IC_VERIFICAR, (conv_u32)((double)pos * total / IC_TAMANHO), total);"))
+    ruim = compilar(mutante, nucleo=mutante / "iso_conv.c")
+    env = dict(os.environ, TESTE_GAME=str(d))
+    env.pop("TESTE_FALHA", None)
+    env.pop("TESTE_CORROMPER", None)
+    r = subprocess.run([str(ruim), str(args.origem)], env=env, capture_output=True, text=True, timeout=600)
+    convertido.unlink(missing_ok=True)
+    exigir(r.returncode == 0, f"mutante do progresso não converteu: {r.stderr}")
+    try:
+        validar_fluxo(r.stdout)
+    except ValueError as e:
+        exigir("porcentagem" in str(e), f"mutante do progresso recusado por outro motivo: {e}")
+    else:
+        raise ValueError("verificador aceitou porcentagem que volta a zero")
+    print("ok: mutante do progresso por etapa recusado", flush=True)
+    # Byte convertido, preservado (inclusive no meio da cópia, que a amostragem
+    # antiga não relia), índices ISO/AFS, folga/UDF, selo e cauda.
     with args.origem.open("rb") as f:
         entradas = pc.inventario(f)
         f.seek(0)
@@ -147,16 +180,11 @@ def main():
     for nome, pos in (("convertido",entradas["pzs3us1/00004.bin"][0]),
                       ("preservado",entradas["disc/SYSTEM.CNF"][0]), ("índice ISO",16*2048+158),
                       ("índice AFS",0x3df008), ("meio do índice AFS2",afs2+8+40000*8), ("folga AFS",0x3df018),
-                      ("área UDF",256*2048), ("selo",pc.MARCA_POS+16), ("cauda",pc.TAMANHO-1)):
+                      ("área UDF",256*2048), ("selo",pc.MARCA_POS+16), ("cauda",pc.TAMANHO-1),
+                      ("preservado no meio da cópia", 2 * 1024 * 1024), ("meio da ISO", pc.TAMANHO // 2)):
         rodar(exe, args.origem, d, 5, corromper=pos)
         exigir(not convertido.exists() and not (d / "bt3-x360.tmp").exists(), "falha publicada")
         print(f"ok: byte sabotado em {nome}", flush=True)
-    # A amostragem tem limite explícito: um byte no meio de uma lacuna grande
-    # não é relido. A aceitação é esperada; esta cópia é apagada imediatamente.
-    rodar(exe, args.origem, d, corromper=2 * 1024 * 1024)
-    exigir(convertido.exists(), "não exercitou o limite da amostragem")
-    convertido.unlink()
-    print("ok: limite comprovado, byte preservado fora da amostra não detectado", flush=True)
     # Interrupção real de processo. A próxima abertura descarta o parcial e recomeça.
     rodar(exe,args.origem,d,77,"parar")
     exigir((d / "bt3-x360.tmp").stat().st_size > 0 and not convertido.exists(), "interrupção não deixou só parcial")
@@ -172,7 +200,13 @@ def main():
     # O verificador das métricas precisa rejeitar cópias de um registro real.
     for de, para in (("origem=3020816384", "origem=3020816385"),
                      ("duplicados=0", "duplicados=1"),
-                     (re.search(r"gravações=\d+", sucesso.stdout)[0], "gravações=10000"), (re.search(r"relidos=\d+", sucesso.stdout)[0], "relidos=3020816384"),
+                     (re.search(r"gravações=\d+", sucesso.stdout)[0], "gravações=10000"),
+                     (re.search(r"relidos=\d+", sucesso.stdout)[0], f"relidos={pc.TAMANHO - 1}"),
+                     (re.search(r"relidos=\d+", sucesso.stdout)[0], "relidos=1451394452"),
+                     (f"releitura {pc.TAMANHO} bytes", "releitura 1451394452 bytes"),
+                     (re.search(r"gravação \d+ bytes em \d+ ms, [0-9.]+ MB/s", sucesso.stdout)[0], "gravação"),
+                     ("conversão: etapa verificar em", "conversão: em"),
+                     ("retrocessos=0", "retrocessos=1"), ("de 0 a 100", "de 0 a 99"),
                      (h[1], "0" * 64)):
         exigir(de in sucesso.stdout, f"mutação de log não encontrou {de}")
         try:
@@ -187,13 +221,13 @@ def main():
         print("ok: verificador visto recusando ausência de sobreposição", flush=True)
     else:
         raise ValueError("verificador aceitou ausência de sobreposição")
-    # A conferência Python cobre cada byte contra a conversão comum e a origem,
-    # inclusive as regiões que o console agora apenas amostra. Só uma ISO em disco.
+    # A conferência Python cobre cada byte contra a conversão comum e a origem.
+    # Só uma ISO em disco.
     comando = [sys.executable, str(pc.RAIZ / "port/x360/tools/convert_iso.py"), str(args.origem),
                str(convertido), "--conv-tool", str(d / "selo/conv_tool")]
     conferir = [*comando, "--conferir", "--dados", str(args.dados)]
     subprocess.run(conferir, check=True)
-    # Verificador integral visto falhando num byte fora da amostra do console.
+    # Verificador integral visto falhando num byte preservado no meio da cópia.
     pos = 2 * 1024 * 1024
     with convertido.open("r+b") as f:
         f.seek(pos); b = f.read(1); f.seek(pos); f.write(bytes([b[0] ^ 1]))
@@ -202,7 +236,7 @@ def main():
            "conferência Python integral aceitou byte estragado")
     with convertido.open("r+b") as f:
         f.seek(pos); f.write(b)
-    print("ok: conferência integral Python vista falhando fora da amostra", flush=True)
+    print("ok: conferência integral Python vista falhando no meio da cópia", flush=True)
     convertido.unlink()
     # Produção real Python depois de remover a C. A igualdade integral acima já
     # comparou todos os bytes C à receita Python; os dois hashes também devem bater.

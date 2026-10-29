@@ -47,8 +47,8 @@ instaladores diferentes. O ensaio nativo usa o mesmo selo e a mesma ferramenta d
 - Lê cada byte da original uma vez, converte entradas e insere o selo antes de escrever em ordem. O hash da
   original é atualizado antes de alterar o buffer, e o da saída antes de cada escrita. Identidade incorreta
   no fim descarta o temporário. `WriteFile`, sincronização, fechamento, reabertura e tamanho continuam conferidos.
-- A reabertura compara literalmente todos os índices que foram antecipados, incluindo a tabela inteira do AFS2.
-  Relê também todas as entradas convertidas, primeiro MiB, selo e amostras das áreas preservadas, conforme abaixo.
+- A reabertura relê os 3.020.816.384 bytes gravados e exige o mesmo SHA256 calculado na gravação. Compara também,
+  literalmente, todos os índices antecipados (incluindo a tabela inteira do AFS2) e o selo.
 - Só então fecha o temporário e usa `MoveFile`, sem substituição, para `bt3-x360.iso`. Um destino preexistente ou
   que apareça durante a conversão é preservado. Falhas tratadas removem o temporário criado pela operação.
 - Se a própria original estiver nomeada `bt3-x360.iso`, recusa sobrescrevê-la e orienta usar `bt3.iso` para a
@@ -103,49 +103,65 @@ buffers é alinhado, mas posições e comprimentos seguem exatamente as entradas
 HD físico execute duas transferências em paralelo ou dobre a taxa por causa das threads. A main continua apenas
 apresentando; o teste com pthreads registra pedidos de leitura e escrita sobrepostos e recusa afinidade 4.
 
-### O que a reabertura confere
+### O que a reabertura confere (desde o pedido das 14h de 29/10/2026)
 
 1. Sincronização, fechamento, reabertura e tamanho exato, como antes.
-2. Comparação literal dos 552.004 bytes de índices antecipados, com seu cache autenticado da original.
-3. CRC32 IEEE de cada uma das 3.327 entradas convertidas completas e da peça do selo.
-4. Primeiro MiB completo, incluindo os descritores ISO e UDF iniciais.
-5. Lacunas preservadas de até 128 KiB completas; nas maiores, primeiros e últimos 64 KiB de cada peça de até 4 MiB.
-   A última amostra inclui o último byte da ISO. CRC32 esperado é calculado no buffer que será enviado à escritora.
-6. Comparação literal adicional dos 512 bytes do selo.
+2. **Releitura integral**: os 3.020.816.384 bytes do temporário reaberto, em blocos de 8 MiB, com SHA256 em fluxo.
+   O digest tem de ser igual ao SHA256 que a escritora calculou sobre cada buffer imediatamente antes do
+   `WriteFile`. Qualquer byte que o disco tenha guardado diferente muda o digest e a conversão é recusada
+   (código 5), com o temporário descartado. A thread 3 lê o próximo bloco enquanto a 2 calcula o hash do atual.
+3. Comparação literal dos 552.004 bytes de índices antecipados, com seu cache autenticado da original.
+4. Comparação literal dos 512 bytes do selo.
 
-São 1.451.394.452 bytes relidos, contando repetições entre índices, amostras e selo. Tráfego total:
-**7.493.027.220 bytes**, contra 20.915.101.408 anteriores, redução de **64,17%**.
-O SHA256 completo da saída é calculado durante a escrita e registrado no diário para comparação externa;
-não depende da amostragem nem substitui a releitura. O ensaio o compara à hashlib sobre a saída inteira.
+Saíram as amostras com CRC32 (primeiros e últimos 64 KiB das lacunas grandes): a releitura integral as cobre.
+Relidos: 3.021.368.900 bytes (a ISO inteira, os índices e o selo). Tráfego total: **9.063.001.668 bytes**
+(T lidos da original, T gravados e a releitura), 1.569.974.448 a mais que a versão amostrada e ainda
+**56,67%** abaixo dos 20.915.101.408 do primeiro caminho. Não há mais limite deliberado: o byte estragado no
+deslocamento 2 MiB, no meio da parte copiada sem conversão, que a amostragem deixava passar, agora é recusado,
+assim como um byte no meio da ISO.
 
-**Limite deliberado:** o miolo das lacunas preservadas maiores que 128 KiB não é relido. Uma corrupção silenciosa
-ali, depois do hash e com `WriteFile`/flush bem sucedidos, pode passar. CRC32 também não é proteção contra
-adulteração intencional nem oferece a resistência a colisões do SHA256. A identidade integral da origem, a
-conversão com cobertura de cada byte, os índices completos, a marca, a original somente leitura e a publicação
-exclusiva continuam exigidos. Isso conserva a segurança de instalação e recusa de origem, mas reduz a cobertura
-da comprovação de persistência. Não se promete detectar todo erro físico de mídia. O teste demonstra o limite
-com corrupção no deslocamento 2 MiB, aceita pelo console simulado e recusada pela conferência integral Python.
-A conferência integral do PC permanece disponível para diagnóstico e para a prova byte a byte.
+**Releitura sobreposta à gravação: não vale.** Pelo XDK, `WriteFile` grava direto no disco (página de
+`FlushFileBuffers`) e o cache do sistema de arquivos guarda metadados, 64 KB por padrão e no máximo 4 MB
+(`XSetFileCacheSize`). A releitura no fim, depois de sincronizar, fechar e reabrir, lê portanto da mídia; no
+máximo a cauda pode sair do cache interno do próprio HD ou da ponte USB. Relendo cada bloco logo depois de
+gravá-lo, a resposta viria justamente desse cache interno, o que enfraquece a garantia, e forçá-la a sair da
+mídia exigiria um flush por bloco. Também não ganharia tempo: leitura e gravação passam pelo mesmo disco, os bytes
+totais são os mesmos e a alternância entre as duas posições acrescenta buscas da cabeça. O hash da releitura já
+fica escondido atrás da E/S pela leitora antecipada. A releitura continua no fim.
+
+### Porcentagem única
+
+O núcleo informa o progresso do processo inteiro em KiB lidos ou gravados: a passagem única lê e grava a ISO
+(2 partes de 3, de 0% a 66%) e a releitura a lê de novo (1 parte, de 66% a 100%). Identificação e publicação
+movem menos de 1 MB e não alteram o número. O nome da etapa continua acima da barra (Checking, Converting,
+Verifying, Finishing) e a porcentagem nunca volta. As caixas do sistema mostram por trás o último estado
+(antes, `Checking ISO... 0%` depois do 100%). Sem estimativa de tempo e sem texto novo.
 
 ### Tempo e como medir no Xenon
 
 Modelo de planejamento, **sem medição no console**, em MB decimais: leitura FATX a 15 a 40 MB/s e escrita a
-10 a 30 MB/s. Para HD compartilhado, somar `4472,214 / R + 3020,816 / W` segundos de E/S, cerca de 213 a 600 s;
-a sobreposição esconde CPU/latências, sem somar artificialmente as taxas do mesmo disco. Supor SHA256 escalar
-a **6 a 20 ms/MB por fluxo**, de 18 a 60 s para cada ISO, na thread 2 para a origem e na 1 para a saída.
-Para os conversores com cobertura, reservar 30 a 80 ms/MB de S, de 42 a 112 s, mais CRC32, pequenas transferências,
-movimento de cabeças e flush. As faixas são hipóteses, não benchmark Xenon; o custo de 264 ms para converter
-6,7 MB medido na decisão 18 serve apenas de ordem de grandeza. Estimativa nova: **5 a 15 minutos** em HD/USB
-saudável, com possibilidade de exceder em mídia lenta. O texto aprovado continua dizendo até 40 minutos;
-não se muda uma frase aprovada para acomodar uma previsão ainda não medida.
+10 a 30 MB/s. Para HD compartilhado, somar `6041,633 / R + 3020,816 / W` segundos de E/S, cerca de 252 a 705 s
+(a releitura integral acrescenta `1569,974 / R`, de 39 a 105 s, à versão amostrada); a sobreposição esconde
+CPU/latências, sem somar artificialmente as taxas do mesmo disco. Supor SHA256 escalar a **6 a 20 ms/MB por
+fluxo**, de 18 a 60 s para cada passagem de 3 GB: a origem na thread 2 e a saída na 1 durante a gravação, e a
+releitura na 2 enquanto a 3 lê, escondida pela leitura (75 a 201 s de E/S). Para os conversores com cobertura,
+reservar 30 a 80 ms/MB de 1395,102 MB, de 42 a 112 s, mais pequenas transferências, movimento de cabeças e flush.
+As faixas são hipóteses, não benchmark Xenon; o custo de 264 ms para converter 6,7 MB medido na decisão 18 serve
+apenas de ordem de grandeza. Estimativa nova: **6 a 17 minutos** em HD/USB saudável, com possibilidade de exceder
+em mídia lenta. O texto aprovado continua dizendo até 40 minutos.
 
 Medir do botão Convert à caixa de sucesso, com mídia, espaço livre, abertura fria/repetida e Guide anotados.
-O diário agora registra total, fases, leitura, gravação, SHA256 da origem, SHA256 da saída e conversores em ms,
-além dos bytes relidos e do digest da saída. Dividir os tempos de hash por 3020,816 e o de conversores por
-1395,102 para obter ms/MB. Leitura/gravação são tempos acumulados dos pedidos, não parcelas que possam ser
-somadas ao total por estarem sobrepostas; incluem espera do SO. Obter MB/s efetivos a partir de bytes/tempo e
-medir também a fase de verificação e o flush. A barra usa Converting ISO durante a passagem conjunta e
-Verifying ISO durante a releitura, sem reiniciar a mesma fase. Não é previsão do tempo restante.
+O diário registra, por conversão:
+
+- `conversão: etapa identificar|converter|verificar|publicar em N ms`: tempo de parede de cada etapa;
+- `conversão: leitura da original B bytes em N ms, X MB/s`, `gravação ... , X MB/s, hash saída N ms` e
+  `releitura ... , X MB/s`: bytes e tempo acumulado dentro de `ReadFile`/`WriteFile`, sem os hashes, isto é, a
+  taxa medida do disco do Lucas (MB de 10^6 bytes);
+- `hash origem`, `conversores` e `hash releitura` em ms, o SHA256 da saída, bytes relidos e o total.
+
+Leitura e gravação da passagem estão sobrepostas: as duas taxas não se somam ao tempo da etapa `converter`.
+Com R e W medidos, o tempo previsto é `6041,633 / R + 3020,816 / W` segundos mais o que sobrar de CPU; dividir os
+tempos de hash por 3020,816 e o de conversores por 1395,102 para obter ms/MB.
 Confirmar Guide responsiva, reinício e desligamento durante cópia; próxima abertura deve limpar e começar do zero.
 
 ## Conferências sem emulador
@@ -155,29 +171,34 @@ Os comandos devem rodar sobre o commit final, com logs em `~/`. Não há qemu, s
 ```sh
 set -o pipefail
 python3 port/x360/tools/teste_iso_console.py /srv/bt3/dados/iso/bt3.iso \
-  --trabalho ~/conv-console/otim-final 2>&1 | tee ~/conv-console/final.log
+  --trabalho ~/conv-console/rel-final 2>&1 | tee ~/conv-console/final.log
 python3 port/x360/tools/teste_iso_tela.py 2>&1 | tee ~/conv-console/tela-final.log
 python3 port/x360/tools/teste_iso_avisos.py 2>&1 | tee ~/conv-console/avisos-final.log
 port/x360/tools/teste_som360.sh 2>&1 | tee ~/conv-console/som-final.log
-port/x360/tools/teste_iso.sh ~/conv-console/otim-final/bt3-x360.iso 2>&1 | tee ~/conv-console/leitor-final.log
+port/x360/tools/teste_iso.sh ~/conv-console/rel-final/bt3-x360.iso 2>&1 | tee ~/conv-console/leitor-final.log
 python3 port/x360/tools/headless.py --alvo x86 2>&1 | tee ~/conv-console/x86-final.log
 ```
 
 `teste_iso_console.py` compila **iso_instalar.c real**, o mesmo núcleo C e conversores, substituindo só as APIs
-FATX pelas POSIX/pthreads. Exige uma leitura de cada intervalo da origem, uma escrita por byte, releitura menor
-que 1,5 GB, pedidos de E/S sobrepostos e SHA256 de saída em fluxo igual à hashlib. Verificadores de métricas e
-digest rejeitam cópias adulteradas de um registro real; cópias compiladas com afinidade 4 ou buffer desalinhado devem falhar em execução.
+FATX pelas POSIX/pthreads. Exige uma leitura de cada intervalo da origem, uma escrita por byte, releitura de pelo
+menos a ISO inteira, pedidos de E/S sobrepostos, SHA256 de saída em fluxo igual à hashlib, os tempos das quatro
+etapas, bytes e MB/s de leitura, gravação e releitura, e a porcentagem. A simulação observa cada publicação dos
+contadores (não amostras por tempo) e exige os 101 valores de 0 a 100, fase final de publicação e nenhum
+retrocesso. Verificadores de métricas, digest e progresso rejeitam cópias adulteradas de um registro real
+(inclusive a releitura amostrada antiga e um retrocesso); cópias compiladas com afinidade 4 ou buffer desalinhado
+devem falhar em execução, e um núcleo mutante com a porcentagem por etapa converte mas tem o registro recusado.
 Compara cada byte C contra a receita Python por `convert_iso.py --conferir --dados`, incluindo todos os intervalos
 preservados e a arte. Em seguida apaga a C, executa a produção real Python e compara tamanho, MD5 e SHA256.
 **Só uma ISO de teste é mantida por vez**; não cria `pc.iso` ao lado da C. Temporários de entradas do Python são
 limpos pelo próprio contexto e as imagens inválidas/parciais são removidas após cada caso.
 
 A original permanece somente leitura e seus hashes são conferidos antes/depois. A conferência Python integral
-é vista recusando um byte alterado fora da amostra. Provoca identidade inválida descoberta no fim, índices ruins,
+é vista recusando um byte alterado no meio da cópia. Provoca identidade inválida descoberta no fim, índices ruins,
 leitura/escrita curtas, espaço insuficiente, falta de alocação/eventos/threads, sincronização/fechamento/reabertura
-ruins, truncamento, destino concorrente, bytes alterados em nove classes, saída existente, reconversão e
-encerramento real durante a cópia. Inclui o meio da tabela do AFS2, fora da amostra normal. A próxima abertura
-limpa o parcial e recomeça. Não se roda um segundo produtor de ISO ao mesmo tempo.
+ruins, truncamento, destino concorrente, bytes alterados em onze posições, saída existente, reconversão e
+encerramento real durante a cópia. Inclui o meio da tabela do AFS2, o byte preservado em 2 MiB (que a amostragem
+antiga aceitava) e o meio da ISO. A próxima abertura limpa o parcial e recomeça. Não se roda um segundo produtor
+de ISO ao mesmo tempo.
 
 `teste_iso_tela.py` compila o fluxo C++ real sobre uma UI e fila de threads simuladas. Verifica cancelamento,
 falhas, sucesso, espera pela Guide e apresentação contínua. Mutantes compilados têm de falhar em execução:

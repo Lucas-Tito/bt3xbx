@@ -16,15 +16,17 @@ typedef struct Meta {
     unsigned n;
     conv_u8 *buf;
 } Meta;
+/* ms e bytes por arquivo: [0] original ou gravação, [1] releitura do temporário. */
 typedef struct Operacao {
     HANDLE pedir, pronto, thread;
-    int parar, pendente, ok, escrita;
+    int parar, pendente, ok, escrita, qual;
     conv_u32 pos;
     unsigned n;
     void *buf;
     void *dono;
     IsoSha sha;
-    DWORD ms, hash_ms;
+    DWORD ms[2], hash_ms;
+    conv_u32 bytes[2];
 } Operacao;
 typedef struct Instalar {
     HANDLE origem, tmp;
@@ -34,6 +36,9 @@ typedef struct Instalar {
     Operacao leitora, escritora;
 } Instalar;
 static volatile LONG sFase, sPorcento;
+static const char *const sEtapas[5] = {"identificar", "copiar", "converter", "verificar", "publicar"};
+static int sEtapa = -1;
+static DWORD sEtapaInicio;
 static int tamanho(void *ctx, int qual, conv_u32 *n) {
     Instalar *c = (Instalar *)ctx;
     LARGE_INTEGER t;
@@ -123,9 +128,11 @@ static DWORD WINAPI trabalhar(LPVOID p) {
             inicio = GetTickCount();
             o->ok = gravar(o->dono, o->pos, o->buf, o->n);
         } else {
-            o->ok = ler(o->dono, 0, o->pos, o->buf, o->n);
+            o->ok = ler(o->dono, o->qual, o->pos, o->buf, o->n);
         }
-        o->ms += GetTickCount() - inicio;
+        o->ms[o->qual] += GetTickCount() - inicio;
+        if (o->ok)
+            o->bytes[o->qual] += o->n;
         SetEvent(o->pronto);
     }
 }
@@ -154,9 +161,10 @@ static int esperar(Operacao *o) {
     o->pendente = 0;
     return ok;
 }
-static int pedir(Operacao *o, conv_u32 pos, void *buf, unsigned n) {
+static int pedir(Operacao *o, int qual, conv_u32 pos, void *buf, unsigned n) {
     if (o->pendente)
         return 0;
+    o->qual = qual;
     o->pos = pos;
     o->buf = buf;
     o->n = n;
@@ -167,12 +175,12 @@ static int pedir(Operacao *o, conv_u32 pos, void *buf, unsigned n) {
     }
     return 1;
 }
-static int antecipar(void *ctx, conv_u32 pos, void *buf, unsigned n) {
-    return pedir(&((Instalar *)ctx)->leitora, pos, buf, n);
+static int antecipar(void *ctx, int qual, conv_u32 pos, void *buf, unsigned n) {
+    return pedir(&((Instalar *)ctx)->leitora, qual, pos, buf, n);
 }
 static int esperar_leitura(void *ctx) { return esperar(&((Instalar *)ctx)->leitora); }
 static int enviar(void *ctx, conv_u32 pos, const void *buf, unsigned n) {
-    return pedir(&((Instalar *)ctx)->escritora, pos, (void *)buf, n);
+    return pedir(&((Instalar *)ctx)->escritora, 0, pos, (void *)buf, n);
 }
 static int esperar_gravacao(void *ctx) { return esperar(&((Instalar *)ctx)->escritora); }
 static void hash_saida(void *ctx, conv_u8 *hash) { IsoSha_Final(&((Instalar *)ctx)->escritora.sha, hash); }
@@ -255,21 +263,25 @@ static void descartar(void *ctx) {
     if (!DeleteFile("game:\\" IC_TEMP))
         Diario_Escrever("conversão: temporário não removido, erro %u", (unsigned)GetLastError());
 }
+/* Tempo de parede de cada etapa no diário; fase < 0 só fecha a última. */
+static void etapa(int fase) {
+    DWORD agora = GetTickCount();
+    if (sEtapa >= 0 && sEtapa < 5)
+        Diario_Escrever("conversão: etapa %s em %u ms", sEtapas[sEtapa], (unsigned)(agora - sEtapaInicio));
+    sEtapa = fase;
+    sEtapaInicio = agora;
+}
+/* Uma porcentagem só: o núcleo informa o processo inteiro, pesado por bytes. */
 static void progresso(void *ctx, int fase, conv_u32 p, conv_u32 n) {
-    static int ultima = -1;
-    static DWORD inicio;
-    unsigned porcento = (unsigned)((double)p * 100.0 / (n ? n : 1));
+    unsigned porcento = p >= n ? 100U : (unsigned)((double)p * 100.0 / n);
     (void)ctx;
-    if (fase != ultima) {
-        DWORD agora = GetTickCount();
-        if (ultima >= 0)
-            Diario_Escrever("conversão: fase %d em %u ms", ultima, (unsigned)(agora - inicio));
-        ultima = fase;
-        inicio = agora;
-    }
+    if (fase != sEtapa)
+        etapa(fase);
     InterlockedExchange(&sFase, fase);
     InterlockedExchange(&sPorcento, (LONG)porcento);
 }
+/* MB decimais por segundo, a mesma unidade do modelo de tempo da nota. */
+static double mbs(conv_u32 bytes, DWORD ms) { return ms ? (double)bytes / 1000.0 / (double)ms : 0.0; }
 void IsoInstalar_Progresso(int *fase, unsigned *porcento) {
     *fase = (int)InterlockedCompareExchange(&sFase, 0, 0);
     *porcento = (unsigned)InterlockedCompareExchange(&sPorcento, 0, 0);
@@ -288,6 +300,7 @@ int IsoInstalar_Executar(const char *origem) {
     unsigned i;
     char erro[240], hash[65];
     DWORD inicio = GetTickCount();
+    sEtapa = -1;
     memset(&c, 0, sizeof(c));
     c.tmp = INVALID_HANDLE_VALUE;
     c.origem = CreateFile(origem, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -313,6 +326,7 @@ int IsoInstalar_Executar(const char *origem) {
     io.descartar = descartar;
     io.progresso = progresso;
     progresso(&c, IC_IDENTIFICAR, 0, 1);
+    Diario_Escrever("conversão: início, %u bytes", (unsigned)IC_TAMANHO);
     if (!abrir_operacao(&c, &c.leitora, 0) || !abrir_operacao(&c, &c.escritora, 1)) {
         r = IC_IO;
         strcpy(erro, "falha ao criar as threads de E/S");
@@ -321,6 +335,7 @@ int IsoInstalar_Executar(const char *origem) {
     }
     fechar_operacao(&c.leitora);
     fechar_operacao(&c.escritora);
+    etapa(-1);
     for (i = 0; i < c.nmeta; i++)
         free(c.meta[i].buf);
     if (r == IC_OK) {
@@ -328,10 +343,16 @@ int IsoInstalar_Executar(const char *origem) {
             sprintf(hash + i * 2, "%02x", (unsigned)io.sha_saida[i]);
         Diario_Escrever("conversão: SHA256 saída %s, relidos %u bytes", hash, (unsigned)io.relidos);
     }
-    Diario_Escrever("conversão: hash origem %u ms, conversores %u ms", (unsigned)io.hash_origem_ms,
-                    (unsigned)io.conversao_ms);
-    Diario_Escrever("conversão: leitura %u ms, gravação %u ms, hash saída %u ms", (unsigned)c.leitora.ms,
-                    (unsigned)c.escritora.ms, (unsigned)c.escritora.hash_ms);
+    Diario_Escrever("conversão: hash origem %u ms, conversores %u ms, hash releitura %u ms", (unsigned)io.hash_origem_ms,
+                    (unsigned)io.conversao_ms, (unsigned)io.hash_releitura_ms);
+    /* Tempos acumulados dentro de ReadFile/WriteFile, sem os hashes: a taxa do disco. */
+    Diario_Escrever("conversão: leitura da original %u bytes em %u ms, %.1f MB/s", (unsigned)c.leitora.bytes[0],
+                    (unsigned)c.leitora.ms[0], mbs(c.leitora.bytes[0], c.leitora.ms[0]));
+    Diario_Escrever("conversão: gravação %u bytes em %u ms, %.1f MB/s, hash saída %u ms", (unsigned)c.escritora.bytes[0],
+                    (unsigned)c.escritora.ms[0], mbs(c.escritora.bytes[0], c.escritora.ms[0]),
+                    (unsigned)c.escritora.hash_ms);
+    Diario_Escrever("conversão: releitura %u bytes em %u ms, %.1f MB/s", (unsigned)c.leitora.bytes[1],
+                    (unsigned)c.leitora.ms[1], mbs(c.leitora.bytes[1], c.leitora.ms[1]));
     CloseHandle(c.origem);
     Diario_Escrever("conversão: resultado %d, %s, total %u ms", r, erro, (unsigned)(GetTickCount() - inicio));
     return r;

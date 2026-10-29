@@ -59,6 +59,13 @@ static void tela(D3DDevice *dev, int fase, unsigned pc) {
     texto(dev, ISO_CONV_AGUARDE, 160, 490, 3);
     dev->Present(NULL, NULL, NULL, NULL);
 }
+/* Atrás das caixas fica o último estado da conversão, sem voltar a 0%. */
+static void fundo(D3DDevice *dev) {
+    int fase;
+    unsigned pc;
+    IsoInstalar_Progresso(&fase, &pc);
+    tela(dev, fase, pc);
+}
 /* Buffers usados pelo sistema ficam estáticos até o término assíncrono. */
 static int caixa(D3DDevice *dev, const wchar_t *titulo, const wchar_t *msg, bool pergunta) {
     static LPCWSTR botoes[2];
@@ -68,7 +75,7 @@ static int caixa(D3DDevice *dev, const wchar_t *titulo, const wchar_t *msg, bool
     botoes[0] = pergunta ? ISO_CONV_SIM : ISO_CONV_OK;
     botoes[1] = ISO_CONV_NAO;
     for (;;) {
-        tela(dev, IC_IDENTIFICAR, 0);
+        fundo(dev);
         ZeroMemory(&ov, sizeof(ov));
         ZeroMemory(&resultado, sizeof(resultado));
         r = XShowMessageBoxUI(XUSER_INDEX_ANY, titulo, msg, pergunta ? 2 : 1, botoes, pergunta ? 1 : 0, 0,
@@ -79,7 +86,7 @@ static int caixa(D3DDevice *dev, const wchar_t *titulo, const wchar_t *msg, bool
     if (r != ERROR_IO_PENDING && r != ERROR_SUCCESS)
         return -1;
     while (!XHasOverlappedIoCompleted(&ov))
-        tela(dev, IC_IDENTIFICAR, 0);
+        fundo(dev);
     r = XGetOverlappedResult(&ov, &fim, FALSE);
     return r == ERROR_SUCCESS ? (int)resultado.dwButtonPressed : -1;
 }
