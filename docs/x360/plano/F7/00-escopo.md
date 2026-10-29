@@ -17,6 +17,10 @@ A reserva revisada é 360 a 500 h de máquina serializada. Não altera o aceite 
 receitas, 11 marcos gerados pelo fluxo do jogo, salvos, reabertos pela carga normal e conferidos, com negativos
 recusados; a PPC fica especificada, sem rodar.
 
+[Medido] **Etapa 4, plano e primeira família, 29/10:** [plano por famílias, lote retomável e censo de carga do
+elenco](04.md): 35 casos de luta em time carregam os 349 pares id/traje, os rostos e as vozes dos dois lados e 33
+estágios; a x86 percorreu os 35, e a rodada com todas as redes está armada no WSL e no Deck.
+
 [Lido] Legenda: **[medido]** é contagem nos dados ou resultado de log identificado, inclusive de uma rodada
 anterior; **[lido]** é comportamento encontrado em fonte ou documento, sem prova nova de execução;
 **[estimado]** é proposta de trabalho, hipótese ou limite de aceite ainda sujeito à aprovação. A marca no início
