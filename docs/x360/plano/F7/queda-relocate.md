@@ -78,3 +78,32 @@ Acrescentaram-se apenas as duas transições. A ISO versão 3 passou na convers�
 recusas e estragos do teste oficial. O leitor recusa a versão 2. É obrigatório reconverter a ISO original.
 A saída válida está fora do git, em `~/queda-provas/iso-v3/bt3-x360.iso`.
 O vínculo da lacuna com a queda do console ainda depende da reprodução; não é conclusão baseada só no mapa.
+
+
+## Fechamento desta tentativa no WSL
+
+A reprodução não foi executada. A única espera desta tarefa no `flock` ficou mais de 70 minutos
+em `locks_lock_inode_wait`, acima do dobro do teto de 30 minutos preparado para a reprodução inicial.
+A inspeção confirmou um detentor externo e outras esperas; nenhum deles foi sinalizado.
+Foi encerrado somente o PID 635045, que ainda aguardava a trava, conforme a regra de interrupção do `AGENTS.md`.
+Nenhum qemu ou roteiro desta tarefa começou. O confronto `queda_relocate` é uma receita preparada,
+não um roteiro aprovado. Os passos de dano e o segundo Final Flash ainda precisam de ajuste por execução.
+
+Provas realizadas: os dois pacotes convertidos com cobertura integral e 24 corrupções recusadas;
+os números dos vértices, triângulos, texturas e pacotes conferidos independentemente, imagens preservadas;
+as 4.037 entradas antigas do censo com o mesmo resultado; ISO versão 3 no teste oficial completo;
+leitor com as versões 1 e 2 recusadas e oito mutantes acusados; caminhada sintética da pilha e mutante;
+os leitores reais na x86, duas relocações seguidas em cada pacote, e um caso com contagem estragada recusado.
+O verificador de conversão também falhou sobre a cópia da saída com um byte trocado e sobre o cadastro antigo.
+As builds PPC compilaram, mas seus executáveis não foram rodados.
+
+Faltam: reproduzir a queda na PPC sem mapa com a build anterior e dados do conversor anterior,
+identificar a chamada e o LEU no confronto, executar o caso isolado PPC com dados crus e convertidos,
+aprovar `SEMMAPA=1 IMG=1 roteiros.sh duelo queda_relocate`, `save_mc.sh` e seu julgamento
+`f5_final_confere.py save-mc`, além da compilação XDK e do console. Não há tabela final de execução aprovada.
+O relatório externo é `~/entrega-queda-relocate.md`. A pergunta sobre arena e trajes não recebeu resposta;
+a receita usa arena inicial, traje 0 e um membro sem itens por lado.
+
+Para retomar, os scripts de execução estão em `~/queda-sonda.sh`, `~/queda-baseline-ppc.sh`,
+`~/queda-casos.sh` e `~/queda-oficial.sh`. Reservar a trava uma única vez e encadear os passos necessários.
+A hipótese prioritária é a transição crua; a correspondência com o endereço do console permanece inferência.
