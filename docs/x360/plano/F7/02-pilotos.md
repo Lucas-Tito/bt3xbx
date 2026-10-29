@@ -172,6 +172,51 @@ diferente, e larguras conflitantes entre `EftDisc` e `EftODisc`. Depois, rejulga
 no Deck sem emulador (`memdiff` e `roteiros.py memoria` nos quatro pontos e no fim). Isso é prova
 antecipada; o aceite continua a ser o `roteiros.sh` do piloto com RC=0.
 
+### Novo julgamento com as quatro regras (29/10/2026, noite)
+
+[Medido] As regras acima estão no `memoria_luta.py` (1 a 3) e no `memdiff.py` (4), com o `roteiros.py` contando as
+linhas da cauda à parte. Rejulgamento só dos dumps preservados no Deck, sem emulador, com os executáveis de
+`~/bt3xbx-f7p` (`c1e8ff7`, que só difere de `84cd35b4` em documentação): as ferramentas antigas com eles reproduzem
+byte a byte o `memdiff.txt` guardado do fim, do `ponto_carga` e do `ponto_antes`. Executor `~/f7vl/py/tudo.sh`, saídas em
+`~/f7vl/{base,novo,neg}` no Deck.
+
+| Ponto | `memdiff` | Julgamento | `libm-host` | Observação |
+|---|---|---|---:|---|
+| fim (`semmapa`) | sai 0 | RC=0 | 13 | rastro igual, 1.728/1.728 quadros de luta; disco pela união; cauda do 01442 conforme |
+| tela 38 | sai 0 | RC=0 | 0 | como antes |
+| tela 39 | sai 0 | RC=0 | 0 | como antes |
+| `ponto_carga` | sai 0 | RC=0 | 8 | como antes (o perfil) |
+| `ponto_antes` | sai 0 | RC=0 | 42 | 8 do perfil e as 34 das partes |
+| `ponto_transformacao` | sai 0 | RC=0 | 13 | |
+| `ponto_depois` | sai 0 | RC=0 | 13 | cauda do 01442 conforme |
+
+[Medido] No `anim1` (`heap:0xce800`) do fim e do `ponto_depois`: `[0, 0x9BF00)` é o 01452 (conforme, como antes);
+`cauda pzs3us1_01442.bin.marcas [0x9bf00, 0xb50c0): conforme 78641, fora-do-formato 0`; `resto [0xb50c0, 0xce800):
+conforme 26064, fora-do-formato 0`. As 15.514 palavras igual-sem-inverter, 32 2xu16 e 26 u64 sumiram da classe por
+palavra, porque agora são números conferidos pela marcação do arquivo que os gravou.
+
+[Medido] Os negativos, cada um numa cópia (dump da PPC ou base do `--donos`), todos recusados com RC=1 e a falha
+nomeada:
+
+| Regra | Estrago | Recusa |
+|---|---|---|
+| 1 | `EftODisc` +0x40: o campo de 4 bytes que as duas vistas tipam igual vira dois u16 | `memdiff` sai 2: "vistas com larguras ou tipos conflitantes em +0x40" |
+| 2 | `dir.z` da parte 0 do brilho (normal e igual nas duas) somado de 100 ULP, `ponto_antes` | `heap#176+0x1f338 (heap:0x1a0800, dados+0x1f318, +0x4 bytes) diferente e não explicado` |
+| 3 | `EftDisc.atk` +0x3C (trabalho +0xCC), um número tipado do argumento | `heap#176+0x2fd6c (+0x4 bytes) diferente e não explicado` |
+| 3 | o byte gravado +0x41 (trabalho +0xD1), que fica comparado | `heap#176+0x2fd71 (+0x1 bytes) diferente e não explicado` |
+| 4 | um byte da cauda do 01442 (dados +0x9C001) | `marcas heap#36 cauda ...: fora-do-formato 1` e o trecho |
+| 4 | um byte depois do 01442 (dados +0xC0000) | `marcas heap#36 resto ...: fora-do-formato 1` e o trecho |
+| 4 | as marcas sem o `.orig` do 01442 (a camada não se acha) | as 15.514 igual-sem-inverter voltam, "classe não explicada ali" |
+
+[Medido] O `teste_memoria_luta.py` (um número errado em cada subalocação e trabalho vivo, slot, geração e dono
+estragados): no fim, 1.470 estragos recusados e intacto conforme, incluindo o trabalho vivo do `EftDisc_Init` pela
+união e o vetor das partes do brilho; no `ponto_antes`, 1.473 recusados e intacto conforme.
+
+[Lido] Isto é prova antecipada sobre os dumps de `84cd35b4`; o aceite da transformação continua a ser o
+`roteiros.sh` do piloto com RC=0, que espera o emulador (`entrega-f7-verificador-libm.md`). A regra 2 cobre a
+diferença da dobra de constantes da x86 (`docs/x360/pesquisa/06-libm.md`): com a chave `BT3_SEM_DOBRA=1` ligada por
+padrão, ela e a do perfil saem.
+
 ## Relógio de parede e disco
 
 [Medido] Segundos por rede, calculados entre marcas consecutivas de `*-tempos.tsv`.
