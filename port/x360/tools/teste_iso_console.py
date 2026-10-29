@@ -7,7 +7,8 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
-import shutil
+import re
+import resource
 import subprocess
 import sys
 import convert_iso as pc
@@ -24,23 +25,29 @@ def hashes(p):
         return pc.hashes(f)
 
 
-def comparar(a, b):
-    exigir(a.stat().st_size == b.stat().st_size == pc.TAMANHO, "tamanhos diferentes")
-    with a.open("rb") as x, b.open("rb") as y:
-        while z := x.read(pc.BLOCO):
-            exigir(z == y.read(len(z)), f"bytes diferentes perto de {x.tell()}")
+def validar_fluxo(texto, sha=None):
+    exigir(f"origem={pc.TAMANHO} escrita={pc.TAMANHO}" in texto and "duplicados=0" in texto,
+           "E/S repetiu bytes da origem ou não escreveu exatamente uma ISO")
+    m = re.search(r"relidos=(\d+) duplicados=0", texto)
+    exigir(m and 1395101552 < int(m[1]) < 1500000000, "releitura fora do limite esperado")
+    sobrepostas = re.search(r"pedidos sobrepostos=(\d+)", texto)
+    exigir(sobrepostas and int(sobrepostas[1]) > 0, "nenhuma E/S sobreposta foi pedida")
+    gravacoes = re.search(r"gravações=(\d+)", texto)
+    exigir(gravacoes and 360 < int(gravacoes[1]) < 1000, "escritas pequenas não foram agrupadas")
+    if sha:
+        exigir(f"SHA256 saída {sha}" in texto, "hash em fluxo diferente da saída reaberta")
 
 
-def compilar(pasta):
+def compilar(pasta, adaptador=None):
     raiz = pc.RAIZ
     preparar(pasta / "selo")
     exe = pasta / "teste_instalar"
     fontes = sorted((raiz / "port/x360/conv").glob("*.c"))
     subprocess.run([os.environ.get("CC", "gcc"), "-std=gnu89", "-O2", "-Wall", "-Wextra", "-Werror",
-                    "-Wdeclaration-after-statement", "-Wno-unused-function", "-Wno-stringop-truncation",
+                    "-Wdeclaration-after-statement", "-pthread", "-Wno-unused-function", "-Wno-stringop-truncation",
                     "-I" + str(raiz / "port/x360/src/teste_instalar"),
                     "-I" + str(raiz / "port/x360/src"), "-I" + str(raiz / "port/x360/conv"),
-                    "-I" + str(pasta / "selo"), str(raiz / "port/x360/src/iso_instalar.c"),
+                    "-I" + str(pasta / "selo"), str(adaptador or raiz / "port/x360/src/iso_instalar.c"),
                     str(raiz / "port/x360/src/teste_instalar/teste_instalar.c"),
                     *(str(f) for f in fontes if f.name not in ("conv_tool.c", "conv_jogo.c")),
                     "-o", str(exe)], check=True)
@@ -56,15 +63,19 @@ def rodar(exe, origem, pasta, esperado=0, falha=None, corromper=None):
         env["TESTE_FALHA"] = falha
     if corromper is not None:
         env["TESTE_CORROMPER"] = str(corromper)
-    r = subprocess.run([str(exe), str(origem)], env=env, capture_output=True, text=True)
+    r = subprocess.run([str(exe), str(origem)], env=env, capture_output=True, text=True, timeout=600)
     print(r.stdout, end="", flush=True)
     exigir(r.returncode == esperado, f"esperado {esperado}, obtido {r.returncode}: {r.stderr}")
+    if esperado == 0:
+        validar_fluxo(r.stdout)
     return r
 
 
 def main():
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("origem", type=Path)
+    p.add_argument("--dados", type=Path, default=Path("/srv/bt3/dados/gamedata"))
     p.add_argument("--trabalho", type=Path, required=True)
     args = p.parse_args()
     d = args.trabalho.resolve()
@@ -72,6 +83,28 @@ def main():
     (d / "commit.txt").write_text(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True))
     (d / "diff.patch").write_bytes(subprocess.check_output(["git", "diff", "HEAD"]))
     exe = compilar(d)
+    # Guardas das threads e dos buffers vistas falhando em cópias compiladas.
+    fonte = pc.RAIZ / "port/x360/src/iso_instalar.c"
+    texto = fonte.read_text()
+    for nome, de, para, acusacao in (
+        ("afinidade", "escrita ? 1 : 3", "escrita ? 4 : 3", "hw == 1 || hw == 3"),
+        ("alinhamento", "return _aligned_malloc(n, 128);",
+         "return (conv_u8 *)_aligned_malloc(n + 1, 128) + 1;", "((uintptr_t)p & 127) == 0"),
+    ):
+        mutante = d / nome
+        mutante.mkdir()
+        exigir(de in texto, f"mutação de {nome} não encontrou alvo")
+        adulterado = mutante / "iso_instalar.c"
+        adulterado.write_text(texto.replace(de, para))
+        ruim = compilar(mutante, adulterado)
+        env = dict(os.environ, TESTE_GAME=str(d))
+        env.pop("TESTE_FALHA", None)
+        env.pop("TESTE_CORROMPER", None)
+        r = subprocess.run([str(ruim), str(args.origem)], env=env, capture_output=True, text=True, timeout=30)
+        exigir(r.returncode != 0 and acusacao in r.stderr, f"{nome} proibido não foi acusado: {r.stderr}")
+        # O mutante do buffer já criou o temporário antes da primeira escrita.
+        (d / "bt3-x360.tmp").unlink(missing_ok=True)
+        print(f"ok: mutante de {nome} recusado em execução", flush=True)
     # A rotina de SHA é vista falhando no comparador com um digest adulterado.
     for b in (b"", b"abc", b"a" * 55, b"a" * 56, b"a" * 64, b"a" * 1000000):
         obtido = subprocess.check_output([str(exe), "--sha"], input=b).decode().strip()
@@ -84,13 +117,15 @@ def main():
     with invalida.open("wb") as f:
         f.truncate(pc.TAMANHO)
     rodar(exe, invalida, d, 1)
-    exigir(not (d / "bt3-x360.tmp").exists(), "criou temporário antes de autenticar")
+    exigir(not (d / "bt3-x360.tmp").exists(), "temporário não foi descartado")
     invalida.unlink()
-    print("ok: origem estragada recusada antes de escrever", flush=True)
+    print("ok: índices estragados recusados antes de escrever", flush=True)
     antes = hashes(args.origem)
     exigir(antes == (pc.MD5, pc.SHA256), "a ISO não é a original do Lucas")
     convertido = d / "bt3-x360.iso"
     for falha, codigo in (("espaco",2),("leitura",1),("escrever",3),("sincronizar",3),
+                           ("alocar",3),("evento1",3),("evento2",3),("evento3",3),("evento4",3),
+                           ("thread1",3),("thread2",3),("origem",1),
                            ("fechar",3),("reabrir",3),("truncar",5),("publicar",6)):
         rodar(exe, args.origem, d, codigo, falha)
         exigir(not (d / "bt3-x360.tmp").exists(), f"temporário sobrou: {falha}")
@@ -103,41 +138,84 @@ def main():
     # Byte convertido, preservado, índices ISO/AFS, folga/UDF, selo e cauda.
     with args.origem.open("rb") as f:
         entradas = pc.inventario(f)
+        f.seek(0)
+        prefixo = f.read(1024 * 1024)
+        registro = prefixo.index(b"PZS3US2.AFS;1") - 33
+        exigir(prefixo[registro + 32] == len(b"PZS3US2.AFS;1"), "registro AFS2 inválido")
+        afs2 = int.from_bytes(prefixo[registro + 2:registro + 6], "little") * 2048
+        exigir(pc.ler(f, afs2, 4) == b"AFS\0", "base do AFS2 inválida")
     for nome, pos in (("convertido",entradas["pzs3us1/00004.bin"][0]),
                       ("preservado",entradas["disc/SYSTEM.CNF"][0]), ("índice ISO",16*2048+158),
-                      ("índice AFS",0x3df008), ("folga AFS",0x3df018),
+                      ("índice AFS",0x3df008), ("meio do índice AFS2",afs2+8+40000*8), ("folga AFS",0x3df018),
                       ("área UDF",256*2048), ("selo",pc.MARCA_POS+16), ("cauda",pc.TAMANHO-1)):
         rodar(exe, args.origem, d, 5, corromper=pos)
         exigir(not convertido.exists() and not (d / "bt3-x360.tmp").exists(), "falha publicada")
         print(f"ok: byte sabotado em {nome}", flush=True)
+    # A amostragem tem limite explícito: um byte no meio de uma lacuna grande
+    # não é relido. A aceitação é esperada; esta cópia é apagada imediatamente.
+    rodar(exe, args.origem, d, corromper=2 * 1024 * 1024)
+    exigir(convertido.exists(), "não exercitou o limite da amostragem")
+    convertido.unlink()
+    print("ok: limite comprovado, byte preservado fora da amostra não detectado", flush=True)
     # Interrupção real de processo. A próxima abertura descarta o parcial e recomeça.
     rodar(exe,args.origem,d,77,"parar")
     exigir((d / "bt3-x360.tmp").stat().st_size > 0 and not convertido.exists(), "interrupção não deixou só parcial")
-    rodar(exe,args.origem,d)
+    sucesso = rodar(exe,args.origem,d)
     exigir(not (d / "bt3-x360.tmp").exists(), "parcial não descartado")
     # Destino já existente preservado, inclusive se ele for a própria origem.
     h = hashes(convertido)
     rodar(exe,args.origem,d,6)
     exigir(hashes(convertido) == h, "destino existente mudou")
-    rodar(exe,convertido,d,1)
+    rodar(exe,convertido,d,6)
     print("ok: retomada do zero, saída existente e reconversão recusada", flush=True)
-    referencia = d / "pc.iso"
-    subprocess.run([sys.executable,str(pc.RAIZ / "port/x360/tools/convert_iso.py"),str(args.origem),str(referencia),
-                    "--conv-tool",str(d / "selo/conv_tool")], check=True)
-    comparar(convertido,referencia)
-    exigir(hashes(referencia) == h, "hashes diferentes entre C e PC")
-    # Vê o próprio comparador falhar com byte adulterado numa cópia.
-    with referencia.open("r+b") as f:
-        pos=entradas["pzs3us1/00004.bin"][0];f.seek(pos);b=f.read(1);f.seek(pos);f.write(bytes([b[0]^1]))
+    validar_fluxo(sucesso.stdout, h[1])
+    # O verificador das métricas precisa rejeitar cópias de um registro real.
+    for de, para in (("origem=3020816384", "origem=3020816385"),
+                     ("duplicados=0", "duplicados=1"),
+                     (re.search(r"gravações=\d+", sucesso.stdout)[0], "gravações=10000"), (re.search(r"relidos=\d+", sucesso.stdout)[0], "relidos=3020816384"),
+                     (h[1], "0" * 64)):
+        exigir(de in sucesso.stdout, f"mutação de log não encontrou {de}")
+        try:
+            validar_fluxo(sucesso.stdout.replace(de, para), h[1])
+        except ValueError:
+            print(f"ok: verificador visto recusando registro adulterado: {de}", flush=True)
+        else:
+            raise ValueError("verificador aceitou registro adulterado")
     try:
-        comparar(convertido,referencia)
+        validar_fluxo(re.sub(r"pedidos sobrepostos=\d+", "pedidos sobrepostos=0", sucesso.stdout), h[1])
     except ValueError:
-        print("ok: comparador visto falhando com byte estragado",flush=True)
+        print("ok: verificador visto recusando ausência de sobreposição", flush=True)
     else:
-        raise ValueError("comparador aceitou sabotagem")
-    with referencia.open("r+b") as f:
-        f.seek(pos);f.write(b)
-    comparar(convertido,referencia)
+        raise ValueError("verificador aceitou ausência de sobreposição")
+    # A conferência Python cobre cada byte contra a conversão comum e a origem,
+    # inclusive as regiões que o console agora apenas amostra. Só uma ISO em disco.
+    comando = [sys.executable, str(pc.RAIZ / "port/x360/tools/convert_iso.py"), str(args.origem),
+               str(convertido), "--conv-tool", str(d / "selo/conv_tool")]
+    conferir = [*comando, "--conferir", "--dados", str(args.dados)]
+    subprocess.run(conferir, check=True)
+    # Verificador integral visto falhando num byte fora da amostra do console.
+    pos = 2 * 1024 * 1024
+    with convertido.open("r+b") as f:
+        f.seek(pos); b = f.read(1); f.seek(pos); f.write(bytes([b[0] ^ 1]))
+    r = subprocess.run(conferir, capture_output=True, text=True)
+    exigir(r.returncode == 1 and "bytes diferentes" in r.stderr,
+           "conferência Python integral aceitou byte estragado")
+    with convertido.open("r+b") as f:
+        f.seek(pos); f.write(b)
+    print("ok: conferência integral Python vista falhando fora da amostra", flush=True)
+    convertido.unlink()
+    # Produção real Python depois de remover a C. A igualdade integral acima já
+    # comparou todos os bytes C à receita Python; os dois hashes também devem bater.
+    subprocess.run(comando, check=True)
+    exigir(hashes(convertido) == h, "hashes diferentes entre C e Python")
+    # Reconversão sem destino existente: a marca antiga na origem é recusada.
+    outra = d / "original.iso"
+    convertido.rename(outra)
+    try:
+        rodar(exe, outra, d, 1)
+        exigir(not convertido.exists() and not (d / "bt3-x360.tmp").exists(), "reconversão publicada")
+    finally:
+        outra.rename(convertido)
     depois=hashes(args.origem)
     exigir(depois == antes, "original mudou")
     (d / "hashes.txt").write_text(f"tamanho {convertido.stat().st_size}\nMD5 {h[0]}\nSHA256 {h[1]}\noriginal {depois}\n")

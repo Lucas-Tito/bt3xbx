@@ -198,3 +198,11 @@ host o selo exato da ferramenta PC e o inclui na build. Para comparar bytes entr
 `--conv-tool build/x360/iso/conv_tool` da mesma preparação. Esse hash continua identificando a ferramenta PC
 usada como referência, inclusive quando o console aplica o núcleo C comum. Uma ferramenta PC recompilada com
 outro compilador pode ter procedência diferente na marca; não é divergência dos bytes convertidos.
+
+
+Na otimização do console pedida pelo Lucas em 29/10/2026, a origem é autenticada no fim da passagem única,
+antes de publicar. Índices antecipados ficam em cache e não são relidos da origem. A saída tem SHA256 calculado
+ao gravar; a reabertura compara índices completos, entradas convertidas, marca e amostras preservadas. A cobertura
+de persistência é menor que a conferência integral do PC descrita acima; o miolo não amostrado pode ocultar
+corrupção silenciosa. Modelo de tempo, faixas exatas e prova desse limite estão na nota da F8. A versão e os bytes
+da saída continuam iguais, com a mesma ferramenta/selo; o instalador PC mantém sua conferência integral.

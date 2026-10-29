@@ -2547,3 +2547,25 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   objetos iguais à base recompilada. Preparar os dados locais antes de julgar e conferir também `obj_data/`.
   Na cópia privada dos `.s`, corrigir o `.incbin` absoluto de `vu1_micro.data.s` para o dado somente leitura,
   como já registrado na seção de caminhos absolutos; nunca editar a árvore compartilhada em `/srv/bt3/dados`.
+
+
+### Reduzir E/S da instalação sem esconder a cobertura (F8, 29/10/2026)
+
+- Contar tráfego do caminho inteiro antes de estimar: duas autenticações, comparação contra a origem e
+  remendos de entradas custavam 20,91 GB, não somente duas leituras e uma escrita. A passagem sequencial com
+  hash da origem antes de converter, hash da saída na escritora e releitura seletiva fica em 7,49 GB.
+- Antecipar índices sem cache quebra a promessa de uma leitura por byte. Guardar os metadados até o fim,
+  usar esses bytes na passagem e comparar todos literalmente após reabrir, incluindo o meio da tabela AFS2.
+- Três buffers permitem próxima leitura, conversão atual e escrita anterior com donos diferentes. Drenar ambos
+  os pedidos em toda saída, inclusive falha; só então soltar buffers/apagar. Usar threads 1, 2 e 3, com a main
+  apresentando, antes do jogo/áudio. Eventos e handles distintos bastam para sobrepor E/S síncrona no XDK.
+- Hash durante escrita identifica os bytes enviados, não prova persistência integral. Documentar amostras e
+  provar um erro deliberado fora delas que passa. CRC32 é soma rápida contra erro acidental, não autenticação.
+- Para provar C/Python com uma ISO de teste, conferir a C inteira com `convert_iso.py --conferir --dados`,
+  guardar hashes, apagar a C e só então produzir a Python. A conferência integral deve recusar um byte que
+  ficou fora da amostra do console. Remover imagens de rodadas antigas antes de criar novas; preservar logs.
+
+- Congelar `conv/*.[ch]` e `convert_iso.py` durante toda a prova C/Python. A ferramenta e o selo são preparados
+  no começo, mas o Python recalcula a identidade dos fontes no fim. Uma rodada de desenvolvimento recusou a
+  marca porque os fontes foram editados durante as sabotagens, embora a C tivesse concluído: não comparar
+  selos de instantes diferentes. Recompilar do commit final e não editar esses fontes até acabar a conferência.

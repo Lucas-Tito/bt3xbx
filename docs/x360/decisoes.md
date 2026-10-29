@@ -643,7 +643,9 @@ preservação da original. O PC continua disponível com `convert_iso.py`. Imple
 [plano/F8/03-conversao-console.md](plano/F8/03-conversao-console.md); XDK e console aguardam revisão.
 
 - **Como:** os dois caminhos usam os conversores C comuns e produzem uma ISO do mesmo tamanho, sem mudar posições
-  ou tabelas ISO/AFS. Tamanho e identidade da USA SLUS-21678 são conferidos integralmente antes da escrita.
+  ou tabelas ISO/AFS. Tamanho e identidade da USA SLUS-21678 são conferidos integralmente antes da publicação.
+  No console, após o pedido de otimização de 29/10, o SHA256 é calculado na passagem da cópia/conversão;
+  a reabertura confere índices, entradas convertidas, marca e amostras. Os limites estão na nota da F8.
 - **O jogo exige a ISO convertida:** o console converte uma vez, antes do jogo, e reinicia o título após publicar a
   saída conferida. A carga continua sem `Conv_Arquivo` para as entradas da ISO; não há conversão de reserva por carga.
 - **Por quê:** a carga deixa de pagar a conversão (500 ms na luta medida na decisão 18, 264 ms só no cenário), e o

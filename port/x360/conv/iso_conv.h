@@ -16,10 +16,22 @@ typedef struct IsoConvIO {
     void *ctx;
     int (*tamanho)(void *, int, conv_u32 *);
     int (*ler)(void *, int, conv_u32, void *, unsigned);
-    int (*gravar)(void *, conv_u32, const void *, unsigned);
+    /* Um pedido de leitura e um de escrita podem coexistir. O buffer pertence
+       ao pedido até esperar_* devolver; mesmo na falha, esperar drena o pedido. */
+    int (*antecipar)(void *, conv_u32, void *, unsigned);
+    int (*esperar_leitura)(void *);
+    int (*enviar)(void *, conv_u32, const void *, unsigned);
+    int (*esperar_gravacao)(void *);
+    void (*hash_saida)(void *, conv_u8 *);
+    void *(*alocar)(unsigned); /* buffers de E/S alinhados a 128 bytes */
+    void (*liberar)(void *);
+    conv_u8 sha_saida[32];
+    conv_u32 relidos, hash_origem_ms, conversao_ms;
+    conv_u32 (*relogio)(void);
     int (*espaco)(void *); /* pelo menos 3 GiB livres, além da original */
     int (*iniciar)(void *);
     int (*reabrir)(void *);
+    int (*conferir_indices)(void *, conv_u32 *);
     int (*publicar)(void *);
     void (*descartar)(void *);
     void (*progresso)(void *, int, conv_u32, conv_u32);
