@@ -2525,3 +2525,12 @@ Na investigação `queda-relocate`, a espera única pelo `flock ~/wsl.lock` fico
 a trava, acima do dobro do teto de 30 minutos preparado para a reprodução PPC inicial. A espera própria foi
 encerrada pelo PID, sem sinalizar o detentor ou as demais filas. Não confundir compilação PPC, conversão e
 casos nativos aprovados com execução PPC: a reprodução e os critérios de jogo ficaram pendentes.
+
+
+### A ISO sintética do teste de fluxos acompanha a versão do leitor
+
+Depois de exigir a ISO versão 3, o `teste_som360.sh` ainda fabricava a marca versão 2. As três
+rodadas positivas falhavam na recusa da ISO antes de testar qualquer fluxo; os mutantes também
+falhavam ali e não provavam suas sabotagens. O gerador agora usa `ISO_MARCA_VERSAO` do mesmo
+`iso360.h` levado à compilação do ensaio. Exigir primeiro o caso positivo e ler a causa dos
+negativos, em vez de contar toda saída não zero como prova da sabotagem.

@@ -24,6 +24,7 @@
 #include <time.h>
 #include <pthread.h>
 #include "fluxo.h"
+#include "iso360.h"
 
 #define TAM 1000000L
 #define BLOCO 4096L
@@ -331,7 +332,7 @@ static int faz_iso(void) {
     grava(o, 20 * SETOR, "BOOT2 = cdrom0:\\SLUS_216.78;1\r\nVER = 1.00\r\nVMODE = NTSC\r\n", 57);
     memset(s, 0, sizeof(s));
     memcpy(s, "BT3X360-ISO", 11);
-    p32(s + 16, 2);
+    p32(s + 16, ISO_MARCA_VERSAO);
     p32(s + 20, 512);
     p32(s + 24, 3020816384U);
     grava(o, 0x3DF400, s, 512);

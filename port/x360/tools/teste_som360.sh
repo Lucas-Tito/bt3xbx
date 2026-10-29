@@ -27,6 +27,7 @@ trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/teste"
 cp "$SOM/som_nucleo.h" "$SOM/som_nucleo.c" "$T/"
 cp "$SOM/teste/teste_nucleo.c" "$SOM/teste/teste_fluxo.c" "$T/teste/"
+cp "$RAIZ/port/x360/src/iso360.h" "$T/"
 cp "$SOM/fluxo.h" "$SOM/fluxo.c" "$RAIZ/port/x360/src/iso360.c" "$T/"
 mkdir -p "$T/xtl"; cp "$SOM/teste/xtl/xtl.h" "$T/xtl/"
 falhas=0
@@ -75,7 +76,7 @@ compila_fluxo() { # $1 = o diretório com fluxo.c e iso360.c
   $CC -std=c89 -pedantic -Wall -Wextra -Werror -O2 -DFLUXO_PELO_PORT -c "$1/fluxo.c" -o "$1/fluxo.o" &&
   $CC -std=gnu99 -Wall -Wextra -Wno-stringop-truncation -Werror -O2 -I"$T/xtl" -I"$RAIZ/port/x360/src" \
     -I"$RAIZ/port/x360/conv" -c "$1/iso360.c" -o "$1/iso360.o" &&
-  $CC -std=c99 -Wall -O2 -I"$1" "$T/teste/teste_fluxo.c" "$1/fluxo.o" "$1/iso360.o" -lpthread -o "$1/prog_fluxo"
+  $CC -std=c99 -Wall -O2 -I"$1" -I"$T" "$T/teste/teste_fluxo.c" "$1/fluxo.o" "$1/iso360.o" -lpthread -o "$1/prog_fluxo"
 }
 $CC -std=c89 -pedantic -Wall -Wextra -Werror -O2 -c "$T/fluxo.c" -o "$T/fluxo_wsl.o" ||
   { echo ">> FALHA: o fluxo.c sem FLUXO_PELO_PORT não compila em C89 estrito"; falhas=$((falhas + 1)); }
