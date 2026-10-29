@@ -723,7 +723,12 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None, roteiro
         print(f"{pre}DIFERENÇA: memória: nenhum bloco vivo com arquivo ou conteúdo convertido achado")
         ok = False
     conf = sum(int(re.search(r"conforme (\d+)", l).group(1)) for l in marcas)
-    print(f"{pre}  {len(marcas)} blocos com arquivo ou conteúdo convertido, {conf} números e bytes conformes")
+    # (F7) as linhas da cauda de um buffer fixo reaproveitado (memdiff.py BUFFERS_FIXOS) julgam-se como as outras, mas
+    # não são um bloco a mais
+    caudas = [l for l in marcas if re.match(r"marcas heap#\d+ (cauda|resto) ", l)]
+    print(f"{pre}  {len(marcas) - len(caudas)} blocos com arquivo ou conteúdo convertido, {conf} números e bytes conformes")
+    for l in caudas:
+        print(f"{pre}  buffer fixo reaproveitado: {l[7:]}")
     for l in fora:
         print(f"{pre}DIFERENÇA: memória: {l}")
         ok = False

@@ -1650,6 +1650,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `BtlFx_FireKiBlast` não grava `unk40` nem `unk42`, e o disco copia os 0x50 bytes; os leitores (a vista
   `EftHitAtk` de 0x34 bytes e os callbacks até +0x2B) nunca passam de +0x33. `sem_leitor` aceita
   `(deslocamento, bytes)`, para deixar comparado o byte gravado no meio (+0x41).
+- **Buffer fixo reaproveitado guarda o resto do arquivo anterior.** Os três buffers do slot fixo do lutador
+  (modelo 0xCE000, anim0 0x160800, anim1 0xCE800) são zerados no `BtlObj_Init` e recarregados no lugar pela troca de
+  forma; um arquivo menor deixa depois dele o fim do maior, já convertido e com os campos que o jogo gravou. O
+  `memdiff.py` confere essa cauda pelas marcas do arquivo anterior (achado pelo conteúdo da x86 só naquele trecho, em
+  camadas) e exige o resto depois dele igual byte a byte. Uma linha de `CLASSES_CONHECIDAS` com teto teria aceitado
+  as 15.514 palavras sem provar nada. Voltará em toda troca para um arquivo menor.
 - **A fonte do menu mede também o cabeçalho de sprites.** Itens negativos chamam `Font_GetWidth` sobre
   o count u32 da folha. O ramo big-endian de `BtlMenu_GetWidth` reconstitui as duas metades como u16
   temporários; converter o cabeçalho como texto estragaria a relocação. As posições do `--mapa` têm
