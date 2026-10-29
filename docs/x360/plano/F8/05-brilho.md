@@ -9,6 +9,11 @@ o brilho do 360 igual ao do port de PC com `GLOW_DEFAULT 60`, sem subir para os 
 
 ## 1. Resultado
 
+**Encerrado como problema conhecido (29/10/2026, decisão do Lucas):** a prova da seção 4 foi desarmada antes de rodar e a
+rodada de console da seção 5 não será feita. O escuro à noite vai para os problemas conhecidos do README, com a dúvida
+aberta entre o jogo e a TV do Lucas (os níveis de referência de vídeo). As seções abaixo ficam como registro, para quem
+quiser retomar.
+
 **A H9 não mostrou um defeito do 360: a referência dela é que não é a do PC.** Nenhuma mudança no código do 360 até aqui; a
 prova que fecha a questão no WSL está armada (seção 4) e a rodada curta de console está preparada (seção 5).
 
@@ -80,7 +85,7 @@ fator 0,4); com `--desloca 24,16` o melhor encaixe anda de (+40, +16) para (+64,
 | `diag_bilinear.patch` | o diagnóstico do rasterizador da seção 2; aplica no `6dde9c6` (o das parciais da H9) e na main |
 | `brilho_ref.sh REF SAIDA` | sob a trava: aplica o patch no REF, recompila a x86, roda as parciais de 3500 (v1 sem chave, que tem de dar as da H9 byte a byte; v2 bilinear e alfa do PC; v3 só bilinear; v4 o quadro inteiro a 60%) e o `brilho_ajuste.py` do console contra a H9, a v3 e a v2 em `SAIDA/resultado.txt` |
 
-## 4. A prova no WSL (armada, esperando a trava)
+## 4. A prova no WSL (desarmada em 29/10, não rodou)
 
 Serviço `bt3-brilho-ref` (`systemd-run --user`, `flock ~/wsl.lock`), armado em 29/10 às 15:52 atrás de `bt3-alfa-rodada3`
 e `bt3-f5-lotes-envio`. Worktrees `/home/codex/bt3xbx-brilho` (este branch) e `/home/codex/bt3xbx-brilho-ref` (`6dde9c6`,
@@ -97,7 +102,7 @@ parciais da H9). Se o WSL reiniciar antes, o serviço some: armar de novo com a 
 | contra v2 o x volta a uns 40 pixels, ou o ganho fica perto de 0,6 | o 360 difere do PC na cadeia: abrir passada por passada (a captura dos alvos 3 a 6 no console) |
 | v3 e v2 iguais no encaixe | o alfa acima de 0x80 não pesa na cena; o resto da força é outra coisa |
 
-## 5. A rodada curta de console (preparada)
+## 5. A rodada curta de console (preparada, não será feita)
 
 O `.xex` é o da main (nenhuma mudança no 360 neste branch). Ambientes em [05-ambientes](05-ambientes/), um por abertura;
 cada um grava as capturas numa pasta própria (`game:\shots_<nome>`). Envio, com o console na FreeStyle e o `.xex` e o

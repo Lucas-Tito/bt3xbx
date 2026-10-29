@@ -55,6 +55,11 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
    prendem). Nenhuma mudança no 360. Armado no WSL (`bt3-brilho-ref`, esperando a trava): o rasterizador com o bilinear
    do GS e o alfa do PC contra as capturas da H9. Preparada a rodada curta de console: o Shenlong na configuração de
    release a 60% e a 0%, e o deserto à noite em luta a 60, 0 e 100 (ambientes em [05-ambientes](05-ambientes/)).
+   **Problema conhecido (decisão do Lucas, 29/10):** sem mais teste. A rodada de console e a prova no WSL não serão
+   feitas (o serviço `bt3-brilho-ref` foi desarmado antes de rodar). Vai para os problemas conhecidos do README da
+   release: os estágios à noite podem parecer escuros demais no console. Fica em dúvida se a causa é o jogo ou a TV do
+   Lucas (os "Níveis de referência" de vídeo do console contra a faixa que a TV espera escurecem os tons baixos); o
+   brilho do 360 segue o do PC a 60% pelo que se mediu.
 6. **Arrumação para a finalização** (27/10/2026): o 360 achar a ISO convertida quando há a original e a convertida na
    mesma pasta (hoje a busca pega a primeira `.iso`); a numeração repetida das seções das notas da F5; as pastas
    temporárias do WSL; propor ao upstream as correções do cache que valem também para o PC (a colisão das tabelas do
