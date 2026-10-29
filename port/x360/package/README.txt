@@ -2,88 +2,29 @@ Dragon Ball Z: Budokai Tenkaichi 3 for Xbox 360
 Version {{VERSION}}
 ================================================
 
-A native Xbox 360 port of Dragon Ball Z: Budokai Tenkaichi 3 (PlayStation 2, USA release,
-SLUS-21678). It is the game's own code, rebuilt for the Xbox 360 from a decompilation. It is
-not an emulator.
-
-This package contains NO game data. You need your own disc image (ISO) of the USA release of
-the game. Nothing in this project helps you get one: make it from a disc you own.
-
-This project is not affiliated with or endorsed by the game's developers, publishers or rights
-holders. All rights to the game belong to their owners.
-
-
-CONTENTS
---------
-
-  1. What you need
-  2. What is in this package
-  3. Installing
-  4. Converting your ISO (two ways)
-  5. Updating to a new version
-  6. Controls
-  7. Saves
-  8. If the game crashes
-  9. Known issues
-  10. Credits, licence and legal
-
-
 1. WHAT YOU NEED
 ----------------
 
-* An Xbox 360 with RGH or JTAG that can run unsigned homebrew (.xex files). A retail console
-  that is not modified cannot run this.
-* Your own ISO of the USA release, SLUS-21678. Other regions (PAL, Japan) and other versions
-  are not supported. You can check your ISO on a PC:
+* Xbox 360 that can run .xex files.
+* Your own ISO of the USA release, SLUS-21678.
 
     Size:    3,020,816,384 bytes
     MD5:     350404a81de912347c8b262542fed970
     SHA256:  93f1f911e9a2bbdf92e5794fc3075ddf3f87db3df4b1cb8cfbb0448721c91172
 
-* Free space on the drive where the game goes: 3 GB for the converted ISO, plus the original
-  ISO (another 3 GB) while you convert. About 6 GB in total.
-* A controller, and a way to copy files to the console (FTP from your dashboard, or a USB
-  drive).
+* 10 GB of free space.
 
-What was tested: Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle Dash 3.0.780 with DashLaunch,
-the game on the internal hard drive. Not tested yet: Aurora and other dashboards, other kernels,
-USB drives. If you try one of those, a report helps (section 8).
-
-
-2. WHAT IS IN THIS PACKAGE
---------------------------
-
-  bt3-x360\            The game folder. This is what goes to the console.
-    default.xex        The game.
-    default.dat        Tables the game needs. Always keep these three files together and
-    default.swap       from the same version.
-  pc-tools\            Optional: the ISO converter for a PC (section 4, option B).
-  README.txt           This file.
-  LICENSE.txt          The licence of the port's code.
-  THIRD-PARTY.txt      Licences and credits of the parts made by others.
-  licenses\            The full licence texts named in THIRD-PARTY.txt.
-  SHA256SUMS.txt       Checksums of every file above.
-
-To check that your download is complete, run this in the unpacked folder on Linux or WSL:
-
-    sha256sum -c SHA256SUMS.txt
-
-Every line must end with "OK".
-
-
-3. INSTALLING
+2. INSTALLING
 -------------
 
-1. Unpack the zip on your PC.
-2. Copy the whole bt3-x360 folder to the console, to a place your dashboard scans for games,
+1. Copy the whole bt3-x360 folder to the console, to a place your dashboard scans for games,
    for example Hdd1:\Games\bt3-x360.
-3. Copy your original USA ISO into that same folder, next to default.xex, and name it
+2. Copy your original USA ISO into that same folder, next to default.xex, and name it
    bt3.iso. Any name ending in .iso works, except bt3-x360.iso: that name is reserved for the
    converted ISO.
-   (If you converted on a PC, copy your bt3-x360.iso there instead and skip step 5.)
-4. Start "Budokai Tenkaichi 3" from your dashboard. If it is not listed, rescan your game
-   folders, or start default.xex from the dashboard's file manager.
-5. The game asks to convert your ISO. Choose Convert (section 4, option A).
+   (If you converted on a PC with the PC tool, copy your bt3-x360.iso there instead and skip
+   step 3.)
+3. The game asks to convert your ISO. Choose Convert (section 3, option A).
 
 After the conversion the game folder looks like this:
 
@@ -95,7 +36,7 @@ After the conversion the game folder looks like this:
     saves\           created by the game the first time it saves
 
 
-4. CONVERTING YOUR ISO (TWO WAYS)
+3. CONVERTING YOUR ISO (TWO WAYS)
 ---------------------------------
 
 The game cannot use the original ISO directly. It needs a converted copy: the game's data
@@ -103,9 +44,9 @@ reordered for the Xbox 360 processor, and the button pictures changed to Xbox 36
 The converted ISO is the same size as the original. Your original ISO is only read, never
 changed. Pick one of the two ways below; both give a converted ISO that the game accepts.
 
-Option A: on the console (recommended)
+Option A: on the console
 
-1. With your original ISO in the game folder (section 3), start the game.
+1. With your original ISO in the game folder (section 2), start the game.
 2. A box appears:
 
      Convert ISO
@@ -140,8 +81,8 @@ also starts from the original.
 
 Option B: on a PC (advanced)
 
-For Linux, or Windows with WSL. You need Python 3.8 or newer and gcc. Go to the pc-tools
-folder of this package and run:
+For Linux. You need Python 3.8 or newer and gcc. Go to the pc-tools folder of this package
+and run:
 
     mkdir -p port/build
     gcc -std=c89 -O2 -o port/build/conv_tool $(ls port/x360/conv/*.c | grep -v conv_jogo.c)
@@ -158,43 +99,7 @@ Then copy bt3-x360.iso into the game folder on the console, next to default.xex.
 need to copy the original.
 
 
-5. UPDATING TO A NEW VERSION
-----------------------------
-
-Replace default.xex, default.dat and default.swap together, all three from the new package.
-Keep the saves folder and your converted ISO. If the new version needs a new conversion, the
-game says so when it starts; put your original ISO back in the folder and convert again
-(section 4).
-
-
-6. CONTROLS
------------
-
-The game's own controls, with the Xbox 360 buttons in the places of the PlayStation 2 buttons.
-The pictures of buttons in the game (menus, lessons, command lists) show the Xbox 360 buttons.
-
-    Xbox 360              PlayStation 2
-    A                     Cross
-    B                     Circle
-    X                     Square
-    Y                     Triangle
-    LB / RB               L1 / R1
-    LT / RT               L2 / R2
-    Left stick click      L3
-    Right stick click     R3
-    Start                 Start
-    Back                  Select
-    D-pad, sticks         D-pad, sticks
-
-* Y goes back in the menus, as Triangle did on the PlayStation 2.
-* Player 1 is the first controller that is turned on; player 2 is the next one.
-* Vibration works as in the original game, and can be turned off in the game's options.
-* The controller layout can be changed in the game's own options, as on the PlayStation 2.
-  This version has no other remapping.
-* The game has no quit option. To leave, press the Guide button and go back to the dashboard.
-
-
-7. SAVES
+4. SAVES
 --------
 
 The game saves as it did on the memory card, through its own menus. The files go to the saves
@@ -205,7 +110,7 @@ Saves from the PlayStation 2, from PCSX2 or from the PC port cannot be used here
 from here cannot be used there. Importing and exporting saves is not part of this version.
 
 
-8. IF THE GAME CRASHES
+5. IF THE GAME CRASHES
 ----------------------
 
 If the game runs into an error, it shows:
@@ -233,42 +138,16 @@ A problem that is not a crash (a wrong picture, wrong sound, a menu that does no
 the "Bug report" form. Please read the known issues below first.
 
 
-9. KNOWN ISSUES
+6. KNOWN ISSUES
 ---------------
 
-* Night stages, the desert at night above all, can look too dark. We are not sure yet whether
+* Night stages, the desert at night above all, can look too dark. I'm not sure yet whether
   this comes from the game or from the TV setup. The console's "Reference Levels" video
   setting (System Settings, Console Settings, Display, Reference Levels) must match the range
   your TV expects; when they differ, dark tones get darker. Try the other options there and
   compare.
-* The picture is always 16:9 in this version, also on a TV set to 4:3, where it looks
-  stretched. Menus and movies are stretched to 16:9, as in the PC port. Following the
-  console's 4:3 or widescreen setting is planned for a later version.
-* In 16:9 the gauges and other on-screen displays are narrowed and look a little blurry.
 * On Namek, during the dragon (Shenlong) animation, parts of the sky and the water can turn
   black for a moment.
 * Not every character, costume, transformation, stage, story battle and mode has been played
-  on the console for this version. If one of them crashes, please report it (section 8).
+  on the console for this version. If one of them crashes, please report it (section 5).
 * The online mode (Dragon Net Battle) is not available.
-* There is no settings menu of the port, no button remapping beyond the game's own options, and
-  no import or export of saves.
-
-
-10. CREDITS, LICENCE AND LEGAL
-------------------------------
-
-* Tenkaichi3Decomp, the native PC port this one is built on, by z3xox and contributors:
-  https://github.com/z3xox/Tenkaichi3Decomp
-* BT3-Decompiled, the decompilation of the game: https://github.com/z3xox/BT3-Decompiled
-* Xbox 360 port (bt3xbx): Lucas Tito, https://github.com/Lucas-Tito/bt3xbx
-* Xbox 360 button pictures: "Input Prompts" by Kenney (www.kenney.nl), public domain (CC0).
-  Thank you, Kenney.
-
-The port's own code is under the MIT licence (LICENSE.txt). The parts made by others keep their
-own licences (THIRD-PARTY.txt). The game's code comes from the decompilation and is not ours to
-license: it belongs to the game's rights holders.
-
-This project is not affiliated with or endorsed by the game's developers, publishers or rights
-holders. It exists for preservation, study and interoperability, and distributes none of the
-game's assets. All rights to the game belong to their owners. You need your own legally
-obtained copy of the game to use it.
