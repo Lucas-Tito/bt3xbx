@@ -2541,3 +2541,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   o envio por lotes no meio, e só depois o envio muda o tempo.
 - Teste nativo de código do 360 com g++: `unsigned __int64` só compila com `#define __int64 long long` (um `typedef`
   não aceita o `unsigned` na frente).
+
+
+### Analisar o relógio e a imagem dos lotes (F5, gravação, seção 39)
+
+- O modelo C normaliza os carimbos pelo G da própria abertura com marcas. Para retirar o efeito delas, aplicar
+  essa fração ao G do controle da mesma build/repetição e recalibrar P/U nesse controle; o comando sem essa troca
+  ainda usa as constantes históricas. Conservar também o resultado original para reproduzir a comparação.
+- O perfil fino anterior ao alfa não contém o rateio da build com alfa. Trocar só o total escala também o antigo
+  custo inicial do alfa. Publicar a hipótese do rateio e a sensibilidade sem `outros`, sem somar um ganho antigo
+  à recuperação do cronograma; prazo de um quadro que sumiu do picos continua sendo referência, não nova medida.
+- `compara_quadros.py` procura `frame_NNNNN.ppm` no segundo diretório, mesmo ao comparar duas capturas do console.
+  Criar links fora do git; exigir todos os números e dimensões e igualdade exata. Seu código 0 significa medida
+  produzida: falta de referência ou um pixel diferente não reprova por si, e 100,00% pode ser arredondamento.
+  Na li37 as capturas cheias são 853x597, não o tamanho alocado do alvo 864x608. Recalcular o FNV do arquivo inteiro
+  para associar a captura ao diário, preservando também SHA256.
+- Captura cheia para a GPU e lê/grava a imagem: as seis li37 têm 20 imagens de quatro ou mais vblanks no combate,
+  até 22. Não transferir esses histogramas ao aceite de desempenho ou à exceção E; os relógios sem captura são
+  outra evidência. A longa marginal 7109 → 7110 dos perfis sem alfa também não vira troca de cena por hipótese.

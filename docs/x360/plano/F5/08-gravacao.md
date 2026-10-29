@@ -5191,3 +5191,218 @@ O que falta para os lotes chegarem ao D3D antes de G, cada item com a sua prova:
 
 **Ponto de parada.** Esta tarefa para aqui: a segunda parte muda a sincronização entre a gravação e o desenho e só se
 prova com o console. A medida do relógio decide se ela vale a pena.
+
+
+## 39. Rodadas rl37a2810 e li37a2810: o teto medido sustenta o envio durante a gravação, com imagem igual (29/10/2026)
+
+**Resposta: vale fazer a segunda parte do `BT3_GS_LOTES`, desligada por padrão.** Com o progresso da gravação medido
+no Xenon, o teto C recalibrado nos controles do 6960 recupera **13,811 a 14,095 ms**, acima da meta de **11,5 ms** da
+seção 37 em **2,311 a 2,595 ms**. Com alfa, a folga ideal do 6959 → 6960 é **3,817 a 3,844 ms**, deixando
+**2,817 a 2,844 ms além da margem de 1 ms**. A primeira parte tem imagem igual nos quatro pares, controles inclusos.
+Isso justifica implementar e medir a sincronização da seção 38; **nenhum ganho real dos prefixos foi medido, o zero
+continua reprovado e a exceção E não está aprovada**. As duas partes ainda não viram padrão.
+
+Somente análise/documentação, base `cc546dce`, branch `codex/f5-lotes-analise`, sem console, emulador ou build nova.
+Scripts, comandos, recortes, tabelas numéricas e negativos em `~/f5-lotes-analise/`; originais intactos.
+
+### Proveniência e conferência dos catorze logs
+
+**[Informado pelo Lucas]** Rodadas executadas uma abertura por vez, na ordem preparada na seção 38, saves novos,
+builds de `dc2785f`: perfil MD5 `759be0af5a97b41df00c83ce5ffd1da3`, perfil+alfa
+`ce6cda5cc75ebc8008763f058b034d60`, normal `5d2e4c29a0c3691fc2bd0eabe757a1af` e lotes
+`36b9c15421c1058bb23c7cacd60178ca`. A ctla2 foi aberta em 29/10; as demais do relógio na noite de 28/10.
+Os binários e a inexistência dos saves antes das aberturas não foram reinspecionados nesta análise.
+
+**[Medido]** Todos carimbam `dc2785f diff:da39a3ee5e`. Ambientes inteiros conferidos contra os gerados por
+`lotes_console.py`, incluindo a ordem, quatorze saves exclusivos `sv_rl37a2810_NOME` / `sv_li37a2810_NOME`, a lista e
+as marcas do relógio, a captura cheia e a pasta por abertura. Sem DEMO, som/16:9/FXAA/origem/VU1 direto/envio rápido
+ligados, escala 1,33, hardware 3; tempos/CPU/cortes/comum/oráculo/constantes/fecho desligados; picos 36 e tela 1.
+O alfa de compilação só aparece nas rela/ctla; primeira parte dos lotes ligada só nas lot, desligada nas lct,
+ausente nas nor. Os oito relógios têm os cinco quadros completos, sem vagas perdidas; controles sem carimbos.
+
+SHA256 dos **bytes originais completos** em `~/sessao_2910/logs/NOME/bt3xbx.log`; a análise usa somente até o
+primeiro `f5_duelo.txt:99 fim vblank 12570 quadro 8378`. A continuação da nor1, por exemplo, não cria outra janela.
+
+| Abertura na ordem das duas rodadas | SHA256 original | Linhas usadas / totais |
+|---|---|---:|
+| rel1 | `ce9403fe8c9b1d56c0d2827a8bc259c9ec54262146f66b8dcec9325bec9125d8` | 2896 / 3023 |
+| ctl1 | `e42f77d61c689e08b4c9d1fc1bf13c4400d605623cbece0cf7df4d7f7f9f7d5d` | 2824 / 2900 |
+| rela1 | `96bd1bc2da9dcb8e0a4c13f354a849aca574f3743505e25cf91ab3644ac45271` | 2893 / 3296 |
+| ctla1 | `0e64a89eb3d6c588da0ef6c382b0e09679bb053c94dd03820158644ab10a903a` | 2801 / 2903 |
+| rel2 | `b397394c29d9cc559c0bb75a87c193f1162863bbe75ec52b24c8b9d9978e720f` | 2898 / 3276 |
+| ctl2 | `c4770ed5b0f96d3635d3827f65d9c1b6d4c26fb74eaa50720dd7979c0c47d5c7` | 2827 / 3105 |
+| rela2 | `b8974025bf51eca18fcf794bbbf6a8b56ba95d42ca250aa5c363cfea4ab8a30b` | 2901 / 3103 |
+| ctla2 | `ae99a1f4fb0cc8eb4f55c24ac679a1e5f20f3ca713e35e14ae6b48753b064df7` | 2803 / 2905 |
+| nor1 | `9b208115d83f561d7747b831d02e2d21fde7994abc96fc879153c7f536f933e4` | 2897 / 16037 |
+| lot1 | `1112095a0a2fa7fe42ea24e0fed0cea976b6c617564a7cb03e62cb036727b86d` | 3000 / 3262 |
+| lct1 | `0f8825ba39fb436146cd898514668620858c4e544dc92a6ad9c3159efd650bc6` | 2990 / 3357 |
+| nor2 | `b0da59be055c4ddf5d2646740bc272ea480c5410e12d13e5e9805fe0c5d4f2f3` | 2911 / 3088 |
+| lot2 | `3703ac60015745b4ec12b48082068072f1f90f52d70de6e2d3019783d9098fae` | 3002 / 3317 |
+| lct2 | `a24db922c0ab85a523e37ab8c1eadf3c89963c2cfd6ae7621a4d3f92fc93ad3c` | 2992 / 4616 |
+
+As 42 linhas de execução do roteiro são idênticas nas catorze (roteiro de 86 passos, boot e retorno incluídos).
+J1/J2: **684/2.334 passos**, **1.368/4.668 vblanks do jogo**, todos os passos de dois vblanks. Resultado estado 4,
+vencedor 0x2, razão 0x1, vida 0/27160, vblank 11478/quadro 7757. Associação completa nas 28 janelas: zero repetição,
+troca sem quadro, imagem pulada e marca GPU ausente; histogramas e linhas individuais conservam as contagens e
+cada imagem excepcional aponta para o quadro seguinte. Não confundir os vblanks do jogo com os de hardware.
+
+Zero falha, vigia, amostra indisponível, perda no diário, descarte requerido, pressão/espera de descarte,
+textura recusada/branca, alvo sem textura, VU pulada/falta de espaço, fora da vaga, leitura sem Resolve ou DATE
+lendo fora do que o alvo tinha. Conferidos **88 resumos de recursos por abertura** e os descartes dos picos,
+sem somar os totais cumulativos. Mínimo livre **140 MB no relógio / 137 MB na imagem**, acima do piso 32.
+Maiores buffers nos resumos: 13.134/470.000 vértices, 53.797/98.304 VU, 129.105/294.912 índices,
+2.227/8.192 constantes e 2.422/16.384 desenhos, todos dentro da capacidade.
+
+J1 tem 684 imagens de dois vblanks em todos os leitores. J2 conserva estes denominadores (1/2/3/4+):
+
+| Grupo | Imagens de picos, histograma | Imagens de passos, histograma |
+|---|---|---|
+| rel1/2 | 2334: 4/2327/3/0 | 2335: 4/2328/3/0 |
+| ctl1/2 | 2334: 3/2328/3/0 | 2334: 3/2328/3/0 |
+| rela1/2, ctla1/2 | 2335: 2/2332/1/0 | 2334: 2/2331/1/0 |
+| nor1/2, lct1/2 | 2334: 5/2308/1/20 | 2335: 5/2309/1/20 |
+| lot1/2 | 2334: 5/2308/1/20 | 2334: 5/2308/1/20 |
+
+A diferença de uma imagem de dois vblanks na fronteira foi conservada. `passos.py` estrutural sai 0 nas catorze;
+com `--console --janelas 2 --minimo 600`, sai **1 nas catorze**. No relógio, só por longas e por faltar a segunda
+janela aprovada (parede/esperado 0,9972). Na imagem, também pelo tempo de parede e pelas capturas: há **20 imagens
+de quatro ou mais** dentro do combate em cada abertura, com alvos nas capturas, mais a longa 6935 → 6936. O máximo
+é **22 vblanks**, lot2 no 6899 → 6900. São aberturas de imagem, não medidas de desempenho nem candidatas à exceção E.
+
+No relógio sem alfa há três longas em cada rel/ctl: **6929 → 6930**, **6959 → 6960** e **7109 → 7110**.
+A última tem U de **-0,2/-0,4** nas rel e **-0,2/-0,1 ms** nas ctl; não é a longa do 7170 nem foi demonstrada como
+troca de cena. Com alfa só permanece 6959 → 6960 (U **-10,3** nas rela, **-10,2 ms** nas ctla).
+Nenhuma imagem de quatro ou mais nos oito relógios. Nenhuma longa no 7170 nessas oito, mas a build é de perfil:
+isso não mede regressão nem ganho da build normal. Continuam faltando as três janelas longas finais da F5.
+
+### O relógio e o custo dos carimbos
+
+`prefixos_teto.py --console RECORTE --so-relogio` aprova os oito e lê G/P/U dos cinco quadros.
+Tempos abaixo **desde J**, portanto J=0; não são as folgas do `picos: tela` (sinal oposto para U atrasado):
+
+| Controle, quadro | G | P | U |
+|---|---:|---:|---:|
+| ctl1, 6930 | 14,501 | 21,247 | 35,606 |
+| ctl1, 6960 | 19,893 | 26,597 | 42,481 |
+| ctl2, 6930 | 14,410 | 21,153 | 35,482 |
+| ctl2, 6960 | 19,910 | 26,632 | 42,565 |
+| ctla1, 6930 | 14,835 | 17,282 | 31,548 |
+| ctla1, 6960 | 20,462 | 27,000 | 43,051 |
+| ctla2, 6930 | 14,863 | 17,316 | 31,582 |
+| ctla2, 6960 | 20,466 | 27,013 | 43,052 |
+
+Os pares rel menos ctl, em ms, mostram o efeito dos carimbos mais a variação entre aberturas, sem isolar causalidade:
+
+| Quadro, par | ΔG | ΔP | ΔU |
+|---|---|---|---|
+| 6930, rel1/ctl1; rel2/ctl2 | +0,006; +0,069 | +0,038; +0,083 | +0,007; +0,071 |
+| 6930, rela1/ctla1; rela2/ctla2 | +0,066; +0,028 | +0,092; +0,030 | +0,117; +0,047 |
+| 6960, rel1/ctl1; rel2/ctl2 | +0,211; +0,085 | +0,259; +0,090 | +0,289; +0,065 |
+| 6960, rela1/ctla1; rela2/ctla2 | +0,043; +0,050 | +0,094; +0,155 | +0,129; +0,082 |
+
+Não usar o tempo absoluto da rel como se fosse produção. No 6900 da rel1 P/U ficam **13,057/13,367 ms** acima da
+ctl1, apesar de ΔG=0,152: é outra perturbação da abertura de diagnóstico, sem causa isolada. Nos alvos 6930/6960 as
+diferenças estão na tabela. Os cinco quadros e os quarenta fins completos estão em `rodada/dados.json`.
+
+### O teto C: carimbos do Xenon, controle da mesma build e variação
+
+**[Modelo, não ganho medido]** Executado o comando da seção 38 para cada rel/rela:
+
+```sh
+python3 port/x360/tools/prefixos_teto.py \
+  /home/codex/f5-gpu-comum/listas-x86gv \
+  /home/codex/f5-reprojeto/final2810/dados.json --console RECORTE
+```
+
+Os logs `NOME-teto-referencia.log` guardam esse resultado com as constantes históricas da seção 36. Para a tabela
+abaixo, `~/f5-lotes-analise/modela.py` usa **as mesmas funções `progresso`/`libera`/`analisa`**, trocando G/P/U pelos
+controles da mesma build/repetição (tabela anterior). A liberação é a fração `carimbo_us / G_rel`, aplicada a
+`G_ctl`; assim o excesso de G da abertura com marcas não vira ganho. O prazo é a entrega J da troca excepcional
+em `picos: tela`: **32,9 ms no 6930, 32,8 no 6960**. O alfa já tirou o 6930 do log excepcional, então ali **32,9 é
+referência do modelo, não prazo individual publicado**.
+
+A GPU/CPU por desenho vem de `g6930_1/_2` e `g6960_1/_2` do perfil fino, com as listas x86gv da seção 30:
+213/1.408 desenhos, conferidos contra o console. Cada linha é a faixa entre os dois perfis finos, mantendo a curva
+e o controle da repetição indicada. A calibração reproduz P/U do controle a menos de 0,000001 ms. As três casas da tabela reproduzem a aritmética,
+não a precisão física: o prazo de picos é arredondado a 0,1 ms, e o rateio continua sendo um modelo.
+No 6930 com alfa não existe perfil fino novo por classe: para o rateio principal retiramos `classe outros`
+(5,384/5,380 ms, dominada pelo alfa na seção 32), ajustamos o total e recalibramos o restante ao P-G medido.
+Isso é hipótese explícita, não remoção de tempo medido desta build. O rateio original inteiro escalado serve de
+sensibilidade, publicado depois da tabela; não somamos os 5,4 ms históricos ao ganho.
+
+Plano da EDRAM previsto, z da visita e DATE curto até 64; a última vaga e as dependências do sufixo continuam em G.
+GPU começa é o primeiro trabalho útil simulado; a entrega final, o Resolve final, a tela/FXAA/Present permanecem no fim.
+
+| Curva, quadro | Desenhos antes de G | GPU começa desde J | U do teto | Recuperação de U | Folga até o prazo | Além da margem de 1 ms |
+|---|---:|---|---|---|---|---|
+| rel1, 6930 | 199 / 213 | 7,033 a 7,044 | 25,615 a 25,641 | 9,965 a 9,991 | 7,259 a 7,285 | 6,259 a 6,285 |
+| rel1, 6960 | 1396 / 1408 | 1,823 a 1,826 | 28,659 a 28,670 | 13,811 a 13,822 | 4,130 a 4,141 | 3,130 a 3,141 |
+| rel2, 6930 | 199 / 213 | 6,991 a 7,001 | 25,497 a 25,522 | 9,960 a 9,985 | 7,378 a 7,403 | 6,378 a 6,403 |
+| rel2, 6960 | 1396 / 1408 | 1,751 a 1,754 | 28,676 a 28,687 | 13,878 a 13,889 | 4,113 a 4,124 | 3,113 a 3,124 |
+| rela1, 6930 | 199 / 213 | 1,773 a 1,776 | 26,665 a 26,686 | 4,862 a 4,883 | 6,214 a 6,235 | 5,214 a 5,235 |
+| rela1, 6960 | 1396 / 1408 | 1,771 a 1,773 | 28,956 a 28,960 | 14,091 a 14,095 | 3,840 a 3,844 | 2,840 a 2,844 |
+| rela2, 6930 | 199 / 213 | 1,741 a 1,744 | 26,679 a 26,699 | 4,883 a 4,903 | 6,201 a 6,221 | 5,201 a 5,221 |
+| rela2, 6960 | 1396 / 1408 | 1,784 a 1,786 | 28,978 a 28,983 | 14,069 a 14,074 | 3,817 a 3,822 | 2,817 a 2,822 |
+
+No 6960, **1.396/1.408 desenhos (99,15%)** ficam liberáveis antes de G. A GPU poderia começar em **J+1,75 a
+1,83 ms**, cerca de **18,07 a 18,69 ms antes de G** nos controles; isso não é a recuperação líquida inteira.
+O desenho 1152, começo da segunda cadeia de brilho, fecha em aproximadamente **72% de G**; a cauda e as pausas
+por dependência limitam o ganho. Com alfa o teto acaba em **J+28,956 a 28,983 ms**, antes do prazo J+32,8.
+Mesmo usando a meta mais exigente de 11,5 ms da ap35, sobram **2,569 a 2,595 ms** de recuperação no alfa.
+Sem alfa sobram **2,311 a 2,389 ms** sobre essa meta. Com as regras integrais do DATE o teto ainda falha no 6960:
+começar cedo sozinho não basta; a imagem igual da regra curta é parte necessária da justificativa.
+
+No 6930, **199/213 (93,43%)** ficam liberáveis. Sem alfa, o começo útil é J+6,99 a 7,04 e a recuperação fica em
+**9,960 a 9,991 ms**, folga **7,259 a 7,403**. Com alfa, os controles já acabam em J+31,548/31,582; contra o prazo
+referencial, folga **1,352/1,318 ms**, sem prefixos. Com o rateio sem `outros`, o começo útil fica em J+1,74 a 1,78,
+recuperação adicional **4,862 a 4,903**, folga **6,201 a 6,235**. Conservando o rateio antigo e escalando todas as
+classes ao P-G do alfa, começo J+3,58 a 3,62, recuperação **6,335 a 6,378**, folga **7,677 a 7,706**.
+Os dois rateios passam no modelo; os números do alfa no 6930 têm essa incerteza e a do prazo de referência.
+Parede/esperado das seis aberturas de imagem fica entre 1,0333 e 1,0359, coerente com as paradas para capturar.
+Não há cronograma fino do 7170 nem prova de duas vistas.
+
+### A imagem da primeira parte
+
+**[Medido]** `compara_quadros.py` executado com `--lista`, lot1/nor1, lct1/nor1, lot2/nor2 e lct2/nor2.
+A ferramenta espera nomes `frame_NNNNN.ppm` na referência; foram criados links fora do git para os `gpu_NNNNN.ppm`
+das nor correspondentes. Exigidos os **22 números exatos** da seção 38 nos dois lados e dimensões **853x597**
+(captura cheia da imagem visível, distinta dos alvos alocados 864x608). Comparação de todos os pixels, não amostra.
+
+| Par | Quadros | Pixels iguais / comparados | Pior canal / erro médio |
+|---|---:|---:|---|
+| lot1 / nor1 | 22 | 11.203.302 / 11.203.302 | 0 / 0 |
+| lct1 / nor1 | 22 | 11.203.302 / 11.203.302 | 0 / 0 |
+| lot2 / nor2 | 22 | 11.203.302 / 11.203.302 | 0 / 0 |
+| lct2 / nor2 | 22 | 11.203.302 / 11.203.302 | 0 / 0 |
+
+**44.813.208 pixels comparados, 88 pares de quadros iguais**; os arquivos inteiros também têm o mesmo conteúdo
+em cada par. SHA256 de cada uma das 132 capturas em `capturas.sha256`; FNV-1a dos arquivos completos recalculado e
+igual ao publicado pelo log de cada abertura. A primeira parte foi efetivamente exercitada: em **cada lot**, nos
+88 trechos, **8.339 planos previstos / 1 integral**, **zero rebaixamento para B** (zero por nativa/filme),
+DATE **32.655 perto / 3.592 copiando a área inteira**. Os contadores das lct são todos zero. Em **todas as seis**,
+`fora da vaga 0`, `alvo lido sem Resolve 0`, e DATE `0 com desenho lendo fora do que o alvo tinha`, inclusive nas nor.
+A regra curta pode copiar mais pixels, mas a imagem final desses 22 quadros permaneceu igual. Não prova todos os
+intermediários, todo o jogo, o alfa de compilação ou consumo antes da entrega. **Imagem igual não é ganho**;
+o envio continua esperando G nas seis aberturas.
+
+### Recomendação, provas negativas e limites
+
+A porta das decisões 29/32 passa **no modelo**: fazer a segunda parte descrita na seção 38, ainda com a chave de
+compilação desligada por padrão, conservando publicação/barreiras, versões, um dispositivo dono, um Present,
+cercas da VU1 e despacho real dos lotes. A folga de 2,82 ms além de 1 ms no pior alfa é orçamento ideal para os
+custos ainda ausentes, não garantia de que caibam: fila, SMT/memória, snapshots/recursos e plano errado na troca
+podem consumi-la. Repetir as provas da seção 28 e medir prazo/imagem no console, inclusive 7170. Não mexer no aceite,
+no padrão do alfa ou na entrada. A condição que pediria números para a exceção E (teto não passar 11,5) **não ocorreu**;
+continuam sem aceite as três janelas longas finais e a exceção só volta ao Lucas se a integração não fechar.
+
+**[Medido, conferência final]** O extrator adaptado `confere.py` recusou **22 cópias corrompidas, cada uma com saída 1**:
+fim, associação, imagem, duração, resultado, save, carimbo, textura, descarte no resumo e no pico, resumo de recursos,
+marca GPU, histograma, ambiente repetido, fim/quadro do relógio, vaga, DATE, buffer, piso de memória, ação e alfa.
+`imagem.py` recusou com 1 um pixel alterado, quadro ausente e dimensão trocada: o comparador só mede e pode imprimir
+100,00% arredondado; por isso cobertura e igualdade exata são exigidas à parte. `prefixos_teto.py --mutantes`
+recusou as 18 entradas sintéticas; os oito `--so-relogio`, quatro comandos completos do teto e recalibrações passam.
+
+Sem mudança em `src/`, `include/` ou `port/` contra `cc546dce`, não é necessária rodada de emulador/build.
+A prova de objetos sem depuração da seção 38 permanece a de `cb396826` (`~/f5-lotes/wsl2/provas.resumo`): as quatro
+builds, só carimbo diferente, `cmp` visto falhar. Reconferido `cmp` das seções `.text` guardadas de base/final da
+mesma rodada e SHA1 **`9f2cdb4962397877eb90171bc8d7cfe9af3abc08`**. É artefato histórico, não build desta análise.
