@@ -258,7 +258,7 @@ for n in "${NOMES[@]}"; do
         JUNTA=0
         if [ "${RAPIDO:-1}" = 1 ] && [ "${MEM:-fim}" != menu ]; then
             JUNTA=1
-            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao && $n != f7_elenco_* ]] || PONTOS=(--pontos)
+            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao && $n != f7_dividido && $n != f7_elenco_* ]] || PONTOS=(--pontos)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
         fi
