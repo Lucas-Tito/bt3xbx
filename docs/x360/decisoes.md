@@ -855,3 +855,19 @@ provada nas F4 e F6 e nos pilotos da F7 (e aceita como referência na decisão 3
    casos por família, os mais diferentes entre si (forma gigante, fusão, estágio que muda), e todo caso em que a x86
    mostrar algo fora do esperado. O console segue com a inspeção por família.
 
+
+## 36. A conversão continua antecipada, e os pacotes de menu entram nela (29/10/2026)
+
+As quedas do Final Flash no Broly e do Dragon Fist do Goku SSJ3 e a trava do Father-Son vieram de arquivos que o
+conversor não cobre (a transição de destruição do cenário, o modelo extra do golpe), não de a conversão ser feita antes
+da carga: com a conversão na carga, o mesmo conversor deixaria os mesmos arquivos crus. Medido no console: converter os
+3.325 arquivos leva 71,5 s de CPU (uns 21 ms por arquivo), e na F4 a conversão na carga somava 772 ms em 28 arquivos do
+boot; na luta, as cargas de transformação, troca de membro, modelo de golpe e cenário pagariam de 1 a 9 quadros longos
+cada (estimado), contra o zero da decisão 27. O Lucas decidiu:
+
+1. **A conversão segue antecipada** (na ISO, pelo console ou pelo PC). A cobertura do conversor é que se fecha, pelo
+   banco de carga estendido a tudo que o jogo carrega (`plano/F7/05-banco-de-carga.md`).
+2. **Os pacotes de menu que ainda se convertem na carga** (`Port_ConvertMenuPack`, chamado pelos menus do jogo; o
+   amostrador os viu nos carregamentos dos menus) passam para a conversão da ISO, na mesma versão nova da marca que as
+   correções do banco trouxerem. O que for montado só na memória em tempo de execução, sem arquivo na ISO, continua
+   convertido na carga e fica listado.
