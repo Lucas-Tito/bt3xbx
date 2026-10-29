@@ -97,7 +97,7 @@ class Alvo:
         # aparecem depois de propagar variáveis ou desenrolar laços (o EftGlow_BuildTables), fora do modelo do PS2 que o
         # softfloat_ps2.c aplica em tempo de execução; o GCC da PPC e o compilador do PS2 fazem essas contas em tempo de
         # execução. Desligada por padrão: muda a .text das duas builds, e o aceite é o da pesquisa 06.
-        self.sem_dobra = os.environ.get("BT3_SEM_DOBRA") == "1"
+        self.sem_dobra = os.environ.get("BT3_SEM_DOBRA", "1") != "0"  # ligada por padrão (decisão do Lucas, 29/10); BT3_SEM_DOBRA=0 desliga
         if self.sem_dobra:
             self.soft += ["-frounding-math"]
         # Rastreio: uma chamada antes de cada leitura/escrita (rastreio.c), cópias de estrutura via memcpy.
