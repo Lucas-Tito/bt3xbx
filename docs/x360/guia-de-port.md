@@ -2525,3 +2525,21 @@ Na investigação `queda-relocate`, a espera única pelo `flock ~/wsl.lock` fico
 a trava, acima do dobro do teto de 30 minutos preparado para a reprodução PPC inicial. A espera própria foi
 encerrada pelo PID, sem sinalizar o detentor ou as demais filas. Não confundir compilação PPC, conversão e
 casos nativos aprovados com execução PPC: a reprodução e os critérios de jogo ficaram pendentes.
+
+### Instalação inicial no console (F8, conversão)
+
+- A marca versão 3 inclui o SHA256 do **executável PC**, além dos fontes. Não comparar `.xex` ou ferramenta
+  nativa recompilada com outro compilador esperando a mesma marca. `preparar_iso_console.py` gera no host o selo
+  e conserva o `conv_tool` que deve ser passado ao `convert_iso.py --conv-tool` na prova de igualdade literal.
+- Depois de preparar a ISO com D3D ativo, relançar o título. Tentar reservar o heap fixo do PS2 nesse processo
+  violaria a ordem de `Preparar`: a CRT/D3D já pode ter ocupado os endereços baixos. A conversão fica antes do
+  jogo e do áudio, numa thread de hardware 2; a main apresenta e os textos da instalação são estáticos.
+- O teste do fluxo de áudio ainda criava marca 2 e passou a parar na guarda da marca 3 antes de testar o áudio.
+  O gerador agora usa `ISO_MARCA_VERSAO`. Uma falha de identidade na imagem sintética não é regressão do fluxo.
+  Rodar a prova de adiantamento sem outra tarefa saturando CPU/disco: sua exigência de nenhuma falta depende
+  de a thread leitora ser escalonada a tempo. Não relaxar os limites para aceitar uma execução disputada.
+- Uma worktree nova pode ligar a x86 sem `port/build/gen/data`, preenchendo tabelas ausentes com stubs. Isso
+  não reproduz a referência: a rodada inicial deu 450 stubs e `.text` diferente do hash histórico, mesmo com
+  objetos iguais à base recompilada. Preparar os dados locais antes de julgar e conferir também `obj_data/`.
+  Na cópia privada dos `.s`, corrigir o `.incbin` absoluto de `vu1_micro.data.s` para o dado somente leitura,
+  como já registrado na seção de caminhos absolutos; nunca editar a árvore compartilhada em `/srv/bt3/dados`.

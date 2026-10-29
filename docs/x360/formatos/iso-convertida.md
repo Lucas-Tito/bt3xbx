@@ -184,3 +184,17 @@ os dois arquivos do formato [transicao](transicao.md), elevando o total de arqui
 3.327. O leitor recusa as versões anteriores. É obrigatório converter novamente a ISO USA original com este
 instalador; recompilar o `.xex` e manter a ISO versão 2 não corrige os dados. Não reutilizar uma ISO já convertida
 como origem. O teste completo provoca a recusa das marcas 1 e 2; o teste do leitor também recusa ambas.
+
+
+## Conversão no console com o mesmo contrato (F8)
+
+A decisão 23 foi revista pelo Lucas somente quanto ao local da instalação. O console agora oferece a conversão
+inicial da USA original, com `conv/iso_conv.c` e os mesmos conversores e ícones do PC. A carga continua exigindo
+a ISO pronta. Segurança, interface provisória, tempo e provas estão em
+[03-conversao-console](../plano/F8/03-conversao-console.md).
+
+O contrato da marca versão 3 permanece intacto. `preparar_iso_console.py`, chamado por `build_f2.sh`, gera no
+host o selo exato da ferramenta PC e o inclui na build. Para comparar bytes entre os dois caminhos, usar no PC
+`--conv-tool build/x360/iso/conv_tool` da mesma preparação. Esse hash continua identificando a ferramenta PC
+usada como referência, inclusive quando o console aplica o núcleo C comum. Uma ferramenta PC recompilada com
+outro compilador pode ter procedência diferente na marca; não é divergência dos bytes convertidos.

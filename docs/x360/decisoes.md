@@ -635,25 +635,25 @@ Escolhas do Lucas para a F4 (`plano/F4/00-escopo.md`):
   - Dragon Net Battle escondido no 360, com o mesmo valor em x86, PPC e console, para os roteiros não se
     desalinharem no menu.
 
-## 23. ISO convertida no PC, exigida pelo jogo (14/10/2026; passo futuro)
+## 23. ISO convertida antes do jogo (14/10/2026; revista pelo Lucas em 29/10/2026)
 
-Escolha do Lucas: a conversão dos arquivos sai do console e vai para um passo de instalação no PC. Não é opção: é o
-caminho do port, num passo futuro (F5, logo depois do teto de memória).
+A escolha de 14/10 tirou a conversão da carga e criou uma ISO preparada no PC. O Lucas reviu **somente onde a
+conversão roda**: ao encontrar a USA original na raiz, o próprio console oferece prepará-la, com progresso e
+preservação da original. O PC continua disponível com `convert_iso.py`. Implementação e provas locais em
+[plano/F8/03-conversao-console.md](plano/F8/03-conversao-console.md); XDK e console aguardam revisão.
 
-- **Como:** um script de PC lê a ISO do próprio usuário (SLUS-21678, hashes conferidos) e grava uma ISO convertida,
-  do mesmo tamanho: os conversores trocam no lugar, sem mudar tamanho nem posição (decisão 18), então a estrutura da
-  ISO e dos AFS fica a mesma. O núcleo já existe na `conv_tool` (`--disco` converte todos os conteúdos).
-- **O jogo exige a ISO convertida:** a original é recusada com mensagem clara na tela, sem detecção dupla nem
-  conversão de reserva no console. A conversão na carga (`Conv_Arquivo` no `iso360.c`) sai do 360.
+- **Como:** os dois caminhos usam os conversores C comuns e produzem uma ISO do mesmo tamanho, sem mudar posições
+  ou tabelas ISO/AFS. Tamanho e identidade da USA SLUS-21678 são conferidos integralmente antes da escrita.
+- **O jogo exige a ISO convertida:** o console converte uma vez, antes do jogo, e reinicia o título após publicar a
+  saída conferida. A carga continua sem `Conv_Arquivo` para as entradas da ISO; não há conversão de reserva por carga.
 - **Por quê:** a carga deixa de pagar a conversão (500 ms na luta medida na decisão 18, 264 ms só no cenário), e o
-  console fica com um caminho só. Continua sem instalação no console, com um arquivo só no FATX e nenhum byte do
-  jogo no repositório ou no release: o script roda no PC de quem tem o disco.
-- **Fica para uma etapa posterior:** os conteúdos comprimidos (BPE) dos menus, que só se convertem depois de
-  descomprimidos (`Sprite_Unpack`, F4). Pré-convertê-los exige descomprimir, converter e comprimir de novo, com um
-  compressor BPE que ainda não existe; até lá, eles continuam convertidos no console.
-- **A definir na implementação:** a marca que distingue a ISO convertida da original, e os arquivos de `mods/`.
-- **Substitui**, quando for feito, a conversão na carga da decisão 18; o resto dela (ISO única, sem instalador no
-  console) continua.
+  jogo continua com um caminho só, um arquivo no FATX e nenhum byte do jogo no repositório ou no release.
+- **Conteúdos comprimidos (BPE):** continuam convertidos depois de descomprimidos (`Sprite_Unpack`, F4).
+  Não há recompressão nem mudança deste requisito.
+- **Marca e mods:** marca embutida na folga AFS comprovadamente livre, versão 3; `mods/` continuam convertidos na
+  abertura. Os ícones do Kenney entram na instalação comum, conforme a decisão 30.
+- Substitui a conversão na carga da decisão 18. Permanecem a ISO única e a ausência de pastas extraídas no console;
+  a instalação inicial no console é a única parte revista em relação ao texto de 14/10.
 
 
 ## 24. F5: a luta de teste e as escolhas de arquitetura (16/10/2026)
