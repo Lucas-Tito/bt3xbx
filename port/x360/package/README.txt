@@ -150,9 +150,9 @@ folder of this package and run:
 The first two lines build the converter (conv_tool) once. The last line checks that the ISO
 is the unmodified USA release (size, MD5 and SHA256), converts it, then reads the result again
 and compares every byte. It needs about 6 GB free in the folder of the output during the work
-(3 GB stay at the end) and takes several minutes. The tool's messages are in Portuguese: when
-it ends well, the last line is "tudo certo" ("all good"). On any error it prints a line
-starting with "convert_iso:", exits with code 1 and does not leave a bt3-x360.iso behind.
+(3 GB stay at the end) and takes several minutes. When it ends well, the last line is
+"all done". On any error it prints a line starting with "convert_iso:", exits with code 1
+and does not leave a bt3-x360.iso behind.
 
 Then copy bt3-x360.iso into the game folder on the console, next to default.xex. You do not
 need to copy the original.
