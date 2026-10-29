@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Conferências da rodada final: objetos sem depuração e saída do save_mc.sh."""
 import argparse
+import hashlib
 from pathlib import Path
 import subprocess
 import tempfile
@@ -32,6 +33,20 @@ def objetos(base, final):
                 exigir(nome in permitir, f'objeto fora dos testes diferente: {nome}')
                 teste.append(nome)
     print(f'objetos: {iguais} iguais; diferentes só dos testes: {teste}; total {len(a)}')
+
+
+# Mudanças de teste dos roteiros: o jogo e o port continuam provados pelos objetos.
+TEXT_ANTIGA = '43444ea4d03a6d448aa1ae74a631e35b356a7caa'
+TEXT_ROTEIROS = 'e6e284c6064a064a9230b88bea90c16b3efc31e7'
+
+
+def texto(pasta):
+    for nome in ('base', 'final'):
+        sha = hashlib.sha1((pasta / f'text-{nome}.bin').read_bytes()).hexdigest()
+        aceitos = {TEXT_ANTIGA, TEXT_ROTEIROS} if nome == 'base' else {TEXT_ROTEIROS}
+        exigir(sha in aceitos, f'.text {nome} diferente: {sha}')
+        print(f'.text {nome}: {sha}')
+    print('.text: referências aprovadas; conferir também objetos sem depuração')
 
 
 def save_mc(pasta):
@@ -66,12 +81,16 @@ def main():
     o = sub.add_parser('objetos')
     o.add_argument('base', type=Path)
     o.add_argument('final', type=Path)
+    t = sub.add_parser('text')
+    t.add_argument('pasta', type=Path)
     s = sub.add_parser('save-mc')
     s.add_argument('pasta', type=Path)
     args = p.parse_args()
     try:
         if args.modo == 'objetos':
             objetos(args.base, args.final)
+        elif args.modo == 'text':
+            texto(args.pasta)
         else:
             save_mc(args.pasta)
     except (OSError, ValueError, subprocess.CalledProcessError) as e:

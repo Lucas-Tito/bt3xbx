@@ -2,7 +2,8 @@
 
 [Índice do plano](../../plano.md)
 
-Itens que o Lucas pediu para o acabamento ao longo das outras fases. Cada um vira etapa quando a F8 for escopada.
+Itens que o Lucas pediu para o acabamento ao longo das outras fases. O [escopo da F8](00-escopo.md) (29/10/2026)
+dá a situação de cada um, a etapa em que entra e as perguntas que faltam responder.
 
 ## A ISO (22/10/2026)
 
@@ -47,6 +48,18 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
    [F5/09](../F5/09.md) e os branches `f5-shenlong` e `codex/f5-namek`.
 5. **O estágio do deserto à noite escuro demais** (visto pelo Lucas jogando, 23/10): talvez o mesmo brilho somado
    mais fraco no 360 (a H9 de [F5/09](../F5/09.md)); sem captura ainda.
+   **Estado em 29/10** ([05-brilho](05-brilho.md), decisão 34: o brilho igual ao do PC a 60%): a H9 não mostrou defeito
+   do 360. A referência dela, o rasterizador x86, lê no ponto a cadeia do brilho que o jogo pede bilinear, e isso
+   desloca o halo dele 40 pixels em x (o modelo da cadeia prevê 40,5; as capturas dão 40) e o estreita; os 39% são os
+   60% do port vezes 0,615, e o que falta nos 0,615 tem candidato comum ao PC (o alfa acima de 0x80 que o PC e o 360
+   prendem). Nenhuma mudança no 360. Armado no WSL (`bt3-brilho-ref`, esperando a trava): o rasterizador com o bilinear
+   do GS e o alfa do PC contra as capturas da H9. Preparada a rodada curta de console: o Shenlong na configuração de
+   release a 60% e a 0%, e o deserto à noite em luta a 60, 0 e 100 (ambientes em [05-ambientes](05-ambientes/)).
+   **Problema conhecido (decisão do Lucas, 29/10):** sem mais teste. A rodada de console e a prova no WSL não serão
+   feitas (o serviço `bt3-brilho-ref` foi desarmado antes de rodar). Vai para os problemas conhecidos do README da
+   release: os estágios à noite podem parecer escuros demais no console. Fica em dúvida se a causa é o jogo ou a TV do
+   Lucas (os "Níveis de referência" de vídeo do console contra a faixa que a TV espera escurecem os tons baixos); o
+   brilho do 360 segue o do PC a 60% pelo que se mediu.
 6. **Arrumação para a finalização** (27/10/2026): o 360 achar a ISO convertida quando há a original e a convertida na
    mesma pasta (hoje a busca pega a primeira `.iso`); a numeração repetida das seções das notas da F5; as pastas
    temporárias do WSL; propor ao upstream as correções do cache que valem também para o PC (a colisão das tabelas do
@@ -57,10 +70,39 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
    deriva do som, filme) e as capturas ficam desligados sem `ambiente.txt`, e continuam ligáveis por ele para teste.
    Conferir no console que, desligados, não custam nada no quadro nem gravam arquivo.
 
+11. **As duas provas de console que restam da F6** (decisão do Lucas, 28/10/2026, para não repetir depois): a
+    sessão longa (uns 30 min de jogo livre, com ciclos de luta e menu e a Guide algumas vezes, a memória no mesmo
+    estado depois de cada ciclo e o som sem desandar) e a saída para o dashboard pela Guide (o BT3 não tem opção de
+    sair e o port não criou uma), sem travar nem deixar som preso. Ficam para a sessão final de console do
+    fechamento, sobre a build do release. O resto da lista de console da F6 etapa 9 saiu: filme e escuta (item 10),
+    frio e aquecido (a F5 já mede) e a queda provocada.
+
+13. **Falhar com elegância, não com uma tela vermelha solta** (pedido do Lucas, 28/10/2026, depois da queda do Final
+    Flash no Broly): hoje uma queda pinta a tela de vermelho e espera um botão, sem dizer nada. No release, a queda
+    mostra um aviso claro em inglês (o jogo encontrou um erro e vai voltar ao painel), guarda o log para quem quiser
+    reportar e volta ao painel limpo, sem deixar a FreeStyle em laço (o defeito do laço é tratado antes, na tarefa da
+    queda). As cores por fase continuam só para o desenvolvimento.
+
+15. **Análise do suporte a mods** (pedido do Lucas, 29/10/2026, para o fechamento): estudar o que seria preciso para o
+    port do 360 aceitar (a) os mods do BT3 que a comunidade usa (personagens, trajes, estágios, texturas, sons; hoje a
+    pasta `mods/` é recusada ou convertida na carga, decisões 18, 23 e 24) e (b) o Tag Team na versão do port de PC (o fork
+    nativo do autor sobre o Tenkaichi3Decomp e a branch `tagteam-exp` do upstream, `pesquisa/05-tag-team.md`). Só
+    análise: formatos, conversão para big-endian, memória e desempenho no Xenon, e a licença (o código do Tag Team de PC
+    é AGPL-3.0; trazê-lo muda a licença do port, decisão a tomar então). Não mexe na decisão 16 nem antecipa a F9.
+
 ## A abertura do repositório, a última parte do plano (27/10/2026)
 
 8. **Antes de abrir o repositório** (pedido do Lucas, só anotado, sem plano ainda): os documentos em inglês, com o
    guia de instalação e o de contribuição; e o GitHub configurado para receber as contribuições.
+
+## Depois da primeira release (29/10/2026)
+
+14. **Otimizar a GPU para subir a resolução** (pedido do Lucas): hoje a resolução é limitada pela GPU, não pela CPU. Na
+    escala 1,33 a GPU tem uns 8 ms de folga na mediana e uns 2 ms nos quadros pesados do Duelo de teste; a escala 1,5
+    mediu 32 ms de GPU na mediana e 45 nos trechos pesados (22/10, `plano/F5/08-720p.md`). Caminhos já levantados: o
+    desenho comum sem textura, as leituras de alvos e a cadeia do brilho (perfil fino de 28/10, seção 31 do
+    `plano/F5/08-gravacao.md`), os efeitos de tela na escala 1 (`BT3_ESCALA_FX`, 3 a 5 ms estimados) e o ganho de tabela
+    dos prefixos. Começa por uma rodada curta medindo a GPU em 1,33, 1,4 e 1,5 sobre a build da release.
 
 ## Fora do plano do port (28/10/2026)
 

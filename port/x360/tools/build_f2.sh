@@ -34,6 +34,9 @@ docker run --rm --user "$(id -u):$(id -g)" -e BT3_CARIMBO="$CARIMBO" -v "$RAIZ":
 
 echo "== 2. compilação (cl.exe)"
 CLFLAGS="-c -Ox -Oi -fp:precise -fp:except- -GS- -Gy -GF -MT -W3 -Zi"
+# (F5, seção 35) BT3_PERFIL_CADEIA=1: a build de perfil, com as marcas do diagnóstico da CPU (gs/cadeia_cpu.h); a normal
+# fica sem elas, porque mesmo desligadas custavam tempo no fim do quadro
+PERFIL=""; [ "${BT3_PERFIL_CADEIA:-0}" = 1 ] && PERFIL="-D BT3_PERFIL_CADEIA" && echo "   build de perfil: BT3_PERFIL_CADEIA"
 port/x360/tools/cl_jogo.sh $OUT/c89 $OUT/obj $CLFLAGS -Fd$OUT/obj/ >/dev/null
 python3 port/x360/tools/cl_resumo.py $OUT/obj | head -1
 python3 port/x360/tools/cl_resumo.py $OUT/obj | grep -q "^$(ls $OUT/c89/*.c | wc -l) de" || { python3 port/x360/tools/cl_resumo.py $OUT/obj --arquivos | tail -20; exit 1; }
@@ -51,7 +54,7 @@ docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app 
   for f in port/x360/src/gs/*.cpp; do
     n=$(basename ${f%.*})
     INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX -D PORT_X360 -D PORT_BIG_ENDIAN \
-      '"$CLFLAGS"' -TP -EHsc -GR- -Iport/x360/src -Iport/src/gs -Iport/x360/src/gs/cl -I'"$OUT"'/shaders \
+      '"$CLFLAGS $PERFIL"' -TP -EHsc -GR- -Iport/x360/src -Iport/src/gs -Iport/x360/src/gs/cl -I'"$OUT"'/shaders \
       -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
   done
   for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp port/x360/src/som/*.c port/x360/src/som/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do

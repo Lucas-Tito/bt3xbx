@@ -10,7 +10,8 @@ quadros 40
 aperta X
 espera tela 39 max 600
 quadros 150
-aperta DIREITA                    # segunda célula, Goku (Mid), id 1
+aperta BAIXO                      # primeira coluna, segunda linha: Goku (Mid), id 1
+quadros 60
 aperta X                         # grade
 quadros 60
 aperta X                         # forma base
@@ -26,7 +27,7 @@ aperta X
 quadros 60
 aperta X
 quadros 60
-aperta BAIXO 4
+aperta CIMA 2                     # volta pela última linha até arena 5, sem células bloqueadas
 quadros 30
 aperta X
 espera luta max 3000

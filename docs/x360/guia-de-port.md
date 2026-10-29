@@ -6,9 +6,9 @@ little-endian (PS2, PS1, GameCube não, que já é big-endian) levada ao 360.
 
 Como usar num chat novo: peça para ler este arquivo, o `CLAUDE.md` deste repositório (modelo de
 regras) e `docs/x360/decisoes.md` (o porquê de cada escolha). As pesquisas em
-`docs/x360/pesquisa/01..04` têm o detalhe: 01 é o setup do 360 e as lições do CollectionUI e do
+`docs/x360/pesquisa/01..05` têm o detalhe: 01 é o setup do 360 e as lições do CollectionUI e do
 hiddriver, 02 são os ports de referência (SM64, MK64, Virtua Fighter), 03 é o estado da decomp do
-BT3, 04 é onde ficam os ícones dos botões e o custo de trocá-los.
+BT3, 04 é onde ficam os ícones dos botões e o custo de trocá-los, 05 é o estado do Tag Team nativo no PC.
 
 Mantido vivo: cada aprendizado que custou uma rodada entra aqui (seção 6) no mesmo commit da
 correção.
@@ -185,7 +185,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `memdiff.py --marcas` | o mesmo, campo a campo num bloco que guarda um arquivo, pela largura que o conversor deu a cada byte (`conv_tool --marcas`); `--marcas-tam` acha o bloco pelo tamanho pedido ao alocador, em vez do índice, que muda de um quadro e de um roteiro para outro, e cada região marcada sai numa linha "marcas ...: conforme N, fora-do-formato M" |
 | `memdiff.py --tipos BASE --donos BASE` | (revisão da etapa 5) as globais e os blocos do heap campo a campo pelo tipo (`campos.py --globais` e `--donos --tipos`), com os vetores de bytes e os campos `unk*` como opacos; cada trecho fora do formato é listado, a região do heap diz o tipo, quem alocou e onde começam os dados |
 | `campos.py --globais PROG BASE` / `--donos PROG VBLANK --tipos BASE` | a largura de cada byte das globais (DWARF, mapa do `elftipos.py`, declarações `extern`) e dos blocos vivos do heap (o tipo pedido na alocação ou o apontado por quem recebe o bloco), para o `memdiff.py` |
-| `memdiff.py --marcas-vivas DIR --so-em-uso` | (F4, etapa 5b) cada arquivo e conteúdo de `DIR` (o `conv_tool --marcas` grava ao lado de cada `.marcas` o `.orig`, o conteúdo antes da conversão, que fica no WSL) no bloco em uso que o guarda no começo, achado pelo conteúdo: os trechos de 64 bytes não nulos iguais aos da x86 (o tamanho não basta: 21 rostos do mesmo tamanho, o arquivo do lutador num buffer fixo de 0xCE000). `--so-em-uso` tira da comparação os blocos livres, o enchimento do alocador e o `HeapBlock.unk1C`, que o alocador nunca grava. Classes novas por palavra: `misto` (u8, u8 e u16 na mesma palavra) e `float-proximo` (arredondamento, a libm do host) |
+| `memdiff.py --marcas-vivas DIR --so-em-uso` | (F4, etapa 5b) cada arquivo e conteúdo de `DIR` (o `conv_tool --marcas` grava ao lado de cada `.marcas` o `.orig`, o conteúdo antes da conversão, que fica no WSL) no bloco em uso que o guarda no começo, achado pelo conteúdo: os trechos de 64 bytes não nulos iguais aos da x86 (o tamanho não basta: 21 rostos do mesmo tamanho, o arquivo do lutador num buffer fixo de 0xCE000). `--so-em-uso` tira da comparação os blocos livres, o enchimento do alocador e o `HeapBlock.unk1C`, que o alocador nunca grava. Classes novas por palavra: `misto` (u8, u8 e u16 na mesma palavra) e `float-proximo` (arredondamento; entre a x86 e a PPC, a dobra de constantes do clang, `pesquisa/06-libm.md`) |
 | `campos.py` | compara um bloco campo a campo pelo tipo do DWARF (via gdb); `--donos` diz quem alocou cada bloco do heap num vblank |
 | `layout.py` | compara pelo DWARF o layout de toda struct do jogo entre x86 e PPC; a build PPC falha se algo divergir |
 | `pacotes64.py` | todo acesso de 64 bits à memória no código do jogo (AST dos `.i`), classificado em pacote da GPU ou número; falha se uma gravação em pacote estiver sem `PS2_PKT64` (decisão 19, `formatos/gpu.md`) |
@@ -990,6 +990,31 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     `BT3_NAMEFONT_TEST`: sem a correção a PPC não diz nada; com ela corta as 36 e as 24 legendas como a x86. As
     imagens de teste ainda diferem em uns 3% dos bytes (causa não achada; só vale para estágio ou música de fora do
     disco, que o 360 não tem: `plano/F4/05.md`).
+- **Coleta conjunta de memórias e imagens (28/10/2026).** Com `SEMMAPA=1`, `RAPIDO=1` é o padrão:
+  a PPC normal coleta a memória final, todas as telas e as imagens numa passagem; a x86 de memória faz o mesmo.
+  `BT3_MEMORIAS` lista os vblanks e destinos, e o gancho de teste grava dump, páginas e subalocações sem sair.
+  Continuam as janelas de pintura, as comparações de tipos e donos e os mesmos arquivos para os verificadores.
+  `RAPIDO=0` conserva o modo separado; `MEM=menu` conserva o fluxo da guarda. O gravador fica separado para provar
+  que abri-lo não muda o jogo. Em `historia_novo`, os arquivos da rodada da F6 de 28/10 delimitam 4968 s no total,
+  4265 s de PPC, sendo 1880 s nas imagens e 1851 s nas passagens PPC que a coleta pode retirar. O custo acrescido
+  de calcular hashes com as imagens precisa entrar na medida do ganho. O inventário, o protocolo de equivalência,
+  a integração da `.text` dos conferentes F5/F6 e os caminhos das medidas estão em
+  [medicoes/roteiros-rapido.md](medicoes/roteiros-rapido.md). Cada execução grava sua duração em `tempos.tsv`.
+  Na comparação entre modos, os caminhos absolutos são normalizados para o mesmo arquivo lógico e os dois
+  ponteiros temporários `gColWalkBox`/`gColWalkCtx` usam a dispensa já existente. A primeira equivalência das Opções
+  mostrou também endereços malloc de `sMapa` e do IOP de `SndMgr`, e restos livres/enchimento do heap.
+  O comparador preserva NULL contra não NULL e aplica as mesmas exclusões de `memdiff --so-em-uso`;
+  dados vivos, cabeçalhos e rodapés continuam byte a byte. Controles nas duas ordens de bytes provam os limites.
+  Cada arquivo de páginas é recalculado sobre o dump original pela libxxhash, antes de normalizar os caminhos.
+  `REUSA=1` continua julgando todas as memórias e imagens; uma cópia estragada precisa falhar também neste modo.
+  Na rodada final, Opções passou de 998,93 para 829,74 s (16,9%) e Duelo de 1676,15 para 1294,51 s (22,8%),
+  com 79 e 93 arquivos/provas equivalentes. A projeção dos roteiros da F6 é 13,71 para 9,79 h; da F5, 13,39 para
+  9,46 h, sem contar os testes fixos. As faixas e os limites da extrapolação estão no inventário.
+  Para controles com `SOM=1 REUSA=1`, colete e confira com `GUARDA_SOM=1`: os PCM são apagados por padrão,
+  e a primeira restauração da cópia reprovou por falta deles. Para controles específicos de memória e imagem,
+  retire `SOM` do ambiente e preserve o julgamento de áudio da rodada completa. Exija também a cópia restaurada
+  com `tudo certo`. Uma mudança só de documentação não pede repetir o jogo: recompilar e comparar o código
+  com a rodada aprovada conserva essa prova sem ocupar o emulador.
 - **Imagens das telas na etapa 6 da F4, o que custou rodadas:**
   - **O rasterizador pintando todo quadro leva umas três horas por roteiro na PPC** (no qemu, uns 30 quadros por
     minuto nos menus; a x86, 7 minutos). O que custa é pintar: com o GS ligado e nada pintado (`BT3_GS_FROM` alto) a
@@ -1224,6 +1249,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   98,6%): a diferença era toda o filtro. O Lucas decidiu não ligar esse modo nas comparações; a regra é aceitar a tela
   com textura reduzida por volta de 82% e medir a nitidez separada antes de procurar erro. A arte dos personagens vem
   sem o meio texel e pela fórmula estrita do GS sairia um pouco macia (anotado, sem decisão).
+- **Num efeito de alvo em alvo, o ponto do rasterizador não é só nitidez: ele muda o lugar do efeito** (F8, pendência 5,
+  `plano/F8/05-brilho.md`). A cadeia do brilho (`GfxPost_DrawGlow`) borra o 64 x 64 com dez passadas em que a ida lê um
+  texel adiante e a volta não: no GS, com o bilinear, cada passo faz a média de dois texels e anda meio texel para cada
+  lado; no ponto, cada ida anda um texel inteiro. O halo do rasterizador sai 40 pixels à esquerda e 35 acima do do PS2 e
+  do caminho de GPU, três vezes mais estreito. A H9 da F5 comparou o console com ele e leu um "brilho do 360 deslocado e
+  fraco" que custou rodadas de console (`BT3_GLOW=100`) sem resultado. Antes de comparar um efeito de tela com o
+  rasterizador: o `TEX1` dos desenhos dele (0x60 é bilinear), um modelo de uma dimensão da cadeia com as coordenadas do
+  jogo (o deslocamento que ele prevê aparece nas capturas?) e, para medir, o `diag_bilinear.patch` (o bilinear do GS, o
+  alfa preso do PC e o `BT3_GLOW` no rasterizador, só no WSL). O rasterizador também usa o alfa até 0xFF onde o PC e o
+  360 o prendem em 0x80: ali ele soma até o dobro.
 - **Teto de memória sem descarte vira textura branca para sempre.** Na sessão da F4, depois da tela de versus do
   Torneio, os menus seguintes ficaram brancos até reiniciar: o backend recusava textura acima de 128 MiB e o cache
   do frontend (`gs_draw.c`) só varre por idade com 8.192 entradas, então nada saía. Num console com memória fixa, o
@@ -1617,6 +1652,28 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Não confunda ordem de bytes com a libm já conhecida.** A concessão da F4 de até 64 ULP para as direções
   de `EftGlow_BuildTables` fica nos campos y/z produzidos por cosf/sinf, com código de tipo próprio e
   contagem `libm-host`. Sai o teto genérico da arena; nenhum outro float ganha essa concessão.
+- **Duas declarações do mesmo trabalho: compare pela união, nunca escolha uma.** (F7, a transformação) O trabalho
+  de 0x4C0 bytes da tarefa de disco é `EftODisc` para `EftDisc_Init`/`Update` e `EftDisc` para os outros seis
+  callbacks; o `memoria_luta.py` recusava as duas e o fim da luta não chegou a ser julgado. `uniao_vistas` junta as
+  marcações: cada campo de uma cai inteiro sobre opacos (0xFE) da outra ou é o mesmo campo; largura ou tipo
+  diferente recusa. O negativo é um campo que as duas tipam igual virando dois u16.
+- **A cópia por valor de um argumento leva o lixo da pilha junto, e cada build tem o seu.** O `FxHitArg2` de
+  `BtlFx_FireKiBlast` não grava `unk40` nem `unk42`, e o disco copia os 0x50 bytes; os leitores (a vista
+  `EftHitAtk` de 0x34 bytes e os callbacks até +0x2B) nunca passam de +0x33. `sem_leitor` aceita
+  `(deslocamento, bytes)`, para deixar comparado o byte gravado no meio (+0x41).
+- **Buffer fixo reaproveitado guarda o resto do arquivo anterior.** Os três buffers do slot fixo do lutador
+  (modelo 0xCE000, anim0 0x160800, anim1 0xCE800) são zerados no `BtlObj_Init` e recarregados no lugar pela troca de
+  forma; um arquivo menor deixa depois dele o fim do maior, já convertido e com os campos que o jogo gravou. O
+  `memdiff.py` confere essa cauda pelas marcas do arquivo anterior (achado pelo conteúdo da x86 só naquele trecho, em
+  camadas) e exige o resto depois dele igual byte a byte. Uma linha de `CLASSES_CONHECIDAS` com teto teria aceitado
+  as 15.514 palavras sem provar nada. Voltará em toda troca para um arquivo menor.
+- **A "libm do host" entre a x86 e a PPC era a dobra de constantes do clang.** As duas builds usam a mesma newlib do
+  PS2 em float por software; o clang da x86 desenrolou o laço do `EftGlow_BuildTables` e calculou o `tbl` na
+  compilação, ao mais próximo, enquanto o GCC da PPC e o executável do PS2 o calculam em execução, truncando a soma.
+  Antes de aceitar ULP entre as builds, procure a conta no objeto de cada uma (as chamadas `__addsf3`/`__mulsf3`/
+  `__divsf3`/`__floatsisf` da função) e no executável original. A chave `BT3_SEM_DOBRA=1` do `headless.py`
+  (`-frounding-math`) tira a dobra: o perfil da x86 sai igual ao da PPC nas 80 palavras
+  (`docs/x360/pesquisa/06-libm.md`).
 - **A fonte do menu mede também o cabeçalho de sprites.** Itens negativos chamam `Font_GetWidth` sobre
   o count u32 da folha. O ramo big-endian de `BtlMenu_GetWidth` reconstitui as duas metades como u16
   temporários; converter o cabeçalho como texto estragaria a relocação. As posições do `--mapa` têm
@@ -2423,6 +2480,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Passos e imagens têm denominadores distintos: nesta rodada as antigas registram 2.335 imagens para
   2.334 passos, tanto em passos quanto em picos, com histograma conservado. Publicar ambos e conferir
   as associações. Não corrigir automaticamente a contagem nem fabricar uma imagem longa adicional.
+- **Como provar que a build normal voltou ao código antigo (feito em 28/10):** compilar o `gs_d3d.cpp` de cada
+  versão no XDK com as opções da `build_f2.sh` (a cópia numa pasta `gs/` com `som` ligado ao do port, por causa do
+  `#include "../som/..."`), desmontar com `link.exe /dump /disasm` (a imagem `collectionui-xdk:light` não tem
+  `dumpbin.exe`) e comparar com os rótulos `$M`/`$LN` normalizados, que mudam de número sem mudar o código. Funções
+  `inline` vazias ainda saem como COMDATs de um `blr`; conferir no `default.map` que o `-OPT:REF` as descartou.
+  Diagnóstico de tempo no caminho do desenho fica atrás de uma chave de **compilação**, nunca só de ambiente.
 
 ### A preparação da rodada final da F6 (`plano/F6/09.md`)
 
@@ -2467,6 +2530,59 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
 
+### Alfa ap35a2810: medir o que saiu do filtro e conferir os descartes dos picos (F5, seção 37)
+
+- Com `BT3_PICOS=36`, a melhora pode retirar o quadro inteiro do log: `picos_escreve` só publica se o intervalo
+  de apresentação ou o período do jogo ultrapassar o limiar. `picos: tela` só publica permanências diferentes de
+  dois vblanks. Associações completas e histogramas conservados provam a ausência da longa, mas não fornecem
+  J/G/P/U ou F individuais, nem margem de 1 ms. Não transformar os 5,4 ms do perfil histórico ou um teto de
+  modelo em ganho líquido medido. U do quadro A, retido na tela, é diferente de U do seguinte B atrasado; a
+  linha de B pode ainda revelar a folga anterior de A, quando existe.
+- Uma mutação sem âncora de `descarte: 0 pressões` pode atingir primeiro `picos:   quadro` no boot, em vez de
+  `gs_d3d:   descarte:`. O primeiro negativo da ap35 foi aceito pelo leitor que só conferia o resumo. Conferir
+  os dois formatos e ver os dois negativos saírem com 1; também exigir que a mutação alterou o texto e que a
+  recusa veio da regra pretendida. Zero em `passos` não substitui os recursos individuais e os resumos.
+- A ap35 testou o alfa selecionado por ambiente, antes da chave de compilação: base perdeu 0,3 a 0,4 ms no
+  6960 contra main, alfa perdeu mais 0,2 a 0,3. Não transferir esse custo à versão com os blocos ausentes da
+  compilação, nem usar o ganho repetido de uma versão para certificar o código gerado ou a imagem da outra.
+
+### Pesquisa de mods nativos: branches, forks e licenças (29/10/2026)
+
+- A pesquisa do Tag Team encontrou um fork público do próprio autor pela lista de forks, embora a busca por
+  nome ainda não o mostrasse. Consultar a API paginada e `git log --all`, além do README da branch padrão.
+  `tagteam-exp` tinha quatro vistas fora da `main`; no projeto independente, a branch atual era `decomp-native`,
+  enquanto a padrão ainda mostrava a implementação antiga por recompilação estática. Fixar commit e data das
+  fontes, conferir código e release, e distinguir nota histórica de correções posteriores.
+- A licença também depende da revisão: o upstream passou de MIT para AGPL em 14/10, antes das quatro vistas.
+  Não aplicar o rótulo MIT antigo ao código novo. As fontes, os limites e a opção conservadora de somente
+  referência estão em [pesquisa/05-tag-team.md](pesquisa/05-tag-team.md).
+
+- **Falha de imagem pode ser de identidade ou ausência.** Em `discfusion`, duas lutas usavam o mesmo nome
+  `luta`: a captura da segunda sobrescrevia a primeira e o conferente recusava o quadro, mesmo com 26/26
+  PPM iguais. Corrigido no `roteiros.py imagens` (a segunda luta é `luta_2`; as outras 20 listas ficam
+  iguais), e o `compara_imagens` recusa nome repetido na lista pelo nome, antes da âncora: um rótulo fixo
+  para um evento que se repete é o erro a procurar. Em `f6_final`/`f6_final_start`, a marca de retorno e
+  `fim` coincidiam e faltava o desenho seguinte para capturar a marca nas duas arquiteturas: a armadilha
+  do Torneio (9c-3, acima) de novo. O roteiro ganhou `quadros 2` depois da marca. Antes de rodar um roteiro
+  novo com `IMG=1`, conferir que nenhuma `marca` é a última linha antes de `fim`. Nunca registrar falta ou
+  âncora errada como diferença de pixels, nem retirar a imagem exigida para passar.
+- **Referência de telas se regrava revisada, nunca para obter código zero.** A do Data Center era anterior
+  à senha e ao Replay (`eb968268`); as do final mudam no `fim` pelos dois quadros. A rodada das lacunas
+  (`f6_final.sh ... --lacunas`, 09.md seção 7) regrava as três pelo caminho documentado (`REF=1
+  roteiros.sh NOME`), guarda a antiga como `NOME.telas.anterior-SHA8`, e o `f6_final_confere.py
+  revisa-referencia` exige a diferença explicada pelo roteiro: o Data Center igual à antiga até a entrada
+  na senha (35 linhas, a menos dos números de linha) e terminando na linha 165; o final igual menos o
+  `fim`, dois quadros depois. Revisão reprovada devolve a antiga. Cada regravação aceita vai a
+  `~/referencias/PROVENIENCIA.tsv` (commit, rodada, SHA256 da antiga e da nova).
+- **Refazer só os reprovados é outra rodada, com lista fixa.** O `--retomar` não serve depois de mudar
+  roteiro ou ferramenta usada pela build ensaiada: as árvores isoladas são do commit antigo. O `--lacunas`
+  pede destino novo e commit novo, roda só a lista `LACUNAS` do conferente (os reprovados e o que eles
+  exigem: builds, objetos, `.text`, a ISO do leitor, os negativos) e grava a lista na origem; o conferente
+  recusa outra lista e nunca imprime a frase da aprovação integral nesse modo, porque os outros casos são
+  de outra build. Ao refazer com commit novo, conferir os nomes que a rodada usa entre casos: o
+  `teste_iso_convertida.py` passou a gravar `bt3-x360.iso` (`99b6e18`), e o `leitor-iso` ainda pedia
+  `convertida.iso`, o que daria tudo FALTA; agora o caso exige a ISO presente antes de testar.
+
 ### Pilotos da F7 no Deck (28/10/2026)
 
 - O módulo do instalador foi renomeado de `iso_convertida.py` para `convert_iso.py`. A leitura
@@ -2479,6 +2595,35 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - `espera forma L ID`, `espera blast L N` e `confere membro L ID TRAJE VARIANTE MIN MAX`
   observam o membro ativo. `BT3_F7=1` registra pedido, classe, custo e queda do estoque, sem
   chamar a função que pede transformação. As imagens e a memória incluem os pontos do piloto.
+
+- A grade de personagens tem sete colunas: o id 1 fica na primeira coluna da segunda
+  linha, não na segunda célula. Confirmar a célula por `gCharSel->cells` no gdb antes
+  de repetir a rede inteira. Com New Game, a segunda célula só tem a forma 13 e pula
+  a janela de formas; um X excedente passa a escolher o COM, e as direções seguintes
+  atingem outra fase. O ensaio acusou ids 13/13 e arena 0; usar BAIXO e aguardar o
+  carrossel preserva os quatro X do id 1 e os três X do adversário 25.
+- No New Game, BAIXO quatro vezes nos estágios desvia a coluna nas células
+  bloqueadas e termina na arena 3. CIMA duas vezes passa pelas linhas 5 e 4 na
+  coluna 0, ambas liberadas, e chega à arena 5. A conferência da luta montada
+  deve permanecer antes de testar recurso ou transformação.
+
+- Reabrir um cartão não muda a ordem dos arquivos do jogo: a x86 deve continuar lendo
+  `gamedata` original, e só a PPC recebe `BT3_DATA` e `BT3_CONVERTIDOS` da conversão.
+  Passar os dois à x86 derrubou o reabrir depois da Missão 0 no Deck (RC 139).
+  O executor dos pilotos usa `~/wsl.lock` por padrão e mede também o espaço físico
+  livre do C: antes das builds e de cada roteiro; `F7_MAQUINA=Deck` conserva a prova
+  e a trava específicas do Deck. Identificar a máquina nos tempos: a rodada final de 29/10
+  voltou ao Deck, e não fornece uma razão de velocidade medida contra o WSL.
+- **O lote pode acabar sem passar pela auditoria final.** O `set -e` do executor para no
+  `roteiros.sh` reprovado; na transformação da F7 ele deixou de medir os bytes, conferir
+  comportamento/negativos, produzir cobertura e chamar `save_mc.sh`. Conferir `RC` e `FIM`
+  antes de chamar o lote aprovado. Completar as conferências sobre as saídas preservadas
+  e rodar a prova do cartão sob a mesma trava, sem esconder o RC=1 nem repetir horas de emulação.
+- **Comportamento, pixels e hashes não dispensam memória.** O piloto transformou pelo R3,
+  debitou o custo e retornou ao movimento em todas as redes; os 1.728 hashes e 14 PPM eram
+  iguais. Ainda assim, `memdiff` recusou o contexto conflitante `EftDisc`/`EftODisc` no fim
+  e regiões do trabalho da luta e do buffer de modelo nos pontos. Guardar um único caso
+  reprovado para diagnóstico; não ampliar classes conhecidas sem explicar bytes, leitor e vida útil.
 
 ### Receitas de cartão da F7 (etapa 2, 28/10/2026)
 
@@ -2545,3 +2690,22 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Uma rodada interrompida sem `FIM RC=0` não passou, mesmo se as imagens coincidirem. Preservar os artefatos,
   corrigir a causa demonstrada nos dumps e lançar pasta nova com **as duas** variáveis `F7_SAIDA` e `BASE_X86`.
   Retomar o script sem `BASE_X86` só recusa a chamada, antes de criar serviço ou conferir qualquer rede.
+
+### Censo do elenco da F7 (etapa 4, 29/10/2026)
+
+- **Escolha por estado, não por toques.** A condição `time L CAMPO N` lê a TeamSel (personagem sob o cursor,
+  passo da escolha, traje, linha, coluna, placa, estágio, membro em escolha): cada `aperta ... ate time ...` para
+  no quadro em que a tela chegou lá, e o rastro diz o que o jogo deu. A grade (15 linhas de 7, com volta nas duas
+  direções) e a lista de estágios do Duelo saem da própria x86 (`f7_elenco.py sonda`, gdb), fora do git.
+- **Uma luta em time carrega dez personagens.** Cinco contra cinco no Duelo e `termina luta perde apos 4 troca`:
+  cada KO faz o jogo trocar o membro e carregar o próximo pelo `BtlLoad_StepChara`. Sem o `troca`, o golpe no
+  lado 0 sai dois quadros depois do quarto KO do lado 1 e o quinto membro dele nunca carrega (a recarga do slot
+  fixo é uma por vez). O `rastreia elenco` registra cada carga concluída lendo o slot fixo e a forma do lado.
+- **O que depende de quê.** O rosto do HUD é `8 + id * 2 + lado` (cada id dos dois lados); a voz é `0xC7B + id`
+  com a voz do New Game e `0xBDA + id` com a outra (Opções, página do som, voz); a variante 1 (danificada) não é
+  selecionável, só o choque de raios perdido e o Ultimate com a bandeira 0x2000 a carregam.
+- **Sair das Opções com algo mudado pergunta se grava** (McFlow 4, estado 32): `aperta TRIANGULO ate mcflow 32` e
+  o laço do "sim" do `opcoes.txt`. Na grade de estágios, a placa da música é a coluna 6 e nela o BAIXO não anda:
+  varrer a linha com sete DIREITA. Os estágios 4 e 27 não estão no Duelo, só no Torneio.
+- **Ssh dentro de um script lido pelo stdin come o resto do script.** `echo ... | bash` com um `ssh deck "..."` no
+  meio parou em silêncio depois dele; use `ssh -n` ou grave o script num arquivo antes de rodar.

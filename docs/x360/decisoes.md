@@ -788,3 +788,70 @@ que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
    como entrada, para trocar de fonte sem mexer no resto.
 5. **SELECT fica como está:** o 360 também tem o botão de selecionar, então nem o ícone 8 nem o texto "SELECT button"
    da lição mudam.
+
+## 31. F6: a igualdade x86 = PPC basta como referência do decodificador de filme (28/10/2026)
+
+A rodada final da F6 (etapa 9) exigia comparar o decodificador de filme do port com o programa de referência do
+libmpeg2 (`mpeg2test`), que não existe no clone do upstream. O Lucas escolheu aceitar a prova que já existe: os 7.010
+quadros dos filmes com hash RGBA idêntico entre x86 e PPC, mais os filmes vistos certos no console (22/10 e 28/10).
+O caso `filme-referencia-upstream` deixa de reprovar a rodada e passa a constar como dispensado por esta decisão;
+não se busca nem se compila o `mpeg2test`.
+
+## 32. F5: o alfa exato vira padrão quando provado, e os prefixos vão para o D3D (28/10/2026)
+
+Com o reprojeto da decisão 29 em andamento, o Lucas respondeu às duas perguntas da seção 36 do `08-gravacao.md`:
+
+1. **O alfa exato vira o padrão da build** (a chave de compilação `BT3_ALFA_ORIGEM` passa a ser a da build normal)
+   quando o console confirmar o ganho nas repetições da rodada ap35a2810 e as provas da seção 28 mostrarem a mesma
+   imagem e o mesmo jogo. Na primeira abertura com o corte (alfa1, 28/10), a imagem longa do 6929 sumiu.
+2. **Os prefixos vão para o D3D** (`BT3_GS_LOTES`, desligado por padrão), começando pela medida do relógio da
+   gravação por faixa no Xenon. As duas consultas que mudam de lugar (o plano do quadro anterior e o limite do DATE)
+   exigem a prova de imagem igual antes de qualquer ganho valer. O teto do modelo no 6960 é de 13,0 a 15,9 ms contra
+   os 10,6 que faltam; se a medida no console mostrar que não fecha, os números voltam ao Lucas para a exceção E.
+
+## 33. F8: as escolhas do escopo da primeira release (29/10/2026)
+
+O escopo da F8 (`plano/F8/00-escopo.md`, seção 6) pediu onze escolhas. O Lucas respondeu:
+
+1. **Sem prévia antes da F7 completa:** uma release só, a `1.0.0`.
+2. **Sem opções do port nem remapeamento** na primeira release: padrões fixos e a configuração de controle do próprio jogo.
+3. **16:9 seguindo o ajuste de tela do painel:** aprovado, mas fica para depois da primeira release (até lá, 16:9 fixo).
+4. **Vibração:** entra na primeira release.
+5. **Importar e exportar saves:** fora da primeira release.
+6. **Conversão da ISO:** o README dá as duas opções, a conversão no próprio console e o `convert_iso.py` no PC.
+7. **Nome e versão:** `1.0.0`, e o pacote sem o "xbx" do nome do repositório (`bt3-x360-1.0.0.zip`).
+8. **O `release.yml` do upstream:** desligado no GitHub em 29/10. No futuro, pensar num workflow de release do 360,
+   se o upstream ainda não tiver um.
+9. **README do usuário:** os oito pontos do escopo.
+10. **Gaps de imagem:** só o deserto à noite escuro entra na primeira release; o preto de Namek no Shenlong não importa
+    para ela e fica para depois.
+11. **Publicação:** o repositório vira público e a release sai junto com a abertura dele. Os relatórios de queda vão
+    para as issues do GitHub, com regras contra spam (modelo de issue com campos obrigatórios, o `crash.txt` e a versão,
+    rótulos e o que não é aceito).
+
+## 34. F8: o brilho somado do 360 igual ao do port de PC, a 60% (29/10/2026)
+
+Na pendência 5 da F8 (o deserto à noite escuro demais no console), a H9 da F5 (`plano/F5/09.md`) apontava o brilho
+somado do 360 mais fraco e deslocado que o do rasterizador x86. O port de PC soma o brilho e o clarão a 60% do que as
+passadas do jogo dão (`GLOW_DEFAULT 60`, `port/src/gs/gs_draw.h`, escolha do upstream de 06/10). O Lucas decidiu:
+
+1. **O brilho do 360 fica igual ao do port de PC com 60%**: forma, posição e força do halo como as do caminho de GPU do
+   PC. **Não sobe para os 100% do PS2** ("não quero que fique muito brilhoso").
+2. A referência das medidas é a do PC, não a do PS2: o rasterizador x86 só serve com o filtro bilinear do GS, o alfa
+   preso do PC e o `BT3_GLOW` (o diagnóstico `port/x360/tools/diag_bilinear.patch`, só no WSL); sem eles ele lê a cadeia
+   do brilho no ponto e desloca o halo (`plano/F8/05-brilho.md`).
+
+## 35. F7: os lotes de conteúdo ficam para depois da primeira release, e a PPC roda por amostra (29/10/2026)
+
+A etapa 4 da F7 (elenco, trajes, transformações, fusões, estágios) foi estimada em 256 a 316 h de máquina no ritmo do
+Deck (`plano/F7/04.md`, seção 2), e as etapas 4, 5 e 6 juntas em 360 a 500 h: de uma a três semanas com o WSL e o Deck
+ligados. Quase todo esse custo é a PPC no qemu, que só prova que o código big-endian se comporta como o x86, coisa já
+provada nas F4 e F6 e nos pilotos da F7 (e aceita como referência na decisão 31). O Lucas decidiu:
+
+1. **As etapas 4, 5 e 6 da F7 não rodam para a primeira release.** O lote do elenco, pronto e provado na x86 em
+   laboratório, foi desarmado antes de rodar. A primeira release não espera a F7 inteira; o critério de conteúdo da F8
+   passa a ser a F7 sem essas três etapas.
+2. **Quando os lotes voltarem, a x86 roda todos os casos** (memória e imagens) e **a PPC roda uma amostra**: um ou dois
+   casos por família, os mais diferentes entre si (forma gigante, fusão, estágio que muda), e todo caso em que a x86
+   mostrar algo fora do esperado. O console segue com a inspeção por família.
+

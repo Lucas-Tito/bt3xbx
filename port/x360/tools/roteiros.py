@@ -723,7 +723,12 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None, roteiro
         print(f"{pre}DIFERENÇA: memória: nenhum bloco vivo com arquivo ou conteúdo convertido achado")
         ok = False
     conf = sum(int(re.search(r"conforme (\d+)", l).group(1)) for l in marcas)
-    print(f"{pre}  {len(marcas)} blocos com arquivo ou conteúdo convertido, {conf} números e bytes conformes")
+    # (F7) as linhas da cauda de um buffer fixo reaproveitado (memdiff.py BUFFERS_FIXOS) julgam-se como as outras, mas
+    # não são um bloco a mais
+    caudas = [l for l in marcas if re.match(r"marcas heap#\d+ (cauda|resto) ", l)]
+    print(f"{pre}  {len(marcas) - len(caudas)} blocos com arquivo ou conteúdo convertido, {conf} números e bytes conformes")
+    for l in caudas:
+        print(f"{pre}  buffer fixo reaproveitado: {l[7:]}")
     for l in fora:
         print(f"{pre}DIFERENÇA: memória: {l}")
         ok = False
@@ -974,6 +979,9 @@ TELAS_IMG = {4, 33, 34, 35, 38, 39, 40, 44, 45, 48, 49, 50, 53, 54, 55, 56, 60, 
 # tela). Não é um modo do jogo: o roteiro.c a dá no lugar do 60 enquanto CharRef.state é a carga do modelo ou o modelo.
 TELAS_IMG.add(600)
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
+# (F7, etapa 4) cada carga de personagem do "rastreia elenco" ("elenco carga lado L ..."): o modelo novo na tela,
+# ELENCO quadros depois da carga concluída
+ELENCO = 12
 
 
 def eventos_rastro(caminho):
@@ -1009,8 +1017,10 @@ def lista_imagens(caminho, luta=False):
         if t.startswith("tela "):
             x = t.split()[1]
             if x == "luta":
+                # (a segunda luta do roteiro é luta_2: com o mesmo nome a captura dela sobrescrevia a da primeira, e o
+                # Disc Fusion da F6 tinha 26 PPM iguais com a âncora da primeira luta recusada)
                 if luta:
-                    out.append(("luta", LUTA, anc))
+                    out.append(("luta" if vezes[t] == 1 else f"luta_{vezes[t]}", LUTA, anc))
                 continue
             if x == "carga":
                 # (a tela de carregamento antes da luta, 2D: a imagem dela, CARGA quadros depois de entrar)
@@ -1033,6 +1043,8 @@ def lista_imagens(caminho, luta=False):
                 out.append((f"{rotulo}_saida", seguinte - q - SAIDA, anc))
         elif t.startswith("marca ") or t.startswith("ok som "):
             out.append((rotulo, 0, anc))
+        elif t.startswith("carga lado "):
+            out.append((rotulo, ELENCO, anc))
         elif t in ("ok mcflow 12", "ok mcflow 2"):
             out.append((rotulo, PERGUNTA, anc))
     return out
@@ -1066,6 +1078,12 @@ def compara_imagens(lista, dx, dp, sx=None, sp=None, telas=None):
     qx, qp = quadros(sx), quadros(sp)
     eventos = eventos_rastro(telas) if telas else None
     erros = iguais = 0
+    # (F6, etapa 9) um nome repetido grava duas capturas no mesmo NOME.ppm: a segunda apaga a primeira, e só a âncora
+    # denunciava. Recusado pelo nome, antes de olhar os pixels.
+    for nome, k in collections.Counter(nome for nome, _, _ in lista).items():
+        if k > 1:
+            print(f"  DIFERENÇA: {nome}: nome repetido {k} vezes na lista (a captura seguinte sobrescreve a anterior)")
+            erros += 1
     for nome, n, anc in lista:
         onde = f"{nome} ({anc} +{n}; x86 {qx.get(nome, 'sem linha imagem:')}, ppc {qp.get(nome, 'sem linha imagem:')})"
         a, b = pathlib.Path(dx) / f"{nome}.ppm", pathlib.Path(dp) / f"{nome}.ppm"
