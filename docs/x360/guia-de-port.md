@@ -6,9 +6,9 @@ little-endian (PS2, PS1, GameCube não, que já é big-endian) levada ao 360.
 
 Como usar num chat novo: peça para ler este arquivo, o `CLAUDE.md` deste repositório (modelo de
 regras) e `docs/x360/decisoes.md` (o porquê de cada escolha). As pesquisas em
-`docs/x360/pesquisa/01..04` têm o detalhe: 01 é o setup do 360 e as lições do CollectionUI e do
+`docs/x360/pesquisa/01..05` têm o detalhe: 01 é o setup do 360 e as lições do CollectionUI e do
 hiddriver, 02 são os ports de referência (SM64, MK64, Virtua Fighter), 03 é o estado da decomp do
-BT3, 04 é onde ficam os ícones dos botões e o custo de trocá-los.
+BT3, 04 é onde ficam os ícones dos botões e o custo de trocá-los, 05 é o estado do Tag Team nativo no PC.
 
 Mantido vivo: cada aprendizado que custou uma rodada entra aqui (seção 6) no mesmo commit da
 correção.
@@ -2512,3 +2512,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - A ap35 testou o alfa selecionado por ambiente, antes da chave de compilação: base perdeu 0,3 a 0,4 ms no
   6960 contra main, alfa perdeu mais 0,2 a 0,3. Não transferir esse custo à versão com os blocos ausentes da
   compilação, nem usar o ganho repetido de uma versão para certificar o código gerado ou a imagem da outra.
+
+### Pesquisa de mods nativos: branches, forks e licenças (29/10/2026)
+
+- A pesquisa do Tag Team encontrou um fork público do próprio autor pela lista de forks, embora a busca por
+  nome ainda não o mostrasse. Consultar a API paginada e `git log --all`, além do README da branch padrão.
+  `tagteam-exp` tinha quatro vistas fora da `main`; no projeto independente, a branch atual era `decomp-native`,
+  enquanto a padrão ainda mostrava a implementação antiga por recompilação estática. Fixar commit e data das
+  fontes, conferir código e release, e distinguir nota histórica de correções posteriores.
+- A licença também depende da revisão: o upstream passou de MIT para AGPL em 14/10, antes das quatro vistas.
+  Não aplicar o rótulo MIT antigo ao código novo. As fontes, os limites e a opção conservadora de somente
+  referência estão em [pesquisa/05-tag-team.md](pesquisa/05-tag-team.md).
