@@ -80,6 +80,7 @@ int Port_X360Fclose(FILE *f) {
 }
 
 /* o resto que o iso360.c chama */
+int gX360Log = 1; /* Ensaio de desenvolvimento. */
 void Diario_Escrever(const char *formato, ...);
 #include <stdarg.h>
 void Diario_Escrever(const char *formato, ...) {

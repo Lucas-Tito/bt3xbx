@@ -19,7 +19,7 @@ static int Saida_Esperar(const char *nome, HANDLE h, unsigned teto) {
     return r == WAIT_OBJECT_0;
 }
 
-static DWORD WINAPI Saida_Threads(LPVOID arg) {
+static DWORD WINAPI Saida_Graficos(LPVOID arg) {
     int ok;
     XSetThreadProcessor(GetCurrentThread(), 1);
     sSaidaEtapa = "pedidos de parada do GS";
@@ -33,6 +33,15 @@ static DWORD WINAPI Saida_Threads(LPVOID arg) {
     sSaidaEtapa = "thread de desenho do GS";
     if (!Saida_Esperar("GS desenho", (HANDLE)GsDraw_Thread360(), 2000)) ok = 0;
     if (ok) InterlockedExchange(&sGraficosParados, 1);
+    sThreadsSeguras = ok;
+    return 0;
+}
+
+static DWORD WINAPI Saida_Threads(LPVOID arg) {
+    int ok;
+    XSetThreadProcessor(GetCurrentThread(), 1);
+    if (!sGraficosParados) Saida_Graficos(arg);
+    ok = sThreadsSeguras;
     sSaidaEtapa = "cargas em blocos";
     if (!Blocos_PararTodos360()) ok = 0;
     sSaidaEtapa = "cargas de áudio, vigia, misturador e XAudio2";

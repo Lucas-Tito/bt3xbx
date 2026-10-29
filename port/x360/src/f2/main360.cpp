@@ -2,12 +2,13 @@
  * F2: o jogo sem janela no 360 (decisão 15 e plano, F2): a luta de demonstração inteira, sem desenho nem som, para
  * medir quanto a lógica do jogo custa por quadro no Xenon com a FPU de verdade e para comparar o resultado.
  *
- * A thread principal só limpa a tela com a cor da fase (nunca para: a Guide congela o console se ela parar):
+ * Com BT3_LOG=1, a thread principal limpa a tela com a cor da fase (nunca para: a Guide congela o console se ela parar):
  *   preto    preparando a memória e as tabelas do disco (antes do D3D, de propósito: ver Preparar)
  *   amarelo  um instante, entre o D3D e o jogo
  *   azul     a luta rodando
  *   verde    terminou bem; qualquer botão volta para o dashboard
  *   vermelho falhou (o log diz onde: game:\bt3xbx.log, game:\saida.txt)
+ * Sem log, o fundo é preto. Uma exceção gera crash.txt e uma caixa do sistema.
  * A ISO recusada tem uma caixa do sistema sobre o preto, e o jogo não começa (decisão 23).
  * O jogo roda noutra thread, com pilha grande e a FPU em truncamento (o modelo do PS2 para soma e multiplicação).
  * Com BT3_GS=gpu (F3, etapa 7) o jogo desenha: o dispositivo passa para a thread do jogo, que apresenta um quadro por
@@ -26,7 +27,7 @@
 #include "iso360.h"
 #include "iso_avisos.h"
 #include "som/som360.h"
-#include "pilha360.h"
+#include "queda360.h"
 #include "queda_teste360.h"
 
 extern "C" {
@@ -145,7 +146,7 @@ extern "C" void Port_GsDesenhoPartida(void) {
 extern "C" void Port_Sair(int codigo) {
     Diario_Escrever("saída do jogo com código %d (%s)", codigo, gPortStage);
     Estado_Resumo();
-    gPortStage = "jogo: encerramento";
+    gPortStage = "game shutdown";
     /* A main usa a mesma desmontagem com teto para a saída normal e para a queda. */
     GsD3d_Soltar();
     InterlockedExchange(&gCodigo, codigo);
@@ -173,93 +174,86 @@ static int LerPilha(unsigned endereco, unsigned *valor) {
     }
 }
 
-static void RegistrarPilha(const CONTEXT *c) {
-    unsigned inicio = (unsigned)c->Gpr1, atual = inicio, anterior, retorno;
-    Diario_Escrever("CRASH argumentos atuais: r3=%016I64X r4=%016I64X r5=%016I64X r6=%016I64X",
-                    (unsigned __int64)c->Gpr3, (unsigned __int64)c->Gpr4, (unsigned __int64)c->Gpr5, (unsigned __int64)c->Gpr6);
-    Diario_Escrever("CRASH argumentos atuais: r7=%016I64X r8=%016I64X r9=%016I64X r10=%016I64X",
-                    (unsigned __int64)c->Gpr7, (unsigned __int64)c->Gpr8, (unsigned __int64)c->Gpr9, (unsigned __int64)c->Gpr10);
-    Diario_Escrever("CRASH preservados: r28=%016I64X r29=%016I64X r30=%016I64X r31=%016I64X",
-                    (unsigned __int64)c->Gpr28, (unsigned __int64)c->Gpr29, (unsigned __int64)c->Gpr30, (unsigned __int64)c->Gpr31);
-    /* São candidatos a retorno, não um desenrolamento dos prólogos. Folhas e chamadas de cauda
-       podem omitir quadros. Iar e Lr continuam sendo registrados separadamente. */
-    for (unsigned i = 0; i < 12; i++) {
-        if (!Pilha360_Proximo(inicio, atual, LerPilha, &anterior, &retorno)) {
-            Diario_Escrever("CRASH pilha: fim ou elo inválido em %08X (quadro %u)", atual, i);
-            break;
-        }
-        Diario_Escrever("CRASH pilha %u: r1=%08X anterior=%08X retorno=%08X", i, atual, anterior, retorno);
-        atual = anterior;
-    }
-}
-
 static LONG WINAPI AoMorrer(LPEXCEPTION_POINTERS p) {
-    if (p != NULL && p->ExceptionRecord != NULL && p->ContextRecord != NULL) {
-        unsigned acesso = 0, onde = 0;
-        if (p->ExceptionRecord->NumberParameters >= 2) {
-            acesso = (unsigned)p->ExceptionRecord->ExceptionInformation[0];
-            onde = (unsigned)p->ExceptionRecord->ExceptionInformation[1];
+    /* Só a primeira queda publica o contexto. Nada de disco, diário síncrono ou CRT no filtro,
+       inclusive quando a origem for uma callback do áudio nas threads de hardware 4 e 5. */
+    if (InterlockedCompareExchange(&sQuedaTomada, 1, 0) == 0) {
+        sQueda.thread = GetCurrentThreadId();
+        sQueda.vb = gPortVBlanks;
+        sQueda.quadro = gGsFrame;
+        strncpy(sQueda.fase, gPortStage, sizeof(sQueda.fase) - 1);
+        if (p != NULL && p->ExceptionRecord != NULL && p->ContextRecord != NULL) {
+            const CONTEXT *c = p->ContextRecord;
+            sQueda.contexto = 1;
+            sQueda.codigo = (unsigned)p->ExceptionRecord->ExceptionCode;
+            sQueda.iar = (unsigned)c->Iar;
+            sQueda.lr = (unsigned)c->Lr;
+            if (p->ExceptionRecord->NumberParameters >= 2) {
+                sQueda.acesso = (unsigned)p->ExceptionRecord->ExceptionInformation[0];
+                sQueda.endereco = (unsigned)p->ExceptionRecord->ExceptionInformation[1];
+            }
+            sQueda.r[0] = (unsigned __int64)c->Gpr0;
+            sQueda.r[1] = (unsigned __int64)c->Gpr1;
+            sQueda.r[2] = (unsigned __int64)c->Gpr2;
+            sQueda.r[3] = (unsigned __int64)c->Gpr3;
+            sQueda.r[4] = (unsigned __int64)c->Gpr4;
+            sQueda.r[5] = (unsigned __int64)c->Gpr5;
+            sQueda.r[6] = (unsigned __int64)c->Gpr6;
+            sQueda.r[7] = (unsigned __int64)c->Gpr7;
+            sQueda.r[8] = (unsigned __int64)c->Gpr8;
+            sQueda.r[9] = (unsigned __int64)c->Gpr9;
+            sQueda.r[10] = (unsigned __int64)c->Gpr10;
+            sQueda.r[11] = (unsigned __int64)c->Gpr11;
+            sQueda.r[12] = (unsigned __int64)c->Gpr12;
+            sQueda.r[13] = (unsigned __int64)c->Gpr13;
+            sQueda.r[14] = (unsigned __int64)c->Gpr14;
+            sQueda.r[15] = (unsigned __int64)c->Gpr15;
+            sQueda.r[16] = (unsigned __int64)c->Gpr16;
+            sQueda.r[17] = (unsigned __int64)c->Gpr17;
+            sQueda.r[18] = (unsigned __int64)c->Gpr18;
+            sQueda.r[19] = (unsigned __int64)c->Gpr19;
+            sQueda.r[20] = (unsigned __int64)c->Gpr20;
+            sQueda.r[21] = (unsigned __int64)c->Gpr21;
+            sQueda.r[22] = (unsigned __int64)c->Gpr22;
+            sQueda.r[23] = (unsigned __int64)c->Gpr23;
+            sQueda.r[24] = (unsigned __int64)c->Gpr24;
+            sQueda.r[25] = (unsigned __int64)c->Gpr25;
+            sQueda.r[26] = (unsigned __int64)c->Gpr26;
+            sQueda.r[27] = (unsigned __int64)c->Gpr27;
+            sQueda.r[28] = (unsigned __int64)c->Gpr28;
+            sQueda.r[29] = (unsigned __int64)c->Gpr29;
+            sQueda.r[30] = (unsigned __int64)c->Gpr30;
+            sQueda.r[31] = (unsigned __int64)c->Gpr31;
+            Queda_CapturarPilha(LerPilha);
         }
-        Diario_Escrever("CRASH code=0x%08X Iar=0x%08X Lr=0x%08X r1=0x%08X %s=0x%08X (fase: %s)",
-                        (unsigned)p->ExceptionRecord->ExceptionCode, (unsigned)p->ContextRecord->Iar,
-                        (unsigned)p->ContextRecord->Lr, (unsigned)p->ContextRecord->Gpr1,
-                        acesso ? "escrevendo" : "lendo", onde, gPortStage);
-        Diario_Escrever("CRASH thread=%u jogo=%u gravação=%u desenho=%u vblank=%u quadro=%u luta_desde=%u",
-                        (unsigned)GetCurrentThreadId(), (unsigned)gThreadJogo, (unsigned)gThreadGravacao,
-                        (unsigned)gThreadDesenho, gPortVBlanks, gGsFrame, gX360Luta);
-        RegistrarPilha(p->ContextRecord);
-    } else {
-        Diario_Escrever("CRASH sem contexto (fase: %s)", gPortStage);
-    }
-    Diario_Descarregar(); /* a linha CRASH no disco já: o que vem a seguir (Port_UnpackPendenteNaQueda) pode falhar de novo */
-    Som360_MarcarQueda(); /* só publica silêncio; o som para na auxiliar, fora da thread que caiu */
-    {   /* um Sprite_Unpack ainda sem gancho é a causa provável (dados de menu little-endian): diz quem chamou */
-        static char linha[256]; /* (fora da pilha, que pode ser o problema) */
-        if (Port_UnpackPendenteNaQueda(linha, sizeof(linha))) {
-            Diario_Escrever("%s", linha);
+        sRelatorioThread = CreateThread(NULL, 64 * 1024, Queda_Relatar,
+            GetCurrentThreadId() == gThreadPrincipal ? (LPVOID)1 : NULL, CREATE_SUSPENDED, NULL);
+        if (sRelatorioThread != NULL) {
+            XSetThreadProcessor(sRelatorioThread, 1);
+            ResumeThread(sRelatorioThread);
         }
     }
-    _flushall();
-    Diario_Descarregar();
+    Som360_MarcarQueda();
     gCor = 0xFFC02020;
+    __lwsync();
     InterlockedExchange(&gTerminou, 1);
     if (gThreadDesenho != 0 && GetCurrentThreadId() == gThreadDesenho) {
-        /* (degrau 2, etapa 4) caiu o desenho (o dono do dispositivo): solta; a gravação para de esperar por ele e perde os
-           quadros seguintes; a main segue com a tela vermelha */
-        Diario_Escrever("a queda foi na thread de desenho (BT3_GS_DESENHO), na etapa \"%s\"", (const char *)gGsD3dEtapa);
         GsDraw_DesenhoCaiu();
         GsD3d_Soltar();
-        Diario_Descarregar();
         ExitThread(7);
     }
     if (gThreadGravacao != 0 && GetCurrentThreadId() == gThreadGravacao) {
-        /* caiu a gravação: sem a divisão ela é a dona do dispositivo e solta; com ela, pede ao desenho que saia sem esperar e
-           solte. A thread do jogo vai ficar esperando, a main segue sem ela */
-        if (gThreadDesenho != 0) {
-            Diario_Escrever("a queda foi na thread de gravação, na etapa \"%s\" do backend", (const char *)gGsD3dEtapaGrav);
-            GsDraw_DesenhoPararJa();
-        }
+        if (gThreadDesenho != 0) GsDraw_DesenhoPararJa();
         GsD3d_Soltar();
-        Diario_Descarregar();
         ExitThread(6);
     }
     if (GetCurrentThreadId() == gThreadJogo) {
-        if (gThreadGravacao != 0) {
-            Port_GsPararJa(); /* sem esperar: a de gravação acaba o que tem e solta o dispositivo; a main espera até 2 s por ele */
-        }
-        if (gThreadDesenho != 0) {
-            GsDraw_DesenhoPararJa(); /* (com a divisão o dono é o desenho: sai sem esperar e solta) */
-        }
+        if (gThreadGravacao != 0) Port_GsPararJa();
+        if (gThreadDesenho != 0) GsDraw_DesenhoPararJa();
         GsD3d_Soltar();
-        ExitThread(5); /* só o jogo morre: a main segue com a tela vermelha e volta ao dashboard no botão */
+        ExitThread(5);
     }
-    /* A queda de uma auxiliar também é consumida: deixá-la chegar ao interceptador repete o defeito.
-       A main segue pelas esperas com teto. Se a própria main caiu, só resta lançar o painel. */
-    if (GetCurrentThreadId() == gThreadPrincipal) {
-        HANDLE volta = CreateThread(NULL, 64 * 1024, VoltarAoDashboard, NULL, 0, NULL);
-        if (volta == NULL) XLaunchNewImage(NULL, 0);
-        else CloseHandle(volta);
-    }
+    if (GetCurrentThreadId() == gThreadPrincipal && sRelatorioThread == NULL) XLaunchNewImage(NULL, 0);
     ExitThread(8);
     return EXCEPTION_EXECUTE_HANDLER;
 }
@@ -270,7 +264,7 @@ static DWORD WINAPI Jogo(LPVOID arg) {
     int r;
     (void)arg;
     _controlfp(_RC_CHOP, _MCW_RC); /* soma e multiplicação truncadas, como no PS2 (decisões 4 e 5) */
-    gPortStage = "jogo: inicialização";
+    gPortStage = "game initialization";
     Diario_Escrever("jogo começando (%s)", gPortStage);
     gCor = 0xFF2040C0; /* azul */
     if (MpegMede_Rodar()) { /* (F6, etapa 6) BT3_MPEG_MEDE=1: só a medição do decodificador dos filmes, e sai */
@@ -306,7 +300,7 @@ static bool MostrarRecusa(D3DDevice *dev, int motivo) {
     DWORD r, inicio = GetTickCount(), fim = 0;
     Iso_Aviso(motivo, &kTitulo, &kTexto);
     for (;;) {
-        dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, gX360Log ? gCor : 0xFF010101, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
         ZeroMemory(&sOv, sizeof(sOv));
         r = XShowMessageBoxUI(XUSER_INDEX_ANY, kTitulo, kTexto, 1, kBotoes, 0, XMB_ERRORICON, &sResultado, &sOv);
@@ -321,7 +315,7 @@ static bool MostrarRecusa(D3DDevice *dev, int motivo) {
     }
     Diario_Escrever("recusa: caixa do sistema aberta (motivo %d)", motivo);
     while (!XHasOverlappedIoCompleted(&sOv)) {
-        dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, gX360Log ? gCor : 0xFF010101, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
     }
     r = XGetOverlappedResult(&sOv, &fim, FALSE);
@@ -339,7 +333,7 @@ static void Saida_Apresentar(void) {
         sTelaSaida->SetVerticalBlankCallback(NULL);
     }
     if (sTelaSaida->QueryThreadOwnership() == GetCurrentThreadId()) {
-        sTelaSaida->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
+        sTelaSaida->Clear(0, NULL, D3DCLEAR_TARGET, gX360Log ? gCor : 0xFF010101, 1.0f, 0);
         sTelaSaida->Present(NULL, NULL, NULL, NULL);
     }
 }
@@ -356,18 +350,17 @@ void __cdecl main() {
     D3DPRESENT_PARAMETERS pp;
     D3DDevice *dev = NULL;
     HANDLE t, auxiliar;
-    bool desmontado = false, liberarVideo = true;
+    bool desmontado = false, liberarVideo = true, quedaMostrada = false;
     static SaidaVideo video;
     int local;
     int motivo;
     bool gpu, recusada, saidaDireta = false, solto = false;
 
     gThreadPrincipal = GetCurrentThreadId();
-    Diario_Abrir("game:\\bt3xbx.log");
     SetUnhandledExceptionFilter(AoMorrer);
-    Diario_Escrever("bt3xbx F2, jogo sem janela (" __DATE__ " " __TIME__ "), pilha da main perto de %08X",
-                    (unsigned)(DWORD)&local);
     Ambiente_Carregar("game:\\ambiente.txt");
+    Diario_Escrever("bt3xbx F2, jogo sem janela (" __DATE__ " " __TIME__ "), pilha da main perto de %08X",
+                    (unsigned)(size_t)&local);
     QuedaTeste_Configurar(getenv("BT3_QUEDA_TESTE"), getenv("BT3_QUEDA_TESTE_THREAD"));
     Blocos_Iniciar360();
     Iso_Iniciar(); /* antes de qualquer thread: a ISO e a trava dela */
@@ -423,8 +416,8 @@ void __cdecl main() {
 
     for (;;) {
         if (gTerminou && !desmontado) {
-            gPortStage = "saída: threads";
-            auxiliar = CreateThread(NULL, 256 * 1024, Saida_Threads, t, 0, NULL);
+            gPortStage = "shutdown threads";
+            auxiliar = CreateThread(NULL, 256 * 1024, sQuedaTomada ? Saida_Graficos : Saida_Threads, t, 0, NULL);
             bool acabou = Saida_Aguardar(auxiliar, 15000, Saida_Apresentar) != 0;
             if (auxiliar != NULL) CloseHandle(auxiliar);
             desmontado = true;
@@ -441,7 +434,7 @@ void __cdecl main() {
         if (gpu) {
             if (!gTerminou) {
                 Sleep(50);
-                Vigiar();
+                if (gX360Log) Vigiar();
                 continue;
             }
             /* Só depois dos handles sinalizados: nenhum produtor ainda pode usar o dispositivo. */
@@ -457,7 +450,17 @@ void __cdecl main() {
             dev->SetVerticalBlankCallback(NULL);
             gpu = false;
         }
-        dev->Clear(0, NULL, D3DCLEAR_TARGET, gCor, 1.0f, 0);
+        if (sQuedaTomada && !quedaMostrada) {
+            quedaMostrada = true;
+            if (sRelatorioThread != NULL) {
+                Saida_Aguardar(sRelatorioThread, 3000, Saida_Apresentar);
+                CloseHandle(sRelatorioThread);
+                sRelatorioThread = NULL;
+            }
+            saidaDireta = Queda_Mostrar(Saida_Apresentar);
+            if (saidaDireta) break;
+        }
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, gX360Log ? gCor : 0xFF010101, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
         if (gTerminou) {
             bool apertou = false;
@@ -474,7 +477,18 @@ void __cdecl main() {
         }
     }
 
-    gPortStage = "saída: dashboard";
+    if (sRelatorioThread != NULL) {
+        Saida_Aguardar(sRelatorioThread, 3000, liberarVideo ? Saida_Apresentar : NULL);
+        CloseHandle(sRelatorioThread);
+        sRelatorioThread = NULL;
+    }
+    if (sQuedaTomada) {
+        auxiliar = CreateThread(NULL, 256 * 1024, Saida_Threads, t, 0, NULL);
+        bool acabou = Saida_Aguardar(auxiliar, 15000, Saida_Apresentar) != 0;
+        if (auxiliar != NULL) CloseHandle(auxiliar);
+        liberarVideo = liberarVideo && acabou && sThreadsSeguras != 0;
+    }
+    gPortStage = "return to dashboard";
     Diario_Escrever("voltando ao dashboard");
     if (t != NULL && liberarVideo) CloseHandle(t);
     video.dev = dev;

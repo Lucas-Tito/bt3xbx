@@ -1,5 +1,9 @@
 # Desmontagem após queda e retorno à FreeStyle
 
+Atualização F8: a caixa, `crash.txt` e os padrões de diagnóstico de
+[04-queda-e-logs](../F8/04-queda-e-logs.md) substituem a tela vermelha e o log obrigatório
+do roteiro abaixo. Para repetir este diagnóstico, acrescentar `BT3_LOG=1`.
+
 A sequência com teto passou no ensaio nativo do WSL; o retorno limpo à FreeStyle ainda exige XDK e console.
 
 Base: `888072d1`, branch `codex/queda-freestyle`. Complementa a

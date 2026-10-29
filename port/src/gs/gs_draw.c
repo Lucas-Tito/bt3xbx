@@ -214,6 +214,10 @@ static void vu_faixa_marcas(const float *v, uint32_t passo, uint32_t count, uint
 }
 #endif
 
+#ifdef PORT_X360
+extern int gX360Log;
+#endif
+
 static uint64_t gpu_now(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -642,7 +646,11 @@ static GsTex texture_get(int ctx) {
             return gsWhite; /* this one frame uses more textures than the cache holds */
         }
     }
+#ifdef PORT_X360
+    tex_t0 = (gX360Log ? gpu_now() : 0);
+#else
     tex_t0 = gpu_now();
+#endif
 #ifdef BT3_GS_ESPERAS
     /* (seção 26) o cache pela origem: a mesma imagem já decodificada com outra chave (outro gen ou outro TEX0) dá o mesmo
        recurso, sem decodificar nem criar (o tempo do hash conta como o da decodificação). Fora com um pacote de texturas. */
@@ -688,7 +696,11 @@ static GsTex texture_get(int ctx) {
                 tex_conta_reuso(o, t0, texa, gen, tbp, tbw, psm, tw, th, cbp, cpsm, bits);
 #endif
                 {
+#ifdef PORT_X360
+                    uint64_t d_ = (gX360Log ? gpu_now() - tex_t0 : 0);
+#else
                     uint64_t d_ = gpu_now() - tex_t0;
+#endif
                     gGpuTexNs += d_;
 #ifdef PORT_X360
                     gPicosTexNs += d_;
@@ -752,7 +764,11 @@ static GsTex texture_get(int ctx) {
        0 diferentes, 2 formato que ela não faz). O tex_conta.py separa a primeira vez das redecodificações. */
     if (!replaced && px != NULL && getenv("BT3_TEX_CONTA") != NULL) {
         FILE *cf = tex_conta_arq();
+#ifdef PORT_X360
+        uint64_t ch = 1469598103934665603ull, ns = (gX360Log ? gpu_now() - tex_t0 : 0);
+#else
         uint64_t ch = 1469598103934665603ull, ns = gpu_now() - tex_t0;
+#endif
         uint32_t k, *px2 = malloc((size_t)tw * th * 4);
         int igual = 2;
         for (k = 0; k < tw * th; k++) {
@@ -772,7 +788,7 @@ static GsTex texture_get(int ctx) {
 #endif
 #ifdef PORT_X360
     {   /* (picos: a decodificação do quadro, gs_internal.h) */
-        uint64_t d_ = gpu_now() - tex_t0;
+        uint64_t d_ = (gX360Log ? gpu_now() - tex_t0 : 0);
         gGpuTexNs += d_;
         gPicosTexNs += d_;
     }
@@ -5022,7 +5038,7 @@ static void Gs_FamTrecho(void) {
     if (quadros == 0 && desde == 0) { /* o primeiro fim de quadro: liga e começa o trecho */
         const char *e = getenv("BT3_TEMPOS");
 #ifdef PORT_X360
-        gGsFam = e == NULL || atoi(e) != 0;
+        gGsFam = e != NULL && atoi(e) != 0;
 #else
         gGsFam = e != NULL && atoi(e) != 0; /* (fora do 360 só com BT3_TEMPOS=1: gs_internal.h) */
 #endif
@@ -5254,7 +5270,11 @@ static void desenho_entrega(void) {
 #endif
     GS_FAM_FIM(GS_FAM_ESPERA, f0);
     GS_FAM_INI(f1);
+#ifdef PORT_X360
+    t0 = (gX360Log ? gpu_now() : 0);
+#else
     t0 = gpu_now();
+#endif
     c[0] = gsDrawCount;
     c[1] = gsVertCount;
     c[2] = gsVuVertCount;
@@ -5327,7 +5347,11 @@ static void desenho_entrega(void) {
     gsSkipped = 0;
     gsNative = 0;
     jogo_usa(sJogo ^ 1); /* o do retrato anterior: o desenho já o largou (a espera do começo desta função) */
+#ifdef PORT_X360
+    dt = (gX360Log ? gpu_now() - t0 : 0);
+#else
     dt = gpu_now() - t0;
+#endif
     sCopiaNs += dt;
     if (dt > sCopiaPior) {
         sCopiaPior = dt;
@@ -5410,7 +5434,11 @@ void GsGpu_FrameEnd(void) {
     vu_faixa_confere();
     est_confere_linha();
 #endif
+#ifdef PORT_X360
+    uint64_t t0 = (gX360Log ? gpu_now() : 0);
+#else
     uint64_t t0 = gpu_now();
+#endif
     if (sBackend != NULL) {
         int i;
 
@@ -5440,12 +5468,16 @@ void GsGpu_FrameEnd(void) {
 #ifdef PORT_X360
             if (sDesParado) {
                 desenho_descarta();
-                gGpuEndNs += gpu_now() - t0;
+                gGpuEndNs += (gX360Log ? gpu_now() - t0 : 0);
                 return;
             }
 #endif
             desenho_entrega();
+#ifdef PORT_X360
+            gGpuEndNs += (gX360Log ? gpu_now() - t0 : 0);
+#else
             gGpuEndNs += gpu_now() - t0;
+#endif
             return;
         }
 #endif
@@ -5519,5 +5551,9 @@ void GsGpu_FrameEnd(void) {
             scale_apply();
         }
     }
+#ifdef PORT_X360
+    gGpuEndNs += (gX360Log ? gpu_now() - t0 : 0);
+#else
     gGpuEndNs += gpu_now() - t0;
+#endif
 }

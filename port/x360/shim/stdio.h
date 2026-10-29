@@ -12,6 +12,16 @@ int Port_Printf(const char *, ...);
 #define stderr (Port_X360Saida())
 #define fopen Port_X360Fopen
 #define printf Port_Printf
+int Port_X360Fprintf(FILE *, const char *, ...);
+int Port_X360Fputs(const char *, FILE *);
+int Port_X360Fputc(int, FILE *);
+size_t Port_X360Fwrite(const void *, size_t, size_t, FILE *);
+int Port_X360Fflush(FILE *);
+#define fprintf Port_X360Fprintf
+#define fputs Port_X360Fputs
+#define fputc Port_X360Fputc
+#define fwrite Port_X360Fwrite
+#define fflush Port_X360Fflush
 /* as leituras passam pelo port: o arquivo pode estar dentro da ISO (port/x360/src/iso360.c, decisão 18) */
 size_t Port_X360Fread(void *, size_t, size_t, FILE *);
 int Port_X360Fseek(FILE *, long, int);

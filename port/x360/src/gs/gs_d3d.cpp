@@ -48,7 +48,7 @@
  *                     640 x 448 (a média dos pixels de saída de cada pixel do GS), comparáveis às da escala 1;
  *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado, e a
  *                     memória por classe (F5, etapa 1);
- *   BT3_TEMPOS=1      (o padrão; 0 desliga) o tempo de GPU e de CPU de cada passada do fim do quadro no mesmo log
+ *   BT3_TEMPOS=1      (desligado por padrão) o tempo de GPU e de CPU de cada passada do fim do quadro no mesmo log
  *                     (F5, etapa 8; tempo_* abaixo), e o tempo da thread de gravação por família, uma linha "gs: gravação
  *                     por família" a cada 60 quadros, também dentro da janela do passos (gs_draw.c, Gs_FamTrecho).
  *
@@ -715,6 +715,7 @@ extern "C" int Passos_Tela(unsigned *v, int n) {
 /* o relógio para o gs_vu1.c (C, sem o xtl.h): o tempo da VU1 na gravação do quadro */
 extern "C" uint64_t GsD3d_Tique(void) {
     LARGE_INTEGER t;
+    if (!gX360Log) return 0;
     QueryPerformanceCounter(&t);
     return (uint64_t)t.QuadPart;
 }
@@ -730,6 +731,14 @@ static double ms_desde(const LARGE_INTEGER *a) {
     LARGE_INTEGER b;
     QueryPerformanceCounter(&b);
     return (double)(b.QuadPart - a->QuadPart) * 1000.0 / (double)sFreq.QuadPart;
+}
+
+static void diagnostico_inicio(LARGE_INTEGER *t) {
+    t->QuadPart = 0;
+    if (gX360Log) QueryPerformanceCounter(t);
+}
+static double diagnostico_ms(const LARGE_INTEGER *t) {
+    return gX360Log ? ms_desde(t) : 0.0;
 }
 
 static unsigned sPicoPress, sPicoDescN, sPicoEsperas, sPicoLotes; /* (picos) da gravação, desde a última entrega */
@@ -1213,7 +1222,7 @@ static void tela_apresentou(unsigned quadro, int repete) {
     sTelaJanela = janela;
 }
 
-/* ---- tempos por passada (F5, etapa 8; BT3_TEMPOS, ligado por padrão) ----------------------------------------- */
+/* ---- tempos por passada (F5, etapa 8; BT3_TEMPOS, desligado por padrão) ----------------------------------------- */
 
 /* O tempo de GPU de cada classe de trabalho do fim do quadro, pelo método do autoteste da profundidade (a GPU parada
    antes e depois), mas sem parar a CPU: a cada troca de classe uma marca, InsertCallback(D3DCALLBACK_IDLE), que a GPU
@@ -2564,7 +2573,7 @@ static void prof_entrega(void) {
         Prof *z = &sProfD[sZDono];
         LARGE_INTEGER t;
         Ret rz = sSujoZ;
-        QueryPerformanceCounter(&t);
+        diagnostico_inicio(&t);
         tempo_poe(T_PROF);
         if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
         sDev->SetTexture(0, NULL);
@@ -2577,7 +2586,7 @@ static void prof_entrega(void) {
         ret_une(&z->conteudo, rz.x0, rz.y0, rz.x1, rz.y1);
         sConta.zRes++;
         sConta.zResPx += (double)(rz.x1 - rz.x0) * (rz.y1 - rz.y0);
-        sConta.msZQuadro += ms_desde(&t);
+        sConta.msZQuadro += diagnostico_ms(&t);
     }
     sZDono = -1;
     sSujoZ.x0 = sSujoZ.x1 = 0;
@@ -2869,12 +2878,12 @@ static void entra_res(int i, int usaZ) {
         if (poeZ && sProfD[i].tex != NULL && sProfD[i].conteudo.x1 > sProfD[i].conteudo.x0) {
             LARGE_INTEGER t;
             Ret r = sProfD[i].conteudo;
-            QueryPerformanceCounter(&t);
+            diagnostico_inicio(&t);
             tempo_poe(T_PROF);
             prof_poe(&sProfD[i], &r, sModoZ);
             sConta.zRest++;
             sConta.zRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
-            sConta.msZQuadro += ms_desde(&t);
+            sConta.msZQuadro += diagnostico_ms(&t);
         }
     }
     if (poeZ) {
@@ -3210,12 +3219,12 @@ static void entra_na_edram(int i, int usaZ) {
         if (poeZ && sProfD[i].tex != NULL && sProfD[i].conteudo.x1 > sProfD[i].conteudo.x0) {
             LARGE_INTEGER t;
             Ret r = sProfD[i].conteudo;
-            QueryPerformanceCounter(&t);
+            diagnostico_inicio(&t);
             tempo_poe(T_PROF);
             prof_poe(&sProfD[i], &r, sModoZ);
             sConta.zRest++;
             sConta.zRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
-            sConta.msZQuadro += ms_desde(&t);
+            sConta.msZQuadro += diagnostico_ms(&t);
         }
     }
     if (poeZ) {
@@ -3248,6 +3257,7 @@ static void prof_compara(D3DTexture *a, D3DTexture *b, unsigned c[5]) {
 
 /* o tempo da GPU de `vezes` chamadas de f (com a GPU parada antes e depois), em ms por chamada */
 static double prof_cronometra(void (*f)(void *), void *ctx, int vezes) {
+    if (!gX360Log) return 0.0;
     LARGE_INTEGER t;
     int k;
     sDev->BlockUntilIdle();
@@ -3644,7 +3654,7 @@ static void tempo_init(void) {
         sCortesGpuA = sCortesGpuB = 6960;
         if (e != NULL && atoi(e) != 1) sscanf(e, "%u,%u", &sCortesGpuA, &sCortesGpuB);
     }
-    sTempo.ligado = sCortesGpu || env_num("BT3_TEMPOS", 1) != 0;
+    sTempo.ligado = sCortesGpu || env_num("BT3_TEMPOS", 0) != 0;
     if (!sTempo.ligado) {
         Diario_Escrever("gs_d3d: tempos: desligados (BT3_TEMPOS=0)");
         return;
@@ -4611,6 +4621,7 @@ static void log_tempos(double msQuadro) {
 }
 
 static void log_quadros(void) {
+    if (!gX360Log) return;
     /* os tempos sem os quadros que tiveram captura (cada uma pesa centenas de ms e encobria o resto) */
     unsigned q = sConta.quadros, t = sConta.quadros + sConta.capturas;
     int i;
@@ -5622,7 +5633,7 @@ static void frame_end(void) {
 
     Port_QuedaTeste360(1, gX360Luta != 0, q->quadro);
     cadeia_inicio(q->quadro);
-    QueryPerformanceCounter(&t0);
+    diagnostico_inicio(&t0);
     sQ = q;
     memset(&sFilmeAtual, 0, sizeof(sFilmeAtual));
     sFilmeAlvoAtual = -1;
@@ -5661,7 +5672,7 @@ static void frame_end(void) {
         }
         sConta.msVuGrav += g;
         if (g > sConta.msVuGravPior) sConta.msVuGravPior = g;
-        QueryPerformanceCounter(&tv);
+        diagnostico_inicio(&tv);
         gGsD3dEtapa = "fim do quadro: cópia da VU1";
         tempo_poe(T_VU_COPIA);
         if (!q->dividido) {
@@ -5677,7 +5688,7 @@ static void frame_end(void) {
             sVuIbQ = sVuIb[sVuPar];
         }
         tempo_poe(T_OUTROS);
-        msVu = ms_desde(&tv);
+        msVu = diagnostico_ms(&tv);
         msCopiaVu = msVu;
         sConta.msVuCopia += msVu;
         if (msVu > sConta.msVuCopiaPior) sConta.msVuCopiaPior = msVu;
@@ -5782,9 +5793,9 @@ static void frame_end(void) {
             ed_confere(d); /* (o contador "alvo lido sem Resolve", esperado 0) */
         }
         if (d->vu) {
-            QueryPerformanceCounter(&tv);
+            diagnostico_inicio(&tv);
             desenha_vu(d, sVuIni[n]);
-            msVu += ms_desde(&tv);
+            msVu += diagnostico_ms(&tv);
         } else {
             desenha(d);
         }
@@ -5846,11 +5857,11 @@ static void frame_end(void) {
     if (gPicos != 0) {
         picos_marca(q->quadro); /* (picos: a GPU terminou o quadro) */
     }
-    QueryPerformanceCounter(&tp);
+    diagnostico_inicio(&tp);
     gGsD3dEtapa = "fim do quadro: Present";
     CADEIA_CHAMADA(CA_PRESENT, sDev->Present(NULL, NULL, NULL, NULL));
     sUltimoPresent = GetTickCount();
-    msPresent = ms_desde(&tp);
+    msPresent = diagnostico_ms(&tp);
     if (gPicos != 0) {
         picos_apresentou();
     }
@@ -5859,7 +5870,7 @@ static void frame_end(void) {
         tela_apresentou(q->quadro, 0); /* (BT3_PICOS_TELA) */
     }
     tempo_poe(T_OUTROS);
-    Passos_Apresentou(q->quadro, (unsigned)(msPresent * 1000.0));
+    if (gX360Log) Passos_Apresentou(q->quadro, (unsigned)(msPresent * 1000.0));
     tempo_poe(T_LIMPEZA);
     if (sFilmeLog) filme_apresentou();
     gGsD3dEtapa = "fim do quadro: texturas soltas";
@@ -5890,11 +5901,11 @@ static void frame_end(void) {
         alvos_sem_textura(NULL);
     }
 
-    msFim = ms_desde(&t0);
+    msFim = diagnostico_ms(&t0);
     tempo_fecha_cpu(msFim, capturas == sConta.capturas);
     cadeia_fim(capturas != sConta.capturas);
-    ms = ms_desde(&sUltimoFim);
-    QueryPerformanceCounter(&sUltimoFim);
+    ms = diagnostico_ms(&sUltimoFim);
+    diagnostico_inicio(&sUltimoFim);
     if (capturas == sConta.capturas) {
         sConta.msFim += msFim;
         if (msFim > sConta.msFimPior) sConta.msFimPior = msFim;

@@ -69,6 +69,7 @@ static LARGE_INTEGER sFreq;
 static HANDLE sSistema;
 static volatile LONG sGuide;
 static int sDeriva;
+static int sMedidas;
 static LARGE_INTEGER sDerivaIni;
 static int sFilmeLog;
 struct FilmeTempoEntrada {
@@ -195,6 +196,7 @@ static unsigned Microssegundos(LONGLONG t) {
 /* microssegundos de um relógio que só anda (diferenças em unsigned atravessam a volta) */
 extern "C" unsigned Som360_Agora(void) {
     LARGE_INTEGER t;
+    if (!sMedidas) return 0;
     if (sFreq.QuadPart == 0) {
         QueryPerformanceFrequency(&sFreq);
     }
@@ -205,6 +207,7 @@ extern "C" unsigned Som360_Agora(void) {
 /* tipo 0: do comando de efeito ao primeiro bloco misturado; 1: do início de um fluxo ao primeiro som dele */
 extern "C" void Som360_Latencia(int tipo, unsigned us) {
     unsigned ms = us / 1000;
+    if (!sMedidas) return;
     if (tipo < 0 || tipo > 1) {
         return;
     }
@@ -217,6 +220,7 @@ extern "C" void Som360_Latencia(int tipo, unsigned us) {
 
 /* o som na thread do jogo: 0 RPC do SOUNDS.IRX, 1 envio de banco, 2 início de fluxo, 3 cabeçalhos vistos no vblank */
 extern "C" void Som360_CustoJogo(int tipo, unsigned us) {
+    if (!sMedidas) return;
     if (tipo < 0 || tipo > 3) {
         return;
     }
@@ -316,6 +320,7 @@ static void Encher(int i) {
             if (TryEnterCriticalSection(&sTrava)) {
                 unsigned espera;
                 pegou = 1;
+                if (!sMedidas) break;
                 QueryPerformanceCounter(&t);
                 espera = Microssegundos(t.QuadPart - t0.QuadPart);
                 if (espera > sTravaPiorUs) {
@@ -357,13 +362,15 @@ static void Encher(int i) {
             }
         }
     }
-    QueryPerformanceCounter(&t1);
-    us = Microssegundos(t1.QuadPart - t0.QuadPart);
-    if (us > sPiorUs) {
-        sPiorUs = us;
-    }
-    if (us > 5000) {
-        sBlocosLentos++;
+    if (sMedidas) {
+        QueryPerformanceCounter(&t1);
+        us = Microssegundos(t1.QuadPart - t0.QuadPart);
+        if (us > sPiorUs) {
+            sPiorUs = us;
+        }
+        if (us > 5000) {
+            sBlocosLentos++;
+        }
     }
     ZeroMemory(&b, sizeof(b));
     b.AudioBytes = sizeof(sBuf[i]);
@@ -616,6 +623,7 @@ static DWORD WINAPI Vigia(LPVOID arg) {
     /* depois do tom: uma linha quando aparecer falta, trava perdida ou queda, e a cada 60 s com o som do jogo */
     while (!Esperar(1000)) {
         MEMORYSTATUS m;
+        if (!gX360Log) continue;
         GlobalMemoryStatus(&m);
         if (m.dwAvailPhys < sMemMin) {
             sMemMin = m.dwAvailPhys;
@@ -654,6 +662,7 @@ extern "C" void Som360_Iniciar(void) {
         Diario_Escrever("som: desligado (BT3_SOM=1 liga o som do jogo; BT3_SOM_TESTE=1, o tom de teste)");
         return;
     }
+    sMedidas = gX360Log && getenv("BT3_SOM_MEDIDAS") != NULL && atoi(getenv("BT3_SOM_MEDIDAS")) == 1;
     sFilmeLog = getenv("BT3_FILME_LOG") != NULL && atoi(getenv("BT3_FILME_LOG")) == 1;
     QueryPerformanceFrequency(&sFreq);
     QueryPerformanceCounter(&sDerivaIni);

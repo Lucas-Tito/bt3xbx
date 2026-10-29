@@ -31,6 +31,8 @@
 #define ESPERA_ARQUIVO_MS 3000 /* quanto quem grava espera outra gravação em curso antes de gravar mesmo assim */
 #define PROCESSADOR 1          /* thread de hardware da escritora: outro núcleo que o do jogo (2), longe do XAudio2 (4 e 5) */
 
+int gX360Log;
+
 static HANDLE sArquivo = INVALID_HANDLE_VALUE;
 static CRITICAL_SECTION sTrava; /* só o anel e os contadores dele: nunca I/O de disco aqui dentro */
 static int sTravaPronta = 0;

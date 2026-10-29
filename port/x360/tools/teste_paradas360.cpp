@@ -26,6 +26,7 @@ static std::string log;
 static std::vector<std::string> chamadas;
 static void exige(bool ok, const char *s) { if (!ok) throw std::runtime_error(s); }
 static void marca(const char *s) { chamadas.push_back(s); }
+extern "C" { int gX360Log = 1; }
 extern "C" void Diario_Escrever(const char *f, ...) {
     char b[1024]; va_list a; va_start(a, f); vsnprintf(b, sizeof(b), f, a); va_end(a); log += b;
 }

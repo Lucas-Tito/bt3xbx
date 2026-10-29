@@ -2563,3 +2563,35 @@ Numa worktree nova, `headless.py` pode ligar com stubs mesmo sem `port/build/gen
 Antes de comparar a x86, gerar as tabelas com `gen_data.py --asm CAMINHO_DESTA_WORKTREE/asm`.
 A primeira tentativa desta tarefa tinha só 327 objetos e SHA1 diferente; depois das 72 tabelas,
 voltaram os 399 objetos e a `.text` idêntica à base. Não aceitar só a mensagem de ligação bem-sucedida.
+
+
+### Desligar logs exige tratar o FILE nulo e separar diagnóstico da reprodução
+
+Na F8, [04-queda-e-logs](plano/F8/04-queda-e-logs.md), `BT3_LOG=1` passou a ser obrigatório.
+A abertura comum recusa escritas auxiliares sem log, além de filtrar as chaves, pois há
+despejos de erro na VU1 que não dependem de uma chave. Saves e configurações explícitas seguem
+permitidos. O ambiente precisa ser lido antes de abrir o diário, e as opções do próprio diário só podem ser
+consultadas depois de publicar o log ligado: antes disso o filtro de chaves de diagnóstico as oculta.
+Não devolver NULL como stderr sem embrulhar `fprintf` e as outras operações do shim: a CRT não
+aceita esse FILE. Os embrulhos descartam antes de formatar e preservam os arquivos reais.
+O ensaio local de ambiente também expôs a cópia da última entrada sobre ela mesma na remoção;
+a tabela agora evita a cópia idêntica e usa `memmove` de linhas inteiras.
+
+Estatística de filme antes alocava e media dentro da reprodução. Ao separá-la, `Filme360_Fechou`
+precisa liberar as vagas mesmo sem vetor de medidas; o controle negativo sem essa chamada falha.
+`BT3_TEX_ORIGEM` é cache de texturas e `BT3_FILME` é reprodução, não medidas: não entram na lista
+de diagnóstico. Relógios de prazos, áudio e vblank também permanecem funcionais.
+As chaves novas `BT3_ESTADO_TEMPOS`, `BT3_FILME_MEDIDAS` e `BT3_SOM_MEDIDAS` restauram apenas as
+contas antes incondicionais; atualizar todos os ambientes e geradores junto com o padrão.
+
+O relatório de queda não pode depender do diário nem fazer flush na thread que caiu: no áudio isso
+poderia pôr E/S nas threads 4 e 5. Copiar o contexto e a cadeia protegida, depois gravar numa auxiliar 1.
+Parar e esperar os produtores gráficos antes de a main retomar o D3D para a caixa; desmontar os
+recursos restantes depois do OK. Uma caixa que afirma relatório salvo só abre após escrita completa,
+flush e fechamento conferidos. Os ensaios com API simulada compilam a main real e exigem sabotagens;
+não substituem Guide, FATX, concorrência nem custo por quadro no Xenon.
+
+Para gerar todas as tabelas numa worktree nova, além de `asm` também é necessário o link `assets`
+para os dados só leitura: a VU1 vem de `assets/cod/1BF6B0.textbin.bin`. Uma falha de `gen_data.py`
+não pode ser seguida de uma comparação x86 como se a geração tivesse passado. Exigir `set -euo pipefail`,
+os 399 objetos e a comparação sem depuração, além do SHA1 da `.text`.

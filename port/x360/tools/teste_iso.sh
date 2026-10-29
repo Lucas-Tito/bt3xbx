@@ -36,6 +36,7 @@ size_t Iso_Ler(void *buf, size_t tam, size_t n, void *f);
 int Iso_Fechar(void *f);
 int Iso_Posicionar(void *f, long desl, int origem);
 long Iso_Posicao(void *f);
+int gX360Log = 1;
 void Diario_Escrever(const char *formato, ...) {
     va_list ap; va_start(ap, formato); vprintf(formato, ap); va_end(ap); putchar('\n');
 }

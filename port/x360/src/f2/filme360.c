@@ -58,6 +58,7 @@ static unsigned long *sOrdem;
 static unsigned sImagens, sSemVaga;
 static unsigned sNumero; /* o número da última imagem entregue: só cresce, de um filme ao outro (o gs_core.c compara) */
 static double sTiqueMs;
+static int sMedir = -1;
 static LARGE_INTEGER sAnterior;
 
 int Filme360_Ligado(void) {
@@ -87,12 +88,17 @@ int Filme360_Imagem(Mpeg2 *m) {
     const unsigned char *py, *pb, *pr;
     unsigned char *dados;
     unsigned pitch, imagem, n, esperas0 = 0, esperas1 = 0;
-    int s, y, ok, temEspera;
+    int s, y, ok, temEspera, medir;
     double msEspera0 = 0, msEspera1 = 0, msVaga = 0;
     unsigned __int64 iso0;
-    LARGE_INTEGER t0, t1, t2, t3;
+    LARGE_INTEGER t0 = {0}, t1 = {0}, t2 = {0}, t3 = {0};
 
-    if (sMed == NULL) {
+    if (sMedir < 0) {
+        const char *e = getenv("BT3_FILME_MEDIDAS");
+        sMedir = gX360Log && e != NULL && atoi(e) == 1;
+    }
+    medir = sMedir;
+    if (medir && sMed == NULL) {
         LARGE_INTEGER f;
         QueryPerformanceFrequency(&f);
         sTiqueMs = 1000.0 / (double)f.QuadPart;
@@ -103,14 +109,18 @@ int Filme360_Imagem(Mpeg2 *m) {
         Diario_Escrever("filme: BT3_FILME=1: a imagem direto para a textura (vagas do gs_d3d.cpp, ps_filme); leitura em blocos "
                         "de %d KB (0: a cada fread)", Filme360_BlocoKb());
     }
-    QueryPerformanceCounter(&t0);
-    temEspera = Iso_FilmeEspera(&msEspera0, &esperas0);
-    iso0 = gPicosIsoTiques;
+    temEspera = 0;
+    iso0 = 0;
+    if (medir) {
+        QueryPerformanceCounter(&t0);
+        temEspera = Iso_FilmeEspera(&msEspera0, &esperas0);
+        iso0 = gPicosIsoTiques;
+    }
     ok = Mpeg2_NextPlanes(m, &py, &pb, &pr, &s);
-    QueryPerformanceCounter(&t1);
-    if (temEspera) {
+    if (medir) QueryPerformanceCounter(&t1);
+    if (medir && temEspera) {
         Iso_FilmeEspera(&msEspera1, &esperas1);
-    } else {
+    } else if (medir) {
         /* (sem os blocos, BT3_FILME_BLOCO_KB=0: as leituras são desta thread, dentro do Mpeg2_NextPlanes, como na
            medição da primeira parte; vale enquanto só ela lê a ISO) */
         msEspera1 = (double)(gPicosIsoTiques - iso0) * sTiqueMs;
@@ -127,10 +137,10 @@ int Filme360_Imagem(Mpeg2 *m) {
     if (!ok) {
         sSemVaga++;
         gFilme360Imagem = 0; /* (a imagem não aparece; o filme segue no ritmo) */
-        QueryPerformanceCounter(&t2);
-        t3 = t2;
+        if (medir) QueryPerformanceCounter(&t2);
+        if (medir) t3 = t2;
     } else {
-        QueryPerformanceCounter(&t2);
+        if (medir) QueryPerformanceCounter(&t2);
         /* Y nas linhas 0 a 447; Cb e Cr lado a lado nas 448 a 671 (o layout que o ps_filme lê) */
         for (y = 0; y < ALTURA; y++) {
             memcpy(dados + y * pitch, py + y * s, LARGURA);
@@ -141,10 +151,10 @@ int Filme360_Imagem(Mpeg2 *m) {
         }
         __sync(); /* (a escrita combinada sai antes de a GPU poder ler, e antes do número publicado) */
         gFilme360Imagem = imagem;
-        QueryPerformanceCounter(&t3);
+        if (medir) QueryPerformanceCounter(&t3);
     }
     n = sImagens++;
-    if (n < MAX_N && sMed != NULL) {
+    if (medir && n < MAX_N && sMed != NULL) {
         double msLer = msEspera1 - msEspera0;
         unsigned long tLer = (unsigned long)(msLer / sTiqueMs + 0.5), tDec = (unsigned long)(t1.QuadPart - t0.QuadPart);
         sMed[n][M_LEITURA] = tLer;
@@ -154,7 +164,7 @@ int Filme360_Imagem(Mpeg2 *m) {
         sMed[n][M_TOTAL] = (unsigned long)(t3.QuadPart - t0.QuadPart);
         sMed[n][M_PERIODO] = sAnterior.QuadPart != 0 ? (unsigned long)(t0.QuadPart - sAnterior.QuadPart) : 0;
     }
-    sAnterior = t0;
+    if (medir) sAnterior = t0;
     (void)esperas1;
     return 1;
 }
@@ -198,6 +208,8 @@ void Filme360_Fechou(void) {
     GsD3d_FilmeEsperaCaptura(); /* só as capturas: a última não se perde com o número zerado no fechamento */
     gFilme360Imagem = 0;
     if (sMed == NULL) {
+        sImagens = 0;
+        GsD3d_FilmeFim();
         return;
     }
     if (n > 0) {

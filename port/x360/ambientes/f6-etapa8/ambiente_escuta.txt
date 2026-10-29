@@ -1,3 +1,8 @@
+BT3_LOG=1
+BT3_ESTADO_TEMPOS=1
+BT3_FILME_MEDIDAS=1
+BT3_SOM_MEDIDAS=1
+BT3_TEMPOS=1
 # F6, etapa 8: Treino manual, pelo menos 11 minutos na mesma luta. Ver docs/x360/plano/F6/08.md.
 -BT3_DEMO
 -BT3_ROTEIRO

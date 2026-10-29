@@ -12,6 +12,8 @@
 extern "C" {
 #endif
 
+extern int gX360Log; /* BT3_LOG=1, publicado antes das threads; zero sem ambiente. */
+
 void Diario_Abrir(const char *caminho); /* trunca: cada execução começa limpa; liga a thread escritora */
 void Diario_Escrever(const char *formato, ...);
 void Diario_Fechar(void); /* grava o que falta, com flush, para a thread e fecha */

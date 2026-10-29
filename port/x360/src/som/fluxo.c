@@ -77,7 +77,7 @@ static FluxoContadores sCont;
 #ifdef _XBOX
 static CRITICAL_SECTION sTrava;
 static HANDLE sAcorda, sThread;
-static unsigned agora_ms(void) { return GetTickCount(); }
+static unsigned agora_ms(void) { return gX360Log ? GetTickCount() : 0; }
 static void trava(void) { EnterCriticalSection(&sTrava); }
 static void destrava(void) { LeaveCriticalSection(&sTrava); }
 static void acorda(void) { SetEvent(sAcorda); }

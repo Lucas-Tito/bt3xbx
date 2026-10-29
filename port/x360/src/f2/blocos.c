@@ -89,6 +89,7 @@ int Blocos_PararTodos360(void) {
 #ifdef _XBOX
 static double agora_ms(void) {
     LARGE_INTEGER t, f;
+    if (!gX360Log) return 0.0;
     QueryPerformanceCounter(&t);
     QueryPerformanceFrequency(&f);
     return (double)t.QuadPart * 1000.0 / (double)f.QuadPart;
