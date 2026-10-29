@@ -2495,4 +2495,15 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   Passar os dois à x86 derrubou o reabrir depois da Missão 0 no Deck (RC 139).
   O executor dos pilotos usa `~/wsl.lock` por padrão e mede também o espaço físico
   livre do C: antes das builds e de cada roteiro; `F7_MAQUINA=Deck` conserva a prova
-  e a trava específicas do Deck. A estimativa de rodadas retomadas no WSL usa suas medidas.
+  e a trava específicas do Deck. Identificar a máquina nos tempos: a rodada final de 29/10
+  voltou ao Deck, e não fornece uma razão de velocidade medida contra o WSL.
+- **O lote pode acabar sem passar pela auditoria final.** O `set -e` do executor para no
+  `roteiros.sh` reprovado; na transformação da F7 ele deixou de medir os bytes, conferir
+  comportamento/negativos, produzir cobertura e chamar `save_mc.sh`. Conferir `RC` e `FIM`
+  antes de chamar o lote aprovado. Completar as conferências sobre as saídas preservadas
+  e rodar a prova do cartão sob a mesma trava, sem esconder o RC=1 nem repetir horas de emulação.
+- **Comportamento, pixels e hashes não dispensam memória.** O piloto transformou pelo R3,
+  debitou o custo e retornou ao movimento em todas as redes; os 1.728 hashes e 14 PPM eram
+  iguais. Ainda assim, `memdiff` recusou o contexto conflitante `EftDisc`/`EftODisc` no fim
+  e regiões do trabalho da luta e do buffer de modelo nos pontos. Guardar um único caso
+  reprovado para diagnóstico; não ampliar classes conhecidas sem explicar bytes, leitor e vida útil.
