@@ -1,0 +1,41 @@
+# F7, etapa 3: Duelo 1P/2P, Goku Early/Kuririn, mirante do Kami.
+# Cartão novo obrigatório. Resultado abreviado pelo dano do jogo, sem crédito de vitória por entrada.
+inclui boot.txt
+rastreia luta
+quadros 90
+aperta BAIXO 3
+aperta X ate tela 38
+quadros 120
+aperta BAIXO                     # 1P contra 2P
+aperta X
+quadros 40
+aperta X                         # simples
+espera tela 39 max 600
+quadros 150
+marca ponto dois_seletores
+jogador 2
+aperta DIREITA 3                 # Kuririn
+aperta X
+quadros 60
+aperta TRIANGULO                 # cancela a escolha do 2P
+quadros 60
+aperta X
+quadros 60
+jogador 1
+aperta X
+quadros 60
+# Os dois confirmam itens e trajes no mesmo quadro.
+juntos X X 4
+quadros 60
+juntos X X 4
+quadros 90
+marca ponto dois_prontos
+jogador 1
+aperta BAIXO 4
+quadros 30
+aperta X
+espera luta max 3000
+marca ponto carga
+espera seq 3 max 1200
+confere dividido 1
+confere luta 0 0 25 0 5 0 4 13

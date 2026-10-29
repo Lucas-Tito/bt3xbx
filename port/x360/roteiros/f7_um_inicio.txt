@@ -1,0 +1,37 @@
+# Comparativo informativo da etapa 3: mesma dupla/arena, mas adversário COM no simples.
+inclui boot.txt
+rastreia luta
+quadros 90                        # o menu principal aceita entrada depois do fade e da animação
+aperta BAIXO 3                    # História, Ultimate Battle, Torneio, Duelo (com tudo desbloqueado)
+aperta X ate tela 38              # DuelMenu
+quadros 120
+aperta X                          # 1P contra COM
+quadros 40
+aperta X                          # luta simples
+espera tela 39 max 600            # CharSel
+quadros 150
+# jogador 1: o cursor começa no Goku (Early), a primeira célula da grade (id 0, sem formas): X no personagem, X na
+# lista de itens (nenhum) e X na cor (o traje 0)
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+# o COM (o mesmo controle escolhe): o cursor dele começa na segunda célula; três à direita, o Kuririn (a quinta, id 25)
+aperta DIREITA 3
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+# estágio: quatro para baixo na primeira coluna da grade de estágios (seis colunas), o estágio 5
+aperta BAIXO 4
+quadros 30
+aperta X
+espera luta max 3000              # a tela de carregamento vem antes
+marca ponto carga                 # a carga concluída: a primeira leitura com a luta andando (a apresentação)
+espera seq 3 max 1200             # o combate controlável (BtlSeqFight)
+confere luta 0 0 25 0 5 0 4 13
+confere dividido 0

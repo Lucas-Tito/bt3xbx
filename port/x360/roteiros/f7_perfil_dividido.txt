@@ -1,0 +1,19 @@
+# Sonda informativa no console: fria e duas aquecidas, sem aceitar desempenho.
+inclui f7_dois_inicio.txt
+marca janela_1
+juntos CIRCULO CIRCULO 600
+jogador 1
+ritmo 4 8
+aperta START ate pausa 1 max 120
+quadros 60
+aperta START ate pausa 0 max 120
+marca janela_2
+juntos CIRCULO CIRCULO 600
+jogador 1
+ritmo 4 8
+aperta START ate pausa 1 max 120
+quadros 60
+aperta START ate pausa 0 max 120
+marca janela_3
+juntos CIRCULO CIRCULO 600
+fim

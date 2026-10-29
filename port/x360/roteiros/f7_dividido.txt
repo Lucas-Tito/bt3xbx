@@ -1,0 +1,54 @@
+# F7, etapa 3. Seleção compartilhada com a sonda de console.
+inclui f7_dois_inicio.txt
+# Cada porta tem de produzir sua própria ação do lado correto.
+ritmo 20 4
+aperta DIREITA ate acao 0 0x0D-0x35 max 300
+jogador 2
+aperta ESQUERDA ate acao 1 0x0D-0x35 max 300
+ritmo 40 4
+aperta L2 ate acao 1 0x37 max 300
+aperta CIRCULO ate acao 1 0x38 max 300
+jogador 1
+aperta L2 ate acao 0 0x37 max 300
+quadros 60
+marca ponto dividido
+# Janela comparável: ambos em guarda, sem custo de adversário COM.
+juntos CIRCULO CIRCULO 180
+quadros 2
+marca ponto perfil_fim
+# Técnica pelo controle: câmera cheia temporária e retorno às duas metades.
+ritmo 200 2
+aperta L2 ate ki 0 100000 max 3000
+ritmo 6 6
+aperta L2+CIMA+TRIANGULO ate acao 0 0x105-0x12F max 600
+quadros 20
+marca ponto cheia
+quadros 240
+espera acao 0 0x0-0x35 max 1200
+quadros 30
+marca ponto dividido_volta
+# Pausa por cada jogador, sem misturar quem leu o START.
+ritmo 4 8
+jogador 2
+aperta START ate pausa 1 max 120
+quadros 30
+aperta START ate pausa 0 max 120
+jogador 1
+aperta START ate pausa 1 max 120
+quadros 30
+aperta START ate pausa 0 max 120
+termina luta vence max 1800
+espera seq 6 max 1200
+quadros 60
+aperta BAIXO 3
+quadros 20
+aperta X
+quadros 60
+aperta CIMA
+quadros 20
+aperta X
+espera tela 4 max 3000
+quadros 120
+marca ponto retorno
+quadros 30
+fim
