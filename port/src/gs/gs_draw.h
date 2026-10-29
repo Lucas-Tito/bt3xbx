@@ -199,6 +199,16 @@ extern const GsQuadro *gsQuadro;
 /* The interface a back end implements (gs_gpu.c today, gs_gl.c in time). All GPU state stays the back
    end's: the shared layer only hands it handles and asks for the few numbers it must know (whether it can
    still take a texture this frame, a target's attachments). */
+#ifdef PORT_BIG_ENDIAN
+#ifdef BT3_GS_LOTES
+#define GS_LOTES 1
+#endif
+#endif
+/* O falso exercita o mesmo protocolo na x86, sem mudar a build normal. */
+#if defined(BT3_GPU_FALSO) && defined(BT3_GS_LOTES)
+#define GS_LOTES 1
+#endif
+
 typedef struct GsBackend {
     const char *name;                     /* "vulkan", "opengl" */
     int (*init)(void);                    /* window + device + fixed pipelines + white texture; 0 = failed */
@@ -231,6 +241,13 @@ typedef struct GsBackend {
        sempre); a gravação só regrava um jogo depois disso. Lido na gravação, escrito pelo lado do desenho. */
     int (*vuJogo)(int k, float **verts, uint32_t **idx, uint32_t *capV, uint32_t *capI);
     uint32_t (*vuFeito)(void);
+#ifdef GS_LOTES
+    /* Uma vaga: preparo na gravação com desenho parado; consumo na dona do dispositivo.
+       O produtor espera só o consumo CPU, nunca a GPU. O fecho continua sendo frameEnd. */
+    uint32_t (*lotesProntos)(const GsQuadro *q, uint32_t de);
+    void (*lotesPrepara)(const GsQuadro *q);
+    void (*lotesDesenha)(const GsQuadro *q, uint32_t ate);
+#endif
 #endif
 } GsBackend;
 

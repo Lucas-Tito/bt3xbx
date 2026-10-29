@@ -61,7 +61,7 @@ SEM_RASTREIO = {"state", "namefont"}
 
 class Alvo:
     def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False, gravador=False, teste_som=False, fluxo=False,
-                 alfa=False):
+                 alfa=False, lotes=False):
         self.nome, self.rastreio, self.chamadas, self.gpu, self.vu1, self.alfa = nome, rastreio, chamadas, gpu, vu1, alfa
         self.gravador, self.teste_som, self.fluxo = gravador, teste_som, fluxo
         self.be = nome == "ppc"  # big-endian: campos de bits na ordem do PS2 (bitfields.py)
@@ -69,7 +69,7 @@ class Alvo:
         # diverge no quadro 2755).
         self.opt = "-O2"
         pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
-            ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "") + ("l" if alfa else "")
+            ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "") + ("l" if alfa else "") + ("e" if lotes else "")
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
         self.exe = self.b / f"bt3_{pasta}"
@@ -97,6 +97,9 @@ class Alvo:
         if alfa:  # (F5, seção 36) o alfa exato na origem, só nesta build (port/src/gs/gs_draw.h, GS_ALFA)
             self.soft += ["-DBT3_ALFA_ORIGEM"]
             self.hard += ["-DBT3_ALFA_ORIGEM"]
+        if lotes:
+            self.soft += ["-DBT3_GS_LOTES", "-DBT3_GPU_FALSO"]
+            self.hard += ["-DBT3_GS_LOTES", "-DBT3_GPU_FALSO"]
         # Rastreio: uma chamada antes de cada leitura/escrita (rastreio.c), cópias de estrutura via memcpy.
         # As leituras de variáveis locais também: o jogo copia um vetor do arquivo para a pilha e lê um
         # componente dali (o ASan pularia por "provar" o acesso seguro).
@@ -504,7 +507,10 @@ def main():
     ap.add_argument("--teste-som", action="store_true", help="(F6, rede 3) só o teste das amostras dos decodificadores")
     ap.add_argument("--fluxo", action="store_true", help="(F6, etapa 5, com --teste-som) o ADX lido em blocos, como no 360")
     ap.add_argument("--alfa", action="store_true", help="(F5, seção 36, com --gpu) o alfa exato na origem (BT3_ALFA_ORIGEM)")
+    ap.add_argument("--lotes", action="store_true", help="(com --gpu e PPC ou --vu1) envio durante a gravação")
     a = ap.parse_args()
+    if a.lotes and not (a.gpu and (a.alvo == "ppc" or a.vu1)):
+        sys.exit("--lotes exige --gpu e PPC ou --vu1")
     if a.fluxo and not a.teste_som:
         sys.exit("--fluxo só vale com --teste-som")
     if (a.gravador or a.teste_som) and (a.rastreio or a.chamadas or a.gpu):
@@ -517,7 +523,7 @@ def main():
         sys.exit("--vu1 só vale com --alvo x86 --gpu (na PPC a otimização já vem com o PORT_BIG_ENDIAN)")
     if a.alfa and not (a.gpu and (a.alvo == "ppc" or a.vu1)):
         sys.exit("--alfa só vale com --gpu (e --vu1 na x86): o alfa mora na gravação da VU1 otimizada")
-    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1, a.gravador, a.teste_som, a.fluxo, a.alfa))
+    construir(Alvo(a.alvo, a.rastreio, a.chamadas, a.gpu, a.vu1, a.gravador, a.teste_som, a.fluxo, a.alfa, a.lotes))
 
 
 main()

@@ -5406,3 +5406,106 @@ Sem mudança em `src/`, `include/` ou `port/` contra `cc546dce`, não é necess�
 A prova de objetos sem depuração da seção 38 permanece a de `cb396826` (`~/f5-lotes/wsl2/provas.resumo`): as quatro
 builds, só carimbo diferente, `cmp` visto falhar. Reconferido `cmp` das seções `.text` guardadas de base/final da
 mesma rodada e SHA1 **`9f2cdb4962397877eb90171bc8d7cfe9af3abc08`**. É artefato histórico, não build desta análise.
+
+## 40. Segunda parte dos lotes: uma faixa CPU por vez e a GPU durante a gravação (29/10/2026)
+
+**Resultado da implementação.** Candidato `BT3_GS_LOTES=1`, ausente da build normal. A gravação publica prefixos
+fechados para a dona do D3D antes da entrega final; cada faixa despacha comandos com `KickOff`. A primeira versão
+conserva exclusão entre as duas CPUs: a gravação espera o consumo CPU da faixa e continua enquanto a GPU trabalha.
+Não acrescenta quadro à fila nem vblank. **Não há ganho real medido, imagem D3D aprovada ou aceite da F5 nesta nota.**
+O teto C da seção 39 não prevê a serialização CPU, os Resolves adicionais ou a barreira DATE desta versão.
+
+### Publicação e recursos
+
+- `gs_lotes_grav.h`, incluído no `gs_draw.c` apenas na variante, publica uma vaga com o retrato pequeno do quadro.
+  As dez posições de `GS_RELOGIO` também oferecem os desenhos abaixo do último, que ainda pode fundir. Ofertas a cada
+  32 desenhos, faixas de pelo menos 64; sem divisão ou VU1 direto, a entrega integral continua sendo usada.
+- A espera pelo estado livre e a reserva contra repetição usam a mesma trava. Com o desenho parado, o preparo faz
+  `vu_plano`, `prof_garante` e `sincroniza_alvos`. A barreira `__sync_synchronize` da ponte do 360 emite `sync` completo,
+  necessário para os buffers de escrita combinada. Só depois publica estado 4 e acorda o desenho. O produtor só retoma
+  após a confirmação CPU; os bytes já publicados permanecem vivos até o fecho normal e a cerca da GPU.
+- O estado 4 consome o que está disponível e retorna ao laço da dona do dispositivo. Não espera o próximo lote.
+  `frame_parte` conserva o começo do quadro, o estado das nativas e o `cleared` do desenho por versão de alvo.
+  O `cleared` da gravação só muda na entrega final: antecipá-lo muda a escolha de texturas em `draw_state`.
+- Cada faixa termina com `ed_fim`, `prof_entrega` e `KickOff`; a Guide pode usar a EDRAM entre faixas. Só há consumo
+  antecipado com profundidade restaurável, cor e z existentes para os alvos usados, EDRAM residente, plano anterior
+  válido e a imagem completa anterior na textura própria do FXAA. Fora dessas condições, usa entrega integral.
+  Isso também impede repetir um alvo que o quadro parcial já modificou quando o FXAA está desligado ou falhou.
+- Fila de profundidades, `sPendGrav`, plano seguinte, captura, Present, callback da VU1 e liberações continuam no fecho.
+  A leitura do alfa amostrado também fica integral no fecho: examinar só o primeiro prefixo retiraria trabalho dos lotes
+  sem retirá-lo do controle e contaminaria a medida. A cauda começa no primeiro desenho ainda não enviado.
+
+### Consultas ao futuro e limite DATE
+
+A função pura `gs_lotes_limite`, comum ao D3D e ao falso, só aceita uma lista de desenhos fechados. Para os desenhos
+sem z, exige o testemunho de troca de alvo ou primeiro z que permite responder a `usa_z`. Não divide uma sequência
+DATE entre seu marcador e o seguinte. Mesmo com o DATE curto da primeira parte, um `ed_fim` extra pode atualizar por
+alias a textura que os leitores de DATE ainda usarão. O último grupo espera a entrega integral. Essa restrição pode
+prender boa parte do 6960 e reduzir bastante o teto anterior; não reutilizar os 13,8 a 14,1 ms como previsão desta
+implementação. Remover a restrição exige outra solução de posse/snapshot e prova de imagem, não só mudar um limite.
+
+### Provas e conferência reproduzível
+
+**[Medido, sem jogo]** `teste_lotes_envio.py`: as fronteiras DATE/Z e o transporte de produção, sete faixas com atrasos
+1/5/20 ms; cinco cópias sabotadas recusadas (sem testemunho, corte DATE, último fundível, ordem, espera CPU).
+`teste_lotes_protocolo.py` é auditoria de fonte, com dez sabotagens recusadas: publicação/barreira, ponte `sync`, preparo,
+filas, despacho, cor, z, imagem anterior para Guide, `cleared` e retorno ao laço. Não é execução de D3D.
+`lotes_envio_igual.py 979cc928` compara os tokens dos três fontes na configuração normal, preservando as inclusões
+como sentinelas, e recusa uma cópia adulterada de cada fonte. Não substitui objetos do XDK.
+O `c89.py` preparou `gs_draw.c` com lotes, alfa e perfil ligados, sem falha.
+
+**[Medido, preparo da referência]** A x86 completa preliminar, depois de `gen_data.py --asm asm`, tem 397 objetos,
+104 stubs e SHA1 da `.text` `43444ea4d03a6d448aa1ae74a631e35b356a7caa`. Os logs preservados da seção 38
+(`~/f5-lotes/wsl2/build-base-x86.log` e `build-final-x86.log`) mostram 325 objetos e 450 stubs: faltavam as 72 tabelas.
+Seu SHA1 `9f2cdb49...` pertence a essa ligação incompleta. A comparação de objetos daquela nota continua sendo uma
+comparação dos fontes que ela compilou; não dá uma build executável do jogo. Nesta rodada, base e final geram os mesmos
+dados completos antes de comparar objetos e `.text`, e a execução exige fim do roteiro, lista completa e stubs iguais.
+
+A conferência oficial fica em `lotes_envio_wsl.sh SAIDA`, **sob um único `flock ~/wsl.lock`**, com logs em `~/`.
+O script usa uma cópia descartável da base `979cc928` dentro de `port/build`, sem mudar outra worktree e sem ISO:
+
+| Prova da rodada | Critério |
+|---|---|
+| normal x base, x86/x86gv/PPCg | objetos sem depuração por `objcopy`/`cmp`, só carimbo de teste pode diferir; stubs e `.text` x86 iguais; `cmp` visto falhar |
+| fronteira/publicação nativas, x86 e PPC | mesmos testes e sabotagens, atrasos 1/5/20 ms |
+| falso, Duelo e Treino, x86/PPC | 28 execuções: normal, controle da mesma build, envio, envio com alfa e três atrasos; 24 comparações contra normal e 14 entre arquiteturas por `divergencias.py --normal` |
+| comandos enviados | cada comando e dados relidos na faixa e no fecho; hash integral igual ao de faixas mais cauda; ao menos uma faixa efetiva nas aberturas ligadas |
+| posse da VU1 e recursos | GPU falsa atrasada dois quadros, zero diferentes, zero liberação forçada, zero textura solta usada; quatro execuções sabotadas de dados/ordem têm de falhar |
+| critérios anteriores | `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino`, `SEMMAPA=1 IMG=1 roteiros.sh duelo`, `save_mc.sh` e seu conferidor, com estados/saves não vazios e iguais |
+
+`headless.py --lotes` cria `x86gve`, `ppcge` e, com `--alfa`, `x86gvle`/`ppcgle`. O falso lê os comandos efetivamente
+entregues pelo transporte de produção; **não rasteriza D3D**. As imagens dos roteiros são do raster de software. Igualdade
+dos comandos/dados e dessas imagens não prova os Resolves, o restauro ou a Guide do D3D. Os resultados finais e o SHA1
+ficam no relatório `~/entrega-f5-lotes-envio.md` e em `~/f5-lotes-envio/rodada-final/provas.resumo`; só contam com
+`tudo certo`, builds do commit conferido e árvore limpa. Previsão de execução depois da trava: até duas horas; limite
+quatro horas. A fila e o marcador de espera evitam manter uma sessão esperando o emulador.
+
+### Rodadas preparadas para o Lucas
+
+`lotes_envio_console.py tempo|imagem|longas SAIDA --rodada ID` prepara ambientes, ordem, manifesto e instruções;
+`--mutantes` recusa doze alterações também quando o manifesto é adulterado junto. Antes de abrir, conferir no console
+que **todos** os saves e pastas de captura não existem. Se existir qualquer um, trocar a rodada inteira.
+
+| Rodada, só preparada no WSL | Aberturas | Builds e propósito |
+|---|---|---|
+| `le40a2910` | 16 | normal/perfil, lotes/perfil, e ambas com alfa; duas repetições, `nor`, `ctl`, `pln`, `lot`; relógio sem carimbos em 6900/6929/6930/6960/7000/7170, sem captura |
+| `im40a2910` | 16 | normal, lotes e ambas com alfa, mesmos quatro estados e repetições; 22 capturas cheias por abertura, pastas exclusivas |
+| `jl40a2910` | 3 opcionais | lotes com alfa, `f5_treino`, uma janela fria e duas aquecidas de pelo menos 2.700 passos; sem captura ou perfil |
+
+`nor` não tem a chave de lotes. Na mesma build com a chave, `ctl` usa `BT3_LOTES=0`, `pln` usa
+`BT3_LOTES=1 BT3_LOTES_ENVIO=0` e `lot` usa ambas 1. O sufixo `a` significa `BT3_ALFA_ORIGEM=1` na compilação.
+No tempo, todas as builds usam `BT3_PERFIL_CADEIA=1`, `BT3_RELOGIO_MARCAS=0` e cadeia desligada. Relógio completo do
+controle da mesma build evita perder o quadro que melhora e sai do filtro de picos. Guardar SHA256/carimbo dos xex,
+logs e capturas; capturas ficam só no WSL. Conferir contadores de recursos e cercas, igualdade exata dos pixels de
+lot/ctl/pln contra nor do mesmo alfa/repetição, e também inspeção da imagem final com FXAA. Não aceitar arredondamento
+de 100,00% do comparador. Medir G/P/U e prazo em ambas as repetições, principalmente 6930/6960, além de 6929 e 7170.
+Exigir envio efetivo nas linhas `lotes: quadro`, testar Guide com gravação parada entre faixas e a retomada.
+Com parciais, `frame_end`/`msFim` é o intervalo do primeiro lote ao fecho, incluindo gravação e ociosidade entre faixas;
+não é CPU ocupada do desenho nem o F integral antigo. Usar prazo da imagem e J/G/P/U para julgar ganho.
+
+**XDK, ao revisar:** compilar base `979cc928` e final sem chaves e comparar **todos os objetos** e funções do mapa por
+`xdk_objetos.py RAIZ BASE FINAL`, que normaliza `link.exe /dump /disasm`, como na seção 38. Exigir zero diferenças na
+normal. Na variante com lotes, esperar mudanças em `obj/gs_gs_draw.obj` e `x360/gs_d3d.obj`; repetir com alfa e perfil
+para conferir as quatro famílias de builds da rodada. Verificar que `BT3_GS_LOTES` chega também ao `c89.py`.
+A ausência de XDK no WSL deixa a build, o despacho D3D, a imagem, a Guide e o ganho real para essa revisão e o console.
+O zero de longas continua reprovado; a exceção E não foi aprovada.

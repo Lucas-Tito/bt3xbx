@@ -46,6 +46,11 @@ extern int gPortMenuMode;       /* headless.c: the menus are running */
 extern int gPortMusicPercent, gPortSePercent;
 
 static GsBackend *sBackend;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+static void gs_lotes_passo(void);
+#endif
+#endif
 #if defined(PORT_X360) && defined(BT3_PERFIL_CADEIA)
 /* (F5, seção 38 do 08-gravacao.md) O relógio da gravação por desenho, só na build de perfil (BT3_PERFIL_CADEIA=1
    build_f2.sh): com BT3_RELOGIO_GRAV=Q1,Q2,... no ambiente, cada desenho anexado fecha o anterior com uma leitura do mftb
@@ -1120,7 +1125,16 @@ static void depth_clut(int ctx) {
         return; /* the next strip of the same pass */
     }
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
     GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 }
 
 static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *us, float *vs) {
@@ -1148,7 +1162,16 @@ static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *u
                 c.target = GsDraw_TargetGet(tbp / 32, 0);
                 if (c.target >= 0 && gsDrawCount < CAP_DRAWS && !(last != NULL && last->native == 4)) {
                     gsDraws[gsDrawCount++] = c;
-                    GS_RELOGIO();
+                #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
                 }
             }
         }
@@ -1313,7 +1336,16 @@ static void date_snapshot(const GsDraw *d) {
     c.target = d->target;
     if (gsDrawCount + 1 < CAP_DRAWS) {
         gsDraws[gsDrawCount++] = c;
-        GS_RELOGIO();
+    #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
     }
 }
 
@@ -1854,7 +1886,16 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
         gs_alfa_junta(sAlfa[sJogo], gsDrawCount, sAlfaCpu, 0);
 #endif
         gsDraws[gsDrawCount++] = d;
-        GS_RELOGIO();
+    #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
     }
 }
 
@@ -1991,7 +2032,16 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
 #endif
     vu_faixa(gsDrawCount, lo, hi, 0);
     gsDraws[gsDrawCount++] = *d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
     GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
@@ -2141,7 +2191,16 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
     GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
@@ -2281,7 +2340,16 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
     GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
@@ -2442,7 +2510,16 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
     GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
@@ -2468,7 +2545,16 @@ void GsGpu_FbUpload(int second) {
     d.target = GsDraw_TargetGet(second ? 0x70 : 0, 1);
     if (d.target >= 0) {
         gsDraws[gsDrawCount++] = d;
-        GS_RELOGIO();
+    #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
     }
 }
 
@@ -2500,7 +2586,16 @@ void GsGpu_Native(int effect) {
     d.scissor[2] = ((int)((sc >> 16) & 0x7FF) + 1) * SCALE - d.scissor[0];
     d.scissor[3] = ((int)((sc >> 48) & 0x7FF) + 1) * SCALE - d.scissor[1];
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
     GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 }
 
 /* A new resolution multiplier: every render target is dropped and made again at the new size when the game next
@@ -4797,6 +4892,13 @@ static void solta_pede(GsTex tex, int alvo) {
     s->quadro = gGsFrame;
 }
 
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+#define GS_LOTE_MIN 64u
+#include "../../x360/include/gs_lotes_grav.h"
+#endif
+#endif
+
 static void *desenho_thread(void *arg) {
     uint32_t i;
     (void)arg;
@@ -4862,6 +4964,17 @@ static void *desenho_thread(void *arg) {
         }
 #endif
         gsQuadro = &sRetrato;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+        if (sDesTem == 4) {
+            sBackend->lotesDesenha(&sLote, sLoteAte);
+            pthread_mutex_lock(&sDesLock);
+            sDesTem = 0;
+            pthread_cond_broadcast(&sDesFeito);
+            continue;
+        }
+#endif
+#endif
         sBackend->frameEnd();
         for (i = 0; i < sRetrato.soltaCount; i++) {
             sBackend->solta(sRetrato.soltas[i].tex, sRetrato.soltas[i].alvo);
@@ -5422,6 +5535,11 @@ static void desenho_entrega(void) {
     pthread_mutex_lock(&sDesLock);
 #ifdef PORT_X360
     sEntregando = 0;
+#endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    sLoteAte = sLoteConsulta = 0; /* o fecho passou para o desenho; o próximo quadro usa outra lista */
+#endif
 #endif
     sDesTem = 1;
     pthread_cond_signal(&sDesAcorda);

@@ -433,6 +433,9 @@ static void alfa_confere(const GsQuadro *q) {
     fprintf(stderr, "alfa: quadro %u desenhos %u altos %u, 0 diferentes\n", q->quadro, des, alto);
 }
 #endif
+#ifdef GS_LOTES
+#include "lotes_envio.h"
+#endif
 static void fake_frame_end(void) {
     uint32_t i;
     uint64_t quadro = 1469598103934665603ull;
@@ -442,6 +445,9 @@ static void fake_frame_end(void) {
     const uint32_t *bytes;
 #ifdef BT3_GS_ESPERAS
     const GsQuadro *g = gsQuadro;
+#ifdef GS_LOTES
+    fake_lotes_fim(g);
+#endif
     if (!g->dividido) px_final(g);
 #ifdef GS_ALFA
     alfa_confere(g);
@@ -626,7 +632,12 @@ static void fake_solta(GsTex tex, int alvo) {
         envenena(tex);
     }
 }
-#define FAKE_DIVISAO , fake_entrega, fake_solta_pede, fake_solta, fake_vu_jogo, fake_vu_feito
+#ifdef GS_LOTES
+#define FAKE_LOTES , fake_lotes_prontos, fake_lotes_prepara, fake_lotes_desenha
+#else
+#define FAKE_LOTES
+#endif
+#define FAKE_DIVISAO , fake_entrega, fake_solta_pede, fake_solta, fake_vu_jogo, fake_vu_feito FAKE_LOTES
 #else
 #define FAKE_DIVISAO
 #endif

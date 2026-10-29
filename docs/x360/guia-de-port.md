@@ -2559,3 +2559,29 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Captura cheia para a GPU e lê/grava a imagem: as seis li37 têm 20 imagens de quatro ou mais vblanks no combate,
   até 22. Não transferir esses histogramas ao aceite de desempenho ou à exceção E; os relógios sem captura são
   outra evidência. A longa marginal 7109 → 7110 dos perfis sem alfa também não vira troca de cena por hipótese.
+
+### Enviar durante a gravação com a dona do D3D livre (F5, gravação, seção 40)
+
+- Uma vaga com produtor esperando apenas o consumo CPU permite sobrepor GPU e gravação sem tornar todas as tabelas
+  concorrentes de uma vez. O consumidor precisa voltar ao seu laço entre faixas; esperar novos desenhos dentro de
+  `frame_end` congela a Guide. Publicação da VU1 combinada exige `sync` completo antes de sinalizar a vaga.
+- **Resolver para liberar a EDRAM pode mudar DATE sem corrida nenhuma.** A fonte do DATE pode ser a própria textura
+  do alvo; um Resolve extra no meio dos seus leitores muda o alfa lido por alias. A primeira implementação conserva
+  cada sequência inteira numa faixa. O teto que supunha só 64 de consulta não prevê essa barreira.
+- **Cor ou z que só nascerão na entrega não podem receber prefixo.** Sem cor, `ed_fim` perde pixels antes de
+  `alvos_sem_textura` criar a textura; sem restauro de z, a faixa seguinte limpa a profundidade já escrita. Recusar o
+  envio antecipado nesses casos, não consumir e tentar reparar no fim. As duas guardas têm sabotagens na auditoria.
+- O `cleared` próprio do desenho deve sobreviver por versão entre retratos parciais. Antecipá-lo na gravação muda a
+  seleção de texturas. Filas de profundidades e pendências só trocam na entrega final, como a cerca de reaproveitar VU1.
+- **A imagem que a Guide repete tem de continuar completa.** Sem FXAA, o ponteiro da imagem anterior pode ser um alvo
+  que os prefixos já modificaram. O candidato só envia com a imagem anterior na textura própria do FXAA. Restaurar a
+  EDRAM entre faixas não resolve sozinho a posse dessa imagem.
+- Uma amostra integral como `alfa_alto` não pode virar amostra só do primeiro prefixo. Isso retira trabalho apenas da
+  abertura ligada, alterando custo e denominadores. Conservar a varredura inteira no fecho, com e sem alfa.
+- Build nova numa worktree sem `gen/data` pode ligar com centenas de stubs e parecer válida. Gerar dados pelo
+  `gen_data.py --asm asm`, fazer a x86 antes da PPC e conferir stubs antes de executar. As tentativas preliminares sem
+  esses dados não contam como execução do jogo. Não copiar `.s` com `incbin` de outro caminho. Os logs da seção 38 tinham 450 stubs, sem as 72 tabelas; a referência
+  `9f2cdb49...` era dessa ligação incompleta. Com dados gerados, a preliminar da seção 40 tem 104 stubs e `43444ea4...`:
+  comparar base e final com dados equivalentes, sem confundir mudança de ligação com mudança dos fontes.
+- Com envio parcial, `msFim` vai do primeiro lote ao fecho e inclui os intervalos em que a gravação trabalhou e a dona
+  D3D ficou ociosa. Não compará-lo como CPU ocupada nem como F integral antigo: medir prazo da imagem e J/G/P/U.

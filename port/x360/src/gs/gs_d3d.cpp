@@ -1910,7 +1910,7 @@ static struct {
      diz se algum leitor lê fora dela).
    BT3_LOTES=0 desliga na build com a chave (o controle da mesma build). A build normal não tem nada disto. */
 #define LOTES_DATE_CURTO 64
-static int sLotes;
+static int sLotes, sLotesEnvio;
 static struct {
     int valido, alvos;
     int ent[MAX_TARGETS];
@@ -1948,9 +1948,12 @@ static void otim_init(void) {
     }
 #ifdef BT3_GS_LOTES
     sLotes = env_num("BT3_LOTES", 1) != 0;
+    sLotesEnvio = sLotes && env_num("BT3_LOTES_ENVIO", 1) != 0;
     Diario_Escrever("gs_d3d: lotes (BT3_GS_LOTES), primeira parte %s: o plano da EDRAM do quadro anterior e o DATE só até %d "
-                    "desenhos à frente; o envio ainda espera a entrega", sLotes ? "ligada" : "desligada (BT3_LOTES=0)",
+                    "desenhos à frente; envio durante a gravacao, uma vaga CPU", sLotes ? "ligada" : "desligada (BT3_LOTES=0)",
                     LOTES_DATE_CURTO);
+    Diario_Escrever("lotes: envio %s (BT3_LOTES_ENVIO), exige VU1 direto, EDRAM residente e imagem anterior no FXAA",
+                    sLotesEnvio ? "ligado" : "desligado");
 #endif
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
@@ -3161,6 +3164,9 @@ static void ed_plano(const GsQuadro *q) {
             ret_une(&ext[t], 0, 0, esc_px(x1, sEscN, sEscD), esc_px(y1, sEscN, sEscD));
         }
     }
+#ifdef BT3_GS_LOTES
+    if (sLotes) for (t = 0; t < MAX_TARGETS; t++) sVagaDe[t] = VG_B;
+#endif
     for (t = 0; t < q->targetCount && t < MAX_TARGETS; t++) {
         const Ret *c = &sAlvoD[t].conteudo;
         sVagaDe[t] = VG_B;
@@ -5985,8 +5991,21 @@ static int alvo_do_fbp(const GsQuadro *q, int fbp) {
     return -1;
 }
 
+#ifdef BT3_GS_LOTES
+#include "../../include/gs_lotes.h"
+static struct {
+    uint32_t n;
+    LARGE_INTEGER t0;
+    double msVu, msCopiaVu;
+    int cleared[MAX_TARGETS];
+    unsigned ver[MAX_TARGETS];
+    unsigned faixas, desenhos;
+} sLtExec;
+static void frame_parte(const GsQuadro *q, uint32_t ate, int final) {
+#else
 static void frame_end(void) {
     const GsQuadro *q = gsQuadro;
+#endif
     LARGE_INTEGER t0, tp, tv;
     double msVu, msCopiaVu;
     double msFim, msPresent;
@@ -5997,6 +6016,15 @@ static void frame_end(void) {
     D3DTexture *mtex;
     static int every = -1;
 
+#ifdef BT3_GS_LOTES
+    uint32_t de = sLtExec.n;
+    if (de) {
+        for (i = 0; i < q->targetCount; i++) {
+            if (sLtExec.ver[i] == sAlvoD[i].ver) q->targets[i].cleared |= sLtExec.cleared[i];
+        }
+    }
+    if (!de) {
+#endif
     cadeia_inicio(q->quadro);
     QueryPerformanceCounter(&t0);
     sQ = q;
@@ -6026,9 +6054,15 @@ static void frame_end(void) {
     tempo_poe(T_OUTROS);
     gGsD3dEtapa = "fim do quadro: refazendo a lista";
     sConta.msZQuadro = 0.0;
+#ifdef BT3_GS_LOTES
+    if (final && sConta.quadros == 30 && sConta.alfaAltoDes == 0) {
+        alfa_alto(); /* a mesma lista inteira, nunca só o primeiro prefixo */
+    }
+#else
     if (sConta.quadros == 30 && sConta.alfaAltoDes == 0) {
         alfa_alto(); /* (um quadro por trecho) */
     }
+#endif
     {
         /* F5, etapa 6: o tempo da VU1 na gravação do quadro (gs_vu1.c) e a cópia das três famílias para a GPU */
         double g = q->vu1Ms;
@@ -6065,7 +6099,26 @@ static void frame_end(void) {
     }
     tempo_abre(); /* (a GPU do quadro começa aqui) */
     recorte_poe();
+#ifdef BT3_GS_LOTES
+        sLtExec.t0 = t0;
+        sLtExec.msCopiaVu = msCopiaVu;
+    } else {
+        t0 = sLtExec.t0;
+        msVu = sLtExec.msVu;
+        msCopiaVu = sLtExec.msCopiaVu;
+        sQ = q;
+        if (final) {
+            if (sConta.quadros == 30 && sConta.alfaAltoDes == 0) alfa_alto();
+            sConta.msVuGrav += q->vu1Ms;
+            if (q->vu1Ms > sConta.msVuGravPior) sConta.msVuGravPior = q->vu1Ms;
+            mem_buffers(q);
+        }
+        recorte_poe();
+    }
+    for (n = de; n < ate; n++) {
+#else
     for (n = 0; n < q->drawCount; n++) {
+#endif
         const GsDraw *d = &q->draws[n];
         if (sComumGpu) sComumDesenho = n;
         if (d->native >= 100) {
@@ -6166,6 +6219,30 @@ static void frame_end(void) {
             desenha(d);
         }
     }
+#ifdef BT3_GS_LOTES
+    if (!final) {
+        /* A dona D3D fica livre para a Guide. A fronteira não corta DATE: resolver
+           seu alvo fonte no meio dos leitores mudaria o alfa por alias. */
+        if (sEdRes) ed_fim(); else sai_da_edram();
+        prof_entrega();
+        for (i = 0; i < q->targetCount; i++) {
+            sLtExec.cleared[i] = q->targets[i].cleared;
+            sLtExec.ver[i] = sAlvoD[i].ver;
+        }
+        sLtExec.n = ate;
+        sLtExec.msVu = msVu;
+        sLtExec.faixas++;
+        sLtExec.desenhos += ate - de;
+        sDev->KickOff(); /* sem despacho, os comandos podem continuar só na CPU */
+        return;
+    }
+    if (de && (q->quadro == 6900 || q->quadro == 6929 || q->quadro == 6930 ||
+               q->quadro == 6960 || q->quadro == 7000 || q->quadro == 7170)) {
+        Diario_Escrever("lotes: quadro %u faixas %u desenhos antes de G %u cauda %u", q->quadro,
+                        sLtExec.faixas, sLtExec.desenhos, ate - de);
+    }
+    sLtExec.n = sLtExec.faixas = sLtExec.desenhos = 0;
+#endif
     sConta.msVuDes += msVu;
     if (msVu > sConta.msVuDesPior) sConta.msVuDesPior = msVu;
     gGsD3dEtapa = "fim do quadro: o último alvo volta para a textura";
@@ -6316,6 +6393,36 @@ static void frame_end(void) {
     gsNative = 0;
 }
 
+#ifdef BT3_GS_LOTES
+static void frame_end(void) { frame_parte(gsQuadro, gsQuadro->drawCount, 1); }
+static int lotes_usa_z(const GsDraw *d) {
+    return sModoZ && (sPipes[d->pipeline].zwrite || sPipes[d->pipeline].ztst >= 2);
+}
+static uint32_t lotes_prontos(const GsQuadro *q, uint32_t de) {
+    if (!sLotesEnvio || !sEdRes || !sModoZ || !sLtPlano.valido || q->vuJogo < 0) return de;
+    /* Sem textura de z, um corte no meio de uma visita perderia o z já escrito.
+       A entrega final pode criar a textura; até lá, conservar a lista integral. */
+    for (uint32_t n = de; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        if (d->target >= 0 && d->target < q->targetCount && !sAlvos[d->target].tex) return de;
+        if (!d->native && sPipes[d->pipeline].zwrite && sPipes[d->pipeline].ztst != 0 &&
+            (d->target < 0 || d->target >= q->targetCount || !sProf[d->target].tex)) return de;
+    }
+    /* A Guide só repete a imagem completa anterior. Sem a textura própria do
+       FXAA, sMostradoTex poderia ser um alvo já alterado pelo quadro parcial. */
+    if (!sFxaa || !sFxaaTex || sMostradoTex != sFxaaTex) return de;
+    return gs_lotes_limite(q, de, lotes_usa_z);
+}
+static void lotes_prepara(const GsQuadro *q) {
+    /* O produtor esperou a faixa CPU anterior. Fila de profundidades e pendências
+       só trocam na entrega final; não zerar sPendGrav nem o cleared da gravação. */
+    vu_plano(q);
+    prof_garante(q);
+    sincroniza_alvos();
+}
+static void lotes_desenha(const GsQuadro *q, uint32_t ate) { frame_parte(q, ate, 0); }
+#endif
+
 /* A thread dona do dispositivo, sem quadro há 50 ms (o jogo carrega, não entrega quadro): apresenta de novo a última
    imagem, para a Guide e o sistema terem um present a cada tanto. No degrau 1, a de gravação ociosa; com a divisão (degrau
    2, etapa 4), a de desenho ociosa, com a entrega parada (gs_draw.c, desenho_thread). Usa a textura que o próprio desenho
@@ -6447,6 +6554,11 @@ GsBackend sD3dBackend = {
     solta,
     vu_jogo,
     vu_feito,
+#ifdef BT3_GS_LOTES
+    lotes_prontos,
+    lotes_prepara,
+    lotes_desenha,
+#endif
 };
 }
 

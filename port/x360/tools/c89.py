@@ -38,6 +38,9 @@ SUBSTITUIDOS = {"plat_crash", "plat_libm", "softfloat_ps2", "plat_fastvec", "sta
 GS_SEM_JANELA = {"gs_core", "gs_sony", "gs_vu1", "namefont", "snd_adx", "snd_se"}  # e state.c (substituído)
 # F3, etapa 7: a gravação do quadro para o backend D3D9 do 360 (port/x360/src/gs/gs_d3d.cpp). Compila com o pedaço
 # de SDL que ela cita (port/x360/src/gs/sdl) e tira as entradas GsGpu_* vazias do sem_janela.c (X360_GS_D3D).
+# (F5, seção 40) a publicação de faixas precisa existir nos dois lados da interface GsBackend.
+if os.environ.get("BT3_GS_LOTES") == "1":
+    DEFS.append("-DBT3_GS_LOTES")
 GS_D3D = {"gs_draw"}
 
 
