@@ -1,0 +1,159 @@
+# F7, etapa 4 (gerado por port/x360/tools/f7_elenco.py; não editar à mão): censo de carga do elenco,
+# caso f7_elenco_03. Duelo 1P contra COM em time, voz alt, estágio 1.
+# lado 0: 34/0 42/0 50/0 116/0 2/0
+# lado 1: 33/1 35/1 41/1 133/1 11/1
+# Cada membro escolhido pela entrada na TeamSel, conferido no estado da tela (time L chara/cor); na luta,
+# "termina luta" derruba cada membro que entra, e o jogo carrega o seguinte; "rastreia elenco" registra cada
+# carga concluída. O resultado volta à TeamSel (memória no fim).
+inclui boot.txt
+rastreia elenco
+quadros 90
+confere voz 1
+aperta BAIXO 3                    # Duelo
+aperta X ate tela 38 max 120       # DuelMenu
+quadros 120
+aperta X                          # 1P contra COM
+quadros 40
+aperta BAIXO                      # luta em time
+quadros 20
+aperta X
+espera tela 40 max 600            # TeamSel
+quadros 150
+# lado 0, membro 0: id 34, traje 0 (linha 2, coluna 3, nas formas)
+aperta BAIXO ate time 0 linha 2 max 600
+aperta DIREITA ate time 0 coluna 3 max 300
+aperta X ate time 0 estado 1 max 300
+aperta DIREITA ate time 0 chara 34 max 300
+aperta X ate time 0 estado 2 max 300
+aperta CIMA ate time 0 placa 0 max 300
+aperta X ate time 0 estado 5 max 300
+aperta DIREITA ate time 0 cor 0 max 300
+aperta X ate time 0 estado 6 max 300
+# lado 0, membro 1: id 42, traje 0 (linha 1, coluna 6, nas formas)
+aperta X ate time 0 estado 0 max 300
+aperta BAIXO ate time 0 linha 1 max 600
+aperta DIREITA ate time 0 coluna 6 max 300
+aperta X ate time 0 estado 1 max 300
+aperta DIREITA ate time 0 chara 42 max 300
+aperta X ate time 0 estado 2 max 300
+aperta CIMA ate time 0 placa 0 max 300
+aperta X ate time 0 estado 5 max 300
+aperta DIREITA ate time 0 cor 0 max 300
+aperta X ate time 0 estado 6 max 300
+# lado 0, membro 2: id 50, traje 0 (linha 2, coluna 5, nas formas)
+aperta X ate time 0 estado 0 max 300
+aperta BAIXO ate time 0 linha 2 max 600
+aperta DIREITA ate time 0 coluna 5 max 300
+aperta X ate time 0 estado 1 max 300
+aperta DIREITA ate time 0 chara 50 max 300
+aperta X ate time 0 estado 2 max 300
+aperta CIMA ate time 0 placa 0 max 300
+aperta X ate time 0 estado 5 max 300
+aperta DIREITA ate time 0 cor 0 max 300
+aperta X ate time 0 estado 6 max 300
+# lado 0, membro 3: id 116, traje 0 (linha 8, coluna 2, nas formas)
+aperta X ate time 0 estado 0 max 300
+aperta BAIXO ate time 0 linha 8 max 600
+aperta DIREITA ate time 0 coluna 2 max 300
+aperta X ate time 0 estado 1 max 300
+aperta DIREITA ate time 0 chara 116 max 300
+aperta X ate time 0 estado 2 max 300
+aperta CIMA ate time 0 placa 0 max 300
+aperta X ate time 0 estado 5 max 300
+aperta DIREITA ate time 0 cor 0 max 300
+aperta X ate time 0 estado 6 max 300
+# lado 0, membro 4: id 2, traje 0 (linha 1, coluna 0, nas formas)
+aperta X ate time 0 estado 0 max 300
+aperta BAIXO ate time 0 linha 1 max 600
+aperta DIREITA ate time 0 coluna 0 max 300
+aperta X ate time 0 estado 1 max 300
+aperta DIREITA ate time 0 chara 2 max 300
+aperta X ate time 0 estado 2 max 300
+aperta CIMA ate time 0 placa 0 max 300
+aperta X ate time 0 estado 5 max 300
+aperta DIREITA ate time 0 cor 0 max 300
+aperta X ate time 0 estado 6 max 300
+espera time 0 membros 5 max 60
+aperta DIREITA ate time 0 cursor 5 max 300   # time completo
+aperta X ate time 0 estado 8 max 300
+# lado 1, membro 0: id 33, traje 1 (linha 1, coluna 3, nas formas)
+aperta BAIXO ate time 1 linha 1 max 600
+aperta DIREITA ate time 1 coluna 3 max 300
+aperta X ate time 1 estado 1 max 300
+aperta DIREITA ate time 1 chara 33 max 300
+aperta X ate time 1 estado 2 max 300
+aperta CIMA ate time 1 placa 0 max 300
+aperta X ate time 1 estado 5 max 300
+aperta DIREITA ate time 1 cor 1 max 300
+aperta X ate time 1 estado 6 max 300
+# lado 1, membro 1: id 35, traje 1 (linha 2, coluna 3, nas formas)
+aperta X ate time 1 estado 0 max 300
+aperta BAIXO ate time 1 linha 2 max 600
+aperta DIREITA ate time 1 coluna 3 max 300
+aperta X ate time 1 estado 1 max 300
+aperta DIREITA ate time 1 chara 35 max 300
+aperta X ate time 1 estado 2 max 300
+aperta CIMA ate time 1 placa 0 max 300
+aperta X ate time 1 estado 5 max 300
+aperta DIREITA ate time 1 cor 1 max 300
+aperta X ate time 1 estado 6 max 300
+# lado 1, membro 2: id 41, traje 1 (linha 1, coluna 6, nas formas)
+aperta X ate time 1 estado 0 max 300
+aperta BAIXO ate time 1 linha 1 max 600
+aperta DIREITA ate time 1 coluna 6 max 300
+aperta X ate time 1 estado 1 max 300
+aperta DIREITA ate time 1 chara 41 max 300
+aperta X ate time 1 estado 2 max 300
+aperta CIMA ate time 1 placa 0 max 300
+aperta X ate time 1 estado 5 max 300
+aperta DIREITA ate time 1 cor 1 max 300
+aperta X ate time 1 estado 6 max 300
+# lado 1, membro 3: id 133, traje 1 (linha 10, coluna 3, nas formas)
+aperta X ate time 1 estado 0 max 300
+aperta BAIXO ate time 1 linha 10 max 600
+aperta DIREITA ate time 1 coluna 3 max 300
+aperta X ate time 1 estado 1 max 300
+aperta DIREITA ate time 1 chara 133 max 300
+aperta X ate time 1 estado 2 max 300
+aperta CIMA ate time 1 placa 0 max 300
+aperta X ate time 1 estado 5 max 300
+aperta DIREITA ate time 1 cor 1 max 300
+aperta X ate time 1 estado 6 max 300
+# lado 1, membro 4: id 11, traje 1 (linha 13, coluna 0, nas formas)
+aperta X ate time 1 estado 0 max 300
+aperta BAIXO ate time 1 linha 13 max 600
+aperta DIREITA ate time 1 coluna 0 max 300
+aperta X ate time 1 estado 1 max 300
+aperta DIREITA ate time 1 chara 11 max 300
+aperta X ate time 1 estado 2 max 300
+aperta CIMA ate time 1 placa 0 max 300
+aperta X ate time 1 estado 5 max 300
+aperta DIREITA ate time 1 cor 1 max 300
+aperta X ate time 1 estado 6 max 300
+espera time 1 membros 5 max 60
+aperta DIREITA ate time 1 cursor 5 max 300   # time completo
+aperta X ate time 1 estado 8 max 300
+quadros 60
+repete ate time 0 estagio 1 max 3000
+    aperta DIREITA 7                # as seis colunas e a placa da música (nela o BAIXO não anda)
+    aperta BAIXO
+volta
+quadros 30
+aperta X
+espera luta max 3000
+espera seq 3 max 1200
+termina luta perde apos 4 troca max 40000
+# o resultado (estado 6): a segunda opção volta à seleção, e a confirmação pede "sim" (para cima)
+espera seq 6 max 1200
+quadros 60
+marca ponto resultado
+aperta BAIXO
+quadros 20
+aperta X
+quadros 60
+aperta CIMA
+quadros 20
+aperta X
+espera tela 40 max 3000
+quadros 200
+fim
