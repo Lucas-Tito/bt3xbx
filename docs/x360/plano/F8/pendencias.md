@@ -89,6 +89,11 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     nativo do autor sobre o Tenkaichi3Decomp e a branch `tagteam-exp` do upstream, `pesquisa/05-tag-team.md`). Só
     análise: formatos, conversão para big-endian, memória e desempenho no Xenon, e a licença (o código do Tag Team de PC
     é AGPL-3.0; trazê-lo muda a licença do port, decisão a tomar então). Não mexe na decisão 16 nem antecipa a F9.
+16. **As regras das issues, para rever no fechamento** (Lucas, 29/10/2026): ficam como estão por enquanto, mas ele não
+    concorda com a forma atual. Hoje: dois formulários (queda e defeito sem queda), queda sem `crash.txt` fechada na
+    hora pela ação e reaberta quando o arquivo chega, respostas prontas por rótulo, nada fecha por prazo
+    ([06-publicacao](06-publicacao.md), seção 5a). Em aberto: se o formulário de defeito sem queda continua (ele não tem
+    `crash.txt` para exigir) e o que mais mudar; perguntar ao Lucas antes de mexer.
 
 ## A abertura do repositório, a última parte do plano (27/10/2026)
 

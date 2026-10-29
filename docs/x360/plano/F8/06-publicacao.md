@@ -210,6 +210,8 @@ de qualquer nome (1), não fechar a queda sem arquivo (1), não trancar a pirata
 qualquer pessoa (2), comentar a mesma resposta de novo (2). Não roda no GitHub de verdade até o repositório subir;
 na primeira issue real, conferir a execução na aba Actions.
 
+**Provisório:** o Lucas deixou assim por enquanto, mas não concorda com a forma; volta no fechamento (pendência 16).
+
 ## 6. O que o Lucas deve auditar
 
 | Arquivo | O que conferir |
