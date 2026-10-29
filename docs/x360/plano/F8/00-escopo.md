@@ -229,6 +229,11 @@ terá de ser decidido e feito quando chegar a hora:
 
 ## 6. Decisões para o Lucas
 
+**Respondidas em 29/10/2026: ver a decisão 33** (`decisoes.md`). Em resumo: release única `1.0.0` junto com a abertura
+do repositório, pacote `bt3-x360-1.0.0.zip`, vibração dentro, as duas conversões no README, só o deserto entre os gaps
+(Namek fica para depois), opções, remapeamento, 16:9 pelo painel e saves fora da primeira release, relatórios de queda
+nas issues do GitHub com regras contra spam. As opções abaixo ficam como registro do que foi perguntado.
+
 [Estimado] Só perguntas que mudam trabalho. Cada uma tem a recomendada e a conservadora; sem resposta, o escopo segue
 a conservadora.
 
