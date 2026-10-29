@@ -15,6 +15,9 @@ As pressões 4..11 foram no quadro 29877; a 13, no 29878. Todas disseram `cabe`,
 0 esperas da GPU. O log chegou ao quadro 32040 junto da queda, mais de 2100 quadros depois.
 Isso enfraquece a hipótese de falta imediata de textura; não exclui corrupção anterior ou uma corrida.
 
+A desmontagem posterior com teto, os testes controlados e o roteiro de aceite estão em
+[queda-freestyle.md](queda-freestyle.md). A descrição abaixo registra o estado anterior à correção.
+
 ## Caminho até a FreeStyle, lido no código
 
 `AoMorrer` grava o contexto, descarrega o diário e chama `Som360_Queda` (`StopEngine`, salvo quando a própria

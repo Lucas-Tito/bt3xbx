@@ -4839,6 +4839,11 @@ void GsDraw_DesenhoAcorda(void) {
     pthread_cond_signal(&sDesAcorda);
 }
 
+/* Handle emprestado: um estado ocioso não prova que a thread já terminou. */
+void *GsDraw_Thread360(void) {
+    return sDividido ? (void *)sDesenho : NULL;
+}
+
 /* uma queda: o desenho sai sem esperar (sem desenhar o retrato pendente) e solta o dispositivo */
 void GsDraw_DesenhoPararJa(void) {
     sDesParaJa = 1;

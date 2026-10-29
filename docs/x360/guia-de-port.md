@@ -2534,3 +2534,32 @@ rodadas positivas falhavam na recusa da ISO antes de testar qualquer fluxo; os m
 falhavam ali e não provavam suas sabotagens. O gerador agora usa `ISO_MARCA_VERSAO` do mesmo
 `iso360.h` levado à compilação do ensaio. Exigir primeiro o caso positivo e ler a causa dos
 negativos, em vez de contar toda saída não zero como prova da sabotagem.
+
+
+### Uma queda exige esperar o GS antes de soltar o D3D
+
+`Port_GsPararJa` e `GsDraw_DesenhoPararJa` só pedem parada. Mesmo um estado ocioso não prova
+que a thread acabou. A main espera os handles reais do jogo e das duas threads do GS antes de
+recuperar a posse do dispositivo. Na parada assíncrona, a gravação não chama a callback que faz
+`pthread_join` do desenho: ela fecharia o handle que a main ainda precisa esperar. O ensaio acusa
+o mutante que reativa essa callback. Quando o desenho cai, o jogo também precisa parar de publicar
+trabalho para a gravação: uma espera que não observa a saída fica presa num GS já encerrado. O ramo
+do 360 consulta o pedido fora da trava e desperta em até 50 ms para observá-lo de novo. O ensaio
+recorta essa espera e acusa o mutante sem o checkpoint, inclusive se alguém tentar sair com a trava
+tomada. Cargas, fluxos e som também têm esperas com teto e resultado no
+log. A desmontagem usa auxiliares na thread de hardware 1, com teto externo consultado pela main;
+ela continua apresentando assim que os produtores gráficos terminam. Nenhum `join` infinito ou
+espera da GPU roda na thread que estava apresentando. Na liberação final, a apresentação termina.
+
+Se uma thread ou a GPU exceder o teto, preservar recursos possivelmente em uso e tentar o painel;
+liberar sob uma thread viva pode causar outra exceção antes do lançamento. Uma segunda exceção na
+auxiliar também precisa ser consumida pelo filtro do título. Registrar a solicitação de
+`XLaunchNewImage` antes de fechar o diário não prova que a FreeStyle iniciou: exigir a home
+respondendo e reabertura do jogo nas variantes de queda do jogo e do desenho. Receita e limites em
+[F7/queda-freestyle](plano/F7/queda-freestyle.md). Os ensaios `teste_saida360.py --mutantes` e
+`teste_paradas360.py` compilam as rotinas reais sobre uma API simulada e exigem as sabotagens acusadas.
+
+Numa worktree nova, `headless.py` pode ligar com stubs mesmo sem `port/build/gen/data` preparado.
+Antes de comparar a x86, gerar as tabelas com `gen_data.py --asm CAMINHO_DESTA_WORKTREE/asm`.
+A primeira tentativa desta tarefa tinha só 327 objetos e SHA1 diferente; depois das 72 tabelas,
+voltaram os 399 objetos e a `.text` idêntica à base. Não aceitar só a mensagem de ligação bem-sucedida.

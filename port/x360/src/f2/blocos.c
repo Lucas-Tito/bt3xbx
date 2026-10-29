@@ -17,6 +17,7 @@
 
 #ifdef _XBOX
 #include <xtl.h>
+#include "diario.h"
 #else
 #include <pthread.h>
 #include <time.h>
@@ -41,12 +42,48 @@ struct Blocos {
     CRITICAL_SECTION trava;
     HANDLE ev[2]; /* 0: acorda a thread de leitura; 1: acorda quem lê */
     HANDLE thread;
+    struct Blocos *proximo;
 #else
     pthread_mutex_t trava;
     pthread_cond_t ev[2];
     pthread_t thread;
 #endif
 };
+
+#ifdef _XBOX
+static CRITICAL_SECTION sCadastro;
+static Blocos *sAtivos;
+/* Na main, antes de abrir qualquer arquivo ou criar thread. */
+void Blocos_Iniciar360(void) { InitializeCriticalSection(&sCadastro); }
+
+/* Só na desmontagem; não libera buffers que um leitor atrasado ainda pode usar. */
+int Blocos_PararTodos360(void) {
+    Blocos *b;
+    int ok = 1;
+    EnterCriticalSection(&sCadastro);
+    for (b = sAtivos; b != NULL; b = b->proximo) {
+        DWORD r, inicio = GetTickCount();
+        int entrou;
+        do {
+            entrou = TryEnterCriticalSection(&b->trava);
+            if (!entrou) Sleep(1);
+        } while (!entrou && GetTickCount() - inicio < 2000);
+        if (!entrou) {
+            Diario_Escrever("saída: carga blocos %p: trava excedeu 2000 ms", b);
+            ok = 0;
+            continue;
+        }
+        b->sair = 1;
+        SetEvent(b->ev[0]);
+        LeaveCriticalSection(&b->trava);
+        r = WaitForSingleObject(b->thread, 2000);
+        Diario_Escrever("saída: carga blocos %p: espera=%08X teto=2000 ms", b, (unsigned)r);
+        if (r != WAIT_OBJECT_0) ok = 0;
+    }
+    LeaveCriticalSection(&sCadastro);
+    return ok;
+}
+#endif
 
 /* ---- o relógio e a thread, do 360 ou do pthreads ---- */
 #ifdef _XBOX
@@ -169,6 +206,10 @@ Blocos *Blocos_Abrir(BlocosLer ler, void *ctx, long tam, long bloco, int hw) {
             SetThreadPriority(b->thread, THREAD_PRIORITY_ABOVE_NORMAL); /* (passa quase todo o tempo esperando o disco) */
             ResumeThread(b->thread);
             b->comThread = 1;
+            EnterCriticalSection(&sCadastro);
+            b->proximo = sAtivos;
+            sAtivos = b;
+            LeaveCriticalSection(&sCadastro);
         }
 #else
         pthread_mutex_init(&b->trava, NULL);
@@ -307,6 +348,16 @@ void Blocos_Fechar(Blocos *b) {
         pthread_join(b->thread, NULL);
 #endif
     }
+#ifdef _XBOX
+    if (b->comThread) {
+        Blocos **p;
+        EnterCriticalSection(&sCadastro);
+        for (p = &sAtivos; *p != NULL; p = &(*p)->proximo) {
+            if (*p == b) { *p = b->proximo; break; }
+        }
+        LeaveCriticalSection(&sCadastro);
+    }
+#endif
     if (b->primitivas) {
 #ifdef _XBOX
         DeleteCriticalSection(&b->trava);

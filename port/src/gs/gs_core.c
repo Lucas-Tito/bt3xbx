@@ -1602,6 +1602,7 @@ int gGsFbpEntregue = -1;
 static void render_wait(void);
 static void gif_corpo(uint32_t addr, uint32_t qwc, int chain);
 #ifdef PORT_X360
+extern void Port_GsInterromperJogo360(void); /* encerra só o jogo, fora de qualquer trava do GS */
 extern void Port_GsThreadPartida(void);                                   /* main360.cpp: processador e identidade da thread */
 extern int GsD3d_Repete(void);                                             /* gs_d3d.cpp: mostra de novo o último quadro */
 extern void GsD3d_Soltar(void);                                            /* gs_d3d.cpp: o dispositivo volta para a main */
@@ -1649,8 +1650,12 @@ static void *render_thread(void *arg) {
 #ifdef BT3_GS_ESPERAS
         } else if (sJob == 3) { /* parar: o dispositivo volta para quem o criou */
 #ifdef PORT_X360
-            if (gGsDesenhoParar != NULL) { /* (degrau 2, etapa 4) a parada sem esperar (Port_GsPararJa): o desenho acaba o
-                                              retrato que tem, solta o dispositivo e sai antes */
+            /* Na queda, a main espera ambos os handles. O join do desenho fecharia o handle antes dela.
+               O pedido ao desenho é separado; a callback síncrona continua para a parada normal antiga. */
+            if (sParar) {
+                gGsDesenhoParar = NULL;
+            }
+            if (gGsDesenhoParar != NULL) {
                 void (*parar)(void) = gGsDesenhoParar;
                 gGsDesenhoParar = NULL;
                 pthread_mutex_unlock(&sLock);
@@ -1715,12 +1720,18 @@ static void *render_thread(void *arg) {
 static void render_wait(void) {
 #ifdef PORT_X360
     uint64_t t0 = 0; /* (picos: o jogo esperando a gravação, gs_internal.h; só quem espera de fato lê o relógio) */
+    Port_GsInterromperJogo360();
     pthread_mutex_lock(&sLock);
     if (gPicos != 0 && sJob != 0) {
         t0 = __mftb();
     }
     while (sJob != 0) {
-        pthread_cond_wait(&sDone, &sLock);
+        Port_X360CondEsperaMs(&sDone, &sLock, 50);
+        if (sParar) {
+            pthread_mutex_unlock(&sLock);
+            Port_GsInterromperJogo360();
+            pthread_mutex_lock(&sLock);
+        }
     }
     pthread_mutex_unlock(&sLock);
     if (t0 != 0) {
@@ -1737,6 +1748,9 @@ static void render_wait(void) {
 }
 
 static void render_post(int job, uint32_t tadr, int tte) {
+#ifdef PORT_X360
+    Port_GsInterromperJogo360();
+#endif
     pthread_mutex_lock(&sLock);
     sJob = job;
     sJobTadr = tadr;
@@ -1779,6 +1793,13 @@ void Port_GsParar(void) {
     }
     sParado = 1; /* o que o jogo ainda mandar na saída se perde: o dispositivo já não é desta thread */
 }
+
+#ifdef PORT_X360
+/* Handle emprestado: só a desmontagem do título o espera, sem fechar nem pegar a trava do GS. */
+void *Port_GsThread360(void) {
+    return sThreaded ? (void *)sThread : NULL;
+}
+#endif
 
 /* Pede a parada sem esperar (uma queda do jogo): a thread acaba o trabalho em andamento, solta o dispositivo e sai. */
 void Port_GsPararJa(void) {

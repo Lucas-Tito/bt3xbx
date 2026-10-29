@@ -731,37 +731,39 @@ extern "C" void Som360_Iniciar(void) {
 
 extern "C" void Som360_Parar(void) {
     static volatile LONG leituraParada;
-    if (!InterlockedExchange(&leituraParada, 1)) { /* (a thread de leitura existe também com o som desligado) */
+    int ligado = InterlockedExchange(&sLigado, 0) != 0, ok = 1;
+    if (ligado) {
+        /* Quem chama é a auxiliar na thread de hardware 1, nunca um retorno do XAudio2. */
+        InterlockedExchange(&sMorto, 1);
+        InterlockedExchange(&sFimMisturador, 1);
+        if (sPare != NULL) SetEvent(sPare);
+        if (sEvento != NULL) SetEvent(sEvento);
+        sX->StopEngine();
+    }
+    if (!InterlockedExchange(&leituraParada, 1)) {
         Medidas("saída");
         Leitura("saída");
         Fluxo_Parar();
     }
-    if (!InterlockedExchange(&sLigado, 0)) {
+    if (!ligado) return;
+    if (sVigia != NULL) {
+        DWORD r = WaitForSingleObject(sVigia, 2000);
+        Diario_Escrever("saída: som vigia: espera=%08X teto=2000 ms", (unsigned)r);
+        if (r != WAIT_OBJECT_0) ok = 0;
+        else { CloseHandle(sVigia); sVigia = NULL; }
+    }
+    if (sMisturador != NULL) {
+        DWORD r = WaitForSingleObject(sMisturador, 2000);
+        Diario_Escrever("saída: som misturador: espera=%08X teto=2000 ms", (unsigned)r);
+        if (r != WAIT_OBJECT_0) ok = 0;
+        else { CloseHandle(sMisturador); sMisturador = NULL; }
+    }
+    if (!ok) {
+        Diario_Escrever("som: thread atrasada; preserva recursos até o dashboard");
         return;
     }
-    if (sVigia != NULL) {
-        SetEvent(sPare);
-        if (WaitForSingleObject(sVigia, 2000) != WAIT_OBJECT_0) {
-            Diario_Escrever("som: o vigia não parou em 2 s");
-        }
-        CloseHandle(sVigia);
-        sVigia = NULL;
-    }
-    if (sSistema != NULL) {
-        CloseHandle(sSistema);
-        sSistema = NULL;
-    }
+    if (sSistema != NULL) { CloseHandle(sSistema); sSistema = NULL; }
     Contadores("saída");
-    sX->StopEngine();
-    if (sMisturador != NULL) {
-        InterlockedExchange(&sFimMisturador, 1);
-        SetEvent(sEvento);
-        if (WaitForSingleObject(sMisturador, 2000) != WAIT_OBJECT_0) {
-            Diario_Escrever("som: o misturador não parou em 2 s");
-        }
-        CloseHandle(sMisturador);
-        sMisturador = NULL;
-    }
     sVoz->DestroyVoice();
     sVoz = NULL;
     sSaida->DestroyVoice();
@@ -770,6 +772,8 @@ extern "C" void Som360_Parar(void) {
     sX = NULL;
     Diario_Escrever("som: parado (StopEngine, vozes e motor soltos)");
 }
+
+extern "C" void Som360_MarcarQueda(void) { InterlockedExchange(&sMorto, 1); }
 
 extern "C" void Som360_Queda(void) {
     InterlockedExchange(&sMorto, 1);

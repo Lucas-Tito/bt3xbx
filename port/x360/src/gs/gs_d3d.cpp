@@ -5606,6 +5606,8 @@ static int alvo_do_fbp(const GsQuadro *q, int fbp) {
     return -1;
 }
 
+extern "C" void Port_QuedaTeste360(int desenho, int luta, unsigned quadro);
+
 static void frame_end(void) {
     const GsQuadro *q = gsQuadro;
     LARGE_INTEGER t0, tp, tv;
@@ -5618,6 +5620,7 @@ static void frame_end(void) {
     D3DTexture *mtex;
     static int every = -1;
 
+    Port_QuedaTeste360(1, gX360Luta != 0, q->quadro);
     cadeia_inicio(q->quadro);
     QueryPerformanceCounter(&t0);
     sQ = q;

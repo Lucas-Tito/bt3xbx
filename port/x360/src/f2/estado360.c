@@ -55,6 +55,9 @@ void Estado_Resumo(void) {
 }
 
 void Port_Sair(int codigo);
+void Port_QuedaTeste360(int desenho, int luta, unsigned quadro);
+void Port_GsInterromperJogo360(void);
+extern unsigned gGsFrame;
 void Port_X360FecharSaida(void); /* posix360.c */
 int Passos_Medindo(void);        /* port/x360/headless/passos.c */
 extern const char *volatile gPortStage;
@@ -66,7 +69,9 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
     static unsigned ate = 0xFFFFFFFFu;
     static int modo = -1, luta = 0;
     (void)fightSize;
+    Port_GsInterromperJogo360();
     gPortStage = fight != NULL ? "jogo: luta" : "jogo: menus ou carga";
+    Port_QuedaTeste360(0, fight != NULL, gGsFrame);
     QueryPerformanceCounter(&agora);
     if (sModo < 0) {
         const char *caminho = getenv("BT3_HASH");
