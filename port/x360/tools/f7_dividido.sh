@@ -106,6 +106,24 @@ passo perfil python3 port/x360/tools/f7_dividido.py perfil "$S/gpu-f7_simples-x8
 passo negativos python3 port/x360/tools/f7_dividido.py negativos "$S/entrada-x86.log" "$S/entrada-x86/pad.bin" \
     "$S/gpu-f7_dividido-x86gv.log" "$S/gpu-f7_simples-x86gv.log" \
     "$S/roteiros/f7_dividido/img/x86/marca_ponto_dividido.ppm" "$S/negativos"
+# Os próprios roteiros da sonda curta também chegam às três janelas nas duas ordens de bytes.
+for r in simples dividido; do
+    for b in x86 ppc; do
+        A=(env BT3_GS=none BT3_UNCAPPED=1 BT3_DOIS=1 BT3_ROTEIRO="port/x360/roteiros/f7_perfil_$r.txt"
+           BT3_SAVES="$S/sonda-$r-$b-cartao")
+        if [ "$b" = x86 ]; then
+            A+=(timeout 900 port/build/x86/bt3_x86)
+        else
+            D=$S/roteiros/f7_$r/dados
+            A+=(BT3_DATA="$D" BT3_CONVERTIDOS="$D/mods/convertidos.txt" timeout 3600 qemu-ppc port/build/ppc/bt3_ppc)
+        fi
+        passo "sonda-$r-$b" "${A[@]}"
+        passo "sonda-confere-$r-$b" python3 port/x360/tools/passos.py "$S/sonda-$r-$b.log" \
+            --carimbo "$(git rev-parse --short HEAD) diff:da39a3ee5e" --minimo 600
+        python3 port/x360/tools/roteiros.py telas "$S/sonda-$r-$b.log" > "$S/sonda-$r-$b.telas"
+    done
+    passo "sonda-rastro-$r" python3 port/x360/tools/roteiros.py compara "$S/sonda-$r-x86.telas" "$S/sonda-$r-ppc.telas"
+done
 passo save-mc bash port/x360/tools/save_mc.sh
 passo confere-save-mc python3 port/x360/tools/f5_final_confere.py save-mc port/build/save_mc
 passo save-entre env O="$S/save_entre" bash port/x360/tools/save_entre.sh

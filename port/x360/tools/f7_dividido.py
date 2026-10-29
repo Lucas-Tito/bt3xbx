@@ -32,7 +32,7 @@ def ler(p):
 def inteiro_fim(s):
     m = re.findall(r"^roteiro: \S+ fim vblank \d+ quadro (\d+)$", s, re.M)
     exige(len(m) == 1, "falta um único fim do roteiro")
-    exige("FALHA" not in s and "sem conversor em" not in s and "NÃO IMPLEMENTADO" not in s.upper(),
+    exige("FALHA" not in s and "sem conversor em" not in s and "NÃO IMPLEMENTADO" not in s.upper() and "not implemented yet:" not in s,
           "falha, guarda ou stub no log")
     return int(m[0])
 
@@ -84,7 +84,7 @@ def entrada(log, pad):
     exige(re.search(r"resultado estado 4 vencedor 0x1 razao 0x1 vida [1-9]\d* 0 ", s), "sem resultado por KO do lado 1")
     exige(re.search(r"derrubado lado 1 ", s), "resultado não identifica o dano de teste")
     exige(re.search(r"ok tela 4 vblank.*\n(?:.*\n)*roteiro: \S+ marca ponto retorno ", s), "sem retorno ao menu")
-    return {"pares": fim, "mudancas": len(eventos), "seletores": len(sel), "resultado": "KO dado, lado 0 vence"}
+    return {"pares": fim, "mudancas": len(eventos), "seletores": len(sel), "resultado": "KO dado, lado 0 vence", "guardas": 0, "stubs": 0}
 
 
 def linhas_vistas(s):
@@ -112,7 +112,7 @@ def vistas(log):
     def metades(v):
         return (v[3] == 1 and v[4] == v[8] == 1 and v[5] != v[9] and
                 v[6:8] == [0, 254] and v[10:12] == [257, 511] and min(v[12:14]) > 0 and min(v[15:17]) > 0)
-    exige(all(v[2] == 3 and metades(v) for v in janela), "metade sem geometria, câmera repetida ou tesoura errada")
+    exige(all(v[2] == 3 and metades(v) and v[14] == 0 for v in janela), "metade sem geometria, câmera repetida ou tesoura errada")
     tecnica, volta = marca(s, "cheia"), marca(s, "dividido_volta")
     cheia = [v for v in linhas if fim < v[1] <= tecnica + 90 and v[3] == 1 and v[14] > 0 and
              ((v[4] == 0 and v[6:8] == [0, 511]) or (v[8] == 0 and v[10:12] == [0, 511]))]
@@ -198,6 +198,7 @@ def negativos(log, pad, gpu, simples, ppm, saida):
     recusa("par_truncado", "entrada", binario=pathlib.Path(pad).read_bytes()[:-18])
     recusa("sem_cancelamento", "entrada", texto=SELECAO.sub("", ler(log)))
     recusa("sem_resultado", "entrada", texto=re.sub(r"^roteiro: resultado.*$", "", ler(log), flags=re.M))
+    recusa("stub", "entrada", texto=ler(log) + "\nbt3: not implemented yet: teste\n")
     recusa("sem_fim", "entrada", texto=re.sub(r"^roteiro: \S+ fim .*$", "", ler(log), flags=re.M))
     def muda_vistas(qual):
         limite = marca(ler(gpu), "dividido_volta")
