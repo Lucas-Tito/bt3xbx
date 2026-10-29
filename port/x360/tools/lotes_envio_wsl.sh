@@ -131,9 +131,10 @@ for a in x86gv ppcg; do
         done
     done
 done
-for r in f5_duelo f5_treino; do
-    for c in normal ctl lot alfa atraso1 atraso5 atraso20; do div "$c-x86gv-$r" "$c-ppcg-$r"; done
-done
+# A normal já difere entre x86gv e ppcg no duelo desde a etapa das threads (08-threads.md): cada
+# variante tem de repetir essa diferença (mesmos quadros e hashes), não zerá-la. Sabotagens no script.
+python3 port/x360/tools/lotes_envio_arquiteturas.py "$I" "$I" 2>&1 | tee "$I/arquiteturas.log"
+pa "entre arquiteturas: $(tail -1 "$I/arquiteturas.log")"
 for a in x86gve ppcge; do
     for m in dados ordem; do
         nome=negativo-$a-$m
@@ -143,7 +144,7 @@ for a in x86gve ppcge; do
         pa "sabotagem $nome recusada"
     done
 done
-pa 'matriz: 28 execuções completas, 24 pares contra normal e 14 entre arquiteturas; quatro sabotagens recusadas'
+pa 'matriz: 28 execuções completas, 24 pares contra normal e 14 entre arquiteturas iguais às da normal (três sabotagens recusadas); quatro sabotagens de execução recusadas'
 # A imagem aqui é o raster de software dos roteiros. O falso não rasteriza D3D;
 # imagem do novo envio no D3D exige as capturas da rodada preparada para o Lucas.
 export O=$I/roteiros REFS=$I/referencias REF=1 SEMMAPA=1 IMG=1

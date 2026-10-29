@@ -2588,3 +2588,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - Sessão de agente sem `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS`: `systemd-run --user` pode dizer `No medium found`
   mesmo com o gerenciador do usuário vivo. Conferir `/run/user/$(id -u)/bus` e passar explicitamente essas duas
   variáveis ao disparo e ao comando do marcador de espera. Não deixar marcador que sai falso só por faltar o barramento.
+- **Comparação que já difere na referência não leva critério zero.** Entre `x86gv` e `ppcg` a build normal difere em 11
+  quadros do duelo desde a etapa das threads; a conferência dos lotes exigiu zero e perdeu a rodada depois de duas horas.
+  Antes de armar, rodar cada comparador nos logs da última rodada de referência e escrever o critério como "igual ao da
+  normal" (mesmos quadros e hashes), com cópias de um quadro a mais, um a menos e um hash trocado vistas falhando.

@@ -5468,7 +5468,7 @@ O script usa uma cópia descartável da base `979cc928` dentro de `port/build`, 
 |---|---|
 | normal x base, x86/x86gv/PPCg | objetos sem depuração por `objcopy`/`cmp`, só carimbo de teste pode diferir; stubs e `.text` x86 iguais; `cmp` visto falhar |
 | fronteira/publicação nativas, x86 e PPC | mesmos testes e sabotagens, atrasos 1/5/20 ms |
-| falso, Duelo e Treino, x86/PPC | 28 execuções: normal, controle da mesma build, envio, envio com alfa e três atrasos; 24 comparações contra normal e 14 entre arquiteturas por `divergencias.py --normal` |
+| falso, Duelo e Treino, x86/PPC | 28 execuções: normal, controle da mesma build, envio, envio com alfa e três atrasos; 24 comparações contra normal por `divergencias.py --normal`; 14 entre arquiteturas por `lotes_envio_arquiteturas.py`, cada uma com a mesma diferença da normal (quadros e hashes), três sabotagens recusadas |
 | comandos enviados | cada comando e dados relidos na faixa e no fecho; hash integral igual ao de faixas mais cauda; ao menos uma faixa efetiva nas aberturas ligadas |
 | posse da VU1 e recursos | GPU falsa atrasada dois quadros, zero diferentes, zero liberação forçada, zero textura solta usada; quatro execuções sabotadas de dados/ordem têm de falhar |
 | critérios anteriores | `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino`, `SEMMAPA=1 IMG=1 roteiros.sh duelo`, `save_mc.sh` e seu conferidor, com estados/saves não vazios e iguais |
