@@ -258,7 +258,7 @@ for n in "${NOMES[@]}"; do
         JUNTA=0
         if [ "${RAPIDO:-1}" = 1 ] && [ "${MEM:-fim}" != menu ]; then
             JUNTA=1
-            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao ]] || PONTOS=(--pontos)
+            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao && $n != f7_elenco_* ]] || PONTOS=(--pontos)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
         fi
@@ -377,7 +377,7 @@ for n in "${NOMES[@]}"; do
             # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
             # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
             # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela
-            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao ]] || PONTOS=(--pontos)
+            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao && $n != f7_elenco_* ]] || PONTOS=(--pontos)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
             while read -r t VT; do

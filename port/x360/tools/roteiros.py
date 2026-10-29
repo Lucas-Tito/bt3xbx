@@ -979,6 +979,9 @@ TELAS_IMG = {4, 33, 34, 35, 38, 39, 40, 44, 45, 48, 49, 50, 53, 54, 55, 56, 60, 
 # tela). Não é um modo do jogo: o roteiro.c a dá no lugar do 60 enquanto CharRef.state é a carga do modelo ou o modelo.
 TELAS_IMG.add(600)
 ENTRADA, SAIDA, LUTA, PERGUNTA, CARGA = 100, 100, 50, 40, 60
+# (F7, etapa 4) cada carga de personagem do "rastreia elenco" ("elenco carga lado L ..."): o modelo novo na tela,
+# ELENCO quadros depois da carga concluída
+ELENCO = 12
 
 
 def eventos_rastro(caminho):
@@ -1040,6 +1043,8 @@ def lista_imagens(caminho, luta=False):
                 out.append((f"{rotulo}_saida", seguinte - q - SAIDA, anc))
         elif t.startswith("marca ") or t.startswith("ok som "):
             out.append((rotulo, 0, anc))
+        elif t.startswith("carga lado "):
+            out.append((rotulo, ELENCO, anc))
         elif t in ("ok mcflow 12", "ok mcflow 2"):
             out.append((rotulo, PERGUNTA, anc))
     return out
