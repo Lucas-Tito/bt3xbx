@@ -188,6 +188,9 @@ class Contexto:
                 # acima, gira por Mtx_RotateZ, leva ao mundo e normaliza: dir.xyz (+0x90) e worldDir.xyz (+0xA0) de toda
                 # parte herdam a diferença dos y/z do perfil, com o mesmo código 0x54 e o mesmo limite de 64 ULP. Visto:
                 # 34 palavras de 0 a 56 ULP, só nas partes de shape 8; posição, ponto, cor e o resto, iguais.
+                # A diferença do perfil não é da libm: é o clang da x86 dobrando o laço do EftGlow_BuildTables na
+                # compilação (docs/x360/pesquisa/06-libm.md). Com BT3_SEM_DOBRA=1 ligada por padrão, esta regra e a
+                # do perfil saem.
                 exigir(n % 0xc0 == 0, 'vetor de partes do brilho com tamanho inesperado')
                 for i in range(n // 0xc0):
                     for o in (0x90, 0x94, 0x98, 0xa0, 0xa4, 0xa8):

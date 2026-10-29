@@ -185,7 +185,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `memdiff.py --marcas` | o mesmo, campo a campo num bloco que guarda um arquivo, pela largura que o conversor deu a cada byte (`conv_tool --marcas`); `--marcas-tam` acha o bloco pelo tamanho pedido ao alocador, em vez do índice, que muda de um quadro e de um roteiro para outro, e cada região marcada sai numa linha "marcas ...: conforme N, fora-do-formato M" |
 | `memdiff.py --tipos BASE --donos BASE` | (revisão da etapa 5) as globais e os blocos do heap campo a campo pelo tipo (`campos.py --globais` e `--donos --tipos`), com os vetores de bytes e os campos `unk*` como opacos; cada trecho fora do formato é listado, a região do heap diz o tipo, quem alocou e onde começam os dados |
 | `campos.py --globais PROG BASE` / `--donos PROG VBLANK --tipos BASE` | a largura de cada byte das globais (DWARF, mapa do `elftipos.py`, declarações `extern`) e dos blocos vivos do heap (o tipo pedido na alocação ou o apontado por quem recebe o bloco), para o `memdiff.py` |
-| `memdiff.py --marcas-vivas DIR --so-em-uso` | (F4, etapa 5b) cada arquivo e conteúdo de `DIR` (o `conv_tool --marcas` grava ao lado de cada `.marcas` o `.orig`, o conteúdo antes da conversão, que fica no WSL) no bloco em uso que o guarda no começo, achado pelo conteúdo: os trechos de 64 bytes não nulos iguais aos da x86 (o tamanho não basta: 21 rostos do mesmo tamanho, o arquivo do lutador num buffer fixo de 0xCE000). `--so-em-uso` tira da comparação os blocos livres, o enchimento do alocador e o `HeapBlock.unk1C`, que o alocador nunca grava. Classes novas por palavra: `misto` (u8, u8 e u16 na mesma palavra) e `float-proximo` (arredondamento, a libm do host) |
+| `memdiff.py --marcas-vivas DIR --so-em-uso` | (F4, etapa 5b) cada arquivo e conteúdo de `DIR` (o `conv_tool --marcas` grava ao lado de cada `.marcas` o `.orig`, o conteúdo antes da conversão, que fica no WSL) no bloco em uso que o guarda no começo, achado pelo conteúdo: os trechos de 64 bytes não nulos iguais aos da x86 (o tamanho não basta: 21 rostos do mesmo tamanho, o arquivo do lutador num buffer fixo de 0xCE000). `--so-em-uso` tira da comparação os blocos livres, o enchimento do alocador e o `HeapBlock.unk1C`, que o alocador nunca grava. Classes novas por palavra: `misto` (u8, u8 e u16 na mesma palavra) e `float-proximo` (arredondamento; entre a x86 e a PPC, a dobra de constantes do clang, `pesquisa/06-libm.md`) |
 | `campos.py` | compara um bloco campo a campo pelo tipo do DWARF (via gdb); `--donos` diz quem alocou cada bloco do heap num vblank |
 | `layout.py` | compara pelo DWARF o layout de toda struct do jogo entre x86 e PPC; a build PPC falha se algo divergir |
 | `pacotes64.py` | todo acesso de 64 bits à memória no código do jogo (AST dos `.i`), classificado em pacote da GPU ou número; falha se uma gravação em pacote estiver sem `PS2_PKT64` (decisão 19, `formatos/gpu.md`) |
@@ -1656,6 +1656,13 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   `memdiff.py` confere essa cauda pelas marcas do arquivo anterior (achado pelo conteúdo da x86 só naquele trecho, em
   camadas) e exige o resto depois dele igual byte a byte. Uma linha de `CLASSES_CONHECIDAS` com teto teria aceitado
   as 15.514 palavras sem provar nada. Voltará em toda troca para um arquivo menor.
+- **A "libm do host" entre a x86 e a PPC era a dobra de constantes do clang.** As duas builds usam a mesma newlib do
+  PS2 em float por software; o clang da x86 desenrolou o laço do `EftGlow_BuildTables` e calculou o `tbl` na
+  compilação, ao mais próximo, enquanto o GCC da PPC e o executável do PS2 o calculam em execução, truncando a soma.
+  Antes de aceitar ULP entre as builds, procure a conta no objeto de cada uma (as chamadas `__addsf3`/`__mulsf3`/
+  `__divsf3`/`__floatsisf` da função) e no executável original. A chave `BT3_SEM_DOBRA=1` do `headless.py`
+  (`-frounding-math`) tira a dobra: o perfil da x86 sai igual ao da PPC nas 80 palavras
+  (`docs/x360/pesquisa/06-libm.md`).
 - **A fonte do menu mede também o cabeçalho de sprites.** Itens negativos chamam `Font_GetWidth` sobre
   o count u32 da folha. O ramo big-endian de `BtlMenu_GetWidth` reconstitui as duas metades como u16
   temporários; converter o cabeçalho como texto estragaria a relocação. As posições do `--mapa` têm
