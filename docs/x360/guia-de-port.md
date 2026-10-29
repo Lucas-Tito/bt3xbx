@@ -1248,6 +1248,16 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   98,6%): a diferença era toda o filtro. O Lucas decidiu não ligar esse modo nas comparações; a regra é aceitar a tela
   com textura reduzida por volta de 82% e medir a nitidez separada antes de procurar erro. A arte dos personagens vem
   sem o meio texel e pela fórmula estrita do GS sairia um pouco macia (anotado, sem decisão).
+- **Num efeito de alvo em alvo, o ponto do rasterizador não é só nitidez: ele muda o lugar do efeito** (F8, pendência 5,
+  `plano/F8/05-brilho.md`). A cadeia do brilho (`GfxPost_DrawGlow`) borra o 64 x 64 com dez passadas em que a ida lê um
+  texel adiante e a volta não: no GS, com o bilinear, cada passo faz a média de dois texels e anda meio texel para cada
+  lado; no ponto, cada ida anda um texel inteiro. O halo do rasterizador sai 40 pixels à esquerda e 35 acima do do PS2 e
+  do caminho de GPU, três vezes mais estreito. A H9 da F5 comparou o console com ele e leu um "brilho do 360 deslocado e
+  fraco" que custou rodadas de console (`BT3_GLOW=100`) sem resultado. Antes de comparar um efeito de tela com o
+  rasterizador: o `TEX1` dos desenhos dele (0x60 é bilinear), um modelo de uma dimensão da cadeia com as coordenadas do
+  jogo (o deslocamento que ele prevê aparece nas capturas?) e, para medir, o `diag_bilinear.patch` (o bilinear do GS, o
+  alfa preso do PC e o `BT3_GLOW` no rasterizador, só no WSL). O rasterizador também usa o alfa até 0xFF onde o PC e o
+  360 o prendem em 0x80: ali ele soma até o dobro.
 - **Teto de memória sem descarte vira textura branca para sempre.** Na sessão da F4, depois da tela de versus do
   Torneio, os menus seguintes ficaram brancos até reiniciar: o backend recusava textura acima de 128 MiB e o cache
   do frontend (`gs_draw.c`) só varre por idade com 8.192 entradas, então nada saía. Num console com memória fixa, o

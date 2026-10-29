@@ -1,0 +1,77 @@
+diff --git a/port/src/gs/gs_core.c b/port/src/gs/gs_core.c
+index 1e49f098..45a15a4c 100644
+--- a/port/src/gs/gs_core.c
++++ b/port/src/gs/gs_core.c
+@@ -575,6 +575,8 @@ static uint32_t texel(int ctx, int u, int v) {
+ 
+ /* ------------------------------------------------------------------------------------------------ pixels */
+ 
++static int sDiagAlfaPc; /* (diagnóstico do brilho, ver diag_le abaixo) */
++
+ static void pixel(Target *sf, int ctx, int x, int y, uint32_t z, uint32_t src) {
+     uint64_t test = gs.test[ctx], al = gs.alpha[ctx], zb = gs.zbuf[ctx], pr = gs.prim;
+     uint64_t sc = gs.scissor[ctx], fr = gs.frame[ctx];
+@@ -649,6 +651,9 @@ static void pixel(Target *sf, int ctx, int x, int y, uint32_t z, uint32_t src) {
+     if ((pr >> 6) & 1) { /* blending: ((A - B) * C >> 7) + D */
+         uint32_t s[3] = {sr, sg, sb};
+         uint32_t c = ((al >> 4) & 3) == 0 ? sa : ((al >> 4) & 3) == 1 ? d >> 24 : (uint32_t)((al >> 32) & 0xFF);
++        if (sDiagAlfaPc && ((al >> 4) & 3) != 2 && c > 0x80) {
++            c = 0x80; /* (diagnóstico, BT3_GS_ALFA_PC: o fator de alfa do PC, preso em 1) */
++        }
+         for (i = 0; i < 3; i++) {
+             int dc = (int)((d >> (8 * i)) & 0xFF);
+             int a = (al & 3) == 0 ? (int)s[i] : (al & 3) == 1 ? dc : 0;
+@@ -680,6 +685,34 @@ static void pixel(Target *sf, int ctx, int x, int y, uint32_t z, uint32_t src) {
+     }
+ }
+ 
++/* (diagnóstico do bt3xbx, port/x360/tools/diag_bilinear.patch, só no WSL; F8, pendência 5) a referência do brilho do
++   caminho de GPU do PC: BT3_GS_BILINEAR=1 lê com o filtro bilinear do GS (o texel em u - 0,5, pesos de 1/16) os
++   sprites em UV com TEX1.MMAG ligado (a cadeia do brilho e os outros efeitos de alvo em alvo; o 3D segue no ponto);
++   BT3_GS_ALFA_PC=1 prende em 0x80 o alfa que a mistura usa como fator (o PC guarda e mistura min(A / 0x80, 1));
++   BT3_GLOW=N põe a cor do desenho que soma um alvo ao quadro (ALPHA 0x68) a N%, como o gs_draw.c. Sem as chaves, nada
++   muda. */
++static int sDiagBil = -1, sDiagGlow = 100;
++static void diag_le(void) {
++    if (sDiagBil < 0) {
++        sDiagBil = getenv("BT3_GS_BILINEAR") != NULL && atoi(getenv("BT3_GS_BILINEAR")) != 0;
++        sDiagAlfaPc = getenv("BT3_GS_ALFA_PC") != NULL && atoi(getenv("BT3_GS_ALFA_PC")) != 0;
++        sDiagGlow = getenv("BT3_GLOW") != NULL ? atoi(getenv("BT3_GLOW")) : 100;
++        if (sDiagBil || sDiagAlfaPc || sDiagGlow != 100) {
++            fprintf(stderr, "gs_core: diagnóstico do brilho: bilinear %d, alfa do PC %d, brilho %d%%\n", sDiagBil, sDiagAlfaPc, sDiagGlow);
++        }
++    }
++}
++static uint32_t texel_bil(int ctx, int u, int v) {
++    int tu = u - 8, tv = v - 8, iu = tu >> 4, iv = tv >> 4, fu = tu & 15, fv = tv & 15, k;
++    uint32_t c00 = texel(ctx, iu, iv), c10 = texel(ctx, iu + 1, iv), c01 = texel(ctx, iu, iv + 1), c11 = texel(ctx, iu + 1, iv + 1), out = 0;
++    for (k = 0; k < 32; k += 8) {
++        uint32_t a = (c00 >> k) & 0xFF, b = (c10 >> k) & 0xFF, c = (c01 >> k) & 0xFF, d = (c11 >> k) & 0xFF;
++        uint32_t m = ((a * (16 - fu) + b * fu) * (16 - fv) + (c * (16 - fu) + d * fu) * fv + 128) >> 8;
++        out |= (m > 255 ? 255 : m) << k;
++    }
++    return out;
++}
++
+ /* Vertex colour and texture combined (TEX0.TFX / TCC). */
+ static uint32_t shade(int ctx, uint32_t vc, float s, float t, float q, int u, int v) {
+     uint64_t pr = gs.prim, t0 = gs.tex0[ctx];
+@@ -689,8 +722,17 @@ static uint32_t shade(int ctx, uint32_t vc, float s, float t, float q, int u, in
+     if (!((pr >> 4) & 1)) {
+         return vc;
+     }
++    diag_le();
++    if (sDiagGlow != 100 && (gs.alpha[ctx] & 0xFF) == 0x68 && (pr & 7) == 6 && ((gs.frame[ctx] & 0x1FF) == 0 || (gs.frame[ctx] & 0x1FF) == 0x70)) {
++        uint32_t k, o = vc & 0xFF000000u;
++        for (k = 0; k < 24; k += 8) {
++            uint32_t m = ((vc >> k) & 0xFF) * (uint32_t)sDiagGlow / 100;
++            o |= (m > 255 ? 255 : m) << k;
++        }
++        vc = o;
++    }
+     if ((pr >> 8) & 1) {
+-        tc = texel(ctx, u >> 4, v >> 4);
++        tc = sDiagBil && ((gs.tex1[ctx] >> 5) & 1) && (pr & 7) == 6 ? texel_bil(ctx, u, v) : texel(ctx, u >> 4, v >> 4);
+     } else {
+         float w = q != 0.0f ? 1.0f / q : 1.0f;
+         tc = texel(ctx, (int)(s * w * (float)(1u << ((t0 >> 26) & 15))), (int)(t * w * (float)(1u << ((t0 >> 30) & 15))));
