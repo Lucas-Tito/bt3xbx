@@ -1009,8 +1009,10 @@ def lista_imagens(caminho, luta=False):
         if t.startswith("tela "):
             x = t.split()[1]
             if x == "luta":
+                # (a segunda luta do roteiro é luta_2: com o mesmo nome a captura dela sobrescrevia a da primeira, e o
+                # Disc Fusion da F6 tinha 26 PPM iguais com a âncora da primeira luta recusada)
                 if luta:
-                    out.append(("luta", LUTA, anc))
+                    out.append(("luta" if vezes[t] == 1 else f"luta_{vezes[t]}", LUTA, anc))
                 continue
             if x == "carga":
                 # (a tela de carregamento antes da luta, 2D: a imagem dela, CARGA quadros depois de entrar)
@@ -1066,6 +1068,12 @@ def compara_imagens(lista, dx, dp, sx=None, sp=None, telas=None):
     qx, qp = quadros(sx), quadros(sp)
     eventos = eventos_rastro(telas) if telas else None
     erros = iguais = 0
+    # (F6, etapa 9) um nome repetido grava duas capturas no mesmo NOME.ppm: a segunda apaga a primeira, e só a âncora
+    # denunciava. Recusado pelo nome, antes de olhar os pixels.
+    for nome, k in collections.Counter(nome for nome, _, _ in lista).items():
+        if k > 1:
+            print(f"  DIFERENÇA: {nome}: nome repetido {k} vezes na lista (a captura seguinte sobrescreve a anterior)")
+            erros += 1
     for nome, n, anc in lista:
         onde = f"{nome} ({anc} +{n}; x86 {qx.get(nome, 'sem linha imagem:')}, ppc {qp.get(nome, 'sem linha imagem:')})"
         a, b = pathlib.Path(dx) / f"{nome}.ppm", pathlib.Path(dp) / f"{nome}.ppm"
