@@ -70,6 +70,107 @@ Seleção, carga e `ponto_carga` passam. Nenhuma classe foi dispensada ou limite
 conteúdo anterior no buffer do modelo e tipagem/valores da região de luta. Hashes e PPM iguais
 não explicam essas regiões. Não se conclui erro de byte order nem diferença inofensiva.
 O caso reprovado permanece isolado no Deck para diagnóstico; não se inicia outro lote sobre ele.
+O diagnóstico está na seção seguinte.
+
+## Diagnóstico da memória da transformação
+
+[Medido] Análise de 29/10/2026 à noite, só sobre os dumps preservados no Deck
+(`~/f7-pilotos-final-84cd35b4/atual/f7_transformacao`), sem emulador. **Nenhuma das quatro
+reprovações vem de dado não convertido ou mal convertido.** Os 122 arquivos e conteúdos lidos
+saem do `conv_tool` com 100% de cobertura e 0 posições não trocadas contra o mapa, e no fim os
+19 blocos vivos com arquivo convertido conferem 9.477.248 números e bytes pelas marcas, nenhum
+fora do formato. Não é a classe do Broly (`00446`/`00447` sem conversor, [queda](queda-relocate.md)):
+não há formato a acrescentar nem censo de arquivos a fazer. São uma falha da ferramenta e três
+diferenças explicáveis da execução. Scripts e saídas da análise: `~/f7tr-diagnostico` no Deck.
+
+### 1. Fim: duas vistas do trabalho do disco (ferramenta)
+
+[Lido] O trabalho de 0x4C0 bytes de uma tarefa de disco tem duas declarações: `EftODisc`
+(`include/battle/eft_o.h`), usada por `EftDisc_Init` e `EftDisc_Update` em `eft_o_c.c`, e
+`EftDisc` (`include/battle/eft_p.h`), usada pelos outros seis callbacks em `eft_p.c`. Um disco
+estava vivo no fim, `memoria_luta.py` (linha 373) recusou os dois tipos e o `memdiff` saiu 2
+antes de comparar: **a memória do fim não chegou a ser julgada**.
+
+[Medido] As duas marcações nunca discordam: onde ambas tipam um byte, a largura é a mesma.
+`EftODisc` tipa 8 bytes que `EftDisc` deixa opacos (`unk3AC` e o ponteiro `tex` em +0x3F8);
+`EftDisc` tipa 98 que `EftODisc` deixa opacos.
+
+Correção: em `memoria_luta.py`, tratar `EftDisc_Init` como já se trata `EftBlade_Init`, aceitando
+só `{EftDisc, EftODisc}` e comparando pela união das marcações (o byte tipado vence o opaco; larguras
+diferentes no mesmo byte continuam recusadas). Com a troca mais simples (escolher `EftDisc`) numa
+cópia das ferramentas, o `memdiff` do fim sai 0 e o julgamento mostra só os itens 2, 3 e 4.
+
+### 2. Bloco 0x1A0800: arredondamento da libm nos quads do brilho
+
+[Medido] O bloco é a arena do `BtlPool`. Os 13 trechos de `ponto_antes` (e os 3 que restam em
+`ponto_transformacao`, `ponto_depois` e no fim) caem no vetor `struct EftPGlowPart` de
+`EftGlowMgr_Init` (140 x 0xC0), só em `dir` (+0x90) e `worldDir` (+0xA0) das partes 16, 21,
+27, 32, 36 e 40: 34 palavras `float-proximo`, de 0 a 56 ULP. Posição, ponto, cor e o resto das
+partes são iguais.
+
+[Medido] O perfil `gEftGlow->dir[20]` já difere pela libm nos y/z das amostras 8, 11, 12, 18 e
+19: são as 8 palavras `libm-host` aceitas desde `ponto_carga` (`memoria_luta.py`, linha 156).
+`EftGlow_GetShapeDir` copia `dir[shape]` e `EftGlow_StepParts` (`src/battle/eft_p_b.c`,
+linhas 856 a 867) gira por `Mtx_RotateZ` (sinf/cosf), leva ao mundo e normaliza. **As seis partes
+diferentes têm `shape` 8; as outras 64 (formas 2 a 7 e 14) são iguais byte a byte.** Cinco estão
+na lista livre (vida 0 ou menos) e a sexta, na ativa com vida -0,251, sai no passo seguinte.
+É a diferença da libm já conhecida, propagada pelo jogo.
+
+Regra: em `memoria_luta.py`, no vetor `EftPGlowPart`, marcar `dir.xyz` (+0x90..+0x9B) e
+`worldDir.xyz` (+0xA0..+0xAB) como 0x54 (libm-host, 64 ULP), em todas as partes, porque as duas
+entradas vêm da libm. A margem é curta (56 ULP num componente de 0,0086). Se estourar, usar
+tolerância absoluta de vetor unitário em vez de ampliar a de ULP.
+
+### 3. Bloco 0xCE800: resto do arquivo anterior no buffer fixo
+
+[Lido] O bloco é `slot->file[2].buf` de um slot fixo de lutador (`BTL_RES_ANIM1_SIZE`,
+`src/battle/btl_obj.c:1198`, zerado no `BtlObj_Init`). Antes da troca guarda
+`pzs3us1/01442.bin` (741.568 bytes); a transformação recarrega no mesmo buffer
+(`BtlRes_SetFileId`, linha 1133) `pzs3us1/01452.bin` (638.720 bytes), e a leitura só grava o arquivo.
+
+[Medido] Em `ponto_depois` e no fim:
+- `[0, 0x9BF00)` confere com as marcas do 01452 (541.655 números e bytes);
+- `[0x9BF00, 0xB50C0)` (25.712 palavras) é o resto do 01442. Na x86, 25.658 palavras são
+  iguais ao original; as outras 54 são campos que o jogo gravou com ele vivo. Pela marcação do
+  01442, os 78.641 números e bytes da PPC são todos conformes, nenhum fora do formato;
+- `[0xB50C0, 0xCE800)` é zero nas duas.
+
+**As classes suspeitas do bloco estão todas no resto: exatamente 15.514 igual-sem-inverter, 32 2xu16
+e 26 u64.** É o mesmo padrão do `stageFile` 0x3B800, já em `CLASSES_CONHECIDAS`, e prova de quebra
+que o 01442 estava bem convertido.
+
+Regra: no `memdiff`, um bloco com marcas vivas cujo conteúdo é menor que o de um arquivo lido antes
+na rodada confere a cauda `[tamanho atual, tamanho anterior)` pelas marcas do anterior, que se acha
+pelo conteúdo da x86 como no `--marcas-vivas` (o `.orig`, metade dos trechos de 64 bytes), em
+camadas se houver mais de um. O que sobrar depois do maior tem de ser igual nas duas. Vale para os
+três buffers do slot fixo (modelo 0xCE000, anim0 0x160800, anim1 0xCE800): voltará em toda troca
+para um arquivo menor, inclusive nas 101 relações. A alternativa fraca é uma linha de
+`CLASSES_CONHECIDAS` com teto pelo menor arquivo e só depois de uma troca de forma. Essa
+alternativa não prova o conteúdo do resto.
+
+### 4. Fim: cauda não iniciada do argumento do disparo
+
+[Medido] Só aparece com o item 1 corrigido: 16 bytes em `heap#176+0x2FD70`, que é o trabalho da
+tarefa de disco 0 (lista de 0x5F00 = 20 x 0x4C0), em +0xD0..+0xDF: `EftDisc.atk` +0x40..+0x4F.
+`BtlFx_FireKiBlast` (`src/battle/btl_char_fx.c:1328`) preenche um `FxHitArg2` local até +0x3C e
+`unk41`, sem gravar `unk40` nem `unk42[0xE]`. `EftDisc_Throw` e `EftDisc_SpawnFromNode` copiam
+os 0x50 bytes por valor (`eft_p.c`, linhas 309 e 697). Na x86 ali estão ponteiros do host
+(0x20090112, 0x019966A4); na PPC, outros valores (0x20045E24, 1.0f). O byte +0x41, gravado,
+vale 0x01 nas duas. É lixo da pilha, outro em cada build e também no PS2.
+
+[Lido] Nenhum leitor: os registros de golpe veem `&w->atk` como `EftHitAtk` (0x34 bytes), e a
+única outra leitura do `atk` é `objId` (+0x12).
+
+Regra: em `memoria_luta.py`, `sem_leitor` para `EftDisc_Init` nos bytes +0xD0 e +0xD2..+0xDF.
+O código do jogo fica como está.
+
+### Para fechar
+
+Implementar o item 1 e as três regras, e ver cada uma falhando de propósito numa cópia: um byte do
+resto do 01442 trocado, um z de quad do brilho a mais de 64 ULP, um byte tipado do `atk` (+0x3C)
+diferente, e larguras conflitantes entre `EftDisc` e `EftODisc`. Depois, rejulgar os dumps preservados
+no Deck sem emulador (`memdiff` e `roteiros.py memoria` nos quatro pontos e no fim). Isso é prova
+antecipada; o aceite continua a ser o `roteiros.sh` do piloto com RC=0.
 
 ## Relógio de parede e disco
 
