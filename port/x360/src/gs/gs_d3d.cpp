@@ -220,11 +220,14 @@ static int sMsVoltaMedia;                 /* ... e alguma delas foi pela média 
                          contorno uma vez por amostra, cada uma com a máscara da sua (D3DRS_MULTISAMPLEMASK) e os ids dela
      BT3_MSAA_2D=1       a arte 2D (misc.w) sem MSAA (D3DRS_MULTISAMPLEANTIALIAS falso: as duas amostras pelo centro do pixel,
                          como sem o MSAA)
+     BT3_MSAA_A2C=0      alfa para cobertura (D3DRS_ALPHATOMASKENABLE) nos desenhos 3D com teste de alfa que só passam com o
+                         alfa a 1/8 ou mais (GEQUAL com AREF de 17 ou mais, GREATER de 16), sem mistura e sem FBA; desligada por
+                         padrão: o alfa de 1/8 a 5/8 cobre uma amostra só também fora da borda (10-msaa.md, seção 9)
    O autoteste das amostras (ms_amostras_autoteste) prova a máscara de cada fragmento e a volta crua; sem elas, a subchave que
    depende delas sai com ERRO (a da volta leva o MSAA junto: sem ela o alfa depois de uma volta seria o médio). Com
    BT3_MSAA_SABOTA=1 (a volta crua uma linha fora) ou 2 (as duas máscaras iguais), o autoteste é estragado de propósito e tem
    de acusar. */
-static int sMsVoltaX, sMsVagas, sMsContorno, sMs2d;
+static int sMsVoltaX, sMsVagas, sMsContorno, sMs2d, sMsA2c;
 static DWORD sMsMasc[2] = {0x1111u, 0x2222u}; /* a máscara de escrita de cada fragmento (o autoteste confirma ou troca) */
 static int sMsMascOk;                     /* o autoteste achou a máscara de cada fragmento */
 static D3DSurface *sMsCru;                /* a cor de 2 amostras vista como 1 amostra, sAlvoW x 2 sAlvoH, na base 0 */
@@ -239,7 +242,7 @@ static int sMsIds1;                       /* a sIds1 é da mesma cópia que a sI
 static double sMsParqueMs, sMsCruMs;      /* autoteste: GPU do parque e da volta crua de um alvo inteiro */
 static struct {
     unsigned quadros, semAlvo, entradas, voltas, despejaM, despejaAB, date, dateVolta, dateTex, ids, idsVolta, zRest, zTroca;
-    unsigned voltaExata, parques, dateMedia, idsMedia, dateAdia, zSai, pequenaSai, ids1, contorno2, des2d;
+    unsigned voltaExata, parques, dateMedia, idsMedia, dateAdia, zSai, pequenaSai, ids1, contorno2, des2d, a2c;
     double parquePx;
 } sMsC; /* (no trecho) */
 static D3DPixelShader *sPsZCor, *sPsZProf;
@@ -3635,9 +3638,10 @@ static void ms_log(void) {
     Diario_Escrever("gs_d3d:   MSAA 2x, o completo, por quadro: a volta exata (BT3_MSAA_VOLTA=%d) com %.2f parques (%.0f mil "
                     "amostras); as vagas (BT3_MSAA_VAGAS=%d): a profundidade saiu %.2f vezes para uma pequena entrar e %.2f "
                     "pequenas saíram para ela voltar; o contorno (BT3_MSAA_CONTORNO=%d): %.2f cópias dos ids do fragmento 1, "
-                    "%.2f contornos por amostra; %.1f desenhos de arte 2D sem MSAA (BT3_MSAA_2D=%d)",
+                    "%.2f contornos por amostra; %.1f desenhos de arte 2D sem MSAA (BT3_MSAA_2D=%d); %.1f desenhos com o alfa "
+                    "para cobertura (BT3_MSAA_A2C=%d)",
                     sMsVoltaX, sMsC.parques / q, sMsC.parquePx / q / 1000.0, sMsVagas, sMsC.zSai / q, sMsC.pequenaSai / q,
-                    sMsContorno, sMsC.ids1 / q, sMsC.contorno2 / q, sMsC.des2d / q, sMs2d);
+                    sMsContorno, sMsC.ids1 / q, sMsC.contorno2 / q, sMsC.des2d / q, sMs2d, sMsC.a2c / q, sMsA2c);
     memset(&sMsC, 0, sizeof(sMsC));
 }
 
@@ -4496,6 +4500,7 @@ static void msaa_init(void) {
     sMsVagas = env_num("BT3_MSAA_VAGAS", 1) != 0;
     sMsContorno = env_num("BT3_MSAA_CONTORNO", 1) != 0;
     sMs2d = env_num("BT3_MSAA_2D", 1) != 0;
+    sMsA2c = env_num("BT3_MSAA_A2C", 0) != 0;
     if (sMsVoltaX) {
         unsigned k;
         sp.Base = 0;
@@ -4556,8 +4561,10 @@ static void msaa_init(void) {
                     "as pequenas depois da profundidade de 2 amostras, as do protótipo", sMsContorno,
                     sMsContorno ? "o contorno por amostra, com a cópia dos ids do fragmento 1, contada com os alvos" :
                     "o contorno por pixel, pelo fragmento 0");
-    Diario_Escrever("gs_d3d: BT3_MSAA=2, o completo: BT3_MSAA_2D=%d (%s)", sMs2d,
-                    sMs2d ? "a arte 2D sem MSAA, as amostras pelo centro do pixel" : "a arte 2D com MSAA, a do protótipo");
+    Diario_Escrever("gs_d3d: BT3_MSAA=2, o completo: BT3_MSAA_2D=%d (%s); BT3_MSAA_A2C=%d (%s)", sMs2d,
+                    sMs2d ? "a arte 2D sem MSAA, as amostras pelo centro do pixel" : "a arte 2D com MSAA, a do protótipo", sMsA2c,
+                    sMsA2c ? "o alfa para cobertura nos desenhos 3D com teste de alfa de 1/8 em diante, sem mistura e sem FBA" :
+                    "desligado");
 }
 
 static int d3d_init(void) {
@@ -6479,8 +6486,10 @@ static void sincroniza_alvos(void) {
     }
 }
 
-/* (F8, BT3_MSAA_2D) os estados de amostra de um desenho no alvo com MSAA, postos antes dele e tirados depois
-   (ms_desenho_tira): o bit 1, a arte 2D sem MSAA. */
+/* (F8, BT3_MSAA_2D e BT3_MSAA_A2C) os estados de amostra de um desenho no alvo com MSAA, postos antes dele e tirados
+   depois (ms_desenho_tira): o bit 1, a arte 2D sem MSAA; o bit 2, o alfa para cobertura. Os desvios do alfa para cobertura
+   são iguais nos quatro pixels da quadra (3/8 cada, 0xFF: sem pontilhado): com 2 amostras, o alfa de 5/8 em diante cobre as
+   duas e o de 1/8 a 5/8 uma; o teste de alfa do desenho garante 1/8 ou mais (nenhum pixel que passa some). */
 static int ms_desenho_poe(const GsDraw *d) {
     int k = 0;
     if (sMs2d && d->misc[3] != 0.0f) {
@@ -6488,11 +6497,21 @@ static int ms_desenho_poe(const GsDraw *d) {
         sMsC.des2d++;
         k |= 1;
     }
+    if (sMsA2c && d->misc[3] == 0.0f && d->misc[2] == 0.0f && !(sPipes[d->pipeline].bkey & 1) &&
+        ((d->mode[3] == 6 && d->misc[0] >= 17.0f) || (d->mode[3] == 7 && d->misc[0] >= 16.0f))) {
+        sDev->SetRenderState(D3DRS_ALPHATOMASKENABLE, TRUE);
+        sDev->SetRenderState(D3DRS_ALPHATOMASKOFFSETS, 0xFFu);
+        sMsC.a2c++;
+        k |= 2;
+    }
     return k;
 }
 static void ms_desenho_tira(int k) {
     if (k & 1) {
         sDev->SetRenderState(D3DRS_MULTISAMPLEANTIALIAS, TRUE);
+    }
+    if (k & 2) {
+        sDev->SetRenderState(D3DRS_ALPHATOMASKENABLE, FALSE);
     }
 }
 
@@ -6704,7 +6723,7 @@ static void frame_end(void) {
         if (sEdRes) {
             ed_confere(d); /* (o contador "alvo lido sem Resolve", esperado 0) */
         }
-        msEst = d->target == sMsAlvo ? ms_desenho_poe(d) : 0; /* (BT3_MSAA_2D; sem a chave, sMsAlvo é -1) */
+        msEst = d->target == sMsAlvo ? ms_desenho_poe(d) : 0; /* (BT3_MSAA_2D, BT3_MSAA_A2C; sem a chave, sMsAlvo é -1) */
         if (d->vu) {
             QueryPerformanceCounter(&tv);
             desenha_vu(d, sVuIni[n]);

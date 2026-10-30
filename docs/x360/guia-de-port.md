@@ -2121,6 +2121,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   pelo centro do pixel, a cobertura e a leitura da textura como sem MSAA. Na escala fracionária as bordas das peças do HUD
   caem no meio do pixel e, com MSAA, ganhariam meia cobertura; o estado posto e tirado em volta de cada desenho de arte 2D
   mantém o afiado e o texto como eram.
+- **O alfa para cobertura do Xenos soma um desvio fixo ao alfa antes de contar as amostras:** `alfa + desvio / N`, com N = 8
+  no MSAA 2x e os desvios de 2 bits por pixel da quadra (`D3DALPHATOMASK_SOLID` é 0xAA, +1/4; `DITHERED` muda por pixel e
+  pontilha). Com 2 amostras e 0xFF (+3/8): abaixo de 1/8 nada, de 1/8 a 5/8 uma amostra, de 5/8 em diante as duas. Num jogo
+  em que o alfa gravado é dado (ids, o bit 7 do DATE) e o "opaco" do PS2 é 0x80, um texel de alfa 0x40 com teste de alfa e
+  sem mistura vira meia cobertura em toda a peça, não só na borda: por isso fica atrás de chave desligada até a imagem
+  aprovar.
 
 ### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
 
