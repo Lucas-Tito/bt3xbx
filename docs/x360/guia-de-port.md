@@ -2841,3 +2841,24 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   esperava o desenho do quadro anterior e só depois perguntava ao backend, onde a chave era lida. Toda espera, trava ou
   laço de uma variante sai antes de qualquer sincronização quando a chave está em 0, e o controle por ambiente só vale
   depois de ser visto igual à build normal no console.
+
+### Provar no host que uma otimização de `src/` dá os mesmos bits (F8, item B, `plano/F8/11-cpu-vu0.md`)
+
+- **Reaproveitar resultado da VU0 emulada exige olhar o estado que ela deixa.** As rotinas de `vu0_a.c` escrevem em
+  `gRefVu0` (vf, ACC, Q, flags); pular uma chamada só vale se a última escritora de cada registrador continuar a mesma.
+  O teste compara o `gRefVu0` inteiro depois do desenho, e o mutante "ordem trocada" mostra que essa comparação pega.
+- **Esta máquina não tem a libc nem a libgcc de 32 bits** (`gcc -m32` compila e não liga). O `teste_explosao.py` liga
+  sem libc: `_start`, `write`/`exit` pelo `int 0x80`, as funções de memória e a divisão de 64 bits em
+  `teste_explosao_rt.c`; os headers da libc pedem um `gnu/stubs-32.h` (vazio) e `-idirafter /usr/include/<multiarch>`.
+- **`objcopy --weaken` enfraquece também as referências que faltam**, e o link estático liga uma função fraca não
+  definida ao endereço 0: o teste caía em `0x00000000` sem nenhum erro de link. Enfraquecer só os símbolos definidos
+  (`nm -g --defined-only` e `--weaken-symbol`).
+- **O gcc põe as funções pequenas do mesmo arquivo dentro da que se testa** (`EftBurst_SetTexture`,
+  `EftBurst_PutModelEnvEnd`): um stub delas não intercepta nada. O teste fornece o que elas chamam (`Tex_Upload`, `gGfx`).
+- **Uma multiplicação por 1,0 que a otimização introduz depende do modelo de float de cada build**: no PC a divisão da
+  VU0 nunca dá denormal nem infinito, no 360 (`float360.c`, FPU nativa) dá. Conferir nos 2^32 padrões de cada modelo
+  (`--identidade`, uns 3 minutos por variante) e o `dumpbin /disasm` do `.obj` velho e novo atrás de `fmadds`/`fnmsubs`.
+- Numa worktree nova `port/build/` não existe: `cp -a .../port/build/gen port/build/` cria `port/build` com o conteúdo
+  de `gen` (sem a pasta `gen`). Fazer `mkdir -p port/build` antes.
+- Uma build disparada com a árvore suja leva `diff:` diferente de `da39a3ee5e` no carimbo: fazer o commit antes do
+  `build_f2.sh` para o log do console apontar um commit.
