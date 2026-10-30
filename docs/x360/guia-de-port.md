@@ -2611,3 +2611,14 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   falhou no `free` do ponteiro propositalmente desalinhado, em vez de chegar à
   guarda DMA esperada. Conferir o primeiro erro e procurar também `selo + 16`
   ao subir a versão. O ensaio C completo acusou a incompatibilidade.
+
+- A rodada oficial deve iniciar os ensaios dentro do serviço, inclusive os
+  instaladores nativos. Esperar pelos PIDs de comandos iniciados na sessão
+  anterior não os protege do encerramento dessa sessão: os dois instaladores
+  pararam sem conclusão. Log incompleto não prova defeito na conversão.
+  O marcador da fila `~/espera/TAREFA` contém na primeira linha um comando
+  que retorna zero enquanto o serviço está ativo, não uma descrição.
+- O banco externo precisa da revisão com `objeto`, `troca`, `CONV=`, `objcru`
+  e `transcru` (na rodada iso-v4, `07f5f5a7`). A revisão `0eef00b5` antecede
+  essa extensão e não prova esses casos, mesmo ligada aos objetos atuais.
+  Conferir tanto a unidade C quanto o script e o comparador antes de armar.

@@ -235,3 +235,11 @@ anteriormente cadastrados. São 3.366 arquivos, +39.
 A marca passou a 4 em ambos os instaladores e no leitor; os testes passam a
 recusar também a versão 3. A prova do banco na PPC será registrada após a fila
 do WSL; cobertura estrutural não basta como prova da carga.
+
+A rodada usa o banco externo de `07f5f5a7`, com a unidade de teste ligada aos
+objetos finais desta worktree. A revisão anterior `0eef00b5` não contém os
+casos extras. A lista tem 131 casos: os personagens 6 e 16, lado 1/voz 1,
+o piloto, os 44 objetos 256..299, os 70 pedidos e as transições 3 e 0.
+O controle com o conversor `09a325dc` deve reprovar na rede e na PPC;
+com `CONV=` apontando para a versão 4, exige carga e rastreio conformes e os
+seis estragos recusados. Resultado final e logs em `~/entrega-iso-v4.md`.

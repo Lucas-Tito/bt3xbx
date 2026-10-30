@@ -6,7 +6,7 @@
 
 Os 81 sítios de `Port_ConvertMenuPack` vêm de arquivos da ISO. Nenhum pacote
 nessa lista é montado apenas na memória. Os 78 sítios em `src/menu/`, os dois
-em `src/battle/late_a*.c` (Shenlong) e o de `src/sys/mcflow_a.c` usam a mesma
+em `src/sys/late_a*.c` (Shenlong) e o de `src/sys/mcflow_a.c` usam a mesma
 API. A lista abaixo liga cada sítio à entrada e à seção pelo inventário da F4
 (`unpacks.py` e `roteiros.py CONTEUDO/FAIXAS`), conferido contra os leitores.
 As chamadas repetidas são aberturas distintas do mesmo tipo de arquivo.
