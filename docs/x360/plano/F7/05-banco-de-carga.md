@@ -263,3 +263,10 @@ conversor e na PPC, como esperado. Evidências em
 A rodada parou depois no comparador de memória dos menus, conforme a nota
 da F8, sem falha no banco. A correção do comparador não muda os conversores
 nem o jogo; o banco será repetido com os carimbos finais.
+
+[Medido] A repetição com `550d8532` passou novamente os 131 casos, o
+rastreio e os seis estragos, com marcas completas. O controle sem a faixa
+reprovou na rede e na PPC. Os sete primeiros roteiros de menu passaram;
+a rodada parou no Ultimate por fragmentos de arquivos em blocos
+reutilizados, descritos na nota da F8. A nova correção só muda ferramentas
+de comparação e documentação; o banco será repetido com o carimbo final.

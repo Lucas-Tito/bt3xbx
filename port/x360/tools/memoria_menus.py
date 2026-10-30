@@ -1,32 +1,44 @@
-"""Referências exatas dos sufixos BPE que uma leitura menor deixou no buffer."""
+"""Referências exatas dos arquivos BPE que uma leitura ou alocação deixou no buffer."""
 
 
-def restos_antecipados(dados, tamanho_atual, referencias):
-    """Retorna [(início, bytes esperados, origens)] sem consultar a memória PPC.
+def fragmentos_antecipados(dados, inicio_minimo, referencias):
+    """Identifica fragmentos pela x86, inclusive após a divisão de um bloco.
 
-    File_Request substitui setores de 0x800 bytes. Só reconhece um sufixo
-    inteiro de arquivo anteriormente lido, na mesma posição, após o último
-    setor do arquivo atual. Exige 64 bytes não nulos para identificar a origem.
-    Não reconhece conteúdo descomprimido nem dispensa bytes pelo tamanho.
+    Só usa âncoras de 128 bytes com ao menos 64 não nulos. Expande a igualdade
+    exata até os limites do fragmento e conserva palavras completas, sem tocar
+    no conteúdo vivo anterior a inicio_minimo. Uma referência nunca depende
+    dos bytes PPC. Saídas conflitantes interrompem a comparação.
     """
-    inicio_minimo = (tamanho_atual + 0x7ff) & ~0x7ff
     palavras, fontes = {}, {}
     for nome, original, convertido in referencias:
-        fim = len(original)
-        if fim > len(dados) or fim <= inicio_minimo or fim % 4 or len(convertido) != fim:
-            continue
-        inicio = fim
-        while inicio > inicio_minimo and dados[inicio - 1] == original[inicio - 1]:
-            inicio -= 1
-        inicio = (inicio + 0x7ff) & ~0x7ff
-        if sum(b != 0 for b in original[inicio:fim]) < 64:
-            continue
-        for pos in range(inicio, fim, 4):
-            esperado = convertido[pos:pos + 4]
-            if pos in palavras and palavras[pos] != esperado:
-                raise ValueError(f'sufixo antecipado ambíguo em {pos:#x}: {nome}')
-            palavras[pos] = esperado
-            fontes.setdefault(pos, set()).add(nome)
+        if len(original) != len(convertido):
+            raise ValueError(f'tamanhos antecipados diferentes: {nome}')
+        cobertos = {}
+        for origem in range(0, len(original) - 127, 64):
+            ancora = original[origem:origem + 128]
+            if sum(b != 0 for b in ancora) < 64:
+                continue
+            pos = dados.find(ancora, inicio_minimo)
+            while pos >= 0:
+                deslocamento = pos - origem
+                if deslocamento % 16 == 0 and not any(
+                        a <= pos and pos + 128 <= b for a, b in cobertos.get(deslocamento, [])):
+                    inicio, fim = pos, pos + 128
+                    while inicio > inicio_minimo and inicio > deslocamento and (
+                            dados[inicio - 1] == original[inicio - deslocamento - 1]):
+                        inicio -= 1
+                    while fim < len(dados) and fim - deslocamento < len(original) and (
+                            dados[fim] == original[fim - deslocamento]):
+                        fim += 1
+                    inicio, fim = (inicio + 3) & ~3, fim & ~3
+                    cobertos.setdefault(deslocamento, []).append((inicio, fim))
+                    for p in range(inicio, fim, 4):
+                        esperado = convertido[p - deslocamento:p - deslocamento + 4]
+                        if p in palavras and palavras[p] != esperado:
+                            raise ValueError(f'fragmento antecipado ambíguo em {p:#x}: {nome}')
+                        palavras[p] = esperado
+                        fontes.setdefault(p, set()).add(nome)
+                pos = dados.find(ancora, pos + 1)
     trechos = []
     for pos in sorted(palavras):
         if trechos and trechos[-1][0] + len(trechos[-1][1]) == pos:
@@ -35,3 +47,8 @@ def restos_antecipados(dados, tamanho_atual, referencias):
         else:
             trechos.append((pos, bytearray(palavras[pos]), set(fontes[pos])))
     return trechos
+
+
+def restos_antecipados(dados, tamanho_atual, referencias):
+    """Protege todos os setores da leitura atual antes de procurar os restos."""
+    return fragmentos_antecipados(dados, (tamanho_atual + 0x7ff) & ~0x7ff, referencias)

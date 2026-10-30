@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Exercita a identificação de sufixos sem aceitar bytes crus ou alterados."""
-from memoria_menus import restos_antecipados
+from random import Random
+from memoria_menus import fragmentos_antecipados, restos_antecipados
 
 
 def main():
-    antigo = bytes((i * 13 + i // 251) % 256 for i in range(0x3100))
+    antigo = Random(741).randbytes(0x3100)
     convertido = bytes(b ^ 0x5a for b in antigo)
     atual = b'\x33' * 0x1800
     dados = atual + antigo[len(atual):]
@@ -36,6 +37,34 @@ def main():
         print('estrago referências conflitantes: recusado')
     else:
         raise AssertionError('referências conflitantes aceitas')
+    # O alocador dividiu o bloco: um pedaço termina no limite do buffer e
+    # outro começa no meio do arquivo, sem o cabeçalho BPE original.
+    for rotulo, dados, esperado in [
+        ('cabeça deslocada', b'\x33' * 0x1800 + antigo[:0x1000],
+         [(0x1800, convertido[:0x1000])]),
+        ('cauda cortada', antigo[0x1000:0x2100], [(0, convertido[0x1000:0x2100])]),
+        ('dois fragmentos', antigo[:0x1000] + b'\x33' * 0x800 + antigo[0x2000:],
+         [(0, convertido[:0x1000]), (0x1800, convertido[0x2000:])]),
+    ]:
+        trechos = fragmentos_antecipados(dados, 0, refs)
+        assert [(a, bytes(b)) for a, b, _ in trechos] == esperado, rotulo
+        ppc = bytearray(dados)
+        for a, b in esperado:
+            ppc[a:a + len(b)] = b
+        assert all(ppc[a:a + len(b)] == b for a, b, _ in trechos)
+        assert not all(dados[a:a + len(b)] == b for a, b, _ in trechos), rotulo
+        ppc[trechos[0][0] + 64] ^= 1
+        assert not all(ppc[a:a + len(b)] == b for a, b, _ in trechos), rotulo
+        print(f'estragos {rotulo}, cru e byte: reprovados')
+    assert not fragmentos_antecipados(antigo, len(antigo), refs), 'conteúdo vivo coberto'
+    assert not fragmentos_antecipados(antigo[:127], 0, refs), 'âncora curta aceita'
+    assert not fragmentos_antecipados(antigo, 0, []), 'fragmento sem origem aceito'
+    try:
+        fragmentos_antecipados(antigo, 0, refs + [('outra saída', antigo, antigo)])
+    except ValueError:
+        print('estrago fragmentos conflitantes: recusado')
+    else:
+        raise AssertionError('fragmentos conflitantes aceitos')
     print('teste_memoria_menus: tudo certo')
 
 

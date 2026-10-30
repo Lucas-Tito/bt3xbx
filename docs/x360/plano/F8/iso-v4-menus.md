@@ -151,3 +151,16 @@ conferir esses sufixos pelas referências originais e convertidas, sem
 dispensa por tamanho ou relaxamento de classes. A identificação usa apenas
 a x86 e respeita a substituição em setores de 0x800 bytes. A nova rodada
 oficial repete todos os roteiros com as builds do commit dessa correção.
+
+[Medido] Em `550d8532`, sete roteiros passaram e o Ultimate chegou ao fim,
+com as 22 imagens idênticas, mas reprovou na memória da tela 21 e do fim.
+O heap havia reutilizado os buffers em posições diferentes e dividido um
+arquivo entre dois blocos novos. Os fragmentos identificados de 00782 e
+00760 coincidem exatamente com as respectivas conversões antecipadas.
+O comparador agora reconhece também fragmentos deslocados pela x86,
+com âncoras de 128 bytes, ao menos 64 não nulos, deslocamento múltiplo de 16
+e recusa de referências conflitantes. Exige a saída convertida exata na PPC.
+Protege os setores vivos e só examina buffers crus sem arquivo vivo quando
+são `faceFile` de `0x16800`, sem tipo ou contexto dinâmico. As classes e
+seus tetos continuam os mesmos. A reanálise dos dumps não substitui a
+rodada oficial do novo commit; resultados no relatório da entrega.

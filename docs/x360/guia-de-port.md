@@ -2658,3 +2658,25 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   sufixo e byte alterado no arquivo vivo reprovaram no julgamento completo.
   A reanálise preservada do Duelo passou; continua sendo investigação, sem
   substituir a repetição oficial das builds finais.
+
+- No Ultimate da ISO v4, não bastou procurar sufixos na posição original.
+  O heap reutilizou e dividiu os blocos: na tela 21, o buffer do retrato
+  00782 contém outro fragmento de 00782 deslocado em `0x3680`, seguido pelo
+  resto de 00760 com o mesmo deslocamento. No fim, os buffers novos do Sim
+  Dragon dividem 00782 entre dois blocos e preservam mais uma cauda antiga.
+  Todos esses trechos coincidiram exatamente com a saída antecipada.
+  `memoria_menus.py` procura âncoras exatas de 128 bytes na x86, com pelo
+  menos 64 não nulos e deslocamento múltiplo de 16, e expande a igualdade
+  até os limites do fragmento. Cada byte PPC deve coincidir com a referência
+  convertida; conflito de saídas interrompe a comparação. A busca protege
+  os setores do arquivo vivo. Sem arquivo vivo, só alcança os dados do
+  buffer cru `faceFile` de `0x16800`, sem tipo nem contexto dinâmico, nunca
+  cabeçalhos, estruturas ou o conteúdo descomprimido `faceRes`.
+  Não ampliar `BUFFER_IMAGEM_VAZIO` ou aceitar diferenças pelo tamanho:
+  fragmentos crus e bytes alterados precisam reprovar também nesses buffers.
+  A reanálise integral do Ultimate passou. As duas cópias reais íntegras
+  passaram, e cinco cópias estragadas reprovaram com saída 1: fragmento cru,
+  byte no fragmento e byte no arquivo vivo da tela 21, mais fragmento cru
+  e byte no buffer sem arquivo vivo do fim. Logs em
+  `~/iso-v4/sonda-fragmentos.log`; testes sintéticos também recusam cabeça
+  deslocada, cauda cortada e dois fragmentos crus ou alterados.
