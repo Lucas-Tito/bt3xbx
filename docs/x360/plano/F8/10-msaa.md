@@ -302,7 +302,7 @@ rodada separar o custo de cada uma. Todas as subchaves em 0 dão o protótipo de
 | `299a79b8` | `BT3_MSAA_VOLTA=1` | a volta exata pelas amostras cruas, o DATE adiado, o autoteste das amostras e a sabotagem dele |
 | `2d6d85e8` | `BT3_MSAA_VAGAS=1` | as pequenas sobre a profundidade de 2 amostras; o alvo com MSAA fica na EDRAM o quadro todo |
 | `9219245c` | `BT3_MSAA_CONTORNO=1` | o contorno por amostra (a cópia dos ids do fragmento 1 e duas passadas com a máscara) |
-| `f1cac186` | `BT3_MSAA_2D=1` | a arte 2D sem MSAA (`D3DRS_MULTISAMPLEANTIALIAS` falso em volta de cada desenho) |
+| `f1cac186` | `BT3_MSAA_2D=1` (desligada por padrão desde 30/10, ver 9.5) | a arte 2D sem MSAA (`D3DRS_MULTISAMPLEANTIALIAS` falso em volta de cada desenho) |
 | `d2e7e50a` | `BT3_MSAA_A2C=0` | o alfa para cobertura nos desenhos com teste de alfa, desligado |
 | `8c466c42` | | as correções da revisão: a volta em tiles inteiros, a média que passa pelo parque contada, a escolha do parque |
 
@@ -421,7 +421,8 @@ console: uma abertura com a chave, para o Lucas olhar cabelos e recortes, e o co
 
 Em volta de cada desenho de arte 2D (`misc.w`) no alvo com MSAA, `D3DRS_MULTISAMPLEANTIALIAS` falso: as amostras pelo
 centro do pixel, a cobertura e a leitura como sem MSAA. Na 1,4 e na 1,5 as bordas das peças caem no meio do pixel; o afiado e
-o texto ficam como sem o MSAA. **O centroide no uv não foi feito:** pede uma variante dos shaders do 3D (mudaria os headers
+o texto ficam como sem o MSAA. **Desligada por padrão (30/10/2026):** nas rodadas de 30/10 (o protótipo, que desenhava o 2D
+com o MSAA) o Lucas gostou do HUD e da arte 2D com o MSAA; a chave fica para comparar, com `BT3_MSAA_2D=1`. **O centroide no uv não foi feito:** pede uma variante dos shaders do 3D (mudaria os headers
 da build sem a chave, ou mais variantes) e só serve se houver franja nas bordas 3D, que a rodada mostra.
 
 ### 9.6 O custo do completo [estimado, 1,4 e 1,5, luta, contra o protótipo]

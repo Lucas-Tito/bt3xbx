@@ -218,8 +218,8 @@ static int sMsVoltaMedia;                 /* ... e alguma delas foi pela média 
                          as pequenas que estão em cima dela)
      BT3_MSAA_CONTORNO=1 o contorno por amostra: a cópia dos ids do fragmento 1 (sIds1) ao lado da do 0 e a passada do
                          contorno uma vez por amostra, cada uma com a máscara da sua (D3DRS_MULTISAMPLEMASK) e os ids dela
-     BT3_MSAA_2D=1       a arte 2D (misc.w) sem MSAA (D3DRS_MULTISAMPLEANTIALIAS falso: as duas amostras pelo centro do pixel,
-                         como sem o MSAA)
+     BT3_MSAA_2D=0       1: a arte 2D (misc.w) sem MSAA (D3DRS_MULTISAMPLEANTIALIAS falso: as duas amostras pelo centro do
+                         pixel, como sem o MSAA). Desligada: o Lucas preferiu o HUD com o MSAA nas rodadas de 30/10
      BT3_MSAA_A2C=0      alfa para cobertura (D3DRS_ALPHATOMASKENABLE) nos desenhos 3D com teste de alfa que só passam com o
                          alfa a 1/8 ou mais (GEQUAL com AREF de 17 ou mais, GREATER de 16), sem mistura e sem FBA; desligada por
                          padrão: o alfa de 1/8 a 5/8 cobre uma amostra só também fora da borda (10-msaa.md, seção 9)
@@ -4537,7 +4537,7 @@ static void msaa_init(void) {
     sMsVoltaX = env_num("BT3_MSAA_VOLTA", 1) != 0;
     sMsVagas = env_num("BT3_MSAA_VAGAS", 1) != 0;
     sMsContorno = env_num("BT3_MSAA_CONTORNO", 1) != 0;
-    sMs2d = env_num("BT3_MSAA_2D", 1) != 0;
+    sMs2d = env_num("BT3_MSAA_2D", 0) != 0;
     sMsA2c = env_num("BT3_MSAA_A2C", 0) != 0;
     if (sMsVoltaX) {
         unsigned k;
