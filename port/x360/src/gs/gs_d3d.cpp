@@ -216,11 +216,13 @@ static int sMsVoltaMedia;                 /* ... e alguma delas foi pela média 
                          fim da EDRAM) e A só para quem precisa da vaga grande: o alvo com MSAA não sai da EDRAM pela cadeia do
                          brilho; quem sai é a profundidade (uma pequena que entra a entrega; a profundidade que volta despeja
                          as pequenas que estão em cima dela)
+     BT3_MSAA_CONTORNO=1 o contorno por amostra: a cópia dos ids do fragmento 1 (sIds1) ao lado da do 0 e a passada do
+                         contorno uma vez por amostra, cada uma com a máscara da sua (D3DRS_MULTISAMPLEMASK) e os ids dela
    O autoteste das amostras (ms_amostras_autoteste) prova a máscara de cada fragmento e a volta crua; sem elas, a subchave que
    depende delas sai com ERRO (a da volta leva o MSAA junto: sem ela o alfa depois de uma volta seria o médio). Com
    BT3_MSAA_SABOTA=1 (a volta crua uma linha fora) ou 2 (as duas máscaras iguais), o autoteste é estragado de propósito e tem
    de acusar. */
-static int sMsVoltaX, sMsVagas;
+static int sMsVoltaX, sMsVagas, sMsContorno;
 static DWORD sMsMasc[2] = {0x1111u, 0x2222u}; /* a máscara de escrita de cada fragmento (o autoteste confirma ou troca) */
 static int sMsMascOk;                     /* o autoteste achou a máscara de cada fragmento */
 static D3DSurface *sMsCru;                /* a cor de 2 amostras vista como 1 amostra, sAlvoW x 2 sAlvoH, na base 0 */
@@ -230,10 +232,12 @@ static void ms_parque(int t);             /* (o alvo com MSAA t vai perder a EDR
 static int sMsDatePend = -1;              /* o marcador de DATE do alvo com MSAA que espera a entrada nele (-1: nenhum) */
 static int sMsVagasQ;                     /* (BT3_MSAA_VAGAS) as pequenas do quadro estão sobre a profundidade */
 static UINT sMsZFim;                      /* o fim da profundidade de 2 amostras na EDRAM (a das pequenas que a tocam) */
+static D3DTexture *sIds1;                 /* (BT3_MSAA_CONTORNO) a cópia dos ids do fragmento 1 */
+static int sMsIds1;                       /* a sIds1 é da mesma cópia que a sIds (a do alvo com MSAA) */
 static double sMsParqueMs, sMsCruMs;      /* autoteste: GPU do parque e da volta crua de um alvo inteiro */
 static struct {
     unsigned quadros, semAlvo, entradas, voltas, despejaM, despejaAB, date, dateVolta, dateTex, ids, idsVolta, zRest, zTroca;
-    unsigned voltaExata, parques, dateMedia, idsMedia, dateAdia, zSai, pequenaSai;
+    unsigned voltaExata, parques, dateMedia, idsMedia, dateAdia, zSai, pequenaSai, ids1, contorno2;
     double parquePx;
 } sMsC; /* (no trecho) */
 static D3DPixelShader *sPsZCor, *sPsZProf;
@@ -3628,8 +3632,10 @@ static void ms_log(void) {
                     sMsC.quadros, sMsAlvo);
     Diario_Escrever("gs_d3d:   MSAA 2x, o completo, por quadro: a volta exata (BT3_MSAA_VOLTA=%d) com %.2f parques (%.0f mil "
                     "amostras); as vagas (BT3_MSAA_VAGAS=%d): a profundidade saiu %.2f vezes para uma pequena entrar e %.2f "
-                    "pequenas saíram para ela voltar",
-                    sMsVoltaX, sMsC.parques / q, sMsC.parquePx / q / 1000.0, sMsVagas, sMsC.zSai / q, sMsC.pequenaSai / q);
+                    "pequenas saíram para ela voltar; o contorno (BT3_MSAA_CONTORNO=%d): %.2f cópias dos ids do fragmento 1, "
+                    "%.2f contornos por amostra",
+                    sMsVoltaX, sMsC.parques / q, sMsC.parquePx / q / 1000.0, sMsVagas, sMsC.zSai / q, sMsC.pequenaSai / q,
+                    sMsContorno, sMsC.ids1 / q, sMsC.contorno2 / q);
     memset(&sMsC, 0, sizeof(sMsC));
 }
 
@@ -4486,6 +4492,7 @@ static void msaa_init(void) {
     /* (o MSAA completo, 10-msaa.md, seção 9) as subchaves, a vista crua, os parques e o autoteste das amostras */
     sMsVoltaX = env_num("BT3_MSAA_VOLTA", 1) != 0;
     sMsVagas = env_num("BT3_MSAA_VAGAS", 1) != 0;
+    sMsContorno = env_num("BT3_MSAA_CONTORNO", 1) != 0;
     if (sMsVoltaX) {
         unsigned k;
         sp.Base = 0;
@@ -4514,6 +4521,23 @@ static void msaa_init(void) {
                         "alfa depois de uma volta seria o médio)");
         return;
     }
+    if (sMsContorno && !sMsMascOk) {
+        Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_CONTORNO=1: o autoteste não achou a máscara de cada fragmento; o contorno fica "
+                        "por pixel, pelo fragmento 0 (o do protótipo)");
+        sMsContorno = 0;
+    }
+    if (sMsContorno) {
+        unsigned bytes = tam_real(sIdsW, sIdsH, D3DFMT_A8R8G8B8);
+        if (mem_livres(bytes) < sMem.pisoMb * MB + bytes ||
+            FAILED(sDev->CreateTexture(sIdsW, sIdsH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &sIds1, NULL)) || sIds1 == NULL) {
+            Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_CONTORNO=1: a cópia dos ids do fragmento 1 não foi criada (%u MB livres); o "
+                            "contorno fica por pixel, pelo fragmento 0 (o do protótipo)", mb_livres());
+            sIds1 = NULL;
+            sMsContorno = 0;
+        } else {
+            mem_cria(CL_ALVO, bytes);
+        }
+    }
     sMsaa = 1;
     Diario_Escrever("gs_d3d: BT3_MSAA=2: o MSAA 2x no alvo que o quadro apresenta (o do fbp), os outros com 1 amostra; a cor de 2 "
                     "amostras na base 0 com %u tiles e a profundidade de 2 amostras na base %u com %u (a de 1 amostra na mesma "
@@ -4521,11 +4545,14 @@ static void msaa_init(void) {
                     "volta pelo modo %d (%s; o autoteste escolheu %d pelo fragmento 0 e %d pelo 1)",
                     sMsTilesCor, sMsTilesCor, sMsTilesProf, sMsModoZ,
                     sMsModoZ == 1 ? "como cor" : sMsModoZ == 2 ? "pelo oDepth" : "zerada, como a de 1 amostra", m0, m1);
-    Diario_Escrever("gs_d3d: BT3_MSAA=2, o completo: BT3_MSAA_VOLTA=%d (%s); BT3_MSAA_VAGAS=%d (%s)", sMsVoltaX,
+    Diario_Escrever("gs_d3d: BT3_MSAA=2, o completo: BT3_MSAA_VOLTA=%d (%s); BT3_MSAA_VAGAS=%d (%s); BT3_MSAA_CONTORNO=%d (%s)",
+                    sMsVoltaX,
                     sMsVoltaX ? "a volta exata pelas amostras cruas, dois parques de 2 x a textura do alvo, contados com os alvos; "
                     "o DATE do alvo fora da EDRAM espera a entrada nele" : "a volta pela média, a do protótipo", sMsVagas,
                     sMsVagas ? "as pequenas sobre a profundidade de 2 amostras, com os alvos residentes" :
-                    "as pequenas depois da profundidade de 2 amostras, as do protótipo");
+                    "as pequenas depois da profundidade de 2 amostras, as do protótipo", sMsContorno,
+                    sMsContorno ? "o contorno por amostra, com a cópia dos ids do fragmento 1, contada com os alvos" :
+                    "o contorno por pixel, pelo fragmento 0");
 }
 
 static int d3d_init(void) {
@@ -5912,8 +5939,16 @@ static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
         sMsC.ids++;
         sMsC.idsVolta += sMsVolta;
         sMsC.idsMedia += sMsVoltaMedia;
+        sMsIds1 = sIds1 != NULL;
+        if (sMsIds1) {
+            /* (BT3_MSAA_CONTORNO) e os do fragmento 1, para o contorno da outra amostra */
+            if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
+            sDev->Resolve(D3DRESOLVE_RENDERTARGET0 | D3DRESOLVE_FRAGMENT1, &fonte, sIds1, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+            sMsC.ids1++;
+        }
     } else {
         sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+        sMsIds1 = 0;
     }
     sIdsQuadro = sQ->quadro + 1;
     sConta.natIds++;
@@ -5975,7 +6010,21 @@ static void nat_contorno(const GsDraw *d, uint32_t n, int *cur) {
     }
     nat_entra(d->target, n, cur);
     tempo_poe(T_CONTORNO);
-    nat_contorno_passa(&r, sEscF);
+    if (d->target == sMsAlvo && sMsIds1) {
+        /* (BT3_MSAA_CONTORNO) uma passada por amostra, cada uma com a máscara e os ids do seu fragmento: a linha preta segue
+           as amostras, e a média do fim a suaviza como as bordas de geometria */
+        D3DTexture *ids0 = sIds;
+        sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, sMsMasc[0]);
+        nat_contorno_passa(&r, sEscF);
+        sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, sMsMasc[1]);
+        sIds = sIds1;
+        nat_contorno_passa(&r, sEscF);
+        sIds = ids0;
+        sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, 0xFFFFFFFFu);
+        sMsC.contorno2++;
+    } else {
+        nat_contorno_passa(&r, sEscF);
+    }
     sConta.natCont++;
 }
 

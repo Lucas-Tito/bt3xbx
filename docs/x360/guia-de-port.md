@@ -2113,6 +2113,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   pequenas sobre a profundidade de 2 amostras, quem sai é a profundidade (uma vez, e volta só nas visitas com z), e o alvo
   principal fica na EDRAM o quadro todo. A regra que mantém isso certo é de mão dupla: a pequena que entra com a
   profundidade na EDRAM a entrega ao dono, e a profundidade que volta (limpa ou restaurada) despeja as pequenas de cima dela.
+- **Uma passada de tela que decide por pixel continua serrilhada com o MSAA:** o contorno do BT3 compara os ids da cópia do
+  alfa e escurece o pixel inteiro. Para ele seguir as amostras, uma cópia dos ids por fragmento (os Resolves pelo fragmento 0
+  e pelo 1) e a passada uma vez por amostra, com a máscara daquela amostra e os ids dela; a média do fim faz o resto. Volte o
+  `D3DRS_MULTISAMPLEMASK` a `0xFFFFFFFF` logo depois: ele vale para tudo o que vem a seguir, inclusive a volta de outro alvo.
 
 ### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
 
