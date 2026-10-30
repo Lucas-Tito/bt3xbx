@@ -2592,6 +2592,39 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
 
+### Metadados exatos do alfa (F5, gravação, seção 36)
+
+- O alfa exato existe só na build com `BT3_ALFA_ORIGEM` (`build_f2.sh` com a variável, `headless.py --alfa`): guarda
+  um byte por desenho no jogo de listas, em memória comum. Na VU, só `misc[3]==3` consulta os alfas dos vértices
+  referidos; as demais camadas usam `color0[3]`. A união de fusões inclui somente trechos não vazios. Aplicar a
+  máscara no desenho fechado, mantendo nativas/count fora da amostra e preservando os dois contadores. O limite
+  continua sendo `>128`, não `>=128`.
+- **Chave nova em caminho quente é de compilação, não de execução.** A primeira versão testava `BT3_ALFA_FORA` a cada
+  vértice no `put`; é o mesmo custo desligado que fez a longa do 7170 (seção 35). Com a chave na compilação, a prova
+  de "desligado sem regressão" vira texto e objeto: `alfa_igual.py BASE` exige o texto da main nos fontes do console
+  com os blocos tirados, e os objetos sem depuração da build normal têm de ser os da main. Ligar a gravação ao
+  backend por um símbolo (`gGsAlfaOrigem`) para que uma build com a chave só de um lado não feche a ligação.
+- O falso compara cada desenho de cada quadro com a varredura original na build com o alfa. No D3D,
+  `BT3_ALFA_CONFERE=1` repete a varredura somente na amostra periódica e acusa diferenças no diário;
+  essa abertura tem custo de oráculo e não serve para anunciar ganho em U. Nenhuma leitura dos buffers
+  combinados foi movida para depois de Present. Os metadados viajam no mesmo rodízio das listas.
+
+### Ensaio dos prefixos no falso (F5, gravação, seção 36)
+
+- `BT3_GS_PREFIXOS=1|2` existe somente no backend falso. Publica até `drawCount-1`, pois a última vaga
+  ainda pode fundir. Uma fila de oito descritores tem um consumidor e drena antes da entrega normal;
+  o consumidor confere novamente os dados referidos, a sequência e versões lógicas de alvos. Atrasos
+  de 1/5/20 ms cobrem a primeira leitura de cada quadro. Não há interpretação de D3D concorrente.
+- **Um ensaio que carrega todas as barreiras mede a barreira, não a cadeia.** O modo 1 marcava as cinco consultas
+  integrais e deu "teto 0"; olhando cada consulta, só o `ed_plano` lê a lista inteira e só um marcador DATE (o 94 do
+  6960, que olha até o 1342) prende o resto. O modo 2 faz o censo das regras reais (plano previsto, z da visita, DATE
+  curto) e a curva do relógio da gravação; `prefixos_teto.py` simula C/U por desenho com o perfil fino do console,
+  calibrado nos P/U sem marcas. Antes de declarar uma partição inviável, listar o que cada consulta ao futuro lê de
+  verdade e quanto custa a alternativa que não muda a imagem.
+- A versão lógica de alvo não é um snapshot dos recursos D3D; o teto não conta fila, disputa de memória/SMT, lotes
+  pequenos no buffer de comandos nem plano previsto errado. A integração `BT3_GS_LOTES` continua exigindo as provas
+  da seção 28 e o console.
+
 ### Alfa ap35a2810: medir o que saiu do filtro e conferir os descartes dos picos (F5, seção 37)
 
 - Com `BT3_PICOS=36`, a melhora pode retirar o quadro inteiro do log: `picos_escreve` só publica se o intervalo
@@ -2726,3 +2759,77 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   varrer a linha com sete DIREITA. Os estágios 4 e 27 não estão no Duelo, só no Torneio.
 - **Ssh dentro de um script lido pelo stdin come o resto do script.** `echo ... | bash` com um `ssh deck "..."` no
   meio parou em silêncio depois dele; use `ssh -n` ou grave o script num arquivo antes de rodar.
+### Medir antes de integrar e comparar builds do XDK (F5, gravação, seção 38)
+
+- **Os `.obj` do `cl` nunca saem iguais** (carimbo do COFF, linhas da depuração): `cmp` acusa todos os 348. A prova
+  de que uma chave de compilação desligada não muda a build normal é a desmontagem: `xdk_objetos.py RAIZ A B` roda o
+  `link /dump /disasm` de todos os objetos na imagem do XDK, normaliza os rótulos que dependem da linha (`$M`, `$LN`
+  e os rótulos C viram `$nome$NNN`) e compara as funções do `.map` (os `__unwind$N` mudam de número com qualquer
+  função nova no objeto: contar por objeto). `--espera-diferente` diz quais podem mudar; sem ele, a mesma comparação
+  tem de sair com 1 numa diferença real.
+- **Uma medida nova no caminho da gravação vai na build de perfil, chave de compilação até o `c89.py`.** O `gs_draw.c`
+  passa pelo `c89.py`, não pelo `cl` do backend: a chave do `build_f2.sh` tem de chegar aos dois, como o alfa.
+  O relógio por desenho (`BT3_RELOGIO_GRAV`) escreve os carimbos pela thread de desenho, depois do `cadeia_fim`,
+  quatro linhas por quadro, para não pôr o diário no tempo do quadro medido.
+- **O controle da mesma build precisa da sua própria linha.** Com `BT3_PICOS=36` um quadro que melhora some do log
+  (seção 37); comparar a abertura com a medida contra uma sem ela pelo picos perde justamente os quadros bons. O
+  relógio fecha cada quadro da lista com G, P e U desde J, e `BT3_RELOGIO_MARCAS=0` tira só os carimbos.
+- **Uma integração que muda dependência e tempo ao mesmo tempo não se prova.** O `BT3_GS_LOTES` começou pelas duas
+  consultas ao futuro (plano previsto, DATE curto) com o envio ainda na entrega: a captura igual prova a imagem sem
+  o envio por lotes no meio, e só depois o envio muda o tempo.
+- Teste nativo de código do 360 com g++: `unsigned __int64` só compila com `#define __int64 long long` (um `typedef`
+  não aceita o `unsigned` na frente).
+
+
+### Analisar o relógio e a imagem dos lotes (F5, gravação, seção 39)
+
+- O modelo C normaliza os carimbos pelo G da própria abertura com marcas. Para retirar o efeito delas, aplicar
+  essa fração ao G do controle da mesma build/repetição e recalibrar P/U nesse controle; o comando sem essa troca
+  ainda usa as constantes históricas. Conservar também o resultado original para reproduzir a comparação.
+- O perfil fino anterior ao alfa não contém o rateio da build com alfa. Trocar só o total escala também o antigo
+  custo inicial do alfa. Publicar a hipótese do rateio e a sensibilidade sem `outros`, sem somar um ganho antigo
+  à recuperação do cronograma; prazo de um quadro que sumiu do picos continua sendo referência, não nova medida.
+- `compara_quadros.py` procura `frame_NNNNN.ppm` no segundo diretório, mesmo ao comparar duas capturas do console.
+  Criar links fora do git; exigir todos os números e dimensões e igualdade exata. Seu código 0 significa medida
+  produzida: falta de referência ou um pixel diferente não reprova por si, e 100,00% pode ser arredondamento.
+  Na li37 as capturas cheias são 853x597, não o tamanho alocado do alvo 864x608. Recalcular o FNV do arquivo inteiro
+  para associar a captura ao diário, preservando também SHA256.
+- Captura cheia para a GPU e lê/grava a imagem: as seis li37 têm 20 imagens de quatro ou mais vblanks no combate,
+  até 22. Não transferir esses histogramas ao aceite de desempenho ou à exceção E; os relógios sem captura são
+  outra evidência. A longa marginal 7109 → 7110 dos perfis sem alfa também não vira troca de cena por hipótese.
+
+### Enviar durante a gravação com a dona do D3D livre (F5, gravação, seção 40)
+
+- Uma vaga com produtor esperando apenas o consumo CPU permite sobrepor GPU e gravação sem tornar todas as tabelas
+  concorrentes de uma vez. O consumidor precisa voltar ao seu laço entre faixas; esperar novos desenhos dentro de
+  `frame_end` congela a Guide. Publicação da VU1 combinada exige `sync` completo antes de sinalizar a vaga.
+- **Resolver para liberar a EDRAM pode mudar DATE sem corrida nenhuma.** A fonte do DATE pode ser a própria textura
+  do alvo; um Resolve extra no meio dos seus leitores muda o alfa lido por alias. A primeira implementação conserva
+  cada sequência inteira numa faixa. O teto que supunha só 64 de consulta não prevê essa barreira.
+- **Cor ou z que só nascerão na entrega não podem receber prefixo.** Sem cor, `ed_fim` perde pixels antes de
+  `alvos_sem_textura` criar a textura; sem restauro de z, a faixa seguinte limpa a profundidade já escrita. Recusar o
+  envio antecipado nesses casos, não consumir e tentar reparar no fim. As duas guardas têm sabotagens na auditoria.
+- O `cleared` próprio do desenho deve sobreviver por versão entre retratos parciais. Antecipá-lo na gravação muda a
+  seleção de texturas. Filas de profundidades e pendências só trocam na entrega final, como a cerca de reaproveitar VU1.
+- **A imagem que a Guide repete tem de continuar completa.** Sem FXAA, o ponteiro da imagem anterior pode ser um alvo
+  que os prefixos já modificaram. O candidato só envia com a imagem anterior na textura própria do FXAA. Restaurar a
+  EDRAM entre faixas não resolve sozinho a posse dessa imagem.
+- Uma amostra integral como `alfa_alto` não pode virar amostra só do primeiro prefixo. Isso retira trabalho apenas da
+  abertura ligada, alterando custo e denominadores. Conservar a varredura inteira no fecho, com e sem alfa.
+- Build nova numa worktree sem `gen/data` pode ligar com centenas de stubs e parecer válida. Gerar dados pelo
+  `gen_data.py --asm asm`, fazer a x86 antes da PPC e conferir stubs antes de executar. As tentativas preliminares sem
+  esses dados não contam como execução do jogo. Não copiar `.s` com `incbin` de outro caminho. Os logs da seção 38 tinham 450 stubs, sem as 72 tabelas; a referência
+  `9f2cdb49...` era dessa ligação incompleta. Com dados gerados, a preliminar da seção 40 tem 104 stubs e `43444ea4...`:
+  comparar base e final com dados equivalentes, sem confundir mudança de ligação com mudança dos fontes.
+- Com envio parcial, `msFim` vai do primeiro lote ao fecho e inclui os intervalos em que a gravação trabalhou e a dona
+  D3D ficou ociosa. Não compará-lo como CPU ocupada nem como F integral antigo: medir prazo da imagem e J/G/P/U.
+- Sessão de agente sem `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS`: `systemd-run --user` pode dizer `No medium found`
+  mesmo com o gerenciador do usuário vivo. Conferir `/run/user/$(id -u)/bus` e passar explicitamente essas duas
+  variáveis ao disparo e ao comando do marcador de espera. Não deixar marcador que sai falso só por faltar o barramento.
+- **Comparação que já difere na referência não leva critério zero.** Entre `x86gv` e `ppcg` a build normal difere em 11
+  quadros do duelo desde a etapa das threads; a conferência dos lotes exigiu zero e perdeu a rodada depois de duas horas.
+  Antes de armar, rodar cada comparador nos logs da última rodada de referência e escrever o critério como "igual ao da
+  normal" (mesmos quadros e hashes), com cópias de um quadro a mais, um a menos e um hash trocado vistas falhando.
+- **O GCC do WSL não compila o `gs_d3d.cpp`.** Um método de `D3DDevice` que o XDK não tem só aparece no `cl.exe`: o
+  `KickOff` é do `D3DXps`; no `D3DDevice`, quem manda a fila à GPU sem esperar é o `InsertFence` (só na thread dona,
+  fora de tiling). A auditoria do protocolo confere cada chamada contra a lista conferida no `d3d9.h`.

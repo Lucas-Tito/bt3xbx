@@ -153,6 +153,12 @@ typedef struct GsSolta {
     int alvo;        /* -1: textura */
     unsigned quadro; /* o gGsFrame da gravação no pedido */
 } GsSolta;
+/* (F5, seção 36) BT3_ALFA_ORIGEM: o alfa exato calculado na gravação (port/x360/include/gs_alfa.h) só existe na build que
+   define a chave (build_f2.sh com BT3_ALFA_ORIGEM=1, headless.py --alfa). A build normal compila como antes, sem chave a
+   testar no put nem no fecho: mesmo desligada, uma chave em caminho quente custou ~1,8 ms no 7170 (seção 35). */
+#if defined(BT3_ALFA_ORIGEM) && (defined(PORT_BIG_ENDIAN) || defined(BT3_TESTE_VU1))
+#define GS_ALFA 1
+#endif
 typedef struct GsQuadro {
     const GsDraw *draws;
     uint32_t drawCount;
@@ -181,6 +187,9 @@ typedef struct GsQuadro {
     /* (F5, etapa 8, BT3_VU1_DIRETO) o jogo de buffers do backend em que a gravação gravou os vértices e os índices da VU1
        (vuVerts e vuIdx apontam para ele; o backend desenha dali sem copiar) e o número de ordem dele, que o backend devolve
        pelo vuFeito quando a GPU acabar de lê-lo; -1: nas listas do gs_draw.c, como antes (o backend copia) */
+#ifdef GS_ALFA
+    const unsigned char *alfa; /* (F5, seção 36) o alfa exato de cada desenho, em memória comum, nunca escrita combinada */
+#endif
     int vuJogo;
     uint32_t vuSeq;
 } GsQuadro;
@@ -190,6 +199,16 @@ extern const GsQuadro *gsQuadro;
 /* The interface a back end implements (gs_gpu.c today, gs_gl.c in time). All GPU state stays the back
    end's: the shared layer only hands it handles and asks for the few numbers it must know (whether it can
    still take a texture this frame, a target's attachments). */
+#ifdef PORT_BIG_ENDIAN
+#ifdef BT3_GS_LOTES
+#define GS_LOTES 1
+#endif
+#endif
+/* O falso exercita o mesmo protocolo na x86, sem mudar a build normal. */
+#if defined(BT3_GPU_FALSO) && defined(BT3_GS_LOTES)
+#define GS_LOTES 1
+#endif
+
 typedef struct GsBackend {
     const char *name;                     /* "vulkan", "opengl" */
     int (*init)(void);                    /* window + device + fixed pipelines + white texture; 0 = failed */
@@ -222,6 +241,13 @@ typedef struct GsBackend {
        sempre); a gravação só regrava um jogo depois disso. Lido na gravação, escrito pelo lado do desenho. */
     int (*vuJogo)(int k, float **verts, uint32_t **idx, uint32_t *capV, uint32_t *capI);
     uint32_t (*vuFeito)(void);
+#ifdef GS_LOTES
+    /* Uma vaga: preparo na gravação com desenho parado; consumo na dona do dispositivo.
+       O produtor espera só o consumo CPU, nunca a GPU. O fecho continua sendo frameEnd. */
+    uint32_t (*lotesProntos)(const GsQuadro *q, uint32_t de);
+    void (*lotesPrepara)(const GsQuadro *q);
+    void (*lotesDesenha)(const GsQuadro *q, uint32_t ate);
+#endif
 #endif
 } GsBackend;
 

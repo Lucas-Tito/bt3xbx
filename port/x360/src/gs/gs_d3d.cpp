@@ -992,6 +992,162 @@ extern "C" void Picos_Gravou(unsigned quadro, uint64_t esperaTiques, const uint3
     p->q = quadro;
 }
 
+#ifdef BT3_PERFIL_CADEIA
+/* ---- o relógio da gravação por desenho (F5, seção 38; só na build de perfil) ---------------------------------------- */
+/* BT3_RELOGIO_GRAV=Q1,Q2,... (até 16 quadros; 0 ou ausente, desligado): o gs_draw.c carimba com o mftb o instante em que
+   cada desenho ficou pronto (o seguinte começou; o último, na entrega) e, na entrega dos quadros da lista, a gravação copia
+   os carimbos para uma vaga (Relogio_Gravou, depois do Picos_Gravou, que já pôs J e G no anel). O desenho escreve a vaga
+   pelo diário a partir do quadro seguinte, até quatro linhas por quadro, depois do cadeia_fim: os carimbos em us desde a
+   entrega do jogo (J; sem BT3_PICOS, desde o primeiro desenho) e a curva de dezesseis avos de J a G no formato do falso,
+   para o prefixos_teto.py. É o progresso real da gravação no Xenon, que a seção 36 modelava (U, W, X). Por último, a
+   linha "relogio: fim" com G, P (a marca da GPU posta antes do Present) e U (a GPU chegou a ela) desde J, esperando a
+   GPU até seis quadros. BT3_RELOGIO_MARCAS=0 tira os carimbos e deixa a linha do fim: o controle da mesma build, que
+   diz quanto os carimbos custam em G, P e U sem depender do limiar do picos. */
+#define REL_VAGAS 4
+#define REL_MAX 4096
+#define REL_LINHA 100
+struct RelVaga {
+    volatile unsigned estado; /* 0 livre, 1 cheia (a gravação escreveu), o desenho a esvazia */
+    unsigned quadro, desenhos, marcados, escritos, temJ, cab;
+    unsigned __int64 j, primeiro, g, t[REL_MAX];
+};
+static RelVaga sRel[REL_VAGAS];
+static unsigned sRelQ[16], sRelQN, sRelPerdidas;
+
+extern "C" int Relogio_Ligado(void) {
+    const char *e = getenv("BT3_RELOGIO_GRAV");
+    char *f;
+    int marcas;
+    if (e == NULL || strcmp(e, "0") == 0) {
+        return 0;
+    }
+    while (*e != 0 && sRelQN < 16) {
+        unsigned long v = strtoul(e, &f, 10);
+        if (f == e || (*f != ',' && *f != 0)) {
+            Diario_Escrever("relogio: BT3_RELOGIO_GRAV inválida (use Q1,Q2,...); desligado");
+            sRelQN = 0;
+            return 0;
+        }
+        sRelQ[sRelQN++] = (unsigned)v;
+        e = *f == ',' ? f + 1 : f;
+    }
+    e = getenv("BT3_RELOGIO_MARCAS");
+    marcas = e == NULL || strcmp(e, "0") != 0;
+    Diario_Escrever("relogio: o relógio da gravação ligado em %u quadros (build de perfil), o primeiro %u, %s", sRelQN,
+                    sRelQN ? sRelQ[0] : 0u, marcas ? "com os carimbos por desenho" : "sem os carimbos (BT3_RELOGIO_MARCAS=0)");
+    return sRelQN == 0 ? 0 : marcas ? 2 : 1;
+}
+
+extern "C" void Relogio_Gravou(unsigned quadro, unsigned desenhos, unsigned marcados, const uint64_t *t, uint64_t primeiro) {
+    unsigned i;
+    RelVaga *v = NULL;
+    const PicoG *g = &sPG[quadro % PICOS_N];
+    for (i = 0; i < sRelQN && sRelQ[i] != quadro; i++) {
+    }
+    if (i == sRelQN) {
+        return;
+    }
+    for (i = 0; i < REL_VAGAS && v == NULL; i++) {
+        if (sRel[i].estado == 0) {
+            v = &sRel[i];
+        }
+    }
+    if (v == NULL) {
+        sRelPerdidas++;
+        return;
+    }
+    v->quadro = quadro;
+    v->desenhos = desenhos;
+    v->marcados = marcados < REL_MAX ? marcados : REL_MAX;
+    memcpy(v->t, t, v->marcados * sizeof(v->t[0]));
+    v->primeiro = primeiro;
+    v->temJ = 0;
+    v->g = __mftb();
+    if (gPicos != 0 && g->q == quadro) { /* (o Picos_Gravou acabou de escrever a vaga, nesta thread) */
+        const PicoJ *j = &sPJ[g->qJogo % PICOS_N];
+        v->g = g->tb;
+        if (j->q == g->qJogo && j->tb != 0) {
+            v->j = j->tb;
+            v->temJ = 1;
+        }
+    }
+    if (!v->temJ) {
+        v->j = primeiro;
+    }
+    v->escritos = 0;
+    v->cab = 0;
+    __lwsync();
+    v->estado = 1;
+}
+
+static int rel_us(unsigned __int64 t, unsigned __int64 j) {
+    double us = (double)(__int64)(t - j) * 1000.0 / sPicoTbMs;
+    return us < -9999999.0 ? -9999999 : us > 99999999.0 ? 99999999 : (int)(us + (us < 0 ? -0.5 : 0.5));
+}
+
+/* (o desenho, no fim do frame_end, fora do tempo do quadro) até quatro linhas de uma vaga cheia de quadro anterior */
+static void relogio_escreve(unsigned quadro) {
+    RelVaga *v = NULL;
+    unsigned i, k, linhas = 0;
+    char buf[REL_LINHA * 12 + 16]; /* (os valores limitados a 8 dígitos com sinal) */
+    for (i = 0; i < REL_VAGAS; i++) { /* (a mais velha: o anel do picos guarda P e U por 16 quadros) */
+        if (sRel[i].estado == 1 && sRel[i].quadro < quadro && (v == NULL || sRel[i].quadro < v->quadro)) {
+            v = &sRel[i];
+        }
+    }
+    if (v == NULL) {
+        return;
+    }
+    __lwsync();
+    if (!v->cab) {
+        v->cab = 1;
+        Diario_Escrever("relogio: quadro %u desenhos %u marcados %u; %s, ms: primeiro desenho %.3f, entrega da gravação (G) "
+                        "%.3f; carimbos em us, o desenho i pronto quando o i+1 começou (o último em G); %u vagas perdidas",
+                        v->quadro, v->desenhos, v->marcados, v->temJ ? "desde a entrega do jogo (J)" :
+                        "sem J (BT3_PICOS desligado): desde o primeiro desenho",
+                        v->primeiro != 0 ? (double)(__int64)(v->primeiro - v->j) / sPicoTbMs : -1.0,
+                        (double)(__int64)(v->g - v->j) / sPicoTbMs, sRelPerdidas);
+    }
+    while (v->escritos < v->marcados && linhas < 4) {
+        unsigned fim = v->escritos + REL_LINHA < v->marcados ? v->escritos + REL_LINHA : v->marcados, p = 0;
+        for (k = v->escritos; k < fim; k++) {
+            p += sprintf(buf + p, " %d", rel_us(v->t[k], v->j));
+        }
+        Diario_Escrever("relogio: quadro %u de %u a %u us%s", v->quadro, v->escritos, fim - 1, buf);
+        v->escritos = fim;
+        linhas++;
+    }
+    if (v->escritos >= v->marcados) {
+        unsigned kq = v->quadro % PICOS_N;
+        int temP = sPD[kq].q == v->quadro, temU = temP && sPicoGpu[kq] != 0;
+        if (!temU && quadro < v->quadro + 6) {
+            return; /* (a GPU ainda não chegou à marca do quadro) */
+        }
+        if (v->marcados > 0 && v->desenhos > 16 && v->g > v->j) { /* (a curva de dezesseis avos de J a G, no formato do falso) */
+            unsigned p = 0;
+            double tot = (double)(v->g - v->j);
+            for (k = 0; k <= 16; k++) {
+                unsigned d = k * v->desenhos / 16;
+                unsigned __int64 tk = d < v->marcados ? v->t[d] : v->g;
+                double m = (double)(__int64)(tk - v->j) / tot * 1000.0;
+                p += sprintf(buf + p, " %d", m < -9999.0 ? -9999 : m > 99999.0 ? 99999 : (int)(m + (m < 0 ? -0.5 : 0.5)));
+            }
+            Diario_Escrever("relogio: curva quadro %u desenhos %u ms %.3f milesimos%s", v->quadro, v->desenhos,
+                            tot / sPicoTbMs, buf);
+        }
+        Diario_Escrever("relogio: fim quadro %u desenhos %u marcados %u; ms desde J: G %.3f, marca da GPU posta (P) %.3f, GPU "
+                        "acabou (U) %.3f", v->quadro, v->desenhos, v->marcados, (double)(__int64)(v->g - v->j) / sPicoTbMs,
+                        temP ? (double)(__int64)(sPD[kq].marca - v->j) / sPicoTbMs : -1.0,
+                        temU ? (double)(__int64)(sPicoGpu[kq] - v->j) / sPicoTbMs : -1.0);
+        __lwsync();
+        v->estado = 0;
+    }
+}
+#define RELOGIO_ESCREVE(q) relogio_escreve(q)
+#else
+#define RELOGIO_ESCREVE(q) ((void)0)
+#endif
+
 static void WINAPI picos_cb(DWORD k) {
     sPicoGpu[k] = __mftb();
     __lwsync();
@@ -1828,6 +1984,30 @@ static struct {
     unsigned semtArte, semtGeral, semtDate, semtAtst; /* (BT3_OTIM_SEMTEX) ver ps_escolhe e otim_log */
     double limpaPx, datePx, datePxAntes;
 } sOt;
+#ifdef BT3_GS_LOTES
+/* ---- BT3_GS_LOTES, primeira parte (F5, decisão 32; 08-gravacao.md, seção 38) ----------------------------------------
+   Para o desenho mandar à GPU os desenhos fechados enquanto a gravação ainda grava, as duas consultas que leem a lista
+   inteira mudam de lugar (o envio ainda espera a entrega nesta parte; a imagem tem de sair igual antes de qualquer ganho):
+     o plano da EDRAM (ed_plano) usa as contas do quadro anterior (quantas entradas, quem pede a vaga grande, até onde
+     desenha), guardadas no fim do frame_end dele (lotes_guarda_plano); um desenho que não cabe na pequena prevista (z,
+     nativa, filme, tesoura além da vaga, conteúdo que a volta não cabe) passa o alvo para a B: o sujo da pequena vai para
+     a textura e a entrada pela B o traz de volta, o caminho de sempre dos alvos da B (lotes_vaga);
+     o DATE (date_area) só procura até LOTES_DATE_CURTO desenhos à frente; com o próximo marcador mais longe, copia a área
+     inteira que o Resolve copiaria sem o BT3_OTIM_DATE (cada pixel que um leitor lê sai igual; o dateFora da build normal
+     diz se algum leitor lê fora dela).
+   BT3_LOTES=0 desliga na build com a chave (o controle da mesma build). A build normal não tem nada disto. */
+#define LOTES_DATE_CURTO 64
+static int sLotes, sLotesEnvio;
+static struct {
+    int valido, alvos;
+    int ent[MAX_TARGETS];
+    unsigned char grande[MAX_TARGETS];
+    Ret ext[MAX_TARGETS];
+} sLtPlano;
+static struct {
+    unsigned previstos, integrais, rebaixados, rebaixadosNativa, dateLongos, dateCurtos;
+} sLt;
+#endif
 
 static void otim_init(void) {
     /* ligadas por padrão desde a rodada do console de 23/10 (08-720p.md): a mesma imagem e 1,3 a 2,6 ms a menos de GPU */
@@ -1865,6 +2045,15 @@ static void otim_init(void) {
                         "alfa pelo especializado %s, os outros pelo ps_gs_semt", (sOtim & OT_PS) ? "sim" : "não (sem o "
                         "BT3_OTIM_PS: todos pelo ps_gs_semt)");
     }
+#ifdef BT3_GS_LOTES
+    sLotes = env_num("BT3_LOTES", 1) != 0;
+    sLotesEnvio = sLotes && env_num("BT3_LOTES_ENVIO", 1) != 0;
+    Diario_Escrever("gs_d3d: lotes (BT3_GS_LOTES), primeira parte %s: o plano da EDRAM do quadro anterior e o DATE só até %d "
+                    "desenhos à frente; envio durante a gravacao, uma vaga CPU", sLotes ? "ligada" : "desligada (BT3_LOTES=0)",
+                    LOTES_DATE_CURTO);
+    Diario_Escrever("lotes: envio %s (BT3_LOTES_ENVIO), exige VU1 direto, EDRAM residente e imagem anterior no FXAA",
+                    sLotesEnvio ? "ligado" : "desligado");
+#endif
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
     if (sPsTrivial != 0 && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsTrivPs, &sPsTriv[0])) ||
@@ -2040,6 +2229,17 @@ static int date_area(uint32_t n, Ret *r) {
     Ret u = {0, 0, 0, 0}, ra = *r, ua;
     float s = sEscF;
     uint32_t k, v;
+#ifdef BT3_GS_LOTES
+    if (sLotes) { /* (o próximo marcador longe: a área inteira, como sem o BT3_OTIM_DATE) */
+        for (k = n + 1; k < sQ->drawCount && k - n <= LOTES_DATE_CURTO && sQ->draws[k].native != 5; k++) {
+        }
+        if (k - n > LOTES_DATE_CURTO) {
+            sLt.dateLongos++;
+            return 1;
+        }
+        sLt.dateCurtos++;
+    }
+#endif
     esc_alinha8(&ra.x0, &ra.y0, &ra.x1, &ra.y1, sAlvoW, sAlvoH);
     sOt.dateN++;
     sOt.datePxAntes += (double)(ra.x1 - ra.x0) * (ra.y1 - ra.y0);
@@ -3339,6 +3539,19 @@ static void ed_plano(const GsQuadro *q) {
     memset(ent, 0, sizeof(ent));
     memset(grande, 0, sizeof(grande));
     memset(ext, 0, sizeof(ext));
+#ifdef BT3_GS_LOTES
+    if (sLotes && sLtPlano.valido) { /* (o plano previsto: as contas do quadro anterior, os alvos que ele tinha) */
+        for (t = 0; t < sLtPlano.alvos && t < q->targetCount; t++) {
+            ent[t] = sLtPlano.ent[t];
+            grande[t] = sLtPlano.grande[t];
+            ext[t] = sLtPlano.ext[t];
+        }
+        sLt.previstos++;
+    } else if (sLotes) {
+        sLt.integrais++; /* (o primeiro quadro, ou depois de um sem a EDRAM residente) */
+    }
+    if (!sLotes || !sLtPlano.valido)
+#endif
     for (n = 0; n < q->drawCount; n++) {
         const GsDraw *d = &q->draws[n];
         int x0, y0, x1, y1;
@@ -3374,6 +3587,9 @@ static void ed_plano(const GsQuadro *q) {
     /* (BT3_MSAA_VAGAS) com o alvo com MSAA no quadro: A só para quem precisa da vaga grande e as pequenas sobre a
        profundidade, do fim da cor de 2 amostras em diante */
     msv = sMsVagas && sMsAlvo >= 0 && sMsAlvo < q->targetCount && sMsAlvo < MAX_TARGETS && ent[sMsAlvo] > 0;
+#ifdef BT3_GS_LOTES
+    if (sLotes) for (t = 0; t < MAX_TARGETS; t++) sVagaDe[t] = VG_B;
+#endif
     for (t = 0; t < q->targetCount && t < MAX_TARGETS; t++) {
         const Ret *c = &sAlvoD[t].conteudo;
         sVagaDe[t] = VG_B;
@@ -3518,6 +3734,119 @@ static void ed_fim(void) {
     }
 }
 
+#ifdef BT3_GS_LOTES
+/* (no fim do frame_end, com a lista do quadro ainda viva) as contas do plano para o quadro seguinte: o mesmo laço do
+   ed_plano, letra por letra (o teste_lotes_fonte.py confere), escrevendo no sLtPlano */
+static void lotes_guarda_plano(const GsQuadro *q) {
+    int *ent = sLtPlano.ent, cur = -1, t;
+    unsigned char *grande = sLtPlano.grande;
+    Ret *ext = sLtPlano.ext;
+    uint32_t n;
+    if (!sLotes || !sEdRes) {
+        sLtPlano.valido = 0;
+        return;
+    }
+    memset(sLtPlano.ent, 0, sizeof(sLtPlano.ent));
+    memset(sLtPlano.grande, 0, sizeof(sLtPlano.grande));
+    memset(sLtPlano.ext, 0, sizeof(sLtPlano.ext));
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        int x0, y0, x1, y1;
+        t = d->target;
+        if (t < 0 || t >= q->targetCount || t >= MAX_TARGETS) {
+            continue;
+        }
+        if (d->native != 0) {
+            if (d->native == 1 || d->native == 3 || d->native == 4 || d->native >= 100) {
+                grande[t] = 1; /* (as nativas e o filme entram no alvo e pedem a vaga grande) */
+                ent[t] += t != cur;
+                cur = t;
+            }
+            continue;
+        }
+        if (d->vu && sVuIni[n] == ~0u) {
+            continue;
+        }
+        ent[t] += t != cur;
+        cur = t;
+        if (!sPipes[d->pipeline].fx && (sPipes[d->pipeline].zwrite || sPipes[d->pipeline].ztst != 1)) {
+            grande[t] = 1;
+        }
+        x0 = d->scissor[0];
+        y0 = d->scissor[1];
+        x1 = d->scissor[0] + d->scissor[2];
+        y1 = d->scissor[1] + d->scissor[3];
+        esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH);
+        if (x1 > x0 && y1 > y0) {
+            ret_une(&ext[t], 0, 0, esc_px(x1, sEscN, sEscD), esc_px(y1, sEscN, sEscD));
+        }
+    }
+    sLtPlano.alvos = q->targetCount < MAX_TARGETS ? q->targetCount : MAX_TARGETS;
+    sLtPlano.valido = 1;
+}
+
+/* o alvo t sai da pequena prevista para a B: o que ela tem vai para a textura, e a próxima entrada (pela B, com a volta)
+   o traz; *cur = -1 força essa entrada */
+static void lotes_rebaixa(int t, int *cur) {
+    int v = sVagaDe[t];
+    if (sResidente == t) {
+        ed_sai();
+    }
+    if (sVaga[v].dono == t) {
+        ed_descarrega(t, ED_DESPEJO);
+        sVaga[v].dono = -1;
+    }
+    sVagaDe[t] = VG_B;
+    *cur = -1;
+    sLt.rebaixados++;
+}
+
+/* (no laço, antes da entrada de um desenho comum) o desenho cabe na pequena prevista do alvo? A regra do ed_plano: vaga
+   grande para z (não efeito) e a tesoura presa na área até a largura e a altura da vaga; e, se a volta vai trazer o
+   conteúdo, ele também */
+static void lotes_vaga(const GsDraw *d, int *cur) {
+    int t = d->target, v, x0, y0, x1, y1;
+    const Vaga *g;
+    if (!sLotes || !sEdRes || t < 0 || t >= MAX_TARGETS || sVagaDe[t] < VG_P0) {
+        return;
+    }
+    v = sVagaDe[t];
+    g = &sVaga[v];
+    if (!sPipes[d->pipeline].fx && (sPipes[d->pipeline].zwrite || sPipes[d->pipeline].ztst != 1)) {
+        lotes_rebaixa(t, cur);
+        return;
+    }
+    x0 = d->scissor[0];
+    y0 = d->scissor[1];
+    x1 = d->scissor[0] + d->scissor[2];
+    y1 = d->scissor[1] + d->scissor[3];
+    esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH);
+    if (x1 > x0 && y1 > y0 && (esc_px(x1, sEscN, sEscD) > g->w || esc_px(y1, sEscN, sEscD) > g->h)) {
+        lotes_rebaixa(t, cur);
+        return;
+    }
+    if (g->dono != t && sQ->targets[t].cleared && sAlvoD[t].conteudo.x1 > sAlvoD[t].conteudo.x0 &&
+        (sAlvoD[t].conteudo.x1 > g->w || sAlvoD[t].conteudo.y1 > g->h)) {
+        lotes_rebaixa(t, cur);
+    }
+}
+
+/* (no nat_entra) as nativas e o filme pedem a vaga grande */
+static void lotes_grande(int t, int *cur) {
+    if (sLotes && sEdRes && t >= 0 && t < MAX_TARGETS && sVagaDe[t] >= VG_P0) {
+        lotes_rebaixa(t, cur);
+        sLt.rebaixadosNativa++;
+    }
+}
+#define LOTES_VAGA(d, cur) lotes_vaga(d, cur)
+#define LOTES_GRANDE(t, cur) lotes_grande(t, cur)
+#define LOTES_GUARDA(q) lotes_guarda_plano(q)
+#else
+#define LOTES_VAGA(d, cur) ((void)0)
+#define LOTES_GRANDE(t, cur) ((void)0)
+#define LOTES_GUARDA(q) ((void)0)
+#endif
+
 /* (no init, depois do autoteste da profundidade) a chave: a B na base 2T; recusada sem a profundidade por alvo (BT3_Z=0,
    em que cada entrada zera a profundidade) ou quando A, a profundidade e B não cabem (a escala 2) */
 static void ed_init(UINT tilesCor) {
@@ -3622,6 +3951,13 @@ static void ed_log(unsigned t) {
                     sEd.tilesMax, (unsigned)EDRAM_TILES, sEd.pequenasMax, sEd.pequenaZ, sEd.lePosta, sEd.foraVaga,
                     sEd.semResolve);
     Diario_Escrever("gs_d3d:   EDRAM residente, plano do último quadro: %s", sEdPlano);
+#ifdef BT3_GS_LOTES
+    Diario_Escrever("gs_d3d:   lotes, no trecho: %u planos previstos pelo quadro anterior, %u integrais; %u alvos passados da "
+                    "pequena prevista para a B (%u por nativa ou filme); DATE: %u marcadores com o próximo perto, %u copiando a "
+                    "área inteira", sLt.previstos, sLt.integrais, sLt.rebaixados, sLt.rebaixadosNativa, sLt.dateCurtos,
+                    sLt.dateLongos);
+    memset(&sLt, 0, sizeof(sLt));
+#endif
     if (sEdTrilhaOk) {
         Diario_Escrever("gs_d3d:   EDRAM residente, sequência do quadro %u (alvo e vaga A, B ou p; + com limpeza e volta; z com a "
                         "profundidade restaurada, Z mantida; ^alvo e motivo: os Resolves, l leitura, d DATE, s saída da fonte do "
@@ -4753,6 +5089,9 @@ static int d3d_init(void) {
                         "de fato (as repetições somadas) que não ficou 2 vblanks na tela, com o quadro seguinte e os momentos "
                         "dele até o prazo, e um resumo no fim de cada janela");
     }
+#ifdef GS_ALFA
+    Diario_Escrever("gs_d3d: alfa exato na origem (build com BT3_ALFA_ORIGEM)");
+#endif
     Diario_Escrever("gs_d3d: pronto; alvo %dx%d, EDRAM: cor %u + profundidade %u de %u tiles; %u MB livres", sAlvoW, sAlvoH,
                     tilesCor, tilesProf, (unsigned)EDRAM_TILES, mb_livres());
     if (tilesCor + tilesProf > EDRAM_TILES) {
@@ -5681,6 +6020,7 @@ static void nat_contorno_passa(const Ret *r, float passo) {
 
 /* o alvo de uma nativa na EDRAM (com a profundidade se os desenhos seguintes da visita a usam) */
 static void nat_entra(int t, uint32_t n, int *cur) {
+    LOTES_GRANDE(t, cur); /* (BT3_GS_LOTES: a pequena prevista não serve a uma nativa) */
     if (*cur != t || sResidente != t) {
         entra_na_edram(t, usa_z(n, t));
         *cur = t;
@@ -6190,6 +6530,7 @@ static void desenha_fba(const GsDraw *d, uint32_t ini) {
 /* Num quadro por trecho: os desenhos que escrevem alfa e quantos deles têm alfa de vértice acima de 0x80 (o que o alfa
    saturado da cor perde; o tamanho do byte exato, seção 4 da especificação). Primitivas do GS: o alfa de cada
    vértice; VU1: o color0 do bloco, ou o alfa de cada vértice nas camadas 3 e 4 (programas 8 e 7). */
+#ifndef GS_ALFA
 static void alfa_alto(void) {
     CadeiaEscopo ca(CA_QUADRO, CA_ALFA);
     const GsQuadro *q = sQ;
@@ -6218,6 +6559,50 @@ static void alfa_alto(void) {
         sConta.alfaAlto += alto;
     }
 }
+#else
+/* (F5, seção 36, BT3_ALFA_ORIGEM) os mesmos dois contadores pelo alfa que a gravação calculou ao escrever os vértices e os
+   índices, sem reler os buffers combinados; BT3_ALFA_CONFERE=1 confere cada desenho com a varredura de antes */
+#include "../../include/gs_alfa.h"
+extern "C" const int gGsAlfaOrigem;
+static void alfa_alto(void) {
+    CadeiaEscopo ca(CA_QUADRO, CA_ALFA);
+    const GsQuadro *q = sQ;
+    uint32_t n, k;
+    static int confere = -1;
+    unsigned diferentes = 0, desenhos = 0, altos = 0;
+    if (confere < 0) confere = env_num("BT3_ALFA_CONFERE", 0) != 0;
+    for (n = 0; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        int alto = 0;
+        if (d->native != 0 || d->count == 0 || !(sPipes[d->pipeline].wmask & GS_CC_A)) {
+            continue;
+        }
+        if (q->alfa != NULL && gGsAlfaOrigem) {
+            alto = gs_alfa_metadado(q, n, sPipes[d->pipeline].wmask);
+        } else if (d->vu) {
+            const Vu0Uniform *u = &q->vuUni[d->uniform];
+            alto = u->color0[3] > 128.0f;
+            if (u->misc[3] == 3.0f) {
+                for (k = 0; k < d->count && !alto; k++) {
+                    uint32_t v = q->vuIdx[d->first + k];
+                    alto = v < q->vuVertCount && q->vuVerts[v * 12 + 7] > 128.0f;
+                }
+            }
+        } else {
+            for (k = 0; k < d->count && !alto; k++) {
+                alto = q->verts[d->first + k].a > 0x80;
+            }
+        }
+        if (confere && q->alfa != NULL && alto != gs_alfa_referencia(q, d, sPipes[d->pipeline].wmask)) diferentes++;
+        desenhos++;
+        altos += alto;
+        sConta.alfaAltoDes++;
+        sConta.alfaAlto += alto;
+    }
+    if (confere) Diario_Escrever("alfa: quadro %u desenhos %u altos %u, %u diferentes%s", q->quadro,
+                               desenhos, altos, diferentes, diferentes ? " FALHA" : "");
+}
+#endif
 
 /* ---- as nativas: o autoteste do boot e os ajustes (F5, etapa 7, segunda parte) ------------------------------- */
 
@@ -6572,8 +6957,21 @@ static int alvo_do_fbp(const GsQuadro *q, int fbp) {
     return -1;
 }
 
+#ifdef BT3_GS_LOTES
+#include "../../include/gs_lotes.h"
+static struct {
+    uint32_t n;
+    LARGE_INTEGER t0;
+    double msVu, msCopiaVu;
+    int cleared[MAX_TARGETS];
+    unsigned ver[MAX_TARGETS];
+    unsigned faixas, desenhos;
+} sLtExec;
+static void frame_parte(const GsQuadro *q, uint32_t ate, int final) {
+#else
 static void frame_end(void) {
     const GsQuadro *q = gsQuadro;
+#endif
     LARGE_INTEGER t0, tp, tv;
     double msVu, msCopiaVu;
     double msFim, msPresent;
@@ -6584,6 +6982,15 @@ static void frame_end(void) {
     D3DTexture *mtex;
     static int every = -1;
 
+#ifdef BT3_GS_LOTES
+    uint32_t de = sLtExec.n;
+    if (de) {
+        for (i = 0; i < q->targetCount; i++) {
+            if (sLtExec.ver[i] == sAlvoD[i].ver) q->targets[i].cleared |= sLtExec.cleared[i];
+        }
+    }
+    if (!de) {
+#endif
     cadeia_inicio(q->quadro);
     QueryPerformanceCounter(&t0);
     sQ = q;
@@ -6613,9 +7020,15 @@ static void frame_end(void) {
     tempo_poe(T_OUTROS);
     gGsD3dEtapa = "fim do quadro: refazendo a lista";
     sConta.msZQuadro = 0.0;
+#ifdef BT3_GS_LOTES
+    if (final && sConta.quadros == 30 && sConta.alfaAltoDes == 0) {
+        alfa_alto(); /* a mesma lista inteira, nunca só o primeiro prefixo */
+    }
+#else
     if (sConta.quadros == 30 && sConta.alfaAltoDes == 0) {
         alfa_alto(); /* (um quadro por trecho) */
     }
+#endif
     {
         /* F5, etapa 6: o tempo da VU1 na gravação do quadro (gs_vu1.c) e a cópia das três famílias para a GPU */
         double g = q->vu1Ms;
@@ -6661,7 +7074,26 @@ static void frame_end(void) {
     }
     tempo_abre(); /* (a GPU do quadro começa aqui) */
     recorte_poe();
+#ifdef BT3_GS_LOTES
+        sLtExec.t0 = t0;
+        sLtExec.msCopiaVu = msCopiaVu;
+    } else {
+        t0 = sLtExec.t0;
+        msVu = sLtExec.msVu;
+        msCopiaVu = sLtExec.msCopiaVu;
+        sQ = q;
+        if (final) {
+            if (sConta.quadros == 30 && sConta.alfaAltoDes == 0) alfa_alto();
+            sConta.msVuGrav += q->vu1Ms;
+            if (q->vu1Ms > sConta.msVuGravPior) sConta.msVuGravPior = q->vu1Ms;
+            mem_buffers(q);
+        }
+        recorte_poe();
+    }
+    for (n = de; n < ate; n++) {
+#else
     for (n = 0; n < q->drawCount; n++) {
+#endif
         const GsDraw *d = &q->draws[n];
         if (sComumGpu) sComumDesenho = n;
         if (d->native >= 100) {
@@ -6761,6 +7193,7 @@ static void frame_end(void) {
         if (sEdRes && d->mode[0] == 2) {
             ed_leitura(d->tex, d->target); /* (o alvo lido como textura com sujo guardado numa vaga: o Resolve agora) */
         }
+        LOTES_VAGA(d, &cur); /* (BT3_GS_LOTES: o desenho cabe na pequena prevista?) */
         if (cur != d->target || sResidente != d->target) {
             entra_na_edram(d->target, usa_z(n, d->target));
             q->targets[d->target].cleared = 1; /* (com a divisão, na cópia do retrato: o cleared do desenho) */
@@ -6781,6 +7214,32 @@ static void frame_end(void) {
             ms_desenho_tira(msEst);
         }
     }
+#ifdef BT3_GS_LOTES
+    if (!final) {
+        /* A dona D3D fica livre para a Guide. A fronteira não corta DATE: resolver
+           seu alvo fonte no meio dos leitores mudaria o alfa por alias. */
+        if (sEdRes) ed_fim(); else sai_da_edram();
+        prof_entrega();
+        for (i = 0; i < q->targetCount; i++) {
+            sLtExec.cleared[i] = q->targets[i].cleared;
+            sLtExec.ver[i] = sAlvoD[i].ver;
+        }
+        sLtExec.n = ate;
+        sLtExec.msVu = msVu;
+        sLtExec.faixas++;
+        sLtExec.desenhos += ate - de;
+        /* Sem despacho, os comandos podem continuar só na CPU. O D3DDevice do XDK 2.0.21256 não tem KickOff
+           (só o D3DXps); o InsertFence manda à GPU o que está na fila, sem esperar, desta thread dona. */
+        sDev->InsertFence();
+        return;
+    }
+    if (de && (q->quadro == 6900 || q->quadro == 6929 || q->quadro == 6930 ||
+               q->quadro == 6960 || q->quadro == 7000 || q->quadro == 7170)) {
+        Diario_Escrever("lotes: quadro %u faixas %u desenhos antes de G %u cauda %u", q->quadro,
+                        sLtExec.faixas, sLtExec.desenhos, ate - de);
+    }
+    sLtExec.n = sLtExec.faixas = sLtExec.desenhos = 0;
+#endif
     sConta.msVuDes += msVu;
     if (msVu > sConta.msVuDesPior) sConta.msVuDesPior = msVu;
     gGsD3dEtapa = "fim do quadro: o último alvo volta para a textura";
@@ -6789,6 +7248,7 @@ static void frame_end(void) {
     } else {
         sai_da_edram();
     }
+    LOTES_GUARDA(q); /* (BT3_GS_LOTES: as contas do plano para o quadro seguinte) */
     prof_entrega(); /* (nada fica na EDRAM entre quadros: a Guide e o present podem usá-la) */
     sConta.msZ += sConta.msZQuadro;
     if (sConta.msZQuadro > sConta.msZPior) sConta.msZPior = sConta.msZQuadro;
@@ -6885,6 +7345,7 @@ static void frame_end(void) {
     msFim = ms_desde(&t0);
     tempo_fecha_cpu(msFim, capturas == sConta.capturas);
     cadeia_fim(capturas != sConta.capturas);
+    RELOGIO_ESCREVE(q->quadro); /* (F5, seção 38: só na build de perfil) */
     ms = ms_desde(&sUltimoFim);
     QueryPerformanceCounter(&sUltimoFim);
     if (capturas == sConta.capturas) {
@@ -6928,6 +7389,36 @@ static void frame_end(void) {
     gsSkipped = 0;
     gsNative = 0;
 }
+
+#ifdef BT3_GS_LOTES
+static void frame_end(void) { frame_parte(gsQuadro, gsQuadro->drawCount, 1); }
+static int lotes_usa_z(const GsDraw *d) {
+    return sModoZ && (sPipes[d->pipeline].zwrite || sPipes[d->pipeline].ztst >= 2);
+}
+static uint32_t lotes_prontos(const GsQuadro *q, uint32_t de) {
+    if (!sLotesEnvio || !sEdRes || !sModoZ || !sLtPlano.valido || q->vuJogo < 0) return de;
+    /* Sem textura de z, um corte no meio de uma visita perderia o z já escrito.
+       A entrega final pode criar a textura; até lá, conservar a lista integral. */
+    for (uint32_t n = de; n < q->drawCount; n++) {
+        const GsDraw *d = &q->draws[n];
+        if (d->target >= 0 && d->target < q->targetCount && !sAlvos[d->target].tex) return de;
+        if (!d->native && sPipes[d->pipeline].zwrite && sPipes[d->pipeline].ztst != 0 &&
+            (d->target < 0 || d->target >= q->targetCount || !sProf[d->target].tex)) return de;
+    }
+    /* A Guide só repete a imagem completa anterior. Sem a textura própria do
+       FXAA, sMostradoTex poderia ser um alvo já alterado pelo quadro parcial. */
+    if (!sFxaa || !sFxaaTex || sMostradoTex != sFxaaTex) return de;
+    return gs_lotes_limite(q, de, lotes_usa_z);
+}
+static void lotes_prepara(const GsQuadro *q) {
+    /* O produtor esperou a faixa CPU anterior. Fila de profundidades e pendências
+       só trocam na entrega final; não zerar sPendGrav nem o cleared da gravação. */
+    vu_plano(q);
+    prof_garante(q);
+    sincroniza_alvos();
+}
+static void lotes_desenha(const GsQuadro *q, uint32_t ate) { frame_parte(q, ate, 0); }
+#endif
 
 /* A thread dona do dispositivo, sem quadro há 50 ms (o jogo carrega, não entrega quadro): apresenta de novo a última
    imagem, para a Guide e o sistema terem um present a cada tanto. No degrau 1, a de gravação ociosa; com a divisão (degrau
@@ -7060,6 +7551,11 @@ GsBackend sD3dBackend = {
     solta,
     vu_jogo,
     vu_feito,
+#ifdef BT3_GS_LOTES
+    lotes_prontos,
+    lotes_prepara,
+    lotes_desenha,
+#endif
 };
 }
 

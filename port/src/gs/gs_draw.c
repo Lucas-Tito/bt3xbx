@@ -46,6 +46,39 @@ extern int gPortMenuMode;       /* headless.c: the menus are running */
 extern int gPortMusicPercent, gPortSePercent;
 
 static GsBackend *sBackend;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+static void gs_lotes_passo(void);
+#endif
+#endif
+#if defined(PORT_X360) && defined(BT3_PERFIL_CADEIA)
+/* (F5, seção 38 do 08-gravacao.md) O relógio da gravação por desenho, só na build de perfil (BT3_PERFIL_CADEIA=1
+   build_f2.sh): com BT3_RELOGIO_GRAV=Q1,Q2,... no ambiente, cada desenho anexado fecha o anterior com uma leitura do mftb
+   (o desenho i está pronto quando o i+1 começa; o último, na entrega), e a entrega passa os carimbos do quadro ao
+   gs_d3d.cpp (Relogio_Gravou), que escreve pelo desenho os dos quadros da lista. Com BT3_RELOGIO_MARCAS=0, sem os
+   carimbos (sRelLiga 1: só J, G, P e U dos quadros, o controle da mesma build). Na build normal GS_RELOGIO() é vazio. */
+void Relogio_Gravou(unsigned quadro, unsigned desenhos, unsigned marcados, const uint64_t *t, uint64_t primeiro);
+int Relogio_Ligado(void);
+static uint64_t sRelT[MAX_DRAWS], sRelPrimeiro;
+static unsigned sRelN;
+static int sRelLiga = -1;
+static void gs_relogio(void) {
+    uint64_t t = __mftb();
+    if (sRelN >= gsDrawCount) { /* (a lista recomeçou fora da entrega: descarte, troca de tamanho) */
+        sRelN = 0;
+        sRelPrimeiro = 0;
+    }
+    if (sRelPrimeiro == 0) {
+        sRelPrimeiro = t;
+    }
+    while (sRelN + 1 < gsDrawCount) {
+        sRelT[sRelN++] = t;
+    }
+}
+#define GS_RELOGIO() do { if (sRelLiga > 1) gs_relogio(); } while (0)
+#else
+#define GS_RELOGIO() ((void)0)
+#endif
 #ifdef BT3_GS_ESPERAS
 #include <pthread.h>
 /* (degrau 2, etapa 3) o pedido de soltar uma textura ou o alvo de uma vaga: direto ao backend sem a divisão, pela fila com
@@ -138,6 +171,13 @@ typedef struct GsJogo {
 } GsJogo;
 static GsJogo sJogos[2];
 static int sJogo; /* o jogo da gravação */
+#ifdef GS_ALFA
+/* (F5, seção 36) o alfa exato na origem, só na build com BT3_ALFA_ORIGEM (gs_draw.h): sem chave de execução no put */
+#include "../../x360/include/gs_alfa.h"
+static unsigned char sAlfa[2][MAX_DRAWS]; /* 32 KiB, sem cópia dos vértices */
+static int sAlfaCpu, sAlfaVu;
+const int gGsAlfaOrigem = 1; /* o backend o cita: uma build com a chave só de um lado não liga */
+#endif
 static uint32_t *sVuFaixa; /* a vuFaixa do jogo da gravação */
 #define JOGO_BYTES ((unsigned)(MAX_DRAWS * sizeof(GsDraw) + MAX_VERTS * sizeof(Vtx) + MAX_VU_VERTS * 48u + MAX_VU_IDX * 4u + \
                                MAX_VU_UNIFORMS * sizeof(Vu0Uniform) + MAX_DRAWS * 8u))
@@ -1085,6 +1125,16 @@ static void depth_clut(int ctx) {
         return; /* the next strip of the same pass */
     }
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 }
 
 static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *us, float *vs) {
@@ -1112,6 +1162,16 @@ static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *u
                 c.target = GsDraw_TargetGet(tbp / 32, 0);
                 if (c.target >= 0 && gsDrawCount < CAP_DRAWS && !(last != NULL && last->native == 4)) {
                     gsDraws[gsDrawCount++] = c;
+                #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
                 }
             }
         }
@@ -1243,6 +1303,9 @@ static void put(const GsVertex *v, float x, float y, float s, float t, float q, 
     o->y = y;
     o->z = (float)((double)v->z / zmax);
     o->r = r; o->g = g; o->b = b; o->a = a;
+#ifdef GS_ALFA
+    sAlfaCpu |= a > 0x80;
+#endif
     o->s = s; o->t = t; o->q = q;
 }
 
@@ -1273,6 +1336,16 @@ static void date_snapshot(const GsDraw *d) {
     c.target = d->target;
     if (gsDrawCount + 1 < CAP_DRAWS) {
         gsDraws[gsDrawCount++] = c;
+    #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
     }
 }
 
@@ -1702,6 +1775,9 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
         d.orig[0] = tw;
         d.orig[1] = th;
     }
+#ifdef GS_ALFA
+    sAlfaCpu = 0;
+#endif
     d.first = gsVertCount;
     if (type == 6) { /* sprite: two corners, flat colour and depth of the second vertex */
         const GsVertex *a = &v[0], *b = &v[1];
@@ -1801,9 +1877,25 @@ void GsGpu_Draw(int type, int ctx, const GsVertex *v) {
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     last = gsDrawCount ? &gsDraws[gsDrawCount - 1] : NULL;
     if (last != NULL && same_state(last, &d)) {
+#ifdef GS_ALFA
+        gs_alfa_junta(sAlfa[sJogo], gsDrawCount - 1, sAlfaCpu, 1);
+#endif
         last->count += d.count; /* same state as the previous primitive: one draw call */
     } else {
+#ifdef GS_ALFA
+        gs_alfa_junta(sAlfa[sJogo], gsDrawCount, sAlfaCpu, 0);
+#endif
         gsDraws[gsDrawCount++] = d;
+    #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
     }
 }
 
@@ -1918,6 +2010,9 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
 #else
     if (last != NULL && same_state_vu(last, d) && iguais32(&gsVuUni[last->uniform], pu, sizeof(Vu0Uniform) / 4)) {
 #endif
+#ifdef GS_ALFA
+        gs_alfa_junta(sAlfa[sJogo], gsDrawCount - 1, gs_alfa_vu(pu, sAlfaVu, d->count), 1);
+#endif
         vu_faixa(gsDrawCount - 1, lo, hi, 1);
         last->count += d->count;
 #ifdef PORT_X360
@@ -1932,8 +2027,21 @@ static void vu_fecho(GsDraw *d, const Vu0Uniform *pu, uint32_t lo, uint32_t hi) 
     }
 #endif
     d->uniform = (int)gsVuUniCount++; /* (pu é a vaga gsVuUni[gsVuUniCount]) */
+#ifdef GS_ALFA
+    gs_alfa_junta(sAlfa[sJogo], gsDrawCount, gs_alfa_vu(pu, sAlfaVu, d->count), 0);
+#endif
     vu_faixa(gsDrawCount, lo, hi, 0);
     gsDraws[gsDrawCount++] = *d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
@@ -2083,6 +2191,16 @@ void GsGpu_DrawVu6(int ctx, const float *vertices, uint32_t count, const float *
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
@@ -2222,6 +2340,16 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
@@ -2290,6 +2418,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_CONST);
 #endif
+#ifdef GS_ALFA
+    sAlfaVu = 0;
+#endif
     d.vu = 1;
     d.first = gsVuIdxCount;
 #ifdef BT3_GS_ESPERAS
@@ -2308,6 +2439,11 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                     continue;
                 }
             }
+#ifdef GS_ALFA
+            if (layer == 3 && !sAlfaVu) {
+                sAlfaVu = gs_alfa_triangulo(vertices, i);
+            }
+#endif
             idx[n] = base + i;
             idx[n + 1] = base + i + 1;
             idx[n + 2] = base + i + 2;
@@ -2374,6 +2510,16 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     vu_faixa(gsDrawCount, d.first, d.count, 0);
 #endif
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 #ifdef PORT_X360
     GS_VU_MARCA(GS_FAM_V_FECHO);
 #endif
@@ -2399,6 +2545,16 @@ void GsGpu_FbUpload(int second) {
     d.target = GsDraw_TargetGet(second ? 0x70 : 0, 1);
     if (d.target >= 0) {
         gsDraws[gsDrawCount++] = d;
+    #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
     }
 }
 
@@ -2430,6 +2586,16 @@ void GsGpu_Native(int effect) {
     d.scissor[2] = ((int)((sc >> 16) & 0x7FF) + 1) * SCALE - d.scissor[0];
     d.scissor[3] = ((int)((sc >> 48) & 0x7FF) + 1) * SCALE - d.scissor[1];
     gsDraws[gsDrawCount++] = d;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    GS_RELOGIO();
+    gs_lotes_passo();
+#else
+    GS_RELOGIO();
+#endif
+#else
+    GS_RELOGIO();
+#endif
 }
 
 /* A new resolution multiplier: every render target is dropped and made again at the new size when the game next
@@ -4667,6 +4833,9 @@ static void backend_frame_end(void) {
     q->vuIdx = gsVuIdx;
     q->vuIdxCount = gsVuIdxCount;
     q->vuFaixa = sVuFaixa;
+#ifdef GS_ALFA
+    q->alfa = sAlfa[sJogo];
+#endif
     q->vuUni = gsVuUni;
     q->vuUniCount = gsVuUniCount;
     q->targets = gsTargets;
@@ -4722,6 +4891,13 @@ static void solta_pede(GsTex tex, int alvo) {
     s->alvo = alvo;
     s->quadro = gGsFrame;
 }
+
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+#define GS_LOTE_MIN 64u
+#include "../../x360/include/gs_lotes_grav.h"
+#endif
+#endif
 
 static void *desenho_thread(void *arg) {
     uint32_t i;
@@ -4788,6 +4964,17 @@ static void *desenho_thread(void *arg) {
         }
 #endif
         gsQuadro = &sRetrato;
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+        if (sDesTem == 4) {
+            sBackend->lotesDesenha(&sLote, sLoteAte);
+            pthread_mutex_lock(&sDesLock);
+            sDesTem = 0;
+            pthread_cond_broadcast(&sDesFeito);
+            continue;
+        }
+#endif
+#endif
         sBackend->frameEnd();
         for (i = 0; i < sRetrato.soltaCount; i++) {
             sBackend->solta(sRetrato.soltas[i].tex, sRetrato.soltas[i].alvo);
@@ -5266,6 +5453,9 @@ static void desenho_entrega(void) {
     sRetrato.vuVerts = gsVuVerts;
     sRetrato.vuIdx = gsVuIdx;
     sRetrato.vuFaixa = sVuFaixa;
+#ifdef GS_ALFA
+    sRetrato.alfa = sAlfa[sJogo];
+#endif
     sRetrato.vuUni = gsVuUni;
     sRetrato.drawCount = c[0];
     sRetrato.vertCount = c[1];
@@ -5333,9 +5523,23 @@ static void desenho_entrega(void) {
         Picos_Gravou(sRetrato.quadro, pEsp, c);
     }
 #endif
+#if defined(PORT_X360) && defined(BT3_PERFIL_CADEIA)
+    if (sRelLiga < 0) {
+        sRelLiga = Relogio_Ligado(); /* (o primeiro quadro entregue só liga; os carimbos começam no seguinte) */
+    } else if (sRelLiga > 0) {
+        Relogio_Gravou(sRetrato.quadro, c[0], sRelN, sRelT, sRelPrimeiro); /* (depois do picos: a gravação já está no anel) */
+    }
+    sRelN = 0;
+    sRelPrimeiro = 0;
+#endif
     pthread_mutex_lock(&sDesLock);
 #ifdef PORT_X360
     sEntregando = 0;
+#endif
+#if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
+#ifdef GS_LOTES
+    sLoteAte = sLoteConsulta = 0; /* o fecho passou para o desenho; o próximo quadro usa outra lista */
+#endif
 #endif
     sDesTem = 1;
     pthread_cond_signal(&sDesAcorda);

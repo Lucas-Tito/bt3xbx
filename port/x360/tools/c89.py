@@ -25,6 +25,12 @@ import eeconst, portsrc  # noqa: E402
 
 CLANG = os.environ.get("CLANG", "clang")
 DEFS = ["-DPORT_BIG_ENDIAN", "-DPORT_X360", "-D_XBOX"]
+# (F5, seção 36) BT3_ALFA_ORIGEM=1 no ambiente (build_f2.sh): a build com o alfa exato na origem (port/src/gs/gs_draw.h)
+if os.environ.get("BT3_ALFA_ORIGEM") == "1":
+    DEFS.append("-DBT3_ALFA_ORIGEM")
+# (F5, seção 38) BT3_PERFIL_CADEIA=1 (build_f2.sh): a build de perfil leva também o relógio da gravação (gs_draw.c, GS_RELOGIO)
+if os.environ.get("BT3_PERFIL_CADEIA") == "1":
+    DEFS.append("-DBT3_PERFIL_CADEIA")
 I = lambda p: "-I" + str(ROOT / p)  # noqa: E731
 
 # O que o 360 troca por versão própria em port/x360/src (o resto de port/src e de port/src/gs entra como está).
@@ -32,6 +38,9 @@ SUBSTITUIDOS = {"plat_crash", "plat_libm", "softfloat_ps2", "plat_fastvec", "sta
 GS_SEM_JANELA = {"gs_core", "gs_sony", "gs_vu1", "namefont", "snd_adx", "snd_se"}  # e state.c (substituído)
 # F3, etapa 7: a gravação do quadro para o backend D3D9 do 360 (port/x360/src/gs/gs_d3d.cpp). Compila com o pedaço
 # de SDL que ela cita (port/x360/src/gs/sdl) e tira as entradas GsGpu_* vazias do sem_janela.c (X360_GS_D3D).
+# (F5, seção 40) a publicação de faixas precisa existir nos dois lados da interface GsBackend.
+if os.environ.get("BT3_GS_LOTES") == "1":
+    DEFS.append("-DBT3_GS_LOTES")
 GS_D3D = {"gs_draw"}
 
 

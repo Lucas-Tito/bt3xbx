@@ -4706,6 +4706,154 @@ com `som` ligado ao do port, o `cl.exe` da `build_f2.sh`, e `link.exe /dump /nol
 tem `dumpbin.exe`). Falta só a confirmação no console de que o 7170 volta a 2 longas com a build normal; os controles
 das próximas rodadas usam esta build, e o diagnóstico, a de perfil.
 
+
+## 36. Alfa só na compilação e o segundo desenho dos prefixos: o teto passa a meta no modelo (28/10/2026)
+
+**Resultado.** O alfa exato fica atrás de compilação (`BT3_ALFA_ORIGEM`): a build normal compila o texto da main
+nos três fontes do console, sem custo desligado. Os prefixos com a barreira integral liberavam zero desenhos; com as
+regras reais, a partição "plano da EDRAM previsto, z da visita como hoje, DATE só com o próximo marcador perto"
+libera 1.396 dos 1.408 desenhos do 6960 antes do fim da gravação, e o **teto idealizado** no 6960 fica em
+**13,0 a 15,9 ms** contra os 10,6 exigidos (folga 3,4 a 6,3 ms). O alfa sozinho fecha o 6930 no mesmo modelo
+(ganho 5,4, folga 2,8) e não tem o que tirar do 6960. São tetos de modelo, não ganho medido: a integração no D3D
+não foi feita, e o zero continua reprovado. Branch `codex/f5-alfa-prefixos`: base `80fd1358` na primeira parte
+(Codex), main `c3dcc4d` trazida por merge na segunda (Claude). Sem console nem XDK nesta tarefa.
+
+### Primeira parte (Codex): o alfa na origem e o ensaio com a barreira integral
+
+`feda23df` calcula na gravação um byte por desenho em memória comum, dois jogos de 16.384 bytes que acompanham as
+listas, sem mexer nos 128 bytes de `GsDraw`. O `put` registra o alfa de CPU; a geração dos índices da camada 3
+consulta só os três vértices de origem que está referindo; o fecho combina `color0[3]`, `misc[3]` e o resultado dos
+índices, só com count não nulo. Uma fusão faz a união; o uniforme continua protegido pela igualdade completa.
+Nativas, count e máscara são julgados no desenho fechado; `>128`, inclusive floats/NaNs, mantém o predicado.
+O falso confere cada desenho de cada quadro contra a varredura anterior; no D3D o instante de amostragem e os dois
+contadores não mudam, e `BT3_ALFA_CONFERE=1` acrescenta o oráculo no quadro amostrado (abertura de oráculo, não de
+medida). **[Medido, teste nativo]** 512 fronteiras, índice fora do limite, máscara, nativa, vazio, uniforme e fusão;
+cópia inconsistente e cinco mutantes (máscara, misc, índice, uniforme, fusão) recusados, na x86 e na PPC.
+
+`9c9d4be0` ensaiou `BT3_GS_PREFIXOS=1` no falso: um produtor publica até `drawCount-1` (a última vaga ainda funde),
+um consumidor, fila de oito, hashes dos dados referidos e versões lógicas de escrita/leitura dos alvos, atrasos
+0/1/5/20 ms, quatro mutantes (ordem, versão, barreira, liberação) e oito cópias do censo recusados. Cada descritor
+carregava as cinco consultas integrais da seção 32 (`ed_plano`, `usa_z`, `date_area`, `vu_plano`, versões da
+entrega), e por isso **0 desenhos saíam antes de G: teto 0 ms**. Isso media a barreira escolhida, não a cadeia.
+`a5843701` preparou a rodada de console `ap35a2810` (`~/f5-alfa-prefixos/console-ap35a2810`, 19 aberturas, saves
+`sv_ap35a2810_*`), com `BT3_ALFA_FORA` no ambiente: vale para as builds dessa primeira parte, que o Lucas mede hoje.
+
+### O alfa só na compilação: a chave saiu do caminho quente
+
+**[Lido]** `alfa_ligado()` testava a chave a cada vértice no `put` e a cada desenho no fecho, além do armazenamento
+`sAlfaCpu = 0` e `sAlfaVu = 0` sem condição. É o mesmo tipo de custo desligado que fez a regressão do 7170 (seção 35:
+~1,8 ms por escopos inativos). Na decisão 29 desligado tem de ser sem regressão, e um teste por vértice não se prova
+neutro por leitura.
+
+`500bb77b`: a chave virou de compilação. `gs_draw.h` define `GS_ALFA` só com `BT3_ALFA_ORIGEM` (e o caminho da VU1
+otimizada, `PORT_BIG_ENDIAN` ou `BT3_TESTE_VU1`); sem ele, os blocos somem inteiros, o campo `alfa` sai do
+`GsQuadro` e o `alfa_alto` do `gs_d3d.cpp` é a função da main, intacta. Com ele, o alfa se calcula sempre, sem teste
+de execução, e o backend usa o metadado. `BT3_ALFA_FORA` deixa de existir. A build com o alfa sai de
+`BT3_ALFA_ORIGEM=1 build_f2.sh` (passa a chave ao `c89.py`, que pré-processa o `gs_draw.c`, e ao `cl` do backend) e de
+`headless.py --alfa` (pastas `x86gvl` e `ppcgl`); o log dela diz `gs_d3d: alfa exato na origem`. O símbolo
+`gGsAlfaOrigem`, definido pela gravação e citado pelo backend e pelo falso, impede ligar uma build com a chave só de
+um lado. Os 32 KiB estáticos só existem na build com o alfa.
+
+**[Medido, WSL]** `alfa_igual.py BASE` tira os blocos como a build normal os vê e exige o texto da main byte a byte em
+`gs_draw.c`, `gs_draw.h` e `gs_d3d.cpp`: igual; quatro cópias estragadas recusadas (código fora do bloco, campo fora
+do bloco, `#ifndef` trocado, predicado `>=`), e o ramo da primeira parte também é recusado. Builds `x86gv` contra
+`x86gvl`, objetos sem depuração: só `gs_gs_draw.o` e `x360_gpu_falso.o` mudam, e só a com o alfa tem `sAlfa`,
+`sAlfaCpu`, `sAlfaVu` e `gGsAlfaOrigem`. As builds PPC `ppcg`/`ppcgl` ligam. A comparação com os objetos da main e a
+matriz inteira estão na rodada abaixo.
+
+**Para o Lucas compilar no XDK** (a prova que o WSL não dá, a mesma da seção 35): `build_f2.sh` na main `c3dcc4d` e
+neste branch, sem chave; `gs_d3d.obj` e o objeto do `gs_draw` desmontados por `link /dump /disasm` com os rótulos
+normalizados têm de ser iguais função a função (as linhas do fonte mudaram, o código não pode). Depois
+`BT3_ALFA_ORIGEM=1 build_f2.sh` para a build com o alfa e `BT3_PERFIL_CADEIA=1` com e sem ela para os perfis. O
+`alfa_console.py` gera os ambientes da rodada seguinte com a build de cada abertura (`ordem.txt`: nome e build).
+
+### O segundo desenho: onde a barreira estava
+
+**[Lido, `gs_d3d.cpp`]** As consultas ao futuro, uma a uma:
+
+| Consulta | O que lê | Alternativa sem mudar a imagem |
+|---|---|---|
+| `ed_plano` (EDRAM residente, ligada por padrão) | a lista inteira: quantas vezes cada alvo entra (a vaga A), z/nativas por alvo, a união das tesouras (as pequenas) | o plano do quadro anterior: só decide onde cada alvo mora, e o caminho de fallback (B, entrada com volta) já existe. Nos logs do console o plano da luta é estável: A alvo 5, B alvo 2, pequenas 3/4/6 em 1 e 2 cadeias de brilho |
+| `usa_z` | da entrada numa visita até o primeiro desenho com z ou a troca de alvo | nenhuma necessária: a visita fecha cedo (zmax medido abaixo) |
+| `date_area` (OT_DATE) | do marcador DATE até o próximo marcador | se o próximo estiver longe, copiar a área inteira que o Resolve copiaria, como sem a otimização: cada pixel que um leitor lê é copiado igual |
+| `vu_plano` com VU1 direto | só o próprio desenho (`sVuIni = first`) | não é barreira |
+| fusão | o desenho seguinte | só o último espera o fim |
+
+**[Medido, listas x86gv da seção 30 e logs do console]** No 6960 os marcadores DATE são 94, 1342, 1349, ..., 1396: o
+**marcador 94 olha até o 1342**, por cima de toda a geometria dos lutadores, e em ordem prende tudo depois dele.
+No console, por quadro de luta, a consulta copia 479 mil de 4.337 mil pixels (9,4 marcadores, nova1 da rp33): copiar
+a área inteira só nos marcadores longos custa ~0,17 ms de GPU cada (a classe DATE vezes a razão de pixels).
+
+### O teto por partição, com os dados que já existem
+
+`prefixos_teto.py LISTAS DADOS`: para cada desenho, GPU líquida do perfil fino do console (classes por família,
+trechos do comum por faixa de índices, seção 31), CPU do `frame_end` por classe, e o índice de gravação que o libera
+pela partição. Simula `C_i=max(R_i,C_i-1)+c_i` e `U_i=max(C_i,U_i-1)+g_i`, com Resolve final, tela, FXAA e Present
+depois do último, e calibra uma escala de CPU e uma de GPU para reproduzir P e U sem marcas na partição atual
+(6930: P 21,2, U 35,5; 6960: P 26,4, U 42,4; a calibração reproduz os dois). O progresso da gravação até cada
+desenho não tem medida no Xenon: U é uniforme por índice; W pesa as parcelas da gravação do console (VU1, unpack,
+constantes, fecho e VIF nos desenhos da VU; GIF e primitivas nos do GS; envio, hash e DMA por igual).
+Tempos relativos a J, em ms; a meta é U até o prazo menos 1 (31,9 no 6930, 31,8 no 6960). Aberturas _1 e _2
+dão o mesmo a 0,1 ms.
+
+| Quadro, partição | Antes de G | U (modelo U / W) | Ganho | Folga |
+|---|---:|---|---|---|
+| 6960, atual (tudo em G) | 0 / 1408 | 42,4 | 0 | -9,6 |
+| 6960, plano integral (primeira parte) | 0 | 42,4 | 0 | -9,6 |
+| 6960, plano previsto, z e DATE integrais | 1396 | 37,3 / 36,9 | 5,1 / 5,5 | -4,5 / -4,1 |
+| **6960, plano previsto, z, DATE curto (até 64 desenhos)** | 1396 | **29,4 / 26,5** | **13,0 / 15,9** | **3,4 / 6,3** |
+| 6960, plano previsto, DATE inteiro em todos (+1,8 ms GPU) | 1407 | 31,1 / 28,1 | 11,3 / 14,3 | 1,7 / 4,7 |
+| 6930, atual | 0 / 213 | 35,5 | 0 | -2,6 |
+| 6930, só o alfa, sem prefixos | 0 | 30,1 | 5,4 | 2,8 |
+| 6930, plano previsto, z, DATE curto (alfa ainda no início) | 199 | 22,6 / 24,4 | 12,9 / 11,1 | 10,3 / 8,5 |
+
+**[Estimado] Sensibilidade no 6960** (z e DATE curto), deslocando o progresso do modelo W para que o desenho 1152,
+começo da segunda cadeia de brilho, saia em 50/60/70/80/90% de G: folga 7,8 / 7,2 / 6,5 / 4,8 / 3,0 ms. Depois do
+1152 ficam ~12 ms de GPU (segunda cadeia 4,8, HUD 5,2, o resto e o fim 2,0): é isso que limita, não o começo.
+
+**O que o teto não conta.** Fila e publicação, disputa de memória entre a GPU e a gravação (memória unificada),
+disputa SMT da thread 3 com a do jogo, o custo de mandar comandos em lotes pequenos (o D3D do 360 só começa ao
+despachar o buffer), o plano previsto errado em troca de cena, as versões de alvos e texturas lidas cedo e o
+`cleared`/`sincroniza_alvos`/`prof_garante` que hoje rodam na entrega. Também não há perfil fino do 7170 (2.156 VU0)
+nem das duas vistas. Folga de 3,4 a 6,3 ms no teto deixa margem para parte disso, não para tudo sem medir.
+
+**Conclusão para a decisão 29.** O ponto de parada da seção 34 pedia parar se o modelo não recuperasse 10,6/10,2 ms.
+Com a barreira integral, 0; com plano previsto mas DATE integral, 5,1 a 5,5 (não fecha); com DATE curto, 13,0 a 15,9
+(fecha no modelo). Somando o alfa: no 6930 o alfa sozinho já fecha (5,4 contra 3,6); no 6960 o alfa não tira nada e
+só os prefixos chegam lá; no 7170 o alfa tira até ~4,7 ms de uma folga que era -0,1 na build com a regressão.
+O teto justifica a integração `BT3_GS_LOTES` no D3D como próximo passo, desligada por padrão, mas ela não cabe numa
+tarefa sem XDK nem console: muda o laço do `frame_end` para consumir lotes, o plano da EDRAM para previsto com
+fallback, o `date_area` para limitado, o despacho do buffer de comandos e as cercas da VU1 direta.
+
+### O censo das regras reais no falso
+
+`d2274a46`: `BT3_GS_PREFIXOS=2` usa a mesma fila sem a barreira integral e, no fim de cada quadro, aplica
+`px_regras` (fusão, z da visita, DATE com o próximo marcador a até 64 desenhos, em ordem) e a assinatura do plano da
+EDRAM (a A, as pequenas e o tamanho delas em blocos de 8): `prefixos2: quadro Q desenhos N liberados L plano P zmax Z
+datelongos K`, com P=1 quando o plano repete o do quadro anterior. Nos quadros de `BT3_PREFIXOS_QUADROS` (6930, 6960,
+7170 sem ela), a curva do relógio da gravação a cada 1/16 da lista, que o `prefixos_teto.py --curva LOG` usa como
+modelo X (progresso medido na x86/PPC, não no Xenon). **[Medido, testes]** Lista sintética com visitas com e sem z,
+DATE curto, longo e último: resultado conhecido conferido; mutantes `regra_z` e `regra_date` recusados nos dois
+modos, além dos quatro antigos; o leitor recusa dezesseis cópias estragadas (oito de cada modo); o teto recusa lista
+sem desenho, trecho perdido (GPU não conservada), curva fora de ordem ou sem fim e U medido impossível.
+
+### Conferência completa e o que volta ao Lucas
+
+`alfa_prefixos_rodada.sh BASE SAIDA` (no commit final do branch, worktree `~/bt3xbx-alfa2`, base `~/f5-alfa-prefixos2/base` na main
+`c3dcc4d`): fontes iguais à main; objetos sem depuração da build normal iguais aos da main em x86, x86gv e PPCg salvo
+carimbo e falso; a build com o alfa diferente só em `gs_gs_draw.o` e `x360_gpu_falso.o`; `.text`; stubs; unidades;
+matriz da seção 28 na build com o alfa (Duelo/Treino, sem threads/gravação/desenho, cortes 00/10/20/01/11/21) contra a
+base em `divergencias.py --normal`; prefixos 1 e 2 nas duas builds e atrasos 1/5/20 ms; 48 pares x86/PPC com os dois
+contadores iguais; o teto com as curvas medidas; `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino`,
+`roteiros.sh duelo` e `save_mc.sh`. A rodada da primeira parte (`bt3-alfa-rodada2`, `f9ed4da` contra `80fd1358`)
+continua valendo para as builds que o Lucas mede hoje.
+
+Perguntas que voltam ao Lucas: (1) se o console de hoje confirmar o alfa no 6930/7170, adotar a build com
+`BT3_ALFA_ORIGEM` como padrão (depois da prova do XDK e de uma rodada `alfa_console.py` com as builds alternadas);
+(2) autorizar a integração `BT3_GS_LOTES` com o desenho acima, sabendo que é a única rota medida que chega ao 6960
+sem mudar imagem, entrada ou aceite, e que antes dela vale uma medida barata: o relógio da gravação por faixa de
+desenhos na build de perfil, para trocar os modelos U/W/X pelo progresso real do Xenon.
+
 ## 37. Rodada ap35a2810: 7170 restaurado e alfa repetido; o 6960 ainda exige os prefixos (28/10/2026)
 
 **Resposta: a correção desfez a regressão do 7170, e o alfa retirou a longa do 6929 nas três repetições.**
@@ -4888,3 +5036,487 @@ A `.text` vem de `~/f5-gpu-comum/base/port/build/x86/bt3_x86`, carimbo históric
 é referência preexistente, não build deste commit ou prova nova de objetos. A tarefa proíbe emulador e console:
 não se rodaram roteiros, save, captura, oráculo, XDK, três janelas longas ou sessão livre. Além dessas provas,
 continuam sem medida os tempos exatos e a margem individual do alfa, o ganho real dos prefixos, F7 e 720p.
+
+## 38. O relógio da gravação no Xenon e a primeira parte do BT3_GS_LOTES (28/10/2026)
+
+**Resultado.** Pela decisão 32, começando pela medida: a build de perfil ganhou o **relógio da gravação por desenho**
+(o instante, no Xenon, em que cada desenho do quadro fica pronto, em us desde J), com as rodadas de console prontas
+(`rl37a2810`, oito aberturas com controles da mesma build) e o `prefixos_teto.py --console` que troca os modelos U/W/X
+da seção 36 pelo progresso medido. E a **primeira parte do `BT3_GS_LOTES`** (chave de compilação, desligada por padrão):
+as duas consultas que mudam de lugar (o plano da EDRAM pelo quadro anterior e o DATE só até 64 desenhos à frente), com
+o envio ainda na entrega, para a prova de imagem igual vir sozinha (`li37a2810`, seis aberturas). Nada rodou no console:
+**nenhum ganho medido**, o teto da seção 36 continua modelo e o zero continua reprovado. No XDK, a build normal deste
+branch tem a mesma desmontagem da main `c3dcc4d` nos 348 objetos (fecha também a prova do XDK que a seção 36 deixou ao
+Lucas). Branch `claude/f5-lotes`, base `d3b96c07` (`codex/f5-alfa-prefixos`).
+
+### O relógio da gravação (só na build de perfil)
+
+**[Lido]** O desenho i está pronto quando o i+1 começa (a fusão só mexe no último); o último, na entrega (G). Em
+`gs_draw.c`, depois de cada um dos dez `gsDraws[gsDrawCount++]`, `GS_RELOGIO()` fecha com uma leitura do `mftb` os
+desenhos ainda abertos abaixo do último (um descarte fora da entrega recomeça a conta junto com a lista). A entrega
+passa os carimbos do quadro a `Relogio_Gravou` (`gs_d3d.cpp`), depois do `Picos_Gravou`, que já pôs J e G no anel do
+picos; se o quadro está em `BT3_RELOGIO_GRAV=Q1,Q2,...` (até 16), a gravação copia os carimbos para uma de quatro vagas
+(uma vaga cheia perde o quadro e conta). O desenho escreve a vaga pelo diário a partir do quadro seguinte, até quatro
+linhas por quadro, depois do `cadeia_fim` (fora do tempo do quadro):
+
+```text
+relogio: quadro 6960 desenhos 1408 marcados 1407; desde a entrega do jogo (J), ms: primeiro desenho ..., entrega da gravação (G) ...
+relogio: quadro 6960 de 0 a 99 us t0 t1 ... t99          (cem carimbos por linha, us desde J)
+relogio: curva quadro 6960 desenhos 1408 ms G milesimos m0 ... m16   (dezesseis avos de J a G, o formato do falso)
+relogio: fim quadro 6960 desenhos 1408 marcados 1407; ms desde J: G ..., marca da GPU posta (P) ..., GPU acabou (U) ...
+```
+
+A linha do fim espera a GPU chegar à marca do quadro (até seis quadros; sem ela, -1) e sai também com
+`BT3_RELOGIO_MARCAS=0`, que tira só os carimbos por desenho: é o controle da mesma build, que diz o que os carimbos
+custam em G, P e U do mesmo quadro sem depender do limiar do picos (com `BT3_PICOS=36`, um quadro que melhora some do
+log, seção 37). O desenho escreve primeiro a vaga mais velha (o anel do picos guarda 16 quadros).
+
+Só existe com `BT3_PERFIL_CADEIA=1 build_f2.sh`, que agora passa a chave também ao `c89.py` (o `gs_draw.c` é C do
+jogo); na build normal `GS_RELOGIO()` é `((void)0)` e o `RELOGIO_ESCREVE` também. Com a chave e
+`BT3_RELOGIO_GRAV=0` ou `BT3_RELOGIO_MARCAS=0`, um teste por desenho anexado, sem ler o relógio. Exige `BT3_PICOS`
+(sem ele, os carimbos saem desde o primeiro desenho, e o leitor recusa o quadro).
+
+**[Medido, teste nativo]** `teste_relogio.py --saida PASTA` compila os dois blocos com g++ e um `mftb` de mentira,
+grava quadros sintéticos (1.408 desenhos, um descarte no meio, quadros fora da lista, uma vaga perdida, uma GPU que
+chega tarde à marca), com e sem os carimbos, e lê o diário pelo leitor do teto: carimbos, G, P e U voltam iguais. Dez
+sabotagens acusadas (fechar um a mais, sem recomeço, J ou G trocados, linha pulada, vaga que não esvazia, quadro fora
+da lista escrito, U lido da marca, fim sem esperar a GPU, carimbos sem as marcas).
+
+### O teto com o relógio do console
+
+`prefixos_teto.py LISTAS DADOS --console LOG` (o log de uma abertura rel) acrescenta o modelo C: a fração de J a G em que cada desenho ficou
+pronto na abertura, aplicada ao G sem marcas, com a mesma convenção do falso (a liberação que pede k desenhos usa o
+k-ésimo carimbo: conservador por um desenho). `--console LOG --so-relogio` só confere as linhas e lista J, G, P e U por quadro (rel ou ctl). O
+leitor recusa lacuna, repetição, desordem, carimbo depois de G, quadro sem J, contagem que não fecha, curva que não
+confere com os carimbos, fim ausente, U antes de P, G do fim trocado, controle com carimbos ou no modelo e lista do
+console de outro tamanho que a da x86gv (as listas são iguais por construção desde a seção 30; se não forem, o modelo
+não vale): treze mutantes novos, dezoito no total.
+
+**Como ler.** A sensibilidade da seção 36 diz o que procurar: no 6960, com o desenho 1152 (começo da segunda cadeia
+de brilho) pronto a 50/60/70/80/90% de G, a folga do teto fica em 7,8/7,2/6,5/4,8/3,0 ms. O modelo C dá o número com
+o progresso real. Com o alfa, a seção 37 pôs a meta do 6960 em 11,5 ms (U 10,5 ms depois do prazo, mais 1 de margem),
+contra o teto de 13,0 a 15,9 do modelo: se o teto C não passar dos 11,5, os números voltam ao Lucas para a exceção E
+(decisão 32), antes da segunda parte. O controle (ctl contra rel) diz quanto os carimbos movem G; o que mover tem de
+sair do G antes de usar a fração.
+
+### A primeira parte do BT3_GS_LOTES: as duas consultas mudam de lugar
+
+**[Lido, `gs_d3d.cpp`, só com `-D BT3_GS_LOTES`; `BT3_GS_LOTES=1 build_f2.sh`]**
+
+- **O plano da EDRAM previsto.** No fim do `frame_end`, com a lista ainda viva, `lotes_guarda_plano` refaz o laço do
+  `ed_plano` (entradas por alvo, quem pede a vaga grande, até onde cada um desenha) e guarda as contas; o `ed_plano` do
+  quadro seguinte as usa no lugar da varredura da lista dele, e o resto (o conteúdo que o alvo já tem, a escolha da A,
+  as pequenas e a B) é o mesmo código. Um desenho que não cabe na pequena prevista (z sem ser efeito, nativa, filme,
+  tesoura além da vaga, conteúdo que a volta não cabe) passa o alvo para a B: `ed_sai`, o sujo da pequena vai para a
+  textura (`ed_descarrega`, motivo despejo) e a entrada pela B o traz de volta, o caminho de sempre dos alvos da B.
+  O alvo só desce (pequena para B) dentro do quadro. A cor sai igual por construção (Resolve e volta são cópias); a
+  profundidade só entra nas vagas grandes, e os efeitos não leem nem escrevem z. Onde pode mudar: a ida e volta da
+  profundidade pela textura num alvo que o plano previsto mandou à B e o integral a uma pequena (a mesma ida e volta
+  que a EDRAM residente já faz entre A e B, provada igual em 23/10), e só isso a captura decide.
+- **O DATE curto.** `date_area` só procura o próximo marcador até `LOTES_DATE_CURTO` (64) desenhos; mais longe, copia
+  a área inteira que o Resolve copiaria, como sem o `BT3_OTIM_DATE`. Cada pixel que um desenho com DATE lê dentro dessa
+  área sai igual; fora dela (o `dateFora` do log, contado na build normal em todos os marcadores) o `sDate` guarda o
+  que um Resolve anterior deixou, e só ali a imagem pode mudar. Se o `dateFora` da normal for 0 nos quadros da luta,
+  a imagem é a mesma.
+- `BT3_LOTES=0` desliga as duas na build com a chave (o controle da mesma build). O log diz `gs_d3d: lotes
+  (BT3_GS_LOTES), primeira parte ligada` e, por trecho, `lotes, no trecho: N planos previstos, M integrais; R alvos
+  passados da pequena prevista para a B (K por nativa ou filme); DATE: C perto, L copiando a área inteira`.
+- **O envio ainda espera a entrega**: esta parte não muda quando a GPU começa, só tira as duas consultas do caminho do
+  envio por lotes. Nenhum ganho é esperado dela (o plano ainda varre a lista, agora no fim do quadro anterior).
+
+**[Medido, teste da fonte]** `teste_lotes_fonte.py`: o laço do `lotes_guarda_plano` igual ao do `ed_plano` letra por
+letra, a regra da vaga grande e da tesoura do `lotes_vaga` iguais às do laço (a vaga tem `(ext + 7) & ~7`), as nativas
+pela vaga grande no `nat_entra` e as marcas vazias sem a chave; cinco estragos recusados.
+
+### Provas sem console
+
+**[Medido, XDK, `xdk_objetos.py`]** Os `.obj` do cl mudam a cada compilação (carimbo do COFF, linhas da depuração),
+então a comparação é a desmontagem de todos os objetos pelo `link /dump /disasm` na imagem do XDK, com os rótulos que
+dependem da linha normalizados (`$M`, `$LN`, `$rotulo$NNN`) e as funções do `.map` (onde um COMDAT descartado pelo
+`-OPT:REF` apareceria; os `__unwind$N` contam por objeto). Cinco mutantes recusados e uma diferença real vista falhar
+(saída 1).
+
+| Builds comparadas (commit `dc2785f`) | Resultado |
+|---|---|
+| normal x main `c3dcc4d` normal | 348 objetos iguais, 9.617 funções iguais |
+| normal x base `d3b96c07` normal | 348 iguais |
+| lotes x normal | só `gs_d3d.obj`; no `.map` só `lotes_guarda_plano`, `lotes_rebaixa`, `lotes_vaga` a mais |
+| perfil x perfil da base | só `gs_d3d.obj` e `gs_gs_draw.obj`; no `.map` só `gs_relogio`, `Relogio_Ligado`, `Relogio_Gravou`, `relogio_escreve` |
+
+**[WSL, `lotes_wsl.sh BASE SAIDA`, serviço `bt3-lotes-wsl-adf640e8`, sem emulador]** As duas mudanças só existem no
+console; base e final compiladas em x86, x86gv, PPCg e PPCg com o alfa, objetos sem depuração, `.text` e stubs
+comparados (o `cmp` visto falhar), e as unidades e mutantes das ferramentas novas. Com os objetos iguais, as provas de
+execução da seção 28 (roteiros, listas, `divergencias.py`, save) não têm o que mudar. **[Medido, WSL]** Em `adf640e8`
+(`~/f5-lotes/wsl1/provas.resumo`): as quatro builds de base e final ligam, a `.text` da x86 é a mesma
+(`9f2cdb49...`), os objetos sem depuração só diferem no `x360_passos.o` (o carimbo) nas quatro, os stubs são iguais e
+as unidades e mutantes passam: tudo certo, em 4,5 min. Repetido em `cb396826` (o código das builds do console, com o
+controle do relógio; `~/f5-lotes/wsl2/provas.resumo`): o mesmo resultado, a mesma `.text`, em 5 min.
+
+### As rodadas de console prontas
+
+Geradas por `lotes_console.py relogio|imagem SAIDA --rodada R`, que confere os ambientes (oito estragos do relógio e
+quatro da imagem recusados, e as rodadas já usadas). Builds do commit `dc2785f` (carimbo `dc2785f diff:da39a3ee5e`; os
+commits seguintes só mexem em documentos),
+na máquina do XDK, em `/home/lucas-tito/Documentos/bt3xbx-lotes/build/x360/console-<rodada>/` com `builds/<build>/`
+(`default.xex` e `.map`), `ordem.txt`, `manifesto.json`, os `ambiente_<abertura>.txt` e `LEIA.txt`:
+
+| Rodada | Aberturas, em ordem | Builds (md5 do `.xex`) | O que dá |
+|---|---|---|---|
+| `rl37a2810` | rel1 ctl1 rela1 ctla1 rel2 ctl2 rela2 ctla2 | perfil `759be0af5a97b41df00c83ce5ffd1da3`, perfil+alfa `ce6cda5cc75ebc8008763f058b034d60` | os carimbos por desenho e J/G/P/U nos quadros 6900, 6930, 6960, 7000 e 7170 (rel), só J/G/P/U dos mesmos (ctl, `BT3_RELOGIO_MARCAS=0`) |
+| `li37a2810` | nor1 lot1 lct1 nor2 lot2 lct2 | normal `5d2e4c29a0c3691fc2bd0eabe757a1af`, lotes `36b9c15421c1058bb23c7cacd60178ca` | 22 capturas cheias por abertura nas trocas de cena (6928 a 6932, 6958 a 6962, 7168 a 7172) e fora delas, em `game:\shots_li37a2810_<abertura>` |
+
+Todas com a cadeia desligada, picos e tela por imagem ligados, saves `sv_<rodada>_<abertura>` novos. A prova da
+imagem: `compara_quadros.py` de lot e lct contra nor com todos os pixels iguais em todos os quadros, e no log
+`fora da vaga 0`, `alvo lido sem Resolve 0` e, na normal, o DATE `lendo fora do que o alvo tinha` em 0. Se igual, o
+plano previsto e o DATE curto ficam provados para a segunda parte; se não, a captura e a sequência da EDRAM do trecho
+dizem onde.
+
+### A segunda parte: o envio durante a gravação (não feita)
+
+O que falta para os lotes chegarem ao D3D antes de G, cada item com a sua prova:
+
+1. **Publicação dos desenhos fechados.** A gravação publica, com barreira, quantos desenhos do quadro estão prontos
+   (o `GS_RELOGIO` já marca o ponto); o desenho consome em ordem, esperando o próximo lote ou a entrega, sem fila de
+   vblank nova e com um Present só, no fim.
+2. **As regras de liberação** do `px_regras` no D3D: a fusão (o último espera), o `usa_z` da entrada de uma visita
+   (até o primeiro desenho com z ou a troca de alvo), o DATE até 64 à frente e as contas do plano acumuladas no laço
+   em vez da varredura no fim.
+3. **O que hoje a entrega faz com o desenho parado** (`entrega`: `vu_plano`, profundidades e alvos novos, versões,
+   memória, o `cleared` da cópia da tabela) passa a ir por lote, com a regra de que o desenho só vê um alvo, textura ou
+   profundidade depois de publicados; `sincroniza_alvos`/`prof_garante` no fio certo.
+4. **O despacho do buffer de comandos** a cada lote (o D3D do 360 só começa ao despachar) e as cercas da VU1 direta
+   (o rodízio de três jogos não pode liberar um jogo com lote em voo).
+5. **As provas**: listas e comandos iguais no falso com o consumo por lotes (o ensaio `BT3_GS_PREFIXOS=2` vira o
+   oráculo), atrasos 1/5/20 ms, objetos da normal iguais, e no console imagem igual, prazo medido e o 7170.
+
+**Ponto de parada.** Esta tarefa para aqui: a segunda parte muda a sincronização entre a gravação e o desenho e só se
+prova com o console. A medida do relógio decide se ela vale a pena.
+
+
+## 39. Rodadas rl37a2810 e li37a2810: o teto medido sustenta o envio durante a gravação, com imagem igual (29/10/2026)
+
+**Resposta: vale fazer a segunda parte do `BT3_GS_LOTES`, desligada por padrão.** Com o progresso da gravação medido
+no Xenon, o teto C recalibrado nos controles do 6960 recupera **13,811 a 14,095 ms**, acima da meta de **11,5 ms** da
+seção 37 em **2,311 a 2,595 ms**. Com alfa, a folga ideal do 6959 → 6960 é **3,817 a 3,844 ms**, deixando
+**2,817 a 2,844 ms além da margem de 1 ms**. A primeira parte tem imagem igual nos quatro pares, controles inclusos.
+Isso justifica implementar e medir a sincronização da seção 38; **nenhum ganho real dos prefixos foi medido, o zero
+continua reprovado e a exceção E não está aprovada**. As duas partes ainda não viram padrão.
+
+Somente análise/documentação, base `cc546dce`, branch `codex/f5-lotes-analise`, sem console, emulador ou build nova.
+Scripts, comandos, recortes, tabelas numéricas e negativos em `~/f5-lotes-analise/`; originais intactos.
+
+### Proveniência e conferência dos catorze logs
+
+**[Informado pelo Lucas]** Rodadas executadas uma abertura por vez, na ordem preparada na seção 38, saves novos,
+builds de `dc2785f`: perfil MD5 `759be0af5a97b41df00c83ce5ffd1da3`, perfil+alfa
+`ce6cda5cc75ebc8008763f058b034d60`, normal `5d2e4c29a0c3691fc2bd0eabe757a1af` e lotes
+`36b9c15421c1058bb23c7cacd60178ca`. A ctla2 foi aberta em 29/10; as demais do relógio na noite de 28/10.
+Os binários e a inexistência dos saves antes das aberturas não foram reinspecionados nesta análise.
+
+**[Medido]** Todos carimbam `dc2785f diff:da39a3ee5e`. Ambientes inteiros conferidos contra os gerados por
+`lotes_console.py`, incluindo a ordem, quatorze saves exclusivos `sv_rl37a2810_NOME` / `sv_li37a2810_NOME`, a lista e
+as marcas do relógio, a captura cheia e a pasta por abertura. Sem DEMO, som/16:9/FXAA/origem/VU1 direto/envio rápido
+ligados, escala 1,33, hardware 3; tempos/CPU/cortes/comum/oráculo/constantes/fecho desligados; picos 36 e tela 1.
+O alfa de compilação só aparece nas rela/ctla; primeira parte dos lotes ligada só nas lot, desligada nas lct,
+ausente nas nor. Os oito relógios têm os cinco quadros completos, sem vagas perdidas; controles sem carimbos.
+
+SHA256 dos **bytes originais completos** em `~/sessao_2910/logs/NOME/bt3xbx.log`; a análise usa somente até o
+primeiro `f5_duelo.txt:99 fim vblank 12570 quadro 8378`. A continuação da nor1, por exemplo, não cria outra janela.
+
+| Abertura na ordem das duas rodadas | SHA256 original | Linhas usadas / totais |
+|---|---|---:|
+| rel1 | `ce9403fe8c9b1d56c0d2827a8bc259c9ec54262146f66b8dcec9325bec9125d8` | 2896 / 3023 |
+| ctl1 | `e42f77d61c689e08b4c9d1fc1bf13c4400d605623cbece0cf7df4d7f7f9f7d5d` | 2824 / 2900 |
+| rela1 | `96bd1bc2da9dcb8e0a4c13f354a849aca574f3743505e25cf91ab3644ac45271` | 2893 / 3296 |
+| ctla1 | `0e64a89eb3d6c588da0ef6c382b0e09679bb053c94dd03820158644ab10a903a` | 2801 / 2903 |
+| rel2 | `b397394c29d9cc559c0bb75a87c193f1162863bbe75ec52b24c8b9d9978e720f` | 2898 / 3276 |
+| ctl2 | `c4770ed5b0f96d3635d3827f65d9c1b6d4c26fb74eaa50720dd7979c0c47d5c7` | 2827 / 3105 |
+| rela2 | `b8974025bf51eca18fcf794bbbf6a8b56ba95d42ca250aa5c363cfea4ab8a30b` | 2901 / 3103 |
+| ctla2 | `ae99a1f4fb0cc8eb4f55c24ac679a1e5f20f3ca713e35e14ae6b48753b064df7` | 2803 / 2905 |
+| nor1 | `9b208115d83f561d7747b831d02e2d21fde7994abc96fc879153c7f536f933e4` | 2897 / 16037 |
+| lot1 | `1112095a0a2fa7fe42ea24e0fed0cea976b6c617564a7cb03e62cb036727b86d` | 3000 / 3262 |
+| lct1 | `0f8825ba39fb436146cd898514668620858c4e544dc92a6ad9c3159efd650bc6` | 2990 / 3357 |
+| nor2 | `b0da59be055c4ddf5d2646740bc272ea480c5410e12d13e5e9805fe0c5d4f2f3` | 2911 / 3088 |
+| lot2 | `3703ac60015745b4ec12b48082068072f1f90f52d70de6e2d3019783d9098fae` | 3002 / 3317 |
+| lct2 | `a24db922c0ab85a523e37ab8c1eadf3c89963c2cfd6ae7621a4d3f92fc93ad3c` | 2992 / 4616 |
+
+As 42 linhas de execução do roteiro são idênticas nas catorze (roteiro de 86 passos, boot e retorno incluídos).
+J1/J2: **684/2.334 passos**, **1.368/4.668 vblanks do jogo**, todos os passos de dois vblanks. Resultado estado 4,
+vencedor 0x2, razão 0x1, vida 0/27160, vblank 11478/quadro 7757. Associação completa nas 28 janelas: zero repetição,
+troca sem quadro, imagem pulada e marca GPU ausente; histogramas e linhas individuais conservam as contagens e
+cada imagem excepcional aponta para o quadro seguinte. Não confundir os vblanks do jogo com os de hardware.
+
+Zero falha, vigia, amostra indisponível, perda no diário, descarte requerido, pressão/espera de descarte,
+textura recusada/branca, alvo sem textura, VU pulada/falta de espaço, fora da vaga, leitura sem Resolve ou DATE
+lendo fora do que o alvo tinha. Conferidos **88 resumos de recursos por abertura** e os descartes dos picos,
+sem somar os totais cumulativos. Mínimo livre **140 MB no relógio / 137 MB na imagem**, acima do piso 32.
+Maiores buffers nos resumos: 13.134/470.000 vértices, 53.797/98.304 VU, 129.105/294.912 índices,
+2.227/8.192 constantes e 2.422/16.384 desenhos, todos dentro da capacidade.
+
+J1 tem 684 imagens de dois vblanks em todos os leitores. J2 conserva estes denominadores (1/2/3/4+):
+
+| Grupo | Imagens de picos, histograma | Imagens de passos, histograma |
+|---|---|---|
+| rel1/2 | 2334: 4/2327/3/0 | 2335: 4/2328/3/0 |
+| ctl1/2 | 2334: 3/2328/3/0 | 2334: 3/2328/3/0 |
+| rela1/2, ctla1/2 | 2335: 2/2332/1/0 | 2334: 2/2331/1/0 |
+| nor1/2, lct1/2 | 2334: 5/2308/1/20 | 2335: 5/2309/1/20 |
+| lot1/2 | 2334: 5/2308/1/20 | 2334: 5/2308/1/20 |
+
+A diferença de uma imagem de dois vblanks na fronteira foi conservada. `passos.py` estrutural sai 0 nas catorze;
+com `--console --janelas 2 --minimo 600`, sai **1 nas catorze**. No relógio, só por longas e por faltar a segunda
+janela aprovada (parede/esperado 0,9972). Na imagem, também pelo tempo de parede e pelas capturas: há **20 imagens
+de quatro ou mais** dentro do combate em cada abertura, com alvos nas capturas, mais a longa 6935 → 6936. O máximo
+é **22 vblanks**, lot2 no 6899 → 6900. São aberturas de imagem, não medidas de desempenho nem candidatas à exceção E.
+
+No relógio sem alfa há três longas em cada rel/ctl: **6929 → 6930**, **6959 → 6960** e **7109 → 7110**.
+A última tem U de **-0,2/-0,4** nas rel e **-0,2/-0,1 ms** nas ctl; não é a longa do 7170 nem foi demonstrada como
+troca de cena. Com alfa só permanece 6959 → 6960 (U **-10,3** nas rela, **-10,2 ms** nas ctla).
+Nenhuma imagem de quatro ou mais nos oito relógios. Nenhuma longa no 7170 nessas oito, mas a build é de perfil:
+isso não mede regressão nem ganho da build normal. Continuam faltando as três janelas longas finais da F5.
+
+### O relógio e o custo dos carimbos
+
+`prefixos_teto.py --console RECORTE --so-relogio` aprova os oito e lê G/P/U dos cinco quadros.
+Tempos abaixo **desde J**, portanto J=0; não são as folgas do `picos: tela` (sinal oposto para U atrasado):
+
+| Controle, quadro | G | P | U |
+|---|---:|---:|---:|
+| ctl1, 6930 | 14,501 | 21,247 | 35,606 |
+| ctl1, 6960 | 19,893 | 26,597 | 42,481 |
+| ctl2, 6930 | 14,410 | 21,153 | 35,482 |
+| ctl2, 6960 | 19,910 | 26,632 | 42,565 |
+| ctla1, 6930 | 14,835 | 17,282 | 31,548 |
+| ctla1, 6960 | 20,462 | 27,000 | 43,051 |
+| ctla2, 6930 | 14,863 | 17,316 | 31,582 |
+| ctla2, 6960 | 20,466 | 27,013 | 43,052 |
+
+Os pares rel menos ctl, em ms, mostram o efeito dos carimbos mais a variação entre aberturas, sem isolar causalidade:
+
+| Quadro, par | ΔG | ΔP | ΔU |
+|---|---|---|---|
+| 6930, rel1/ctl1; rel2/ctl2 | +0,006; +0,069 | +0,038; +0,083 | +0,007; +0,071 |
+| 6930, rela1/ctla1; rela2/ctla2 | +0,066; +0,028 | +0,092; +0,030 | +0,117; +0,047 |
+| 6960, rel1/ctl1; rel2/ctl2 | +0,211; +0,085 | +0,259; +0,090 | +0,289; +0,065 |
+| 6960, rela1/ctla1; rela2/ctla2 | +0,043; +0,050 | +0,094; +0,155 | +0,129; +0,082 |
+
+Não usar o tempo absoluto da rel como se fosse produção. No 6900 da rel1 P/U ficam **13,057/13,367 ms** acima da
+ctl1, apesar de ΔG=0,152: é outra perturbação da abertura de diagnóstico, sem causa isolada. Nos alvos 6930/6960 as
+diferenças estão na tabela. Os cinco quadros e os quarenta fins completos estão em `rodada/dados.json`.
+
+### O teto C: carimbos do Xenon, controle da mesma build e variação
+
+**[Modelo, não ganho medido]** Executado o comando da seção 38 para cada rel/rela:
+
+```sh
+python3 port/x360/tools/prefixos_teto.py \
+  /home/codex/f5-gpu-comum/listas-x86gv \
+  /home/codex/f5-reprojeto/final2810/dados.json --console RECORTE
+```
+
+Os logs `NOME-teto-referencia.log` guardam esse resultado com as constantes históricas da seção 36. Para a tabela
+abaixo, `~/f5-lotes-analise/modela.py` usa **as mesmas funções `progresso`/`libera`/`analisa`**, trocando G/P/U pelos
+controles da mesma build/repetição (tabela anterior). A liberação é a fração `carimbo_us / G_rel`, aplicada a
+`G_ctl`; assim o excesso de G da abertura com marcas não vira ganho. O prazo é a entrega J da troca excepcional
+em `picos: tela`: **32,9 ms no 6930, 32,8 no 6960**. O alfa já tirou o 6930 do log excepcional, então ali **32,9 é
+referência do modelo, não prazo individual publicado**.
+
+A GPU/CPU por desenho vem de `g6930_1/_2` e `g6960_1/_2` do perfil fino, com as listas x86gv da seção 30:
+213/1.408 desenhos, conferidos contra o console. Cada linha é a faixa entre os dois perfis finos, mantendo a curva
+e o controle da repetição indicada. A calibração reproduz P/U do controle a menos de 0,000001 ms. As três casas da tabela reproduzem a aritmética,
+não a precisão física: o prazo de picos é arredondado a 0,1 ms, e o rateio continua sendo um modelo.
+No 6930 com alfa não existe perfil fino novo por classe: para o rateio principal retiramos `classe outros`
+(5,384/5,380 ms, dominada pelo alfa na seção 32), ajustamos o total e recalibramos o restante ao P-G medido.
+Isso é hipótese explícita, não remoção de tempo medido desta build. O rateio original inteiro escalado serve de
+sensibilidade, publicado depois da tabela; não somamos os 5,4 ms históricos ao ganho.
+
+Plano da EDRAM previsto, z da visita e DATE curto até 64; a última vaga e as dependências do sufixo continuam em G.
+GPU começa é o primeiro trabalho útil simulado; a entrega final, o Resolve final, a tela/FXAA/Present permanecem no fim.
+
+| Curva, quadro | Desenhos antes de G | GPU começa desde J | U do teto | Recuperação de U | Folga até o prazo | Além da margem de 1 ms |
+|---|---:|---|---|---|---|---|
+| rel1, 6930 | 199 / 213 | 7,033 a 7,044 | 25,615 a 25,641 | 9,965 a 9,991 | 7,259 a 7,285 | 6,259 a 6,285 |
+| rel1, 6960 | 1396 / 1408 | 1,823 a 1,826 | 28,659 a 28,670 | 13,811 a 13,822 | 4,130 a 4,141 | 3,130 a 3,141 |
+| rel2, 6930 | 199 / 213 | 6,991 a 7,001 | 25,497 a 25,522 | 9,960 a 9,985 | 7,378 a 7,403 | 6,378 a 6,403 |
+| rel2, 6960 | 1396 / 1408 | 1,751 a 1,754 | 28,676 a 28,687 | 13,878 a 13,889 | 4,113 a 4,124 | 3,113 a 3,124 |
+| rela1, 6930 | 199 / 213 | 1,773 a 1,776 | 26,665 a 26,686 | 4,862 a 4,883 | 6,214 a 6,235 | 5,214 a 5,235 |
+| rela1, 6960 | 1396 / 1408 | 1,771 a 1,773 | 28,956 a 28,960 | 14,091 a 14,095 | 3,840 a 3,844 | 2,840 a 2,844 |
+| rela2, 6930 | 199 / 213 | 1,741 a 1,744 | 26,679 a 26,699 | 4,883 a 4,903 | 6,201 a 6,221 | 5,201 a 5,221 |
+| rela2, 6960 | 1396 / 1408 | 1,784 a 1,786 | 28,978 a 28,983 | 14,069 a 14,074 | 3,817 a 3,822 | 2,817 a 2,822 |
+
+No 6960, **1.396/1.408 desenhos (99,15%)** ficam liberáveis antes de G. A GPU poderia começar em **J+1,75 a
+1,83 ms**, cerca de **18,07 a 18,69 ms antes de G** nos controles; isso não é a recuperação líquida inteira.
+O desenho 1152, começo da segunda cadeia de brilho, fecha em aproximadamente **72% de G**; a cauda e as pausas
+por dependência limitam o ganho. Com alfa o teto acaba em **J+28,956 a 28,983 ms**, antes do prazo J+32,8.
+Mesmo usando a meta mais exigente de 11,5 ms da ap35, sobram **2,569 a 2,595 ms** de recuperação no alfa.
+Sem alfa sobram **2,311 a 2,389 ms** sobre essa meta. Com as regras integrais do DATE o teto ainda falha no 6960:
+começar cedo sozinho não basta; a imagem igual da regra curta é parte necessária da justificativa.
+
+No 6930, **199/213 (93,43%)** ficam liberáveis. Sem alfa, o começo útil é J+6,99 a 7,04 e a recuperação fica em
+**9,960 a 9,991 ms**, folga **7,259 a 7,403**. Com alfa, os controles já acabam em J+31,548/31,582; contra o prazo
+referencial, folga **1,352/1,318 ms**, sem prefixos. Com o rateio sem `outros`, o começo útil fica em J+1,74 a 1,78,
+recuperação adicional **4,862 a 4,903**, folga **6,201 a 6,235**. Conservando o rateio antigo e escalando todas as
+classes ao P-G do alfa, começo J+3,58 a 3,62, recuperação **6,335 a 6,378**, folga **7,677 a 7,706**.
+Os dois rateios passam no modelo; os números do alfa no 6930 têm essa incerteza e a do prazo de referência.
+Parede/esperado das seis aberturas de imagem fica entre 1,0333 e 1,0359, coerente com as paradas para capturar.
+Não há cronograma fino do 7170 nem prova de duas vistas.
+
+### A imagem da primeira parte
+
+**[Medido]** `compara_quadros.py` executado com `--lista`, lot1/nor1, lct1/nor1, lot2/nor2 e lct2/nor2.
+A ferramenta espera nomes `frame_NNNNN.ppm` na referência; foram criados links fora do git para os `gpu_NNNNN.ppm`
+das nor correspondentes. Exigidos os **22 números exatos** da seção 38 nos dois lados e dimensões **853x597**
+(captura cheia da imagem visível, distinta dos alvos alocados 864x608). Comparação de todos os pixels, não amostra.
+
+| Par | Quadros | Pixels iguais / comparados | Pior canal / erro médio |
+|---|---:|---:|---|
+| lot1 / nor1 | 22 | 11.203.302 / 11.203.302 | 0 / 0 |
+| lct1 / nor1 | 22 | 11.203.302 / 11.203.302 | 0 / 0 |
+| lot2 / nor2 | 22 | 11.203.302 / 11.203.302 | 0 / 0 |
+| lct2 / nor2 | 22 | 11.203.302 / 11.203.302 | 0 / 0 |
+
+**44.813.208 pixels comparados, 88 pares de quadros iguais**; os arquivos inteiros também têm o mesmo conteúdo
+em cada par. SHA256 de cada uma das 132 capturas em `capturas.sha256`; FNV-1a dos arquivos completos recalculado e
+igual ao publicado pelo log de cada abertura. A primeira parte foi efetivamente exercitada: em **cada lot**, nos
+88 trechos, **8.339 planos previstos / 1 integral**, **zero rebaixamento para B** (zero por nativa/filme),
+DATE **32.655 perto / 3.592 copiando a área inteira**. Os contadores das lct são todos zero. Em **todas as seis**,
+`fora da vaga 0`, `alvo lido sem Resolve 0`, e DATE `0 com desenho lendo fora do que o alvo tinha`, inclusive nas nor.
+A regra curta pode copiar mais pixels, mas a imagem final desses 22 quadros permaneceu igual. Não prova todos os
+intermediários, todo o jogo, o alfa de compilação ou consumo antes da entrega. **Imagem igual não é ganho**;
+o envio continua esperando G nas seis aberturas.
+
+### Recomendação, provas negativas e limites
+
+A porta das decisões 29/32 passa **no modelo**: fazer a segunda parte descrita na seção 38, ainda com a chave de
+compilação desligada por padrão, conservando publicação/barreiras, versões, um dispositivo dono, um Present,
+cercas da VU1 e despacho real dos lotes. A folga de 2,82 ms além de 1 ms no pior alfa é orçamento ideal para os
+custos ainda ausentes, não garantia de que caibam: fila, SMT/memória, snapshots/recursos e plano errado na troca
+podem consumi-la. Repetir as provas da seção 28 e medir prazo/imagem no console, inclusive 7170. Não mexer no aceite,
+no padrão do alfa ou na entrada. A condição que pediria números para a exceção E (teto não passar 11,5) **não ocorreu**;
+continuam sem aceite as três janelas longas finais e a exceção só volta ao Lucas se a integração não fechar.
+
+**[Medido, conferência final]** O extrator adaptado `confere.py` recusou **22 cópias corrompidas, cada uma com saída 1**:
+fim, associação, imagem, duração, resultado, save, carimbo, textura, descarte no resumo e no pico, resumo de recursos,
+marca GPU, histograma, ambiente repetido, fim/quadro do relógio, vaga, DATE, buffer, piso de memória, ação e alfa.
+`imagem.py` recusou com 1 um pixel alterado, quadro ausente e dimensão trocada: o comparador só mede e pode imprimir
+100,00% arredondado; por isso cobertura e igualdade exata são exigidas à parte. `prefixos_teto.py --mutantes`
+recusou as 18 entradas sintéticas; os oito `--so-relogio`, quatro comandos completos do teto e recalibrações passam.
+
+Sem mudança em `src/`, `include/` ou `port/` contra `cc546dce`, não é necessária rodada de emulador/build.
+A prova de objetos sem depuração da seção 38 permanece a de `cb396826` (`~/f5-lotes/wsl2/provas.resumo`): as quatro
+builds, só carimbo diferente, `cmp` visto falhar. Reconferido `cmp` das seções `.text` guardadas de base/final da
+mesma rodada e SHA1 **`9f2cdb4962397877eb90171bc8d7cfe9af3abc08`**. É artefato histórico, não build desta análise.
+
+## 40. Segunda parte dos lotes: uma faixa CPU por vez e a GPU durante a gravação (29/10/2026)
+
+**Resultado da implementação.** Candidato `BT3_GS_LOTES=1`, ausente da build normal. A gravação publica prefixos
+fechados para a dona do D3D antes da entrega final; cada faixa despacha comandos com `InsertFence`. A primeira versão
+conserva exclusão entre as duas CPUs: a gravação espera o consumo CPU da faixa e continua enquanto a GPU trabalha.
+Não acrescenta quadro à fila nem vblank. **Não há ganho real medido, imagem D3D aprovada ou aceite da F5 nesta nota.**
+O teto C da seção 39 não prevê a serialização CPU, os Resolves adicionais ou a barreira DATE desta versão.
+
+### Publicação e recursos
+
+- `gs_lotes_grav.h`, incluído no `gs_draw.c` apenas na variante, publica uma vaga com o retrato pequeno do quadro.
+  As dez posições de `GS_RELOGIO` também oferecem os desenhos abaixo do último, que ainda pode fundir. Ofertas a cada
+  32 desenhos, faixas de pelo menos 64; sem divisão ou VU1 direto, a entrega integral continua sendo usada.
+- A espera pelo estado livre e a reserva contra repetição usam a mesma trava. Com o desenho parado, o preparo faz
+  `vu_plano`, `prof_garante` e `sincroniza_alvos`. A barreira `__sync_synchronize` da ponte do 360 emite `sync` completo,
+  necessário para os buffers de escrita combinada. Só depois publica estado 4 e acorda o desenho. O produtor só retoma
+  após a confirmação CPU; os bytes já publicados permanecem vivos até o fecho normal e a cerca da GPU.
+- O estado 4 consome o que está disponível e retorna ao laço da dona do dispositivo. Não espera o próximo lote.
+  `frame_parte` conserva o começo do quadro, o estado das nativas e o `cleared` do desenho por versão de alvo.
+  O `cleared` da gravação só muda na entrega final: antecipá-lo muda a escolha de texturas em `draw_state`.
+- Cada faixa termina com `ed_fim`, `prof_entrega` e `InsertFence`; a Guide pode usar a EDRAM entre faixas. Só há consumo
+  antecipado com profundidade restaurável, cor e z existentes para os alvos usados, EDRAM residente, plano anterior
+  válido e a imagem completa anterior na textura própria do FXAA. Fora dessas condições, usa entrega integral.
+  Isso também impede repetir um alvo que o quadro parcial já modificou quando o FXAA está desligado ou falhou.
+- Fila de profundidades, `sPendGrav`, plano seguinte, captura, Present, callback da VU1 e liberações continuam no fecho.
+  A leitura do alfa amostrado também fica integral no fecho: examinar só o primeiro prefixo retiraria trabalho dos lotes
+  sem retirá-lo do controle e contaminaria a medida. A cauda começa no primeiro desenho ainda não enviado.
+
+### Consultas ao futuro e limite DATE
+
+A função pura `gs_lotes_limite`, comum ao D3D e ao falso, só aceita uma lista de desenhos fechados. Para os desenhos
+sem z, exige o testemunho de troca de alvo ou primeiro z que permite responder a `usa_z`. Não divide uma sequência
+DATE entre seu marcador e o seguinte. Mesmo com o DATE curto da primeira parte, um `ed_fim` extra pode atualizar por
+alias a textura que os leitores de DATE ainda usarão. O último grupo espera a entrega integral. Essa restrição pode
+prender boa parte do 6960 e reduzir bastante o teto anterior; não reutilizar os 13,8 a 14,1 ms como previsão desta
+implementação. Remover a restrição exige outra solução de posse/snapshot e prova de imagem, não só mudar um limite.
+
+### Provas e conferência reproduzível
+
+**[Medido, sem jogo]** `teste_lotes_envio.py`: as fronteiras DATE/Z e o transporte de produção, sete faixas com atrasos
+1/5/20 ms; cinco cópias sabotadas recusadas (sem testemunho, corte DATE, último fundível, ordem, espera CPU).
+`teste_lotes_protocolo.py` é auditoria de fonte, com onze sabotagens recusadas: publicação/barreira, ponte `sync`, preparo,
+filas, despacho, cor, z, imagem anterior para Guide, `cleared`, retorno ao laço e um método de `D3DDevice` fora do
+XDK. Não é execução de D3D.
+`lotes_envio_igual.py 979cc928` compara os tokens dos três fontes na configuração normal, preservando as inclusões
+como sentinelas, e recusa uma cópia adulterada de cada fonte. Não substitui objetos do XDK.
+O `c89.py` preparou `gs_draw.c` com lotes, alfa e perfil ligados, sem falha.
+
+**[Medido, preparo da referência]** A x86 completa preliminar, depois de `gen_data.py --asm asm`, tem 397 objetos,
+104 stubs e SHA1 da `.text` `43444ea4d03a6d448aa1ae74a631e35b356a7caa`. Os logs preservados da seção 38
+(`~/f5-lotes/wsl2/build-base-x86.log` e `build-final-x86.log`) mostram 325 objetos e 450 stubs: faltavam as 72 tabelas.
+Seu SHA1 `9f2cdb49...` pertence a essa ligação incompleta. A comparação de objetos daquela nota continua sendo uma
+comparação dos fontes que ela compilou; não dá uma build executável do jogo. Nesta rodada, base e final geram os mesmos
+dados completos antes de comparar objetos e `.text`, e a execução exige fim do roteiro, lista completa e stubs iguais.
+
+A conferência oficial fica em `lotes_envio_wsl.sh SAIDA`, **sob um único `flock ~/wsl.lock`**, com logs em `~/`.
+O script usa uma cópia descartável da base `979cc928` dentro de `port/build`, sem mudar outra worktree e sem ISO:
+
+| Prova da rodada | Critério |
+|---|---|
+| normal x base, x86/x86gv/PPCg | objetos sem depuração por `objcopy`/`cmp`, só carimbo de teste pode diferir; stubs e `.text` x86 iguais; `cmp` visto falhar |
+| fronteira/publicação nativas, x86 e PPC | mesmos testes e sabotagens, atrasos 1/5/20 ms |
+| falso, Duelo e Treino, x86/PPC | 28 execuções: normal, controle da mesma build, envio, envio com alfa e três atrasos; 24 comparações contra normal por `divergencias.py --normal`; 14 entre arquiteturas por `lotes_envio_arquiteturas.py`, cada uma com a mesma diferença da normal (quadros e hashes), três sabotagens recusadas |
+| comandos enviados | cada comando e dados relidos na faixa e no fecho; hash integral igual ao de faixas mais cauda; ao menos uma faixa efetiva nas aberturas ligadas |
+| posse da VU1 e recursos | GPU falsa atrasada dois quadros, zero diferentes, zero liberação forçada, zero textura solta usada; quatro execuções sabotadas de dados/ordem têm de falhar |
+| critérios anteriores | `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino`, `SEMMAPA=1 IMG=1 roteiros.sh duelo`, `save_mc.sh` e seu conferidor, com estados/saves não vazios e iguais |
+
+`headless.py --lotes` cria `x86gve`, `ppcge` e, com `--alfa`, `x86gvle`/`ppcgle`. O falso lê os comandos efetivamente
+entregues pelo transporte de produção; **não rasteriza D3D**. As imagens dos roteiros são do raster de software. Igualdade
+dos comandos/dados e dessas imagens não prova os Resolves, o restauro ou a Guide do D3D. Os resultados finais e o SHA1
+ficam no relatório `~/entrega-f5-lotes-envio.md` e em `~/f5-lotes-envio/rodada-final/provas.resumo`; só contam com
+`tudo certo`, builds do commit conferido e árvore limpa. Previsão de execução depois da trava: até duas horas; limite
+quatro horas. A fila e o marcador de espera evitam manter uma sessão esperando o emulador.
+
+**[Medido, primeira rodada]** A rodada do `d49f87fa` parou com RC=1 depois das 24 listas contra a normal: no `f5_duelo`,
+`x86gv` e `ppcg` diferem nos mesmos 11 quadros (4918 a 4937) com os mesmos hashes na normal e nas seis variantes,
+diferença que já existia desde a etapa das threads (`08-threads.md`), e o roteiro exigia zero. Com o critério novo, as
+14 comparações refeitas a partir desses logs passam, e as cópias com um quadro a mais, um hash trocado e um quadro a
+menos são recusadas. As sabotagens no falso, as imagens dos roteiros e o save não rodaram; a conferência foi rearmada
+em `~/f5-lotes-envio/rodada-final2`. No XDK, todas as builds com `BT3_GS_LOTES` falhavam em `D3DDevice::KickOff`, que
+o XDK 2.0.21256 não tem (só o `D3DXps`): o despacho da faixa passou a `InsertFence`, que pela documentação do XDK manda
+à GPU os comandos pendentes sem esperar. Ele só vale na thread dona do dispositivo e fora de tiling, Z-prepass e XPS;
+a faixa sai do `frame_end`, a mesma função que já chamava `InsertFence` no fecho.
+
+### Rodadas preparadas para o Lucas
+
+`lotes_envio_console.py tempo|imagem|longas SAIDA --rodada ID` prepara ambientes, ordem, manifesto e instruções;
+`--mutantes` recusa doze alterações também quando o manifesto é adulterado junto. Antes de abrir, conferir no console
+que **todos** os saves e pastas de captura não existem. Se existir qualquer um, trocar a rodada inteira.
+
+| Rodada, só preparada no WSL | Aberturas | Builds e propósito |
+|---|---|---|
+| `le40a2910` | 16 | normal/perfil, lotes/perfil, e ambas com alfa; duas repetições, `nor`, `ctl`, `pln`, `lot`; relógio sem carimbos em 6900/6929/6930/6960/7000/7170, sem captura |
+| `im40a2910` | 16 | normal, lotes e ambas com alfa, mesmos quatro estados e repetições; 22 capturas cheias por abertura, pastas exclusivas |
+| `jl40a2910` | 3 opcionais | lotes com alfa, `f5_treino`, uma janela fria e duas aquecidas de pelo menos 2.700 passos; sem captura ou perfil |
+
+`nor` não tem a chave de lotes. Na mesma build com a chave, `ctl` usa `BT3_LOTES=0`, `pln` usa
+`BT3_LOTES=1 BT3_LOTES_ENVIO=0` e `lot` usa ambas 1. O sufixo `a` significa `BT3_ALFA_ORIGEM=1` na compilação.
+No tempo, todas as builds usam `BT3_PERFIL_CADEIA=1`, `BT3_RELOGIO_MARCAS=0` e cadeia desligada. Relógio completo do
+controle da mesma build evita perder o quadro que melhora e sai do filtro de picos. Guardar SHA256/carimbo dos xex,
+logs e capturas; capturas ficam só no WSL. Conferir contadores de recursos e cercas, igualdade exata dos pixels de
+lot/ctl/pln contra nor do mesmo alfa/repetição, e também inspeção da imagem final com FXAA. Não aceitar arredondamento
+de 100,00% do comparador. Medir G/P/U e prazo em ambas as repetições, principalmente 6930/6960, além de 6929 e 7170.
+Exigir envio efetivo nas linhas `lotes: quadro`, testar Guide com gravação parada entre faixas e a retomada.
+Com parciais, `frame_end`/`msFim` é o intervalo do primeiro lote ao fecho, incluindo gravação e ociosidade entre faixas;
+não é CPU ocupada do desenho nem o F integral antigo. Usar prazo da imagem e J/G/P/U para julgar ganho.
+
+**XDK, ao revisar:** compilar base `979cc928` e final sem chaves e comparar **todos os objetos** e funções do mapa por
+`xdk_objetos.py RAIZ BASE FINAL`, que normaliza `link.exe /dump /disasm`, como na seção 38. Exigir zero diferenças na
+normal. Na variante com lotes, esperar mudanças em `obj/gs_gs_draw.obj` e `x360/gs_d3d.obj`; repetir com alfa e perfil
+para conferir as quatro famílias de builds da rodada. Verificar que `BT3_GS_LOTES` chega também ao `c89.py`.
+A ausência de XDK no WSL deixa a build, o despacho D3D, a imagem, a Guide e o ganho real para essa revisão e o console.
+O zero de longas continua reprovado; a exceção E não foi aprovada.
