@@ -122,6 +122,12 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     O MSAA 2x da EDRAM no lugar ou ao lado do FXAA: estudo de custo e protótipo sob `BT3_MSAA=2` em
     [10-msaa.md](10-msaa.md) (30/10/2026, branch `claude/f8-msaa`), com a rodada de console preparada.
 
+17. **A biblioteca da VU0 do port em float nativo no 360** (30/10/2026; o Lucas deixou como ponto de melhoria, sem mudar
+    essa lógica agora): os floats andam como bits `uint32_t` e cada conta vai e volta pela memória (load-hit-store); na luta
+    comum isso é uns 11,7 ms por quadro da thread do jogo, e o conserto estimado ganharia 8 a 9 ms. Exige provar o mesmo
+    resultado na x86, na PPC e no 360 pelos roteiros. Estudo em [11-cpu-vu0](11-cpu-vu0.md), item A; o item B (a projeção
+    por vértice na explosão do planeta) foi feito antes da release.
+
 ## Fora do plano do port (28/10/2026)
 
 10. **As provas da F6 que ficaram por fazer no console** (o Lucas tirou do plano: não são importantes o suficiente).
