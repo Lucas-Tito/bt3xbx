@@ -2117,6 +2117,10 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   alfa e escurece o pixel inteiro. Para ele seguir as amostras, uma cópia dos ids por fragmento (os Resolves pelo fragmento 0
   e pelo 1) e a passada uma vez por amostra, com a máscara daquela amostra e os ids dela; a média do fim faz o resto. Volte o
   `D3DRS_MULTISAMPLEMASK` a `0xFFFFFFFF` logo depois: ele vale para tudo o que vem a seguir, inclusive a volta de outro alvo.
+- **A arte 2D numa superfície com MSAA sai igual à de 1 amostra com `D3DRS_MULTISAMPLEANTIALIAS` falso:** as amostras todas
+  pelo centro do pixel, a cobertura e a leitura da textura como sem MSAA. Na escala fracionária as bordas das peças do HUD
+  caem no meio do pixel e, com MSAA, ganhariam meia cobertura; o estado posto e tirado em volta de cada desenho de arte 2D
+  mantém o afiado e o texto como eram.
 
 ### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
 
