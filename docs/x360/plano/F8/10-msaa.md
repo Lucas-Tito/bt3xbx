@@ -15,7 +15,8 @@ documentação do XDK 2.0.21256 extraída do `xbox360sdk.chm`) e **[estimado]**.
 FXAA ainda incomodar. **Depois da rodada de 30/10 (seção 8):** o MSAA "ajudou muito" no serrilhado que incomodava; ele quer
 **só o MSAA, sem FXAA**, e **não quer ficar na 1,33**. A escala (1,4 ou 1,5) não foi fixada: o MSAA completo tem de servir às
 duas. O modo de 60 quadros fica fora por enquanto. Tudo continua atrás de `BT3_MSAA=2`, desligado por padrão, até o console
-aprovar.
+aprovar. **O MSAA completo** (a volta exata, o plano das vagas, o contorno por amostra, a arte 2D sem MSAA e o alfa para
+cobertura desligado) está na seção 9, com a rodada preparada em `build/sessao_msaa2/`.
 
 ## 1. Resumo
 
@@ -289,3 +290,205 @@ modo 1 (como cor) pelos dois fragmentos nas duas; a cor de 2 amostras: Resolve 0
 **O que o Lucas viu:** o MSAA "ajudou muito" no serrilhado que o incomodava. Decisões: só o MSAA, sem FXAA; nada de ficar na
 1,33; a escala entre 1,4 e 1,5 fica para depois do MSAA completo (seção 9); o modo de 60 quadros fora por enquanto.
 
+## 9. O MSAA completo (branch `claude/f8-msaa-escala`, 30/10)
+
+Pedido: transformar o protótipo num MSAA 2x completo para a 1,4 e a 1,5, sem FXAA, com a lista da seção 6 ("O que falta").
+Tudo continua atrás de `BT3_MSAA=2`, desligado por padrão; cada parte tem uma subchave (lida só com o MSAA ligado), para a
+rodada separar o custo de cada uma. Todas as subchaves em 0 dão o protótipo de `a5f5bc51`.
+
+| Commit | Subchave (padrão com o MSAA) | O quê |
+|---|---|---|
+| `52884f50` | | a rodada de 30/10 (seção 8) |
+| `299a79b8` | `BT3_MSAA_VOLTA=1` | a volta exata pelas amostras cruas, o DATE adiado, o autoteste das amostras e a sabotagem dele |
+| `2d6d85e8` | `BT3_MSAA_VAGAS=1` | as pequenas sobre a profundidade de 2 amostras; o alvo com MSAA fica na EDRAM o quadro todo |
+| `9219245c` | `BT3_MSAA_CONTORNO=1` | o contorno por amostra (a cópia dos ids do fragmento 1 e duas passadas com a máscara) |
+| `f1cac186` | `BT3_MSAA_2D=1` | a arte 2D sem MSAA (`D3DRS_MULTISAMPLEANTIALIAS` falso em volta de cada desenho) |
+| `d2e7e50a` | `BT3_MSAA_A2C=0` | o alfa para cobertura nos desenhos com teste de alfa, desligado |
+| `8c466c42` | | as correções da revisão: a volta em tiles inteiros, a média que passa pelo parque contada, a escolha do parque |
+
+### 9.1 A volta exata (`BT3_MSAA_VOLTA`) [lido; a exatidão, o autoteste do boot]
+
+**O problema** (seção 8): o protótipo trazia o alvo com MSAA de volta pela média das amostras; o DATE e a cópia dos ids, que
+leem o fragmento 0, liam o alfa médio nos pixels trazidos pela volta. A primeira entrada de cada quadro já é uma volta.
+
+**A saída escolhida, e por que ela:** a documentação do `D3DRS_MULTISAMPLEMASK` diz que, no MSAA 2x, cada pixel do buffer é
+um bloco vertical de 1 x 2 no buffer de amostras, e o `XGSurfaceSize` dá os mesmos tiles para a cor de 2 amostras de `W x H` e
+para a de 1 amostra de `W x 2H`. Uma vista de 1 amostra com o dobro das linhas na base 0 (`sMsCru`) lê e escreve as amostras
+cruas. Quando o alvo com MSAA perde a EDRAM (despejado no quadro, ou no fim do quadro, `ED_FIM`), o conteúdo dele vai por um
+Resolve dessa vista para um parque (`ms_parque`, uma textura `W x 2H`); a volta (`ms_volta`) desenha o parque na mesma vista.
+As duas amostras voltam bit a bit, o alfa do fragmento 0 também, e a média do fim continua a mesma (as amostras são as de
+antes). O estudo sugeria guardar só o alfa do fragmento 0 e restaurá-lo no alfa; isso exigiria um Resolve do fragmento 0 e
+duas passadas na volta (a do fragmento 0 só no alfa e a outra com `2 x média - a0`, para a média do fim não mudar): o mesmo
+tráfego da vista crua (o Resolve mede pelos bytes escritos: 0,179 ms para os 2,4 MB da média da 1,4), menos exato (a cor
+de cada amostra voltaria média) e com mais estados. A vista crua é exata em tudo.
+
+- **Dois parques** (`MS_PARQUES`): o jogo alterna dois alvos de quadro (0 e 2), e a volta do começo de um quadro traz o alvo
+  mostrado dois quadros antes. Um parque vale para o alvo e o retângulo que guardou, com a mesma textura do alvo
+  (`sAlvoD[].ver`); um Resolve de cor para a textura desse alvo num quadro em que ele não é o com MSAA tira a validade
+  (`ms_resolveu`). Sem parque que valha, a volta é pela média, como antes, e conta como tal.
+- **Em tiles inteiros:** o parque e a volta são em retângulos com x em múltiplos de 80 e y em múltiplos de 8 (`alinha80`),
+  o caso que o autoteste prova: com o alvo inteiro, a ida e a volta pela mesma vista acertam com qualquer arranjo das
+  amostras dentro do tile, mas um retângulo que corta um tile dependeria dele. A volta devolve o retângulo inteiro do
+  parque; fora do conteúdo ele tem o que a limpeza da entrada dava. (A revisão por outro agente achou o furo na versão
+  com x em múltiplos de 8, `8c466c42`.)
+- **A média que passa pelo parque:** uma volta pela média (sem parque, com a textura que recebeu a média de um Resolve do
+  alvo com MSAA, `sMsTexMedia`) põe a média nas duas amostras, e o parque guardado depois disso a carrega; o parque leva a
+  marca (`media`) e a volta por ele conta como média. Uma volta por uma textura que só recebeu Resolves de 1 amostra é
+  exata (as duas amostras com o valor de 1 amostra).
+- **Sem Resolve à toa:** o parque só é refeito se o alvo mudou na EDRAM desde o último (`sMsMudou`: algum Resolve de sujo
+  dele, ou a volta pela média).
+- **O DATE adiado:** o marcador de DATE do alvo com MSAA quando ele não é o posto lia a textura (a média). Com a subchave, a
+  cópia espera a entrada nele (`ms_date_adiado`, no fim do `entra_res` e do `entra_na_edram`) e sai do fragmento 0 da EDRAM,
+  com as mesmas contas do caminho do alvo posto (`date_area`). Nada desenha nele entre o marcador e a entrada, então é o
+  mesmo conteúdo.
+- **O autoteste das amostras** (`ms_amostras_autoteste`, no `msaa_init`): dois padrões pseudoaleatórios desenhados com 1
+  amostra são a referência; na cor de 2 amostras, cada padrão vai pela máscara de um bit (`0x1111`, `0x2222`: a máscara
+  tem 4 bits por pixel da quadra de 2 x 2) e os Resolves pelo fragmento 0 e pelo 1 dizem qual máscara escreve qual
+  fragmento (`sMsMasc`). Depois a volta crua: parque, a cor limpa (o controle: o fragmento 0 tem de sair diferente), a volta
+  e os dois fragmentos de novo, que têm de ser os de antes em todos os pixels. Sem a volta exata, o MSAA se desliga com
+  `ERRO` (o alfa depois de uma volta seria o médio). Mede também a GPU do parque e da volta crua de um alvo inteiro.
+- **A sabotagem:** `BT3_MSAA_SABOTA=1` lê a volta uma linha da vista crua abaixo (a amostra de baixo no lugar da de cima):
+  o autoteste tem de dizer `ERRO: não exata` e o MSAA se desligar; `BT3_MSAA_SABOTA=2` desenha os dois padrões com a mesma
+  máscara: `ERRO: nenhuma máscara escreve um fragmento só`, e o contorno fica por pixel.
+- **Os contadores** (`MSAA 2x, por quadro`): `N com a volta, que traz a saída anterior: E exatas, pelo parque, e as outras
+  pela média`; `DATE nele N pelo fragmento 0 (V depois de uma volta, M depois de uma pela média; A esperaram a entrada nele)
+  e T pela textura`; `cópias dos ids N pelo fragmento 0 (V depois de uma volta, M depois de uma pela média)`. "Pela média"
+  conta o quadro em que o conteúdo do alvo com MSAA veio de uma textura com a média (direto ou por um parque marcado). Exato
+  é `M` zero e `T` zero. A linha `MSAA 2x, o completo, por quadro` dá os parques e as amostras guardadas; a trilha marca o parque
+  (`^0k`) e a volta exata (`0M+x`).
+
+**O custo [estimado]:** o parque escreve o dobro da média (uns 0,36 ms por alvo inteiro na 1,4) e a volta crua lê o dobro
+(uns 0,35 contra 0,18). Com as vagas da seção 9.2, sobra uma volta por quadro (a do começo) e um parque (o do fim): uns +0,5
+ms por quadro contra a volta pela média. O autoteste mede os dois tempos no boot.
+
+### 9.2 O plano das vagas (`BT3_MSAA_VAGAS`) [lido; os tamanhos, do log da `m14` e da `m15`]
+
+A 1,5 (área 640 x 448, alvo de 960 x 672) ocupa os mesmos 1.008 + 1.008 tiles que a 1,4 (640 x 480, 896 x 672): 12 colunas de
+tiles de 80 pixels e 84 linhas de 8 nas duas (seção 8). O plano é o mesmo para as duas.
+
+**A ideia:** a cadeia do brilho (3, 4, 5 e 6) não usa profundidade. Nos quadros com o alvo com MSAA, as pequenas moram sobre a
+profundidade de 2 amostras (de 1.008 ao fim da EDRAM, 1.040 tiles) e A fica só para quem precisa da vaga grande (z, nativas,
+o filme). O alvo com MSAA não sai mais da EDRAM pela cadeia do brilho; quem sai é a profundidade:
+
+- a pequena que entra com uma profundidade na EDRAM a entrega à textura do dono (`ms_z_sai`, `prof_entrega` com as
+  superfícies do dono postas) e a posse acaba;
+- a profundidade que volta numa visita com z (limpa ou restaurada) despeja antes as pequenas que moram em cima dela
+  (`ms_pequenas_sai`: o sujo delas vai para as texturas; a próxima entrada de cada uma é com a volta).
+
+As duas regras mantêm o invariante: nunca há profundidade e pequena com conteúdo nos mesmos tiles. A e B continuam dentro da
+cor de 2 amostras (quem precisa delas despeja o alvo com MSAA, pelo parque).
+
+| Pequenas da luta (tesoura do GS) | 1,4 (tiles) | 1,5 (tiles) |
+|---|---:|---:|
+| 3 (512 x 448) | 720 x 632: 360 | 768 x 672: 420 |
+| 4 (128 x 128) | 184 x 184: 36 | 192 x 192: 36 |
+| 5 e 6 (64 x 64) | 96 x 96: 12 cada | 96 x 96: 12 cada |
+| Soma, de 1.008 em diante | 420, até 1.428 | 480, até 1.488 |
+
+**A trilha esperada na pausa** (a de 30/10 com o plano novo): `0M+xz ^0z 3p+ ^3l 4p+ ^4l 5p+ ^5l 6p+ ... 3p ^3l 0M ^0l 3p ^3l
+0Mz ...`: uma volta do alvo com MSAA por quadro, nenhum `^0m`, a profundidade saindo na primeira pequena depois de cada visita
+com z e voltando (`z`) na visita com z seguinte. **O custo [estimado, 1,4, luta]:** saem as 5,7 voltas inteiras do alvo
+com MSAA (uns 1,0 ms), os 6 despejos por ela (uns 0,3 a 0,5 ms) e o revezamento do 3 e do 4 na B (uns 0,3 ms); entram uns
+2 restauros da profundidade de 2 amostras a mais (0,22 ms cada) e as voltas do 3 depois deles (uns 0,1 ms cada).
+
+**O que fica aproximado:** a profundidade de 2 amostras sai pelo fragmento 0 (o único Resolve de profundidade do Xenos) e
+volta com ele nas duas amostras. Antes isso só acontecia na volta do começo do quadro; agora também nas visitas com z depois
+da cadeia do brilho. Um desenho com teste de z depois do brilho, num pixel de borda de silhueta, vê na amostra 1 a
+profundidade da amostra 0. Se a imagem acusar, o mesmo parque cru serve à profundidade (a profundidade de 2 amostras vista
+como cor de 1 amostra com o dobro das linhas), com o dobro do tráfego.
+
+### 9.3 O contorno por amostra (`BT3_MSAA_CONTORNO`)
+
+Na cópia dos ids do alvo com MSAA (`native 4`) sai também a do fragmento 1 (`sIds1`, do tamanho da `sIds`, contada com os
+alvos). O contorno (`native 1`) nesse alvo roda duas vezes, cada uma com a máscara de uma amostra (`sMsMasc`, a que o
+autoteste mediu) e os ids dela; a máscara volta a `0xFFFFFFFF` logo depois. A linha preta passa a seguir as amostras: na
+silhueta, o pixel de borda tem a linha numa amostra e o fundo na outra, e a média do fim a suaviza. Sem a máscara achada,
+ou sem a textura, `ERRO` e o contorno por pixel do protótipo. Custo [estimado]: um Resolve dos ids (uns 0,17 ms na 1,4) e
+uma passada do contorno a mais (uns 0,1 a 0,2 ms). As passadas de tabela pelos ids (`native 3`, a chave e o brilho de
+objeto) continuam por pixel: o mesmo esquema serviria a elas, se a rodada mostrar degrau nelas.
+
+### 9.4 O alfa para cobertura (`BT3_MSAA_A2C`, desligado)
+
+O Xenos soma ao alfa um desvio por pixel da quadra antes de contar as amostras (`alfa + desvio / 8` no 2x; `SOLID` é +1/4,
+`DITHERED` pontilha). Com os quatro desvios em 3 (0xFF, +3/8, sem pontilhado): abaixo de 1/8 nenhuma amostra, de 1/8 a 5/8
+uma, de 5/8 em diante as duas. Só nos desenhos 3D no alvo com MSAA com teste de alfa GEQUAL de AREF 17 ou mais (ou GREATER de
+16), sem mistura e sem FBA: todo pixel que passa no teste cobre ao menos uma amostra. **Desligado porque o risco é alto:** o
+alfa gravado no BT3 é dado (os ids do contorno, o bit 7 do DATE) e o opaco do PS2 é 0x80; um texel de alfa 0x40 (meio) num
+desenho com teste de alfa e sem mistura, que hoje sai opaco, sai com meia cobertura na peça inteira, não só na borda. Para o
+console: uma abertura com a chave, para o Lucas olhar cabelos e recortes, e o contador `desenhos com o alfa para cobertura`.
+
+### 9.5 A arte 2D sem MSAA (`BT3_MSAA_2D`) e o centroide
+
+Em volta de cada desenho de arte 2D (`misc.w`) no alvo com MSAA, `D3DRS_MULTISAMPLEANTIALIAS` falso: as amostras pelo
+centro do pixel, a cobertura e a leitura como sem MSAA. Na 1,4 e na 1,5 as bordas das peças caem no meio do pixel; o afiado e
+o texto ficam como sem o MSAA. **O centroide no uv não foi feito:** pede uma variante dos shaders do 3D (mudaria os headers
+da build sem a chave, ou mais variantes) e só serve se houver franja nas bordas 3D, que a rodada mostra.
+
+### 9.6 O custo do completo [estimado, 1,4 e 1,5, luta, contra o protótipo]
+
+| Parte | ms por quadro |
+|---|---:|
+| As vagas: sem as voltas e os despejos do alvo com MSAA e sem o revezamento na B | -1,6 a -1,8 |
+| As vagas: a profundidade restaurada nas visitas com z e as voltas do 3 | +0,6 a +0,9 |
+| A volta exata: o parque do fim e a volta crua do começo | +0,5 |
+| O contorno por amostra | +0,3 a +0,4 |
+| **Soma** | **-0,6 a +0,2** |
+
+O completo deve custar perto do protótipo (que já ficou 1,3 ms abaixo do FXAA na 1,4 com a SEMTEX), com a volta exata e o
+contorno suave pagos pelas vagas. Na 1,5 a pausa (mínimo 0,6 ms no protótipo) segue apertada: as aberturas da seção 9.8
+dizem o ganho de cada parte. Se faltar, o próximo passo é a volta do começo do quadro: quando o primeiro desenho do alvo com
+MSAA no quadro cobre o conteúdo inteiro sem ler o destino, a volta e o parque dele são trabalho morto.
+
+### 9.7 As provas [medido no XDK; nada rodou no console]
+
+- **Build do 360** (`build_f2.sh` em cada commit; o último, `8c466c42`, carimbo `8c466c42 diff:da39a3ee5e`): 317 de 317 fontes sem erro,
+  nenhum aviso no `gs_d3d.cpp` (os avisos dos outros fontes do 360 são os 8 de antes), os mesmos 103 stubs, `default.dat`
+  `4fe9d0495c144043fdccda41281655fa` e `default.swap` `2e97a3e533accf0ae852e4d25df5283a` iguais aos de `a5f5bc51`;
+  **`default.xex` `42844cae9ec6347d4d2b036eb572ae2e (1.519.616 bytes, 4 KB a mais)`**.
+- **Os shaders são os mesmos:** nenhum shader novo; os 27 headers do `fxc` saem byte a byte iguais aos de `a5f5bc51` (o mesmo
+  caminho de saída). A volta crua usa o `ps_copia`, o contorno por amostra o `ps_contorno`; o resto é estado.
+- **Os objetos contra `a5f5bc51`** (`xdk_objetos.py` do `claude/f5-lotes`, os 317 `obj/*.obj` e os 31 `x360/*.obj`,
+  `--espera-diferente x360/gs_d3d.obj`): saída 0, **347 objetos com a mesma desmontagem e só o `gs_d3d.obj` diferente**; no
+  `.map`, só as funções novas do `ms_*` e do autoteste. **O controle:** sem `--espera-diferente`, a mesma comparação sai com
+  1 apontando o `gs_d3d.obj` e as funções novas do `.map`; o `--mutantes` recusa a instrução trocada, o registrador trocado,
+  a instrução a menos, o rótulo falso e a função a mais no `.map`.
+- **Dentro do `gs_d3d.obj`** (a desmontagem por blocos, cada rótulo do dump um bloco, com registradores, números e
+  deslocamentos normalizados, cada bloco de `a5f5bc51` procurando um igual): 487 de 523 blocos têm um igual (o `gs_d3d.obj` novo tem 554). Os sem par estão nas funções que
+  ganharam código atrás da chave (`entra_res`, `entra_na_edram`, `sai_da_edram`, `ed_descarrega`, `ed_plano`, `ed_fim`,
+  `ed_init`, `ed_log`, `nat_ids`, `nat_contorno`, `frame_end`, `msaa_init`, `ms_log`) ou que as têm em linha (o `cl` põe as
+  funções estáticas pequenas dentro de quem chama: o `nat_tabela` e o `nat_autoteste` levam o `entra_na_edram`); a
+  atribuição de um bloco `$M` à função com nome que vem antes dele no dump é aproximada. O comparador (`funcoes_dis.py`, no
+  scratchpad da sessão) com uma instrução trocada de propósito acusa o bloco.
+- **Sem a chave, o caminho é o mesmo** [lido, o diff de `a5f5bc51` a `8c466c42`]: todo código novo que roda sem `BT3_MSAA`
+  é um teste que cai no caminho de antes. `sMsaa` é 0, `sMsAlvo` é -1, `sMsVoltaX`, `sMsVagas`, `sMsContorno`, `sMs2d` e
+  `sMsA2c` são 0 (só o `msaa_init` com o MSAA aceito os lê). Um por um: o `ms_resolveu` no `sai_da_edram` e no
+  `ed_descarrega` só com `sMsaa`; o `ms_parque` do `sai_da_edram` só com o residente igual a `sMsAlvo` e `sMsAlvo >= 0`, e o
+  do `entra_res` e do `ed_fim` só na vaga M, que sem a chave nenhum alvo recebe (o `ed_prox` a pula com `sMsAlvo` -1); o
+  `ms_volta` só na vaga M ou com o alvo igual a `sMsAlvo` (`exata` fica 0 e a volta é o mesmo `copia`); o `ms_date_adiado`
+  só com `sMsDatePend >= 0`, que só o ramo `sMsVoltaX && d->target == sMsAlvo` do marcador põe (sem a chave o marcador só
+  escreve -1 nele); o `ms_z_sai` e o `ms_pequenas_sai` só com `sMsVagasQ`, que o `ed_plano` põe do `msv`, 0 sem a chave
+  (`sMsVagas` 0); no `ed_plano`, com `msv` 0 a escolha de A ganha um `(!msv || ...)` sempre verdadeiro e a base das pequenas
+  e a conta do `tilesMax` ficam `sEdPool`; no `nat_ids`, o ramo do alvo com MSAA não é tomado e o outro ganha um
+  `sMsIds1 = 0` que ninguém lê sem a chave; no `nat_contorno`, `d->target == sMsAlvo` é falso e a passada é a de antes; no
+  `frame_end`, o `ms_desenho_poe` só no alvo com MSAA (`msEst` 0, nenhum estado posto); o `entra_res` ganha `exata` 0 e um
+  `""` a mais no texto da trilha (a mesma sequência no log), e a legenda da trilha no `ed_log` ganha um `%s` vazio sem a
+  chave. Os únicos efeitos sem a chave são esses testes e o `sMsDatePend = -1` de cada marcador.
+
+### 9.8 A rodada de console (preparada, não rodada)
+
+Em `build/sessao_msaa2/` da cópia principal (fora do git): o `default.xex`, o `.dat`, o `.swap` e o `.map` do `8c466c42`, o
+`f5_duelo.txt` e o `boot.txt` (iguais aos do repositório), um `ambiente_NOME.txt` por abertura (o `ambiente_m14.txt` de 30/10
+com as subchaves e `BT3_SAVES=game:\sv_ms2_NOME`), o `ordem.txt` e o `LEIA-ME.txt`, que diz que linha do log prova cada item.
+
+| Abertura | Escala | Subchaves (VOLTA, VAGAS, CONTORNO, 2D, A2C) | Mede |
+|---|---|---|---|
+| `c14` | 1,4 | 0, 0, 0, 0, 0 | o controle: o protótipo, tem de bater com a `m14` |
+| `t14` | 1,4 | 1, 1, 1, 1, 0 | o completo na 1,4 |
+| `t15` | 1,5 | 1, 1, 1, 1, 0 | o completo na 1,5 (a pausa) |
+| `v14` | 1,4 | 0, 1, 0, 0, 0 | o ganho do plano das vagas (contra a `c14`) |
+| `v15` | 1,5 | 0, 1, 0, 0, 0 | o mesmo na 1,5 (contra a `m15`) |
+| `x14` | 1,4 | 0, 1, 1, 1, 0 | o custo da volta exata (a `t14` contra esta) |
+| `k14` | 1,4 | 1, 1, 0, 1, 0 | o custo do contorno por amostra (a `t14` contra esta) |
+| `a14` | 1,4 | 1, 1, 1, 1, 1 | a imagem do alfa para cobertura |
+| `s1` | 1,4 | tudo, `BT3_MSAA_SABOTA=1`, roteiro `boot.txt` | o autoteste acusa a volta crua estragada e o MSAA se desliga |
+| `s2` | 1,4 | tudo, `BT3_MSAA_SABOTA=2`, roteiro `boot.txt` | o autoteste acusa as máscaras iguais e o contorno fica por pixel |
