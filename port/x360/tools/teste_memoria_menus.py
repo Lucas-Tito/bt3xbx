@@ -64,6 +64,17 @@ def main():
     assert avisos, 'fragmentos conflitantes sem aviso'
     print('estrago fragmentos conflitantes: recusado e registrado')
 
+    # (mutante h) A expansão para trás não entra no conteúdo vivo, mesmo quando ele é igual ao arquivo velho.
+    trechos = fragmentos_antecipados(antigo, 0x1800, refs)
+    assert trechos and min(a for a, _, _ in trechos) >= 0x1800, 'expansão entrou no conteúdo vivo'
+    print('estrago expansão sobre o conteúdo vivo: recusado')
+    # (mutante i) Original e convertido de tamanhos diferentes: a referência sai, com aviso.
+    avisos = []
+    assert not fragmentos_antecipados(antigo, 0, [('curto', antigo, convertido[:-4])], avisos), \
+        'referência de tamanhos diferentes usada'
+    assert avisos and avisos[0].startswith('referência excluída'), avisos
+    print('estrago tamanhos diferentes: referência excluída e registrada')
+
     # Pacote de seções como referência (risco 1 da revisão): resto cru reprova, convertido passa.
     pacote = Random(451).randbytes(0x20000)
     pacote_conv = bytes(b ^ 0x3c for b in pacote)
@@ -106,6 +117,15 @@ def main():
     trechos = fragmentos_antecipados(dados, 0x1000, [('pacote', bytes(pacote_dup), bytes(conv_dup))])
     assert [(a, bytes(b)) for a, b, _ in trechos] == [(0x1040, bytes(conv_dup[0x4000:0x4200]))], trechos
     print('estrago repetido com saídas diferentes: recusado; com a mesma saída: aceito')
+    # Âncora com menos de 64 bytes não nulos não identifica origem, mesmo única.
+    esparso = bytearray(0x1000)
+    for i in range(0x800, 0x880, 4):
+        esparso[i] = (i >> 2) & 0xff or 1
+    esparso = bytes(esparso)
+    dados = vivo + b'\x77' * 0x40 + esparso[0x800:0x880] + b'\x77' * 0x40
+    assert not fragmentos_antecipados(dados, 0x1000, [('esparso', esparso, bytes(b ^ 0x11 for b in esparso))]), \
+        'âncora esparsa aceita'
+    print('estrago âncora esparsa: sem referência aceita')
     # Dois trechos únicos que se sobrepõem com saídas diferentes: a sobreposição não escolhe nenhuma.
     s1, s2, s3 = (Random(k).randbytes(0x200) for k in (1, 2, 3))
     x = bytearray(Random(4).randbytes(0x1000)); x[0x400:0x800] = s1 + s2

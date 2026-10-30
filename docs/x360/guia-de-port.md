@@ -2717,3 +2717,11 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   palavra e sai no log ("restos ambíguos"); sobreposição de dois trechos
   únicos com saídas diferentes também. Não resolver ambiguidade excluindo
   um formato inteiro: o que se exclui volta para a tolerância antiga.
+
+- Dois mutantes do identificador de fragmentos sobreviviam ao teste
+  sintético: a expansão para trás que entrava no conteúdo vivo e a falta da
+  recusa de original e convertido com tamanhos diferentes. Um terceiro, a
+  âncora sem o mínimo de bytes não nulos, passou a sobreviver quando a
+  unicidade cobriu o caso dos zeros. Cada regra do identificador tem de ter
+  um caso próprio no teste, e a lista de mutantes roda de novo a cada
+  mudança dele (`~/revisao-iso-v4/mutantes-isoverif.log`).
