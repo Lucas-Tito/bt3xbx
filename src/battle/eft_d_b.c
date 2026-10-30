@@ -555,6 +555,100 @@ static inline s32 EftBurst_IsVisible(s32 *pos) {
     return 1;
 }
 
+#ifdef PORT
+/*
+ * Port only (docs/x360/plano/F8/11-cpu-vu0.md, item B): the model's vertex part computed once per vertex of a group.
+ *
+ * The original projects every triangle corner on its own: during the planet's explosion about 1,650 triangles, so
+ * 4,950 corners, of 877 vertices go through the emulated vector unit every frame. Within one group, what a corner
+ * computes from its vertex depends on nothing that changes inside the triangle loop: the vertex (grp->verts, read
+ * only), the group's scale, the origin, the view's matrix (nothing in the loop writes it), the frame counter, fade
+ * and dist. So it is computed the first time a vertex appears in the group and kept in this table; what depends on
+ * the corner (its normal and its colour) is still computed per corner, by the same routines with the same operands
+ * in the same order. The table is invalidated per group (the scale, the vertex array and the flags change).
+ *
+ * Why the bits are the same (port/x360/tools/teste_explosao.sh checks them on random models):
+ * - the routines skipped for a repeated vertex are pure (IVec4_Set, Vec4_Scale, Vec4_Sub, Vec3_Dot, Vec4_Add,
+ *   Vec4_Clamp, Vec4_ToInt, Mtx_ProjectPointStq: their result depends only on their arguments and on the constant
+ *   registers vf0..vf3) except IVec4_ToFloat12, which leaves vf4 / vf5 behind; every corner still ends with the
+ *   same IVec4_ToFloat12 (its normal) / IVec4_ToFloat (its colour) as the original, which overwrite all of vf4 and
+ *   vf5, so the vector unit's state after each corner is the original's;
+ * - Mtx_ProjectPointStq gives stq = (uv.x * Q, uv.y * Q, 1.0 * Q, uv.w), Q = 1 / w of the projected vertex. The
+ *   table keeps the vertex's 1.0 * Q (the projection with a zero uv), and the corner multiplies its normal by it
+ *   with Vec4_Scale (uv.x * Q, uv.y * Q: the same multiply, the same operand order). That is the original's only
+ *   if 1.0 * Q is Q. On the PC builds Q comes from the PS2 model's division (+/-0, a normal number or +/-max) and
+ *   the model's multiply by 1.0 gives those back unchanged; on the 360 Q comes from the FPU's division
+ *   (port/x360/src/f2/float360.c) and an IEEE multiply by 1.0 gives its operand back whatever the rounding mode (a
+ *   denormal stays itself, or the division already flushed it in non-IEEE mode; an infinity stays; a NaN made by
+ *   the division is quiet and comes back unchanged);
+ * - the light of the second pass (frame 11 on) is computed from the vertex's distance to the origin: the same
+ *   statements, once; the corner's colour is still converted and added per corner.
+ * A vertex index outside the table (negative or EFT_BURST_VTX_MAX or more) is computed for that corner alone, as
+ * the original does; gEftBurstVtxFora counts those corners and the first draw that has any is logged.
+ */
+#define EFT_BURST_VTX_MAX 2048
+
+typedef struct EftBurstVtx {
+    EftIVec scr;  /* the vertex's screen position (Mtx_ProjectPointStq) */
+    EftIVec amb;  /* second pass, frame 11 on: the light's colour as integers (rgbaq[k][1]) */
+    EftFVec dir;  /* the same, when near: lightDir * lit, added to the corner's colour */
+    f32 q;        /* stq.z of the projection: 1.0 * Q */
+    s32 near;     /* len < dist */
+    u32 stamp;    /* sEftBurstStamp of the group that filled it */
+} EftBurstVtx;
+
+static EftBurstVtx sEftBurstVtx[EFT_BURST_VTX_MAX];
+static u32 sEftBurstStamp;
+u32 gEftBurstVtxFora; /* corners computed without the table */
+
+/* What a corner of the original computes from its vertex alone, in the original's order. */
+static void EftBurst_PortVertex(EftBurstVtx *c, s16 *v, f32 scale, f32 *origin, s32 light, f32 fade, f32 dist) {
+    EftFVec ang;
+    EftFVec pos;
+    EftFVec d;
+    EftFVec zero;
+    EftFVec stq;
+
+    IVec4_Set(ang, v[0], v[1], v[2], 0);
+    IVec4_ToFloat12(pos, ang);
+    Vec4_Scale((Vec4 *)pos, (Vec4 *)pos, scale);
+    Vec4_Sub((Vec4 *)d, (Vec4 *)origin, (Vec4 *)pos);
+    pos[3] = 1.0f;
+    memset(zero, 0, sizeof(zero));
+    Mtx_ProjectPointStq(c->scr, stq, &gBtlCamView->proj, pos, zero);
+    c->q = stq[2];
+    if (light) {
+        EftFVec lightV = { 0.0f, 0.0f, 0.0f, 1.0f };
+        EftFVec lightDir = { 1.0f, -0.2f, -0.8f, 0.0f };
+        EftFVec ambient = { 127.0f, 127.0f, 127.0f, 0.0f };
+        f32 len;
+        f32 lit;
+
+        len = sqrtf(Vec3_Dot((Vec4 *)d, (Vec4 *)d));
+        lit = 255.0f - len / dist * 255.0f;
+        if (lit > 255.0f) {
+            lit = 255.0f;
+        }
+        Vec4_Scale((Vec4 *)lightV, (Vec4 *)lightV, fade * 0.6f * lit);
+        Vec4_Add((Vec4 *)ambient, (Vec4 *)lightV, (Vec4 *)ambient);
+        Vec4_Clamp(ambient, ambient, 0.0f, 255.0f);
+        Vec4_ToInt(c->amb, (Vec4 *)ambient);
+        c->near = len < dist;
+        if (c->near) {
+            Vec4_Scale((Vec4 *)c->dir, (Vec4 *)lightDir, lit);
+        }
+    }
+}
+
+#ifdef PORT_X360 /* the console's log (one line per call) */
+extern void Diario_Escrever(const char *formato, ...);
+#define EFT_BURST_LOG(f, a, b, c) Diario_Escrever(f, a, b, c)
+#else
+extern s32 printf(const char *formato, ...);
+#define EFT_BURST_LOG(f, a, b, c) printf(f "\n", a, b, c)
+#endif
+#endif /* PORT */
+
 /* Draws the burst's model in camera space: every vertex is three 16-bit angles / a radius turned into a
    point around (0, 0, -50), every triangle is sent as RGBAQ / ST / XYZ2. Groups with flag 0x800 get a
    second, environment-mapped pass through GS context 2 whose colour is a light that fades with the
@@ -589,6 +683,11 @@ void EftBurst_DrawModel(EftBurstModel *model, s32 unused) {
     f32 fade;
     f32 dist;
     f32 scale;
+#ifdef PORT
+    s32 light;
+    u32 fora = 0;
+    s32 foraIdx = 0;
+#endif
 
     grp = model->groups;
     envTex = &gEftBurstRes.texPack->tex[6];
@@ -636,9 +735,76 @@ void EftBurst_DrawModel(EftBurstModel *model, s32 unused) {
         pkt[0] = PS2_PKT64(0x44);
         pkt[1] = PS2_PKT64(0x43); /* ALPHA_2 */
         pkt += 2;
+#ifdef PORT
+        light = (flags & 0x800) && gEftBurst->frame >= 11;
+        if (++sEftBurstStamp == 0) { /* a new group: the table is empty (wrapped: cleared by hand) */
+            for (k = 0; k < EFT_BURST_VTX_MAX; k++) {
+                sEftBurstVtx[k].stamp = 0;
+            }
+            sEftBurstStamp = 1;
+        }
+#endif
         for (t = 0; t < grp->triCount; t++, tri++) {
             vis = 0;
             env = flags & 0x800;
+#ifdef PORT
+            for (k = 0; k < 3; k++) {
+                s32 idx = tri->vtx[k];
+                EftBurstVtx *c;
+                EftBurstVtx own;
+
+                if ((u32)idx < EFT_BURST_VTX_MAX) {
+                    c = &sEftBurstVtx[idx];
+                    if (c->stamp != sEftBurstStamp) {
+                        EftBurst_PortVertex(c, &verts[idx * 3], scale, origin, light, fade, dist);
+                        c->stamp = sEftBurstStamp;
+                    }
+                } else {
+                    c = &own;
+                    EftBurst_PortVertex(c, &verts[idx * 3], scale, origin, light, fade, dist);
+                    fora++;
+                    foraIdx = idx;
+                }
+                IVec4_Set(ang, tri->nrm[k][0], tri->nrm[k][1], 0, 0);
+                IVec4_ToFloat12(nrm[k], ang);
+                Vec4_Scale((Vec4 *)st[k], (Vec4 *)nrm[k], c->q); /* uv.x * Q, uv.y * Q */
+                st[k][2] = c->q;
+                st[k][3] = nrm[k][3];
+                scr[k][0] = c->scr[0];
+                scr[k][1] = c->scr[1];
+                scr[k][2] = c->scr[2];
+                scr[k][3] = c->scr[3];
+                rgba[0] = tri->col[k][0] & 0xFF;
+                rgba[1] = (tri->col[k][0] >> 8) & 0xFF;
+                rgba[2] = tri->col[k][1] & 0xFF;
+                rgba[3] = (tri->col[k][1] >> 8) & 0xFF;
+                rgbaq[k][0] = PS2_PKT64((u64)rgba[0] | ((u64)rgba[1] << 8) | ((u64)rgba[2] << 16) | ((u64)rgba[3] << 24) |
+                              ((u64)((u32 *)st[k])[2] << 32));
+                if (env) {
+                    Vec4_Copy((Vec4 *)st2[k], (Vec4 *)st[k]);
+                    st2[k][0] *= 8.0f;
+                    st2[k][1] *= 8.0f;
+                    if (light) {
+                        EftFVec ambient;
+                        EftFVec colF;
+
+                        IVec4_ToFloat(colF, rgba);
+                        rgbaq[k][1] = PS2_PKT64((u64)c->amb[0] | ((u64)c->amb[1] << 8) | ((u64)c->amb[2] << 16) |
+                                      ((u64)c->amb[3] << 24) | ((u64)((u32 *)st[k])[2] << 32));
+                        if (c->near) {
+                            Vec4_Add((Vec4 *)ambient, (Vec4 *)c->dir, (Vec4 *)colF);
+                            Vec4_Clamp(ambient, ambient, 0.0f, 255.0f);
+                            Vec4_ToInt(rgba, (Vec4 *)ambient);
+                            rgbaq[k][0] = PS2_PKT64((u64)rgba[0] | ((u64)rgba[1] << 8) | ((u64)rgba[2] << 16) |
+                                          ((u64)rgba[3] << 24) | ((u64)((u32 *)st[k])[2] << 32));
+                        }
+                    } else {
+                        rgbaq[k][1] = PS2_PKT64((u64)((u32 *)st[k])[2] << 32);
+                    }
+                }
+                vis += EftBurst_IsVisible(scr[k]);
+            }
+#else
             for (k = 0; k < 3; k++) {
                 s16 *v = &verts[tri->vtx[k] * 3];
 
@@ -694,6 +860,7 @@ void EftBurst_DrawModel(EftBurstModel *model, s32 unused) {
                 }
                 vis += EftBurst_IsVisible(scr[k]);
             }
+#endif
             if (vis != 0) {
                 pkt[0] = PS2_PKT64(0x1000000000008002);
                 pkt[1] = PS2_PKT64(0xE);
@@ -756,6 +923,18 @@ void EftBurst_DrawModel(EftBurstModel *model, s32 unused) {
         Dma_EndDirect(pkt);
     }
     Dma_EndDirect(EftBurst_PutModelEnvEnd(Dma_BeginDirect()));
+#ifdef PORT
+    if (fora != 0) {
+        static s32 logged;
+
+        gEftBurstVtxFora += fora;
+        if (!logged) {
+            logged = 1;
+            EFT_BURST_LOG("eft_d_b: explos\303\243o: %u cantos fora da tabela de v\303\251rtices (\303\255ndice %d, limite %d), "
+                          "calculados sem ela", fora, foraIdx, EFT_BURST_VTX_MAX);
+        }
+    }
+#endif
 }
 #endif
 INCLUDE_RODATA("asm/nonmatchings/battle/eft_d_b", D_002EC8C0);
