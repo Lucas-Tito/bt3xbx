@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Converte e confere a ISO USA do usuário no PC, sem recomprimir BPE.
+"""Converte e confere a ISO USA do usuário no PC, com os menus BPE antecipados.
 
 Uso e contrato: docs/x360/formatos/iso-convertida.md. Requer Python 3 e conv_tool.
 Os temporários ficam ao lado da saída, nunca nos dados originais.

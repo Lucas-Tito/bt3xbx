@@ -196,7 +196,7 @@ def pares_heap(nome, ax, dx, ap, dp):
     return out
 
 
-def pelo_formato(ax, dx, dp, marcas):
+def pelo_formato(ax, dx, dp, marcas, original=None, convertido=None):
     """Compara [data, data + len(marcas)) do bloco pela marcação do conversor. Devolve (início, fim, classes,
     trechos fora do formato) com início e fim relativos ao bloco."""
     ini = struct.unpack_from("<I", dx, 0x14)[0] - ax  # HeapBlock.data
@@ -208,7 +208,12 @@ def pelo_formato(ax, dx, dp, marcas):
         if k + w > fim:
             w = fim - k
         a, b = dx[k:k + w], dp[k:k + w]
-        if m in (2, 4, 8):
+        if original is not None and convertido is not None and a == original[k - ini:k - ini + w]:
+            # O PS2 ainda guarda os bytes originais: exigir a saída antecipada
+            # exata, inclusive packSize e fluxo BPE. Aceitar a == b aqui deixaria
+            # passar de propósito o pacote cru, como antes da ISO v4.
+            ok = b == convertido[k - ini:k - ini + w]
+        elif m in (2, 4, 8):
             ok = a == b[::-1]
         elif m == 1:
             ok = a == b
@@ -694,7 +699,14 @@ def main():
             estado = estado[:-1] + f", {dono[0]} de {dono[2]})"
             tipados_heap[0] += 1
         elif nx in marcas:
-            fmt_ini, fmt_fim, cf, tf = pelo_formato(ax, dx, dp, marcas[nx])
+            referencia = nome_marcas[nx][:-len(".marcas")]
+            convertido = referencia + ".convertido"
+            original = referencia + ".orig"
+            antecipado = os.path.exists(convertido)
+            fmt_ini, fmt_fim, cf, tf = pelo_formato(
+                ax, dx, dp, marcas[nx],
+                open(original, "rb").read() if antecipado else None,
+                open(convertido, "rb").read() if antecipado else None)
             classes.update(cf)
             trechos += [tuple(t) for t in tf]
             print(f"marcas {nx} {nome_marcas[nx].rsplit('/', 1)[-1]}: conforme {cf['conforme']}, "

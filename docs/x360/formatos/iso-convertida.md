@@ -31,12 +31,15 @@ chama `--saida` em lotes e exige conversão com cobertura integral, lista comple
 resultado na posição original de cada entrada, numa cópia temporária da imagem. A instalação solicita também `--icones360`, descrito abaixo.
 Os nomes e as faixas não são duplicados no Python.
 
-Ficam preservados os fluxos BPE, suas caudas e as animações comprimidas. As tabelas dos pacotes e os dois
-campos do cabeçalho BPE (`rawSize`, `packSize`) são trocados como no `--saida` atual; o fluxo a partir do byte 8
-permanece em bytes (`Conv_Bytes`, em `menus.c`, `som.c` e `personagem.c`). Não se descomprime nem se recomprime
-conteúdo para gravá-lo na ISO. O `--disco` continua conferindo também os
-conteúdos após a descompressão, que permanecem a cargo dos ganchos do jogo. SLUS, DBZP, som, filmes, módulos,
-nomes, datas, tabelas e preenchimento mantêm os bytes originais, exceto pela marca especificada abaixo.
+Os menus BPE passam a trazer o conteúdo convertido e recomprimido na versão 4
+([inventário dos 81 sítios](../plano/F8/iso-v4-menus.md)). Posições e tamanhos AFS,
+comprimentos dos arquivos e deslocamentos das seções externas continuam iguais.
+Os blocos cujo conteúdo é só bytes conservam a codificação original; os blocos
+alterados usam a gramática original quando ela cabe, ou uma nova gramática BPE.
+A nova descompressão precisa ser idêntica à conversão do conteúdo e caber no
+espaço da seção. O resto da cauda permanece intocado. As animações e folhas de
+carregamento mantêm o fluxo original e a conversão na carga. Nenhum metadado
+ISO/UDF/AFS é reescrito.
 
 ## Arte dos botões e nome público
 

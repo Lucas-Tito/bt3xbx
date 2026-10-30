@@ -2586,3 +2586,21 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
 - A causa não foi vista no console (sem xbdm): é a diferença que sobrou. Por isso o núcleo leva o estado do
   SHA256 da origem a cada 64 MiB (`iso_marcos.h`, resumos, nenhum byte do jogo) e para no primeiro marco errado,
   dizendo no log a janela e o lote. Se voltar a falhar, o log já aponta onde.
+
+
+### ISO v4: antecipar BPE sem aumentar as entradas (29/10/2026)
+
+- Recompressão gulosa do arquivo inteiro perdeu espaço em 41 pacotes, mesmo
+  mantendo os tamanhos e tentando vários limites de bloco. Os originais usam
+  blocos de até 10.000 bytes; aproximar esse limite ainda deixou 33 falhas.
+  Conservar os blocos inalterados e tentar a gramática original nos alterados,
+  por programação dinâmica, resolveu o encaixe no ensaio integral. Uma nova
+  gramática é alternativa por bloco. Sempre conferir a descompressão completa
+  antes de gravar; falta de espaço é erro fatal, nunca truncamento.
+- Um fluxo BPE recomprimido tem bytes diferentes com o mesmo conteúdo lógico.
+  Marcar o fluxo como bytes e aceitar igualdade deixa passar pacote cru. As
+  marcas dos menus agora levam `.convertido` ao lado de `.orig`; o comparador
+  exige os bytes convertidos exatos nas posições que o jogo não escreveu.
+  `teste_menus_iso.py` estraga as duas provas, na equivalência e na memória.
+- Worktree nova não traz os links de dados: criá-los para `/srv/bt3/dados`, sem
+  copiar nem escrever nas pastas. O primeiro ensaio aqui só viu "não abre".

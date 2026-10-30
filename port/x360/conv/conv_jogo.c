@@ -219,22 +219,13 @@ void Port_ConvertLoadSheet(void *buf, int size) {
     }
 }
 
-/* Um pacote de tela de menu logo depois de Sprite_Unpack, com o formato que o chamador sabe que é (docs/x360/formatos/
-   menus.md 4): BootCard_Init ("menu_cartao"), FirstRun_Main ("menu_logos"), McFlow_Init ("menu_mcflow") e
-   Title_Init ("menu_titulo"). Cada Sprite_Unpack desses aloca um buffer novo: não há conversão dupla. */
+/* ISO v4: todos os pacotes de menu vêm de arquivos convertidos antecipadamente.
+   A ISO já contém o conteúdo big-endian recomprimido; mods passam por Conv_Arquivo
+   ao abrir. O gancho apenas confirma o Sprite_Unpack e mantém a guarda ativa.
+   A folha de carregamento e as animações conservam seus ganchos de conversão. */
 void Port_ConvertMenuPack(void *buf, int size, const char *formato) {
-    char msg[240];
-    int r;
     convertido(buf, formato);
     if (size <= 0) {
         falha("conv: %s com 0x%X bytes descomprimidos", formato, (unsigned)size);
-    }
-    msg[0] = '\0';
-    r = Conv_FormatoBits(formato, formato, (conv_u8 *)buf, (conv_ofs)size, mapa_de(formato, size), msg, sizeof(msg));
-    if (r == 0) {
-        falha("conv: formato %s desconhecido", formato);
-    }
-    if (r < 0) {
-        falha("conv: %s de 0x%X bytes: %s", formato, (unsigned)size, msg);
     }
 }
