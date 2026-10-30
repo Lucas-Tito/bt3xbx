@@ -10,6 +10,10 @@ este estudo dá o custo do MSAA para a escolha ser feita com números.
 Convenção: **[medido]** (logs do console, a rodada `gc_base1` de 28/10 em `build/sessao_2810/coleta/`), **[lido]** (código,
 documentação do XDK 2.0.21256 extraída do `xbox360sdk.chm`) e **[estimado]**.
 
+
+**Decisão do Lucas (30/10/2026):** o MSAA só vai ao console se a escala maior (1,4, `plano/F8/09-escala.md`) com o
+FXAA ainda incomodar. A rodada `build/sessao_msaa/` fica guardada para esse caso; nada daqui entra na main antes.
+
 ## 1. Resumo
 
 - **A EDRAM com MSAA 2x:** um tile tem 80 x 8 pixels com 2 amostras (80 x 16 com 1) [lido, `GPU_EDRAM_TILE`]: cada superfície
