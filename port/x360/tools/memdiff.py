@@ -74,6 +74,7 @@ Para cada região com marcação, uma linha "marcas REGIAO ARQ: conforme N, fora
 """
 import bisect, os, re, struct, subprocess, sys
 from collections import Counter
+from memoria_menus import restos_antecipados
 
 BASE = 0x20000000  # -Ttext-segment de headless.py
 MAGIC = 0x53484254
@@ -545,6 +546,19 @@ def main():
         marcas[achados[0]] = m
         nome_marcas[achados[0]] = arq
     dados_x86 = {nx: (ax, dx) for (nx, ax, dx), _ in pares}
+    # Somente arquivos BPE inteiros, lidos pela rodada e com saída antecipada.
+    # As referências de conteúdo descomprimido (@...#bpe) não são leituras em setores.
+    referencias_bpe = []
+    for arq in vivas:
+        base = arq[:-len('.marcas')]
+        if '@' in base or not os.path.exists(base + '.convertido'):
+            continue
+        original = open(base + '.orig', 'rb').read()
+        if len(original) < 8:
+            continue
+        bruto, comprimido = struct.unpack_from('<II', original)
+        if 0 < bruto <= 0x900000 and 0 < comprimido <= len(original) - 8:
+            referencias_bpe.append((os.path.basename(base), original, open(base + '.convertido', 'rb').read()))
 
     def mesmo_conteudo(b, orig):
         """o bloco b da x86 guarda orig? (metade ou mais dos trechos de 64 bytes iguais)"""
@@ -711,6 +725,24 @@ def main():
             trechos += [tuple(t) for t in tf]
             print(f"marcas {nx} {nome_marcas[nx].rsplit('/', 1)[-1]}: conforme {cf['conforme']}, "
                   f"fora-do-formato {cf['fora-do-formato']}")
+            if antecipado and '@' not in referencia:
+                for inicio, esperado, origens in restos_antecipados(
+                        dx[fmt_ini:fmt_ini + pedido], len(marcas[nx]), referencias_bpe):
+                    inicio += fmt_ini
+                    fim_resto = inicio + len(esperado)
+                    # Comparação exata, inclusive onde bytes crus seriam iguais nas
+                    # duas máquinas. Alteração na PPC nunca escolhe a referência.
+                    for pos, byte in enumerate(esperado, inicio):
+                        ok = dp[pos] == byte
+                        classes['conforme' if ok else 'fora-do-formato'] += 1
+                        if not ok:
+                            if trechos and pos - trechos[-1][1] <= 16:
+                                trechos[-1] = (trechos[-1][0], pos + 1)
+                            else:
+                                trechos.append((pos, pos + 1))
+                    pula.append((inicio, fim_resto))
+                    print(f"restos antecipados: {nx} dados+{inicio - fmt_ini:#x} +{len(esperado):#x}: "
+                          + ', '.join(sorted(origens)))
         for o in range(0, n, 4):
             if fmt_ini <= o < fmt_fim or fmt_ini < o + 4 <= fmt_fim:
                 continue

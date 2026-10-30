@@ -141,3 +141,13 @@ assim como os estragos na comparação de memória. A rodada oficial com as
 builds finais e os roteiros ainda precisa concluir para provar a carga.
 
 Os resultados da rodada final ficam no relatório `~/entrega-iso-v4.md`.
+
+[Medido] A rodada de `28882f91` passou a carga do Duelo, o rastro, a luta,
+o cartão e as oito imagens. Três comparações de memória reprovaram por
+sufixos de retratos antigos nos buffers de arquivo: 00760 após 00782 ou
+00923, 00789 após 00785, e 00771/00923 após 00921. Os bytes coincidem
+exatamente com as respectivas saídas antecipadas. O comparador passa a
+conferir esses sufixos pelas referências originais e convertidas, sem
+dispensa por tamanho ou relaxamento de classes. A identificação usa apenas
+a x86 e respeita a substituição em setores de 0x800 bytes. A nova rodada
+oficial repete todos os roteiros com as builds do commit dessa correção.

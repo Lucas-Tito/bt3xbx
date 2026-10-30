@@ -2642,3 +2642,19 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   a recuperação byte a byte com `confere_save_mc.py`, antes de registrar
   aprovação. Cópias com estados, save, teste unitário, chegada ao menu,
   temporário ou falha injetada alterados reprovaram separadamente.
+
+- A leitura de um retrato menor substitui setores de 0x800 bytes do buffer,
+  deixando sufixos dos arquivos anteriores. Com a ISO v4, esses sufixos têm
+  fluxos recomprimidos diferentes na x86 e na PPC. A rodada do Duelo passou
+  na carga e nas oito imagens, mas o comparador ainda julgava os sufixos por
+  palavra, acusando diferenças nas telas 39, 00923 e 00921. Antes de dispensar
+  o resto do buffer, conferir sua origem: o `memdiff.py` agora reconhece na
+  x86 um sufixo inteiro de referência `.orig`, na mesma posição, após o último
+  setor do arquivo atual, e exige exatamente a saída `.convertido` na PPC.
+  Só usa arquivos inteiros lidos pela rodada, com pelo menos 64 bytes não
+  nulos no sufixo; referências conflitantes param a comparação. O conteúdo
+  vivo continua conferido pelas marcas. `teste_memoria_menus.py` exercita a
+  regra e as recusas; cópias do dump real com sufixo cru, byte alterado no
+  sufixo e byte alterado no arquivo vivo reprovaram no julgamento completo.
+  A reanálise preservada do Duelo passou; continua sendo investigação, sem
+  substituir a repetição oficial das builds finais.

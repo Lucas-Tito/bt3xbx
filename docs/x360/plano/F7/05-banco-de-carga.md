@@ -254,3 +254,12 @@ da PPC se faltar importação, região ou marca; ambos os primeiros controles
 foram vistos falhando. O controle negativo não aceita erro de infraestrutura
 como diferença de conteúdo. Evidências em `~/iso-v4/banco-rejulgado/` e
 `~/iso-v4/sonda-adaptador/`.
+
+[Medido] A nova rodada de `28882f91` passou os 131 casos na PPC e os seis
+controles negativos (`largura`, `cru`, `byte`, `pula`, `objcru`, `transcru`).
+O controle com o conversor `09a325dc` reprovou na rede de arquivos sem
+conversor e na PPC, como esperado. Evidências em
+`~/iso-v4/banco-final-28882f91.log` e `banco-sem-faixa-28882f91.log`.
+A rodada parou depois no comparador de memória dos menus, conforme a nota
+da F8, sem falha no banco. A correção do comparador não muda os conversores
+nem o jogo; o banco será repetido com os carimbos finais.

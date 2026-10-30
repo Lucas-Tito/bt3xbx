@@ -709,7 +709,8 @@ def memoria(caminho, pre="", tela=None, dados="gamedata", tela_fim=None, roteiro
         print(f"{pre}memória: {heap[6:]}")
     for l in linhas:
         if l.startswith(("marcas ambíguas", "marcas iguais", "--marcas-vivas", "--marcas-tam", "livres:", "--tipos:",
-                         "--donos:", "aliases CharRef:", "não inicializado:", "ponteiros Shen:")):
+                         "--donos:", "aliases CharRef:", "não inicializado:", "ponteiros Shen:",
+                         "restos antecipados:")):
             print(f"{pre}  {l}")
     if not any(l.startswith("--tipos: ") for l in linhas):
         print(f"{pre}DIFERENÇA: memória: o memdiff sem --tipos (as globais sem o tipo)")
