@@ -2622,3 +2622,23 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   e `transcru` (na rodada iso-v4, `07f5f5a7`). A revisão `0eef00b5` antecede
   essa extensão e não prova esses casos, mesmo ligada aos objetos atuais.
   Conferir tanto a unidade C quanto o script e o comparador antes de armar.
+
+- Adaptar um banco de outro checkout exige trocar também o `sys.path` do
+  Python embutido em `banco.sh`, além dos caminhos de `banco.py`. Na rodada
+  iso-v4 ele ainda apontava para o checkout sem o módulo: a lista de regiões
+  ficou vazia, a geração de marcas não fez trabalho e os 131 casos reprovaram
+  por falta de marcas, embora a PPC tivesse terminado. A preparação agora
+  para no erro de importação, exige regiões não vazias e para no erro de
+  `--marcas`. A importação quebrada e a lista vazia foram vistas reprovando.
+  Só `test -s` não basta: um `print` sem nomes grava uma quebra de linha.
+- No controle de byte alterado do banco, saída 2 da comparação significa
+  retrato ou marca faltante, e não prova diferença no conteúdo. O adaptador
+  conserva esse código e só aceita saída 1 como estrago reprovado pela
+  comparação. Os 131 retratos preservados passaram com marcas completas;
+  o byte alterado reprovou por diferença, sem região sem marcas.
+- `save_mc.sh` desta base não imprime `tudo certo` e não julga todos os
+  estados que resume. O lançador da iso-v4 confere os casos unitários, a
+  chegada ao menu, os estados A/B1/B2 contra a x86, o erro de escrita F e
+  a recuperação byte a byte com `confere_save_mc.py`, antes de registrar
+  aprovação. Cópias com estados, save, teste unitário, chegada ao menu,
+  temporário ou falha injetada alterados reprovaram separadamente.

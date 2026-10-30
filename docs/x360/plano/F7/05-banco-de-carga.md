@@ -243,3 +243,14 @@ o piloto, os 44 objetos 256..299, os 70 pedidos e as transições 3 e 0.
 O controle com o conversor `09a325dc` deve reprovar na rede e na PPC;
 com `CONV=` apontando para a versão 4, exige carga e rastreio conformes e os
 seis estragos recusados. Resultado final e logs em `~/entrega-iso-v4.md`.
+
+[Medido] A primeira rodada oficial terminou os 131 casos na PPC, mas seu
+adaptador deixou de importar o módulo externo ao coletar as regiões. As
+marcas ficaram vazias e a comparação reprovou. Após corrigir a preparação,
+os mesmos 131 retratos ficaram conformes, com marcas completas, e o byte
+alterado reprovou por diferença de conteúdo. Essa reanálise não substitui a
+nova rodada oficial das builds finais. O adaptador agora interrompe antes
+da PPC se faltar importação, região ou marca; ambos os primeiros controles
+foram vistos falhando. O controle negativo não aceita erro de infraestrutura
+como diferença de conteúdo. Evidências em `~/iso-v4/banco-rejulgado/` e
+`~/iso-v4/sonda-adaptador/`.
