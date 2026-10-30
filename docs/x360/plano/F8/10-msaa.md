@@ -11,8 +11,11 @@ Convenção: **[medido]** (logs do console, a rodada `gc_base1` de 28/10 em `bui
 documentação do XDK 2.0.21256 extraída do `xbox360sdk.chm`) e **[estimado]**.
 
 
-**Decisão do Lucas (30/10/2026):** o MSAA só vai ao console se a escala maior (1,4, `plano/F8/09-escala.md`) com o
-FXAA ainda incomodar. A rodada `build/sessao_msaa/` fica guardada para esse caso; nada daqui entra na main antes.
+**Decisão do Lucas (30/10/2026, de manhã):** o MSAA só vai ao console se a escala maior (1,4, `plano/F8/09-escala.md`) com o
+FXAA ainda incomodar. **Depois da rodada de 30/10 (seção 8):** o MSAA "ajudou muito" no serrilhado que incomodava; ele quer
+**só o MSAA, sem FXAA**, e **não quer ficar na 1,33**. A escala (1,4 ou 1,5) não foi fixada: o MSAA completo tem de servir às
+duas. O modo de 60 quadros fica fora por enquanto. Tudo continua atrás de `BT3_MSAA=2`, desligado por padrão, até o console
+aprovar.
 
 ## 1. Resumo
 
@@ -195,7 +198,7 @@ o restauro da profundidade de 2 amostras como cor (o autoteste decide; pelo oDep
 o alfa médio nas bordas; o trecho pesado da pausa, onde a folga é de uns 2 ms; e o modelo de amostras do Xenos na arte
 2D (meia cobertura nas bordas da 1,33).
 
-## 7. A rodada de console (preparada, não rodada)
+## 7. A rodada de console do protótipo (rodada em 30/10: os números na seção 8)
 
 Em `build/sessao_msaa/` da cópia principal (fora do git): `build/` com o `default.xex` do `b798b956` e o `.dat` e o `.swap`
 (iguais aos da main), os roteiros `f5_duelo.txt` e `boot.txt` (iguais aos do repositório) e os ambientes, com o
@@ -228,3 +231,61 @@ sombra no chão e as bordas internas dos lutadores (braços, pernas) devem sair 
 continua serrilhado na b** (seção 5) e fica liso só na c; a c deve ser a mais lisa. Procurar defeitos: franjas ou pontos de
 outra cor nas bordas dos lutadores (os ids médios, seção 4), um halo diferente no brilho, a barra do HUD cortada diferente (o
 DATE), o texto e os ícones (devem ficar iguais à a sem o amaciamento do FXAA na b).
+
+## 8. A rodada de 30/10 e as decisões do Lucas [medido]
+
+Logs em `build/sessao_escala/coleta/{a133,b14,c14s,d15s,bt14,e14,e14s}`, `build/sessao_msaa/coleta/{c_com_fxaa,msaa_b_sem_fxaa}`
+e `build/sessao_msaaesc/coleta/{m14,m15}` da cópia principal (fora do git). O roteiro `f5_duelo` com a ISO versão 2, as
+mesmas chaves do `ambiente_base1.txt` de 28/10; o `m14` e o `m15` com a build `a5f5bc51` (este branch: o protótipo, a 1,4 e a
+`BT3_OTIM_SEMTEX`). Todas terminaram com `roteiro: resultado estado 4 vencedor 0x2 razao 0x1 vida 0 27160` e nenhum `ERRO`.
+
+**A folga da GPU** (linha `picos: tela, janela`; mínimo / p1 / p10 / mediana, ms; e as imagens que ficaram 3 vblanks):
+
+| Abertura | Escala | AA | SEMTEX | Pausa (janela 1) | Luta (janela 2) | 3 vblanks (1 / 2) |
+|---|---|---|---|---|---|---|
+| `a133` | 1,33 | FXAA | | 4,7 / 5,4 / 6,1 / 8,4 | -9,5 / 2,5 / 6,3 / 8,5 | 0 / 2 |
+| `b14` | 1,4 | FXAA | | 2,2 / 3,1 / 3,7 / 6,3 | -0,8 / 2,8 / 4,4 / 7,6 | 0 / 2 |
+| `c14s` | 1,4 | FXAA | sim | 5,8 / 6,6 / 7,3 / 9,9 | -8,0 / 3,2 / 7,8 / 10,2 | 0 / 2 |
+| `d15s` | 1,5 | FXAA | sim | 2,5 / 3,5 / 4,3 / 7,1 | -0,6 / 2,7 / 4,9 / 7,8 | 0 / 1 |
+| `c_com_fxaa` | 1,33 | MSAA + FXAA | | 3,4 / 4,2 / 5,0 / 7,5 | -10,5 / 1,9 / 5,2 / 7,6 | 0 / 3 |
+| `msaa_b_sem_fxaa` | 1,33 | MSAA | | 4,1 / 5,0 / 5,7 / 8,3 | -9,7 / 2,6 / 6,0 / 8,5 | 0 / 2 |
+| `m14` | 1,4 | MSAA | sim | 4,0 / 4,8 / 5,6 / 8,4 | -9,7 / 2,6 / 6,1 / 8,9 | 0 / 2 |
+| `m15` | 1,5 | MSAA | sim | **0,6 / 1,5 / 2,5 / 5,5** | -1,8 / 1,6 / 3,4 / 7,3 | 0 / **4** |
+
+- **A `BT3_OTIM_SEMTEX` ganha uns 2,6 ms na mediana da luta da 1,4** (`c14s` contra `b14`) e não muda a imagem: as capturas da
+  `e14` e da `e14s` (1,4 sem e com a chave, `BT3_SHOT=600`) têm os 15 FNV comuns idênticos.
+- **O MSAA só, no lugar do FXAA, custa quase o mesmo que o FXAA na 1,33** (`msaa_b_sem_fxaa` contra `a133`: a mediana igual, o
+  p10 0,3 ms abaixo); com o FXAA junto, mais 0,9 ms (`c_com_fxaa`).
+- **Na 1,4 com a SEMTEX, o MSAA só (`m14`) fica 1,3 ms abaixo do FXAA (`c14s`) na mediana da luta** e ainda acima da `a133`
+  (o padrão de hoje): cabe.
+- **Na 1,5 com a SEMTEX, o MSAA só (`m15`) aperta**: a pausa fica com o mínimo em 0,6 ms e o p1 em 1,5, e a luta perdeu o prazo
+  em 4 imagens (a `d15s`, com FXAA, em 1). É o caso que o plano das vagas (seção 9) tem de aliviar.
+
+**Os contadores do protótipo na luta** (a linha `MSAA 2x, por quadro`, a janela de 2.400 quadros, por quadro):
+
+| | 1,33 (`msaa_b_sem_fxaa`) | 1,4 (`m14`) e 1,5 (`m15`) |
+|---|---:|---:|
+| Entradas no alvo com MSAA | 5,68 | 5,68 |
+| Delas com a volta | 3,43 | 5,68 |
+| Despejos de A ou B ao entrar nele / dele ao entrar em A ou B | 4,41 / 2,43 | 6,66 / 4,68 |
+| DATE pelo fragmento 0, todos depois de uma volta | 10,74 | 10,74 |
+| DATE pela textura (com a média) | 0,53 | 0,53 |
+| Cópias dos ids pelo fragmento 0, depois de uma volta | 0,98 | 0,98 |
+
+Na 1,4 e na 1,5 o plano do último quadro é `A alvo 5 (12 entradas); M alvo 2 (7 entradas, 2 amostras); B alvo 3 (8
+entradas); B alvo 4 (5 entradas); pequena alvo 6 96x96 (12 tiles, 10 entradas)` e a trilha da pausa, `0M+z ^0m 3B+ ^3l 4B+
+^4l 5A+ ^5l 6p+ ... 5A 4B 3B+ ^3l ^5m 0M+ ^0l 3B+ ^3l 0M+Z ^0m ...`: **toda entrada do 3 e do 4 na B despeja o alvo com MSAA,
+e cada volta a ele é uma volta inteira**, como a seção 2 previa. **A primeira entrada de cada quadro já é uma volta** (`0M+z`:
+o alvo traz o conteúdo do quadro em que foi mostrado pela última vez), então "depois de uma volta" vale para todo DATE e toda
+cópia dos ids do quadro: o alfa que eles leem pelo fragmento 0 é o médio nos pixels que a volta trouxe e que nada redesenhou
+desde então.
+
+**A 1,5 ocupa a mesma EDRAM que a 1,4** [medido no boot da `m15`]: alvo de 960 x 672, `a cor de 2 amostras na base 0 com 1008
+tiles e a profundidade de 2 amostras na base 1008 com 1008`, `as pequenas de 2016 a 2048 (32 tiles)`, como a `m14` com 896 x
+672 (12 colunas de tiles de 80 pixels nos dois casos; 84 linhas de 8). O autoteste da profundidade de 2 amostras escolheu o
+modo 1 (como cor) pelos dois fragmentos nas duas; a cor de 2 amostras: Resolve 0,179 ms e volta 0,177 ms na 1,4, 0,191 e
+0,190 na 1,5 (o alvo inteiro). O mesmo plano de vagas serve às duas escalas.
+
+**O que o Lucas viu:** o MSAA "ajudou muito" no serrilhado que o incomodava. Decisões: só o MSAA, sem FXAA; nada de ficar na
+1,33; a escala entre 1,4 e 1,5 fica para depois do MSAA completo (seção 9); o modo de 60 quadros fora por enquanto.
+

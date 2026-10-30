@@ -4,7 +4,9 @@
 decisões 20 e 27
 
 Branch `claude/f8-escala` (base `main` `cf6e8aa2`), 30/10/2026. Convenção: **[medido]**, **[lido]** e **[estimado]**.
-Nada rodou no console: a rodada da seção 6 está preparada.
+**A rodada da seção 6 rodou em 30/10** (`build/sessao_escala/coleta/`): na luta, a mediana da folga da GPU foi 8,5 ms na 1,33,
+7,6 na 1,4, 10,2 na 1,4 com a `BT3_OTIM_SEMTEX` e 7,8 na 1,5 com ela; as capturas da `e14` e da `e14s` têm os 15 FNV comuns
+iguais. A tabela completa, com o MSAA nas mesmas escalas, e as decisões do Lucas estão em `10-msaa.md`, seção 8.
 
 ## 1. O pedido e o resultado
 
