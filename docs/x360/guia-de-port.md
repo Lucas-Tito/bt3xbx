@@ -2107,6 +2107,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Uma cópia adiada para a entrada no alvo é exata quando nada desenha nele entre o pedido e a entrada:** o marcador de DATE
   de um alvo que não está posto lia a textura dele (a média das amostras); a cópia do fragmento 0 feita na entrada seguinte
   nele, antes do primeiro desenho com DATE, lê o mesmo conteúdo, da EDRAM.
+- **Na EDRAM cheia, escolha quem sai pelo que cada visita usa, não pelo tamanho:** com a cor e a profundidade de 2 amostras
+  ocupando 2.016 de 2.048 tiles, o protótipo pôs A e B dentro da cor de 2 amostras e cada entrada da cadeia do brilho
+  despejava o alvo principal (5,7 voltas inteiras por quadro na 1,4). A cadeia do brilho não usa profundidade: com as
+  pequenas sobre a profundidade de 2 amostras, quem sai é a profundidade (uma vez, e volta só nas visitas com z), e o alvo
+  principal fica na EDRAM o quadro todo. A regra que mantém isso certo é de mão dupla: a pequena que entra com a
+  profundidade na EDRAM a entrega ao dono, e a profundidade que volta (limpa ou restaurada) despeja as pequenas de cima dela.
 
 ### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
 
