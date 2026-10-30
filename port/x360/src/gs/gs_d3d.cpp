@@ -3416,8 +3416,8 @@ static unsigned env_num(const char *nome, unsigned padrao) {
 }
 
 /* (F5, etapa 8, 720p, etapas 2 e 3) A área dos alvos (BT3_ALVO_AREA=LxA, pixels do GS) e a escala (BT3_ESCALA: 1, 1.5 ou
-   2; na retomada também 1.25, 1.33 e 1.6, com a área em que a escala dá inteiro: 640x512, 648x456 e 640x460), pelas regras
-   do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
+   2; na retomada também 1.25, 1.33 e 1.6, com a área em que a escala dá inteiro: 640x512, 648x456 e 640x460; na F8 a 1.4,
+   com 640x480, docs/x360/plano/F8/09-escala.md), pelas regras do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
    diz o motivo e fica no padrão (a escala em 1: uma área que não cabe na EDRAM na escala pedida, e a de 1024 x 1024 com
    qualquer escala maior que 1). Um desenho além da área é cortado e contado (corte_conta), nunca desenhado num alvo
    maior: o par da EDRAM e as texturas têm um tamanho só. No começo do init, antes de qualquer alvo. */
@@ -3434,7 +3434,7 @@ static void area_init(void) {
         e = "1.33";
     }
     if (e != NULL && *e != '\0' && !esc_le_escala(e, &num, &den)) {
-        Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.5, 1.6 ou 2); fica 1", e);
+        Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.4, 1.5, 1.6 ou 2); fica 1", e);
         num = den = 1;
     }
     if (a != NULL && *a != '\0') {

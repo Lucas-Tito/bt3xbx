@@ -130,15 +130,16 @@ static int desenha(double s, double x0, double gsPorTexel, int jogo, int hoje, P
     return n;
 }
 
-static const double kEsc[4] = {1.0, 4.0 / 3.0, 1.5, 1.6};
-static const char *const kEscNome[4] = {"1", "1,33", "1,5", "1,6"};
+/* (F8, docs/x360/plano/F8/09-escala.md) e a 1,4 */
+static const double kEsc[5] = {1.0, 4.0 / 3.0, 1.5, 1.6, 1.4};
+static const char *const kEscNome[5] = {"1", "1,33", "1,5", "1,6", "1,4"};
 
 static void arte(void) {
     static Px o[MAXPX], h[MAXPX];
     int ie, k, jogo, larg, n, i, j;
     char txt[200];
     printf("A arte 2D (N = %d texels; colunas perdidas e pixels sem mistura por texel de dentro, hoje e com o afiado):\n", N);
-    for (ie = 0; ie < 4; ie++) {
+    for (ie = 0; ie < 5; ie++) {
         double s = kEsc[ie];
         for (larg = 0; larg < 2; larg++) {
             double gpt = larg ? 0.75 : 1.0;
@@ -275,7 +276,7 @@ static void folha(void) {
     int ie, larg, ifr, esp, jogo, k, i, j, n;
     int vizinho = 0, perdidos = 0, dobrados = 0, pesoErr = 0, casosNit = 0, casosLin = 0, linFora = 0;
     char txt[240];
-    for (ie = 1; ie < 4; ie++) {
+    for (ie = 1; ie < 5; ie++) {
         double s = kEsc[ie];
         for (larg = 0; larg < 2; larg++) {
             double gpt = larg ? 0.75 : 1.0;
@@ -436,6 +437,8 @@ int main(int argc, char **argv) {
     copia("escala 1,5, vertical", 672.0, 720);
     copia("escala 1,6, 16:9, horizontal", 819.2, 1280);
     copia("escala 1,6, vertical", 716.8, 720);
+    copia("escala 1,4, 16:9, horizontal", 716.8, 1280);
+    copia("escala 1,4, vertical", 627.2, 720);
     copia("escala 2, 16:9, horizontal", 1024.0, 1280);
     copia("escala 2, vertical", 896.0, 720);
     printf("%d casos, %d falhas%s%s\n", sCasos, sFalhas, sEstraga ? " (com --estraga: o bilinear comum)" : "",

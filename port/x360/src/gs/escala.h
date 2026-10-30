@@ -3,7 +3,8 @@
  * da escala, em C89 puro e sem o XDK. O gs_d3d.cpp as usa; port/x360/tools/teste_escala.c as testa no Linux com o gcc.
  *
  * A área é em pixels do GS (o alvo lógico do gs_draw.c é 1024 x 1024; o jogo desenha no máximo 640 x 448); a escala, uma
- * fração num / den (720p, retomada: 1, 1,25 = 5/4, 1,33 = 4/3, 1,5 = 3/2, 1,6 = 8/5 e 2; antes, em meios); a área vezes a
+ * fração num / den (720p, retomada: 1, 1,25 = 5/4, 1,33 = 4/3, 1,5 = 3/2, 1,6 = 8/5 e 2; antes, em meios; F8, 1,4 = 7/5,
+ * docs/x360/plano/F8/09-escala.md); a área vezes a
  * escala, em pixels de saída e inteira, é o tamanho dos alvos, das profundidades e do par na EDRAM. As regras de uma área
  * aceita:
  *   - de 640 x 448 (a imagem do jogo: a cópia dos ids e as capturas a leem inteira) até 1024 x 1024 (o alvo lógico);
@@ -67,12 +68,13 @@ static int esc_le_area(const char *s, int *w, int *h) {
     return 1;
 }
 
-/* (720p, retomada) As escalas aceitas: 1, 1,25, 1,33, 1,5, 1,6 e 2, com o texto do log ("1,33" é 4/3). k: 0 a 5 (a
-   escala k em *num / *den); NULL depois da última. */
+/* (720p, retomada) As escalas aceitas: 1, 1,25, 1,33, 1,5, 1,6 e 2, com o texto do log ("1,33" é 4/3); (F8, 09-escala.md)
+   e 1,4 = 7/5, no fim da lista para as outras guardarem o índice. k: 0 a 6 (a escala k em *num / *den); NULL depois da
+   última. */
 static const char *esc_lista(int k, int *num, int *den) {
-    static const char *const nome[6] = {"1", "1,25", "1,33", "1,5", "1,6", "2"};
-    static const int fr[6][2] = {{1, 1}, {5, 4}, {4, 3}, {3, 2}, {8, 5}, {2, 1}};
-    if (k < 0 || k >= 6) {
+    static const char *const nome[7] = {"1", "1,25", "1,33", "1,5", "1,6", "2", "1,4"};
+    static const int fr[7][2] = {{1, 1}, {5, 4}, {4, 3}, {3, 2}, {8, 5}, {2, 1}, {7, 5}};
+    if (k < 0 || k >= 7) {
         return 0;
     }
     *num = fr[k][0];
@@ -92,7 +94,7 @@ static const char *esc_nome(int num, int den) {
     return 0;
 }
 
-/* BT3_ESCALA: "1", "1.25", "1.33", "1.5", "1.6" ou "2" (com ponto ou vírgula) em *num / *den; 0: outro valor */
+/* BT3_ESCALA: "1", "1.25", "1.33", "1.4", "1.5", "1.6" ou "2" (com ponto ou vírgula) em *num / *den; 0: outro valor */
 static int esc_le_escala(const char *s, int *num, int *den) {
     int k, i, n, d;
     const char *t;
@@ -116,7 +118,7 @@ static int esc_le_escala(const char *s, int *num, int *den) {
 static const char *esc_monta(EscArea *a, int w, int h, int num, int den) {
     EscArea n;
     if (esc_nome(num, den) == 0) {
-        return "escala fora de 1, 1,25, 1,33, 1,5, 1,6 e 2";
+        return "escala fora de 1, 1,25, 1,33, 1,4, 1,5, 1,6 e 2";
     }
     if (w < ESC_IMG_W || h < ESC_IMG_H) {
         return "menor que a imagem do jogo (640 x 448)";
