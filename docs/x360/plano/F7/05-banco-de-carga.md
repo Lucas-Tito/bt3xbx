@@ -276,3 +276,12 @@ passaram novamente; sem a faixa, rede e PPC reprovaram como esperado.
 A rodada parou depois no seletor de referências do comparador dos menus,
 no Disc Fusion, sem falha de carga no banco. A correção só restringe as
 referências de restos aos arquivos BPE inteiros registrados em offset zero.
+
+[Medido] A rodada de `24c8b1be` aprovou novamente os 131 casos na x86 e
+na PPC, o rastreio de 79.036 trechos numéricos e os seis estragos. Sem a
+faixa, o conversor `09a325dc` reprovou na rede e na PPC no objeto 256.
+Evidências: `~/iso-v4/banco-final-24c8b1be.log` e
+`~/iso-v4/banco-sem-faixa-24c8b1be.log`. A parte A fica provada no banco;
+a execução completa dos dois golpes no console permanece para a revisão.
+A entrega conjunta continua parcial: a rodada de menus parou por espaço
+no C:, conforme a nota da F8 e `~/entrega-iso-v4.md`.

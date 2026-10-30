@@ -183,3 +183,31 @@ cópias reais íntegras do Ultimate continuam passando e os cinco estragos
 continuam reprovando com saída 1, inclusive nos fragmentos sem arquivo
 vivo. Logs: `~/iso-v4/rejulgar-discfusion-bpe-inteiro.log` e
 `~/iso-v4/sonda-fragmentos-bpe-inteiro.log`. Não valem como rodada oficial.
+
+## Julgamento da entrega parcial (30/10/2026)
+
+[Medido] As builds limpas de `24c8b1be` passaram Disc Fusion, Torneio,
+Evolution, Data Center e Referência, com memória conforme e, respectivamente,
+24, 10, 17, 19 e 9 imagens idênticas entre x86 e PPC. Os cinco logs
+`~/iso-v4/roteiros-24c8b1be-NOME.log` terminam com `== tudo certo`.
+O cartão também passou nas duas arquiteturas, incluindo falha de escrita
+e recuperação de temporário; `save_mc-24c8b1be.log` termina com
+`confere_save_mc: tudo certo`.
+
+[Medido] O ciclo encerrou com saída 1 às 15:36:11 antes de executar
+Shenlong: a guarda de espaço exigia mais de 4 GiB livres no C:. Não há
+log desse roteiro. Na retomada, o volume tinha cerca de 3,8 GiB livres,
+apesar dos 782 GiB livres no ext4. A entrega fica parcial, sem aprovação
+global. Faltam neste commit Shenlong, Duelo, Duelo em time, Treino,
+Opções, História, História novo, História perde, Ultimate, Missão,
+Sobrevivência e Sim Dragon. Aprovações de commits anteriores permanecem
+históricas e não substituem essas doze provas.
+
+Não foi armado outro ciclo nem reduzida a reserva. Conserva-se o prazo
+absoluto de 30/10 às 16:54:59 e encerra-se o trabalho bloqueado por espaço,
+com logs e ISO preservados fora do git. O relatório distingue a tabela
+bruta do lançador do julgamento final: a linha automática de falha de
+Shenlong é bloqueio de infraestrutura antes da execução, não reprovação
+de conteúdo. As builds provadas são de `24c8b1be`; o commit posterior
+desta nota só altera documentação. A build XDK e o ensaio no console
+continuam para a revisão Linux, conforme `~/entrega-iso-v4.md`.

@@ -2694,3 +2694,12 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   fez a asserção do pacote falhar de propósito. A tela 29 preservada passou
   com a seleção corrigida, sem mudar classes ou tetos. A reanálise não
   substitui a rodada oficial das builds finais.
+
+- Na rodada iso-v4 de 30/10, a reserva do C: interrompeu o ciclo antes de
+  abrir o log de Shenlong. O trap anotou o nome do próximo roteiro e saída
+  1, mas isso não significava reprovação do jogo. Ao julgar, conferir se o
+  comando chegou a executar e preservar a tabela bruta; registrar bloqueio
+  de infraestrutura separadamente. O cartão sem dumps nem imagens pôde
+  passar em um serviço próprio sob a mesma trava. Essa prova independente
+  não aprova os roteiros de menu que ficaram sem execução, nem autoriza
+  reduzir a reserva física ou renovar o prazo.
