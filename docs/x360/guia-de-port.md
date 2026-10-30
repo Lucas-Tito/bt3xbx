@@ -2096,7 +2096,13 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   diz que cada pixel do MSAA 2x é um bloco vertical de 1 x 2, e o `XGSurfaceSize` dá os mesmos tiles para `W x H` com 2
   amostras e `W x 2H` com 1. Uma vista de 1 amostra com o dobro das linhas na mesma base guarda e devolve as duas amostras com
   um Resolve e uma cópia (o "parque" da volta exata), sem saber a ordem delas dentro do tile: a ida e a volta são pela mesma
-  vista. O autoteste do boot confere bit a bit pelos dois fragmentos e tem um controle (a cor limpa sem a volta).
+  vista. O autoteste do boot confere bit a bit pelos dois fragmentos e tem um controle (a cor limpa sem a volta). **Mas ele
+  só prova o que testa:** com o alvo inteiro, a ida e a volta pela mesma vista acertam com qualquer arranjo das amostras
+  dentro do tile; um retângulo que corta um tile (x em múltiplos de 8) já depende do arranjo. Guarde e devolva em tiles
+  inteiros (x em múltiplos de 80, y de 8), o mesmo caso do autoteste (a revisão de outro agente achou o furo).
+- **Exatidão que passa por um cache herda a origem dele:** um parque guardado depois de uma volta pela média guarda a média
+  nas duas amostras; a volta seguinte por ele é "crua" mas não exata. O parque leva a marca de onde veio, e a textura do
+  alvo, a de ter recebido a média.
 - **A máscara do `D3DRS_MULTISAMPLEMASK` tem 4 bits por pixel da quadra de 2 x 2:** com 2 amostras, "só a amostra 0" é
   `0x1111` e "só a 1" é `0x2222`. Um `1` ou um `2` escreveria só o pixel de cima à esquerda de cada quadra. Qual bit escreve
   qual fragmento do Resolve, o autoteste mede (desenha um padrão por bit e compara os fragmentos com a referência de 1

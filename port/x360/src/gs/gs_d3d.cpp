@@ -232,6 +232,9 @@ static DWORD sMsMasc[2] = {0x1111u, 0x2222u}; /* a máscara de escrita de cada f
 static int sMsMascOk;                     /* o autoteste achou a máscara de cada fragmento */
 static D3DSurface *sMsCru;                /* a cor de 2 amostras vista como 1 amostra, sAlvoW x 2 sAlvoH, na base 0 */
 static int sMsMudou;                      /* o alvo com MSAA mudou na EDRAM desde o último parque (ou voltou pela média) */
+static int sMsConteudoMedia;              /* o que a EDRAM tem do alvo com MSAA veio, em parte, de uma textura com a média */
+static unsigned char sMsTexMedia[MAX_TARGETS]; /* a textura do alvo tem a média de um Resolve do alvo com MSAA */
+static int sMsUltMedia;                   /* (ms_volta) o parque da última volta exata tinha a média */
 static void ms_resolveu(int t);           /* (um Resolve de cor para a textura do alvo t: o parque dele, se for de outro) */
 static void ms_parque(int t);             /* (o alvo com MSAA t vai perder a EDRAM: as amostras cruas para o parque) */
 static int sMsDatePend = -1;              /* o marcador de DATE do alvo com MSAA que espera a entrada nele (-1: nenhum) */
@@ -440,8 +443,9 @@ typedef struct MsParque {
     TexXg *tex;   /* sAlvoW x 2 sAlvoH, A8R8G8B8 tiled: as amostras cruas */
     int alvo;     /* -1: vazio */
     unsigned ver; /* a textura do alvo (sAlvoD[].ver) quando ele foi guardado */
-    Ret r;        /* o que vale, em pixels do alvo (múltiplos de 8) */
+    Ret r;        /* o que vale, em pixels do alvo (x em tiles inteiros de 80, y em múltiplos de 8) */
     unsigned uso;
+    int media;    /* o que ele guardou veio de uma volta pela média (pixels com as duas amostras iguais à média) */
 } MsParque;
 static MsParque sMsParque[MS_PARQUES];
 static unsigned sMsUso;
@@ -2981,6 +2985,7 @@ static void ms_resolveu(int t) {
     int k;
     if (t == sMsAlvo) {
         sMsMudou = 1;
+        sMsTexMedia[t] = 1; /* (a textura passa a ter a média das amostras) */
         return;
     }
     for (k = 0; k < MS_PARQUES; k++) {
@@ -3022,12 +3027,13 @@ static void ms_parque(int t) {
     if (a->tex == NULL || r.x1 <= r.x0 || r.y1 <= r.y0) {
         return;
     }
-    alinha8(&r);
+    alinha80(&r); /* (tiles inteiros: a ida e a volta pela vista crua nunca cortam um tile, como no autoteste) */
     if (!sMsMudou && ms_parque_de(t, &r) != NULL) {
         return; /* (a EDRAM tem o que o parque já tem) */
     }
-    for (k = 0; k < MS_PARQUES; k++) { /* (o do alvo; senão o menos usado) */
+    for (k = 0; k < MS_PARQUES; k++) { /* (o do alvo; senão um vazio ou vencido; senão o menos usado) */
         MsParque *q = &sMsParque[k];
+        int vago;
         if (q->tex == NULL) {
             continue;
         }
@@ -3035,7 +3041,9 @@ static void ms_parque(int t) {
             p = q;
             break;
         }
-        if (p == NULL || q->uso < p->uso) {
+        vago = q->alvo < 0 || q->ver != sAlvoD[q->alvo].ver;
+        if (p == NULL || (vago && !(p->alvo < 0 || p->ver != sAlvoD[p->alvo].ver)) || (vago == (p->alvo < 0 || p->ver !=
+            sAlvoD[p->alvo].ver) && q->uso < p->uso)) {
             p = q;
         }
     }
@@ -3060,6 +3068,7 @@ static void ms_parque(int t) {
     p->ver = a->ver;
     p->r = r;
     p->uso = ++sMsUso;
+    p->media = sMsConteudoMedia;
     sMsMudou = 0;
     sMsC.parques++;
     sMsC.parquePx += 2.0 * (double)(r.x1 - r.x0) * (r.y1 - r.y0);
@@ -3073,7 +3082,8 @@ static void ms_parque(int t) {
 }
 
 /* (BT3_MSAA_VOLTA) A volta exata de r do alvo com MSAA t, já posto e limpo: as amostras cruas do parque, pela vista de 1
-   amostra. 0: sem parque que valha para r (a volta fica pela média, a de antes, contada). */
+   amostra, no retângulo inteiro que o parque guardou (tiles inteiros, como o autoteste prova; fora de r ele tem o que a
+   limpeza da entrada dava). 0: sem parque que valha para r (a volta fica pela média, a de antes, contada). */
 static int ms_volta(int t, const Ret *r) {
     D3DVIEWPORT9 vp = {0, 0, (DWORD)sAlvoW, (DWORD)(2 * sAlvoH), 0.0f, 1.0f};
     float W = (float)sAlvoW, H = (float)sAlvoH;
@@ -3085,12 +3095,13 @@ static int ms_volta(int t, const Ret *r) {
     sDev->SetRenderTarget(0, sMsCru);
     sDev->SetDepthStencilSurface(NULL);
     sDev->SetViewport(&vp);
-    copia(&p->tex->cab, sAlvoW, 2 * sAlvoH, (float)r->x0, 2.0f * r->y0, (float)r->x1, 2.0f * r->y1, r->x0 / W, r->y0 / H,
-          r->x1 / W, r->y1 / H, 0);
+    copia(&p->tex->cab, sAlvoW, 2 * sAlvoH, (float)p->r.x0, 2.0f * p->r.y0, (float)p->r.x1, 2.0f * p->r.y1, p->r.x0 / W,
+          p->r.y0 / H, p->r.x1 / W, p->r.y1 / H, 0);
     if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(0, NULL); /* (o parque é destino do próximo Resolve dele) */
     sCurTex = (GsTex)-1;
     p->uso = ++sMsUso;
+    sMsUltMedia = p->media;
     ms_repoe();
     return 1;
 }
@@ -3122,8 +3133,8 @@ static void ms_date_adiado(int i) {
         sMsC.date++;
         sMsC.dateVolta += sMsVolta;
         sMsC.dateMedia += sMsVoltaMedia;
+        sMsC.dateAdia++;
     }
-    sMsC.dateAdia++;
     sDateFonte = sDate;
 }
 
@@ -3275,10 +3286,13 @@ static void entra_res(int i, int usaZ) {
             sMsVolta = 1; /* (o que a EDRAM tem dele agora veio da saída anterior: o parque, ou a média dela) */
             sMsC.voltas++;
             sMsC.voltaExata += exata;
-            sMsVoltaMedia |= !exata;
-            sMsMudou = !exata; /* (pela média: a EDRAM não é o que o parque tem) */
+            sMsConteudoMedia = exata ? sMsUltMedia : sMsTexMedia[i]; /* (pela textura: a média, se ela a tiver) */
+            sMsVoltaMedia |= sMsConteudoMedia;
+            sMsMudou = !exata; /* (pela textura: a EDRAM não é o que o parque tem) */
         } else if (nova) {
             sMsMudou = 0; /* (sem conteúdo: o que for desenhado passa por um Resolve, que marca) */
+            sMsConteudoMedia = 0;
+            sMsTexMedia[i] = 0;
         }
     }
     esquece_estado();
@@ -3735,8 +3749,12 @@ static void entra_na_edram(int i, int usaZ) {
         /* (BT3_MSAA) a volta deste alvo: pelo parque (exata) ou pela média; sem conteúdo, nada a guardar ainda */
         int volta = sQ->targets[i].cleared && a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL;
         sMsC.voltaExata += exata;
-        sMsVoltaMedia |= volta && !exata;
+        sMsConteudoMedia = !volta ? 0 : exata ? sMsUltMedia : sMsTexMedia[i];
+        sMsVoltaMedia |= sMsConteudoMedia;
         sMsMudou = volta && !exata;
+        if (!volta) {
+            sMsTexMedia[i] = 0;
+        }
     }
     esquece_estado();
     sResidente = i;
@@ -4451,6 +4469,26 @@ fim:
     return cruOk;
 }
 
+/* (o msaa_init recusando o MSAA depois das subchaves) a vista crua e os parques soltos, as subchaves zeradas */
+static void ms_desiste(void) {
+    unsigned k;
+    sDev->BlockUntilIdle();
+    if (sMsCru != NULL) {
+        sMsCru->Release();
+        sMsCru = NULL;
+    }
+    for (k = 0; k < MS_PARQUES; k++) {
+        if (sMsParque[k].tex != NULL) {
+            sMem.vivos[CL_ALVO] -= sMsParque[k].tex->bytes;
+            sMem.nVivos[CL_ALVO]--;
+            xg_libera(&sMsParque[k].tex->cab);
+            sMsParque[k].tex = NULL;
+        }
+        sMsParque[k].alvo = -1;
+    }
+    sMsVoltaX = sMsVagas = sMsContorno = sMs2d = sMsA2c = 0;
+}
+
 /* (F8, BT3_MSAA=2; depois do autoteste da profundidade, antes do ed_init) as superfícies de 2 amostras e o modo do
    restauro da profundidade delas: o autoteste duas vezes, pelo fragmento 0 e pelo 1 (as duas amostras têm de voltar
    certas). Sem modo exato nas duas, sem MSAA (com o motivo). */
@@ -4510,6 +4548,7 @@ static void msaa_init(void) {
                             "não foi criada; fica sem MSAA", sAlvoW, 2 * sAlvoH,
                             XGSurfaceSize(sAlvoW, 2 * sAlvoH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE), sMsTilesCor);
             sMsCru = NULL;
+            ms_desiste();
             return;
         }
         for (k = 0; k < MS_PARQUES; k++) {
@@ -4519,6 +4558,8 @@ static void msaa_init(void) {
                 (sMsParque[k].tex = xg_cria(sAlvoW, 2 * sAlvoH, D3DFMT_A8R8G8B8)) == NULL) {
                 Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_VOLTA=1: o parque %u (%u KB) não foi criado (%u MB livres); fica sem MSAA",
                                 k, bytes >> 10, mb_livres());
+                sMsParque[k].tex = NULL;
+                ms_desiste();
                 return;
             }
             mem_cria(CL_ALVO, sMsParque[k].tex->bytes);
@@ -4527,6 +4568,7 @@ static void msaa_init(void) {
     if (!ms_amostras_autoteste() && sMsVoltaX) {
         Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_VOLTA=1: a volta crua não passou no autoteste das amostras; fica sem MSAA (o "
                         "alfa depois de uma volta seria o médio)");
+        ms_desiste();
         return;
     }
     if (sMsContorno && !sMsMascOk) {
