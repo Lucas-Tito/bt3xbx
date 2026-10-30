@@ -74,7 +74,7 @@ Para cada região com marcação, uma linha "marcas REGIAO ARQ: conforme N, fora
 """
 import bisect, os, re, struct, subprocess, sys
 from collections import Counter
-from memoria_menus import bpe_inteiro, fragmentos_antecipados
+from memoria_menus import fragmentos_antecipados
 
 BASE = 0x20000000  # -Ttext-segment de headless.py
 MAGIC = 0x53484254
@@ -546,18 +546,19 @@ def main():
         marcas[achados[0]] = m
         nome_marcas[achados[0]] = arq
     dados_x86 = {nx: (ax, dx) for (nx, ax, dx), _ in pares}
-    # Somente arquivos BPE inteiros, lidos pela rodada e com saída antecipada.
-    # As referências de conteúdo descomprimido (@...#bpe) não são leituras em setores.
+    # Todo arquivo inteiro lido pela rodada com saída antecipada (BPE inteiro ou pacote de seções). As referências de
+    # conteúdo descomprimido (@...#bpe) não são leituras em setores. Conteúdo repetido entre elas não escolhe
+    # referência: fragmentos_antecipados exige mapeamento único e diz o que recusou ("restos ambíguos").
     referencias_bpe = []
     for arq in vivas:
         base = arq[:-len('.marcas')]
         if '@' in base or not os.path.exists(base + '.convertido'):
             continue
-        original = open(base + '.orig', 'rb').read()
-        conteudo = base + '@0x0#bpe.orig'
-        tamanho_conteudo = os.path.getsize(conteudo) if os.path.exists(conteudo) else None
-        if bpe_inteiro(original, tamanho_conteudo):
-            referencias_bpe.append((os.path.basename(base), original, open(base + '.convertido', 'rb').read()))
+        referencias_bpe.append((os.path.basename(base), open(base + '.orig', 'rb').read(),
+                                open(base + '.convertido', 'rb').read()))
+    if referencias_bpe:
+        print(f"referências antecipadas: {len(referencias_bpe)}: " + ", ".join(n for n, _, _ in referencias_bpe))
+    avisos_ditos = set()
 
     def mesmo_conteudo(b, orig):
         """o bloco b da x86 guarda orig? (metade ou mais dos trechos de 64 bytes iguais)"""
@@ -737,8 +738,17 @@ def main():
             dados_restos = struct.unpack_from('<I', dx, 0x14)[0] - ax
             inicio_restos = 0
         if inicio_restos is not None:
-            for inicio, esperado, origens in fragmentos_antecipados(
-                    dx[dados_restos:dados_restos + pedido], inicio_restos, referencias_bpe):
+            avisos = []
+            achados = fragmentos_antecipados(dx[dados_restos:dados_restos + pedido], inicio_restos, referencias_bpe,
+                                             avisos)
+            for aviso in avisos:
+                if aviso.startswith("referência"):
+                    if aviso not in avisos_ditos:
+                        print(f"restos: {aviso}")
+                    avisos_ditos.add(aviso)
+                else:
+                    print(f"restos ambíguos: {nx} {aviso}")
+            for inicio, esperado, origens in achados:
                 inicio += dados_restos
                 fim_resto = inicio + len(esperado)
                 # Comparação exata, inclusive onde bytes crus seriam iguais nas

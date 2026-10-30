@@ -2703,3 +2703,17 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   passar em um serviço próprio sob a mesma trava. Essa prova independente
   não aprova os roteiros de menu que ficaram sem execução, nem autoriza
   reduzir a reserva física ou renovar o prazo.
+
+- A correção anterior tirou os pacotes de seções das referências, e isso
+  inverteu o julgamento dos restos de pacote: num buffer de retrato, um
+  trecho de 00451 cru passava como igual-sem-inverter e o mesmo trecho
+  convertido reprovava como diferente (cópias da tela 29 do Disc Fusion).
+  A causa era outra: conteúdo repetido, dentro do pacote ou de um arquivo
+  dentro de outro (0x110 bytes de 00475 dentro de 00451), escolhia uma
+  saída arbitrária. Agora todo arquivo inteiro antecipado é referência, e
+  cada fragmento achado pela x86 é procurado em todos os originais, em
+  qualquer posição: só vale se todas as cópias derem a mesma saída
+  convertida. O ambíguo não escolhe referência, fica com a comparação por
+  palavra e sai no log ("restos ambíguos"); sobreposição de dois trechos
+  únicos com saídas diferentes também. Não resolver ambiguidade excluindo
+  um formato inteiro: o que se exclui volta para a tolerância antiga.
