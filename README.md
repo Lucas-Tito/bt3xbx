@@ -1,4 +1,34 @@
-# Tenkaichi3Decomp
+# bt3xbx: Budokai Tenkaichi 3 for Xbox 360
+
+An Xbox 360 port of **Dragon Ball Z: Budokai Tenkaichi 3** (PlayStation 2, USA release, SLUS-21678). It runs as a
+homebrew `.xex` on a modded console (RGH or JTAG) and is the game's own code compiled for the Xbox 360's PowerPC
+processor, with a renderer, sound and input layer written for the console. It is not an emulator.
+
+It is a fork of [Tenkaichi3Decomp](https://github.com/z3xox/Tenkaichi3Decomp), the PC port built on the
+BT3-Decompiled decompilation. Everything the Xbox 360 needs lives in `port/x360/`, `docs/x360/` and in
+`#ifdef PORT_X360` blocks; the rest is the PC port's, described below.
+
+**Status:** in development. There is no release yet; the first one is being tested on the console.
+
+This repository contains **no game data**, and the release will not contain any either. You need your own disc
+image of the USA release. The game converts it once, on the console or on a PC, into a copy laid out for the
+Xbox 360; your original is only read.
+
+**Building** needs the Xbox 360 XDK, which is not part of this repository and is not provided. The build runs on
+Linux with the XDK's compiler under Wine. The setup, the tools and the process are in
+[docs/x360/guia-de-port.md](docs/x360/guia-de-port.md); the plan is in [docs/x360/plano.md](docs/x360/plano.md)
+and the decisions in [docs/x360/decisoes.md](docs/x360/decisoes.md). These documents are in Portuguese.
+
+**Credits:** z3xox and the contributors of Tenkaichi3Decomp (the PC port this one is built on), the
+BT3-Decompiled project (the decompilation), and [Kenney](https://kenney.nl) (the Xbox 360 button icons, CC0;
+see `port/x360/arte/kenney/`). The licence and the legal notes at the end of this file apply to the Xbox 360 port
+as well.
+
+---
+
+The rest of this file is the README of the PC port this project is built on.
+
+## Tenkaichi3Decomp
 
 A native PC port of **Dragon Ball Z: Budokai Tenkaichi 3** (PlayStation 2, USA release, SLUS-21678), built on
 the matching decompilation in **BT3-Decompiled**. It is the game's own code compiled for PC, with a new
