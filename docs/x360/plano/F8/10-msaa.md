@@ -493,3 +493,28 @@ com as subchaves e `BT3_SAVES=game:\sv_ms2_NOME`), o `ordem.txt` e o `LEIA-ME.tx
 | `a14` | 1,4 | 1, 1, 1, 1, 1 | a imagem do alfa para cobertura |
 | `s1` | 1,4 | tudo, `BT3_MSAA_SABOTA=1`, roteiro `boot.txt` | o autoteste acusa a volta crua estragada e o MSAA se desliga |
 | `s2` | 1,4 | tudo, `BT3_MSAA_SABOTA=2`, roteiro `boot.txt` | o autoteste acusa as máscaras iguais e o contorno fica por pixel |
+
+### 9.9 A rodada de 30/10 do completo [medido] e a decisão do Lucas
+
+Rodadas no console (192.168.0.7), build `1c4f3d95` (xex `6930682e`), duelo do `f5_duelo.txt`. Folga da GPU até o prazo na
+janela da luta, em ms (mediana, p10, p1):
+
+| Abertura | Subchaves (VOLTA, VAGAS, CONTORNO) | Mediana | p10 | p1 | Nota |
+|---|---|---|---|---|---|
+| `c14` | 0, 0, 0 | 8,7 | 6,1 | 2,6 | bate com a `m14` (8,9 / 6,1 / 2,6) |
+| `t14` | 1, 1, 1 | 8,4 | 5,6 | 2,7 | |
+| `x14` | 0, 1, 1 | 8,9 | 6,1 | 3,1 | a volta exata custa uns 0,5 ms (`t14` contra esta) |
+| `t15` | 1, 1, 1 | 6,8 | 2,7 | 1,1 | contra a `m15` (7,3 / 3,4 / 1,6); pausa com mínimo 0,0 |
+
+- **As vagas e o contorno não agiram neste duelo:** na `t14` e na `t15`, 0 saídas da profundidade para as pequenas e 0
+  contornos por amostra por quadro. Por isso a `v14`, a `v15` e a `k14` foram puladas (repetiriam a `c14` e a `m15`).
+- **As sabotagens:** a `s1` deu `ERRO: não exata` e o MSAA se desligou; a `s2` deu `ERRO: nenhuma máscara escreve um
+  fragmento só` e o contorno ficou por pixel. Nada aparece na tela, só no log.
+- **A imagem da volta exata:** a `it14` (a `t14` com `BT3_SHOT=600`) e a `ix14` (a `x14` com o mesmo) deram os 15 FNV iguais.
+  Limite: o DATE e a cópia dos ids depois de uma volta pela média só aparecem em uns 8 de 170 trechos do log da `c14`, e as
+  capturas a cada 600 quadros podem não ter caído neles; o efeito, nesses quadros, é o alfa médio nos pixels de borda.
+- O aviso do vigia (3 s parado no `autoteste das amostras do MSAA`, antes do primeiro quadro) aparece em todas as aberturas
+  desta build e não na `m15`; é só o tempo do autoteste, que não vai na versão pública.
+
+**Decisão do Lucas (30/10):** a volta exata fica desligada (`BT3_MSAA_VOLTA=0` por padrão); as vagas e o contorno ficam
+ligados (não custaram nada medível na `x14`).

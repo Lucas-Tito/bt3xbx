@@ -207,7 +207,8 @@ static int sMsVolta;                      /* o conteúdo do alvo com MSAA na EDR
 static int sMsVoltaMedia;                 /* ... e alguma delas foi pela média das amostras (a do protótipo: o alfa médio) */
 /* ---- (F8, BT3_MSAA=2, o MSAA completo; 10-msaa.md, seção 9) as subchaves, lidas só com o MSAA ligado, cada uma desligável
    para a rodada separar o custo (todas em 0: o protótipo de a5f5bc51):
-     BT3_MSAA_VOLTA=1    a volta exata: o alvo com MSAA que perde a EDRAM (despejado no quadro, ou no fim dele) guarda as duas
+     BT3_MSAA_VOLTA=0    1: a volta exata. Desligada: custou 0,5 ms na luta da 1,4 e as capturas da it14 e da ix14 deram iguais
+                         (30/10, seção 9.9). O alvo com MSAA que perde a EDRAM (despejado no quadro, ou no fim dele) guarda as duas
                          amostras cruas num parque (a cor de 2 amostras vista como uma de 1 amostra com o dobro das linhas,
                          sMsCru: o pixel (x, y) com as amostras nas linhas 2y e 2y + 1, a "1x2" da documentação do
                          D3DRS_MULTISAMPLEMASK) e volta por ele: as duas amostras como estavam, o alfa do fragmento 0 também;
@@ -4534,7 +4535,7 @@ static void msaa_init(void) {
         }
     }
     /* (o MSAA completo, 10-msaa.md, seção 9) as subchaves, a vista crua, os parques e o autoteste das amostras */
-    sMsVoltaX = env_num("BT3_MSAA_VOLTA", 1) != 0;
+    sMsVoltaX = env_num("BT3_MSAA_VOLTA", 0) != 0;
     sMsVagas = env_num("BT3_MSAA_VAGAS", 1) != 0;
     sMsContorno = env_num("BT3_MSAA_CONTORNO", 1) != 0;
     sMs2d = env_num("BT3_MSAA_2D", 0) != 0;
