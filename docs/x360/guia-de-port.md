@@ -2833,3 +2833,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **O GCC do WSL não compila o `gs_d3d.cpp`.** Um método de `D3DDevice` que o XDK não tem só aparece no `cl.exe`: o
   `KickOff` é do `D3DXps`; no `D3DDevice`, quem manda a fila à GPU sem esperar é o `InsertFence` (só na thread dona,
   fora de tiling). A auditoria do protocolo confere cada chamada contra a lista conferida no `d3d9.h`.
+
+### Uma chave de ambiente em 0 não desliga o que roda antes dela (F5, gravação, seção 41)
+
+- **A `ctl` (tudo desligado por ambiente) tem de bater com a build sem a variante antes de qualquer conclusão.** Na
+  `le40a2910` a build dos lotes com as duas chaves em 0 atrasou 56 imagens na luta contra 3 da normal: o `gs_lotes_passo`
+  esperava o desenho do quadro anterior e só depois perguntava ao backend, onde a chave era lida. Toda espera, trava ou
+  laço de uma variante sai antes de qualquer sincronização quando a chave está em 0, e o controle por ambiente só vale
+  depois de ser visto igual à build normal no console.

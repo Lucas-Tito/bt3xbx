@@ -5520,3 +5520,40 @@ normal. Na variante com lotes, esperar mudanças em `obj/gs_gs_draw.obj` e `x360
 para conferir as quatro famílias de builds da rodada. Verificar que `BT3_GS_LOTES` chega também ao `c89.py`.
 A ausência de XDK no WSL deixa a build, o despacho D3D, a imagem, a Guide e o ganho real para essa revisão e o console.
 O zero de longas continua reprovado; a exceção E não foi aprovada.
+
+## 41. Rodadas le40a2910 e im40a2910: o alfa entra, os lotes saem da primeira release (30/10/2026)
+
+No console, 30/10, builds de perfil do `6365624e`, duelo do `f5_duelo.txt` na 1,33 com FXAA. Só a primeira repetição da
+`le40a2910` rodou (a segunda e a `jl40a2910` foram dispensadas pelo Lucas) e, da `im40a2910`, só a `nor1` e a `nora1`.
+
+| Abertura | Build | Imagens de 3 vblanks (pausa, luta) | Folga da GPU na luta, mediana e p1 (ms) |
+|---|---|---|---|
+| `nor1` | normal | 0, 3 | 7,3 e 2,3 |
+| `ctl1` | lotes, as duas partes em 0 | 26, 56 | 7,9 e -2,0 |
+| `pln1` | lotes, só a primeira parte | 42, 104 | 7,5 e -5,2 |
+| `lot1` | lotes, as duas partes | 343 + 46 de 4, 1091 + 92 de 4 | -0,1 e -22,0 |
+| `nora1` | normal com o alfa | 0, 1 | 7,4 e 2,1 |
+| `ctla1` | lotes com o alfa, em 0 | 30, 74 | 7,2 e -5,2 |
+| `plna1` | lotes com o alfa, só a primeira | 51, 131 | |
+
+**O alfa:** a `nora1` empata com a `nor1` no tempo, e as 22 capturas da `im40a2910` (`nor1` contra `nora1`) deram os mesmos FNV.
+Entra como padrão da build do 360 (`build_f2.sh`, `BT3_ALFA_ORIGEM=1` sem a chave).
+
+**Por que os lotes pioram, mesmo em 0** [lido no código e medido no log]: o `gs_lotes_passo` (`gs_lotes_grav.h`), chamado a
+cada desenho anexado, a partir do 65º e a cada 32, trava o `sDesLock` e espera o desenho terminar o quadro anterior
+(`while (sDesTem && !sDesParado)`) **antes** de chamar o `lotesProntos`, que é onde a chave `BT3_LOTES_ENVIO` é lida. Na
+normal a gravação só espera o desenho na entrega, e a gravação do quadro N+1 corre junto com o desenho do N; na build lotes
+essa sobreposição acaba no 64º desenho. Na luta: passos do jogo acima de 33,37 ms 0 na `nor1`, 316 na `ctl1`, 560 na `pln1`,
+1.989 na `lot1`; trabalho do jogo p50 25,0, 30,3, 30,5 e 43,4 ms. Só os quadros pesados crescem (G desde J no 7170: 21,1 na
+`nor1`, 29,8 na `ctl1`, 49,1 na `lot1`), onde o desenho anterior é longo.
+
+**A `lot1`** [medido, com a conta inferida]: cada faixa espera o desenho ficar livre e depois espera o desenho consumi-la
+(`gs_lotes_grav.h`, uma vaga); a CPU do desenho deixa de sobrepor o quadro seguinte e se soma à gravação. Período de uns 43
+ms (27 da gravação da `nor1` mais 17 do desenho sozinho), cada imagem em 2 ou 3 vblanks. A GPU não é o gargalo (U desde J
+56,1 contra 58,9 da `nor1` no 6900): a folga negativa vem do J atrasado.
+
+**Decisão do Lucas (30/10):** os lotes ficam fora da primeira release; o código continua atrás do `BT3_GS_LOTES` (desligado
+na compilação, a build normal não tem a espera: `GS_LOTES` só existe com ele, `gs_draw.h`). Se voltarem: sair do
+`gs_lotes_passo` antes da trava com o envio desligado e nunca esperar ali (uns 10 linhas, deve devolver a `ctl` ao nível da
+`nor`); o envio em si precisa publicar sem esperar o consumo, preparar na thread do desenho e faixas bem maiores (centenas
+de linhas, com teto pequeno, porque a GPU não é o gargalo).
