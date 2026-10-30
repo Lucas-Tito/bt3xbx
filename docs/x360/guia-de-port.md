@@ -2680,3 +2680,17 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   e byte no buffer sem arquivo vivo do fim. Logs em
   `~/iso-v4/sonda-fragmentos.log`; testes sintéticos também recusam cabeça
   deslocada, cauda cortada e dois fragmentos crus ou alterados.
+
+- No Disc Fusion da ISO v4, o cabeçalho do pacote de seções 00451, com
+  contagem 6 e primeiro deslocamento 64, passou no teste de dois tamanhos
+  plausíveis usado para selecionar referências BPE inteiras. Quatro trechos
+  curtos do buffer de retrato coincidiam com bytes repetidos desse pacote;
+  exigir sua versão recomprimida criou diferenças falsas onde x86 e PPC
+  eram idênticas. O pacote não é uma referência de arquivo BPE inteiro.
+  Além do cabeçalho, exigir o conteúdo registrado em `@0x0#bpe.orig` e seu
+  tamanho igual ao tamanho descomprimido. Não inferir o formato só por dois
+  inteiros pequenos. O teste sintético recusa pacote sem esse conteúdo,
+  tamanho incompatível e truncamento; restaurar o detector antigo numa cópia
+  fez a asserção do pacote falhar de propósito. A tela 29 preservada passou
+  com a seleção corrigida, sem mudar classes ou tetos. A reanálise não
+  substitui a rodada oficial das builds finais.

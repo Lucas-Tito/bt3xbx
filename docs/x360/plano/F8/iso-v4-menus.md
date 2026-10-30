@@ -164,3 +164,22 @@ Protege os setores vivos e só examina buffers crus sem arquivo vivo quando
 são `faceFile` de `0x16800`, sem tipo ou contexto dinâmico. As classes e
 seus tetos continuam os mesmos. A reanálise dos dumps não substitui a
 rodada oficial do novo commit; resultados no relatório da entrega.
+
+[Medido] Em `6915208d`, o banco e os roteiros Ultimate, Missão,
+Sobrevivência e Sim Dragon passaram. Disc Fusion passou as 24 imagens,
+mas reprovou na memória da tela 29. O seletor de referências de restos
+confundiu o pacote de seções 00451, cabeçalho `(6, 64)`, com BPE inteiro.
+Quatro coincidências curtas em bytes repetidos desse pacote produziram
+referências falsas; nesses trechos, x86 e PPC são idênticas. A seleção
+agora exige também o conteúdo BPE registrado no deslocamento zero, com
+tamanho igual ao declarado no cabeçalho. A tela preservada passa sem
+mudança de classes ou tetos. O detector antigo restaurado numa cópia
+reprova no teste do pacote de seções. Resultados oficiais e prazo absoluto
+mantido em `~/entrega-iso-v4.md`.
+
+[Medido] A reanálise completa de Disc Fusion passou, com memória em todas
+as telas e 24 imagens idênticas, em modo de desenvolvimento. As duas
+cópias reais íntegras do Ultimate continuam passando e os cinco estragos
+continuam reprovando com saída 1, inclusive nos fragmentos sem arquivo
+vivo. Logs: `~/iso-v4/rejulgar-discfusion-bpe-inteiro.log` e
+`~/iso-v4/sonda-fragmentos-bpe-inteiro.log`. Não valem como rodada oficial.

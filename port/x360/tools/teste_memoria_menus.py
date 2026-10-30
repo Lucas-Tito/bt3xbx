@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
 """Exercita a identificação de sufixos sem aceitar bytes crus ou alterados."""
 from random import Random
-from memoria_menus import fragmentos_antecipados, restos_antecipados
+import struct
+from memoria_menus import bpe_inteiro, fragmentos_antecipados, restos_antecipados
 
 
 def main():
+    pacote = struct.pack('<II', 6, 64) + Random(451).randbytes(512)
+    assert not bpe_inteiro(pacote, None), 'pacote de seções aceito como BPE'
+    bpe = struct.pack('<II', 1024, 512) + pacote
+    assert bpe_inteiro(bpe, 1024)
+    assert not bpe_inteiro(bpe, None), 'BPE sem conteúdo registrado aceito'
+    assert not bpe_inteiro(bpe, 1023), 'tamanho do conteúdo incorreto aceito'
+    assert not bpe_inteiro(bpe[:64], 1024), 'fluxo truncado aceito'
+    print('estragos pacote de seções, origem ausente, tamanho e truncamento: recusados')
     antigo = Random(741).randbytes(0x3100)
     convertido = bytes(b ^ 0x5a for b in antigo)
     atual = b'\x33' * 0x1800

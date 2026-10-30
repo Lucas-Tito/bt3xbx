@@ -1,5 +1,20 @@
 """Referências exatas dos arquivos BPE que uma leitura ou alocação deixou no buffer."""
 
+import struct
+
+
+def bpe_inteiro(original, tamanho_conteudo):
+    """Exige o conteúdo registrado em offset zero, além do cabeçalho plausível.
+
+    Um pacote de seções também começa com dois inteiros pequenos. Isso não
+    o torna BPE nem autoriza usar seus bytes como restos de um retrato.
+    """
+    if tamanho_conteudo is None or len(original) < 8:
+        return False
+    bruto, comprimido = struct.unpack_from('<II', original)
+    return (0 < bruto <= 0x900000 and bruto == tamanho_conteudo
+            and 0 < comprimido <= len(original) - 8)
+
 
 def fragmentos_antecipados(dados, inicio_minimo, referencias):
     """Identifica fragmentos pela x86, inclusive após a divisão de um bloco.

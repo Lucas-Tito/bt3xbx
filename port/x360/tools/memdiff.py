@@ -74,7 +74,7 @@ Para cada região com marcação, uma linha "marcas REGIAO ARQ: conforme N, fora
 """
 import bisect, os, re, struct, subprocess, sys
 from collections import Counter
-from memoria_menus import fragmentos_antecipados
+from memoria_menus import bpe_inteiro, fragmentos_antecipados
 
 BASE = 0x20000000  # -Ttext-segment de headless.py
 MAGIC = 0x53484254
@@ -554,10 +554,9 @@ def main():
         if '@' in base or not os.path.exists(base + '.convertido'):
             continue
         original = open(base + '.orig', 'rb').read()
-        if len(original) < 8:
-            continue
-        bruto, comprimido = struct.unpack_from('<II', original)
-        if 0 < bruto <= 0x900000 and 0 < comprimido <= len(original) - 8:
+        conteudo = base + '@0x0#bpe.orig'
+        tamanho_conteudo = os.path.getsize(conteudo) if os.path.exists(conteudo) else None
+        if bpe_inteiro(original, tamanho_conteudo):
             referencias_bpe.append((os.path.basename(base), original, open(base + '.convertido', 'rb').read()))
 
     def mesmo_conteudo(b, orig):

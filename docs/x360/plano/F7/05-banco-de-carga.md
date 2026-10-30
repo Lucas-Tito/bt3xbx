@@ -270,3 +270,9 @@ reprovou na rede e na PPC. Os sete primeiros roteiros de menu passaram;
 a rodada parou no Ultimate por fragmentos de arquivos em blocos
 reutilizados, descritos na nota da F8. A nova correção só muda ferramentas
 de comparação e documentação; o banco será repetido com o carimbo final.
+
+[Medido] Em `6915208d`, os 131 casos, o rastreio e os seis estragos
+passaram novamente; sem a faixa, rede e PPC reprovaram como esperado.
+A rodada parou depois no seletor de referências do comparador dos menus,
+no Disc Fusion, sem falha de carga no banco. A correção só restringe as
+referências de restos aos arquivos BPE inteiros registrados em offset zero.
