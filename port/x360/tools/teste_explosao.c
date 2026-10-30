@@ -471,9 +471,47 @@ static u32 identidade(u32 passo) {
     return ruins;
 }
 
+/* "tempo": as duas versões no modelo do tamanho do planeta, 200 vezes cada, pelo relógio do processador (só x86) */
+static void tempo(void) {
+#if defined(__i386__) || defined(__x86_64__)
+    u32 lado, r, lo, hi;
+    u64 t[2];
+
+    for (lado = 0; lado < 2; lado++) {
+        u64 t0;
+        monta(&kCenas[2], -1);
+        gRefVu0 = sVu0Partida;
+        sWork.frame = 37;
+        sWork.fadeDist = fbits(kDist[1]);
+        __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
+        t0 = ((u64)hi << 32) | lo;
+        for (r = 0; r < 200; r++) { /* só o desenho: sem limpar nem copiar a lista */
+            sDmaCur = sDma;
+            sLogN = 0;
+            if (lado == 0) {
+                EftBurst_DrawModel_Velho(&sModelo, 0);
+            } else {
+                EftBurst_DrawModel_Novo(&sModelo, 0);
+            }
+        }
+        __asm__ volatile("rdtsc" : "=a"(lo), "=d"(hi));
+        t[lado] = (((u64)hi << 32) | lo) - t0;
+    }
+    put("tempo (planeta, 200 vezes, ciclos do relógio / 1000): velho ");
+    putu((u32)(t[0] / 1000));
+    put(", novo ");
+    putu((u32)(t[1] / 1000));
+    put(", novo/velho ");
+    putu((u32)(t[1] * 1000 / t[0]));
+    put(" por mil");
+    fim();
+#endif
+}
+
 s32 main(s32 argc, char **argv) {
     u32 c, q, d, e, i;
     s32 completa = argc > 1 && argv[1][0] == 'i';
+    s32 soTempo = argc > 1 && argv[1][0] == 't';
 
 #ifdef MODELO_360
     { /* a FPU do 360 em truncamento (_controlfp(_RC_CHOP)): SSE e x87 em direção a zero */
@@ -494,6 +532,10 @@ s32 main(s32 argc, char **argv) {
     }
     gEftBurstRes.texPack = &sPack;
     sPack.tex = sPackTex;
+    if (soTempo) {
+        tempo();
+        return 0;
+    }
 
     for (c = 0; c < sizeof(kCenas) / sizeof(kCenas[0]); c++) {
         for (e = 0; e < 3; e++) { /* 0x800 em grupos alternados, em nenhum, em todos */

@@ -16,6 +16,7 @@ novo: o fonte como está), a VU0 do port e o modelo de float de cada build, e ro
 O binário da x86 é ligado sem libc (port/x360/tools/teste_explosao_rt.c): esta máquina não tem a de 32 bits.
 --mutantes: cada mutante de MUTANTES (um erro plausível na tabela) tem de ser recusado; sai com 1 se algum passar.
 --identidade: confere 1.0 * q == q para todos os 2^32 padrões (sem ela, um a cada 257).
+--tempo: mede as duas versões (200 desenhos de um modelo do tamanho do planeta) pelo rdtsc, nas variantes da x86.
 --original REV: confere que o ramo velho é, letra por letra, o arquivo de REV (padrão f5-alfa, se existir).
 """
 import argparse, os, pathlib, re, shutil, subprocess, sys, tempfile
@@ -202,6 +203,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mutantes", action="store_true")
     ap.add_argument("--identidade", action="store_true")
+    ap.add_argument("--tempo", action="store_true", help="também mede as duas versões no modelo do planeta (x86)")
     ap.add_argument("--original", default="f5-alfa")
     ap.add_argument("--pasta")
     ap.add_argument("--alvos", default="x86,x86-360,ppc")
@@ -230,6 +232,9 @@ def main():
         print(f"== {nome}: " + ("igual" if rc == 0 else "DIFERE"))
         print("\n".join("   " + l for l in out.strip().split("\n") if not l.startswith("cena ")))
         falhou |= rc != 0
+        if a.tempo and alvo.livre:
+            rc2, out2 = alvo.liga_roda(comuns + [alvo.jogo_obj(novo, "novo")], "novo", ["t"])
+            print("   " + out2.strip())
         if a.mutantes:
             for i, (m, de, para) in enumerate(MUTANTES):
                 if novo.count(de) != 1:
