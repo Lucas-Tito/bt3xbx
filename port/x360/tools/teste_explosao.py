@@ -101,10 +101,12 @@ class Alvo:
                 "-ffunction-sections", "-fdata-sections"]
         if nome == "ppc":
             self.cc, self.livre = ["powerpc-linux-gnu-gcc"], False
+            self.objcopy, self.nm = "powerpc-linux-gnu-objcopy", "powerpc-linux-gnu-nm"  # (o binutils do host não lê objeto da PPC)
             self.soft = ["-msoft-float", "-mno-gnu-attribute", "-fsigned-char", "-DPORT_BIG_ENDIAN", "-frounding-math"]
             self.hard = ["-fsigned-char", "-DPORT_BIG_ENDIAN"]
             self.exe = ["qemu-ppc"]
         else:
+            self.objcopy, self.nm = "objcopy", "nm"
             # sem libc de 32 bits: os headers da libc pedem gnu/stubs-32.h, que fica vazio aqui
             shim = self.b / "shim/gnu"
             shim.mkdir(parents=True, exist_ok=True)
@@ -181,9 +183,9 @@ class Alvo:
         o = self.ee(self.jogo, t, self.b / f"eft_{nome}.o")
         # só os definidos ficam fracos: um --weaken geral deixaria fraca também a referência a uma função que falta,
         # que o link estático liga ao endereço 0 sem aviso
-        defs = run(["nm", "-g", "--defined-only", o]).stdout.split()
+        defs = run([self.nm, "-g", "--defined-only", o]).stdout.split()
         defs = [d for d in defs[2::3] if d != "EftBurst_DrawModel"]
-        run(["objcopy", f"--redefine-sym=EftBurst_DrawModel=EftBurst_DrawModel_{nome.split('_')[0].capitalize()}"] +
+        run([self.objcopy, f"--redefine-sym=EftBurst_DrawModel=EftBurst_DrawModel_{nome.split('_')[0].capitalize()}"] +
             [f"--weaken-symbol={d}" for d in defs] + [o])
         return o
 
