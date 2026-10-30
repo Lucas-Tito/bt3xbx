@@ -2604,3 +2604,10 @@ casos nativos aprovados com execução PPC: a reprodução e os critérios de jo
   `teste_menus_iso.py` estraga as duas provas, na equivalência e na memória.
 - Worktree nova não traz os links de dados: criá-los para `/srv/bt3/dados`, sem
   copiar nem escrever nas pastas. O primeiro ensaio aqui só viu "não abre".
+
+- A versão também é literal em `IsoConv_Executar`, na validação do selo antes
+  da passagem, além de `ISO_MARCA_VERSAO` e `convert_iso.VERSAO`. Esquecer esse
+  ponto recusou o selo v4 antes de ler o fluxo. O mutante de alinhamento então
+  falhou no `free` do ponteiro propositalmente desalinhado, em vez de chegar à
+  guarda DMA esperada. Conferir o primeiro erro e procurar também `selo + 16`
+  ao subir a versão. O ensaio C completo acusou a incompatibilidade.

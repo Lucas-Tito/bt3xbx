@@ -248,7 +248,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
         goto fim;
     r = IC_FORMATO;
     msg = "selo incompatível";
-    if (memcmp(selo, "BT3X360-ISO\0\0\0\0\0", 16) || le32(selo + 16) != 3 || le32(selo + 20) != 512 ||
+    if (memcmp(selo, "BT3X360-ISO\0\0\0\0\0", 16) || le32(selo + 16) != 4 || le32(selo + 20) != 512 ||
         le32(selo + 24) != IC_TAMANHO || le32(selo + 28) != 0 || !(quantos = planejar(e, n, v)))
         goto fim;
     msg = "lotes fora do limite de setor";
