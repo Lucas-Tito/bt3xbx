@@ -2090,6 +2090,24 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   o `cor.a * k` e o `* 128 + 0,5` do teste de alfa viraram um `mad` só com 255. Mantenha o ramo e confira na listagem `/Fc`
   que as contas do que tem de dar o mesmo byte saem com as mesmas instruções.
 
+### O MSAA completo (F8, `plano/F8/10-msaa.md`, seção 9)
+
+- **A superfície de 2 amostras do Xenos é a de 1 amostra com o dobro das linhas:** a documentação do `D3DRS_MULTISAMPLEMASK`
+  diz que cada pixel do MSAA 2x é um bloco vertical de 1 x 2, e o `XGSurfaceSize` dá os mesmos tiles para `W x H` com 2
+  amostras e `W x 2H` com 1. Uma vista de 1 amostra com o dobro das linhas na mesma base guarda e devolve as duas amostras com
+  um Resolve e uma cópia (o "parque" da volta exata), sem saber a ordem delas dentro do tile: a ida e a volta são pela mesma
+  vista. O autoteste do boot confere bit a bit pelos dois fragmentos e tem um controle (a cor limpa sem a volta).
+- **A máscara do `D3DRS_MULTISAMPLEMASK` tem 4 bits por pixel da quadra de 2 x 2:** com 2 amostras, "só a amostra 0" é
+  `0x1111` e "só a 1" é `0x2222`. Um `1` ou um `2` escreveria só o pixel de cima à esquerda de cada quadra. Qual bit escreve
+  qual fragmento do Resolve, o autoteste mede (desenha um padrão por bit e compara os fragmentos com a referência de 1
+  amostra).
+- **Um contador "depois de uma volta" que dá tudo não diz nada:** no BT3 a primeira entrada de cada quadro já é uma volta (o
+  alvo traz o que mostrou dois quadros antes), então todo DATE e toda cópia dos ids do quadro contavam "depois de uma volta".
+  Conte pelo caminho (a volta exata, pelo parque, e a pela média), não pelo fato de ter havido uma volta.
+- **Uma cópia adiada para a entrada no alvo é exata quando nada desenha nele entre o pedido e a entrada:** o marcador de DATE
+  de um alvo que não está posto lia a textura dele (a média das amostras); a cópia do fragmento 0 feita na entrada seguinte
+  nele, antes do primeiro desenho com DATE, lê o mesmo conteúdo, da EDRAM.
+
 ### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
 
 - **O header do `fxc` traz a linha de comando no comentário:** dois headers do mesmo shader compilados com caminhos de saída
