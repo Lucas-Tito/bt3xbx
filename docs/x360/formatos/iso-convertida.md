@@ -1,4 +1,4 @@
-# ISO convertida no PC, versão 3
+# ISO convertida no PC, versão 4
 
 [Decisão 23](../decisoes.md) | [tarefa da etapa 2](../tarefas/f5-etapa2-iso.md)
 
@@ -61,7 +61,7 @@ console pode chamar a mesma API, fornecendo o mesmo pacote. A API valida as
 18 entradas antes de escrever e recusa índices, tamanhos, formatos, limites e alfa
 incompatíveis. Não existe troca em tempo de desenho nem mudança dos controles.
 
-O console agora exige versão 3, marca de 512 bytes e tamanho de origem correto.
+O console agora exige versão 4, marca de 512 bytes e tamanho de origem correto.
 Outra versão da conversão é recusada com a mesma caixa da original, que pede a conversão (o Lucas
 não quer caixa própria de versão: só a conversão publicada vai existir fora do projeto);
 imagem de outra região continua recebendo a caixa de versão do jogo.
@@ -112,7 +112,7 @@ Inteiros em little-endian, hashes em bytes binários. A marca inteira tem 512 by
 | Posição relativa | Tamanho | Conteúdo |
 |---|---|---|
 | `0` | 16 | ASCII `BT3X360-ISO`, seguido por cinco zeros |
-| `16` | 4 | Versão do contrato: 3 |
+| `16` | 4 | Versão do contrato: 4 |
 | `20` | 4 | Tamanho da marca: 512 |
 | `24` | 8 | Tamanho da origem: 3.020.816.384 |
 | `32` | 16 | MD5 da origem |
@@ -179,7 +179,7 @@ no lugar, sem segunda convertida; as cópias temporárias da original são remov
 
 ## Versão 3: transições de cenário
 
-A versão 2 não incluía os ids 0x1BF e 0x1C0 na conversão. A versão 3 mantém os ícones da 2 e acrescenta
+A versão 2 não incluía os ids 0x1BF e 0x1C0 na conversão. A versão 4 mantém os ícones da 2 e acrescenta
 os dois arquivos do formato [transicao](transicao.md), elevando o total de arquivos convertidos de 3.325 para
 3.327. O leitor recusa as versões anteriores. É obrigatório converter novamente a ISO USA original com este
 instalador; recompilar o `.xex` e manter a ISO versão 2 não corrige os dados. Não reutilizar uma ISO já convertida
@@ -193,7 +193,7 @@ inicial da USA original, com `conv/iso_conv.c` e os mesmos conversores e ícones
 a ISO pronta. Segurança, interface provisória, tempo e provas estão em
 [03-conversao-console](../plano/F8/03-conversao-console.md).
 
-O contrato da marca versão 3 permanece intacto. `preparar_iso_console.py`, chamado por `build_f2.sh`, gera no
+O contrato da marca versão 4 permanece intacto. `preparar_iso_console.py`, chamado por `build_f2.sh`, gera no
 host o selo exato da ferramenta PC e o inclui na build. Para comparar bytes entre os dois caminhos, usar no PC
 `--conv-tool build/x360/iso/conv_tool` da mesma preparação. Esse hash continua identificando a ferramenta PC
 usada como referência, inclusive quando o console aplica o núcleo C comum. Uma ferramenta PC recompilada com
@@ -206,3 +206,10 @@ ao gravar; a reabertura compara índices completos, entradas convertidas, marca 
 de persistência é menor que a conferência integral do PC descrita acima; o miolo não amostrado pode ocultar
 corrupção silenciosa. Modelo de tempo, faixas exatas e prova desse limite estão na nota da F8. A versão e os bytes
 da saída continuam iguais, com a mesma ferramenta/selo; o instalador PC mantém sua conferência integral.
+
+## Versão 4: objetos de golpe
+
+A faixa `0xD1C..0xD47` usa `personagem`: 44 modelos extras, incluindo Dragon Fist
+(`03355.bin`) e Father-Son Kamehameha (`03366.bin`). São 3.366 arquivos com conversor,
+39 a mais que na versão 3, que já cobria os cinco modelos de ShenScene. As marcas
+1, 2 e 3 são recusadas e exigem reconversão da original USA.

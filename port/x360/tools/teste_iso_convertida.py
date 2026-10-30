@@ -122,7 +122,7 @@ def executar(args):
             finally:
                 alterar(copia, pos)
 
-        for versao_antiga in (1, 2):
+        for versao_antiga in (1, 2, 3):
             with copia.open("r+b") as f:
                 f.seek(iso.MARCA_POS + 16)
                 f.write(struct.pack("<I", versao_antiga))

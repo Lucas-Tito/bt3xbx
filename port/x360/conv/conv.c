@@ -325,9 +325,8 @@ static const Formato sFormatos[] = {
 static const ConvFaixa sFaixas[] = {
     /* BtlLoad_StepStageChange: os dois filmes de destruição de cenário. */
     {0x1BF - 1, 0x1C0 - 1, CONV_ARQ, "transicao"},
-    /* ShenScene_StepLoad: os três dragões e as duas variantes das esferas, todos slots de modelo (N = 252). */
-    {0xD3C - 1, 0xD3D - 1, CONV_ARQ, "personagem"},
-    {0xD45 - 1, 0xD47 - 1, CONV_ARQ, "personagem"},
+    /* BTL_FILE_OBJECT: modelos extras dos golpes (ids >= 256), dragões e esferas de ShenScene. */
+    {0xD1C - 1, 0xD47 - 1, CONV_ARQ, "personagem"},
     /* Referência e Shenlong (menus-ref.md); a seção 1 do 472 não tem Sprite_Unpack no jogo. */
     {462, 462, CONV_ARQ, "menu_pacote"}, /* tabela de três seções vazias */
     {472, 472, 1, "menu_inativo"},

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepara no host o selo versão 3 idêntico ao do instalador PC desta build.
+"""Prepara no host o selo versão 4 idêntico ao do instalador PC desta build.
 
 Conserve build/x360/iso/conv_tool para reproduzir a marca no PC com --conv-tool.
 Não lê a ISO nem dados do jogo. O XDK não precisa executar programas nativos.
@@ -23,7 +23,7 @@ def preparar(pasta):
         "static const unsigned char sIsoSelo[512] = {\n" +
         ",\n".join("    " + ",".join(f"0x{x:02x}" for x in selo[i:i+16]) for i in range(0,512,16)) + "\n};\n")
     (pasta / "selo.bin").write_bytes(selo)
-    print(f"selo versão 3 e ferramenta PC: {pasta}", flush=True)
+    print(f"selo versão 4 e ferramenta PC: {pasta}", flush=True)
     return tool
 
 

@@ -112,7 +112,7 @@ static int inventario(IsoConvIO *io, Entrada *e, unsigned *cont) {
         if ((i && e[i].pos < e[i - 1].pos + e[i - 1].tam) ||
             (e[i].pos < IC_MARCA_POS + IC_MARCA_TAM && e[i].pos + e[i].tam > IC_MARCA_POS))
             return 0;
-    return *cont == 3327;
+    return *cont == 3366;
 }
 static int converter(const Entrada *e, conv_u8 *buf, conv_u8 *feito) {
     conv_u32 i;
