@@ -105,6 +105,8 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "gs_sem_ps.h"
 #include "gsz_tex_ps.h"
 #include "gsz_sem_ps.h"
+#include "gs_semt_ps.h"  /* (F8, BT3_OTIM_SEMTEX: ps_gs_semt, ps_gsz_semt; ver otim_init) */
+#include "gsz_semt_ps.h"
 #include "tabela_z_ps.h" /* (720p, retomada, BT3_OTIM_NEVOA: ps_tabela_z, ps_tabela_ids) */
 #include "tabela_ids_ps.h"
 #include "gs_af_ps.h"     /* (720p, BT3_AFIADO: ps_gs_af, vs_gs_af e ps_copia_af; ver afiado_init) */
@@ -182,6 +184,71 @@ static D3DSurface *sEdramProfCor; /* (F5, etapa 7) a profundidade da EDRAM vista
    alvo inteiro (postos no init); com ela, a vaga do alvo posto (ed_poe) */
 static D3DSurface *sCorPosta;
 static int sPostaW = GS_W, sPostaH = GS_H;
+/* (F8, BT3_MSAA) a profundidade posta com a cor e a vista dela como cor (o restauro do modo 1): sem a chave, sempre
+   sEdramProf e sEdramProfCor (postas no init); com ela, as de 2 amostras quando o alvo posto é o com MSAA */
+static D3DSurface *sProfPosta, *sProfCorPosta;
+static DWORD sZFrag; /* (BT3_MSAA, só o autoteste) o fragmento dos Resolves da profundidade: 0, ou D3DRESOLVE_FRAGMENT1 */
+static UINT sProfBase; /* a base da profundidade de 1 amostra na EDRAM: os tiles da cor; com BT3_MSAA, os da cor de 2 amostras */
+/* ---- (F8, BT3_MSAA=2; docs/x360/plano/F8/10-msaa.md) o protótipo do MSAA 2x da EDRAM, desligado por padrão ------------
+   Só o alvo que o quadro apresenta (o do fbp) desenha com 2 amostras, numa superfície de cor de 2 amostras na base 0 da
+   EDRAM (sMsCor, o dobro dos tiles do alvo) com a profundidade de 2 amostras logo depois (sMsProf, na mesma base da
+   profundidade de 1 amostra, que com a chave muda para depois dela); os outros alvos, como antes. O Resolve de saída faz a
+   média das amostras (D3DRESOLVE_ALLFRAGMENTS, o padrão); a cópia dos ids e o DATE leem só o fragmento 0 (o alfa exato); a
+   profundidade sai pelo fragmento 0 (o único jeito do Xenos) e volta pelo modo que o autoteste de 2 amostras escolher.
+   Com os alvos residentes (BT3_EDRAM_RESIDENTE), a vaga M (a cor de 2 amostras) cobre os tiles de A e de B: entrar em M
+   despeja A e B, entrar em A ou B despeja M; as pequenas ficam depois da profundidade de 2 amostras e não se tocam. Sem a
+   chave nada muda: nenhum objeto criado, sMsAlvo fica -1 e todo teste novo cai no caminho de antes. */
+static int sMsaa;                         /* 2: pedido e cabe (msaa_base); 1: as superfícies e o autoteste ok (msaa_init) */
+static D3DSurface *sMsCor, *sMsProf, *sMsProfCor;
+static UINT sMsTilesCor, sMsTilesProf;
+static int sMsModoZ;                      /* o restauro da profundidade de 2 amostras (0 zerada, 1 como cor, 2 oDepth) */
+static int sMsAlvo = -1;                  /* o alvo com MSAA no quadro (o do fbp); -1: nenhum (sempre, sem a chave) */
+static int sMsVolta;                      /* o conteúdo do alvo com MSAA na EDRAM veio de uma volta no quadro */
+static int sMsVoltaMedia;                 /* ... e alguma delas foi pela média das amostras (a do protótipo: o alfa médio) */
+/* ---- (F8, BT3_MSAA=2, o MSAA completo; 10-msaa.md, seção 9) as subchaves, lidas só com o MSAA ligado, cada uma desligável
+   para a rodada separar o custo (todas em 0: o protótipo de a5f5bc51):
+     BT3_MSAA_VOLTA=0    1: a volta exata. Desligada: custou 0,5 ms na luta da 1,4 e as capturas da it14 e da ix14 deram iguais
+                         (30/10, seção 9.9). O alvo com MSAA que perde a EDRAM (despejado no quadro, ou no fim dele) guarda as duas
+                         amostras cruas num parque (a cor de 2 amostras vista como uma de 1 amostra com o dobro das linhas,
+                         sMsCru: o pixel (x, y) com as amostras nas linhas 2y e 2y + 1, a "1x2" da documentação do
+                         D3DRS_MULTISAMPLEMASK) e volta por ele: as duas amostras como estavam, o alfa do fragmento 0 também;
+                         o marcador de DATE do alvo com MSAA fora da EDRAM espera a entrada nele e lê o fragmento 0 de lá
+     BT3_MSAA_VAGAS=1    com os alvos residentes, as pequenas sobre a profundidade de 2 amostras (do fim da cor de 2 amostras ao
+                         fim da EDRAM) e A só para quem precisa da vaga grande: o alvo com MSAA não sai da EDRAM pela cadeia do
+                         brilho; quem sai é a profundidade (uma pequena que entra a entrega; a profundidade que volta despeja
+                         as pequenas que estão em cima dela)
+     BT3_MSAA_CONTORNO=1 o contorno por amostra: a cópia dos ids do fragmento 1 (sIds1) ao lado da do 0 e a passada do
+                         contorno uma vez por amostra, cada uma com a máscara da sua (D3DRS_MULTISAMPLEMASK) e os ids dela
+     BT3_MSAA_2D=0       1: a arte 2D (misc.w) sem MSAA (D3DRS_MULTISAMPLEANTIALIAS falso: as duas amostras pelo centro do
+                         pixel, como sem o MSAA). Desligada: o Lucas preferiu o HUD com o MSAA nas rodadas de 30/10
+     BT3_MSAA_A2C=0      alfa para cobertura (D3DRS_ALPHATOMASKENABLE) nos desenhos 3D com teste de alfa que só passam com o
+                         alfa a 1/8 ou mais (GEQUAL com AREF de 17 ou mais, GREATER de 16), sem mistura e sem FBA; desligada por
+                         padrão: o alfa de 1/8 a 5/8 cobre uma amostra só também fora da borda (10-msaa.md, seção 9)
+   O autoteste das amostras (ms_amostras_autoteste) prova a máscara de cada fragmento e a volta crua; sem elas, a subchave que
+   depende delas sai com ERRO (a da volta leva o MSAA junto: sem ela o alfa depois de uma volta seria o médio). Com
+   BT3_MSAA_SABOTA=1 (a volta crua uma linha fora) ou 2 (as duas máscaras iguais), o autoteste é estragado de propósito e tem
+   de acusar. */
+static int sMsVoltaX, sMsVagas, sMsContorno, sMs2d, sMsA2c;
+static DWORD sMsMasc[2] = {0x1111u, 0x2222u}; /* a máscara de escrita de cada fragmento (o autoteste confirma ou troca) */
+static int sMsMascOk;                     /* o autoteste achou a máscara de cada fragmento */
+static D3DSurface *sMsCru;                /* a cor de 2 amostras vista como 1 amostra, sAlvoW x 2 sAlvoH, na base 0 */
+static int sMsMudou;                      /* o alvo com MSAA mudou na EDRAM desde o último parque (ou voltou pela média) */
+static int sMsConteudoMedia;              /* o que a EDRAM tem do alvo com MSAA veio, em parte, de uma textura com a média */
+static unsigned char sMsTexMedia[MAX_TARGETS]; /* a textura do alvo tem a média de um Resolve do alvo com MSAA */
+static int sMsUltMedia;                   /* (ms_volta) o parque da última volta exata tinha a média */
+static void ms_resolveu(int t);           /* (um Resolve de cor para a textura do alvo t: o parque dele, se for de outro) */
+static void ms_parque(int t);             /* (o alvo com MSAA t vai perder a EDRAM: as amostras cruas para o parque) */
+static int sMsDatePend = -1;              /* o marcador de DATE do alvo com MSAA que espera a entrada nele (-1: nenhum) */
+static int sMsVagasQ;                     /* (BT3_MSAA_VAGAS) as pequenas do quadro estão sobre a profundidade */
+static UINT sMsZFim;                      /* o fim da profundidade de 2 amostras na EDRAM (a das pequenas que a tocam) */
+static D3DTexture *sIds1;                 /* (BT3_MSAA_CONTORNO) a cópia dos ids do fragmento 1 */
+static int sMsIds1;                       /* a sIds1 é da mesma cópia que a sIds (a do alvo com MSAA) */
+static double sMsParqueMs, sMsCruMs;      /* autoteste: GPU do parque e da volta crua de um alvo inteiro */
+static struct {
+    unsigned quadros, semAlvo, entradas, voltas, despejaM, despejaAB, date, dateVolta, dateTex, ids, idsVolta, zRest, zTroca;
+    unsigned voltaExata, parques, dateMedia, idsMedia, dateAdia, zSai, pequenaSai, ids1, contorno2, des2d, a2c;
+    double parquePx;
+} sMsC; /* (no trecho) */
 static D3DPixelShader *sPsZCor, *sPsZProf;
 static D3DTexture *sBranco, *sDate;
 static D3DTexture *sDateFonte; /* o que os desenhos com DATE leem: sDate, ou a textura de um alvo fora da EDRAM */
@@ -370,6 +437,19 @@ static TexXg *xg_cria_n(UINT w, UINT h, D3DFORMAT f, size_t tam) {
     return x;
 }
 static TexXg *xg_cria(UINT w, UINT h, D3DFORMAT f) { return xg_cria_n(w, h, f, sizeof(TexXg)); }
+
+/* (F8, BT3_MSAA_VOLTA) os parques das amostras cruas do alvo com MSAA (ms_parque, ms_volta) */
+#define MS_PARQUES 2 /* o alvo do quadro e o do anterior (o jogo alterna dois) */
+typedef struct MsParque {
+    TexXg *tex;   /* sAlvoW x 2 sAlvoH, A8R8G8B8 tiled: as amostras cruas */
+    int alvo;     /* -1: vazio */
+    unsigned ver; /* a textura do alvo (sAlvoD[].ver) quando ele foi guardado */
+    Ret r;        /* o que vale, em pixels do alvo (x em tiles inteiros de 80, y em múltiplos de 8) */
+    unsigned uso;
+    int media;    /* o que ele guardou veio de uma volta pela média (pixels com as duas amostras iguais à média) */
+} MsParque;
+static MsParque sMsParque[MS_PARQUES];
+static unsigned sMsUso;
 
 /* a GPU ainda usa o recurso (os dois cabeçalhos de uma profundidade) */
 static int xg_ocupado(D3DTexture *t) {
@@ -1729,16 +1809,23 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
                           gs_d3d.hlsl) nos desenhos sem DATE, sem arte 2D, sem teste de alfa e sem alvo como textura
      BT3_OTIM_LIMPA=1     ao entrar na EDRAM, a cor limpa só fora do conteúdo que a volta do alvo vai cobrir (limpa_fora)
      BT3_OTIM_DATE=1      o Resolve da cópia do DATE só na área que os desenhos com DATE seguintes leem (date_area)
-     BT3_OTIM_NEVOA=1     a passada de tabela com um shader por fonte (ps_tabela_z, ps_tabela_ids; nat_tabela_passa) */
+     BT3_OTIM_NEVOA=1     a passada de tabela com um shader por fonte (ps_tabela_z, ps_tabela_ids; nat_tabela_passa)
+   (F8, docs/x360/plano/F8/09-escala.md) Fora do BT3_OTIM e desligada por padrão (0: o .xex faz o de antes):
+     BT3_OTIM_SEMTEX=1    os desenhos sem textura (modo 0) que iam ao ps_gs geral, que lia a branca e jogava a leitura fora:
+                          sem DATE e sem teste de alfa, com ou sem arte 2D (o misc.w só mexe no uv), o especializado
+                          ps_gs_sem (com o BT3_OTIM_PS); os outros, o ps_gs_semt (o gs_pixel sem a leitura da textura,
+                          com o DATE, o teste de alfa e o FBA do mesmo texto). O ps_gsz_* o mesmo na VU1. */
 enum { OT_PS = 1, OT_LIMPA = 2, OT_DATE = 4, OT_NEVOA = 8 };
-static unsigned sOtim, sPsTrivial;
+static unsigned sOtim, sPsTrivial, sSemTex;
 static D3DPixelShader *sPsTriv[2];    /* [0] ps_gs_triv, [1] ps_gsz_triv */
 static D3DPixelShader *sPsRap[2][2];  /* [z][com textura]: ps_gs_sem, ps_gs_tex, ps_gsz_sem, ps_gsz_tex */
+static D3DPixelShader *sPsSemT[2];    /* (BT3_OTIM_SEMTEX) [z]: ps_gs_semt, ps_gsz_semt */
 static D3DPixelShader *sPsTabFonte[2]; /* [0] ps_tabela_z (a névoa pela profundidade), [1] ps_tabela_ids */
 static unsigned env_num(const char *nome, unsigned padrao);
 /* (no trecho de 60 quadros, do desenho) o que as otimizações fizeram (otim_log) */
 static struct {
     unsigned psRap, psSem, psGs, limpaN, limpaRets, dateN, dateVazio, dateFora;
+    unsigned semtArte, semtGeral, semtDate, semtAtst; /* (BT3_OTIM_SEMTEX) ver ps_escolhe e otim_log */
     double limpaPx, datePx, datePxAntes;
 } sOt;
 
@@ -1765,6 +1852,18 @@ static void otim_init(void) {
                         "um shader por fonte %s (BT3_OTIM_NEVOA; o autoteste das nativas passa por eles)", todas,
                         (sOtim & OT_PS) ? "sim" : "não", (sOtim & OT_LIMPA) ? "sim" : "não", (sOtim & OT_DATE) ? "sim" : "não",
                         (sOtim & OT_NEVOA) ? "sim" : "não");
+    }
+    /* (F8) fora do BT3_OTIM, que é ligado por padrão: só com a chave dela */
+    sSemTex = env_num("BT3_OTIM_SEMTEX", 0) != 0;
+    if (sSemTex && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsSemTPs, &sPsSemT[0])) ||
+                    FAILED(sDev->CreatePixelShader((const DWORD *)kGsZSemTPs, &sPsSemT[1])))) {
+        Diario_Escrever("gs_d3d: ERRO: os shaders sem textura não foram criados; BT3_OTIM_SEMTEX desligada");
+        sSemTex = 0;
+    }
+    if (sSemTex) {
+        Diario_Escrever("gs_d3d: F8, desenhos sem textura sem a leitura da branca (BT3_OTIM_SEMTEX=1): sem DATE e sem teste de "
+                        "alfa pelo especializado %s, os outros pelo ps_gs_semt", (sOtim & OT_PS) ? "sim" : "não (sem o "
+                        "BT3_OTIM_PS: todos pelo ps_gs_semt)");
     }
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
@@ -1864,6 +1963,21 @@ static D3DPixelShader *ps_escolhe(const GsDraw *d, int estado) {
     if (afiado_usa(d, estado)) {
         sAfDes++;
         return sPsGsAf;
+    }
+    /* (F8, BT3_OTIM_SEMTEX) sem textura (modo 0): o resultado da leitura da textura não entra na cor nem no alfa, e o misc.w
+       só mexe no uv dela. Sem DATE e sem teste de alfa, o especializado (que só faz a cor, a função do alfa do vértice e o
+       FBA); senão o ps_gs_semt, o gs_pixel sem a leitura */
+    if (sSemTex && d->mode[0] == 0) {
+        if ((sOtim & OT_PS) && d->misc[1] == 0.0f && d->mode[3] == 0) {
+            sOt.psRap++;
+            sOt.psSem++;
+            sOt.semtArte += d->misc[3] != 0.0f;
+            return sPsRap[z][0];
+        }
+        sOt.semtGeral++;
+        sOt.semtDate += d->misc[1] != 0.0f;
+        sOt.semtAtst += d->mode[3] != 0;
+        return sPsSemT[z];
     }
     /* (BT3_OTIM_PS) sem DATE (misc.y), sem arte 2D (misc.w), sem teste de alfa (modo.w) e sem alvo como textura (modo.x 2:
        o rect e o c6); o FBA (misc.z) e a função da textura (modo.y, modo.z) o especializado ainda lê das constantes */
@@ -1994,6 +2108,11 @@ static void otim_log(unsigned t) {
                         (double)sOt.psRap / t, (double)sOt.psSem / t, (double)sOt.psGs / t, (double)sOt.limpaN / t,
                         (double)sOt.limpaRets / t, sOt.limpaPx / t / 1000.0, (double)sOt.dateN / t, sOt.datePx / t / 1000.0,
                         sOt.datePxAntes / t / 1000.0, sOt.dateVazio, sOt.dateFora);
+    }
+    if (sSemTex) {
+        Diario_Escrever("gs_d3d:   F8, sem textura, por quadro: %.1f pelo ps_gs_semt (%.1f com DATE, %.1f com teste de alfa), %.1f "
+                        "com arte 2D pelo especializado", (double)sOt.semtGeral / t, (double)sOt.semtDate / t,
+                        (double)sOt.semtAtst / t, (double)sOt.semtArte / t);
     }
     memset(&sOt, 0, sizeof(sOt));
 }
@@ -2435,7 +2554,7 @@ static void prof_poe(Prof *z, const Ret *r, int modo) {
         sDev->SetPixelShaderConstantF(7, zc, 1);
         sDev->SetDepthStencilSurface(NULL);
         if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
-        sDev->SetRenderTarget(0, sEdramProfCor);
+        sDev->SetRenderTarget(0, sProfCorPosta); /* (sEdramProfCor; com BT3_MSAA, a de 2 amostras no alvo com MSAA) */
         sDev->SetViewport(&vpz);
         sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
         sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
@@ -2443,7 +2562,7 @@ static void prof_poe(Prof *z, const Ret *r, int modo) {
         quad(z->cor, sPsZCor, sAlvoWZ, sAlvoH, x0, y0, x1, y1, x0 / W, y0 / H, x1 / W, y1 / H, 0);
         if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
         sDev->SetRenderTarget(0, sCorPosta); /* (sEdramCor; com BT3_EDRAM_RESIDENTE, a vaga A ou B, do mesmo tamanho) */
-        sDev->SetDepthStencilSurface(sEdramProf);
+        sDev->SetDepthStencilSurface(sProfPosta); /* (sEdramProf; com BT3_MSAA, a de 2 amostras no alvo com MSAA) */
         sDev->SetViewport(&vp);
     } else {
         sDev->SetRenderState(D3DRS_ZENABLE, TRUE);
@@ -2465,7 +2584,7 @@ static void prof_tira(Prof *z, const Ret *r) {
     fonte.x1 = r->x0; fonte.y1 = r->y0; fonte.x2 = r->x1; fonte.y2 = r->y1;
     destino.x = r->x0; destino.y = r->y0;
     if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
-    sDev->Resolve(D3DRESOLVE_DEPTHSTENCIL, &fonte, z->tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+    sDev->Resolve(D3DRESOLVE_DEPTHSTENCIL | sZFrag, &fonte, z->tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
 }
 
 /* a textura de profundidade de um alvo e o cabeçalho que a lê como cor (na gravação: o XG, sem o dispositivo); 0: não coube */
@@ -2573,7 +2692,19 @@ static void prof_entrega(void) {
         sCurTex = (GsTex)-1;
         sCurDate = NULL;
         alinha80(&rz);
-        prof_tira(z, &rz);
+        if (sMsaa && (sZDono == sMsAlvo) != (sProfPosta == sMsProf)) {
+            /* (BT3_MSAA) a profundidade na EDRAM é do outro tipo (1 ou 2 amostras) que a posta: o Resolve lê a do dono */
+            if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
+            sDev->SetRenderTarget(0, sZDono == sMsAlvo ? sMsCor : sEdramCor);
+            sDev->SetDepthStencilSurface(sZDono == sMsAlvo ? sMsProf : sEdramProf);
+            prof_tira(z, &rz);
+            if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
+            sDev->SetRenderTarget(0, sCorPosta);
+            sDev->SetDepthStencilSurface(sProfPosta);
+            sMsC.zTroca++;
+        } else {
+            prof_tira(z, &rz);
+        }
         ret_une(&z->conteudo, rz.x0, rz.y0, rz.x1, rz.y1);
         sConta.zRes++;
         sConta.zResPx += (double)(rz.x1 - rz.x0) * (rz.y1 - rz.y0);
@@ -2621,6 +2752,12 @@ static void sai_da_edram(void) {
         sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sAlvoD[sResidente].tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
         ret_une(&sAlvoD[sResidente].conteudo, r.x0, r.y0, r.x1, r.y1);
         sConta.corResPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+        if (sMsaa) {
+            ms_resolveu(sResidente); /* (BT3_MSAA) */
+        }
+    }
+    if (sResidente == sMsAlvo && sMsAlvo >= 0) {
+        ms_parque(sResidente); /* (BT3_MSAA_VOLTA: sem os alvos residentes, toda saída do alvo com MSAA perde a EDRAM) */
     }
     sResidente = -1;
     sSujo.x0 = sSujo.x1 = 0;
@@ -2640,7 +2777,8 @@ static void sai_da_edram(void) {
    profundidade do Xenos têm um pitch só), por isso só alvos sem z e sem nativas vão para elas. */
 #define VAGAS_MAX 8 /* A, B e até seis pequenas */
 enum { VG_A = 0, VG_B = 1, VG_P0 = 2 };
-enum { ED_LEITURA, ED_DATE, ED_FONTE, ED_DESPEJO, ED_FIM, ED_N };
+#define VG_M VAGAS_MAX /* (BT3_MSAA) a vaga do alvo com MSAA, fora da faixa das do quadro (ed_prox a inclui) */
+enum { ED_LEITURA, ED_DATE, ED_FONTE, ED_DESPEJO, ED_FIM, ED_MSAA, ED_N };
 typedef struct Vaga {
     D3DSurface *cor; /* a superfície (A: sEdramCor) */
     int w, h;        /* em pixels de saída */
@@ -2650,13 +2788,21 @@ typedef struct Vaga {
 } Vaga;
 static int sEdRes;                       /* 1: a chave ligada e as faixas cabem */
 static int sEdSabota;                    /* BT3_EDRAM_SABOTA=1: o erro da rodada de 23/10 de volta, para ver o contador acusar */
-static Vaga sVaga[VAGAS_MAX];
+static Vaga sVaga[VAGAS_MAX + 1];
 static int sVagaN = 2;                   /* A, B e as pequenas do quadro */
 static UINT sEdPool;                     /* 3T: a base da primeira pequena */
 static signed char sVagaDe[MAX_TARGETS]; /* a vaga de cada alvo no quadro */
 static int sVagaPosta = -1;              /* a vaga da superfície posta (-1: nenhuma deste quadro ainda) */
 static unsigned sEdMarca;                /* desenhos e passadas até a entrada no alvo posto (a saída diz se ele desenhou) */
-static const char kEdMotivo[ED_N] = {'l', 'd', 's', 'b', 'f'};
+static const char kEdMotivo[ED_N] = {'l', 'd', 's', 'b', 'f', 'm'};
+/* a vaga seguinte nos laços pelas vagas do quadro: as de 0 a sVagaN - 1 e, com o alvo com MSAA no plano, a VG_M */
+static int ed_prox(int v) {
+    v++;
+    if (v >= sVagaN && v <= VG_M) {
+        v = sMsAlvo >= 0 ? VG_M : VG_M + 1;
+    }
+    return v;
+}
 /* (no trecho) */
 static struct {
     unsigned entradas, primeiras, reentradas, naB, despejos, saidas, saidasDesenho, pequenaZ, lePosta, foraVaga, semResolve;
@@ -2683,13 +2829,23 @@ static void ed_poe(int v) {
     Vaga *g = &sVaga[v];
     D3DVIEWPORT9 vp = {0, 0, (DWORD)g->w, (DWORD)g->h, 0.0f, 1.0f};
     float c[4] = {2.0f / sAreaW, 2.0f / sAreaH, 0.0f, 0.0f};
-    if (v >= VG_P0) {
+    if (v >= VG_P0 && v != VG_M) {
         c[0] = 2.0f * (float)sEscN / ((float)g->w * (float)sEscD); /* (2 / a largura da vaga em pixels do GS) */
         c[1] = 2.0f * (float)sEscN / ((float)g->h * (float)sEscD);
     }
     if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
     sDev->SetRenderTarget(0, g->cor);
-    sDev->SetDepthStencilSurface(v < VG_P0 ? sEdramProf : NULL);
+    if (v == VG_M) {
+        sDev->SetDepthStencilSurface(sMsProf); /* (BT3_MSAA: a de 2 amostras, o mesmo tipo da cor) */
+        sProfPosta = sMsProf;
+        sProfCorPosta = sMsProfCor;
+    } else {
+        sDev->SetDepthStencilSurface(v < VG_P0 ? sEdramProf : NULL);
+        if (sMsaa) {
+            sProfPosta = v < VG_P0 ? sEdramProf : NULL;
+            sProfCorPosta = sEdramProfCor;
+        }
+    }
     sDev->SetViewport(&vp);
     sDev->SetVertexShaderConstantF(14, c, 1);
     sVagaPosta = v;
@@ -2739,6 +2895,9 @@ static void ed_descarrega(int t, int motivo) {
     sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sAlvoD[t].tex, &destino, 0, 0, NULL, 0.0f, 0, NULL);
     ret_une(&sAlvoD[t].conteudo, r.x0, r.y0, r.x1, r.y1);
     sConta.corResPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+    if (sMsaa) {
+        ms_resolveu(t); /* (BT3_MSAA) */
+    }
     sEd.desc[motivo]++;
     sEd.descPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
     if (sEdTrilhaN >= 0) {
@@ -2776,7 +2935,7 @@ static void ed_sai(void) {
 static void ed_leitura(GsTex tex, int alvo) {
     CadeiaEscopo ca(-1, CA_EDRAM);
     int v;
-    for (v = 0; v < sVagaN; v++) {
+    for (v = 0; v <= VG_M; v = ed_prox(v)) {
         int t = sVaga[v].dono;
         if (t >= 0 && (GsTex)sAlvoD[t].tex == tex) {
             if (t == alvo || (sEdSabota && t == sResidente)) {
@@ -2793,7 +2952,7 @@ static void ed_leitura(GsTex tex, int alvo) {
    não pode ter sujo guardado numa vaga (a textura não teria o que a EDRAM tem). Só conta: tem de dar 0. */
 static void ed_confere(const GsDraw *d) {
     int v;
-    for (v = 0; v < sVagaN; v++) {
+    for (v = 0; v <= VG_M; v = ed_prox(v)) {
         int t = sVaga[v].dono;
         if (t < 0 || t == d->target || t == sResidente || sVaga[v].sujo.x1 <= sVaga[v].sujo.x0 || sAlvoD[t].tex == NULL) {
             continue; /* (o alvo do desenho: o sujo dele está no sSujo, e a leitura de si mesmo o gs_draw.c recusa) */
@@ -2804,10 +2963,222 @@ static void ed_confere(const GsDraw *d) {
     }
 }
 
+/* ---- (F8, BT3_MSAA, o MSAA completo; docs/x360/plano/F8/10-msaa.md, seção 9) a volta exata, o DATE adiado e as pequenas
+   sobre a profundidade. Sem a chave nada daqui roda: sMsAlvo é -1, sMsVoltaX e sMsVagasQ são 0. */
+
+/* a superfície posta de volta depois de uma troca daqui: a vaga posta (alvos residentes) ou o par posto */
+static void ms_repoe(void) {
+    D3DVIEWPORT9 vp = {0, 0, (DWORD)sAlvoW, (DWORD)sAlvoH, 0.0f, 1.0f};
+    if (sEdRes && sVagaPosta >= 0) {
+        ed_poe(sVagaPosta);
+    } else {
+        if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
+        sDev->SetRenderTarget(0, sCorPosta);
+        sDev->SetDepthStencilSurface(sProfPosta);
+        sDev->SetViewport(&vp);
+    }
+    esquece_estado();
+}
+
+/* um Resolve de cor foi para a textura do alvo t: o do alvo com MSAA marca que a EDRAM dele mudou desde o parque; o de
+   outro alvo (o mesmo alvo num quadro sem MSAA nele) tira a validade do parque dele */
+static void ms_resolveu(int t) {
+    int k;
+    if (t == sMsAlvo) {
+        sMsMudou = 1;
+        sMsTexMedia[t] = 1; /* (a textura passa a ter a média das amostras) */
+        return;
+    }
+    for (k = 0; k < MS_PARQUES; k++) {
+        if (sMsParque[k].alvo == t) {
+            sMsParque[k].alvo = -1;
+        }
+    }
+}
+
+/* o parque do alvo t que vale para r (NULL: nenhum; r NULL: qualquer um dele) */
+static MsParque *ms_parque_de(int t, const Ret *r) {
+    int k;
+    for (k = 0; k < MS_PARQUES; k++) {
+        MsParque *p = &sMsParque[k];
+        if (p->alvo == t && p->tex != NULL && p->ver == sAlvoD[t].ver &&
+            (r == NULL || (r->x0 >= p->r.x0 && r->y0 >= p->r.y0 && r->x1 <= p->r.x1 && r->y1 <= p->r.y1))) {
+            return p;
+        }
+    }
+    return NULL;
+}
+
+/* (BT3_MSAA_VOLTA) O alvo com MSAA t vai perder a EDRAM (despejado no quadro, ou no fim dele; a média dele já está na
+   textura): o conteúdo dele com as duas amostras cruas vai para um parque, pela vista de 1 amostra com o dobro das linhas
+   (a amostra de cima e a de baixo de cada pixel, as linhas 2y e 2y + 1). Sem mudança desde o último parque (a volta exata e
+   nada desenhado), nada a fazer. */
+static void ms_parque(int t) {
+    Alvo *a;
+    MsParque *p = NULL;
+    Ret r;
+    D3DRECT fonte;
+    D3DPOINT destino;
+    int k;
+    if (!sMsVoltaX || t < 0 || t != sMsAlvo) {
+        return;
+    }
+    a = &sAlvoD[t];
+    r = a->conteudo;
+    if (a->tex == NULL || r.x1 <= r.x0 || r.y1 <= r.y0) {
+        return;
+    }
+    alinha80(&r); /* (tiles inteiros: a ida e a volta pela vista crua nunca cortam um tile, como no autoteste) */
+    if (!sMsMudou && ms_parque_de(t, &r) != NULL) {
+        return; /* (a EDRAM tem o que o parque já tem) */
+    }
+    for (k = 0; k < MS_PARQUES; k++) { /* (o do alvo; senão um vazio ou vencido; senão o menos usado) */
+        MsParque *q = &sMsParque[k];
+        int vago;
+        if (q->tex == NULL) {
+            continue;
+        }
+        if (q->alvo == t) {
+            p = q;
+            break;
+        }
+        vago = q->alvo < 0 || q->ver != sAlvoD[q->alvo].ver;
+        if (p == NULL || (vago && !(p->alvo < 0 || p->ver != sAlvoD[p->alvo].ver)) || (vago == (p->alvo < 0 || p->ver !=
+            sAlvoD[p->alvo].ver) && q->uso < p->uso)) {
+            p = q;
+        }
+    }
+    if (p == NULL) {
+        return;
+    }
+    tempo_poe(T_COR_RES);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
+    sDev->SetTexture(0, NULL); /* (o parque, destino do Resolve, pode estar no estágio desde a volta) */
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
+    sDev->SetTexture(1, NULL);
+    sCurTex = (GsTex)-1;
+    sCurDate = NULL;
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
+    sDev->SetRenderTarget(0, sMsCru);
+    sDev->SetDepthStencilSurface(NULL);
+    fonte.x1 = r.x0; fonte.y1 = 2 * r.y0; fonte.x2 = r.x1; fonte.y2 = 2 * r.y1;
+    destino.x = r.x0; destino.y = 2 * r.y0;
+    if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
+    sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, &p->tex->cab, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+    p->alvo = t;
+    p->ver = a->ver;
+    p->r = r;
+    p->uso = ++sMsUso;
+    p->media = sMsConteudoMedia;
+    sMsMudou = 0;
+    sMsC.parques++;
+    sMsC.parquePx += 2.0 * (double)(r.x1 - r.x0) * (r.y1 - r.y0);
+    if (sEdTrilhaN >= 0) {
+        char b[16];
+        _snprintf(b, sizeof(b) - 1, "^%dk ", t);
+        b[sizeof(b) - 1] = '\0';
+        ed_trilha(b);
+    }
+    ms_repoe();
+}
+
+/* (BT3_MSAA_VOLTA) A volta exata de r do alvo com MSAA t, já posto e limpo: as amostras cruas do parque, pela vista de 1
+   amostra, no retângulo inteiro que o parque guardou (tiles inteiros, como o autoteste prova; fora de r ele tem o que a
+   limpeza da entrada dava). 0: sem parque que valha para r (a volta fica pela média, a de antes, contada). */
+static int ms_volta(int t, const Ret *r) {
+    D3DVIEWPORT9 vp = {0, 0, (DWORD)sAlvoW, (DWORD)(2 * sAlvoH), 0.0f, 1.0f};
+    float W = (float)sAlvoW, H = (float)sAlvoH;
+    MsParque *p;
+    if (!sMsVoltaX || (p = ms_parque_de(t, r)) == NULL) {
+        return 0;
+    }
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
+    sDev->SetRenderTarget(0, sMsCru);
+    sDev->SetDepthStencilSurface(NULL);
+    sDev->SetViewport(&vp);
+    copia(&p->tex->cab, sAlvoW, 2 * sAlvoH, (float)p->r.x0, 2.0f * p->r.y0, (float)p->r.x1, 2.0f * p->r.y1, p->r.x0 / W,
+          p->r.y0 / H, p->r.x1 / W, p->r.y1 / H, 0);
+    if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
+    sDev->SetTexture(0, NULL); /* (o parque é destino do próximo Resolve dele) */
+    sCurTex = (GsTex)-1;
+    p->uso = ++sMsUso;
+    sMsUltMedia = p->media;
+    ms_repoe();
+    return 1;
+}
+
+/* (BT3_MSAA_VOLTA) O marcador de DATE n do alvo com MSAA chegou com ele fora da EDRAM posta: a cópia do alfa espera a
+   entrada nele (nada desenha nele antes dela) e sai do fragmento 0 da EDRAM, como a do alvo posto, no lugar da textura com a
+   média. Chamada no fim da entrada. */
+static void ms_date_adiado(int i) {
+    int n = sMsDatePend;
+    Ret r = sSujo;
+    if (n < 0 || i != sMsAlvo) {
+        return;
+    }
+    sMsDatePend = -1;
+    ret_une(&r, sAlvoD[i].conteudo.x0, sAlvoD[i].conteudo.y0, sAlvoD[i].conteudo.x1, sAlvoD[i].conteudo.y1);
+    if (r.x1 > r.x0 && sDate != NULL && (!(sOtim & OT_DATE) || date_area((uint32_t)n, &r))) {
+        D3DRECT fonte;
+        D3DPOINT destino;
+        tempo_poe(T_DATE);
+        alinha8(&r);
+        fonte.x1 = r.x0; fonte.y1 = r.y0; fonte.x2 = r.x1; fonte.y2 = r.y1;
+        destino.x = r.x0; destino.y = r.y0;
+        if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
+        sDev->SetTexture(1, NULL); /* (o destino do Resolve não pode estar em uso) */
+        sCurDate = NULL;
+        if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
+        sDev->Resolve(D3DRESOLVE_RENDERTARGET0 | D3DRESOLVE_FRAGMENT0, &fonte, sDate, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+        sConta.dateRes++;
+        sMsC.date++;
+        sMsC.dateVolta += sMsVolta;
+        sMsC.dateMedia += sMsVoltaMedia;
+        sMsC.dateAdia++;
+    }
+    sDateFonte = sDate;
+}
+
+/* (BT3_MSAA_VAGAS) Uma pequena vai entrar em cima da profundidade que está na EDRAM: ela vai para a textura do dono
+   (prof_entrega, com as superfícies dele postas) e a posse acaba; quem a usar de novo a restaura. */
+static void ms_z_sai(void) {
+    int dono = sZDono;
+    if (dono < 0) {
+        return;
+    }
+    if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
+    sCorPosta = dono == sMsAlvo ? sMsCor : sEdramCor;
+    sProfPosta = dono == sMsAlvo ? sMsProf : sEdramProf;
+    sProfCorPosta = dono == sMsAlvo ? sMsProfCor : sEdramProfCor;
+    sDev->SetRenderTarget(0, sCorPosta);
+    sDev->SetDepthStencilSurface(sProfPosta);
+    prof_entrega();
+    sMsC.zSai++;
+    if (sEdTrilhaN >= 0) {
+        char b[16];
+        _snprintf(b, sizeof(b) - 1, "^%dz ", dono);
+        b[sizeof(b) - 1] = '\0';
+        ed_trilha(b);
+    }
+}
+
+/* (BT3_MSAA_VAGAS) A profundidade vai ser limpa ou restaurada por cima das pequenas que moram nela: o sujo delas vai para
+   as texturas e elas saem das vagas (a próxima entrada de cada uma é com a volta). */
+static void ms_pequenas_sai(void) {
+    int v;
+    for (v = VG_P0; v < sVagaN; v++) {
+        if (sVaga[v].dono >= 0 && sVaga[v].base < sMsZFim) {
+            ed_descarrega(sVaga[v].dono, ED_MSAA);
+            sVaga[v].dono = -1;
+            sMsC.pequenaSai++;
+        }
+    }
+}
+
 /* A entrada do alvo i pela vaga dele (entra_na_edram com a chave) */
 static void entra_res(int i, int usaZ) {
     Alvo *a = &sAlvoD[i];
-    int v = sVagaDe[i], poeZ = 0, nova;
+    int v = sVagaDe[i], poeZ = 0, nova, exata = 0;
     DWORD limpa = D3DCLEAR_TARGET;
     Vaga *g = &sVaga[v];
     ed_sai();
@@ -2820,10 +3191,31 @@ static void entra_res(int i, int usaZ) {
         g->dono = -1;
         sEd.despejos++;
     }
+    if (sMsAlvo >= 0) {
+        /* (BT3_MSAA) a cor de 2 amostras (M) cobre os tiles de A e de B: quem entra numa despeja o que a outra tem */
+        int k;
+        if (v == VG_M) {
+            for (k = VG_A; k <= VG_B; k++) {
+                if (sVaga[k].dono >= 0) {
+                    ed_descarrega(sVaga[k].dono, ED_MSAA);
+                    sVaga[k].dono = -1;
+                    sMsC.despejaAB++;
+                }
+            }
+        } else if (v < VG_P0 && sVaga[VG_M].dono >= 0) {
+            ed_descarrega(sVaga[VG_M].dono, ED_MSAA);
+            ms_parque(sVaga[VG_M].dono); /* (BT3_MSAA_VOLTA) */
+            sVaga[VG_M].dono = -1;
+            sMsC.despejaM++;
+        }
+        if (sMsVagasQ && v >= VG_P0 && v != VG_M && sVaga[v].base < sMsZFim && sZDono >= 0) {
+            ms_z_sai(); /* (BT3_MSAA_VAGAS) a pequena mora em cima da profundidade: ela sai antes */
+        }
+    }
     nova = g->dono != i;
     tempo_poe(T_COR_ENTRA);
     ed_poe(v);
-    if (usaZ && v >= VG_P0) {
+    if (usaZ && v >= VG_P0 && v != VG_M) {
         sEd.pequenaZ++; /* (o plano não deixa; contado) */
         usaZ = 0;
     }
@@ -2833,6 +3225,9 @@ static void entra_res(int i, int usaZ) {
         if (sZDono == i) {
             sConta.zMantida++;
         } else {
+            if (sMsVagasQ) {
+                ms_pequenas_sai(); /* (BT3_MSAA_VAGAS) a profundidade vai ser limpa e restaurada por cima delas */
+            }
             prof_entrega();
             limpa |= D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL;
             poeZ = 1;
@@ -2858,8 +3253,13 @@ static void entra_res(int i, int usaZ) {
         if (nova && a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
             Ret r = a->conteudo;
             tempo_poe(T_COR_VOLTA);
-            copia(a->tex, g->w, g->h, (float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1, (float)r.x0 / sAlvoW,
-                  (float)r.y0 / sAlvoH, (float)r.x1 / sAlvoW, (float)r.y1 / sAlvoH, 0);
+            if (v == VG_M) {
+                exata = ms_volta(i, &r); /* (BT3_MSAA_VOLTA: as amostras cruas do parque; sem ele, a média, como antes) */
+            }
+            if (!exata) {
+                copia(a->tex, g->w, g->h, (float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1, (float)r.x0 / sAlvoW,
+                      (float)r.y0 / sAlvoH, (float)r.x1 / sAlvoW, (float)r.y1 / sAlvoH, 0);
+            }
             sConta.restauros++;
             sConta.corRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
             if (r.x1 > g->w || r.y1 > g->h) {
@@ -2871,14 +3271,30 @@ static void entra_res(int i, int usaZ) {
             Ret r = sProfD[i].conteudo;
             QueryPerformanceCounter(&t);
             tempo_poe(T_PROF);
-            prof_poe(&sProfD[i], &r, sModoZ);
+            prof_poe(&sProfD[i], &r, v == VG_M ? sMsModoZ : sModoZ);
             sConta.zRest++;
             sConta.zRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
             sConta.msZQuadro += ms_desde(&t);
+            sMsC.zRest += v == VG_M;
         }
     }
     if (poeZ) {
         sZDono = i;
+    }
+    if (v == VG_M) {
+        sMsC.entradas++;
+        if (nova && sQ->targets[i].cleared && a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
+            sMsVolta = 1; /* (o que a EDRAM tem dele agora veio da saída anterior: o parque, ou a média dela) */
+            sMsC.voltas++;
+            sMsC.voltaExata += exata;
+            sMsConteudoMedia = exata ? sMsUltMedia : sMsTexMedia[i]; /* (pela textura: a média, se ela a tiver) */
+            sMsVoltaMedia |= sMsConteudoMedia;
+            sMsMudou = !exata; /* (pela textura: a EDRAM não é o que o parque tem) */
+        } else if (nova) {
+            sMsMudou = 0; /* (sem conteúdo: o que for desenhado passa por um Resolve, que marca) */
+            sMsConteudoMedia = 0;
+            sMsTexMedia[i] = 0;
+        }
     }
     esquece_estado();
     if (nova) {
@@ -2895,10 +3311,13 @@ static void entra_res(int i, int usaZ) {
     sEd.naB += v == VG_B;
     if (sEdTrilhaN >= 0) {
         char b[16];
-        _snprintf(b, sizeof(b) - 1, "%d%c%s%s ", i, v == VG_A ? 'A' : v == VG_B ? 'B' : 'p', nova ? "+" : "",
-                  !usaZ ? "" : poeZ ? "z" : "Z");
+        _snprintf(b, sizeof(b) - 1, "%d%c%s%s%s ", i, v == VG_A ? 'A' : v == VG_B ? 'B' : v == VG_M ? 'M' : 'p', nova ? "+" : "",
+                  exata ? "x" : "", !usaZ ? "" : poeZ ? "z" : "Z");
         b[sizeof(b) - 1] = '\0';
         ed_trilha(b);
+    }
+    if (sMsDatePend >= 0) {
+        ms_date_adiado(i); /* (BT3_MSAA_VOLTA) */
     }
 }
 
@@ -2913,8 +3332,8 @@ static void ed_plano(const GsQuadro *q) {
     static Ret ext[MAX_TARGETS];
     static int cacheW[VAGAS_MAX], cacheH[VAGAS_MAX];
     static UINT cacheBase[VAGAS_MAX];
-    int cur = -1, t, i, A = -1, m = 0, nTilesP = 0, nP = 0;
-    UINT base = sEdPool;
+    int cur = -1, t, i, A = -1, m = 0, nTilesP = 0, nP = 0, msv;
+    UINT base = sEdPool, base0;
     uint32_t n;
     memset(ent, 0, sizeof(ent));
     memset(grande, 0, sizeof(grande));
@@ -2951,18 +3370,35 @@ static void ed_plano(const GsQuadro *q) {
             ret_une(&ext[t], 0, 0, esc_px(x1, sEscN, sEscD), esc_px(y1, sEscN, sEscD));
         }
     }
+    /* (BT3_MSAA_VAGAS) com o alvo com MSAA no quadro: A só para quem precisa da vaga grande e as pequenas sobre a
+       profundidade, do fim da cor de 2 amostras em diante */
+    msv = sMsVagas && sMsAlvo >= 0 && sMsAlvo < q->targetCount && sMsAlvo < MAX_TARGETS && ent[sMsAlvo] > 0;
     for (t = 0; t < q->targetCount && t < MAX_TARGETS; t++) {
         const Ret *c = &sAlvoD[t].conteudo;
         sVagaDe[t] = VG_B;
         if (q->targets[t].cleared && c->x1 > c->x0) {
             ret_une(&ext[t], 0, 0, c->x1, c->y1);
         }
-        if (ent[t] > 0 && (A < 0 || ent[t] > ent[A])) {
+        if (ent[t] > 0 && t != sMsAlvo && (!msv || grande[t]) && (A < 0 || ent[t] > ent[A])) {
             A = t;
         }
     }
+    sMsVagasQ = msv;
+    if (msv) {
+        base = sMsTilesCor;
+    }
+    base0 = base;
     if (A >= 0) {
         sVagaDe[A] = VG_A;
+    }
+    if (sMsAlvo >= 0) {
+        /* (BT3_MSAA) o alvo com MSAA na vaga M; sem entrada neste quadro, nenhum (contado) */
+        if (sMsAlvo < q->targetCount && sMsAlvo < MAX_TARGETS && ent[sMsAlvo] > 0) {
+            sVagaDe[sMsAlvo] = VG_M;
+        } else {
+            sMsC.semAlvo++;
+            sMsAlvo = -1;
+        }
     }
     sVagaN = VG_P0;
     for (;;) { /* (as pequenas, o que mais entra primeiro) */
@@ -3019,9 +3455,11 @@ static void ed_plano(const GsQuadro *q) {
         sVaga[i].dono = -1;
         sVaga[i].sujo.x0 = sVaga[i].sujo.x1 = 0;
     }
+    sVaga[VG_M].dono = -1;
+    sVaga[VG_M].sujo.x0 = sVaga[VG_M].sujo.x1 = 0;
     sVagaPosta = -1;
-    if ((unsigned)(3 * sVaga[VG_A].tiles + nTilesP) > sEd.tilesMax) {
-        sEd.tilesMax = 3 * sVaga[VG_A].tiles + nTilesP;
+    if ((unsigned)(base0 + nTilesP) > sEd.tilesMax) { /* (sem BT3_MSAA, base0 é sEdPool, 3T: a conta de antes) */
+        sEd.tilesMax = base0 + nTilesP;
     }
     if ((unsigned)nP > sEd.pequenasMax) {
         sEd.pequenasMax = (unsigned)nP;
@@ -3033,7 +3471,9 @@ static void ed_plano(const GsQuadro *q) {
         if (ent[t] == 0 || t == A) {
             continue;
         }
-        if (sVagaDe[t] >= VG_P0) {
+        if (sVagaDe[t] == VG_M) {
+            k = _snprintf(sEdPlano + m, sizeof(sEdPlano) - m - 1, "; M alvo %d (%d entradas, 2 amostras)", t, ent[t]);
+        } else if (sVagaDe[t] >= VG_P0) {
             k = _snprintf(sEdPlano + m, sizeof(sEdPlano) - m - 1, "; pequena alvo %d %dx%d (%u tiles, %d entradas)", t,
                           sVaga[sVagaDe[t]].w, sVaga[sVagaDe[t]].h, sVaga[sVagaDe[t]].tiles, ent[t]);
         } else {
@@ -3058,9 +3498,12 @@ static void ed_plano(const GsQuadro *q) {
 static void ed_fim(void) {
     int v;
     ed_sai();
-    for (v = 0; v < sVagaN; v++) {
+    for (v = 0; v <= VG_M; v = ed_prox(v)) {
         if (sVaga[v].dono >= 0) {
             ed_descarrega(sVaga[v].dono, ED_FIM);
+            if (v == VG_M) {
+                ms_parque(sVaga[v].dono); /* (BT3_MSAA_VOLTA: para a próxima volta dele, num quadro seguinte) */
+            }
             sVaga[v].dono = -1;
         }
     }
@@ -3078,8 +3521,23 @@ static void ed_fim(void) {
    em que cada entrada zera a profundidade) ou quando A, a profundidade e B não cabem (a escala 2) */
 static void ed_init(UINT tilesCor) {
     D3DSURFACE_PARAMETERS sp;
+    UINT baseB = 2 * tilesCor;
     if (env_num("BT3_EDRAM_RESIDENTE", 1) == 0) { /* ligada por padrão desde a rodada de 23/10 (a imagem igual, 3,35 ms) */
         return;
+    }
+    if (sProfBase != tilesCor) {
+        baseB = tilesCor; /* (BT3_MSAA pedida e recusada no msaa_init: a profundidade ficou em 2T, B vai para T) */
+    }
+    if (sMsaa == 1) {
+        /* (BT3_MSAA) A na base 0 e B logo depois, as duas dentro dos tiles da cor de 2 amostras (M); a profundidade de 1 e
+           de 2 amostras depois de M; as pequenas depois da de 2 amostras */
+        if (2 * tilesCor > sMsTilesCor || sMsTilesCor + sMsTilesProf > EDRAM_TILES) {
+            Diario_Escrever("gs_d3d: BT3_EDRAM_RESIDENTE=1 recusada com BT3_MSAA=2: A e B (%u tiles cada) não cabem na cor de 2 "
+                            "amostras (%u) ou ela e a profundidade passam dos %u; fica o caminho de antes", tilesCor,
+                            sMsTilesCor, (unsigned)EDRAM_TILES);
+            return;
+        }
+        baseB = tilesCor;
     }
     if (sModoZ == 0) {
         Diario_Escrever("gs_d3d: BT3_EDRAM_RESIDENTE=1 recusada: a profundidade por alvo está desligada (BT3_Z=0 ou o autoteste); "
@@ -3092,7 +3550,7 @@ static void ed_init(UINT tilesCor) {
         return;
     }
     memset(&sp, 0, sizeof(sp));
-    sp.Base = 2 * tilesCor;
+    sp.Base = baseB;
     if (FAILED(sDev->CreateRenderTarget(sAlvoW, sAlvoH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &sVaga[VG_B].cor, &sp))) {
         Diario_Escrever("gs_d3d: ERRO: BT3_EDRAM_RESIDENTE=1: a vaga B não foi criada; fica o caminho de antes");
         sVaga[VG_B].cor = NULL;
@@ -3100,12 +3558,33 @@ static void ed_init(UINT tilesCor) {
     }
     sVaga[VG_A].cor = sEdramCor;
     sVaga[VG_A].base = 0;
-    sVaga[VG_B].base = 2 * tilesCor;
+    sVaga[VG_B].base = baseB;
     sVaga[VG_A].w = sVaga[VG_B].w = sAlvoW;
     sVaga[VG_A].h = sVaga[VG_B].h = sAlvoH;
     sVaga[VG_A].tiles = sVaga[VG_B].tiles = tilesCor;
     sVaga[VG_A].dono = sVaga[VG_B].dono = -1;
     sEdPool = 3 * tilesCor;
+    if (sMsaa == 1) {
+        sVaga[VG_M].cor = sMsCor;
+        sVaga[VG_M].base = 0;
+        sVaga[VG_M].w = sAlvoW;
+        sVaga[VG_M].h = sAlvoH;
+        sVaga[VG_M].tiles = sMsTilesCor;
+        sVaga[VG_M].dono = -1;
+        sEdPool = sMsTilesCor + sMsTilesProf;
+        sMsZFim = sMsTilesCor + sMsTilesProf;
+        Diario_Escrever("gs_d3d: EDRAM residente com BT3_MSAA=2: M (a cor de 2 amostras) na base 0 com %u tiles, A na base 0 e B "
+                        "na base %u dentro dela (quem entra numa despeja a outra), a profundidade de 1 e de 2 amostras na base "
+                        "%u, as pequenas de %u a %u (%u tiles)", sMsTilesCor, baseB, sMsTilesCor,
+                        sMsVagas ? sMsTilesCor : sEdPool, (unsigned)EDRAM_TILES,
+                        (unsigned)EDRAM_TILES - (sMsVagas ? sMsTilesCor : sEdPool));
+        if (sMsVagas) {
+            Diario_Escrever("gs_d3d: BT3_MSAA_VAGAS=1: nos quadros com o alvo com MSAA, as pequenas moram sobre a profundidade "
+                            "(de %u a %u) e A fica só para quem precisa da vaga grande; a pequena que entra com a profundidade na "
+                            "EDRAM a manda para a textura do dono, e a profundidade que volta despeja as pequenas de cima dela",
+                            sMsTilesCor, sMsZFim);
+        }
+    }
     sEdRes = 1;
     sEdSabota = env_num("BT3_EDRAM_SABOTA", 0) != 0;
     if (sEdSabota) {
@@ -3114,7 +3593,7 @@ static void ed_init(UINT tilesCor) {
     }
     Diario_Escrever("gs_d3d: EDRAM residente (BT3_EDRAM_RESIDENTE=1): A na base 0, a profundidade na base %u e B na base %u, "
                     "%dx%d e %u tiles cada; as pequenas de %u a %u (%u tiles), até %d por quadro",
-                    tilesCor, 2 * tilesCor, sAlvoW, sAlvoH, tilesCor, sEdPool, (unsigned)EDRAM_TILES,
+                    sProfBase, baseB, sAlvoW, sAlvoH, tilesCor, sEdPool, (unsigned)EDRAM_TILES,
                     (unsigned)EDRAM_TILES - sEdPool, VAGAS_MAX - VG_P0);
 }
 
@@ -3145,10 +3624,40 @@ static void ed_log(unsigned t) {
     if (sEdTrilhaOk) {
         Diario_Escrever("gs_d3d:   EDRAM residente, sequência do quadro %u (alvo e vaga A, B ou p; + com limpeza e volta; z com a "
                         "profundidade restaurada, Z mantida; ^alvo e motivo: os Resolves, l leitura, d DATE, s saída da fonte do "
-                        "DATE, b despejo da B, f fim): %s", sEdTrilhaQ, sEdTrilha);
+                        "DATE, b despejo da B, f fim%s): %s", sEdTrilhaQ,
+                        sMsaa ? "; com o MSAA, M a vaga dele, m despejo por ela, k o parque das amostras, z a profundidade que "
+                        "sai para uma pequena, x a volta exata" : "", sEdTrilha);
     }
     memset(&sEd, 0, sizeof(sEd));
     sEdTrilhaOk = 0;
+}
+
+/* (BT3_MSAA, no log do trecho) os contadores do protótipo, por quadro */
+static void ms_log(void) {
+    double q = sMsC.quadros != 0 ? (double)sMsC.quadros : 1.0;
+    if (sMsaa != 1) {
+        return;
+    }
+    Diario_Escrever("gs_d3d:   MSAA 2x, por quadro: %.2f entradas no alvo com MSAA (%.2f com a volta, que traz a saída anterior: "
+                    "%.2f exatas, pelo parque, e as outras pela média); com os alvos residentes, %.2f despejos de A ou B ao "
+                    "entrar nele e %.2f dele ao entrar em A ou B; DATE nele %.2f pelo fragmento 0 (%.2f depois de uma volta, "
+                    "%.2f depois de uma pela média; %.2f esperaram a entrada nele) e %.2f pela textura (com a média); cópias dos "
+                    "ids %.2f pelo fragmento 0 (%.2f depois de uma volta, %.2f depois de uma pela média); a profundidade dele "
+                    "restaurada %.2f (modo %d), Resolves da profundidade com a superfície trocada %.2f; no trecho, %u de %u "
+                    "quadros sem o alvo com MSAA (sem o fbp ou sem entrada nele: o quadro todo sem MSAA); o do último quadro, "
+                    "alvo %d",
+                    sMsC.entradas / q, sMsC.voltas / q, sMsC.voltaExata / q, sMsC.despejaAB / q, sMsC.despejaM / q,
+                    sMsC.date / q, sMsC.dateVolta / q, sMsC.dateMedia / q, sMsC.dateAdia / q, sMsC.dateTex / q, sMsC.ids / q,
+                    sMsC.idsVolta / q, sMsC.idsMedia / q, sMsC.zRest / q, sMsModoZ, sMsC.zTroca / q, sMsC.semAlvo,
+                    sMsC.quadros, sMsAlvo);
+    Diario_Escrever("gs_d3d:   MSAA 2x, o completo, por quadro: a volta exata (BT3_MSAA_VOLTA=%d) com %.2f parques (%.0f mil "
+                    "amostras); as vagas (BT3_MSAA_VAGAS=%d): a profundidade saiu %.2f vezes para uma pequena entrar e %.2f "
+                    "pequenas saíram para ela voltar; o contorno (BT3_MSAA_CONTORNO=%d): %.2f cópias dos ids do fragmento 1, "
+                    "%.2f contornos por amostra; %.1f desenhos de arte 2D sem MSAA (BT3_MSAA_2D=%d); %.1f desenhos com o alfa "
+                    "para cobertura (BT3_MSAA_A2C=%d)",
+                    sMsVoltaX, sMsC.parques / q, sMsC.parquePx / q / 1000.0, sMsVagas, sMsC.zSai / q, sMsC.pequenaSai / q,
+                    sMsContorno, sMsC.ids1 / q, sMsC.contorno2 / q, sMsC.des2d / q, sMs2d, sMsC.a2c / q, sMsA2c);
+    memset(&sMsC, 0, sizeof(sMsC));
 }
 
 /* Põe o alvo i na EDRAM: limpa a cor (0) e, se ele já tinha conteúdo, desenha a textura dele de volta por cima.
@@ -3160,7 +3669,7 @@ static void entra_na_edram(int i, int usaZ) {
     Alvo *a = &sAlvoD[i];
     D3DVIEWPORT9 vp = {0, 0, sAlvoW, sAlvoH, 0.0f, 1.0f};
     DWORD limpa = D3DCLEAR_TARGET;
-    int poeZ = 0;
+    int poeZ = 0, ms = i == sMsAlvo, exata = 0; /* (BT3_MSAA: sem a chave, sMsAlvo é sempre -1) */
     if (sEdRes) {
         entra_res(i, usaZ); /* (720p, BT3_EDRAM_RESIDENTE) */
         return;
@@ -3185,8 +3694,18 @@ static void entra_na_edram(int i, int usaZ) {
     }
     tempo_poe(T_COR_ENTRA);
     if (sComumGpu && sTempo.quadro) sComumApi[C_ALVO]++;
-    sDev->SetRenderTarget(0, sEdramCor);
-    sDev->SetDepthStencilSurface(sEdramProf);
+    sDev->SetRenderTarget(0, ms ? sMsCor : sEdramCor); /* (BT3_MSAA: o alvo com MSAA nas de 2 amostras) */
+    sDev->SetDepthStencilSurface(ms ? sMsProf : sEdramProf);
+    if (sMsaa) {
+        sCorPosta = ms ? sMsCor : sEdramCor;
+        sProfPosta = ms ? sMsProf : sEdramProf;
+        sProfCorPosta = ms ? sMsProfCor : sEdramProfCor;
+        sMsC.entradas += ms;
+        if (ms && sQ->targets[i].cleared && a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
+            sMsVolta = 1;
+            sMsC.voltas++;
+        }
+    }
     sDev->SetViewport(&vp);
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
@@ -3202,8 +3721,13 @@ static void entra_na_edram(int i, int usaZ) {
         if (a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL) {
             Ret r = a->conteudo;
             tempo_poe(T_COR_VOLTA); /* (720p, etapa 2: a volta da cor separada da limpeza na medição) */
-            copia(a->tex, sAlvoW, sAlvoH, (float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1, (float)r.x0 / sAlvoW,
-                  (float)r.y0 / sAlvoH, (float)r.x1 / sAlvoW, (float)r.y1 / sAlvoH, 0);
+            if (ms) {
+                exata = ms_volta(i, &r); /* (BT3_MSAA_VOLTA: as amostras cruas do parque; sem ele, a média, como antes) */
+            }
+            if (!exata) {
+                copia(a->tex, sAlvoW, sAlvoH, (float)r.x0, (float)r.y0, (float)r.x1, (float)r.y1, (float)r.x0 / sAlvoW,
+                      (float)r.y0 / sAlvoH, (float)r.x1 / sAlvoW, (float)r.y1 / sAlvoH, 0);
+            }
             sConta.restauros++;
             sConta.corRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
         }
@@ -3212,8 +3736,9 @@ static void entra_na_edram(int i, int usaZ) {
             Ret r = sProfD[i].conteudo;
             QueryPerformanceCounter(&t);
             tempo_poe(T_PROF);
-            prof_poe(&sProfD[i], &r, sModoZ);
+            prof_poe(&sProfD[i], &r, ms ? sMsModoZ : sModoZ);
             sConta.zRest++;
+            sMsC.zRest += ms;
             sConta.zRestPx += (double)(r.x1 - r.x0) * (r.y1 - r.y0);
             sConta.msZQuadro += ms_desde(&t);
         }
@@ -3221,10 +3746,24 @@ static void entra_na_edram(int i, int usaZ) {
     if (poeZ) {
         sZDono = i;
     }
+    if (ms) {
+        /* (BT3_MSAA) a volta deste alvo: pelo parque (exata) ou pela média; sem conteúdo, nada a guardar ainda */
+        int volta = sQ->targets[i].cleared && a->conteudo.x1 > a->conteudo.x0 && a->tex != NULL;
+        sMsC.voltaExata += exata;
+        sMsConteudoMedia = !volta ? 0 : exata ? sMsUltMedia : sMsTexMedia[i];
+        sMsVoltaMedia |= sMsConteudoMedia;
+        sMsMudou = volta && !exata;
+        if (!volta) {
+            sMsTexMedia[i] = 0;
+        }
+    }
     esquece_estado();
     sResidente = i;
     sSujo.x0 = sSujo.x1 = 0;
     sConta.trocas++;
+    if (sMsDatePend >= 0) {
+        ms_date_adiado(i); /* (BT3_MSAA_VOLTA) */
+    }
 }
 
 /* ---- profundidade: o autoteste do boot (F5, etapa 7) -------------------------------------------------------- */
@@ -3416,8 +3955,8 @@ static unsigned env_num(const char *nome, unsigned padrao) {
 }
 
 /* (F5, etapa 8, 720p, etapas 2 e 3) A área dos alvos (BT3_ALVO_AREA=LxA, pixels do GS) e a escala (BT3_ESCALA: 1, 1.5 ou
-   2; na retomada também 1.25, 1.33 e 1.6, com a área em que a escala dá inteiro: 640x512, 648x456 e 640x460), pelas regras
-   do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
+   2; na retomada também 1.25, 1.33 e 1.6, com a área em que a escala dá inteiro: 640x512, 648x456 e 640x460; na F8 a 1.4,
+   com 640x480, docs/x360/plano/F8/09-escala.md), pelas regras do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
    diz o motivo e fica no padrão (a escala em 1: uma área que não cabe na EDRAM na escala pedida, e a de 1024 x 1024 com
    qualquer escala maior que 1). Um desenho além da área é cortado e contado (corte_conta), nunca desenhado num alvo
    maior: o par da EDRAM e as texturas têm um tamanho só. No começo do init, antes de qualquer alvo. */
@@ -3434,7 +3973,7 @@ static void area_init(void) {
         e = "1.33";
     }
     if (e != NULL && *e != '\0' && !esc_le_escala(e, &num, &den)) {
-        Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.5, 1.6 ou 2); fica 1", e);
+        Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.4, 1.5, 1.6 ou 2); fica 1", e);
         num = den = 1;
     }
     if (a != NULL && *a != '\0') {
@@ -3713,6 +4252,364 @@ static void tempo_init(void) {
     gGsD3dEtapa = "antes do primeiro quadro";
 }
 
+/* (F8, BT3_MSAA=2) a conta da EDRAM, antes de criar a profundidade de 1 amostra: a cor de 2 amostras na base 0 e a
+   profundidade de 2 amostras logo depois têm de caber nos 2.048 tiles; cabendo, a de 1 amostra muda para a mesma base da
+   de 2 (as duas nunca valem ao mesmo tempo: a posse é uma só, sZDono). Devolve a base da profundidade de 1 amostra. */
+static UINT msaa_base(UINT tilesCor) {
+    unsigned pedido = env_num("BT3_MSAA", 0);
+    if (pedido == 0) {
+        return tilesCor;
+    }
+    if (pedido != 2) {
+        Diario_Escrever("gs_d3d: BT3_MSAA=%u recusada (só 2); fica sem MSAA", pedido);
+        return tilesCor;
+    }
+    sMsTilesCor = XGSurfaceSize(sAlvoW, sAlvoH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_2_SAMPLES);
+    sMsTilesProf = XGSurfaceSize(sAlvoW, sAlvoH, D3DFMT_D24S8, D3DMULTISAMPLE_2_SAMPLES);
+    if (sMsTilesCor + sMsTilesProf > EDRAM_TILES) {
+        Diario_Escrever("gs_d3d: BT3_MSAA=2 recusada: a cor e a profundidade de 2 amostras de %dx%d são %u + %u tiles, mais que "
+                        "os %u da EDRAM; fica sem MSAA", sAlvoW, sAlvoH, sMsTilesCor, sMsTilesProf, (unsigned)EDRAM_TILES);
+        return tilesCor;
+    }
+    sMsaa = 2;
+    return sMsTilesCor;
+}
+
+/* o autoteste da profundidade (prof_autoteste) nas superfícies de 2 amostras, com os Resolves da profundidade pelo
+   fragmento frag (0 ou D3DRESOLVE_FRAGMENT1): devolve o modo que ele escolheria, sem mexer no de 1 amostra */
+static int ms_autoteste(DWORD frag) {
+    D3DSurface *c = sEdramCor, *p = sEdramProf, *pc = sEdramProfCor, *cp = sCorPosta, *pp = sProfPosta, *pcp = sProfCorPosta;
+    double zr = sMsZRes, zt = sMsZRest, cr = sMsCorRes, ct = sMsCorRest;
+    int modo = sModoZ, m;
+    Diario_Escrever("gs_d3d: MSAA 2x: o autoteste da profundidade de novo, nas superfícies de 2 amostras, com os Resolves da "
+                    "profundidade pelo fragmento %d (as linhas seguintes; os tempos são da cor e da profundidade de 2 "
+                    "amostras):", frag != 0 ? 1 : 0);
+    sEdramCor = sCorPosta = sMsCor;
+    sEdramProf = sProfPosta = sMsProf;
+    sEdramProfCor = sProfCorPosta = sMsProfCor;
+    sZFrag = frag;
+    prof_autoteste();
+    m = sModoZ;
+    sZFrag = 0;
+    sEdramCor = c;
+    sEdramProf = p;
+    sEdramProfCor = pc;
+    sCorPosta = cp;
+    sProfPosta = pp;
+    sProfCorPosta = pcp;
+    sModoZ = modo;
+    sMsZRes = zr;
+    sMsZRest = zt;
+    sMsCorRes = cr;
+    sMsCorRest = ct;
+    return m;
+}
+
+/* ---- (F8, BT3_MSAA, o MSAA completo) o autoteste das amostras --------------------------------------------------- */
+
+/* quantas palavras de duas texturas do XG do tamanho do alvo são iguais (quem chama parou a GPU) */
+static unsigned ms_iguais(const TexXg *a, const TexXg *b, unsigned *total) {
+    unsigned n = a->pitch / 4 * (unsigned)sAlvoH, k, c = 0;
+    for (k = 0; k < n; k++) {
+        c += ((const unsigned *)a->dados)[k] == ((const unsigned *)b->dados)[k];
+    }
+    *total = n;
+    return c;
+}
+static void ms_poe(D3DSurface *c, int h) {
+    D3DVIEWPORT9 vp = {0, 0, (DWORD)sAlvoW, (DWORD)h, 0.0f, 1.0f};
+    sDev->SetRenderTarget(0, c);
+    sDev->SetDepthStencilSurface(NULL);
+    sDev->SetViewport(&vp);
+}
+static void ms_resolve(DWORD frag, TexXg *t, int h) {
+    D3DRECT fonte = {0, 0, sAlvoW, h};
+    D3DPOINT destino = {0, 0};
+    sDev->SetTexture(0, NULL);
+    sDev->Resolve(D3DRESOLVE_RENDERTARGET0 | frag, &fonte, &t->cab, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+}
+static void cr_parque(void *t) { ms_resolve(0, (TexXg *)t, 2 * sAlvoH); }
+static void cr_cru(void *t) {
+    copia(&((TexXg *)t)->cab, sAlvoW, 2 * sAlvoH, 0.0f, 0.0f, (float)sAlvoW, (float)(2 * sAlvoH), 0.0f, 0.0f, 1.0f, 1.0f, 0);
+    sDev->SetTexture(0, NULL);
+}
+
+/* Antes do primeiro quadro, com a EDRAM livre: dois padrões de bits (pseudoaleatórios, um por amostra) vão para a cor de 2
+   amostras, cada um pela máscara de um bit de escrita (D3DRS_MULTISAMPLEMASK 0x1111 e 0x2222: o bit 0 e o 1 de cada pixel da
+   quadra de 2 x 2); os Resolves pelo fragmento 0 e pelo 1 têm de dar os mesmos bits de cada padrão desenhado com 1 amostra
+   (a referência): isso diz a máscara de cada fragmento. Depois a volta crua: o parque pela vista de 1 amostra com o dobro das
+   linhas (sMsCru), a cor limpa (o controle: os fragmentos têm de sair diferentes), a volta pela mesma vista e os dois
+   fragmentos de novo, que têm de ser os de antes, bit a bit. Mede também a GPU do parque e da volta crua de um alvo inteiro.
+   Devolve 1 com a volta crua exata (e sMsMascOk com a máscara achada). */
+static int ms_amostras_autoteste(void) {
+    TexXg *ref[2] = {NULL, NULL}, *fr[2] = {NULL, NULL}, *g[2] = {NULL, NULL}, *park = sMsParque[0].tex;
+    D3DTexture *pad[2] = {NULL, NULL};
+    D3DLOCKED_RECT lr;
+    unsigned x = 777u, k, j, total = 0, tc = 0, e[2][2] = {{0, 0}, {0, 0}}, ctlRef = 0, ctlFr = 0, ctlVolta = 0, cru[2] = {0, 0};
+    unsigned sabota = env_num("BT3_MSAA_SABOTA", 0); /* (1 a volta crua uma linha fora; 2 as duas máscaras iguais) */
+    int ok = 1, mapa = -1, cruOk = 0;
+    gGsD3dEtapa = "autoteste das amostras do MSAA";
+    for (k = 0; k < 2; k++) {
+        if (FAILED(sDev->CreateTexture(256, 256, 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &pad[k], NULL)) || pad[k] == NULL) {
+            pad[k] = NULL;
+            ok = 0;
+        }
+        ref[k] = xg_cria(sAlvoW, sAlvoH, D3DFMT_A8R8G8B8);
+        fr[k] = xg_cria(sAlvoW, sAlvoH, D3DFMT_A8R8G8B8);
+        g[k] = xg_cria(sAlvoW, sAlvoH, D3DFMT_A8R8G8B8);
+        ok = ok && ref[k] != NULL && fr[k] != NULL && g[k] != NULL;
+    }
+    if (!ok) {
+        Diario_Escrever("gs_d3d: ERRO: MSAA 2x: as texturas do autoteste das amostras não foram criadas");
+        goto fim;
+    }
+    for (k = 0; k < 2; k++) {
+        if (SUCCEEDED(pad[k]->LockRect(0, &lr, NULL, 0))) {
+            for (j = 0; j < 256u * (unsigned)lr.Pitch / 4; j++) {
+                x = x * 1664525u + 1013904223u;
+                ((unsigned *)lr.pBits)[j] = x ^ (x >> 16);
+            }
+            pad[k]->UnlockRect(0);
+        }
+    }
+    sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, 0xFFFFFFFFu);
+    /* 1. as referências: cada padrão com 1 amostra (a cor de 1 amostra na mesma base 0) */
+    for (k = 0; k < 2; k++) {
+        ms_poe(sEdramCor, sAlvoH);
+        copia(pad[k], sAlvoW, sAlvoH, 0.0f, 0.0f, (float)sAlvoW, (float)sAlvoH, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+        ms_resolve(0, ref[k], sAlvoH);
+    }
+    /* 2. a cor de 2 amostras com o padrão k pela máscara do bit k, e os dois fragmentos */
+    ms_poe(sMsCor, sAlvoH);
+    sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
+    sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0, 0.0f, 0);
+    for (k = 0; k < 2; k++) {
+        sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, k == 0 || (sabota & 2) ? 0x1111u : 0x2222u);
+        copia(pad[k], sAlvoW, sAlvoH, 0.0f, 0.0f, (float)sAlvoW, (float)sAlvoH, 0.0f, 0.0f, 1.0f, 1.0f, 0);
+    }
+    sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, 0xFFFFFFFFu);
+    ms_resolve(D3DRESOLVE_FRAGMENT0, fr[0], sAlvoH);
+    ms_resolve(D3DRESOLVE_FRAGMENT1, fr[1], sAlvoH);
+    /* 3. a volta crua, com o controle (a cor limpa, sem a volta) */
+    if (park != NULL && sMsCru != NULL) {
+        ms_poe(sMsCru, 2 * sAlvoH);
+        ms_resolve(0, park, 2 * sAlvoH);
+        ms_poe(sMsCor, sAlvoH);
+        sDev->Clear(0, NULL, D3DCLEAR_TARGET, 0, 0.0f, 0);
+        ms_resolve(D3DRESOLVE_FRAGMENT0, g[0], sAlvoH);
+        sDev->BlockUntilIdle();
+        ctlVolta = ms_iguais(g[0], fr[0], &tc);
+        ms_poe(sMsCru, 2 * sAlvoH);
+        if (sabota & 1) {
+            /* (a sabotagem: a volta lida uma linha da vista crua abaixo, a amostra de baixo no lugar da de cima) */
+            copia(&park->cab, sAlvoW, 2 * sAlvoH, 0.0f, 0.0f, (float)sAlvoW, (float)(2 * sAlvoH), 0.0f, 1.0f / (2 * sAlvoH),
+                  1.0f, 1.0f + 1.0f / (2 * sAlvoH), 0);
+            sDev->SetTexture(0, NULL);
+        } else {
+            cr_cru(park);
+        }
+        ms_poe(sMsCor, sAlvoH);
+        ms_resolve(D3DRESOLVE_FRAGMENT0, g[0], sAlvoH);
+        ms_resolve(D3DRESOLVE_FRAGMENT1, g[1], sAlvoH);
+    }
+    sDev->BlockUntilIdle();
+    for (j = 0; j < 2; j++) {
+        for (k = 0; k < 2; k++) {
+            e[j][k] = ms_iguais(fr[j], ref[k], &total); /* (o fragmento j contra o padrão do bit k) */
+        }
+    }
+    ctlRef = ms_iguais(ref[0], ref[1], &tc);
+    ctlFr = ms_iguais(fr[0], fr[1], &tc);
+    if (park != NULL && sMsCru != NULL) {
+        cru[0] = ms_iguais(g[0], fr[0], &tc);
+        cru[1] = ms_iguais(g[1], fr[1], &tc);
+    }
+    mapa = e[0][0] == total && e[1][1] == total ? 0 : e[0][1] == total && e[1][0] == total ? 1 : -1;
+    sMsMascOk = mapa >= 0 && ctlRef < total / 2;
+    if (mapa == 1) {
+        sMsMasc[0] = 0x2222u; /* (o bit 1 escreve o fragmento 0) */
+        sMsMasc[1] = 0x1111u;
+    }
+    cruOk = park != NULL && sMsCru != NULL && cru[0] == total && cru[1] == total && ctlVolta < total / 2 && ctlFr < total / 2;
+    if (park != NULL && sMsCru != NULL) {
+        ms_poe(sMsCru, 2 * sAlvoH);
+        sMsParqueMs = prof_cronometra(cr_parque, park, 8);
+        sMsCruMs = prof_cronometra(cr_cru, park, 8);
+    }
+    if (sabota != 0) {
+        Diario_Escrever("gs_d3d: BT3_MSAA_SABOTA=%u: o autoteste das amostras estragado de propósito (%s%s); tem de acusar ERRO",
+                        sabota, (sabota & 1) ? "a volta crua uma linha fora" : "", (sabota & 2) ? " as duas máscaras iguais" : "");
+    }
+    Diario_Escrever("gs_d3d: MSAA 2x: autoteste das amostras com %u pixels: o fragmento 0 igual ao padrão do bit 0 da máscara "
+                    "em %u e ao do bit 1 em %u, o fragmento 1 em %u e %u (as duas referências iguais entre si em %u, tem de ser "
+                    "perto de 0): %s; a volta crua (a cor de 2 amostras vista como 1 amostra de %dx%d): controle sem a volta %u "
+                    "iguais (perto de 0; os dois fragmentos iguais entre si em %u, perto de 0), depois dela o fragmento 0 %u e o "
+                    "1 %u iguais (%s); GPU por alvo inteiro: o parque %.3f ms, a volta crua %.3f ms",
+                    total, e[0][0], e[0][1], e[1][0], e[1][1], ctlRef,
+                    !sMsMascOk ? "ERRO: nenhuma máscara escreve um fragmento só" : mapa == 0 ? "a máscara 0x1111 escreve o fragmento 0 e a 0x2222 o 1" :
+                    "a máscara 0x2222 escreve o fragmento 0 e a 0x1111 o 1", sAlvoW, 2 * sAlvoH, ctlVolta, ctlFr, cru[0], cru[1],
+                    cruOk ? "exata" : park == NULL || sMsCru == NULL ? "sem a vista crua ou o parque, não testada" : "ERRO: não exata",
+                    sMsParqueMs, sMsCruMs);
+fim:
+    sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, 0xFFFFFFFFu);
+    sDev->SetTexture(0, NULL);
+    sDev->SetRenderTarget(0, sTela);
+    sDev->SetDepthStencilSurface(NULL);
+    sDev->BlockUntilIdle();
+    for (k = 0; k < 2; k++) {
+        if (pad[k] != NULL) pad[k]->Release();
+        xg_libera(ref[k] != NULL ? &ref[k]->cab : NULL); /* (a GPU parada: BlockUntilIdle) */
+        xg_libera(fr[k] != NULL ? &fr[k]->cab : NULL);
+        xg_libera(g[k] != NULL ? &g[k]->cab : NULL);
+    }
+    if (park != NULL) {
+        sMsParque[0].alvo = -1;
+    }
+    esquece_estado();
+    gGsD3dEtapa = "antes do primeiro quadro";
+    return cruOk;
+}
+
+/* (o msaa_init recusando o MSAA depois das subchaves) a vista crua e os parques soltos, as subchaves zeradas */
+static void ms_desiste(void) {
+    unsigned k;
+    sDev->BlockUntilIdle();
+    if (sMsCru != NULL) {
+        sMsCru->Release();
+        sMsCru = NULL;
+    }
+    for (k = 0; k < MS_PARQUES; k++) {
+        if (sMsParque[k].tex != NULL) {
+            sMem.vivos[CL_ALVO] -= sMsParque[k].tex->bytes;
+            sMem.nVivos[CL_ALVO]--;
+            xg_libera(&sMsParque[k].tex->cab);
+            sMsParque[k].tex = NULL;
+        }
+        sMsParque[k].alvo = -1;
+    }
+    sMsVoltaX = sMsVagas = sMsContorno = sMs2d = sMsA2c = 0;
+}
+
+/* (F8, BT3_MSAA=2; depois do autoteste da profundidade, antes do ed_init) as superfícies de 2 amostras e o modo do
+   restauro da profundidade delas: o autoteste duas vezes, pelo fragmento 0 e pelo 1 (as duas amostras têm de voltar
+   certas). Sem modo exato nas duas, sem MSAA (com o motivo). */
+static void msaa_init(void) {
+    D3DSURFACE_PARAMETERS sp;
+    int m0 = 0, m1 = 0;
+    if (sMsaa != 2) {
+        sMsaa = 0;
+        return;
+    }
+    sMsaa = 0;
+    memset(&sp, 0, sizeof(sp));
+    sp.Base = 0;
+    if (FAILED(sDev->CreateRenderTarget(sAlvoW, sAlvoH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_2_SAMPLES, 0, FALSE, &sMsCor, &sp))) {
+        Diario_Escrever("gs_d3d: ERRO: BT3_MSAA=2: a cor de 2 amostras não foi criada; fica sem MSAA");
+        sMsCor = NULL;
+        return;
+    }
+    sp.Base = sMsTilesCor;
+    sp.HierarchicalZBase = 0;
+    if (FAILED(sDev->CreateDepthStencilSurface(sAlvoW, sAlvoH, D3DFMT_D24S8, D3DMULTISAMPLE_2_SAMPLES, 0, FALSE, &sMsProf, &sp))) {
+        Diario_Escrever("gs_d3d: ERRO: BT3_MSAA=2: a profundidade de 2 amostras não foi criada; fica sem MSAA");
+        sMsProf = NULL;
+        return;
+    }
+    if (XGSurfaceSize(sAlvoWZ, sAlvoH, D3DFMT_A8B8G8R8, D3DMULTISAMPLE_2_SAMPLES) != sMsTilesProf ||
+        FAILED(sDev->CreateRenderTarget(sAlvoWZ, sAlvoH, D3DFMT_A8B8G8R8, D3DMULTISAMPLE_2_SAMPLES, 0, FALSE, &sMsProfCor, &sp))) {
+        Diario_Escrever("gs_d3d: ERRO: BT3_MSAA=2: a profundidade de 2 amostras vista como cor (%dx%d, %u tiles contra %u) não "
+                        "foi criada; fica sem MSAA", sAlvoWZ, sAlvoH,
+                        XGSurfaceSize(sAlvoWZ, sAlvoH, D3DFMT_A8B8G8R8, D3DMULTISAMPLE_2_SAMPLES), sMsTilesProf);
+        sMsProfCor = NULL;
+        return;
+    }
+    sMsModoZ = 0;
+    if (sModoZ != 0) {
+        m0 = ms_autoteste(0);
+        m1 = ms_autoteste(D3DRESOLVE_FRAGMENT1);
+        sMsModoZ = m0 == 1 && m1 == 1 ? 1 : m0 != 0 && m1 != 0 ? 2 : 0;
+        if (sMsModoZ == 0) {
+            Diario_Escrever("gs_d3d: ERRO: BT3_MSAA=2: nenhum restauro da profundidade de 2 amostras exato nos dois fragmentos "
+                            "(o autoteste escolheu %d pelo fragmento 0 e %d pelo 1); fica sem MSAA", m0, m1);
+            return;
+        }
+    }
+    /* (o MSAA completo, 10-msaa.md, seção 9) as subchaves, a vista crua, os parques e o autoteste das amostras */
+    sMsVoltaX = env_num("BT3_MSAA_VOLTA", 0) != 0;
+    sMsVagas = env_num("BT3_MSAA_VAGAS", 1) != 0;
+    sMsContorno = env_num("BT3_MSAA_CONTORNO", 1) != 0;
+    sMs2d = env_num("BT3_MSAA_2D", 0) != 0;
+    sMsA2c = env_num("BT3_MSAA_A2C", 0) != 0;
+    if (sMsVoltaX) {
+        unsigned k;
+        sp.Base = 0;
+        if (XGSurfaceSize(sAlvoW, 2 * sAlvoH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE) != sMsTilesCor ||
+            FAILED(sDev->CreateRenderTarget(sAlvoW, 2 * sAlvoH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &sMsCru, &sp))) {
+            Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_VOLTA=1: a cor de 2 amostras vista como 1 amostra (%dx%d, %u tiles contra %u) "
+                            "não foi criada; fica sem MSAA", sAlvoW, 2 * sAlvoH,
+                            XGSurfaceSize(sAlvoW, 2 * sAlvoH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE), sMsTilesCor);
+            sMsCru = NULL;
+            ms_desiste();
+            return;
+        }
+        for (k = 0; k < MS_PARQUES; k++) {
+            unsigned bytes = tam_real(sAlvoW, 2 * sAlvoH, D3DFMT_A8R8G8B8);
+            sMsParque[k].alvo = -1;
+            if (mem_livres(bytes) < sMem.pisoMb * MB + bytes ||
+                (sMsParque[k].tex = xg_cria(sAlvoW, 2 * sAlvoH, D3DFMT_A8R8G8B8)) == NULL) {
+                Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_VOLTA=1: o parque %u (%u KB) não foi criado (%u MB livres); fica sem MSAA",
+                                k, bytes >> 10, mb_livres());
+                sMsParque[k].tex = NULL;
+                ms_desiste();
+                return;
+            }
+            mem_cria(CL_ALVO, sMsParque[k].tex->bytes);
+        }
+    }
+    if (!ms_amostras_autoteste() && sMsVoltaX) {
+        Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_VOLTA=1: a volta crua não passou no autoteste das amostras; fica sem MSAA (o "
+                        "alfa depois de uma volta seria o médio)");
+        ms_desiste();
+        return;
+    }
+    if (sMsContorno && !sMsMascOk) {
+        Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_CONTORNO=1: o autoteste não achou a máscara de cada fragmento; o contorno fica "
+                        "por pixel, pelo fragmento 0 (o do protótipo)");
+        sMsContorno = 0;
+    }
+    if (sMsContorno) {
+        unsigned bytes = tam_real(sIdsW, sIdsH, D3DFMT_A8R8G8B8);
+        if (mem_livres(bytes) < sMem.pisoMb * MB + bytes ||
+            FAILED(sDev->CreateTexture(sIdsW, sIdsH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &sIds1, NULL)) || sIds1 == NULL) {
+            Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_CONTORNO=1: a cópia dos ids do fragmento 1 não foi criada (%u MB livres); o "
+                            "contorno fica por pixel, pelo fragmento 0 (o do protótipo)", mb_livres());
+            sIds1 = NULL;
+            sMsContorno = 0;
+        } else {
+            mem_cria(CL_ALVO, bytes);
+        }
+    }
+    sMsaa = 1;
+    Diario_Escrever("gs_d3d: BT3_MSAA=2: o MSAA 2x no alvo que o quadro apresenta (o do fbp), os outros com 1 amostra; a cor de 2 "
+                    "amostras na base 0 com %u tiles e a profundidade de 2 amostras na base %u com %u (a de 1 amostra na mesma "
+                    "base); a saída do alvo com a média das amostras, a cópia dos ids e o DATE pelo fragmento 0; a profundidade "
+                    "volta pelo modo %d (%s; o autoteste escolheu %d pelo fragmento 0 e %d pelo 1)",
+                    sMsTilesCor, sMsTilesCor, sMsTilesProf, sMsModoZ,
+                    sMsModoZ == 1 ? "como cor" : sMsModoZ == 2 ? "pelo oDepth" : "zerada, como a de 1 amostra", m0, m1);
+    Diario_Escrever("gs_d3d: BT3_MSAA=2, o completo: BT3_MSAA_VOLTA=%d (%s); BT3_MSAA_VAGAS=%d (%s); BT3_MSAA_CONTORNO=%d (%s)",
+                    sMsVoltaX,
+                    sMsVoltaX ? "a volta exata pelas amostras cruas, dois parques de 2 x a textura do alvo, contados com os alvos; "
+                    "o DATE do alvo fora da EDRAM espera a entrada nele" : "a volta pela média, a do protótipo", sMsVagas,
+                    sMsVagas ? "as pequenas sobre a profundidade de 2 amostras, com os alvos residentes" :
+                    "as pequenas depois da profundidade de 2 amostras, as do protótipo", sMsContorno,
+                    sMsContorno ? "o contorno por amostra, com a cópia dos ids do fragmento 1, contada com os alvos" :
+                    "o contorno por pixel, pelo fragmento 0");
+    Diario_Escrever("gs_d3d: BT3_MSAA=2, o completo: BT3_MSAA_2D=%d (%s); BT3_MSAA_A2C=%d (%s)", sMs2d,
+                    sMs2d ? "a arte 2D sem MSAA, as amostras pelo centro do pixel" : "a arte 2D com MSAA, a do protótipo", sMsA2c,
+                    sMsA2c ? "o alfa para cobertura nos desenhos 3D com teste de alfa de 1/8 em diante, sem mistura e sem FBA" :
+                    "desligado");
+}
+
 static int d3d_init(void) {
     static const D3DVERTEXELEMENT9 elemGs[] = {
         {0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
@@ -3788,7 +4685,8 @@ static int d3d_init(void) {
     sCorPosta = sEdramCor;
     sPostaW = sAlvoW;
     sPostaH = sAlvoH;
-    sp.Base = tilesCor;
+    sProfBase = msaa_base(tilesCor); /* (F8, BT3_MSAA: com a chave, depois da cor de 2 amostras) */
+    sp.Base = sProfBase;
     sp.HierarchicalZBase = 0;
     if (FAILED(sDev->CreateDepthStencilSurface(sAlvoW, sAlvoH, D3DFMT_D24S8, D3DMULTISAMPLE_NONE, 0, FALSE, &sEdramProf, &sp))) {
         Diario_Escrever("gs_d3d: ERRO na profundidade da EDRAM");
@@ -3801,6 +4699,8 @@ static int d3d_init(void) {
                         XGSurfaceSize(sAlvoWZ, sAlvoH, D3DFMT_A8B8G8R8, D3DMULTISAMPLE_NONE), tilesProf);
         sEdramProfCor = NULL;
     }
+    sProfPosta = sEdramProf;
+    sProfCorPosta = sEdramProfCor;
     if (FAILED(sDev->CreateTexture(1, 1, 1, 0, D3DFMT_LIN_A8B8G8R8, D3DPOOL_DEFAULT, &sBranco, NULL)) ||
         FAILED(sBranco->LockRect(0, &r, NULL, 0))) {
         Diario_Escrever("gs_d3d: ERRO na textura branca");
@@ -3831,6 +4731,7 @@ static int d3d_init(void) {
     otim_init(); /* (720p, retomada: antes do autoteste das nativas, que passa pelos shaders da névoa) */
     afiado_init(); /* (720p, BT3_AFIADO) */
     fxaa_init();   /* (720p, BT3_FXAA) */
+    msaa_init();   /* (F8, BT3_MSAA: depois do autoteste da profundidade, que ele repete nas de 2 amostras; antes do ed_init) */
     ed_init(tilesCor); /* (720p, BT3_EDRAM_RESIDENTE: depois do autoteste da profundidade, que escolhe o sModoZ) */
     nat_init(); /* (F5, etapa 7, segunda parte) */
     tempo_init(); /* (F5, etapa 8) */
@@ -4091,7 +4992,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
             CADEIA_CHAMADA(CA_ESTADO, sDev->SetIndices(sVuIbQ));
         }
         sEstadoGs = chave;
-    } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE)) {
+    } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE) || sSemTex) {
         D3DPixelShader *ps = ps_escolhe(d, estado);
         if (ps != sCurPs) {
             if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
@@ -4189,6 +5090,8 @@ static void desenha_fba(const GsDraw *d, uint32_t ini);
 static int comum_classe(const GsDraw *d, int af, int rapido, int trivial) {
     if (trivial) return T_C_TRIV;
     if (af) return T_C_AF;
+    /* (F8, BT3_OTIM_SEMTEX) o sem textura pelo ps_gs_semt fica na classe sem; o que vai ao especializado, na rapido sem */
+    if (sSemTex && d->mode[0] == 0) return rapido && d->misc[1] == 0.0f && d->mode[3] == 0 ? T_C_RAP_SEM : T_C_SEM;
     if (rapido && d->misc[1] == 0.0f && d->misc[3] == 0.0f && d->mode[3] == 0 && d->mode[0] != 2)
         return d->mode[0] ? T_C_RAP_TEX : T_C_RAP_SEM;
     return d->mode[0] == 0 ? T_C_SEM : d->mode[0] == 1 ? T_C_VRAM : d->mode[0] == 2 ? T_C_ALVO : T_C_PACOTE;
@@ -4657,6 +5560,7 @@ static void log_quadros(void) {
     afiado_log(t); /* (720p, BT3_AFIADO) */
     fxaa_log(t);   /* (720p, BT3_FXAA) */
     ed_log(t);   /* (720p, BT3_EDRAM_RESIDENTE) */
+    ms_log();    /* (F8, BT3_MSAA) */
     log_tempos(sConta.msQuadro / q);
     log_memoria();
     if (sDiv) {
@@ -5084,7 +5988,23 @@ static void nat_ids(const GsDraw *d, uint32_t n, int *cur) {
     if (sComumGpu && sTempo.quadro) sComumApi[C_TEX]++;
     sDev->SetTexture(3, NULL);
     if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
-    sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+    if (d->target == sMsAlvo) {
+        /* (BT3_MSAA) os ids do fragmento 0, exatos: a média de dois ids vizinhos seria um terceiro id */
+        sDev->Resolve(D3DRESOLVE_RENDERTARGET0 | D3DRESOLVE_FRAGMENT0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+        sMsC.ids++;
+        sMsC.idsVolta += sMsVolta;
+        sMsC.idsMedia += sMsVoltaMedia;
+        sMsIds1 = sIds1 != NULL;
+        if (sMsIds1) {
+            /* (BT3_MSAA_CONTORNO) e os do fragmento 1, para o contorno da outra amostra */
+            if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
+            sDev->Resolve(D3DRESOLVE_RENDERTARGET0 | D3DRESOLVE_FRAGMENT1, &fonte, sIds1, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+            sMsC.ids1++;
+        }
+    } else {
+        sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sIds, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+        sMsIds1 = 0;
+    }
     sIdsQuadro = sQ->quadro + 1;
     sConta.natIds++;
 }
@@ -5145,7 +6065,21 @@ static void nat_contorno(const GsDraw *d, uint32_t n, int *cur) {
     }
     nat_entra(d->target, n, cur);
     tempo_poe(T_CONTORNO);
-    nat_contorno_passa(&r, sEscF);
+    if (d->target == sMsAlvo && sMsIds1) {
+        /* (BT3_MSAA_CONTORNO) uma passada por amostra, cada uma com a máscara e os ids do seu fragmento: a linha preta segue
+           as amostras, e a média do fim a suaviza como as bordas de geometria */
+        D3DTexture *ids0 = sIds;
+        sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, sMsMasc[0]);
+        nat_contorno_passa(&r, sEscF);
+        sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, sMsMasc[1]);
+        sIds = sIds1;
+        nat_contorno_passa(&r, sEscF);
+        sIds = ids0;
+        sDev->SetRenderState(D3DRS_MULTISAMPLEMASK, 0xFFFFFFFFu);
+        sMsC.contorno2++;
+    } else {
+        nat_contorno_passa(&r, sEscF);
+    }
     sConta.natCont++;
 }
 
@@ -5595,6 +6529,35 @@ static void sincroniza_alvos(void) {
     }
 }
 
+/* (F8, BT3_MSAA_2D e BT3_MSAA_A2C) os estados de amostra de um desenho no alvo com MSAA, postos antes dele e tirados
+   depois (ms_desenho_tira): o bit 1, a arte 2D sem MSAA; o bit 2, o alfa para cobertura. Os desvios do alfa para cobertura
+   são iguais nos quatro pixels da quadra (3/8 cada, 0xFF: sem pontilhado): com 2 amostras, o alfa de 5/8 em diante cobre as
+   duas e o de 1/8 a 5/8 uma; o teste de alfa do desenho garante 1/8 ou mais (nenhum pixel que passa some). */
+static int ms_desenho_poe(const GsDraw *d) {
+    int k = 0;
+    if (sMs2d && d->misc[3] != 0.0f) {
+        sDev->SetRenderState(D3DRS_MULTISAMPLEANTIALIAS, FALSE);
+        sMsC.des2d++;
+        k |= 1;
+    }
+    if (sMsA2c && d->misc[3] == 0.0f && d->misc[2] == 0.0f && !(sPipes[d->pipeline].bkey & 1) &&
+        ((d->mode[3] == 6 && d->misc[0] >= 17.0f) || (d->mode[3] == 7 && d->misc[0] >= 16.0f))) {
+        sDev->SetRenderState(D3DRS_ALPHATOMASKENABLE, TRUE);
+        sDev->SetRenderState(D3DRS_ALPHATOMASKOFFSETS, 0xFFu);
+        sMsC.a2c++;
+        k |= 2;
+    }
+    return k;
+}
+static void ms_desenho_tira(int k) {
+    if (k & 1) {
+        sDev->SetRenderState(D3DRS_MULTISAMPLEANTIALIAS, TRUE);
+    }
+    if (k & 2) {
+        sDev->SetRenderState(D3DRS_ALPHATOMASKENABLE, FALSE);
+    }
+}
+
 /* o alvo de um fbp na tabela do quadro (a cópia da entrega com a divisão): o GsDraw_TargetGet sem escrever o last */
 static int alvo_do_fbp(const GsQuadro *q, int fbp) {
     int i;
@@ -5612,7 +6575,7 @@ static void frame_end(void) {
     double msVu, msCopiaVu;
     double msFim, msPresent;
     unsigned capturas = sConta.capturas;
-    int cur = -1, mostrado, i;
+    int cur = -1, mostrado, i, msEst;
     uint32_t n;
     double ms;
     D3DTexture *mtex;
@@ -5681,6 +6644,15 @@ static void frame_end(void) {
         gGsD3dEtapa = "fim do quadro: refazendo a lista";
     }
     tempo_poe(T_PLANO);
+    if (sMsaa) {
+        /* (BT3_MSAA) o alvo com MSAA: o que o quadro apresenta (o do fbp; sem ele, nenhum, contado) */
+        sMsAlvo = alvo_do_fbp(q, q->fbp);
+        sMsVolta = 0;
+        sMsVoltaMedia = 0;
+        sMsDatePend = -1;
+        sMsC.quadros++;
+        sMsC.semAlvo += sMsAlvo < 0;
+    }
     if (sEdRes) {
         ed_plano(q); /* (720p, BT3_EDRAM_RESIDENTE: as vagas do quadro) */
     }
@@ -5703,6 +6675,7 @@ static void frame_end(void) {
         if (d->native == 5) {
             /* o começo de uma sequência de desenhos com DATE: a cópia da cor do alvo agora */
             sConta.dateMarc++;
+            sMsDatePend = -1; /* (BT3_MSAA_VOLTA: um marcador novo vence o que esperava) */
             if (!q->targets[d->target].cleared) {
                 continue;
             }
@@ -5722,15 +6695,30 @@ static void frame_end(void) {
                     sDev->SetTexture(1, NULL); /* (o destino do Resolve não pode estar em uso) */
                     sCurDate = NULL;
                     if (sComumGpu && sTempo.quadro) sComumApi[C_RESOLVE]++;
-                    sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sDate, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+                    if (d->target == sMsAlvo) {
+                        /* (BT3_MSAA) o alfa do fragmento 0, exato: o bit 7 que o DATE testa sem a média da borda */
+                        sDev->Resolve(D3DRESOLVE_RENDERTARGET0 | D3DRESOLVE_FRAGMENT0, &fonte, sDate, &destino, 0, 0, NULL,
+                                      0.0f, 0, NULL);
+                        sMsC.date++;
+                        sMsC.dateVolta += sMsVolta;
+                        sMsC.dateMedia += sMsVoltaMedia;
+                    } else {
+                        sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &fonte, sDate, &destino, 0, 0, NULL, 0.0f, 0, NULL);
+                    }
                     sConta.dateRes++;
                 }
+                sDateFonte = sDate;
+            } else if (sMsVoltaX && d->target == sMsAlvo) {
+                /* (BT3_MSAA_VOLTA) o alvo com MSAA fora da EDRAM posta: a textura dele tem a média das amostras; a cópia
+                   do alfa pelo fragmento 0 espera a entrada nele (ms_date_adiado), antes do primeiro desenho com DATE */
+                sMsDatePend = (int)n;
                 sDateFonte = sDate;
             } else {
                 if (sEdRes) {
                     ed_descarrega(d->target, ED_DATE); /* (com sujo guardado numa vaga: a textura em dia, como antes) */
                 }
                 sConta.dateTex++;
+                sMsC.dateTex += d->target == sMsAlvo; /* (BT3_MSAA: o DATE lê o alfa com a média da borda) */
             }
             continue;
         }
@@ -5778,12 +6766,16 @@ static void frame_end(void) {
         if (sEdRes) {
             ed_confere(d); /* (o contador "alvo lido sem Resolve", esperado 0) */
         }
+        msEst = d->target == sMsAlvo ? ms_desenho_poe(d) : 0; /* (BT3_MSAA_2D, BT3_MSAA_A2C; sem a chave, sMsAlvo é -1) */
         if (d->vu) {
             QueryPerformanceCounter(&tv);
             desenha_vu(d, sVuIni[n]);
             msVu += ms_desde(&tv);
         } else {
             desenha(d);
+        }
+        if (msEst != 0) {
+            ms_desenho_tira(msEst);
         }
     }
     sConta.msVuDes += msVu;

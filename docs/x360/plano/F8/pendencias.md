@@ -103,6 +103,11 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     desenho comum sem textura, as leituras de alvos e a cadeia do brilho (perfil fino de 28/10, seção 31 do
     `plano/F5/08-gravacao.md`), os efeitos de tela na escala 1 (`BT3_ESCALA_FX`, 3 a 5 ms estimados) e o ganho de tabela
     dos prefixos. Começa por uma rodada curta medindo a GPU em 1,33, 1,4 e 1,5 sobre a build da release.
+    **30/10:** a 1,4 entrou pela chave (640 x 480 em 896 x 672) e a primeira otimização foi o desenho sem textura sem a
+    leitura da branca (`BT3_OTIM_SEMTEX`, 1,6 a 3,9 ms estimados na 1,4), não o `BT3_ESCALA_FX` (até 1,3 ms); a rodada de
+    console está preparada ([09-escala](09-escala.md)).
+    O MSAA 2x da EDRAM no lugar ou ao lado do FXAA: estudo de custo e protótipo sob `BT3_MSAA=2` em
+    [10-msaa.md](10-msaa.md) (30/10/2026, branch `claude/f8-msaa`), com a rodada de console preparada.
 
 ## Fora do plano do port (28/10/2026)
 

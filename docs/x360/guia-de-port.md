@@ -2071,6 +2071,69 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   para cada Resolve que sai do caminho, escreva quem lê aquele alvo e em que linha do laço, e ponha um contador que confere a
   leitura no ponto em que ela acontece (depois da troca, antes do desenho), com uma chave de sabotagem para vê-lo acusar.
 
+### A escala 1,4 e o sem textura (F8, `plano/F8/09-escala.md`)
+
+- **Uma escala fracionária só fecha na grade da EDRAM com a área certa:** com `num / den` e lados múltiplos de 32 na escala,
+  o lado do GS tem de ser múltiplo de `32 x den / mdc(num, 32)`. A 1,4 (7/5) pede 160: 640 x 480 (448 não fecha). A 1,375
+  (11/8) pede 256 e a 1,45 (29/20) pede 640: escalas "redondas" podem custar uma superfície bem maior que a vizinha. Faça a
+  conta da menor área num teste antes de prometer uma escala.
+- **`BT3_ESCALA` sem `BT3_ALVO_AREA` cai na escala 1 com 1024 x 1024**, o caminho mais lento, quando a área padrão não vale
+  na escala pedida: o ambiente de rodada leva as duas chaves.
+- **Leia o perfil fino antes de escolher a otimização:** o `BT3_ESCALA_FX` (os efeitos na escala 1) estava estimado em 3 a 5
+  ms pela GPU grossa de 22/10; o perfil por classe e por alvo de 28/10 deu 2 ms para tudo o que ele encolheria e 5,8 ms
+  para o desenho sem textura pelo shader geral, que lia uma textura branca e jogava a leitura fora.
+- **Um `if` com um `uniform bool` muda o microcódigo dos shaders de sempre:** pôr o bloco da textura dentro de `if
+  (!semTex)` trocou um `mul` por `mulsc` e desfez um par no `ps_gs`, no `ps_gsz` e no `ps_gs_af`, com `semTex` falso. Pôr
+  o `semTex ? 0 : tex2Dgrad(...)` na própria linha da leitura deixou os 25 headers byte a byte iguais. Compare os headers
+  com o mesmo comando do `build_f2.sh`: o header traz a linha do `fxc` no comentário, e um `/Fc` a mais já a muda.
+- **Tirar código morto de um shader deixa o `fxc` dobrar contas:** sem o ramo da função da textura (nunca tomado no modo 0),
+  o `cor.a * k` e o `* 128 + 0,5` do teste de alfa viraram um `mad` só com 255. Mantenha o ramo e confira na listagem `/Fc`
+  que as contas do que tem de dar o mesmo byte saem com as mesmas instruções.
+
+### O MSAA completo (F8, `plano/F8/10-msaa.md`, seção 9)
+
+- **A superfície de 2 amostras do Xenos é a de 1 amostra com o dobro das linhas:** a documentação do `D3DRS_MULTISAMPLEMASK`
+  diz que cada pixel do MSAA 2x é um bloco vertical de 1 x 2, e o `XGSurfaceSize` dá os mesmos tiles para `W x H` com 2
+  amostras e `W x 2H` com 1. Uma vista de 1 amostra com o dobro das linhas na mesma base guarda e devolve as duas amostras com
+  um Resolve e uma cópia (o "parque" da volta exata), sem saber a ordem delas dentro do tile: a ida e a volta são pela mesma
+  vista. O autoteste do boot confere bit a bit pelos dois fragmentos e tem um controle (a cor limpa sem a volta). **Mas ele
+  só prova o que testa:** com o alvo inteiro, a ida e a volta pela mesma vista acertam com qualquer arranjo das amostras
+  dentro do tile; um retângulo que corta um tile (x em múltiplos de 8) já depende do arranjo. Guarde e devolva em tiles
+  inteiros (x em múltiplos de 80, y de 8), o mesmo caso do autoteste (a revisão de outro agente achou o furo).
+- **Exatidão que passa por um cache herda a origem dele:** um parque guardado depois de uma volta pela média guarda a média
+  nas duas amostras; a volta seguinte por ele é "crua" mas não exata. O parque leva a marca de onde veio, e a textura do
+  alvo, a de ter recebido a média.
+- **A máscara do `D3DRS_MULTISAMPLEMASK` tem 4 bits por pixel da quadra de 2 x 2:** com 2 amostras, "só a amostra 0" é
+  `0x1111` e "só a 1" é `0x2222`. Um `1` ou um `2` escreveria só o pixel de cima à esquerda de cada quadra. Qual bit escreve
+  qual fragmento do Resolve, o autoteste mede (desenha um padrão por bit e compara os fragmentos com a referência de 1
+  amostra).
+- **Um contador "depois de uma volta" que dá tudo não diz nada:** no BT3 a primeira entrada de cada quadro já é uma volta (o
+  alvo traz o que mostrou dois quadros antes), então todo DATE e toda cópia dos ids do quadro contavam "depois de uma volta".
+  Conte pelo caminho (a volta exata, pelo parque, e a pela média), não pelo fato de ter havido uma volta.
+- **Uma cópia adiada para a entrada no alvo é exata quando nada desenha nele entre o pedido e a entrada:** o marcador de DATE
+  de um alvo que não está posto lia a textura dele (a média das amostras); a cópia do fragmento 0 feita na entrada seguinte
+  nele, antes do primeiro desenho com DATE, lê o mesmo conteúdo, da EDRAM.
+- **Na EDRAM cheia, escolha quem sai pelo que cada visita usa, não pelo tamanho:** com a cor e a profundidade de 2 amostras
+  ocupando 2.016 de 2.048 tiles, o protótipo pôs A e B dentro da cor de 2 amostras e cada entrada da cadeia do brilho
+  despejava o alvo principal (5,7 voltas inteiras por quadro na 1,4). A cadeia do brilho não usa profundidade: com as
+  pequenas sobre a profundidade de 2 amostras, quem sai é a profundidade (uma vez, e volta só nas visitas com z), e o alvo
+  principal fica na EDRAM o quadro todo. A regra que mantém isso certo é de mão dupla: a pequena que entra com a
+  profundidade na EDRAM a entrega ao dono, e a profundidade que volta (limpa ou restaurada) despeja as pequenas de cima dela.
+- **Uma passada de tela que decide por pixel continua serrilhada com o MSAA:** o contorno do BT3 compara os ids da cópia do
+  alfa e escurece o pixel inteiro. Para ele seguir as amostras, uma cópia dos ids por fragmento (os Resolves pelo fragmento 0
+  e pelo 1) e a passada uma vez por amostra, com a máscara daquela amostra e os ids dela; a média do fim faz o resto. Volte o
+  `D3DRS_MULTISAMPLEMASK` a `0xFFFFFFFF` logo depois: ele vale para tudo o que vem a seguir, inclusive a volta de outro alvo.
+- **A arte 2D numa superfície com MSAA sai igual à de 1 amostra com `D3DRS_MULTISAMPLEANTIALIAS` falso:** as amostras todas
+  pelo centro do pixel, a cobertura e a leitura da textura como sem MSAA. Na escala fracionária as bordas das peças do HUD
+  caem no meio do pixel e, com MSAA, ganhariam meia cobertura; o estado posto e tirado em volta de cada desenho de arte 2D
+  mantém o afiado e o texto como eram.
+- **O alfa para cobertura do Xenos soma um desvio fixo ao alfa antes de contar as amostras:** `alfa + desvio / N`, com N = 8
+  no MSAA 2x e os desvios de 2 bits por pixel da quadra (`D3DALPHATOMASK_SOLID` é 0xAA, +1/4; `DITHERED` muda por pixel e
+  pontilha). Com 2 amostras e 0xFF (+3/8): abaixo de 1/8 nada, de 1/8 a 5/8 uma amostra, de 5/8 em diante as duas. Num jogo
+  em que o alfa gravado é dado (ids, o bit 7 do DATE) e o "opaco" do PS2 é 0x80, um texel de alfa 0x40 com teste de alfa e
+  sem mistura vira meia cobertura em toda a peça, não só na borda: por isso fica atrás de chave desligada até a imagem
+  aprovar.
+
 ### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
 
 - **O header do `fxc` traz a linha de comando no comentário:** dois headers do mesmo shader compilados com caminhos de saída
