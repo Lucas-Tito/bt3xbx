@@ -871,3 +871,17 @@ cada (estimado), contra o zero da decisão 27. O Lucas decidiu:
    amostrador os viu nos carregamentos dos menus) passam para a conversão da ISO, na mesma versão nova da marca que as
    correções do banco trouxerem. O que for montado só na memória em tempo de execução, sem arquivo na ISO, continua
    convertido na carga e fica listado.
+
+## 37. F8: a imagem da primeira release é a 1,4 com o MSAA 2x, sem o FXAA (30/10/2026)
+
+O Lucas não ficou satisfeito com a nitidez da 1,33 com o FXAA nem da 1,5; o protótipo do MSAA resolveu o incômodo dele, e
+o FXAA por cima não acrescentou (`plano/F8/10-msaa.md`, seção 8). A rodada do MSAA completo (seção 9.9) mediu na luta da
+1,4 uma folga da GPU com mediana de 8,9 ms e 1% piores em 3,1 ms. O Lucas decidiu:
+
+1. **A escala padrão passa a 1,4** (área de 640 x 480, alvo de 896 x 672), no lugar da 1,33 de 23/10. A 1,5 fica de fora:
+   com o MSAA ela encosta no prazo (pausa com mínimo de 0,0 ms).
+2. **O MSAA 2x fica ligado por padrão** (`BT3_MSAA=2`), com as vagas e o contorno por amostra; a volta exata fica
+   desligada (custa uns 0,5 ms e as capturas com e sem ela deram iguais); a arte 2D também passa pelo MSAA.
+3. **O FXAA sai do padrão** (`BT3_FXAA=0`) e a `BT3_OTIM_SEMTEX` entra (uns 2,6 ms, sem mudar um pixel).
+4. **Os 60 quadros por segundo ficam para depois** (a interpolação do port de PC dobraria o trabalho da GPU), e não há
+   meta numérica para o MSAA agora.

@@ -189,7 +189,7 @@ static int sPostaW = GS_W, sPostaH = GS_H;
 static D3DSurface *sProfPosta, *sProfCorPosta;
 static DWORD sZFrag; /* (BT3_MSAA, só o autoteste) o fragmento dos Resolves da profundidade: 0, ou D3DRESOLVE_FRAGMENT1 */
 static UINT sProfBase; /* a base da profundidade de 1 amostra na EDRAM: os tiles da cor; com BT3_MSAA, os da cor de 2 amostras */
-/* ---- (F8, BT3_MSAA=2; docs/x360/plano/F8/10-msaa.md) o protótipo do MSAA 2x da EDRAM, desligado por padrão ------------
+/* ---- (F8, BT3_MSAA=2; docs/x360/plano/F8/10-msaa.md) o MSAA 2x da EDRAM, ligado por padrão desde 30/10 -----------------
    Só o alvo que o quadro apresenta (o do fbp) desenha com 2 amostras, numa superfície de cor de 2 amostras na base 0 da
    EDRAM (sMsCor, o dobro dos tiles do alvo) com a profundidade de 2 amostras logo depois (sMsProf, na mesma base da
    profundidade de 1 amostra, que com a chave muda para depois dela); os outros alvos, como antes. O Resolve de saída faz a
@@ -1853,8 +1853,8 @@ static void otim_init(void) {
                         (sOtim & OT_PS) ? "sim" : "não", (sOtim & OT_LIMPA) ? "sim" : "não", (sOtim & OT_DATE) ? "sim" : "não",
                         (sOtim & OT_NEVOA) ? "sim" : "não");
     }
-    /* (F8) fora do BT3_OTIM, que é ligado por padrão: só com a chave dela */
-    sSemTex = env_num("BT3_OTIM_SEMTEX", 0) != 0;
+    /* (F8) fora do BT3_OTIM; ligada por padrão desde 30/10 (uns 2,6 ms na luta da 1,4, capturas iguais: 09-escala.md) */
+    sSemTex = env_num("BT3_OTIM_SEMTEX", 1) != 0;
     if (sSemTex && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsSemTPs, &sPsSemT[0])) ||
                     FAILED(sDev->CreatePixelShader((const DWORD *)kGsZSemTPs, &sPsSemT[1])))) {
         Diario_Escrever("gs_d3d: ERRO: os shaders sem textura não foram criados; BT3_OTIM_SEMTEX desligada");
@@ -2477,7 +2477,8 @@ static unsigned sFxaaN;  /* as passadas no trecho (fxaa_log) */
 static Ret sFxaaRet;     /* a parte usada, em pixels de saída (fxaa_init) */
 
 static void fxaa_init(void) {
-    sFxaa = env_num("BT3_FXAA", 1) & 1; /* (ligado por padrão desde 23/10: 0,8 a 0,9 ms de GPU; o Lucas aprovou sem a máscara) */
+    sFxaa = env_num("BT3_FXAA", 0) & 1; /* (de 23/10 a 30/10 ligado por padrão; desde 30/10 o MSAA 2x no lugar dele: o Lucas
+                                           preferiu só o MSAA, 10-msaa.md seção 8) */
     if (sFxaa == 0) {
         return;
     }
@@ -3964,13 +3965,14 @@ static void area_init(void) {
     const char *a = getenv("BT3_ALVO_AREA"), *e = getenv("BT3_ESCALA"), *erroA = NULL, *erroE = NULL;
     int w = GS_W, h = GS_H, num = 1, den = 1;
     EscArea ar;
-    /* o padrão desde 23/10 (08-720p.md, decisão do Lucas): a 1,33 na área de 648 x 456 (864 x 608 na EDRAM), que coube no
-       ritmo da luta com o afiado e os alvos residentes; BT3_ESCALA=1 e BT3_ALVO_AREA=1024x1024 voltam ao de antes */
+    /* o padrão desde 30/10 (09-escala.md e 10-msaa.md, decisão do Lucas): a 1,4 na área de 640 x 480 (896 x 672 na EDRAM),
+       com o MSAA 2x, que cabe junto com a profundidade de 2 amostras (1.008 + 1.008 tiles); de 23/10 a 30/10 foi a 1,33 em
+       648 x 456. BT3_ESCALA=1 e BT3_ALVO_AREA=1024x1024 voltam ao de antes da F5 */
     if (a == NULL) {
-        a = "648x456";
+        a = "640x480";
     }
     if (e == NULL) {
-        e = "1.33";
+        e = "1.4";
     }
     if (e != NULL && *e != '\0' && !esc_le_escala(e, &num, &den)) {
         Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.4, 1.5, 1.6 ou 2); fica 1", e);
@@ -4254,9 +4256,10 @@ static void tempo_init(void) {
 
 /* (F8, BT3_MSAA=2) a conta da EDRAM, antes de criar a profundidade de 1 amostra: a cor de 2 amostras na base 0 e a
    profundidade de 2 amostras logo depois têm de caber nos 2.048 tiles; cabendo, a de 1 amostra muda para a mesma base da
-   de 2 (as duas nunca valem ao mesmo tempo: a posse é uma só, sZDono). Devolve a base da profundidade de 1 amostra. */
+   de 2 (as duas nunca valem ao mesmo tempo: a posse é uma só, sZDono). Devolve a base da profundidade de 1 amostra.
+   Ligado por padrão desde 30/10 (decisão do Lucas, 10-msaa.md seções 8 e 9.9); BT3_MSAA=0 desliga. */
 static UINT msaa_base(UINT tilesCor) {
-    unsigned pedido = env_num("BT3_MSAA", 0);
+    unsigned pedido = env_num("BT3_MSAA", 2);
     if (pedido == 0) {
         return tilesCor;
     }
