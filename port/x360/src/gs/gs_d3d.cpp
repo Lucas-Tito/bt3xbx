@@ -105,6 +105,8 @@ int Port_AspectMilli(void);  /* plat_stub.c */
 #include "gs_sem_ps.h"
 #include "gsz_tex_ps.h"
 #include "gsz_sem_ps.h"
+#include "gs_semt_ps.h"  /* (F8, BT3_OTIM_SEMTEX: ps_gs_semt, ps_gsz_semt; ver otim_init) */
+#include "gsz_semt_ps.h"
 #include "tabela_z_ps.h" /* (720p, retomada, BT3_OTIM_NEVOA: ps_tabela_z, ps_tabela_ids) */
 #include "tabela_ids_ps.h"
 #include "gs_af_ps.h"     /* (720p, BT3_AFIADO: ps_gs_af, vs_gs_af e ps_copia_af; ver afiado_init) */
@@ -1752,16 +1754,23 @@ extern "C" void GsD3d_Branca(int motivo, uint32_t w, uint32_t h) {
                           gs_d3d.hlsl) nos desenhos sem DATE, sem arte 2D, sem teste de alfa e sem alvo como textura
      BT3_OTIM_LIMPA=1     ao entrar na EDRAM, a cor limpa só fora do conteúdo que a volta do alvo vai cobrir (limpa_fora)
      BT3_OTIM_DATE=1      o Resolve da cópia do DATE só na área que os desenhos com DATE seguintes leem (date_area)
-     BT3_OTIM_NEVOA=1     a passada de tabela com um shader por fonte (ps_tabela_z, ps_tabela_ids; nat_tabela_passa) */
+     BT3_OTIM_NEVOA=1     a passada de tabela com um shader por fonte (ps_tabela_z, ps_tabela_ids; nat_tabela_passa)
+   (F8, docs/x360/plano/F8/09-escala.md) Fora do BT3_OTIM e desligada por padrão (0: o .xex faz o de antes):
+     BT3_OTIM_SEMTEX=1    os desenhos sem textura (modo 0) que iam ao ps_gs geral, que lia a branca e jogava a leitura fora:
+                          sem DATE e sem teste de alfa, com ou sem arte 2D (o misc.w só mexe no uv), o especializado
+                          ps_gs_sem (com o BT3_OTIM_PS); os outros, o ps_gs_semt (o gs_pixel sem a leitura da textura,
+                          com o DATE, o teste de alfa e o FBA do mesmo texto). O ps_gsz_* o mesmo na VU1. */
 enum { OT_PS = 1, OT_LIMPA = 2, OT_DATE = 4, OT_NEVOA = 8 };
-static unsigned sOtim, sPsTrivial;
+static unsigned sOtim, sPsTrivial, sSemTex;
 static D3DPixelShader *sPsTriv[2];    /* [0] ps_gs_triv, [1] ps_gsz_triv */
 static D3DPixelShader *sPsRap[2][2];  /* [z][com textura]: ps_gs_sem, ps_gs_tex, ps_gsz_sem, ps_gsz_tex */
+static D3DPixelShader *sPsSemT[2];    /* (BT3_OTIM_SEMTEX) [z]: ps_gs_semt, ps_gsz_semt */
 static D3DPixelShader *sPsTabFonte[2]; /* [0] ps_tabela_z (a névoa pela profundidade), [1] ps_tabela_ids */
 static unsigned env_num(const char *nome, unsigned padrao);
 /* (no trecho de 60 quadros, do desenho) o que as otimizações fizeram (otim_log) */
 static struct {
     unsigned psRap, psSem, psGs, limpaN, limpaRets, dateN, dateVazio, dateFora;
+    unsigned semtArte, semtGeral, semtDate, semtAtst; /* (BT3_OTIM_SEMTEX) ver ps_escolhe e otim_log */
     double limpaPx, datePx, datePxAntes;
 } sOt;
 
@@ -1788,6 +1797,18 @@ static void otim_init(void) {
                         "um shader por fonte %s (BT3_OTIM_NEVOA; o autoteste das nativas passa por eles)", todas,
                         (sOtim & OT_PS) ? "sim" : "não", (sOtim & OT_LIMPA) ? "sim" : "não", (sOtim & OT_DATE) ? "sim" : "não",
                         (sOtim & OT_NEVOA) ? "sim" : "não");
+    }
+    /* (F8) fora do BT3_OTIM, que é ligado por padrão: só com a chave dela */
+    sSemTex = env_num("BT3_OTIM_SEMTEX", 0) != 0;
+    if (sSemTex && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsSemTPs, &sPsSemT[0])) ||
+                    FAILED(sDev->CreatePixelShader((const DWORD *)kGsZSemTPs, &sPsSemT[1])))) {
+        Diario_Escrever("gs_d3d: ERRO: os shaders sem textura não foram criados; BT3_OTIM_SEMTEX desligada");
+        sSemTex = 0;
+    }
+    if (sSemTex) {
+        Diario_Escrever("gs_d3d: F8, desenhos sem textura sem a leitura da branca (BT3_OTIM_SEMTEX=1): sem DATE e sem teste de "
+                        "alfa pelo especializado %s, os outros pelo ps_gs_semt", (sOtim & OT_PS) ? "sim" : "não (sem o "
+                        "BT3_OTIM_PS: todos pelo ps_gs_semt)");
     }
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
@@ -1887,6 +1908,21 @@ static D3DPixelShader *ps_escolhe(const GsDraw *d, int estado) {
     if (afiado_usa(d, estado)) {
         sAfDes++;
         return sPsGsAf;
+    }
+    /* (F8, BT3_OTIM_SEMTEX) sem textura (modo 0): o resultado da leitura da textura não entra na cor nem no alfa, e o misc.w
+       só mexe no uv dela. Sem DATE e sem teste de alfa, o especializado (que só faz a cor, a função do alfa do vértice e o
+       FBA); senão o ps_gs_semt, o gs_pixel sem a leitura */
+    if (sSemTex && d->mode[0] == 0) {
+        if ((sOtim & OT_PS) && d->misc[1] == 0.0f && d->mode[3] == 0) {
+            sOt.psRap++;
+            sOt.psSem++;
+            sOt.semtArte += d->misc[3] != 0.0f;
+            return sPsRap[z][0];
+        }
+        sOt.semtGeral++;
+        sOt.semtDate += d->misc[1] != 0.0f;
+        sOt.semtAtst += d->mode[3] != 0;
+        return sPsSemT[z];
     }
     /* (BT3_OTIM_PS) sem DATE (misc.y), sem arte 2D (misc.w), sem teste de alfa (modo.w) e sem alvo como textura (modo.x 2:
        o rect e o c6); o FBA (misc.z) e a função da textura (modo.y, modo.z) o especializado ainda lê das constantes */
@@ -2017,6 +2053,11 @@ static void otim_log(unsigned t) {
                         (double)sOt.psRap / t, (double)sOt.psSem / t, (double)sOt.psGs / t, (double)sOt.limpaN / t,
                         (double)sOt.limpaRets / t, sOt.limpaPx / t / 1000.0, (double)sOt.dateN / t, sOt.datePx / t / 1000.0,
                         sOt.datePxAntes / t / 1000.0, sOt.dateVazio, sOt.dateFora);
+    }
+    if (sSemTex) {
+        Diario_Escrever("gs_d3d:   F8, sem textura, por quadro: %.1f pelo ps_gs_semt (%.1f com DATE, %.1f com teste de alfa), %.1f "
+                        "com arte 2D pelo especializado", (double)sOt.semtGeral / t, (double)sOt.semtDate / t,
+                        (double)sOt.semtAtst / t, (double)sOt.semtArte / t);
     }
     memset(&sOt, 0, sizeof(sOt));
 }
@@ -3565,8 +3606,8 @@ static unsigned env_num(const char *nome, unsigned padrao) {
 }
 
 /* (F5, etapa 8, 720p, etapas 2 e 3) A área dos alvos (BT3_ALVO_AREA=LxA, pixels do GS) e a escala (BT3_ESCALA: 1, 1.5 ou
-   2; na retomada também 1.25, 1.33 e 1.6, com a área em que a escala dá inteiro: 640x512, 648x456 e 640x460), pelas regras
-   do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
+   2; na retomada também 1.25, 1.33 e 1.6, com a área em que a escala dá inteiro: 640x512, 648x456 e 640x460; na F8 a 1.4,
+   com 640x480, docs/x360/plano/F8/09-escala.md), pelas regras do escala.h. Sem as chaves, 1024 x 1024 na escala 1, o de antes, sem linha no log; uma chave recusada
    diz o motivo e fica no padrão (a escala em 1: uma área que não cabe na EDRAM na escala pedida, e a de 1024 x 1024 com
    qualquer escala maior que 1). Um desenho além da área é cortado e contado (corte_conta), nunca desenhado num alvo
    maior: o par da EDRAM e as texturas têm um tamanho só. No começo do init, antes de qualquer alvo. */
@@ -3583,7 +3624,7 @@ static void area_init(void) {
         e = "1.33";
     }
     if (e != NULL && *e != '\0' && !esc_le_escala(e, &num, &den)) {
-        Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.5, 1.6 ou 2); fica 1", e);
+        Diario_Escrever("gs_d3d: BT3_ESCALA=%s recusada (1, 1.25, 1.33, 1.4, 1.5, 1.6 ou 2); fica 1", e);
         num = den = 1;
     }
     if (a != NULL && *a != '\0') {
@@ -4350,7 +4391,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
             CADEIA_CHAMADA(CA_ESTADO, sDev->SetIndices(sVuIbQ));
         }
         sEstadoGs = chave;
-    } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE)) {
+    } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE) || sSemTex) {
         D3DPixelShader *ps = ps_escolhe(d, estado);
         if (ps != sCurPs) {
             if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
@@ -4448,6 +4489,8 @@ static void desenha_fba(const GsDraw *d, uint32_t ini);
 static int comum_classe(const GsDraw *d, int af, int rapido, int trivial) {
     if (trivial) return T_C_TRIV;
     if (af) return T_C_AF;
+    /* (F8, BT3_OTIM_SEMTEX) o sem textura pelo ps_gs_semt fica na classe sem; o que vai ao especializado, na rapido sem */
+    if (sSemTex && d->mode[0] == 0) return rapido && d->misc[1] == 0.0f && d->mode[3] == 0 ? T_C_RAP_SEM : T_C_SEM;
     if (rapido && d->misc[1] == 0.0f && d->misc[3] == 0.0f && d->mode[3] == 0 && d->mode[0] != 2)
         return d->mode[0] ? T_C_RAP_TEX : T_C_RAP_SEM;
     return d->mode[0] == 0 ? T_C_SEM : d->mode[0] == 1 ? T_C_VRAM : d->mode[0] == 2 ? T_C_ALVO : T_C_PACOTE;

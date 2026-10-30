@@ -5,6 +5,7 @@
  * regra do rasterizador, retângulos vizinhos sem fresta nem sobreposição) e a redução das capturas (esc_reduz). Na retomada
  * do 720p (seção 9), a escala em num / den: 1,6 (640 x 460 em 1024 x 736), 1,33 (648 x 456 em 864 x 608) e 1,25 (640 x 512
  * em 800 x 640), a regra ceil(x * s - 0,5) e as escalas 1, 1,5 e 2 com os números da regra de antes, floor(x * meios / 2).
+ * Na F8 (docs/x360/plano/F8/09-escala.md), a 1,4 = 7/5 (640 x 480 em 896 x 672) e a menor área de cada escala perto dela.
  *
  *   gcc -std=c89 -pedantic -Wall -Wextra -Werror -Iport/x360/src/gs port/x360/tools/teste_escala.c -o /tmp/teste_escala
  *   /tmp/teste_escala            # 0: tudo bate
@@ -106,6 +107,24 @@ static void antes(int meios) {
     confere(difPx == 0 && difGs == 0, t);
 }
 
+/* (F8, 09-escala.md) A menor área (pixels do GS) em que a escala num / den passa pelas regras do esc_monta, sem a lista das
+   escalas: de 640 x 448 em passos de 1, a área na escala inteira e múltipla de 32 nos dois lados; 0 se nenhuma até 1024 cabe
+   na EDRAM. Diz qual escala perto da 1,4 fecha limpo e com que área. */
+static int menor_area(int num, int den, int *w, int *h, unsigned *tiles) {
+    int a, b;
+    for (a = ESC_IMG_W; a <= ESC_GS_LADO && ((a * num) % den != 0 || (a * num / den) % 32 != 0); a++) {
+    }
+    for (b = ESC_IMG_H; b <= ESC_GS_LADO && ((b * num) % den != 0 || (b * num / den) % 32 != 0); b++) {
+    }
+    if (a > ESC_GS_LADO || b > ESC_GS_LADO) {
+        return 0;
+    }
+    *w = a;
+    *h = b;
+    *tiles = esc_tiles(a * num / den, b * num / den);
+    return 2 * *tiles <= ESC_EDRAM_TILES;
+}
+
 /* (etapa 3) a redução: uma imagem de w x h pixels do GS ampliada para a escala (cada pixel do GS repetido nos pixels de
    saída dele) e reduzida volta igual; numa de 2 x 2 diferentes, a média arredondada */
 static void reduz(int num, int den) {
@@ -145,6 +164,10 @@ int main(int argc, char **argv) {
     aceita(640, 460, 8, 5, 1024, 736, 1040, 598);    /* 1,6: 598 + 598 */
     aceita(648, 456, 4, 3, 864, 608, 880, 418);      /* 1,33: 418 + 418 */
     aceita(640, 512, 5, 4, 800, 640, 800, 400);      /* 1,25: 400 + 400 */
+    /* (F8) a 1,4: 7 x largura / 5 múltipla de 32 pede a largura múltipla de 160 (7 e 160 sem fator comum): 640; a altura
+       também, e a primeira de 448 para cima é 480. 896 x 672: 12 x 42 tiles, os mesmos 504 da 1,5 (960 x 672) */
+    aceita(640, 480, 7, 5, 896, 672, 960, 504);      /* 1,4: 504 + 504 */
+    aceita(800, 640, 7, 5, 1120, 896, 1120, 784);    /* 1,4 numa área maior: 784 + 784, ainda cabe */
     confere(esc_tiles(1200, 720) == 675, "1200 x 720 (1,875 x 1,607): 675 tiles");
     confere(esc_tiles(1024, 720) == 585, "1024 x 720 (1,6): 585 tiles");
 
@@ -166,7 +189,12 @@ int main(int argc, char **argv) {
     recusa(640, 460, 1, 1);   /* a área da 1,6 na escala 1: 460 não é múltiplo de 32 */
     recusa(1024, 1024, 8, 5); /* 1638,4 */
     recusa(960, 640, 8, 5);   /* 1536 x 1024: 1.240 + 1.240 tiles, não cabe na EDRAM */
-    recusa(640, 448, 7, 5);   /* 1,4: fora da lista */
+    recusa(640, 448, 7, 5);   /* 1,4: 627,2 linhas, não inteira */
+    recusa(648, 456, 7, 5);   /* 1,4 na área da 1,33: 907,2 x 638,4 */
+    recusa(640, 512, 7, 5);   /* 1,4: 896 x 716,8 */
+    recusa(960, 800, 7, 5);   /* 1,4: 1344 x 1120, 1.190 + 1.190 tiles, não cabe na EDRAM */
+    recusa(640, 480, 11, 8);  /* 1,375: fora da lista */
+    recusa(640, 480, 29, 20); /* 1,45: fora da lista */
 
     /* os alinhamentos: o Resolve (8) e a profundidade (80), presos na área */
     alinha(3, 5, 17, 9, 640, 448, 1, 0, 0, 24, 16);
@@ -199,13 +227,17 @@ int main(int argc, char **argv) {
                 esc_le_escala("1.33", &n, &d) && n == 4 && d == 3 && esc_le_escala("1,33", &n, &d) && n == 4 && d == 3 &&
                 esc_le_escala("1.25", &n, &d) && n == 5 && d == 4 && esc_le_escala("1,25", &n, &d) && n == 5 && d == 4,
             "BT3_ESCALA 1.6, 1.33 e 1.25 (ponto ou vírgula)");
+    confere(esc_le_escala("1.4", &n, &d) && n == 7 && d == 5 && esc_le_escala("1,4", &n, &d) && n == 7 && d == 5 &&
+                !esc_le_escala("1.40", &n, &d) && !esc_le_escala("1.45", &n, &d) && !esc_le_escala("1.375", &n, &d) &&
+                !esc_le_escala("1.4 ", &n, &d) && !esc_le_escala("1.", &n, &d),
+            "BT3_ESCALA 1.4 e 1,4 aceitas; 1.40, 1.45 e 1.375 recusadas");
     confere(!esc_le_escala("3", &n, &d) && !esc_le_escala("", &n, &d) && !esc_le_escala("15", &n, &d) &&
                 !esc_le_escala("1.3", &n, &d) && !esc_le_escala("1.333", &n, &d) && !esc_le_escala("1.7", &n, &d) &&
                 !esc_le_escala("1.50", &n, &d) && !esc_le_escala("1.6 ", &n, &d) && !esc_le_escala("1;6", &n, &d) &&
                 !esc_le_escala(NULL, &n, &d),
             "BT3_ESCALA fora: recusada");
     confere(strcmp(esc_nome(1, 1), "1") == 0 && strcmp(esc_nome(4, 3), "1,33") == 0 && strcmp(esc_nome(8, 5), "1,6") == 0 &&
-                esc_nome(7, 5) == NULL,
+                esc_nome(7, 5) != NULL && strcmp(esc_nome(7, 5), "1,4") == 0 && esc_nome(11, 8) == NULL && esc_nome(29, 20) == NULL,
             "esc_nome: o texto do log");
 
     /* (etapa 3) as bordas na escala, os tamanhos e a redução das capturas */
@@ -230,6 +262,24 @@ int main(int argc, char **argv) {
             "esc_px na escala 1,25: as bordas 1, 2, 4 e 5; 640 x 512 em 800 x 640");
     confere(esc_gs(1024, 8, 5) == 640 && esc_gs(717, 8, 5) == 449 && esc_gs(864, 4, 3) == 648 && esc_gs(800, 5, 4) == 640,
             "esc_gs nas não inteiras");
+    /* (F8) a 1,4: o pixel 0 do GS cobre o de saída 0, o 1 os 1 e 2, o 2 o 3, o 3 os 4 e 5 (1 e 2 alternados, como na 1,5,
+       com o ciclo de 5 pixels do GS em 7); nenhum centro cai numa borda ((2k + 1) 5 / 14 nunca é inteiro) */
+    confere(esc_px(1, 7, 5) == 1 && esc_px(2, 7, 5) == 3 && esc_px(3, 7, 5) == 4 && esc_px(4, 7, 5) == 6 &&
+                esc_px(5, 7, 5) == 7 && esc_px(640, 7, 5) == 896 && esc_px(480, 7, 5) == 672 &&
+                esc_px(448, 7, 5) == 627 + sEstraga && esc_px(512, 7, 5) == 717,
+            "esc_px na escala 1,4: as bordas 1, 3, 4, 6 e 7; 640 x 480 em 896 x 672, 448 linhas em 627, 512 colunas em 717");
+    confere(esc_gs(896, 7, 5) == 640 && esc_gs(627, 7, 5) == 448 && esc_gs(1, 7, 5) == 1, "esc_gs na 1,4");
+    /* a menor área de cada escala perto da 1,4 (em pixels do GS, e os tiles de uma superfície): só a 1,4 fecha com a largura
+       de 640; a 1,375 (11/8) pede 768 x 512 (1056 x 704) e a 1,45 (29/20) 640 x 640 (928 x 928) */
+    {
+        unsigned t1 = 0, t2 = 0, t3 = 0;
+        int w1 = 0, h1 = 0, w2 = 0, h2 = 0, w3 = 0, h3 = 0, c1 = menor_area(7, 5, &w1, &h1, &t1),
+            c2 = menor_area(11, 8, &w2, &h2, &t2), c3 = menor_area(29, 20, &w3, &h3, &t3);
+        printf("menor área: 1,4 %dx%d (%u tiles), 1,375 %dx%d (%u), 1,45 %dx%d (%u)\n", w1, h1, t1, w2, h2, t2, w3, h3, t3);
+        confere(c1 && w1 == 640 && h1 == 480 + 32 * sEstraga && t1 == 504 && c2 && w2 == 768 && h2 == 512 && t2 == 616 &&
+                    c3 && w3 == 640 && h3 == 640 && t3 == 696,
+                "a menor área: 1,4 em 640 x 480 (504 tiles), 1,375 em 768 x 512 (616), 1,45 em 640 x 640 (696)");
+    }
     antes(2);
     antes(3);
     antes(4);
@@ -239,12 +289,14 @@ int main(int argc, char **argv) {
     bordas(8, 5, 1024);
     bordas(4, 3, 1024);
     bordas(5, 4, 1024);
+    bordas(7, 5, 1024);
     reduz(1, 1);
     reduz(3, 2);
     reduz(2, 1);
     reduz(8, 5);
     reduz(4, 3);
     reduz(5, 4);
+    reduz(7, 5);
     {
         unsigned q[4], m;
         q[0] = 0x0A141E29u; q[1] = 0x0A141E29u; q[2] = 0x14281E2Au; q[3] = 0x14281E2Au; /* 2 x 2 na escala 2 (pitch 2) */

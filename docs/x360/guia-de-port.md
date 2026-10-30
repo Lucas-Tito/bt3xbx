@@ -2071,6 +2071,25 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   para cada Resolve que sai do caminho, escreva quem lê aquele alvo e em que linha do laço, e ponha um contador que confere a
   leitura no ponto em que ela acontece (depois da troca, antes do desenho), com uma chave de sabotagem para vê-lo acusar.
 
+### A escala 1,4 e o sem textura (F8, `plano/F8/09-escala.md`)
+
+- **Uma escala fracionária só fecha na grade da EDRAM com a área certa:** com `num / den` e lados múltiplos de 32 na escala,
+  o lado do GS tem de ser múltiplo de `32 x den / mdc(num, 32)`. A 1,4 (7/5) pede 160: 640 x 480 (448 não fecha). A 1,375
+  (11/8) pede 256 e a 1,45 (29/20) pede 640: escalas "redondas" podem custar uma superfície bem maior que a vizinha. Faça a
+  conta da menor área num teste antes de prometer uma escala.
+- **`BT3_ESCALA` sem `BT3_ALVO_AREA` cai na escala 1 com 1024 x 1024**, o caminho mais lento, quando a área padrão não vale
+  na escala pedida: o ambiente de rodada leva as duas chaves.
+- **Leia o perfil fino antes de escolher a otimização:** o `BT3_ESCALA_FX` (os efeitos na escala 1) estava estimado em 3 a 5
+  ms pela GPU grossa de 22/10; o perfil por classe e por alvo de 28/10 deu 2 ms para tudo o que ele encolheria e 5,8 ms
+  para o desenho sem textura pelo shader geral, que lia uma textura branca e jogava a leitura fora.
+- **Um `if` com um `uniform bool` muda o microcódigo dos shaders de sempre:** pôr o bloco da textura dentro de `if
+  (!semTex)` trocou um `mul` por `mulsc` e desfez um par no `ps_gs`, no `ps_gsz` e no `ps_gs_af`, com `semTex` falso. Pôr
+  o `semTex ? 0 : tex2Dgrad(...)` na própria linha da leitura deixou os 25 headers byte a byte iguais. Compare os headers
+  com o mesmo comando do `build_f2.sh`: o header traz a linha do `fxc` no comentário, e um `/Fc` a mais já a muda.
+- **Tirar código morto de um shader deixa o `fxc` dobrar contas:** sem o ramo da função da textura (nunca tomado no modo 0),
+  o `cor.a * k` e o `* 128 + 0,5` do teste de alfa viraram um `mad` só com 255. Mantenha o ramo e confira na listagem `/Fc`
+  que as contas do que tem de dar o mesmo byte saem com as mesmas instruções.
+
 ### O bilinear afiado (F5, etapa 8, `plano/F5/08-720p.md`, seção 10)
 
 - **O header do `fxc` traz a linha de comando no comentário:** dois headers do mesmo shader compilados com caminhos de saída

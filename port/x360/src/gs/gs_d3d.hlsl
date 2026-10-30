@@ -115,8 +115,13 @@ float4 afiado_le(float2 uv0, float2 dx, float2 dy, float4 caixa) {
 
 // O corpo do pixel shader das primitivas do GS e dos programas da VU1 (ps_gs e ps_gsz abaixo). (BT3_AFIADO) afiado, só no
 // ps_gs_af: a leitura da arte 2D pelo afiado_le, com a caixa da peça; falso nos outros, que saem como antes (a caixa
-// não é lida).
-float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool afiado) {
+// não é lida). (F8, BT3_OTIM_SEMTEX; docs/x360/plano/F8/09-escala.md) semTex, só no ps_gs_semt e no ps_gsz_semt, que o
+// gs_d3d.cpp escolhe só para desenhos sem textura (modo.x 0): sem a leitura da textura, que com modo.x 0 ninguém usa (o uv
+// e os gradientes, que só ela lia, o fxc tira). O ramo da função da textura fica, com t zero e nunca tomado (modo.x 0):
+// sem ele, o fxc junta o cor.a * k com o * 128 do teste de alfa num mad só (cor.a * 255 + 0,5), outra ordem de contas;
+// com ele, a listagem tem o mul e o mad do geral. O DATE, o teste de alfa e o FBA são o mesmo texto. Falso nos outros,
+// cujo microcódigo sai igual ao de antes.
+float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool afiado, uniform bool semTex) {
     float k = 255.0f / 128.0f;
     // o centro do pixel em qualquer convenção do VPOS (inteiro ou com o meio pixel): o gl_FragCoord do GL
     float2 f = floor(vpos) + 0.5f;
@@ -154,7 +159,8 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool 
         if (modo.x == 2.0f) {
             uv = clamp(uv, rect.xy, rect.zw);
         }
-        t = tex2Dgrad(tex, uv * esc.xy, dx * esc.xy, dy * esc.xy);
+        // (semTex: sem a leitura)
+        t = semTex ? float4(0.0f, 0.0f, 0.0f, 0.0f) : tex2Dgrad(tex, uv * esc.xy, dx * esc.xy, dy * esc.xy);
     }
     if (modo.x != 0.0f) {
         if (modo.x != 2.0f) {
@@ -187,11 +193,11 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool 
 }
 
 float4 ps_gs(GsPixel e) : COLOR0 {
-    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false);
+    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, false);
 }
 struct GsPixelAf { float4 cor : COLOR0; float3 stq : TEXCOORD0; float4 caixa : TEXCOORD1; float2 vpos : VPOS; };
 float4 ps_gs_af(GsPixelAf e) : COLOR0 {
-    return gs_pixel(e.cor, e.stq, e.vpos, e.caixa, true);
+    return gs_pixel(e.cor, e.stq, e.vpos, e.caixa, true, false);
 }
 
 // F5, etapa 7 (segunda parte): o pixel shader dos programas da VU1 com o recorte pelo w (ver vu_pos abaixo). A
@@ -201,7 +207,21 @@ struct GsPixelZ { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 zw : TEXCO
 struct GsSaidaZ { float4 cor : COLOR0; float z : DEPTH; };
 GsSaidaZ ps_gsz(GsPixelZ e) {
     GsSaidaZ s;
-    s.cor = gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false);
+    s.cor = gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, false);
+    s.z = saturate(e.zw.x / e.zw.y);
+    return s;
+}
+
+// (F8, BT3_OTIM_SEMTEX) O ps_gs e o ps_gsz dos desenhos sem textura (modo.x 0) que o especializado não pega: com DATE ou
+// teste de alfa (e, sem o BT3_OTIM_PS, todos os sem textura). O gs_pixel sem a leitura da textura: no geral, com modo.x 0,
+// a leitura da branca (com os gradientes do tex2Dgrad) era feita e jogada fora. As entradas são as do ps_gs e do ps_gsz (o
+// stq chega e não é lido), para os vertex shaders de sempre.
+float4 ps_gs_semt(GsPixel e) : COLOR0 {
+    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, true);
+}
+GsSaidaZ ps_gsz_semt(GsPixelZ e) {
+    GsSaidaZ s;
+    s.cor = gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, true);
     s.z = saturate(e.zw.x / e.zw.y);
     return s;
 }
