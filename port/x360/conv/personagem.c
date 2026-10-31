@@ -435,6 +435,22 @@ static void animacao(ConvCtx *c, conv_ofs a, conv_ofs b) {
             Conv_U32s(c, t + 4, n * 6);       /* x, y, z, frame, rot lo, rot hi */
         }
     }
+    /* Vão entre os eventos e a primeira trilha, que nenhum campo aponta e que o jogo não lê (só lê eventos até
+       eventCount e volumes apontados por eventos). Só uma animação do elenco tem vão não nulo: a 0x9A do personagem
+       82, em pzs3us1/02251.bin@0x4E400 (eventCount 0, 1.860 bytes). Vira bytes, sem troca; o resto segue em Conv_Zeros. */
+    if (!c->erro) {
+        conv_ofs ini = a + 0x94 + eventos * 0x10, fim = b, o;
+        for (i = 0; i < 71; i++) {
+            if (trilha[i] != 0 && a + (conv_ofs)trilha[i] * 4 < fim) {
+                fim = a + (conv_ofs)trilha[i] * 4;
+            }
+        }
+        for (o = ini; o < fim; o++) {
+            if (Conv_Marca(c, o) == CONV_LIVRE) {
+                Conv_Bytes(c, o, 1);
+            }
+        }
+    }
     Conv_Zeros(c, a, b, "animação");
 }
 
