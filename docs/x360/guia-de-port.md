@@ -3253,3 +3253,22 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   unicidade cobriu o caso dos zeros. Cada regra do identificador tem de ter
   um caso próprio no teste, e a lista de mutantes roda de novo a cada
   mudança dele (`~/revisao-iso-v4/mutantes-isoverif.log`).
+
+### Pular o envio à VU1 sem mudar a imagem (F8, tela dividida, C1, `plano/F8/13-tela-dividida.md`)
+
+- O jogo recorta o estágio de cada metade com a largura da tela cheia (o `StgFrustum_Build` lê `scissorX0` e `scissorY0` como
+  `x0` e `x1`). Trocar o recorte muda a fase da animação de textura (ela avança no desenho). O caminho seguro é manter o
+  recorte largo decidindo tudo e usar uma segunda tabela, do ramo da meia largura sobre uma cópia da vista, só para
+  decidir se o `Vu1Pkt_CallProg4` sai. Cada chamada reinicia a VU1 (`MSCALF 0`) e traz a cabeça de objeto e o A+D de cada
+  lote; o pacote de textura e a animação ficam fora da chamada, então pular só ela não deixa estado para as malhas
+  seguintes. A tabela estreita nunca escreve `cell->vis`.
+- Prova na x86: as capturas do roteiro `f7_dividido` (várias distâncias depois de `marca ponto dividido`) idênticas com a chave
+  ligada e desligada, a mesma chave num duelo de um jogador pulando zero malhas, e uma cópia com as normais laterais
+  encolhidas de propósito tendo de dar imagem diferente (deu, 345 bytes por captura). O hash do estado inteiro
+  (coluna 2 do `BT3_HASH`) NÃO é determinístico de uma rodada para a outra, nem com a chave desligada nas duas; o que vale é a
+  coluna 3 (os valores da luta) mais as imagens.
+- Armadilhas do WSL: a base `43b27d0a` não tem os roteiros da F7 etapa 3 (`f7_dividido.txt`, `BT3_DOIS`); levar o ramo
+  inteiro por `git bundle` em base64 pela entrada padrão (o `ssh` recusa linha de comando longa). O `ssh ... | grep -v`
+  devolve sempre 0: esperar uma rodada com `until ... && echo PRONTO | grep -q PRONTO`, e um marcador novo por rodada
+  (o `FIM` antigo no mesmo arquivo encerra a espera na hora). A primeira compilação do `headless.py` numa árvore nova
+  falhou duas vezes com "unable to rename temporary" nos objetos; repetir a compilação completa passou.

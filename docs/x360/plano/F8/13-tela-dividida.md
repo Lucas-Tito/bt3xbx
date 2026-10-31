@@ -55,7 +55,7 @@ ela deixar de ser a mais lenta.
 
 | Ponto | Ganho [estimado] | Custo | Quando |
 |---|---|---|---|
-| **C1. Recorte justo do estágio na dividida**: manter a tabela larga decidindo a animação de textura (`stgm_a.c:404`) e pular só o `Vu1Pkt_CallProg4` (`stgm_a.c:327` e `:445`) das malhas fora da meia vista; imagem igual | 3 a 6 ms | 2 a 4 dias | 1.0 (em andamento) |
+| **C1. Recorte justo do estágio na dividida**: manter a tabela larga decidindo a animação de textura (`stgm_a.c:404`) e pular só o `Vu1Pkt_CallProg4` (`stgm_a.c:327` e `:445`) das malhas fora da meia vista; imagem igual | 3 a 6 ms | 2 a 4 dias | 1.0 (implementado atrás de `BT3_DIVIDIDA_RECORTE=1`, desligada; falta medir no console) |
 | **D2. Cópia especializada** no unpack da VU1 e na cópia de vértices do `GsGpu_DrawVu0` (mesmos bytes) | 1,5 a 3 ms | 1 dia | 1.0 (em andamento) |
 | D3. Otimização entre arquivos (LTCG) só nos objetos do GS | 1 a 4 ms, incerto | Makefile e uma medida | 1.0 ou 1.1 |
 | D1. Atalhos por "nada mudou" entre lotes seguidos (`draw_state_vu`, `est_acerta`, `vu_uniforme_igual`, `same_state_vu`, `date_snapshot`, `vu_fecho`) | 3 a 6 ms | 3 a 5 dias | 1.1 |
