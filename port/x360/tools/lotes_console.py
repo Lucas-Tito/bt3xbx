@@ -71,13 +71,13 @@ def prepara(saida, rodada, quadros, repeticoes, modo='relogio'):
         manifesto.append(dict({'abertura': nome, 'build': build, 'save': save, 'modo': modo}, **m))
     (saida / 'manifesto.json').write_text(json.dumps(manifesto, indent=2) + '\n')
     (saida / 'ordem.txt').write_text('\n'.join(f'{c[0]} {c[1]}' for c in casos) + '\n')
-    shutil.copyfile(saida / f'ambiente_{casos[0][0]}.txt', saida / 'ambiente.txt')
+    shutil.copyfile(saida / f'ambiente_{casos[0][0]}.txt', saida / 'environment.txt')
     if modo == 'imagem':
         (saida / 'LEIA.txt').write_text(f'''Rodada {rodada}: a imagem do BT3_GS_LOTES, primeira parte (F5, seção 38 do 08-gravacao.md).
 Duas builds do mesmo commit (ordem.txt: abertura e build): normal (build_f2.sh) e lotes (BT3_GS_LOTES=1). Antes de abrir:
 conferir o carimbo, a linha "gs_d3d: lotes (BT3_GS_LOTES), primeira parte ligada" só nas lot* ("desligada" nas lct*), e a
 inexistência de TODOS os saves e pastas de captura do manifesto. Se qualquer um existir, gerar outra rodada inteira.
-Executar na ordem, cada abertura com o ambiente_<nome>.txt como ambiente.txt. Trazer o log e a pasta game:\\<pasta> de cada uma.
+Executar na ordem, cada abertura com o ambiente_<nome>.txt como environment.txt. Trazer o log e a pasta game:\\<pasta> de cada uma.
 A prova: compara_quadros.py <pasta lot> <pasta nor> com todos os pixels iguais em todos os quadros {lista}, e o mesmo para
 lct contra nor (o controle); no log das lot, "lotes, no trecho" com planos previstos e, em todas, "fora da vaga 0", "alvo lido
 sem Resolve 0" e o DATE "lendo fora do que o alvo tinha" em 0 na normal. Imagem igual não é ganho: o envio ainda espera a entrega.
@@ -88,7 +88,7 @@ Duas builds de perfil do mesmo commit (ordem.txt: abertura e build): perfil (BT3
 (BT3_PERFIL_CADEIA=1 BT3_ALFA_ORIGEM=1). Antes de abrir: conferir o carimbo, a linha "gs_d3d: alfa exato na origem" só
 na perfil+alfa, a linha "relogio: o relógio da gravação ligado" só nas aberturas rel*, e a inexistência de TODOS os saves
 do manifesto. Se qualquer save existir, gerar outra rodada inteira. Não reutilizar {", ".join(ANTIGAS)}.
-Executar na ordem, cada abertura com o ambiente_<nome>.txt como ambiente.txt. Preservar os logs com o nome da abertura e SHA256.
+Executar na ordem, cada abertura com o ambiente_<nome>.txt como environment.txt. Preservar os logs com o nome da abertura e SHA256.
 O que se lê: nas rel*, as linhas "relogio:" dos quadros {lista} com os carimbos por desenho (prefixos_teto.py --console
 LOG --so-relogio confere; com LISTAS e DADOS, o modelo C); nas ctl*, só a linha "relogio: fim" dos mesmos quadros (J, G, P
 e U), para comparar com e sem os carimbos.
@@ -127,8 +127,8 @@ def confere(pasta, rodada):
                 raise ValueError(f'{m["abertura"]}: captura ou lotes diferentes do manifesto')
             if (m['build'] == 'lotes') != m['abertura'].startswith('l') or (m['lotes'] == 1) != m['abertura'].startswith('lot'):
                 raise ValueError(f'{m["abertura"]}: build ou chave trocada')
-    if (pasta / 'ambiente.txt').read_text() != (pasta / f'ambiente_{man[0]["abertura"]}.txt').read_text():
-        raise ValueError('ambiente.txt não é o da primeira abertura')
+    if (pasta / 'environment.txt').read_text() != (pasta / f'ambiente_{man[0]["abertura"]}.txt').read_text():
+        raise ValueError('environment.txt não é o da primeira abertura')
     return len(man)
 
 

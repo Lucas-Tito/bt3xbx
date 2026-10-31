@@ -47,12 +47,12 @@ def prepara(p, rodada, modo, repeticoes=2):
         man.append(dict(abertura=n, build=b, save=save, modo=modo, lotes=l, envio=e, ambiente=env))
     (p / 'manifesto.json').write_text(json.dumps(man, indent=2) + '\n')
     (p / 'ordem.txt').write_text(''.join(f'{m["abertura"]} {m["build"]}\n' for m in man))
-    shutil.copyfile(p / f'ambiente_{man[0]["abertura"]}.txt', p / 'ambiente.txt')
+    shutil.copyfile(p / f'ambiente_{man[0]["abertura"]}.txt', p / 'environment.txt')
     (p / 'LEIA.txt').write_text(f'''Rodada {rodada}, F5 seção 40: {modo}, {len(man)} aberturas.
 Builds do mesmo commit, com carimbo e manifesto de hashes antes de enviar. Build normal sem chaves;
 lotes com BT3_GS_LOTES=1; sufixo alfa com BT3_ALFA_ORIGEM=1; prefixo perfil com BT3_PERFIL_CADEIA=1.
 Nunca reutilizar save/pasta já existente: conferir TODOS os nomes do manifesto antes da primeira abertura.
-Abrir na ordem.txt, copiando ambiente_NOME.txt para ambiente.txt e o xex da build indicada.
+Abrir na ordem.txt, copiando ambiente_NOME.txt para environment.txt e o xex da build indicada.
 ctl: ambas as partes desligadas; pln: só plano/DATE da seção 38; lot: envio durante a gravação.
 Sem VU1 direto, EDRAM residente ou plano anterior válido não há envio antecipado. Conferir linhas lotes dos quadros.
 Tempo: nenhuma captura; BT3_RELOGIO_MARCAS=0. prefixos_teto.py --console LOG --so-relogio deve aceitar cada log.
@@ -102,7 +102,7 @@ def confere(p, rodada, modo, repeticoes):
             raise ValueError('captura fora da rodada de imagem')
     if (p / 'ordem.txt').read_text() != ''.join(f'{m["abertura"]} {m["build"]}\n' for m in man):
         raise ValueError('ordem diferente')
-    if (p / 'ambiente.txt').read_bytes() != (p / f'ambiente_{man[0]["abertura"]}.txt').read_bytes():
+    if (p / 'environment.txt').read_bytes() != (p / f'ambiente_{man[0]["abertura"]}.txt').read_bytes():
         raise ValueError('primeiro ambiente diferente')
 
 

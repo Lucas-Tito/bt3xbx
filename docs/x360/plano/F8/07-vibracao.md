@@ -80,7 +80,7 @@ branches, com uma função nova do `pad360.c`.
 
 ## 5. A prova de console (preparada)
 
-Enviar com o console parado na FreeStyle, sem `ambiente.txt` (os padrões da main bastam):
+Enviar com o console parado na FreeStyle, sem `environment.txt` (os padrões da main bastam):
 `python3 port/x360/tools/subir.py build/x360/f2/default.xex build/x360/f2/default.dat build/x360/f2/default.swap`
 (da worktree `bt3xbx-vibra`; conferir o md5 da seção 3). No fim, `subir.py --baixar bt3xbx.log`.
 

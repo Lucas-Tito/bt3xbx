@@ -298,8 +298,8 @@ for n in "${NOMES[@]}"; do
             if [ "$JUNTA" = 1 ]; then
                 while read -r t VT; do cp $D/ppcsm.txt $D/mem_$t/ppc.txt; done < $D/mem_telas.txt
                 if [ -n "${IMG:-}" ]; then
-                    cp $D/ppcsm.txt $D/img/ppc/saida.txt
-                    cp $D/x86mem.txt $D/img/x86/saida.txt
+                    cp $D/ppcsm.txt $D/img/ppc/output.txt
+                    cp $D/x86mem.txt $D/img/x86/output.txt
                 fi
             fi
         fi

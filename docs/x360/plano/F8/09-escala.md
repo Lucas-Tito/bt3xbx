@@ -185,7 +185,7 @@ e `boot.txt` (cópias dos de `build/sessao_2810/gpu`, iguais aos de `port/x360/r
 abertura e o `ordem.txt`. Cada ambiente é o `ambiente_base1.txt` de `build/sessao_2810/gpu` (o release com o `f5_duelo`
 pelo roteiro, 16:9, FXAA, `BT3_PICOS=36`, `BT3_PICOS_TELA=1`, `BT3_TEMPOS=0`; todas as chaves dele existem na main), mais
 `BT3_ISO=game:\bt3-x360.iso`, a escala, a chave e saves próprios (`game:\sv_esc_<nome>`), com o que mede no comentário do
-topo. O `ambiente.txt` é a cópia do `ambiente_a133.txt`. Uns 4 a 5 minutos por abertura.
+topo. O `environment.txt` é a cópia do `ambiente_a133.txt`. Uns 4 a 5 minutos por abertura.
 
 | # | Arquivo | Escala (área) | Chave | `BT3_TEMPOS` | Para quê |
 |---|---|---|---|---|---|
@@ -198,11 +198,11 @@ topo. O `ambiente.txt` é a cópia do `ambiente_a133.txt`. Uns 4 a 5 minutos por
 
 ```
 python3 port/x360/tools/subir.py build/sessao_escala/default.xex build/sessao_escala/default.dat \
-    build/sessao_escala/default.swap build/sessao_escala/ambiente.txt build/sessao_escala/f5_duelo.txt \
+    build/sessao_escala/default.swap build/sessao_escala/environment.txt build/sessao_escala/f5_duelo.txt \
     build/sessao_escala/boot.txt build/sessao_escala/ambiente_*.txt
 # abertura a; depois, com o console de volta na FreeStyle:
 python3 port/x360/tools/subir.py --baixar bt3xbx.log --para build/sessao_escala/a133
-python3 port/x360/tools/subir.py --nome ambiente.txt build/sessao_escala/ambiente_b14.txt
+python3 port/x360/tools/subir.py --nome environment.txt build/sessao_escala/ambiente_b14.txt
 # abertura b; baixar o log para build/sessao_escala/b14; o mesmo com cada linha do ordem.txt
 ```
 

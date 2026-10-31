@@ -86,7 +86,7 @@ inline void ZeroMemory(void *p, std::size_t n) {
 inline DWORD XShowMessageBoxUI(unsigned, const wchar_t *titulo, const wchar_t *texto, unsigned n, LPCWSTR *b,
                                unsigned padrao, unsigned, MESSAGEBOX_RESULT *r, XOVERLAPPED *) {
     TesteExigir(titulo && texto && b && n >= 1 && n <= 2, "caixa inválida");
-    TesteExigir(!std::wcsstr(texto, L"ambiente.txt") && !std::wcsstr(texto, L"BT3_"), "texto interno exposto");
+    TesteExigir(!std::wcsstr(texto, L"ambiente.txt") && !std::wcsstr(texto, L"environment.txt") && !std::wcsstr(texto, L"BT3_"), "texto interno exposto");
     if (n == 2)
         TesteExigir(padrao == 1, "pergunta sem Cancel padrão");
     if (gNegar) {

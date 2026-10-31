@@ -12,7 +12,7 @@ Na revisão Linux, compilar o commit entregue. Levar juntos o `.xex`, `.dat`, `.
 rodada anterior: os quatro ambientes gerados apontam para saves distintos. Antes de cada abertura, conferir
 que a pasta indicada por `BT3_SAVES` ainda não existe; gerar nova rodada se existir. Não apagar saves do usuário.
 Anotar commit, hash dos três arquivos da build, ambiente, ISO e identificador. Copiar só o ambiente escolhido
-como `game:\ambiente.txt`, reiniciar o título e recolher/renomear o log antes de outro caso.
+como `game:\environment.txt`, reiniciar o título e recolher/renomear o log antes de outro caso.
 
 1. `01_simples.txt`: Goku Early/Kuririn, mirante do Kami, 1P/COM, três janelas de 600 passos, separadas por pausa.
 2. `02_dividido.txt`: mesma dupla/arena, 1P/2P pelo roteiro, três janelas de 600 passos. A primeira é fria e as
