@@ -393,7 +393,15 @@ static int pad_read(int socket, unsigned char *data) {
     return 18;
 }
 int sceVibGetProfile() { return 0; }
+#ifdef PORT_X360 /* the 360's controllers vibrate (port/x360/src/f2/pad360.c): data is Pad_SendActuator's vibData */
+extern int Port_PadVibrar(int socket, unsigned data);
+int sceVibSetActParam(int socket, int profileSize, unsigned char *profile, int dataSize, void *data) {
+    (void)profileSize; (void)profile; (void)dataSize;
+    return Port_PadVibrar(socket, *(const unsigned short *)data);
+}
+#else
 int sceVibSetActParam() { return 0; }
+#endif
 
 /* ---- MPEG movies: port/src/plat_movie.c ---- */
 

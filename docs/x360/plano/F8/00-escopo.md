@@ -73,7 +73,7 @@ esses commits estão empilhados em `teste/queda-console`, que é o branch subido
 | 4 | Preto intermitente de Namek no Shenlong | por fazer; rodada de 4 aberturas preparada ([F5/09](../F5/09.md), `f5-shenlong`, `codex/f5-namek`) | F5 com a cadeia de desenho assentada (decisão 32); console | caixa de tempo, pergunta 10 |
 | 5 | Deserto à noite escuro demais | por fazer; sem captura | idem; a primeira captura | caixa de tempo, pergunta 10 |
 | 11 | Sessão longa e saída pela Guide | por fazer | a build da release | 1 sessão de 1 h |
-| (d. 21) | Vibração (`Pad_SendActuator` para `XInputSetState`) | por fazer, nunca implementada | pergunta 4; console | 1 a 2 dias |
+| (d. 21) | Vibração (`Pad_SendActuator` para `XInputSetState`) | em branch (`claude/f8-vibracao`, [07-vibracao](07-vibracao.md)); decidida na 33.4 | console: a prova da seção 5 de lá | 1 sessão curta |
 | (16:9) | Seguir o ajuste de tela do painel (`XGetVideoMode().fIsWideScreen`) | por fazer ([16x9](16x9.md), etapa 4) | pergunta 3; console | 0,5 a 1 dia |
 | (d. 15) | Opções do port e remapeamento | por decidir; recomendação: nada | pergunta 2 | 0, ou 3 a 6 dias |
 | (d. 22) | Importar e exportar saves | por decidir; recomendação: fora | pergunta 5 | 0, ou 5 a 10 dias (o `SaveData` não está tipado) |
