@@ -43,7 +43,7 @@ struct Dispositivo {
 } dev, *sDev = &dev;
 struct GsDraw { int vu, target, mode[4]; float misc[4]; };
 static int afiado_usa(const GsDraw *, int) { return 0; }
-static unsigned sOtim = 0, sPsTrivial = 0;
+static unsigned sOtim = 0, sPsTrivial = 0, sSemTex = 0;  // sSemTex: BT3_OTIM_SEMTEX, padrão 1 no jogo
 #define OT_PS 1
 '''
 main = r'''
@@ -56,6 +56,9 @@ int main() {
  d.mode[0]=1; assert(comum_classe(&d,0,1,0)==T_C_RAP_TEX);
  d.misc[1]=1; assert(comum_classe(&d,0,1,0)==T_C_VRAM);
  d.misc[1]=0; d.mode[0]=3; assert(comum_classe(&d,0,0,0)==T_C_PACOTE);
+ d.mode[0]=0; d.misc[3]=1; assert(comum_classe(&d,0,1,0)==T_C_SEM); d.misc[3]=0;
+ sSemTex=1; assert(comum_classe(&d,0,1,0)==T_C_RAP_SEM && comum_classe(&d,0,0,0)==T_C_SEM);
+ d.misc[3]=1; assert(comum_classe(&d,0,1,0)==T_C_RAP_SEM); d.misc[3]=0; sSemTex=0;
  d.mode[0]=2;
  sTempo.ligado=sCortesGpu=sComumGpu=1; sTempo.freq=1;
  sCortesGpuA=sCortesGpuB=6960;
