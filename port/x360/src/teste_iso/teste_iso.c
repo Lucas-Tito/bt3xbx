@@ -6,6 +6,7 @@
 #include "f2/blocos.h"
 #include <stdarg.h>
 
+int gX360Log = 1; /* Ensaio de desenvolvimento. */
 long long gTesteLentaIni, gTesteLentaFim;
 long gTesteLentaUs;
 volatile int gTesteDentro;

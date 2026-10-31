@@ -17,7 +17,7 @@ Busca nos fontes do backend e nos caminhos do port usados pelo 360, antes da tra
 | `port/src/gs/ui.cpp` e `port/src/plat_mem.c`, `MessageBoxA` | Opções, notificações e caixa do PC | `ui.cpp` não entra na build do 360; a caixa Win32 é excluída por `!PORT_X360` |
 
 Não há outro renderizador de texto de diagnóstico no backend. Os menus e avisos do próprio jogo continuam vindo do
-disco. `Diario_Escrever`, `printf` e `fprintf` do backend vão a `bt3xbx.log` e `saida.txt`; não são legendas das cores.
+disco. `Diario_Escrever`, `printf` e `fprintf` do backend vão a `bt3xbx.log` e `output.txt`; não são legendas das cores.
 Os textos de diagnóstico locais ficam em português. Não se traduziu o código upstream de logs que já estava em inglês.
 
 ## Mensagens e identificação

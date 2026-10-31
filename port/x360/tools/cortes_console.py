@@ -22,7 +22,8 @@ for nome, constantes, fecho, diag, gpu in [
     ('gravacao', 0, 0, '6900,7025', '0'), ('gpu6930', 0, 0, '0', '6929,6931'),
     ('gpu6960', 0, 0, '0', '6959,6961')]:
     linhas = [
-        '-BT3_DEMO', 'BT3_NOMOVIE=1', 'BT3_DESBLOQUEIO=1', r'BT3_ROTEIRO=game:\f5_duelo.txt',
+        'BT3_LOG=1', 'BT3_ESTADO_TEMPOS=1', 'BT3_FILME_MEDIDAS=1', 'BT3_SOM_MEDIDAS=1',
+                  '-BT3_DEMO', 'BT3_NOMOVIE=1', 'BT3_DESBLOQUEIO=1', r'BT3_ROTEIRO=game:\f5_duelo.txt',
         'BT3_GS_THREAD=1', 'BT3_GS_DESENHO=1', 'BT3_SOM=1', 'BT3_WIDE=1',
         'BT3_ESCALA=1.33', 'BT3_FXAA=1', 'BT3_VU1_DIRETO=1', 'BT3_ENVIO_RAPIDO=1', 'BT3_TEMPOS=0',
         'BT3_TEX_ORIGEM=1', 'BT3_PICOS=36', 'BT3_PICOS_TELA=1',
@@ -30,7 +31,7 @@ for nome, constantes, fecho, diag, gpu in [
         f'BT3_CORTES={diag}', f'BT3_CORTES_GPU={gpu}',
         f'BT3_SAVES=game:\\sv_{a.rodada}_{nome}',
     ]
-    (a.saida / ('ambiente_' + nome + '.txt')).write_text('\n'.join(linhas) + '\n')
-shutil.copyfile(a.saida / 'ambiente_base.txt', a.saida / 'ambiente.txt')
+    (a.saida / ('environment_' + nome + '.txt')).write_text('\n'.join(linhas) + '\n')
+shutil.copyfile(a.saida / 'environment_base.txt', a.saida / 'environment.txt')
 print('ambientes e roteiros preparados em', a.saida)
 print('A build do 360 e a rodada são feitas na revisão. Use saves novos em toda abertura.')

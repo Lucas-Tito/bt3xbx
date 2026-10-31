@@ -13,7 +13,7 @@
  * conta), e uma falha dentro da mistura (o código do jogo roda ali) é pega por __try: a mistura passa a dar silêncio,
  * a trava é devolvida e o vigia escreve onde foi (Iar, Lr), sem derrubar o jogo.
  *
- * Chaves do ambiente.txt (o getenv do posix360.c):
+ * Chaves do environment.txt (o getenv do posix360.c):
  *   BT3_SOM=1          o som do jogo: o SDL_InitSubSystem do snd_adx.c passa a abrir o dispositivo. Sem ela, o jogo
  *                      fica como antes da etapa 3. Só tem efeito com desenho (BT3_GS=gpu), como no PC
  *   BT3_SOM_TESTE=1    o tom de teste no começo, pelo mesmo caminho (fluxos do núcleo), em cinco fases
@@ -51,7 +51,7 @@ extern unsigned gPortVBlanks, gGsFrame;
 extern volatile unsigned gX360Luta;
 }
 
-#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
+#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt) */
 
 #define BLOCO 512   /* quadros por buffer: 10,7 ms */
 #define NBUF 4      /* buffers na fila: até 42,7 ms de folga para o retorno atrasar */
@@ -69,6 +69,7 @@ static LARGE_INTEGER sFreq;
 static HANDLE sSistema;
 static volatile LONG sGuide;
 static int sDeriva;
+static int sMedidas;
 static LARGE_INTEGER sDerivaIni;
 static int sFilmeLog;
 struct FilmeTempoEntrada {
@@ -153,7 +154,7 @@ extern "C" void som_destravar(void) {
 
 extern "C" const char *SDL_GetError(void) {
     if (!sJogo) {
-        return "som do jogo desligado (BT3_SOM=1 no ambiente.txt liga)";
+        return "som do jogo desligado (BT3_SOM=1 no environment.txt liga)";
     }
     if (!sLigado) {
         return "o XAudio2 não abriu (ver o diário)";
@@ -195,6 +196,7 @@ static unsigned Microssegundos(LONGLONG t) {
 /* microssegundos de um relógio que só anda (diferenças em unsigned atravessam a volta) */
 extern "C" unsigned Som360_Agora(void) {
     LARGE_INTEGER t;
+    if (!sMedidas) return 0;
     if (sFreq.QuadPart == 0) {
         QueryPerformanceFrequency(&sFreq);
     }
@@ -205,6 +207,7 @@ extern "C" unsigned Som360_Agora(void) {
 /* tipo 0: do comando de efeito ao primeiro bloco misturado; 1: do início de um fluxo ao primeiro som dele */
 extern "C" void Som360_Latencia(int tipo, unsigned us) {
     unsigned ms = us / 1000;
+    if (!sMedidas) return;
     if (tipo < 0 || tipo > 1) {
         return;
     }
@@ -217,6 +220,7 @@ extern "C" void Som360_Latencia(int tipo, unsigned us) {
 
 /* o som na thread do jogo: 0 RPC do SOUNDS.IRX, 1 envio de banco, 2 início de fluxo, 3 cabeçalhos vistos no vblank */
 extern "C" void Som360_CustoJogo(int tipo, unsigned us) {
+    if (!sMedidas) return;
     if (tipo < 0 || tipo > 3) {
         return;
     }
@@ -316,6 +320,7 @@ static void Encher(int i) {
             if (TryEnterCriticalSection(&sTrava)) {
                 unsigned espera;
                 pegou = 1;
+                if (!sMedidas) break;
                 QueryPerformanceCounter(&t);
                 espera = Microssegundos(t.QuadPart - t0.QuadPart);
                 if (espera > sTravaPiorUs) {
@@ -357,13 +362,15 @@ static void Encher(int i) {
             }
         }
     }
-    QueryPerformanceCounter(&t1);
-    us = Microssegundos(t1.QuadPart - t0.QuadPart);
-    if (us > sPiorUs) {
-        sPiorUs = us;
-    }
-    if (us > 5000) {
-        sBlocosLentos++;
+    if (sMedidas) {
+        QueryPerformanceCounter(&t1);
+        us = Microssegundos(t1.QuadPart - t0.QuadPart);
+        if (us > sPiorUs) {
+            sPiorUs = us;
+        }
+        if (us > 5000) {
+            sBlocosLentos++;
+        }
     }
     ZeroMemory(&b, sizeof(b));
     b.AudioBytes = sizeof(sBuf[i]);
@@ -616,6 +623,7 @@ static DWORD WINAPI Vigia(LPVOID arg) {
     /* depois do tom: uma linha quando aparecer falta, trava perdida ou queda, e a cada 60 s com o som do jogo */
     while (!Esperar(1000)) {
         MEMORYSTATUS m;
+        if (!gX360Log) continue;
         GlobalMemoryStatus(&m);
         if (m.dwAvailPhys < sMemMin) {
             sMemMin = m.dwAvailPhys;
@@ -654,6 +662,7 @@ extern "C" void Som360_Iniciar(void) {
         Diario_Escrever("som: desligado (BT3_SOM=1 liga o som do jogo; BT3_SOM_TESTE=1, o tom de teste)");
         return;
     }
+    sMedidas = gX360Log && getenv("BT3_SOM_MEDIDAS") != NULL && atoi(getenv("BT3_SOM_MEDIDAS")) == 1;
     sFilmeLog = getenv("BT3_FILME_LOG") != NULL && atoi(getenv("BT3_FILME_LOG")) == 1;
     QueryPerformanceFrequency(&sFreq);
     QueryPerformanceCounter(&sDerivaIni);
@@ -731,37 +740,39 @@ extern "C" void Som360_Iniciar(void) {
 
 extern "C" void Som360_Parar(void) {
     static volatile LONG leituraParada;
-    if (!InterlockedExchange(&leituraParada, 1)) { /* (a thread de leitura existe também com o som desligado) */
+    int ligado = InterlockedExchange(&sLigado, 0) != 0, ok = 1;
+    if (ligado) {
+        /* Quem chama é a auxiliar na thread de hardware 1, nunca um retorno do XAudio2. */
+        InterlockedExchange(&sMorto, 1);
+        InterlockedExchange(&sFimMisturador, 1);
+        if (sPare != NULL) SetEvent(sPare);
+        if (sEvento != NULL) SetEvent(sEvento);
+        sX->StopEngine();
+    }
+    if (!InterlockedExchange(&leituraParada, 1)) {
         Medidas("saída");
         Leitura("saída");
         Fluxo_Parar();
     }
-    if (!InterlockedExchange(&sLigado, 0)) {
+    if (!ligado) return;
+    if (sVigia != NULL) {
+        DWORD r = WaitForSingleObject(sVigia, 2000);
+        Diario_Escrever("saída: som vigia: espera=%08X teto=2000 ms", (unsigned)r);
+        if (r != WAIT_OBJECT_0) ok = 0;
+        else { CloseHandle(sVigia); sVigia = NULL; }
+    }
+    if (sMisturador != NULL) {
+        DWORD r = WaitForSingleObject(sMisturador, 2000);
+        Diario_Escrever("saída: som misturador: espera=%08X teto=2000 ms", (unsigned)r);
+        if (r != WAIT_OBJECT_0) ok = 0;
+        else { CloseHandle(sMisturador); sMisturador = NULL; }
+    }
+    if (!ok) {
+        Diario_Escrever("som: thread atrasada; preserva recursos até o dashboard");
         return;
     }
-    if (sVigia != NULL) {
-        SetEvent(sPare);
-        if (WaitForSingleObject(sVigia, 2000) != WAIT_OBJECT_0) {
-            Diario_Escrever("som: o vigia não parou em 2 s");
-        }
-        CloseHandle(sVigia);
-        sVigia = NULL;
-    }
-    if (sSistema != NULL) {
-        CloseHandle(sSistema);
-        sSistema = NULL;
-    }
+    if (sSistema != NULL) { CloseHandle(sSistema); sSistema = NULL; }
     Contadores("saída");
-    sX->StopEngine();
-    if (sMisturador != NULL) {
-        InterlockedExchange(&sFimMisturador, 1);
-        SetEvent(sEvento);
-        if (WaitForSingleObject(sMisturador, 2000) != WAIT_OBJECT_0) {
-            Diario_Escrever("som: o misturador não parou em 2 s");
-        }
-        CloseHandle(sMisturador);
-        sMisturador = NULL;
-    }
     sVoz->DestroyVoice();
     sVoz = NULL;
     sSaida->DestroyVoice();
@@ -770,6 +781,8 @@ extern "C" void Som360_Parar(void) {
     sX = NULL;
     Diario_Escrever("som: parado (StopEngine, vozes e motor soltos)");
 }
+
+extern "C" void Som360_MarcarQueda(void) { InterlockedExchange(&sMorto, 1); }
 
 extern "C" void Som360_Queda(void) {
     InterlockedExchange(&sMorto, 1);

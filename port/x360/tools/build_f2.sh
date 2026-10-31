@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F2: o jogo para o Xbox 360 (port/x360/src/f2/main360.cpp), da preparação ao .xex. Sem janela por padrão; com
-# BT3_GS=gpu no ambiente.txt, desenhando pelo backend D3D9 (port/x360/src/gs/gs_d3d.cpp, F3, etapa 7).
+# BT3_GS=gpu no environment.txt, desenhando pelo backend D3D9 (port/x360/src/gs/gs_d3d.cpp, F3, etapa 7).
 #   port/x360/tools/build_f2.sh          ->  build/x360/f2/default.xex (+ .map, .pdb)
 # Passos:
 #   1. c89.py (imagem bt3xbx-ferramentas): cada fonte do jogo e do port vira C89 para o cl;

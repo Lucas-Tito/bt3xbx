@@ -1,10 +1,10 @@
 /*
  * F2: o pedaço de POSIX e de biblioteca C que o port usa e a CRT do Xbox 360 não tem, sobre a API do console. As
  * declarações que o código do jogo e do port vê estão em port/x360/shim (o c89.py pré-processa com elas).
- *   - ambiente: getenv lê uma tabela (padrões da build sem janela + game:\ambiente.txt, linhas NOME=VALOR, e
+ *   - ambiente: getenv lê uma tabela (padrões da build sem janela + game:\environment.txt, linhas NOME=VALOR, e
  *     -NOME para tirar uma variável, como BT3_DEMO para rodar os menus);
  *   - arquivos: caminhos com '/' viram '\' e caminho relativo vai para game:\ (a pasta do .xex);
- *   - saída de texto (stdout, stderr, printf): game:\saida.txt, com buffer; o commit ("c") é da thread do diário (a cada
+ *   - saída de texto (stdout, stderr, printf): game:\output.txt, com buffer; o commit ("c") é da thread do diário (a cada
  *     50 ms, só com algo no buffer), não da thread do jogo (F5/08.md, "Os logs e os engasgos");
  *   - tempo, pastas, threads (pthread sobre threads e seções críticas) e os atômicos do GCC.
  */
@@ -14,10 +14,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include "diario.h"
+#include "diagnostico360.h"
 
 /* ------------------------------------------------------------------ ambiente */
 
-#define MAX_VARS 64
+#define MAX_VARS 128
 static char sNome[MAX_VARS][48], sValor[MAX_VARS][160];
 static int sVars;
 
@@ -31,8 +32,10 @@ static void definir(const char *nome, const char *valor) {
     if (valor == NULL) { /* tirar: a última entra no lugar */
         if (i < sVars) {
             sVars--;
-            strcpy(sNome[i], sNome[sVars]);
-            strcpy(sValor[i], sValor[sVars]);
+            if (i != sVars) {
+                memmove(sNome[i], sNome[sVars], sizeof(sNome[i]));
+                memmove(sValor[i], sValor[sVars], sizeof(sValor[i]));
+            }
         }
         return;
     }
@@ -50,13 +53,19 @@ void Port_X360FecharSaida(void);
 static void depois_do_ambiente(void);
 
 /* As chaves do diário (diario.c, que não lê o ambiente): BT3_LOG_SINCRONO=1 (uma linha, um flush, como antes do anel) e
-   BT3_LOG_FLUSH_MS=<ms> (a idade máxima de uma linha gravada sem flush). Também liga o game:\saida.txt à thread do
+   BT3_LOG_FLUSH_MS=<ms> (a idade máxima de uma linha gravada sem flush). Também liga o game:\output.txt à thread do
    diário. Chamada nos dois fins de Ambiente_Carregar. */
 static void diario_ambiente(void) {
-    const char *s = getenv("BT3_LOG_SINCRONO");
-    const char *m = getenv("BT3_LOG_FLUSH_MS");
+    const char *l = getenv("BT3_LOG"), *s, *m;
+    int i;
+    gX360Log = l != NULL && strcmp(l, "1") == 0;
+    if (!gX360Log) return;
+    s = getenv("BT3_LOG_SINCRONO");
+    m = getenv("BT3_LOG_FLUSH_MS");
+    Diario_Abrir("game:\\bt3xbx.log");
     Diario_Gancho(Port_X360FecharSaida);
     Diario_Configurar(s != NULL && atoi(s) != 0, m != NULL ? atoi(m) : 0);
+    for (i = 0; i < sVars; i++) Diario_Escrever("ambiente: %s=%s", sNome[i], sValor[i]);
 }
 
 /* Padrões da luta de demonstração sem janela (os do ciclo da F1, port/x360/tools/f1.sh), e por cima o arquivo. */
@@ -66,7 +75,7 @@ void Ambiente_Carregar(const char *caminho) {
     /* o jogo como ele roda (23/10/2026, pedido do Lucas): sem a luta de demonstração, desenhando pela GPU com a VU1 em
        HLSL, a gravação e o desenho em threads próprias (F5, etapa 8), o som do jogo (F6) e o 16:9 (decisão 26); a 1,33,
        o afiado, o FXAA, os alvos residentes, o envio por linhas e a VU1 direto já são padrão no backend. Os testes que
-       queriam o de antes dizem no ambiente.txt (BT3_DEMO=1, BT3_GS=none, -BT3_SOM, -BT3_WIDE...) */
+       queriam o de antes dizem no environment.txt (BT3_DEMO=1, BT3_GS=none, -BT3_SOM, -BT3_WIDE...) */
     definir("BT3_GS", "gpu");
     definir("BT3_VU1", "1");
     definir("BT3_VU_VERTS", "98304");
@@ -84,7 +93,7 @@ void Ambiente_Carregar(const char *caminho) {
     definir("BT3_DATA", "game:\\gamedata");
     definir("BT3_SAVES", "game:\\saves");
     /* BT3_HASH (a linha por quadro do estado360.c) não tem padrão: o hash.txt do console não é critério (decisão 17, F5/08.md)
-       e custa uma escrita que estende o arquivo no FATX a cada 4 KB; liga-se com BT3_HASH=game:\hash.txt no ambiente.txt */
+       e custa uma escrita que estende o arquivo no FATX a cada 4 KB; liga-se com BT3_HASH=game:\hash.txt no environment.txt */
     /* o item 4 do menu principal (Dragon Net Battle, src/menu/menu_a.c) fica escondido, como nos roteiros sem
        janela (menus.sh): o mesmo menu nas três builds, e os roteiros de controle não se desalinham (decisão 22) */
     definir("BT3_MENU_ITEM4", "0");
@@ -115,6 +124,7 @@ void Ambiente_Carregar(const char *caminho) {
 
 char *getenv(const char *nome) {
     int i;
+    if (!gX360Log && Diagnostico360_Chave(nome)) return NULL;
     for (i = 0; i < sVars; i++) {
         if (strcmp(sNome[i], nome) == 0) {
             return sValor[i];
@@ -157,7 +167,7 @@ static void mods_no_boot(void) {
     const char *raiz;
     char m[512], c[512];
     DWORD at;
-#pragma warning(suppress : 4996) /* (o getenv é o daqui, que lê o ambiente.txt) */
+#pragma warning(suppress : 4996) /* (o getenv é o daqui, que lê o environment.txt) */
     raiz = getenv("BT3_DATA");
     if (raiz == NULL || raiz[0] == '\0') {
         return;
@@ -176,10 +186,30 @@ FILE *Port_X360Saida(void);
 static void depois_do_ambiente(void) {
     diario_ambiente();
     mods_no_boot();
-    /* (F6) o game:\saida.txt criado aqui, na main antes das threads: o primeiro fprintf(stderr) do jogo o criava na
+    /* (F6) o game:\output.txt criado aqui, na main antes das threads: o primeiro fprintf(stderr) do jogo o criava na
        thread do jogo (o do dispositivo de som, snd_adx.c, dentro de um RPC; o suspeito do RPC de 54 ms da rodada do
        console, plano/F6/05.md) */
     Port_X360Saida();
+}
+
+/* Sem diagnóstico, nenhuma escrita auxiliar do código comum escapa para a pasta do título.
+   Saves e configurações explicitamente escolhidas continuam funcionais. crash.txt usa a API direta. */
+static int escrita_permitida(const char *caminho, const char *modo) {
+    char c[512], raiz[512];
+    const char *s;
+    size_t n;
+    if (gX360Log || (strchr(modo, 'w') == NULL && strchr(modo, 'a') == NULL && strchr(modo, '+') == NULL)) return 1;
+    caminho360(caminho, c, sizeof(c));
+    s = getenv("BT3_SAVES");
+    caminho360(s != NULL ? s : "saves", raiz, sizeof(raiz));
+    n = strlen(raiz);
+    if (strncmp(c, raiz, n) == 0 && c[n] == '\\') return 1;
+    s = getenv("BT3_SETTINGS");
+    if (s != NULL && s[0] != '\0') {
+        caminho360(s, raiz, sizeof(raiz));
+        if (strcmp(c, raiz) == 0) return 1;
+    }
+    return 0;
 }
 
 /* Leitura sob a raiz de dados (BT3_DATA): da ISO, se houver uma. O resto é arquivo de verdade; sob a raiz, os dados
@@ -190,6 +220,7 @@ FILE *Port_X360Fopen(const char *caminho, const char *modo) {
     size_t n = raiz != NULL ? strlen(raiz) : 0;
     int dados = 0;
     FILE *f;
+    if (!escrita_permitida(caminho, modo)) return NULL;
     if (n > 0 && strchr(modo, 'w') == NULL && strchr(modo, 'a') == NULL && strchr(modo, '+') == NULL &&
         strncmp(caminho, raiz, n) == 0 && (caminho[n] == '/' || caminho[n] == '\\')) {
         size_t i;
@@ -274,11 +305,12 @@ int Port_X360Rename(const char *de, const char *para) {
 static FILE *sSaida;
 
 FILE *Port_X360Saida(void) {
+    if (!gX360Log) return NULL;
     if (sSaida == NULL) {
         /* nunca _IONBF: sem buffer, o _flsbuf da CRT do XDK faz _write(fh, &ch, 1) com ch int
            (Source/crt/_flsbuf.c:189), e no PowerPC sai o byte alto, 0, de cada caractere. "c": fflush e
            _flushall chamam FlushFileBuffers (_commit), como o diario.c */
-        sSaida = fopen("game:\\saida.txt", "wc");
+        sSaida = fopen("game:\\output.txt", "wc");
     }
     return sSaida;
 }
@@ -310,6 +342,23 @@ int Port_Printf(const char *formato, ...) {
     }
     return r;
 }
+
+/* O shim passa NULL para stdout/stderr com o log desligado. Arquivos reais continuam na CRT. */
+int Port_X360Fprintf(FILE *f, const char *formato, ...) {
+    va_list ap;
+    int n;
+    if (f == NULL) return 0;
+    va_start(ap, formato);
+    n = vfprintf(f, formato, ap);
+    va_end(ap);
+    return n;
+}
+int Port_X360Fputs(const char *s, FILE *f) { return f == NULL ? 0 : fputs(s, f); }
+int Port_X360Fputc(int c, FILE *f) { return f == NULL ? c : fputc(c, f); }
+size_t Port_X360Fwrite(const void *p, size_t t, size_t n, FILE *f) {
+    return f == NULL ? n : fwrite(p, t, n, f);
+}
+int Port_X360Fflush(FILE *f) { return f == NULL ? 0 : fflush(f); }
 
 struct stat { long st_size; int st_mode; long st_mtime; };
 

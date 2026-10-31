@@ -125,7 +125,7 @@ PORTAS = [
 def parada(caminho):
     ls = linhas(caminho)
     if not ls:
-        print(f">> sem linhas 'som:' em {caminho} (BT3_SOM_ESTADO estava no ambiente.txt?)")
+        print(f">> sem linhas 'som:' em {caminho} (BT3_SOM_ESTADO estava no environment.txt?)")
         return 1
     d = campos(ls[-1])
     print("última linha: " + ls[-1])

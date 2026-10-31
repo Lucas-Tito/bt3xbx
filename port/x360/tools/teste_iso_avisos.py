@@ -57,7 +57,7 @@ def imagem(p, marca=True, volume=b"SLUS_21678", cnf=CNF, setores=TAMANHO // SETO
             f.write(b"TESTE-ISO")
         if marca:
             f.seek(MARCA)
-            f.write(struct.pack("<16sIIQ", b"BT3X360-ISO", 2, 512, TAMANHO).ljust(512, b"\0"))
+            f.write(struct.pack("<16sIIQ", b"BT3X360-ISO", 3, 512, TAMANHO).ljust(512, b"\0"))
 
 
 def troca(p, pos, b):
@@ -142,7 +142,7 @@ def rodada(exe, pasta, anunciar=True):
         with p.open("r+b") as f:
             f.truncate(tam)
         casos.append((f"truncada em {tam}", conferir(exe, pasta, 4, p, p)))
-    for versao in (0, 1, 3, 0xFFFFFFFF):
+    for versao in (0, 1, 2, 4, 0xFFFFFFFF):
         imagem(p)
         troca(p, MARCA + 16, struct.pack("<I", versao))
         casos.append((f"conversão versão {versao} recusada", conferir(exe, pasta, 1, p, p)))
@@ -199,6 +199,7 @@ int main(void) {
         Iso_Aviso(i, &titulo, &texto);
         if (!wcsstr(texto, L"bt3-x360.iso") || !wcsstr(texto, L"root of the game folder") ||
             (i != 2 && !wcsstr(texto, L"convert_iso.py")) || wcsstr(texto, L"ambiente.txt") ||
+            wcsstr(texto, L"environment.txt") ||
             wcsstr(texto, L"BT3_ISO")) return 1;
     }
     Iso_Aviso(2, &titulo, &texto);
@@ -218,6 +219,7 @@ int main(void) {
     if executar(pasta).returncode:
         raise ValueError("textos públicos incompatíveis")
     for j, (de, para) in enumerate([("root of the game folder", "ambiente.txt"),
+                                  ("root of the game folder", "environment.txt"),
                                   ("expected name", "nome esperado"),
                                   ("ISO conversion required", "Unsupported converted ISO version"),
                                   ("convert_iso.py", "iso_convertida.py"),

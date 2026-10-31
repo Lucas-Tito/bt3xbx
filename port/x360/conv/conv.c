@@ -244,7 +244,9 @@ void Conv_MenuInativo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuCharRef(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuShenlong(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
+void Conv_Transicao(ConvCtx *c, conv_ofs base, conv_ofs tam);
 static const Formato sFormatos[] = {
+    {"transicao", Conv_Transicao},
     {"menu_inativo", Conv_MenuInativo},         /* sem leitor: só bytes, menus-ref.md */
     {"menu_charref", Conv_MenuCharRef},         /* menus-ref.md, modo 60 */
     {"menu_shenlong", Conv_MenuShenlong},       /* modos 70 e 71 */
@@ -321,6 +323,8 @@ static const Formato sFormatos[] = {
    Sprite_Unpack (menus.md 4); a conv_tool usa estas linhas no --mapa e no --disco. As faixas da mesma seção não se
    sobrepõem (a conv_tool confere a cada execução: faixas_conferidas). */
 static const ConvFaixa sFaixas[] = {
+    /* BtlLoad_StepStageChange: os dois filmes de destruição de cenário. */
+    {0x1BF - 1, 0x1C0 - 1, CONV_ARQ, "transicao"},
     /* ShenScene_StepLoad: os três dragões e as duas variantes das esferas, todos slots de modelo (N = 252). */
     {0xD3C - 1, 0xD3D - 1, CONV_ARQ, "personagem"},
     {0xD45 - 1, 0xD47 - 1, CONV_ARQ, "personagem"},

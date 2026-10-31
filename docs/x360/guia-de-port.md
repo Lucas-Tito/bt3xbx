@@ -13,6 +13,12 @@ BT3, 04 é onde ficam os ícones dos botões e o custo de trocá-los, 05 é o es
 Mantido vivo: cada aprendizado que custou uma rodada entra aqui (seção 6) no mesmo commit da
 correção.
 
+Em **29/10/2026**, por decisão do Lucas, os arquivos de configuração e de saída do projeto passaram a
+se chamar `environment.txt` e `output.txt`; `bt3xbx.log` continua com o mesmo nome. Não há leitura
+alternativa. Modelos para copiar ao console usam `environment_*.txt`. Referências aos nomes anteriores
+nos registros de rodadas descrevem os artefatos daquela época; os exemplos reutilizáveis usam os nomes
+atuais. O [inventário e as provas da troca](plano/F8/05-arquivos-ingles.md) justificam cada exceção.
+
 ---
 
 ## 1. O setup
@@ -121,14 +127,14 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 - **`Clear` com o preto exato não limpa** o back buffer no caminho de desenho do backend (F5, etapa 1): pedindo
   `0xFF000000` as barras do 4:3 ficavam com o azul da tela de fase anterior, pedindo `0xFF00FF00` saíam verdes e
   pedindo `0xFF010101`, pretas. A causa no D3D do 360 não foi achada; limpe com `0xFF010101`. Ponha a cor de um teste
-  visual no `ambiente.txt`: três aberturas de 30 s acharam isso sem recompilar.
+  visual no `environment.txt`: três aberturas de 30 s acharam isso sem recompilar.
 - **Desde 23/10/2026 os padrões do `Ambiente_Carregar` são o jogo como ele roda:** sem a demonstração, a GPU com a VU1, as
-  duas threads, o som e o 16:9. Um `ambiente.txt` antigo que contava com o padrão de antes (a luta de demonstração, sem
+  duas threads, o som e o 16:9. Um `environment.txt` antigo que contava com o padrão de antes (a luta de demonstração, sem
   desenho, sem som) precisa dizer `BT3_DEMO=1`, `BT3_GS=none`, `-BT3_SOM`; a ISO continua pela busca em `game:\` ou pelo
   `BT3_ISO`. Desde a F8, `01-avisos`, a busca automática percorre as `.iso` até achar uma convertida compatível;
   `BT3_ISO` explícito continua definitivo.
 - **Antes de dizer que uma variável falta no console, leia os padrões do `Ambiente_Carregar`**
-  (`port/x360/src/f2/posix360.c`): o `getenv` do 360 é aquela tabela mais o `ambiente.txt`, não o da CRT nem o
+  (`port/x360/src/f2/posix360.c`): o `getenv` do 360 é aquela tabela mais o `environment.txt`, não o da CRT nem o
   `port/x360/src/ambiente.c` da F1. O estudo da F6 deu o `BT3_SOUND_TICKS` como ausente, a primeira rodada da VU1 da
   F5 o pôs no `ambiente.txt` para provar, e ele já era padrão desde a F2: a rodada não separou nada.
 
@@ -144,7 +150,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `make_spa.py` | gera o SPA (XDBF: XTHD, XSTC, nome, ícone 64x64), porque o `spac.exe` é .NET e não roda no wine |
 | `make_icon.py` | ícone próprio, sem arte do jogo |
 | `subir.py` | FTP para o console com conferência de md5; `--baixar` traz o log, e antes renomeia o arquivo no console para `NOME.lido` (ler um arquivo que o jogo está gravando trava o servidor) |
-| `build_f2.sh` | o jogo inteiro até o `default.xex` (F2): `c89.py`, `cl.exe`, `coff.py`, link com stubs automáticos para o que falta, `dat360.py`, `imagexex`. Desde a F3 leva o backend D3D9 (`port/x360/src/gs`, shaders pelo `fxc`): sem janela por padrão, desenhando com `BT3_GS=gpu` no `ambiente.txt` |
+| `build_f2.sh` | o jogo inteiro até o `default.xex` (F2): `c89.py`, `cl.exe`, `coff.py`, link com stubs automáticos para o que falta, `dat360.py`, `imagexex`. Desde a F3 leva o backend D3D9 (`port/x360/src/gs`, shaders pelo `fxc`): sem janela por padrão, desenhando com `BT3_GS=gpu` no `environment.txt` |
 | `c89.py` | rebaixa o C do jogo e do port para o C89 do `cl` pelo AST do clang (literal composto, declaração no meio do bloco, `typeof`, expressão-comando, case com intervalo), com os headers mínimos de `port/x360/shim` |
 | `coff.py` | as tabelas do executável (esqueleto `port/data/*.s`) como objetos COFF do 360; `--absoluto NOME=VALOR` faz o papel do `--defsym` |
 | `dat360.py` | `default.dat` e `default.swap` ao lado do `.xex`, pelo `.map` da Microsoft (o `esqueleto()` do `headless.py` para o 360) |
@@ -154,7 +160,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `subir_f2.sh` | envia o `.xex` sempre junto com o `.dat` e o `.swap` da mesma build: os dois dependem dos endereços do `.map`, e um par de outra build copia as tabelas para o lugar errado sem erro nenhum |
 | `teste_diario.sh` | o `diario.c` (anel e thread escritora) no Linux, com uma API do Xbox de brinquedo e um disco de 40 ms por flush: ordem, integridade, que quem escreve não espera, a queda, o anel cheio; `--mutantes` estraga o `diario.c` de quatro jeitos e exige que o teste acuse cada um |
 | `picos_log.py` | de um `bt3xbx.log` do console, a média, o pior quadro e a média sem o pior de cada trecho de 60 quadros, e o custo por linha gravada do relatório anterior (`F5/08.md`, "Os logs e os engasgos") |
-| `som_ambiente.py` | (F6, etapa 1, rede 1) todo `getenv` e todo ramo de janela e de rede dos arquivos do som e dos filmes, com o valor no 360 (padrões do `posix360.c` e `--ambiente ambiente.txt`), nos roteiros do WSL e no PC, e o caminho que cada um dá; sai com 1 numa variável ou ramo sem classe ou num caminho que diverge entre o 360 e o WSL fora das divergências esperadas; `--mutantes` estraga cópias de seis jeitos (o sexto, F6 etapa 3: uma chave nova da camada do console) |
+| `som_ambiente.py` | (F6, etapa 1, rede 1) todo `getenv` e todo ramo de janela e de rede dos arquivos do som e dos filmes, com o valor no 360 (padrões do `posix360.c` e `--ambiente environment.txt`), nos roteiros do WSL e no PC, e o caminho que cada um dá; sai com 1 numa variável ou ramo sem classe ou num caminho que diverge entre o 360 e o WSL fora das divergências esperadas; `--mutantes` estraga cópias de seis jeitos (o sexto, F6 etapa 3: uma chave nova da camada do console) |
 | `som_estado.py` | (F6, etapa 1) as linhas `som:` do `BT3_SOM_ESTADO=N` (o estado dos seis players, a boca, as bandeiras dos menus e a tela de resultado da História, por mudança e a cada N leituras do controle; no console com o tempo real): `compara` (console contra x86, vblank a vblank), `falas` (cada fala em vblanks e em ms), `parada` (a porta fechada da tela de resultado) |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
@@ -385,7 +391,7 @@ linha de todo log é "passos: origem COMMIT diff:HASH", o carimbo da build (`hea
 | detector de visões (`BT3_VISOES` no `rastreio.c`, `visoes.py`) | acusa memória gravada com uma largura e lida com outra (u8 de um s32, u64 sobre dois u32). A lista de pares já tratados fica em `visoes_resolvidas.tsv` |
 | `tipos.py` | liga cada leitura do rastreio a struct e campo do código (coluna do DWARF + AST JSON do clang) |
 | `port/x360/conv/` (`conv_tool`) | conversores por formato em C89, para o instalador do 360 e para o PC: troca in-place com limite conferido e cada byte marcado; `conv_tool --mapa` confere contra o rastreio e mede a cobertura (decisão 12); `--disco` termina com o censo dos arquivos de menu por faixa de id (quantos arquivos e contêineres BPE ainda sem conversor); `--pecas` valida cada peça comum dos menus (`formatos/menus-pecas.md`) só na seção dela, em todo pacote do disco que a usa (a tabela `sUsos`), antes de o pacote inteiro ganhar conversor, e com `--mapa` confere só as posições dessa seção. No `--mapa`, uma leitura de 2, 4 ou 8 bytes sobre texto que o conversor deixou em bytes (o laço do fim do rótulo do Flash vira `strlen` na x86r) conta à parte, "em cadeia de texto lida por inteiro". Arquivo e seção para formato numa tabela só (`sFaixas`, conv.c). A `conv_tool` se compila sem `conv_jogo.c`, a ponte do jogo, que cita funções dele. Cada conteúdo descomprimido (`ARQ@0xN#bpe`) se converte também pelo caminho do jogo (`Conv_FormatoBits`, o mapa de bits de `conv_jogo.c`): bytes, resultado e cobertura têm de ser os mesmos, e o conteúdo tem de caber em `CONV_JOGO_MAX` |
-| `convert_iso.py` e `teste_iso_convertida.py` | instalação no PC da decisão 23: usa `conv_tool --lista-conversores` e `--saida`, publica uma ISO do mesmo tamanho só depois da reabertura integral; `--conferir --dados DIR` confere outra vez contra os dados extraídos. O teste completo provoca recusas e estragos e roda `--disco`. Contrato e comandos em `formatos/iso-convertida.md`; marca versão 2 com ícones Kenney e recusa de conversões antigas no 360 |
+| `convert_iso.py` e `teste_iso_convertida.py` | instalação no PC da decisão 23: usa `conv_tool --lista-conversores` e `--saida`, publica uma ISO do mesmo tamanho só depois da reabertura integral; `--conferir --dados DIR` confere outra vez contra os dados extraídos. O teste completo provoca recusas e estragos e roda `--disco`. Contrato e comandos em `formatos/iso-convertida.md`; marca versão 3 com ícones Kenney, transições de cenário e recusa de conversões antigas no 360 |
 | `teste_iso_avisos.py` | F8: o leitor `iso360.c` real sobre a API de teste do Linux, com cabeçalhos, diretórios e AFS inventados em imagens esparsas; confere identificação, recusas e escolha da convertida, exige falha numa cópia estragada e acusa seis mutantes em execução; sem console nem emulador |
 | `elfdados.py` | retipa as tabelas de dados do executável (o splat põe `.long` em tudo) pela largura lida |
 | `bitfields.py` | reescreve os campos de bits do C pré-processado para o GCC big-endian ter a ordem do PS2 (no 360 é `#pragma bitfield_order(lsb_to_msb)`) |
@@ -1234,7 +1240,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **O `NLST` do FTP da FreeStyle devolve as linhas no formato do `LIST`** (permissões, tamanho, nome): pegue o último
   campo, como o `subir.py` faz com o `LIST`.
 - **Capturas do console nos mesmos quadros da referência:** `BT3_SHOT_LISTA=G,G...` (até 32 quadros do GS) no
-  `ambiente.txt` grava só esses quadros, com ou sem o `BT3_SHOT`. Os números vêm da linha "imagem: ... gs G" da build
+  `environment.txt` grava só esses quadros, com ou sem o `BT3_SHOT`. Os números vêm da linha "imagem: ... gs G" da build
   sem janela, e o `compara_quadros.py` mede uma contra a outra.
 - **O WSL não tem numpy:** o `compara_quadros.py` tem um caminho em Python puro, mais lento. Não conte com o numpy em
   ferramenta que roda lá.
@@ -1272,7 +1278,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   contadores do log, medidas das capturas (`ppm_stats.py`) contra a referência, e só então o shader. Nitidez e
   saturação medidas na área 3D (fora da caixa da pausa) dão ordem de grandeza; o viés do rasterizador de software
   (textura lida no ponto) é de uns 15% no gradiente, então 2 a 8 vezes é defeito. Quando a causa é uma passada de
-  tela, `BT3_FX_OFF=8|16|24` no `ambiente.txt` (valem no 360 sem build nova; o 24 provou a triagem na rodada da
+  tela, `BT3_FX_OFF=8|16|24` no `environment.txt` (valem no 360 sem build nova; o 24 provou a triagem na rodada da
   etapa 7) a separa em uma rodada.
 - **Profundidade presa por vértice não é o depth clamp: o chão perto da câmera some.** Na F5 (etapas 6 e 7) os
   programas da VU1 prendiam o z de recorte em 0..w por vértice, para imitar o depth clamp do PC (o D3D9 do Xenos não
@@ -1781,7 +1787,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   até a idade do último flush (250 ms). Mantenha a chave que volta ao jeito síncrono (`BT3_LOG_SINCRONO`): é o que
   permite medir um contra o outro com a mesma build. O hiddriver (`referencias_log`) foi o modelo; o CollectionUI faz
   como o 360 fazia, e aguenta porque não tem lógica pesada por quadro.
-- **O arquivo "c" da CRT (`saida.txt`) também é um flush.** Cada `fflush` de um arquivo aberto com "c" chama
+- **O arquivo "c" da CRT (`output.txt`) também é um flush.** Cada `fflush` de um arquivo aberto com "c" chama
   `FlushFileBuffers` (também vazio); o `printf` do port dava um por chamada, e o vblank um por quadro. O commit passou
   para o gancho da thread do diário.
 - **Um arquivo de log que o jogo grava por quadro (`hash.txt`) tem de ser opt-in no console**: ele estende o arquivo do
@@ -1807,7 +1813,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Uma queda do WSL no meio de uma prova negativa deixa a sabotagem no arquivo.** Depois de uma queda, `git diff` antes de tudo.
 - **Gravação e dispositivo de uma thread só.** O que o frontend faz ao gravar (textura, alvo, shader) é D3D: o canal da GIF (o clear do quadro) também grava, então
   vai para a thread de gravação como trabalho que o jogo espera; no 360 isso evita criar recurso fora da thread dona.
-- **O `ambiente.txt` de uma rodada de menus começa com `-BT3_DEMO`.** A build sem janela liga a luta de demonstração por padrão
+- **O `environment.txt` de uma rodada de menus começa com `-BT3_DEMO`.** A build sem janela liga a luta de demonstração por padrão
   (`posix360.c`); sem a linha, o jogo abre direto na demo e sai com a tela verde. Copiar o bloco de uma nota antiga sem ela custou uma abertura.
 - **Medição de tempo fina custa no Xenon o que não custa na x86.** A medição por família da gravação (umas 24 mil leituras do
   `mftb` por quadro) custou uns 3 ms da luta no console (39,3 contra 36,2 ms). Compare desempenho sempre com a medição desligada
@@ -2862,3 +2868,116 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   de `gen` (sem a pasta `gen`). Fazer `mkdir -p port/build` antes.
 - Uma build disparada com a árvore suja leva `diff:` diferente de `da39a3ee5e` no carimbo: fazer o commit antes do
   `build_f2.sh` para o log do console apontar um commit.
+
+### Queda na relocação: diagnóstico da pilha (28/10/2026)
+
+O LR dentro de `Res_RelocateOffsets` pode apontar para a chamada da guarda dentro dela e não para quem pediu a
+relocação. O filtro do 360 registra agora r3..r10 atuais e r28..r31 preservados, com os 64 bits (podem ter mudado desde a entrada), identidade das threads,
+vblank, quadro, fase e até 12 elos da cadeia do r1. No ABI do XDK, o elo em `0(r1)` aponta para o quadro anterior;
+o retorno salvo está em `anterior-8`, não em `r1+4` como no ABI Linux PPC. Referência: [exemplo de instrumentação
+Xbox 360 da GDC 2012, páginas 2 a 5](https://media.gdcvault.com/gdc2012/slides/Programming%20Track/Adisak_Pochanayon_CPU_Instrumentation_Handouts.pdf).
+Cada leitura usa SEH local; alinhamento de 16, progressão crescente e alcance de 16 MB limitam a caminhada.
+São candidatos a retorno: folhas, prólogos incompletos e chamadas de cauda limitam a interpretação.
+`teste_pilha360.py` exercita memória sintética; `--mutante` retira a guarda de progressão numa cópia e tem de falhar.
+A fase passa da inicialização para menus/carga ou luta no `Port_StateLog`, em vez de conservar o rótulo da reserva
+inicial durante toda a sessão. O encerramento e a saída ao dashboard também recebem rótulos próprios. A integração SEH e os endereços reais ainda exigem compilação XDK e console.
+
+
+### Arquivos fora das faixas cadastradas: transições de cenário
+
+`conv_tool --disco` passou sem erro mesmo sem os ids 0x1BF/0x1C0. Eles ficam entre o fim dos cenários (0x1BE)
+e o início dos menus (0x1C1), e `BtlLoad_StepStageChange` os lê diretamente, sem `Sprite_Unpack`.
+O verificador dos ganchos não cobre esse leitor. Conferir também as chamadas `File_Request3` e os ids derivados;
+um censo de formatos cadastrados não mede as omissões do próprio cadastro.
+O formato está em [transicao.md](formatos/transicao.md); os dois arquivos têm a mesma estrutura completa.
+O modelo da transição usa deslocamentos de imagem em bytes; o `TexFile` das partículas usa palavras.
+Os triângulos têm cores RG/BA lidas como u16, que também precisam de troca.
+O teste negativo da assinatura acusou uma build de conversor anterior à guarda: recompilar a ferramenta após
+alterar seu fonte faz parte da prova, assim como recompilar o jogo. `headless.py` agora pode ser importado sem
+iniciar uma build; o caso isolado reutiliza suas flags e a preparação dos leitores originais.
+
+A instalação passa a exigir marca de versão 3 no instalador e no leitor do console. Uma ISO versão 2 já instalada
+continua com as transições cruas mesmo após recompilar o `.xex`. É preciso reconverter a ISO americana original,
+sem usar uma convertida como origem. `teste_iso_avisos.py` exercita também a recusa explícita da versão 2.
+
+
+Na investigação `queda-relocate`, a espera única pelo `flock ~/wsl.lock` ficou mais de 70 minutos sem obter
+a trava, acima do dobro do teto de 30 minutos preparado para a reprodução PPC inicial. A espera própria foi
+encerrada pelo PID, sem sinalizar o detentor ou as demais filas. Não confundir compilação PPC, conversão e
+casos nativos aprovados com execução PPC: a reprodução e os critérios de jogo ficaram pendentes.
+
+
+### A ISO sintética do teste de fluxos acompanha a versão do leitor
+
+Depois de exigir a ISO versão 3, o `teste_som360.sh` ainda fabricava a marca versão 2. As três
+rodadas positivas falhavam na recusa da ISO antes de testar qualquer fluxo; os mutantes também
+falhavam ali e não provavam suas sabotagens. O gerador agora usa `ISO_MARCA_VERSAO` do mesmo
+`iso360.h` levado à compilação do ensaio. Exigir primeiro o caso positivo e ler a causa dos
+negativos, em vez de contar toda saída não zero como prova da sabotagem.
+
+
+### Uma queda exige esperar o GS antes de soltar o D3D
+
+`Port_GsPararJa` e `GsDraw_DesenhoPararJa` só pedem parada. Mesmo um estado ocioso não prova
+que a thread acabou. A main espera os handles reais do jogo e das duas threads do GS antes de
+recuperar a posse do dispositivo. Na parada assíncrona, a gravação não chama a callback que faz
+`pthread_join` do desenho: ela fecharia o handle que a main ainda precisa esperar. O ensaio acusa
+o mutante que reativa essa callback. Quando o desenho cai, o jogo também precisa parar de publicar
+trabalho para a gravação: uma espera que não observa a saída fica presa num GS já encerrado. O ramo
+do 360 consulta o pedido fora da trava e desperta em até 50 ms para observá-lo de novo. O ensaio
+recorta essa espera e acusa o mutante sem o checkpoint, inclusive se alguém tentar sair com a trava
+tomada. Cargas, fluxos e som também têm esperas com teto e resultado no
+log. A desmontagem usa auxiliares na thread de hardware 1, com teto externo consultado pela main;
+ela continua apresentando assim que os produtores gráficos terminam. Nenhum `join` infinito ou
+espera da GPU roda na thread que estava apresentando. Na liberação final, a apresentação termina.
+
+Se uma thread ou a GPU exceder o teto, preservar recursos possivelmente em uso e tentar o painel;
+liberar sob uma thread viva pode causar outra exceção antes do lançamento. Uma segunda exceção na
+auxiliar também precisa ser consumida pelo filtro do título. Registrar a solicitação de
+`XLaunchNewImage` antes de fechar o diário não prova que a FreeStyle iniciou: exigir a home
+respondendo e reabertura do jogo nas variantes de queda do jogo e do desenho. Receita e limites em
+[F7/queda-freestyle](plano/F7/queda-freestyle.md). Os ensaios `teste_saida360.py --mutantes` e
+`teste_paradas360.py` compilam as rotinas reais sobre uma API simulada e exigem as sabotagens acusadas.
+
+Numa worktree nova, `headless.py` pode ligar com stubs mesmo sem `port/build/gen/data` preparado.
+Antes de comparar a x86, gerar as tabelas com `gen_data.py --asm CAMINHO_DESTA_WORKTREE/asm`.
+A primeira tentativa desta tarefa tinha só 327 objetos e SHA1 diferente; depois das 72 tabelas,
+voltaram os 399 objetos e a `.text` idêntica à base. Não aceitar só a mensagem de ligação bem-sucedida.
+
+
+### Desligar logs exige tratar o FILE nulo e separar diagnóstico da reprodução
+
+Na F8, [04-queda-e-logs](plano/F8/04-queda-e-logs.md), `BT3_LOG=1` passou a ser obrigatório.
+A abertura comum recusa escritas auxiliares sem log, além de filtrar as chaves, pois há
+despejos de erro na VU1 que não dependem de uma chave. Saves e configurações explícitas seguem
+permitidos. O ambiente precisa ser lido antes de abrir o diário, e as opções do próprio diário só podem ser
+consultadas depois de publicar o log ligado: antes disso o filtro de chaves de diagnóstico as oculta.
+Não devolver NULL como stderr sem embrulhar `fprintf` e as outras operações do shim: a CRT não
+aceita esse FILE. Os embrulhos descartam antes de formatar e preservam os arquivos reais.
+O ensaio local de ambiente também expôs a cópia da última entrada sobre ela mesma na remoção;
+a tabela agora evita a cópia idêntica e usa `memmove` de linhas inteiras.
+
+Estatística de filme antes alocava e media dentro da reprodução. Ao separá-la, `Filme360_Fechou`
+precisa liberar as vagas mesmo sem vetor de medidas; o controle negativo sem essa chamada falha.
+`BT3_TEX_ORIGEM` é cache de texturas e `BT3_FILME` é reprodução, não medidas: não entram na lista
+de diagnóstico. Relógios de prazos, áudio e vblank também permanecem funcionais.
+As chaves novas `BT3_ESTADO_TEMPOS`, `BT3_FILME_MEDIDAS` e `BT3_SOM_MEDIDAS` restauram apenas as
+contas antes incondicionais; atualizar todos os ambientes e geradores junto com o padrão.
+
+O relatório de queda não pode depender do diário nem fazer flush na thread que caiu: no áudio isso
+poderia pôr E/S nas threads 4 e 5. Copiar o contexto e a cadeia protegida, depois gravar numa auxiliar 1.
+Parar e esperar os produtores gráficos antes de a main retomar o D3D para a caixa; desmontar os
+recursos restantes depois do OK. Uma caixa que afirma relatório salvo só abre após escrita completa,
+flush e fechamento conferidos. Os ensaios com API simulada compilam a main real e exigem sabotagens;
+não substituem Guide, FATX, concorrência nem custo por quadro no Xenon.
+
+Para gerar todas as tabelas numa worktree nova, além de `asm` também é necessário o link `assets`
+para os dados só leitura: a VU1 vem de `assets/cod/1BF6B0.textbin.bin`. Uma falha de `gen_data.py`
+não pode ser seguida de uma comparação x86 como se a geração tivesse passado. Exigir `set -euo pipefail`,
+os 399 objetos e a comparação sem depuração, além do SHA1 da `.text`.
+
+O `teste_cadeia_cpu.py` comparava o fonte inteiro sem as marcas contra `bbc07118`, anterior aos
+diagnósticos optativos de `78dbb29c`. Isso recusava até alterações de comentário ao chegar à prova dos
+geradores. A referência agora é `78dbb29c`: retira as marcas dos dois lados e atualiza somente o nome
+da configuração nos comentários da referência. A comparação continua integral, incluindo argumentos
+e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.

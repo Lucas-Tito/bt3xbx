@@ -2,7 +2,7 @@
  * F2: no lugar de port/src/gs/state.c (checksum de tudo, salvar e voltar estado, rede), só o que a medição usa:
  *   - Port_StateLog: a linha por quadro de BT3_HASH, no formato da build de PC (vblank, dois checksums, e numa
  *     luta vida, posições, relógio e gerador), para port/x360/tools/compara.py; os checksums vão como 0. Desligada por
- *     padrão no console (sem BT3_HASH no ambiente.txt; F5/08.md);
+ *     padrão no console (sem BT3_HASH no environment.txt; F5/08.md);
  *   - o tempo: a build sem janela não espera o vblank, então o intervalo entre duas chamadas (uma por vblank) é o
  *     que o jogo levou. A luta faz um quadro a cada 2 vblanks (30 fps, decisão 15): o trabalho cai num intervalo
  *     do par e o outro fica quase vazio, então o que vale contra o orçamento de 33,3 ms é a soma de cada par.
@@ -29,6 +29,7 @@ long Port_PadPlayPos(void);
 volatile unsigned gX360Luta; /* o vblank em que a luta começou, 0 fora dela (o backend do GS registra os primeiros quadros) */
 static FILE *sArq;
 static int sModo = -1;
+static int sMedir;
 static LARGE_INTEGER sAntes, sFreq;
 #define VBLANK_MS 16.683
 static double sTotal, sTotalTrecho, sPiorPar, sPiorParTrecho, sPar, sLutaTotal;
@@ -43,6 +44,7 @@ static void resumo(const char *quando, double total, unsigned n, double piorPar)
 }
 
 void Estado_Resumo(void) {
+    if (!gX360Log) return;
     resumo("total", sTotal, sVblanks, sPiorPar);
     Diario_Escrever("pares de vblanks (quadros a 30 fps) acima de 33,3 ms: %u de %u; na luta: %u vblanks, %.2f do "
                     "tempo real, %u pares acima de 33,3 ms", sParesAcima, sPares, sLuta,
@@ -55,8 +57,12 @@ void Estado_Resumo(void) {
 }
 
 void Port_Sair(int codigo);
+void Port_QuedaTeste360(int desenho, int luta, unsigned quadro);
+void Port_GsInterromperJogo360(void);
+extern unsigned gGsFrame;
 void Port_X360FecharSaida(void); /* posix360.c */
 int Passos_Medindo(void);        /* port/x360/headless/passos.c */
+extern const char *volatile gPortStage;
 extern int *gProgress; /* include/menu/menu_a.h, MenuProgress: o modo da tela está em +0x18 */
 
 void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
@@ -65,9 +71,15 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
     static unsigned ate = 0xFFFFFFFFu;
     static int modo = -1, luta = 0;
     (void)fightSize;
-    QueryPerformanceCounter(&agora);
+    Port_GsInterromperJogo360();
+    gPortStage = fight != NULL ? "battle" : "menus or loading";
+    Port_QuedaTeste360(0, fight != NULL, gGsFrame);
+    gX360Luta = fight != NULL ? (gX360Luta ? gX360Luta : vblank) : 0;
+    if (!gX360Log) return;
     if (sModo < 0) {
         const char *caminho = getenv("BT3_HASH");
+        const char *medida = getenv("BT3_ESTADO_TEMPOS");
+        sMedir = medida != NULL && atoi(medida) == 1;
         QueryPerformanceFrequency(&sFreq);
         sModo = 0;
         if (caminho != NULL && (sArq = Port_X360Fopen(caminho, "w")) != NULL) {
@@ -78,8 +90,10 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
             ate = (unsigned)atoi(getenv("BT3_ATE"));
             Diario_Escrever("encerra no vblank %u", ate);
         }
-    } else {
-        double ms = (double)(agora.QuadPart - sAntes.QuadPart) * 1000.0 / (double)sFreq.QuadPart;
+    } else if (sMedir) {
+        double ms;
+        QueryPerformanceCounter(&agora);
+        ms = (double)(agora.QuadPart - sAntes.QuadPart) * 1000.0 / (double)sFreq.QuadPart;
         sTotal += ms;
         sTotalTrecho += ms;
         sVblanks++;
@@ -140,7 +154,7 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
            faz isto (Diario_Gancho, a cada 50 ms), e o commit sai da thread do jogo */
         Port_X360FecharSaida();
     }
-    QueryPerformanceCounter(&sAntes); /* sem o tempo da própria gravação */
+    if (sMedir) QueryPerformanceCounter(&sAntes); /* sem o tempo da própria gravação */
     if (vblank >= ate) {
         Diario_Escrever("BT3_ATE: vblank %u", vblank);
         Port_Sair(0);

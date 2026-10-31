@@ -1,4 +1,4 @@
-# ISO convertida no PC, versão 2
+# ISO convertida no PC, versão 3
 
 [Decisão 23](../decisoes.md) | [tarefa da etapa 2](../tarefas/f5-etapa2-iso.md)
 
@@ -61,7 +61,7 @@ console pode chamar a mesma API, fornecendo o mesmo pacote. A API valida as
 18 entradas antes de escrever e recusa índices, tamanhos, formatos, limites e alfa
 incompatíveis. Não existe troca em tempo de desenho nem mudança dos controles.
 
-O console agora exige versão 2, marca de 512 bytes e tamanho de origem correto.
+O console agora exige versão 3, marca de 512 bytes e tamanho de origem correto.
 Outra versão da conversão é recusada com a mesma caixa da original, que pede a conversão (o Lucas
 não quer caixa própria de versão: só a conversão publicada vai existir fora do projeto);
 imagem de outra região continua recebendo a caixa de versão do jogo.
@@ -112,7 +112,7 @@ Inteiros em little-endian, hashes em bytes binários. A marca inteira tem 512 by
 | Posição relativa | Tamanho | Conteúdo |
 |---|---|---|
 | `0` | 16 | ASCII `BT3X360-ISO`, seguido por cinco zeros |
-| `16` | 4 | Versão do contrato: 2 |
+| `16` | 4 | Versão do contrato: 3 |
 | `20` | 4 | Tamanho da marca: 512 |
 | `24` | 8 | Tamanho da origem: 3.020.816.384 |
 | `32` | 16 | MD5 da origem |
@@ -175,3 +175,12 @@ A pasta de trabalho precisa ser nova; não se apaga uma rodada anterior automati
 commit, diff, hashes e uma ISO válida. Os estragos na convertida são restaurados
 no lugar, sem segunda convertida; as cópias temporárias da original são removidas. A conversão precisa de cerca de
 6 GB temporários, além da original. Confira também o espaço físico do Windows no WSL.
+
+
+## Versão 3: transições de cenário
+
+A versão 2 não incluía os ids 0x1BF e 0x1C0 na conversão. A versão 3 mantém os ícones da 2 e acrescenta
+os dois arquivos do formato [transicao](transicao.md), elevando o total de arquivos convertidos de 3.325 para
+3.327. O leitor recusa as versões anteriores. É obrigatório converter novamente a ISO USA original com este
+instalador; recompilar o `.xex` e manter a ISO versão 2 não corrige os dados. Não reutilizar uma ISO já convertida
+como origem. O teste completo provoca a recusa das marcas 1 e 2; o teste do leitor também recusa ambas.

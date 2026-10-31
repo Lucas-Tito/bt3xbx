@@ -326,9 +326,9 @@ então os dois têm que ser iguais entre si).
 
 ## 8. O que medir primeiro (nada disso é código novo, ou é uma linha)
 
-1. **No console, uma rodada de luta com o `BT3_GS_VERBOSE` ligado no `ambiente.txt`**: o `gs_core.c` já imprime "work per frame:
+1. **No console, uma rodada de luta com o `BT3_GS_VERBOSE` ligado no `environment.txt`**: o `gs_core.c` já imprime "work per frame:
    game code X ms, display list Y ms (texture decoding, pipeline creation, ending and submitting the frame)" a cada 60
-   quadros (`stderr`; **conferir se o `stderr` do 360 cai no `saida.txt`**, o `Port_Printf` cai). Isso separa **L de W+V+E**
+   quadros (`stderr`; **conferir se o `stderr` do 360 cai no `output.txt`**, o `Port_Printf` cai). Isso separa **L de W+V+E**
    (hoje o W é por subtração). Se não sair, duas marcas `GsD3d_Tique` na entrada e na saída da `Port_GsVif1Chain` fazem o
    mesmo.
 2. **No WSL, um contador de bytes por quadro**: bytes de lista (`Dma_GetUsedSize`), bytes de REF e CALL e bytes de
@@ -348,7 +348,7 @@ então os dois têm que ser iguais entre si).
    o degrau 2 for pedido, com os máximos da luta de 4 jogadores e dos estágios pesados.
 2. **O gatilho da resposta 5 da decisão 24 foi cumprido?** (A CPU em série da etapa 8, 75,7 contra 33,37, não se resolve
    dividindo as cargas.) *Conservadora:* sim, mas **só para o degrau 1** (o (c)), reversível por uma chave no
-   `ambiente.txt`; os demais ficam para depois da medição do degrau 1.
+   `environment.txt`; os demais ficam para depois da medição do degrau 1.
 3. **Quem fica com o dispositivo** (a thread de desenho passa a ser dona, e repete o último quadro enquanto o jogo carrega)?
    *Conservadora:* sim, com a main só vigiando como hoje; a Guide pausa a luta pelo estado do jogo, como a resposta 5 já dizia.
 4. **Em que thread de hardware** a de gravação (0, a minha escolha) e a de desenho (3 ou 1), com o áudio da F6 nas 4 e 5?
@@ -500,7 +500,7 @@ estágio).
 
 #### O que mudou
 
-Tudo na chave `BT3_GS_THREAD` (no `ambiente.txt` do 360, junto com `BT3_GS=gpu`; sem a linha, ou com `0`, o jogo grava na
+Tudo na chave `BT3_GS_THREAD` (no `environment.txt` do 360, junto com `BT3_GS=gpu`; sem a linha, ou com `0`, o jogo grava na
 própria thread como antes). A parte portável vale nas builds com `PORT_BIG_ENDIAN` (a PPC e o 360) ou `BT3_TESTE_VU1` (a
 `x86gv`), com o original no `#else`; a `.text` da x86 plana não muda.
 
@@ -602,11 +602,11 @@ os 30 fps: o degrau 2 e o corte de W e V seguem (seção 5).
 
 **Roteiro da rodada** (o `.xex` do commit final com o `default.dat` e o `default.swap` da mesma build, como na rodada de 18/10):
 
-- **Abertura 1**, `BT3_GS_THREAD=1` ligado: o `ambiente.txt` de sempre (`-BT3_DEMO`, `BT3_ISO`, `BT3_GS=gpu`, `BT3_SAVES`, `BT3_MEM_PISO_MB=32`, `BT3_MEM_TEX_MB=128`,
+- **Abertura 1**, `BT3_GS_THREAD=1` ligado: o `environment.txt` de sempre (`-BT3_DEMO`, `BT3_ISO`, `BT3_GS=gpu`, `BT3_SAVES`, `BT3_MEM_PISO_MB=32`, `BT3_MEM_TEX_MB=128`,
   `BT3_VU1=1`, `BT3_VU_VERTS=98304`, `BT3_SHOT=600`) mais `BT3_GS_THREAD=1`. Menus até o Duelo, Goku contra Kuririn, estágio 5, uns 60 s de
   luta, **abrir a Guide uma vez no menu e uma vez durante a carga da luta**, sair pela pausa.
 - **Abertura 2**, desligado: o mesmo, sem a linha `BT3_GS_THREAD` (ou com `BT3_GS_THREAD=0`), uns 30 s de luta: a comparação
-  com a de antes (75,7 ms). Baixar o `bt3xbx.log` e o `saida.txt` entre as duas.
+  com a de antes (75,7 ms). Baixar o `bt3xbx.log` e o `output.txt` entre as duas.
 - O que ler: na abertura 1, `thread de gravação do GS (BT3_GS_THREAD) na thread de hardware 0` e `descarte ligado`; o quadro inteiro
   da luta; nenhuma linha `vigia` com a gravação "gravando" por mais de 3 s; no fim, `saída do jogo com código 0`.
 

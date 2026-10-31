@@ -49,6 +49,9 @@
 #define BT3_CARIMBO "sem carimbo"
 #endif
 static const char kCarimbo[64] = BT3_CARIMBO;
+#ifdef PORT_X360
+const char *Port_Carimbo360(void) { return kCarimbo; }
+#endif
 
 extern unsigned gPortVBlanks;           /* plat_stub.c */
 extern unsigned long long gPortSleptNs; /* plat_stub.c: a espera de vblank até agora */
@@ -66,6 +69,7 @@ int Passos_Descartes(unsigned *v, int n);
 
 #ifdef PORT_X360
 void Diario_Escrever(const char *formato, ...);
+extern int gX360Log;
 /* plat_stub.c: a espera de vblank acumulada desde o boot (ninguém zera), as esperas de fato, as que acabaram no vblank de
    hardware, as que acordaram 1 ms ou mais atrasadas e o pior atraso desde a última leitura (este o passos zera) */
 extern unsigned long long gPortVBlankEsperaNs;
@@ -268,6 +272,9 @@ static void fecha(const char *motivo) {
 
 /* a fronteira de passo: a leitura do controle do jogador 1 */
 void Passos_Leitura(void) {
+#ifdef PORT_X360
+    if (!gX360Log) return;
+#endif
     unsigned long long t = agora_ns(), espera = ESPERA_ACUMULADA;
     unsigned vb = gPortVBlanks;
     int pausa, luta;
@@ -311,6 +318,9 @@ void Passos_Leitura(void) {
 
 /* uma imagem apresentada (o backend, logo depois do Present): o quadro do GS e o tempo dentro do Present */
 void Passos_Apresentou(unsigned quadroGs, unsigned presentUs) {
+#ifdef PORT_X360
+    if (!gX360Log) return;
+#endif
     unsigned long long t = agora_ns();
     sPresentUs += presentUs;
     sImagens++;

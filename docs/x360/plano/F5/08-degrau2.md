@@ -202,8 +202,8 @@ seguinte enquanto a gravação ainda o lia. A captura fecha a janela; que ela ex
 6. nenhuma queda: o `SetUnhandledExceptionFilter` diria `Iar` e `Lr`; um erro no `xg_libera` (liberar o que a GPU ainda lê)
    apareceria como textura corrompida ou queda depois de uma pressão de memória.
 
-**Roteiro da rodada.** Copiar `build/x360/f2/default.xex`, `default.dat`, `default.swap` e `ambiente.txt` do worktree
-`bt3xbx-d2` para a pasta do jogo (o `ambiente.txt` já traz `-BT3_DEMO`, o `BT3_GS_THREAD=1` e o `BT3_SHOT=600`); abrir pela
+**Roteiro da rodada.** Copiar `build/x360/f2/default.xex`, `default.dat`, `default.swap` e `environment.txt` do worktree
+`bt3xbx-d2` para a pasta do jogo (o `environment.txt` já traz `-BT3_DEMO`, o `BT3_GS_THREAD=1` e o `BT3_SHOT=600`); abrir pela
 FreeStyle; menu principal, modo duelo, uma luta de uns dois minutos com troca de personagem e golpes especiais, um menu 3D
 (o `ChrView`), sair para o dashboard; trazer o `bt3xbx.log` e a pasta `shots`.
 
@@ -503,7 +503,7 @@ mesma e o git sem alterados no fim. Leva umas 2 h 40.
    desenho soltou) e sem `CRASH`. Uma queda diz a thread (`a queda foi na thread de desenho` ou `de gravação`) e a etapa.
 
 **Roteiro da rodada no console (três aberturas).** Copiar do worktree `bt3xbx-d2`, de `build/x360/f2/`, o `default.xex`, o
-`default.dat` e o `default.swap` para a pasta do jogo. Para cada abertura, copiar o `ambiente_abN.txt` como `ambiente.txt` (todos
+`default.dat` e o `default.swap` para a pasta do jogo. Para cada abertura, copiar o `environment_abN.txt` como `environment.txt` (todos
 começam com `-BT3_DEMO` e trazem o `BT3_GS_THREAD=1` e o `BT3_SHOT=600`): 1, `BT3_GS_DESENHO=1` e `BT3_GS_DESENHO_HW=3`; 2,
 `BT3_GS_DESENHO=1` e `BT3_GS_DESENHO_HW=1`; 3, sem o `BT3_GS_DESENHO` (o degrau 1). Abrir pela FreeStyle; pular o filme de
 abertura com START (a tela preta depois das logos é o filme, contado e não desenhado); abrir a Guide no menu principal e fechar;

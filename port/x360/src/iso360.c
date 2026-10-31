@@ -85,7 +85,7 @@ unsigned gPicosIsoN;
 unsigned __int64 gPicosIsoBytes, gPicosIsoTiques;
 
 static int ler(__int64 pos, void *buf, unsigned long n) {
-    LARGE_INTEGER p, t0, t1;
+    LARGE_INTEGER p, t0 = {0}, t1;
     DWORD lidos = 0;
     BOOL ok;
     /* a thread de leitura dos fluxos pelo handle dela; as outras pelo comum */
@@ -93,14 +93,16 @@ static int ler(__int64 pos, void *buf, unsigned long n) {
     HANDLE h = propria ? sIsoLeitora : sIso;
     CRITICAL_SECTION *trava = propria ? &sTravaLeitora : &sTrava;
     p.QuadPart = pos;
-    QueryPerformanceCounter(&t0);
+    if (gX360Log) QueryPerformanceCounter(&t0);
     EnterCriticalSection(trava);
     ok = SetFilePointerEx(h, p, NULL, FILE_BEGIN) && ReadFile(h, buf, n, &lidos, NULL);
     LeaveCriticalSection(trava);
-    QueryPerformanceCounter(&t1);
-    gPicosIsoN++;
-    gPicosIsoBytes += n;
-    gPicosIsoTiques += (unsigned __int64)(t1.QuadPart - t0.QuadPart);
+    if (gX360Log) {
+        QueryPerformanceCounter(&t1);
+        gPicosIsoN++;
+        gPicosIsoBytes += n;
+        gPicosIsoTiques += (unsigned __int64)(t1.QuadPart - t0.QuadPart);
+    }
     return ok && lidos == n;
 }
 
@@ -119,7 +121,7 @@ static void hexa(const unsigned char *p, unsigned n, char *s) {
 }
 
 /* A marca da ISO convertida no PC (decisão 23, docs/x360/formatos/iso-convertida.md): 512 bytes em 0x3DF400 que
-   começam por "BT3X360-ISO" e cinco zeros. A versão 2 exige o pacote de ícones (decisão 30). */
+   começam por "BT3X360-ISO" e cinco zeros. A versão 3 exige também as duas transições de cenário convertidas. */
 static int tem_marca(const char *caminho) {
     static unsigned char m[MARCA_TAM];
     static char md5[33], fontes[65], exe[65];

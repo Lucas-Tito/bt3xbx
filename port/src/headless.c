@@ -244,7 +244,14 @@ void Port_Trace(unsigned vblanks) {
             f.rnd = gPortRandNext;
             Port_StateLog(vblanks, &f, sizeof(f));
         } else {
+#ifdef PORT_X360
+            /* (F8) Sem BT3_HASH o 360 ainda precisa saber da luta: a fase do crash.txt ("battle") e a queda de teste
+               (BT3_QUEDA_TESTE) contam os quadros dela. Os valores ficam zerados; só o BT3_HASH os grava. */
+            memset(&f, 0, sizeof(f));
+            Port_StateLog(vblanks, battle ? &f : NULL, battle ? sizeof(f) : 0);
+#else
             Port_StateLog(vblanks, NULL, 0);
+#endif
         }
     }
     if (Port_NetWarp() && sNetEntered && gProgress != NULL && !(gProgress->flags & 0x40)) {

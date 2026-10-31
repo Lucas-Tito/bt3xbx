@@ -2,7 +2,7 @@
  * (F6, etapa 6, docs/x360/plano/F6/06.md) A medição do decodificador dos filmes no Xenon, antes de escolher onde ele
  * roda (decisão 25, item 5) e como a imagem chega à tela (item 6).
  *
- * Com BT3_MPEG_MEDE=1 no ambiente.txt, a thread do jogo (hardware 2), antes de entrar no jogo, abre os dois filmes da
+ * Com BT3_MPEG_MEDE=1 no environment.txt, a thread do jogo (hardware 2), antes de entrar no jogo, abre os dois filmes da
  * ISO (DATA/ZS3USOP.PSS, a abertura, e DATA/ZS3USED.PSS, o final, pelo mesmo caminho que o plat_file.c monta) e
  * decodifica as primeiras imagens de cada um pelo decodificador do port (port/src/plat_mpeg2.c, o mesmo do
  * sceMpegGetPicture), sem desenhar e sem som. Por imagem, três tempos pelo QueryPerformanceCounter:
@@ -26,7 +26,7 @@
 #include <string.h>
 #include "diario.h"
 
-#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
+#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt) */
 
 /* port/src/plat_mpeg2.c */
 typedef struct Mpeg2 Mpeg2;

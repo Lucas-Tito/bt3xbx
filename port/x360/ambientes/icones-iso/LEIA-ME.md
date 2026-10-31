@@ -7,7 +7,7 @@ Manter a convertida versão 1 já existente no console para a abertura 05, com o
 nome `bt3_convertida.iso`. Esse nome antigo só é usado nesse controle negativo.
 Não substituir a nova por uma ISO que tenha apenas a marca adulterada.
 
-Cada ambiente substitui `game:\ambiente.txt`, um por abertura. Saves e capturas
+Cada ambiente substitui `game:\environment.txt`, um por abertura. Saves e capturas
 usam seis nomes novos e diferentes com prefixo `ic2810k_`. Criar o cartão pelo
 New Game, aceitando salvar: são pastas vazias, sem save emprestado nem dados do
 jogo no git. O preparo local correspondente fica em `~/icones/console/`.

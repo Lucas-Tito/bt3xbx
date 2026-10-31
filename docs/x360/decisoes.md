@@ -480,7 +480,7 @@ nativas, a metade baixa primeiro**, na memória principal e na da VU.
 Etapa 7 da F3. A gravação do quadro é a do port de PC (`port/src/gs/gs_draw.c`, compilada no 360 sem mudança além da
 escolha do backend em `#ifdef PORT_X360`); o backend novo é `port/x360/src/gs/gs_d3d.cpp`, com os shaders em
 `gs_d3d.hlsl` (tradução de `gs.vert` e `gs.frag`) compilados pelo `fxc` do XDK no `build_f2.sh`. A mesma build roda
-sem janela (padrão) ou desenhando (`BT3_GS=gpu` no `ambiente.txt`).
+sem janela (padrão) ou desenhando (`BT3_GS=gpu` no `environment.txt`).
 
 Padrões que o Lucas deixou e que podem ser revertidos:
 
@@ -591,7 +591,7 @@ Detalhes que a revisão crítica trouxe:
 - **Guide pausando a luta:** `XNotifyCreateListener` com `XN_SYS_UI`, controle parado com a Guide aberta, e os botões
   segurados mascarados até soltar.
 - **Teste sem ninguém no console:** o boot pelos menus agora exige um controle ligado, e o `BT3_PAD_PLAY` não toca sem
-  controle. Uma chave do `ambiente.txt` pode dar o controle como sempre ligado.
+  controle. Uma chave do `environment.txt` pode dar o controle como sempre ligado.
 
 ## 22. F4: todos os menus, o essencial antes; save nativo em `game:\saves` (13/10/2026)
 
@@ -720,7 +720,7 @@ mostra mais objetos), e a resolução maior (o 720p adiado) vem depois. Escolhas
 2. **Menus:** esticados, como no PC.
 3. **HUD:** estreitado como no PC; na escala 1 ele perde definição (uma coluna em quatro ou borrado), aceito por enquanto;
    a cura (uma escala horizontal de 1,5) vem com a resolução maior.
-4. **A escolha** vem do `ambiente.txt` (`BT3_WIDE=1`) por enquanto; o ajuste de vídeo do painel do console como padrão fica
+4. **A escolha** vem do `environment.txt` (`BT3_WIDE=1`) por enquanto; o ajuste de vídeo do painel do console como padrão fica
    para depois.
 5. **As medições** de desempenho (os roteiros no console e no WSL) passam a usar `BT3_WIDE=1` dos dois lados.
 

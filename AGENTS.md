@@ -49,6 +49,8 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
   Ficar em laço esperando (mesmo com um comando bloqueante repetido) relê todo o contexto a cada volta e gastou a
   cota de um dia inteiro em 29/10.
 - Não mexa no console (FTP) sem a tarefa pedir.
+- Arquivos de diagnóstico do projeto: `environment.txt` (entrada), `output.txt` (saída) e `bt3xbx.log`.
+  Modelos para copiar ao console usam `environment_*.txt`; não há leitura alternativa dos nomes anteriores.
 
 ## Como entregar
 
