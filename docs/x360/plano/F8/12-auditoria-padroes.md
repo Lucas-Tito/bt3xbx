@@ -55,6 +55,16 @@ do `gs_d3d.cpp`, que não são chaves (não há chave que os desligue) e que dec
   captura (`BT3_SHOT*`) e `BT3_SOM_DERIVA` sem `BT3_LOG=1`, o que as deixaria ignoradas pelo `posix360.c`. Ganharam
   `BT3_LOG=1`; o `audita_logs360.py` voltou a passar, com os mutantes acusados.
 
+## Decisão do Lucas (31/10): os autotestes de boot ficam atrás de `BT3_AUTOTESTES`
+
+Implementada no `gs_d3d.cpp`: a chave `BT3_AUTOTESTES` (padrão 0, em `diagnostico360.h`, só vale com `BT3_LOG=1`) liga os três
+autotestes (profundidade, amostras do MSAA, nativas). Sem ela valem os valores fixos da proposta abaixo (profundidade como
+cor nos dois, máscaras 0x1111 e 0x2222, `sNativos` 7), sem criar as texturas e superfícies que só os testes usam, e o diário
+traz uma linha "autotestes pulados" por teste. As sabotagens exigem `BT3_AUTOTESTES=1` (uma linha no diário avisa; sem ela são
+ignoradas) e a volta exata do MSAA (`BT3_MSAA_VOLTA=1`) também (sem prova fica desligada, com uma linha). Dois carimbos
+("carimbo do init", começo e fim de `d3d_init`) medem na próxima rodada de console quanto o boot ganhou. A tabela acima
+descreve o que rodava por padrão antes disso.
+
 ## Proposta: os autotestes de boot sem religar o custo
 
 **Custo medido** (logs de 30/10, `build/sessao_msaa2/coleta/*/bt3xbx.log`, oito rodadas, todas com `BT3_LOG=1`): a

@@ -3106,3 +3106,12 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 - **Provar o x86 sem WSL quando a mudança é só um `#ifdef PORT_X360`:** `gcc -E -P` do arquivo da main e do branch,
   com os `-I` do `compile_flags.txt` e sem `PORT_X360`, tem de dar o mesmo texto (com e sem `PORT_BIG_ENDIAN`, a PPC
   do WSL); com `PORT_X360` tem de diferir, para ver o verificador falhando.
+
+### Autoteste de boot que descobre o hardware
+
+- **Quando a resposta é conhecida, vira valor fixo.** Um autoteste que descobre comportamento do hardware (aqui, o modo de
+  restauro da profundidade, a máscara de cada amostra do MSAA e as passadas nativas) custou de 3,8 a 5 s de boot no console
+  e sempre deu o mesmo resultado. Passa a valor fixo no padrão, com uma linha no diário dizendo o que foi pulado e com que
+  valor; o teste continua no código, atrás de uma chave de desenvolvimento (`BT3_AUTOTESTES=1`, só com log). As provas que só
+  fazem sentido com o teste (sabotagens, a volta exata) exigem a chave, em vez de rodar sem a verificação. Carimbe o começo e
+  o fim do init no diário para a rodada seguinte medir o ganho.
