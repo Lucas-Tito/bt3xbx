@@ -8,9 +8,9 @@
  *   - mods/...    arquivo de verdade, como no PC;
  *   - disc/...    o arquivo da ISO (ISO 9660, sem extensões: nomes em maiúsculas com ";1");
  *   - pzsN/...    a entrada do AFS dentro da ISO.
- * A ISO tem de ser a convertida no PC (decisão 23, port/x360/tools/convert_iso.py): Iso_Iniciar identifica o volume
+ * A carga exige a ISO convertida (decisão 23): o PC ou iso_instalar.c a prepara antes do jogo. Iso_Iniciar identifica o volume
  * e o SYSTEM.CNF antes de procurar a marca (docs/x360/formatos/iso-convertida.md); recusa a imagem incompatível,
- * ilegível ou original sem converter (Iso_Recusada; a main mostra a caixa
+ * ilegível ou original sem converter (Iso_Recusada; a main oferece a instalação da original ou mostra a caixa
  * do sistema e o jogo não começa). Da ISO convertida, a entrada com conversor (Conv_FormatoDe, port/x360/conv) já
  * vem na ordem do 360: é lida inteira na abertura, sem Conv_Arquivo; o resto (fluxos de som, filmes) é lido da ISO
  * a cada fread. Os conteúdos comprimidos (BPE) continuam convertidos depois de descomprimidos, pelos ganchos do

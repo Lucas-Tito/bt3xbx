@@ -184,3 +184,25 @@ os dois arquivos do formato [transicao](transicao.md), elevando o total de arqui
 3.327. O leitor recusa as versões anteriores. É obrigatório converter novamente a ISO USA original com este
 instalador; recompilar o `.xex` e manter a ISO versão 2 não corrige os dados. Não reutilizar uma ISO já convertida
 como origem. O teste completo provoca a recusa das marcas 1 e 2; o teste do leitor também recusa ambas.
+
+
+## Conversão no console com o mesmo contrato (F8)
+
+A decisão 23 foi revista pelo Lucas somente quanto ao local da instalação. O console agora oferece a conversão
+inicial da USA original, com `conv/iso_conv.c` e os mesmos conversores e ícones do PC. A carga continua exigindo
+a ISO pronta. Segurança, interface provisória, tempo e provas estão em
+[03-conversao-console](../plano/F8/03-conversao-console.md).
+
+O contrato da marca versão 3 permanece intacto. `preparar_iso_console.py`, chamado por `build_f2.sh`, gera no
+host o selo exato da ferramenta PC e o inclui na build. Para comparar bytes entre os dois caminhos, usar no PC
+`--conv-tool build/x360/iso/conv_tool` da mesma preparação. Esse hash continua identificando a ferramenta PC
+usada como referência, inclusive quando o console aplica o núcleo C comum. Uma ferramenta PC recompilada com
+outro compilador pode ter procedência diferente na marca; não é divergência dos bytes convertidos.
+
+
+Na otimização do console pedida pelo Lucas em 29/10/2026, a origem é autenticada no fim da passagem única,
+antes de publicar. Índices antecipados ficam em cache e não são relidos da origem. A saída tem SHA256 calculado
+ao gravar; a reabertura compara índices completos, entradas convertidas, marca e amostras preservadas. A cobertura
+de persistência é menor que a conferência integral do PC descrita acima; o miolo não amostrado pode ocultar
+corrupção silenciosa. Modelo de tempo, faixas exatas e prova desse limite estão na nota da F8. A versão e os bytes
+da saída continuam iguais, com a mesma ferramenta/selo; o instalador PC mantém sua conferência integral.

@@ -2981,3 +2981,64 @@ diagnósticos optativos de `78dbb29c`. Isso recusava até alterações de coment
 geradores. A referência agora é `78dbb29c`: retira as marcas dos dois lados e atualiza somente o nome
 da configuração nos comentários da referência. A comparação continua integral, incluindo argumentos
 e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
+
+### Instalação inicial no console (F8, conversão)
+
+- O `xtl.h` do XDK não define `INVALID_FILE_ATTRIBUTES`. Comparar `GetFileAttributes` com `(DWORD)-1`,
+  como já faz `posix360.c`. A camada `teste_instalar/xtl.h` também não deve definir essa constante:
+  removê-la fez o compilador nativo recusar o adaptador antigo com o mesmo identificador ausente do XDK.
+  As APIs simuladas não comprovam disponibilidade no SDK; sem seus headers no WSL, a build XDK segue pendente.
+- A marca versão 3 inclui o SHA256 do **executável PC**, além dos fontes. Não comparar `.xex` ou ferramenta
+  nativa recompilada com outro compilador esperando a mesma marca. `preparar_iso_console.py` gera no host o selo
+  e conserva o `conv_tool` que deve ser passado ao `convert_iso.py --conv-tool` na prova de igualdade literal.
+- Depois de preparar a ISO com D3D ativo, relançar o título. Tentar reservar o heap fixo do PS2 nesse processo
+  violaria a ordem de `Preparar`: a CRT/D3D já pode ter ocupado os endereços baixos. A conversão fica antes do
+  jogo e do áudio, numa thread de hardware 2; a main apresenta e os textos da instalação são estáticos.
+- O teste do fluxo de áudio ainda criava marca 2 e passou a parar na guarda da marca 3 antes de testar o áudio.
+  O gerador agora usa `ISO_MARCA_VERSAO`. Uma falha de identidade na imagem sintética não é regressão do fluxo.
+  Rodar a prova de adiantamento sem outra tarefa saturando CPU/disco: sua exigência de nenhuma falta depende
+  de a thread leitora ser escalonada a tempo. Não relaxar os limites para aceitar uma execução disputada.
+- Uma worktree nova pode ligar a x86 sem `port/build/gen/data`, preenchendo tabelas ausentes com stubs. Isso
+  não reproduz a referência: a rodada inicial deu 450 stubs e `.text` diferente do hash histórico, mesmo com
+  objetos iguais à base recompilada. Preparar os dados locais antes de julgar e conferir também `obj_data/`.
+  Na cópia privada dos `.s`, corrigir o `.incbin` absoluto de `vu1_micro.data.s` para o dado somente leitura,
+  como já registrado na seção de caminhos absolutos; nunca editar a árvore compartilhada em `/srv/bt3/dados`.
+
+
+### Reduzir E/S da instalação sem esconder a cobertura (F8, 29/10/2026)
+
+- Contar tráfego do caminho inteiro antes de estimar: duas autenticações, comparação contra a origem e
+  remendos de entradas custavam 20,91 GB, não somente duas leituras e uma escrita. A passagem sequencial com
+  hash da origem antes de converter, hash da saída na escritora e releitura seletiva fica em 7,49 GB.
+- Antecipar índices sem cache quebra a promessa de uma leitura por byte. Guardar os metadados até o fim,
+  usar esses bytes na passagem e comparar todos literalmente após reabrir, incluindo o meio da tabela AFS2.
+- Três buffers permitem próxima leitura, conversão atual e escrita anterior com donos diferentes. Drenar ambos
+  os pedidos em toda saída, inclusive falha; só então soltar buffers/apagar. Usar threads 1, 2 e 3, com a main
+  apresentando, antes do jogo/áudio. Eventos e handles distintos bastam para sobrepor E/S síncrona no XDK.
+- Hash durante escrita identifica os bytes enviados, não prova persistência integral. Documentar amostras e
+  provar um erro deliberado fora delas que passa. CRC32 é soma rápida contra erro acidental, não autenticação.
+- Para provar C/Python com uma ISO de teste, conferir a C inteira com `convert_iso.py --conferir --dados`,
+  guardar hashes, apagar a C e só então produzir a Python. A conferência integral deve recusar um byte que
+  ficou fora da amostra do console. Remover imagens de rodadas antigas antes de criar novas; preservar logs.
+
+- Congelar `conv/*.[ch]` e `convert_iso.py` durante toda a prova C/Python. A ferramenta e o selo são preparados
+  no começo, mas o Python recalcula a identidade dos fontes no fim. Uma rodada de desenvolvimento recusou a
+  marca porque os fontes foram editados durante as sabotagens, embora a C tivesse concluído: não comparar
+  selos de instantes diferentes. Recompilar do commit final e não editar esses fontes até acabar a conferência.
+
+### A passagem única que autenticou errado no console (F8, 29/10/2026 à noite)
+
+- A primeira conversão acelerada no 360 recusou a ISO USA íntegra em 66% ("identidade SHA256 da original não
+  confere"), depois de passar no ensaio nativo com a mesma ISO. O que só ela fazia, e a versão lenta (que
+  converteu de manhã) não: lotes começando em posições fora do setor (fim de entrada de tamanho quebrado) e
+  índices do cache emendados por `memcpy` no meio do buffer, com `ReadFile` do resto a partir de posição e
+  endereço quebrados. O `ReadFile` do XDK faz DMA direto no buffer do título; a documentação só promete o DMA
+  direto com começo e tamanho em setores e buffer alinhado. Correção: todo lote começa e termina em múltiplo de
+  2048 (o setor do USB; o do HD é 512), cai inteiro no início de um buffer alinhado a 128 num `ReadFile` só, e o
+  cache dos índices é comparado com o lote em vez de emendado (relê 552.004 bytes dos 3 GB).
+- O ensaio nativo não pegou porque o `ReadFile` simulado é um `read` POSIX, que não tem alinhamento. Agora a
+  leitora simulada (thread 3) exige o contrato do DMA, e a versão quebrada é vista caindo nele; um núcleo
+  mutante sem a regra do setor também cai.
+- A causa não foi vista no console (sem xbdm): é a diferença que sobrou. Por isso o núcleo leva o estado do
+  SHA256 da origem a cada 64 MiB (`iso_marcos.h`, resumos, nenhum byte do jogo) e para no primeiro marco errado,
+  dizendo no log a janela e o lote. Se voltar a falhar, o log já aponta onde.

@@ -76,7 +76,7 @@ compila_fluxo() { # $1 = o diretório com fluxo.c e iso360.c
   $CC -std=c89 -pedantic -Wall -Wextra -Werror -O2 -DFLUXO_PELO_PORT -c "$1/fluxo.c" -o "$1/fluxo.o" &&
   $CC -std=gnu99 -Wall -Wextra -Wno-stringop-truncation -Werror -O2 -I"$T/xtl" -I"$RAIZ/port/x360/src" \
     -I"$RAIZ/port/x360/conv" -c "$1/iso360.c" -o "$1/iso360.o" &&
-  $CC -std=c99 -Wall -O2 -I"$1" -I"$T" "$T/teste/teste_fluxo.c" "$1/fluxo.o" "$1/iso360.o" -lpthread -o "$1/prog_fluxo"
+  $CC -std=c99 -Wall -O2 -I"$1" -I"$T" -I"$RAIZ/port/x360/src" "$T/teste/teste_fluxo.c" "$1/fluxo.o" "$1/iso360.o" -lpthread -o "$1/prog_fluxo"
 }
 $CC -std=c89 -pedantic -Wall -Wextra -Werror -O2 -c "$T/fluxo.c" -o "$T/fluxo_wsl.o" ||
   { echo ">> FALHA: o fluxo.c sem FLUXO_PELO_PORT não compila em C89 estrito"; falhas=$((falhas + 1)); }

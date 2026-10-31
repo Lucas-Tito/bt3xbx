@@ -191,10 +191,28 @@ def textos(raiz, pasta):
     programa = pasta / "textos.c"
     programa.write_text(r'''#include <wchar.h>
 #include <stdio.h>
+#include <string.h>
 #include "iso_avisos.h"
 int main(void) {
     const wchar_t *titulo, *texto;
+    const char *progresso[] = {
+        "Checking ISO...", "Copying ISO...", "Converting ISO...", "Verifying ISO...", "Finishing..."
+    };
     int i;
+    if (wcscmp(ISO_CONV_TITULO, L"Convert ISO") ||
+        wcscmp(ISO_CONV_PERGUNTA, L"Convert your original USA ISO for Xbox 360? It needs 3 GB of free space. Your original will be kept.") ||
+        wcscmp(ISO_CONV_SIM, L"Convert") || wcscmp(ISO_CONV_NAO, L"Cancel") || wcscmp(ISO_CONV_OK, L"OK") ||
+        wcscmp(ISO_CONV_SUCESSO, L"ISO ready") ||
+        wcscmp(ISO_CONV_PRONTA, L"Conversion complete. The game will restart.") ||
+        wcscmp(ISO_CONV_ESPACO_TITULO, L"Not enough space") ||
+        wcscmp(ISO_CONV_ESPACO, L"Free at least 3 GB in the game drive and try again.") ||
+        wcscmp(ISO_CONV_FALHA_TITULO, L"Conversion failed") ||
+        wcscmp(ISO_CONV_FALHA, L"The ISO could not be converted. Check your original USA disc image and storage, then try again.") ||
+        wcscmp(ISO_CONV_DESTINO, L"Rename your original ISO to bt3.iso and try again. The name bt3-x360.iso is reserved for the converted ISO.") ||
+        strcmp(ISO_CONV_AGUARDE, "Please wait. Do not turn off the console.") ||
+        sizeof(ISO_CONV_PROGRESSO) / sizeof(ISO_CONV_PROGRESSO[0]) != 5) return 1;
+    for (i = 0; i < 5; i++)
+        if (strcmp(ISO_CONV_PROGRESSO[i], progresso[i])) return 1;
     for (i = 1; i <= 4; i++) {
         Iso_Aviso(i, &titulo, &texto);
         if (!wcsstr(texto, L"bt3-x360.iso") || !wcsstr(texto, L"root of the game folder") ||
@@ -223,7 +241,13 @@ int main(void) {
                                   ("expected name", "nome esperado"),
                                   ("ISO conversion required", "Unsupported converted ISO version"),
                                   ("convert_iso.py", "iso_convertida.py"),
-                                  ('ISO_LARGO(ISO_NOME) L".";', 'ISO_LARGO(ISO_NOME) L". Copy it there.";')]):
+                                  ('ISO_LARGO(ISO_NOME) L".";', 'ISO_LARGO(ISO_NOME) L". Copy it there.";'),
+                                  ('L"Convert ISO"', 'L"Prepare ISO"'),
+                                  ("? It needs 3 GB", "? This takes up to 40 minutes and needs 3 GB"),
+                                  ("The ISO could not be converted.", "The ISO could not be prepared."),
+                                  ("Rename your original ISO to bt3.iso and try again.", "Keep your original as bt3.iso.")]):
+        if de not in fonte:
+            raise ValueError("mutação dos textos: trecho ausente: "+de)
         d = pasta / f"texto{j}"
         d.mkdir()
         (d / "iso_avisos.h").write_text(fonte.replace(de, para))

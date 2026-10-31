@@ -26,6 +26,7 @@
 #include "diario.h"
 #include "iso360.h"
 #include "iso_avisos.h"
+#include "iso_tela.h"
 #include "som/som360.h"
 #include "queda360.h"
 #include "queda_teste360.h"
@@ -339,9 +340,10 @@ static void Saida_Apresentar(void) {
 }
 
 /* XLaunchNewImage não volta: de uma thread nova, com a main parada esperando (pesquisa/01, CLAUDE.md) */
+static bool sReiniciarTitulo;
 static DWORD WINAPI VoltarAoDashboard(LPVOID arg) {
     (void)arg;
-    XLaunchNewImage(NULL, 0);
+    XLaunchNewImage(sReiniciarTitulo ? "game:\\default.xex" : NULL, 0);
     return 0;
 }
 
@@ -397,7 +399,12 @@ void __cdecl main() {
     if (recusada) {
         gCor = 0xFF010101; /* preto (o exato não limpa no console, guia 1.3) */
         InterlockedExchange(&gTerminou, 1);
-        saidaDireta = MostrarRecusa(dev, motivo);
+        if (motivo == ISO_ORIGINAL) {
+            sReiniciarTitulo = IsoTela_Converter(dev, Iso_Pedida()) != 0;
+            saidaDireta = true;
+        } else {
+            saidaDireta = MostrarRecusa(dev, motivo);
+        }
     }
     if (gpu) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF000000, 1.0f, 0);

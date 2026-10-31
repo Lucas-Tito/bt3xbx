@@ -16,9 +16,11 @@ A mensagem é a mesma para qualquer ISO sem a marca.
    distingue pela identificação do disco (o `SYSTEM.CNF` e o volume) antes de olhar a marca.
    Implementado no WSL em [01-avisos](01-avisos.md), junto com a busca pela convertida (item 6); build e sessão no
    360 ficam para a revisão.
-2. **Conversão no próprio console** (pergunta para quando a F8 for escopada; seria rever a decisão 23): o código de
-   conversão já rodou no console antes da decisão 23; o custo é ler e gravar 3 GB no FATX, com tela de progresso, e os
-   conteúdos comprimidos (BPE) continuariam convertidos na carga.
+2. **Conversão no próprio console** (decisão 23 revista pelo Lucas): implementada no WSL em
+   [03-conversao-console](03-conversao-console.md), com os conversores C comuns, ícones, autenticação integral,
+   temporário, conferência e publicação. A carga continua lendo a ISO preparada; BPE se converte na carga.
+   Build XDK, sessão FATX/Guide e aprovação dos textos provisórios aguardam a revisão.
+
 
 ## Os textos para o usuário (22/10/2026)
 
