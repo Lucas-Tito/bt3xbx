@@ -24,7 +24,7 @@ mkdir -p $OUT/c89 $OUT/obj $OUT/dados $OUT/x360 $OUT/shaders
 TITLE_ID=$(grep '^TITLE_ID=' port/x360/package/titulo.env | cut -d= -f2-)
 TITLE_NAME=$(grep '^TITLE_NAME=' port/x360/package/titulo.env | cut -d= -f2-)
 
-# O selo da versão 3 inclui o executável PC. Gerado uma vez no host para os dois caminhos.
+# O selo da versão 4 inclui o executável PC. Gerado uma vez no host para os dois caminhos.
 python3 port/x360/tools/preparar_iso_console.py
 
 echo "== 1. preparação (c89.py)"

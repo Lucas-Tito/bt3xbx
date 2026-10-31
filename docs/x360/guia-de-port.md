@@ -3115,3 +3115,141 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   valor; o teste continua no código, atrás de uma chave de desenvolvimento (`BT3_AUTOTESTES=1`, só com log). As provas que só
   fazem sentido com o teste (sabotagens, a volta exata) exigem a chave, em vez de rodar sem a verificação. Carimbe o começo e
   o fim do init no diário para a rodada seguinte medir o ganho.
+
+### ISO v4: antecipar BPE sem aumentar as entradas (29/10/2026)
+
+- Recompressão gulosa do arquivo inteiro perdeu espaço em 41 pacotes, mesmo
+  mantendo os tamanhos e tentando vários limites de bloco. Os originais usam
+  blocos de até 10.000 bytes; aproximar esse limite ainda deixou 33 falhas.
+  Conservar os blocos inalterados e tentar a gramática original nos alterados,
+  por programação dinâmica, resolveu o encaixe no ensaio integral. Uma nova
+  gramática é alternativa por bloco. Sempre conferir a descompressão completa
+  antes de gravar; falta de espaço é erro fatal, nunca truncamento.
+- Um fluxo BPE recomprimido tem bytes diferentes com o mesmo conteúdo lógico.
+  Marcar o fluxo como bytes e aceitar igualdade deixa passar pacote cru. As
+  marcas dos menus agora levam `.convertido` ao lado de `.orig`; o comparador
+  exige os bytes convertidos exatos nas posições que o jogo não escreveu.
+  `teste_menus_iso.py` estraga as duas provas, na equivalência e na memória.
+- Worktree nova não traz os links de dados: criá-los para `/srv/bt3/dados`, sem
+  copiar nem escrever nas pastas. O primeiro ensaio aqui só viu "não abre".
+
+- A versão também é literal em `IsoConv_Executar`, na validação do selo antes
+  da passagem, além de `ISO_MARCA_VERSAO` e `convert_iso.VERSAO`. Esquecer esse
+  ponto recusou o selo v4 antes de ler o fluxo. O mutante de alinhamento então
+  falhou no `free` do ponteiro propositalmente desalinhado, em vez de chegar à
+  guarda DMA esperada. Conferir o primeiro erro e procurar também `selo + 16`
+  ao subir a versão. O ensaio C completo acusou a incompatibilidade.
+
+- A rodada oficial deve iniciar os ensaios dentro do serviço, inclusive os
+  instaladores nativos. Esperar pelos PIDs de comandos iniciados na sessão
+  anterior não os protege do encerramento dessa sessão: os dois instaladores
+  pararam sem conclusão. Log incompleto não prova defeito na conversão.
+  O marcador da fila `~/espera/TAREFA` contém na primeira linha um comando
+  que retorna zero enquanto o serviço está ativo, não uma descrição.
+- O banco externo precisa da revisão com `objeto`, `troca`, `CONV=`, `objcru`
+  e `transcru` (na rodada iso-v4, `07f5f5a7`). A revisão `0eef00b5` antecede
+  essa extensão e não prova esses casos, mesmo ligada aos objetos atuais.
+  Conferir tanto a unidade C quanto o script e o comparador antes de armar.
+
+- Adaptar um banco de outro checkout exige trocar também o `sys.path` do
+  Python embutido em `banco.sh`, além dos caminhos de `banco.py`. Na rodada
+  iso-v4 ele ainda apontava para o checkout sem o módulo: a lista de regiões
+  ficou vazia, a geração de marcas não fez trabalho e os 131 casos reprovaram
+  por falta de marcas, embora a PPC tivesse terminado. A preparação agora
+  para no erro de importação, exige regiões não vazias e para no erro de
+  `--marcas`. A importação quebrada e a lista vazia foram vistas reprovando.
+  Só `test -s` não basta: um `print` sem nomes grava uma quebra de linha.
+- No controle de byte alterado do banco, saída 2 da comparação significa
+  retrato ou marca faltante, e não prova diferença no conteúdo. O adaptador
+  conserva esse código e só aceita saída 1 como estrago reprovado pela
+  comparação. Os 131 retratos preservados passaram com marcas completas;
+  o byte alterado reprovou por diferença, sem região sem marcas.
+- `save_mc.sh` desta base não imprime `tudo certo` e não julga todos os
+  estados que resume. O lançador da iso-v4 confere os casos unitários, a
+  chegada ao menu, os estados A/B1/B2 contra a x86, o erro de escrita F e
+  a recuperação byte a byte com `confere_save_mc.py`, antes de registrar
+  aprovação. Cópias com estados, save, teste unitário, chegada ao menu,
+  temporário ou falha injetada alterados reprovaram separadamente.
+
+- A leitura de um retrato menor substitui setores de 0x800 bytes do buffer,
+  deixando sufixos dos arquivos anteriores. Com a ISO v4, esses sufixos têm
+  fluxos recomprimidos diferentes na x86 e na PPC. A rodada do Duelo passou
+  na carga e nas oito imagens, mas o comparador ainda julgava os sufixos por
+  palavra, acusando diferenças nas telas 39, 00923 e 00921. Antes de dispensar
+  o resto do buffer, conferir sua origem: o `memdiff.py` agora reconhece na
+  x86 um sufixo inteiro de referência `.orig`, na mesma posição, após o último
+  setor do arquivo atual, e exige exatamente a saída `.convertido` na PPC.
+  Só usa arquivos inteiros lidos pela rodada, com pelo menos 64 bytes não
+  nulos no sufixo; referências conflitantes param a comparação. O conteúdo
+  vivo continua conferido pelas marcas. `teste_memoria_menus.py` exercita a
+  regra e as recusas; cópias do dump real com sufixo cru, byte alterado no
+  sufixo e byte alterado no arquivo vivo reprovaram no julgamento completo.
+  A reanálise preservada do Duelo passou; continua sendo investigação, sem
+  substituir a repetição oficial das builds finais.
+
+- No Ultimate da ISO v4, não bastou procurar sufixos na posição original.
+  O heap reutilizou e dividiu os blocos: na tela 21, o buffer do retrato
+  00782 contém outro fragmento de 00782 deslocado em `0x3680`, seguido pelo
+  resto de 00760 com o mesmo deslocamento. No fim, os buffers novos do Sim
+  Dragon dividem 00782 entre dois blocos e preservam mais uma cauda antiga.
+  Todos esses trechos coincidiram exatamente com a saída antecipada.
+  `memoria_menus.py` procura âncoras exatas de 128 bytes na x86, com pelo
+  menos 64 não nulos e deslocamento múltiplo de 16, e expande a igualdade
+  até os limites do fragmento. Cada byte PPC deve coincidir com a referência
+  convertida; conflito de saídas interrompe a comparação. A busca protege
+  os setores do arquivo vivo. Sem arquivo vivo, só alcança os dados do
+  buffer cru `faceFile` de `0x16800`, sem tipo nem contexto dinâmico, nunca
+  cabeçalhos, estruturas ou o conteúdo descomprimido `faceRes`.
+  Não ampliar `BUFFER_IMAGEM_VAZIO` ou aceitar diferenças pelo tamanho:
+  fragmentos crus e bytes alterados precisam reprovar também nesses buffers.
+  A reanálise integral do Ultimate passou. As duas cópias reais íntegras
+  passaram, e cinco cópias estragadas reprovaram com saída 1: fragmento cru,
+  byte no fragmento e byte no arquivo vivo da tela 21, mais fragmento cru
+  e byte no buffer sem arquivo vivo do fim. Logs em
+  `~/iso-v4/sonda-fragmentos.log`; testes sintéticos também recusam cabeça
+  deslocada, cauda cortada e dois fragmentos crus ou alterados.
+
+- No Disc Fusion da ISO v4, o cabeçalho do pacote de seções 00451, com
+  contagem 6 e primeiro deslocamento 64, passou no teste de dois tamanhos
+  plausíveis usado para selecionar referências BPE inteiras. Quatro trechos
+  curtos do buffer de retrato coincidiam com bytes repetidos desse pacote;
+  exigir sua versão recomprimida criou diferenças falsas onde x86 e PPC
+  eram idênticas. O pacote não é uma referência de arquivo BPE inteiro.
+  Além do cabeçalho, exigir o conteúdo registrado em `@0x0#bpe.orig` e seu
+  tamanho igual ao tamanho descomprimido. Não inferir o formato só por dois
+  inteiros pequenos. O teste sintético recusa pacote sem esse conteúdo,
+  tamanho incompatível e truncamento; restaurar o detector antigo numa cópia
+  fez a asserção do pacote falhar de propósito. A tela 29 preservada passou
+  com a seleção corrigida, sem mudar classes ou tetos. A reanálise não
+  substitui a rodada oficial das builds finais.
+
+- Na rodada iso-v4 de 30/10, a reserva do C: interrompeu o ciclo antes de
+  abrir o log de Shenlong. O trap anotou o nome do próximo roteiro e saída
+  1, mas isso não significava reprovação do jogo. Ao julgar, conferir se o
+  comando chegou a executar e preservar a tabela bruta; registrar bloqueio
+  de infraestrutura separadamente. O cartão sem dumps nem imagens pôde
+  passar em um serviço próprio sob a mesma trava. Essa prova independente
+  não aprova os roteiros de menu que ficaram sem execução, nem autoriza
+  reduzir a reserva física ou renovar o prazo.
+
+- A correção anterior tirou os pacotes de seções das referências, e isso
+  inverteu o julgamento dos restos de pacote: num buffer de retrato, um
+  trecho de 00451 cru passava como igual-sem-inverter e o mesmo trecho
+  convertido reprovava como diferente (cópias da tela 29 do Disc Fusion).
+  A causa era outra: conteúdo repetido, dentro do pacote ou de um arquivo
+  dentro de outro (0x110 bytes de 00475 dentro de 00451), escolhia uma
+  saída arbitrária. Agora todo arquivo inteiro antecipado é referência, e
+  cada fragmento achado pela x86 é procurado em todos os originais, em
+  qualquer posição: só vale se todas as cópias derem a mesma saída
+  convertida. O ambíguo não escolhe referência, fica com a comparação por
+  palavra e sai no log ("restos ambíguos"); sobreposição de dois trechos
+  únicos com saídas diferentes também. Não resolver ambiguidade excluindo
+  um formato inteiro: o que se exclui volta para a tolerância antiga.
+
+- Dois mutantes do identificador de fragmentos sobreviviam ao teste
+  sintético: a expansão para trás que entrava no conteúdo vivo e a falta da
+  recusa de original e convertido com tamanhos diferentes. Um terceiro, a
+  âncora sem o mínimo de bytes não nulos, passou a sobreviver quando a
+  unicidade cobriu o caso dos zeros. Cada regra do identificador tem de ter
+  um caso próprio no teste, e a lista de mutantes roda de novo a cada
+  mudança dele (`~/revisao-iso-v4/mutantes-isoverif.log`).

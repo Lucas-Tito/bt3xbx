@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Converts and verifies your own USA ISO of the game (SLUS-21678) for the Xbox 360 port, on a PC.
+"""Converts and verifies your own USA ISO of the game (SLUS-21678) for the Xbox 360 port, on a PC,
+with the BPE menu packs anticipated (ISO version 4).
 
 Usage: convert_iso.py ORIGINAL.iso bt3-x360.iso [--conv-tool PATH]. Requires Python 3 and conv_tool.
 Temporary files are created next to the output, never next to the original, which is never modified.
@@ -25,7 +26,7 @@ SHA256 = "93f1f911e9a2bbdf92e5794fc3075ddf3f87db3df4b1cb8cfbb0448721c91172"
 SETOR = 2048
 MARCA_POS = 0x3DF400
 MARCA_TAM = 512
-VERSAO = 3
+VERSAO = 4
 MAGIA = b"BT3X360-ISO".ljust(16, b"\0")
 BLOCO = 4 * 1024 * 1024
 

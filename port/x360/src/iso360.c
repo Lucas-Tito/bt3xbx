@@ -13,7 +13,7 @@
  * ilegível ou original sem converter (Iso_Recusada; a main oferece a instalação da original ou mostra a caixa
  * do sistema e o jogo não começa). Da ISO convertida, a entrada com conversor (Conv_FormatoDe, port/x360/conv) já
  * vem na ordem do 360: é lida inteira na abertura, sem Conv_Arquivo; o resto (fluxos de som, filmes) é lido da ISO
- * a cada fread. Os conteúdos comprimidos (BPE) continuam convertidos depois de descomprimidos, pelos ganchos do
+ * a cada fread. Os menus BPE já trazem o conteúdo convertido. Folhas e animações ainda usam os ganchos do
  * jogo (port/x360/conv/conv_jogo.c). Um arquivo de mods/ ou de uma pasta solta (sem ISO) está no formato do PS2 e
  * o que tem conversor se converte ao abrir (Iso_DeArquivo; os mods/ ficam assim até as últimas fases). O arquivo
  * aberto é um IsoArq do vetor sAbertos, e as funções de stdio do shim (Port_X360Fread...) reconhecem um IsoArq

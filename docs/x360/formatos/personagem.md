@@ -1565,3 +1565,11 @@ do pacote do personagem pelo critério da forma, malha F2.12). Resultado:
 O que esse teste não prova: nenhuma posição das partes novas (costura, tipos 10 e 15, sub 1 de técnica,
 modelos do pacote do personagem, malha) foi lida pela luta de demonstração; a largura vem só do código e da
 forma dos dados.
+
+## Objetos extras de golpe (ISO versão 4)
+
+`BtlLoad_StepObject` usa `BTL_FILE_OBJECT` para ids de objeto >= 256: os arquivos
+`pzs3us1/03355..03398.bin` (ids `0xD1C..0xD47`) têm o mesmo formato de slot de
+modelo, incluindo os cinco modelos de ShenScene já cobertos. O conversor
+`personagem` reconhece integralmente os 44. Dragon Fist usa o objeto 256
+(`03355.bin`) e Father-Son Kamehameha o 267 (`03366.bin`).

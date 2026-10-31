@@ -84,6 +84,7 @@ Para cada região com marcação, uma linha "marcas REGIAO ARQ: conforme N, fora
 """
 import bisect, os, re, struct, subprocess, sys
 from collections import Counter
+from memoria_menus import fragmentos_antecipados
 
 BASE = 0x20000000  # -Ttext-segment de headless.py
 MAGIC = 0x53484254
@@ -209,7 +210,7 @@ def pares_heap(nome, ax, dx, ap, dp):
     return out
 
 
-def pelo_formato(ax, dx, dp, marcas, de=0):
+def pelo_formato(ax, dx, dp, marcas, de=0, original=None, convertido=None):
     """Compara [data + de, data + len(marcas)) do bloco pela marcação do conversor. Devolve (início, fim, classes,
     trechos fora do formato) com início e fim relativos ao bloco (o início é o dos dados, sem o de)."""
     ini = struct.unpack_from("<I", dx, 0x14)[0] - ax  # HeapBlock.data
@@ -221,7 +222,12 @@ def pelo_formato(ax, dx, dp, marcas, de=0):
         if k + w > fim:
             w = fim - k
         a, b = dx[k:k + w], dp[k:k + w]
-        if m in (2, 4, 8):
+        if original is not None and convertido is not None and a == original[k - ini:k - ini + w]:
+            # O PS2 ainda guarda os bytes originais: exigir a saída antecipada
+            # exata, inclusive packSize e fluxo BPE. Aceitar a == b aqui deixaria
+            # passar de propósito o pacote cru, como antes da ISO v4.
+            ok = b == convertido[k - ini:k - ini + w]
+        elif m in (2, 4, 8):
             ok = a == b[::-1]
         elif m == 1:
             ok = a == b
@@ -553,6 +559,19 @@ def main():
         marcas[achados[0]] = m
         nome_marcas[achados[0]] = arq
     dados_x86 = {nx: (ax, dx) for (nx, ax, dx), _ in pares}
+    # Todo arquivo inteiro lido pela rodada com saída antecipada (BPE inteiro ou pacote de seções). As referências de
+    # conteúdo descomprimido (@...#bpe) não são leituras em setores. Conteúdo repetido entre elas não escolhe
+    # referência: fragmentos_antecipados exige mapeamento único e diz o que recusou ("restos ambíguos").
+    referencias_bpe = []
+    for arq in vivas:
+        base = arq[:-len('.marcas')]
+        if '@' in base or not os.path.exists(base + '.convertido'):
+            continue
+        referencias_bpe.append((os.path.basename(base), open(base + '.orig', 'rb').read(),
+                                open(base + '.convertido', 'rb').read()))
+    if referencias_bpe:
+        print(f"referências antecipadas: {len(referencias_bpe)}: " + ", ".join(n for n, _, _ in referencias_bpe))
+    avisos_ditos = set()
 
     def mesmo_conteudo(b, orig):
         """o bloco b da x86 guarda orig? (metade ou mais dos trechos de 64 bytes iguais)"""
@@ -716,6 +735,8 @@ def main():
                 print(f"não inicializado: {nx}, ChrView.slot[{slot}].file[0], {b_ - a_} bytes após a primeira palavra")
         trechos, ini, fim = [], None, None
         fmt_ini = fmt_fim = 0
+        inicio_restos = None
+        dados_restos = 0
         dono = None
         if estado.startswith(" (em uso") and nx not in marcas and donos:
             dono = donos.get(struct.unpack_from("<I", dx, 0x14)[0])
@@ -756,7 +777,14 @@ def main():
             estado = estado[:-1] + f", {dono[0]} de {dono[2]})"
             tipados_heap[0] += 1
         elif nx in marcas:
-            fmt_ini, fmt_fim, cf, tf = pelo_formato(ax, dx, dp, marcas[nx])
+            referencia = nome_marcas[nx][:-len(".marcas")]
+            convertido = referencia + ".convertido"
+            original = referencia + ".orig"
+            antecipado = os.path.exists(convertido)
+            fmt_ini, fmt_fim, cf, tf = pelo_formato(
+                ax, dx, dp, marcas[nx],
+                original=open(original, "rb").read() if antecipado else None,
+                convertido=open(convertido, "rb").read() if antecipado else None)
             classes.update(cf)
             trechos += [tuple(t) for t in tf]
             print(f"marcas {nx} {nome_marcas[nx].rsplit('/', 1)[-1]}: conforme {cf['conforme']}, "
@@ -785,6 +813,43 @@ def main():
                 print(f"marcas {nx} resto [{ultimo:#x}, {pedido_c:#x}): conforme {cr['conforme']}, "
                       f"fora-do-formato {cr['fora-do-formato']}")
                 fmt_fim = fmt_ini + pedido_c
+            if antecipado and '@' not in referencia:
+                dados_restos = fmt_ini
+                inicio_restos = (len(marcas[nx]) + 0x7ff) & ~0x7ff
+        # faceFile das seleções e do Sim Dragon (0x16800): sem arquivo vivo,
+        # uma alocação nova ainda pode guardar pedaços de leituras anteriores.
+        # Só alcança o buffer cru sem tipo; nunca estruturas, cabeçalho ou faceRes.
+        if (estado.startswith(" (em uso") and nx not in marcas and dono is None
+                and dinamico is None and pedido == 0x16800):
+            dados_restos = struct.unpack_from('<I', dx, 0x14)[0] - ax
+            inicio_restos = 0
+        if inicio_restos is not None:
+            avisos = []
+            achados = fragmentos_antecipados(dx[dados_restos:dados_restos + pedido], inicio_restos, referencias_bpe,
+                                             avisos)
+            for aviso in avisos:
+                if aviso.startswith("referência"):
+                    if aviso not in avisos_ditos:
+                        print(f"restos: {aviso}")
+                    avisos_ditos.add(aviso)
+                else:
+                    print(f"restos ambíguos: {nx} {aviso}")
+            for inicio, esperado, origens in achados:
+                inicio += dados_restos
+                fim_resto = inicio + len(esperado)
+                # Comparação exata, inclusive onde bytes crus seriam iguais nas
+                # duas máquinas. Alteração na PPC nunca escolhe a referência.
+                for pos, byte in enumerate(esperado, inicio):
+                    ok = dp[pos] == byte
+                    classes['conforme' if ok else 'fora-do-formato'] += 1
+                    if not ok:
+                        if trechos and pos - trechos[-1][1] <= 16:
+                            trechos[-1] = (trechos[-1][0], pos + 1)
+                        else:
+                            trechos.append((pos, pos + 1))
+                pula.append((inicio, fim_resto))
+                print(f"restos antecipados: {nx} dados+{inicio - dados_restos:#x} +{len(esperado):#x}: "
+                      + ', '.join(sorted(origens)))
         for o in range(0, n, 4):
             if fmt_ini <= o < fmt_fim or fmt_ini < o + 4 <= fmt_fim:
                 continue
