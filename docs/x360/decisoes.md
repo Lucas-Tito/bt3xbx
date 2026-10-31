@@ -885,3 +885,13 @@ o FXAA por cima não acrescentou (`plano/F8/10-msaa.md`, seção 8). A rodada do
 3. **O FXAA sai do padrão** (`BT3_FXAA=0`) e a `BT3_OTIM_SEMTEX` entra (uns 2,6 ms, sem mudar um pixel).
 4. **Os 60 quadros por segundo ficam para depois** (a interpolação do port de PC dobraria o trabalho da GPU), e não há
    meta numérica para o MSAA agora.
+
+## 38. F5: a primeira release sai com a exceção E (31/10/2026)
+
+O reprojeto da decisão 29 não fechou o zero: os prefixos (`BT3_GS_LOTES`) pioraram o ritmo até desligados e saíram da
+primeira release (`plano/F5/08-gravacao.md`, seção 41), e o alfa exato entrou como padrão (decisão 32). No duelo do
+`f5_duelo.txt` a build normal ficou com 3 imagens de três vblanks em 2.334 no combate e nenhuma de quatro ou mais
+(`nor1`, rodada `le40a2910` de 30/10). O Lucas aceitou a exceção E do item 4 da decisão 29 para a primeira release:
+imagens de três vblanks só nas trocas de cena dentro da luta, nenhuma de quatro ou mais, conferidas na sessão final com
+a build da release; a mesma regra vale para a tela dividida da F7 (decisão 28). O zero continua como meta depois da
+release.
