@@ -21,6 +21,15 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
   no console, listar e identificar o conteúdo.
 - Merge do upstream só de propósito (`git merge upstream/main`), nunca automático.
 
+## Agentes
+
+- Todo agente lançado escolhe o modelo. Tarefa manual ou mecânica (varrer log, ler arquivos, montar pacote ou
+  ambiente, implementar com especificação fechada, testes com mutantes descritos) vai para `model: "sonnet"`; quem
+  lança fica com a avaliação do que voltar. O modelo maior só para julgamento fino (desenho, revisão adversarial de
+  verificador), dizendo por quê.
+- O gancho em `.claude/settings.json` recusa qualquer chamada de agente sem `model` (menos o `fork`, que herda o
+  modelo de quem lança).
+
 ## Console
 
 Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddriver e usbsecpatch,

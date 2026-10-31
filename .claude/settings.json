@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -e '(.tool_input.model // \"\") != \"\" or (.tool_input.subagent_type // \"\") == \"fork\"' >/dev/null || { echo \"Agente sem modelo: passe model (sonnet para tarefa manual ou mecânica; opus só para julgamento fino, dizendo por quê). Regra do CLAUDE.md, seção Agentes.\" >&2; exit 2; }",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
