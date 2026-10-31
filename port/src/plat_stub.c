@@ -441,6 +441,17 @@ void Port_SetAspectMilli(int milli) {
 int Port_IsWide(void) {
     return Port_AspectMilli() > 1340;
 }
+/* BT3_DIVIDIDA_RECORTE=1: in the split-screen fight the stage meshes that fall wholly outside the tight half-width
+   frustum are not sent to the VU1 (src/battle/stgm_a.c). The picture and the game state stay the same. Read once. */
+int Port_DivididaRecorte(void) {
+    static int sLido = 0, sLiga = 0;
+    if (!sLido) {
+        const char *e = getenv("BT3_DIVIDIDA_RECORTE");
+        sLiga = e != NULL && atoi(e) != 0;
+        sLido = 1;
+    }
+    return sLiga;
+}
 /* The picture's width over the console's 4:3 width (1 = not wide). */
 /* In the menus it is 1: their pages are composed for 4:3 (backdrops, scrolling scenery, 2D and 3D placed against
    each other), so they are shown as they are, stretched to the picture's width (the user's choice). */

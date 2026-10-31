@@ -370,6 +370,28 @@ void BtlStage_ClearZoneMarks(void) {
     fr->plane[4].z = 1.0f;            \
     fr->plane[4].w = 1.0f
 
+#ifdef PORT
+/*
+ * The tight frustum of a half-screen view (BT3_DIVIDIDA_RECORTE): the half-width branch of StgFrustum_Build, which the
+ * original never takes (x0 and x1 are scissorX0 and scissorY0, so the difference is never above 256). A copy of the view
+ * with the two fields set so the branch runs; the game itself still culls with the wide frustum.
+ */
+void StgFrustum_BuildHalf(StgView *view, StgFrustum *fr) {
+    StgView half = *view;
+
+    half.x0 = 0;
+    half.x1 = 300;
+    StgFrustum_Build(&half, fr);
+}
+
+/* Whether the view's scissor is one half of the screen (255 wide, against 512 for the full view). */
+s32 StgView_IsHalf(StgView *view) {
+    s32 w = view->unk204 - view->x0;
+
+    return w > 0 && w < 300;
+}
+#endif
+
 /* Builds the culling frustum of a view: side plane normals, view matrix, projection. Drawing only. */
 void StgFrustum_Build(StgView *view, StgFrustum *fr) {
     f32 k; /* near / screenDist, then each reciprocal in turn: one variable in the original (register allocation) */

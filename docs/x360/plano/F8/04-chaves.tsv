@@ -23,6 +23,7 @@ BT3_DATA	configuração ou teste explícito	game:\\gamedata	port/src/plat_extras
 BT3_DEMO	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/headless.c
 BT3_DESBLOQUEIO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/roteiro.c
 BT3_DISPLAY	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_DIVIDIDA_RECORTE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_stub.c
 BT3_DOIS	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/roteiro.c
 BT3_DUMP	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/headless.c
 BT3_EDRAM_RESIDENTE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp

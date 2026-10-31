@@ -72,6 +72,9 @@ void Roteiro_Rastro(const char *linha); /* roteiro.c */
 /* o backend: os descartes acumulados desde o começo (gs_d3d.cpp no 360; 0 sem backend, sem_janela.c) */
 int Passos_Descartes(unsigned *v, int n);
 #define N_DESC 8
+/* src/battle/stgm_a.c e plat_stub.c: BT3_DIVIDIDA_RECORTE, as malhas do estágio não enviadas à VU1 e as que iriam */
+extern unsigned gPortRecPulados, gPortRecTotal;
+int Port_DivididaRecorte(void);
 
 #ifdef PORT_X360
 void Diario_Escrever(const char *formato, ...);
@@ -114,6 +117,7 @@ static unsigned long long sUltImagem;
 static int sTemImagem;
 static unsigned sUltGs;
 static unsigned sDesc0[N_DESC];
+static unsigned sRecPulados0, sRecTotal0;
 #ifdef PORT_X360
 static unsigned sTela0[N_TELA], sEsperas0, sPeloHw0, sAtrasadas0, sEsperasPasso;
 static int sTemTela;
@@ -167,6 +171,8 @@ static void abre(void) {
     sN = sNInt = sRepetidas = 0;
     sTemImagem = 0;
     sVbAbriu = gPortVBlanks;
+    sRecPulados0 = gPortRecPulados;
+    sRecTotal0 = gPortRecTotal;
     if (Passos_Descartes(sDesc0, N_DESC) <= 0) {
         memset(sDesc0, 0, sizeof(sDesc0));
     }
@@ -274,6 +280,13 @@ static void fecha(const char *motivo) {
                 sJanela, desc[0], desc[1], desc[2], desc[3], desc[4], desc[5], desc[6], desc[7]);
     }
     escreve(s);
+    if (Port_DivididaRecorte()) {
+        unsigned pul = gPortRecPulados - sRecPulados0, tot = gPortRecTotal - sRecTotal0;
+        sprintf(s, "passos: janela %u recorte: %u de %u malhas do estágio (programa 4) não foram à VU1 (%.1f%%), %.1f por "
+                "passo de %.1f", sJanela, pul, tot, tot ? 100.0 * pul / tot : 0.0, sN ? (double)pul / sN : 0.0,
+                sN ? (double)tot / sN : 0.0);
+        escreve(s);
+    }
 }
 
 /* a fronteira de passo: a leitura do controle do jogador 1 */
