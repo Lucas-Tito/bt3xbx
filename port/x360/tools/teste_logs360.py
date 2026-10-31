@@ -42,6 +42,8 @@ static void Diario_Configurar(int s,int) { sincrono=s; }
 static void Diario_Escrever(const char *,...) {}
 static int Diario_Assincrono() { return 1; }
 static void Port_X360FecharSaida() {}
+const char *Port_Versao360() { return "9.8.7"; }
+const char *Port_Carimbo360() { return "teste"; }
 static void mods_no_boot() {}
 static void *TesteMalloc(size_t n) { ++alocacoes; return malloc(n); }
 static int TesteVfprintf(FILE *f,const char *s,va_list a) { ++formatacoes; return vfprintf(f,s,a); }

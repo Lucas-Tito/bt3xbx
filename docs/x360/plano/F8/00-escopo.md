@@ -78,7 +78,7 @@ esses commits estão empilhados em `teste/queda-console`, que é o branch subido
 | (d. 15) | Opções do port e remapeamento | por decidir; recomendação: nada | pergunta 2 | 0, ou 3 a 6 dias |
 | (d. 22) | Importar e exportar saves | por decidir; recomendação: fora | pergunta 5 | 0, ou 5 a 10 dias (o `SaveData` não está tipado) |
 | novo | Auditoria dos padrões do produto | por fazer | itens em branch integrados | 0,5 dia |
-| novo | Versão visível (no `crash.txt`, no log e no README) | por fazer | pergunta 7 | 2 a 4 h |
+| novo | Versão visível (no `crash.txt`, no log e no README) | feita: `port/x360/package/versao.env` é a fonte; o `build_f2.sh` passa BT3_VERSAO ao `passos.c` (`Port_Versao360`): `Version:` no `crash.txt`, linha `versão:` no log (com `BT3_LOG=1`) e `{{VERSION}}` do README pelo `pacote.py` | pergunta 7 | 2 a 4 h |
 | novo | Workflow `release.yml` do upstream rodando no fork | por decidir (seção 4.3) | pergunta 8 | 1 h |
 | novo | Pacote, verificador e avisos de licença | por fazer | seção 4 | 1,5 a 3 dias |
 | novo | README do usuário em inglês | por fazer | perguntas 6 e 9; conversão no console integrada | 1 dia |

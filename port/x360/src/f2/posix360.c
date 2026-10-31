@@ -55,6 +55,9 @@ static void depois_do_ambiente(void);
 /* As chaves do diário (diario.c, que não lê o ambiente): BT3_LOG_SINCRONO=1 (uma linha, um flush, como antes do anel) e
    BT3_LOG_FLUSH_MS=<ms> (a idade máxima de uma linha gravada sem flush). Também liga o game:\output.txt à thread do
    diário. Chamada nos dois fins de Ambiente_Carregar. */
+const char *Port_Versao360(void);
+const char *Port_Carimbo360(void);
+
 static void diario_ambiente(void) {
     const char *l = getenv("BT3_LOG"), *s, *m;
     int i;
@@ -64,6 +67,7 @@ static void diario_ambiente(void) {
     m = getenv("BT3_LOG_FLUSH_MS");
     Diario_Abrir("game:\\bt3xbx.log");
     Diario_Gancho(Port_X360FecharSaida);
+    Diario_Escrever("versão: %s (build %s)", Port_Versao360(), Port_Carimbo360());
     Diario_Configurar(s != NULL && atoi(s) != 0, m != NULL ? atoi(m) : 0);
     for (i = 0; i < sVars; i++) Diario_Escrever("ambiente: %s=%s", sNome[i], sValor[i]);
 }

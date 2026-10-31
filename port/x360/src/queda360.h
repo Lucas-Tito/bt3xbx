@@ -18,6 +18,7 @@ static volatile LONG sQuedaTomada;
 static volatile LONG sRelatorioSalvo;
 static HANDLE sRelatorioThread;
 extern "C" const char *Port_Carimbo360(void);
+extern "C" const char *Port_Versao360(void);
 
 /* Contagens e ponteiros vêm do contexto copiado, nunca da pilha da auxiliar. */
 static void Queda_CapturarPilha(Pilha360_Ler ler) {
@@ -32,11 +33,11 @@ static void Queda_CapturarPilha(Pilha360_Ler ler) {
 static int Queda_Gravar(void) {
     char texto[4096];
     int n = _snprintf(texto, sizeof(texto),
-        "BT3 crash report\r\nBuild: %s\r\nPhase: %s\r\n"
+        "BT3 crash report\r\nVersion: %s\r\nBuild: %s\r\nPhase: %s\r\n"
         "Exception: %08X  IAR: %08X  LR: %08X\r\n"
         "Access type: %u (0=read, 1=write, 8=execute)  Address: %08X\r\n"
         "Thread: %u  Vblank: %u  Frame: %u\r\nContext available: %s\r\nRegisters (64-bit):\r\n",
-        Port_Carimbo360(), sQueda.fase, sQueda.codigo, sQueda.iar, sQueda.lr,
+        Port_Versao360(), Port_Carimbo360(), sQueda.fase, sQueda.codigo, sQueda.iar, sQueda.lr,
         sQueda.acesso, sQueda.endereco, sQueda.thread, sQueda.vb, sQueda.quadro,
         sQueda.contexto ? "yes" : "no");
     if (n < 0 || n >= (int)sizeof(texto)) return 0;

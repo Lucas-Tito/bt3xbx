@@ -49,8 +49,14 @@
 #define BT3_CARIMBO "sem carimbo"
 #endif
 static const char kCarimbo[64] = BT3_CARIMBO;
+/* a versão da release (port/x360/package/versao.env, que o build_f2.sh passa em BT3_VERSAO): a mesma do README do pacote */
+#ifndef BT3_VERSAO
+#define BT3_VERSAO "sem versao"
+#endif
+static const char kVersao[16] = BT3_VERSAO;
 #ifdef PORT_X360
 const char *Port_Carimbo360(void) { return kCarimbo; }
+const char *Port_Versao360(void) { return kVersao; }
 #endif
 
 extern unsigned gPortVBlanks;           /* plat_stub.c */

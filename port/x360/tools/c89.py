@@ -95,7 +95,9 @@ def grupos():
     # (F5, etapa 3) o tempo por passo da luta e os descartes da janela medida, com o carimbo do commit no log
     # (BT3_CARIMBO, que o build_f2.sh passa: o mesmo formato do headless.py)
     carimbo = os.environ.get("BT3_CARIMBO", "sem carimbo").strip().replace('"', "")
-    out.append(("hl_", ROOT / "port/x360/headless/passos.c", ["-std=gnu99", f'-DBT3_CARIMBO="{carimbo}"'], False))
+    versao = os.environ.get("BT3_VERSAO", "sem versao").strip().replace('"', "")
+    out.append(("hl_", ROOT / "port/x360/headless/passos.c",
+                ["-std=gnu99", f'-DBT3_CARIMBO="{carimbo}"', f'-DBT3_VERSAO="{versao}"'], False))
     return out
 
 

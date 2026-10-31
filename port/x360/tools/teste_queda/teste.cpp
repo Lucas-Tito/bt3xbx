@@ -60,7 +60,7 @@ DWORD XInputGetState(unsigned, XINPUT_STATE *s) { static unsigned consultas; s->
 void SetUnhandledExceptionFilter(LONG (*)(LPEXCEPTION_POINTERS)) {}
 DWORD XShowMessageBoxUI(unsigned,LPCWSTR titulo,LPCWSTR texto,unsigned n,const wchar_t **b,unsigned,unsigned,MESSAGEBOX_RESULT *,XOVERLAPPED *) {
     Exigir(presents>0,"caixa sem apresentação");
-    Exigir(relatorio.find("Build: teste-123 diff:limpo")!=std::string::npos,"caixa antes do relatório");
+    Exigir(relatorio.find("Version: 9.8.7\r\nBuild: teste-123 diff:limpo")!=std::string::npos,"caixa antes do relatório");
     Exigir(wcscmp(titulo,L"Unexpected error")==0 && n==1 && wcscmp(b[0],L"OK")==0,"título ou botão errado");
     Exigir(wcscmp(texto,L"The game ran into an unexpected error and needs to close. A report was saved to crash.txt in the game folder. Press OK to return to the dashboard.")==0,"texto errado");
     if(caso=="caixa-negada" || (caso=="caixa-ocupada" && recusas++<3))return ERROR_ACCESS_DENIED;
@@ -80,6 +80,7 @@ void Diario_Descarregar() {}
 void Diario_Fechar() { Evento("diário fechado"); }
 void Port_X360FecharSaida() {}
 const char *Port_Carimbo360() { return "teste-123 diff:limpo"; }
+const char *Port_Versao360() { return "9.8.7"; }
 void Port_MapMemory() {}
 int MpegMede_Rodar() { return 0; }
 void Ambiente_Carregar(const char *caminho) {
