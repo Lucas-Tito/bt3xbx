@@ -48,6 +48,13 @@
  *                     640 x 448 (a média dos pixels de saída de cada pixel do GS), comparáveis às da escala 1;
  *   o log (bt3xbx.log) a cada 60 quadros: tempo por quadro, desenhos, texturas novas, o que não foi desenhado, e a
  *                     memória por classe (F5, etapa 1);
+ *   BT3_AUTOTESTES=1  (diagnóstico, desligado por padrão; só vale com BT3_LOG=1) liga os três autotestes de boot (a profundidade, nas
+ *                     superfícies de 1 e de 2 amostras; as amostras do MSAA; as nativas), que decidem sModoZ, sMsModoZ, sMsMasc e
+ *                     sNativos pela medição. Sem ela, os valores que eles sempre deram no console (profundidade como cor nos dois,
+ *                     máscaras 0x1111 e 0x2222, nativas 7), sem criar as texturas e as superfícies que só eles usam; uma linha
+ *                     "autotestes pulados" por teste no diário. BT3_MSAA_SABOTA e BT3_EDRAM_SABOTA exigem BT3_AUTOTESTES=1, e a volta
+ *                     exata do MSAA (BT3_MSAA_VOLTA=1) também, pois sem o autoteste não há prova dela (fica desligada, com uma linha).
+ *                     Os carimbos "carimbo do init" (começo e fim de d3d_init, com o log ligado) medem o que o boot ganha.
  *   BT3_TEMPOS=1      (desligado por padrão) o tempo de GPU e de CPU de cada passada do fim do quadro no mesmo log
  *                     (F5, etapa 8; tempo_* abaixo), e o tempo da thread de gravação por família, uma linha "gs: gravação
  *                     por família" a cada 60 quadros, também dentro da janela do passos (gs_draw.c, Gs_FamTrecho).
@@ -300,6 +307,7 @@ typedef struct Prof {
 } Prof;
 static Prof sProf[MAX_TARGETS];  /* a gravação (prof_garante, prof_cria, prof_solta) */
 static Prof sProfD[MAX_TARGETS]; /* o desenho */
+static int sAutotestes;  /* BT3_AUTOTESTES=1: os três autotestes de boot rodam e decidem; 0 (padrão): os valores fixos que eles sempre deram */
 static int sModoZ;       /* 0 a profundidade volta zerada (o de antes), 1 restauro como cor, 2 pelo oDepth */
 static int sZDono = -1;  /* o alvo cuja profundidade está na EDRAM (-1: nenhum; ver prof_entrega) */
 static Ret sSujoZ;       /* o que os desenhos com escrita de z do sZDono tocaram desde que ela entrou na EDRAM */
@@ -3925,7 +3933,7 @@ static void ed_init(UINT tilesCor) {
         }
     }
     sEdRes = 1;
-    sEdSabota = env_num("BT3_EDRAM_SABOTA", 0) != 0;
+    sEdSabota = sAutotestes && env_num("BT3_EDRAM_SABOTA", 0) != 0;
     if (sEdSabota) {
         Diario_Escrever("gs_d3d: BT3_EDRAM_SABOTA=1: o alvo posto lido pelo desenho seguinte fica sem Resolve (o erro de 23/10), "
                         "para o contador \"alvo lido sem Resolve\" acusar; a imagem sai errada");
@@ -4184,6 +4192,16 @@ static void prof_autoteste(void) {
     }
     if (sEdramProfCor == NULL || sPsZCor == NULL || sPsZProf == NULL) {
         Diario_Escrever("gs_d3d: ERRO: profundidade: sem a superfície ou os shaders do restauro; desligada");
+        return;
+    }
+    if (!sAutotestes) {
+        /* o que o autoteste sempre deu no console: o restauro como cor é exato em todos os bits */
+        sModoZ = forcado == 2 ? 2 : 1;
+        Diario_Escrever("gs_d3d: autotestes pulados (BT3_AUTOTESTES=0): profundidade modo %d (%s)%s", sModoZ,
+                        sModoZ == 1 ? "restauro como cor" : "restauro pelo oDepth", forcado > 0 ? ", forçado por BT3_Z" : "");
+        sDev->SetRenderTarget(0, sTela);
+        sDev->SetDepthStencilSurface(NULL);
+        esquece_estado();
         return;
     }
     gGsD3dEtapa = "autoteste da profundidade";
@@ -4873,7 +4891,13 @@ static void msaa_init(void) {
         return;
     }
     sMsModoZ = 0;
-    if (sModoZ != 0) {
+    if (sModoZ != 0 && !sAutotestes) {
+        /* o que os dois autotestes sempre deram no console: o mesmo modo da profundidade de 1 amostra (o 1, como cor) */
+        sMsModoZ = sModoZ;
+        m0 = m1 = sModoZ;
+        Diario_Escrever("gs_d3d: autotestes pulados (BT3_AUTOTESTES=0): profundidade de 2 amostras modo %d (%s), os dois fragmentos",
+                        sMsModoZ, sMsModoZ == 1 ? "restauro como cor" : "restauro pelo oDepth");
+    } else if (sModoZ != 0) {
         m0 = ms_autoteste(0);
         m1 = ms_autoteste(D3DRESOLVE_FRAGMENT1);
         sMsModoZ = m0 == 1 && m1 == 1 ? 1 : m0 != 0 && m1 != 0 ? 2 : 0;
@@ -4889,6 +4913,10 @@ static void msaa_init(void) {
     sMsContorno = env_num("BT3_MSAA_CONTORNO", 1) != 0;
     sMs2d = env_num("BT3_MSAA_2D", 0) != 0;
     sMsA2c = env_num("BT3_MSAA_A2C", 0) != 0;
+    if (sMsVoltaX && !sAutotestes) {
+        Diario_Escrever("gs_d3d: BT3_MSAA_VOLTA=1 sem a prova: a volta exata exige BT3_AUTOTESTES=1; fica desligada (a volta pela média)");
+        sMsVoltaX = 0;
+    }
     if (sMsVoltaX) {
         unsigned k;
         sp.Base = 0;
@@ -4915,7 +4943,14 @@ static void msaa_init(void) {
             mem_cria(CL_ALVO, sMsParque[k].tex->bytes);
         }
     }
-    if (!ms_amostras_autoteste() && sMsVoltaX) {
+    if (!sAutotestes) {
+        /* o que o autoteste das amostras sempre deu no console: 0x1111 escreve o fragmento 0 e 0x2222 o 1 */
+        sMsMasc[0] = 0x1111u;
+        sMsMasc[1] = 0x2222u;
+        sMsMascOk = 1;
+        Diario_Escrever("gs_d3d: autotestes pulados (BT3_AUTOTESTES=0): máscaras das amostras 0x1111 (fragmento 0) e 0x2222 "
+                        "(fragmento 1), sem a prova da volta crua");
+    } else if (!ms_amostras_autoteste() && sMsVoltaX) {
         Diario_Escrever("gs_d3d: ERRO: BT3_MSAA_VOLTA=1: a volta crua não passou no autoteste das amostras; fica sem MSAA (o "
                         "alfa depois de uma volta seria o médio)");
         ms_desiste();
@@ -4942,9 +4977,10 @@ static void msaa_init(void) {
     Diario_Escrever("gs_d3d: BT3_MSAA=2: o MSAA 2x no alvo que o quadro apresenta (o do fbp), os outros com 1 amostra; a cor de 2 "
                     "amostras na base 0 com %u tiles e a profundidade de 2 amostras na base %u com %u (a de 1 amostra na mesma "
                     "base); a saída do alvo com a média das amostras, a cópia dos ids e o DATE pelo fragmento 0; a profundidade "
-                    "volta pelo modo %d (%s; o autoteste escolheu %d pelo fragmento 0 e %d pelo 1)",
+                    "volta pelo modo %d (%s; %s %d pelo fragmento 0 e %d pelo 1)",
                     sMsTilesCor, sMsTilesCor, sMsTilesProf, sMsModoZ,
-                    sMsModoZ == 1 ? "como cor" : sMsModoZ == 2 ? "pelo oDepth" : "zerada, como a de 1 amostra", m0, m1);
+                    sMsModoZ == 1 ? "como cor" : sMsModoZ == 2 ? "pelo oDepth" : "zerada, como a de 1 amostra",
+                    sAutotestes ? "o autoteste escolheu" : "valor fixo, sem autoteste:", m0, m1);
     Diario_Escrever("gs_d3d: BT3_MSAA=2, o completo: BT3_MSAA_VOLTA=%d (%s); BT3_MSAA_VAGAS=%d (%s); BT3_MSAA_CONTORNO=%d (%s)",
                     sMsVoltaX,
                     sMsVoltaX ? "a volta exata pelas amostras cruas, dois parques de 2 x a textura do alvo, contados com os alvos; "
@@ -4957,6 +4993,19 @@ static void msaa_init(void) {
                     sMs2d ? "a arte 2D sem MSAA, as amostras pelo centro do pixel" : "a arte 2D com MSAA, a do protótipo", sMsA2c,
                     sMsA2c ? "o alfa para cobertura nos desenhos 3D com teste de alfa de 1/8 em diante, sem mistura e sem FBA" :
                     "desligado");
+}
+
+/* (com o log ligado) o carimbo de tempo do init, em ms do contador de desempenho: o começo e o fim dele, para a rodada
+   medir quanto o boot ganhou sem os autotestes; sem log não custa nada */
+static double sCarimboIni;
+static void carimbo_init(const char *quando) {
+    LARGE_INTEGER t;
+    double ms;
+    if (!gX360Log) return;
+    QueryPerformanceCounter(&t);
+    ms = (double)t.QuadPart * 1000.0 / (double)sFreq.QuadPart;
+    if (sCarimboIni == 0.0) sCarimboIni = ms;
+    Diario_Escrever("gs_d3d: carimbo do init: %s em %.1f ms (+%.1f ms desde o começo)", quando, ms, ms - sCarimboIni);
 }
 
 static int d3d_init(void) {
@@ -4979,6 +5028,12 @@ static int d3d_init(void) {
     D3DLOCKED_RECT r;
 
     QueryPerformanceFrequency(&sFreq);
+    sCarimboIni = 0.0;
+    carimbo_init("começo");
+    sAutotestes = env_num("BT3_AUTOTESTES", 0) != 0; /* (diagnóstico: só vale com BT3_LOG=1, ver diagnostico360.h) */
+    if (!sAutotestes && (env_num("BT3_MSAA_SABOTA", 0) != 0 || env_num("BT3_EDRAM_SABOTA", 0) != 0)) {
+        Diario_Escrever("gs_d3d: a sabotagem pedida (BT3_MSAA_SABOTA ou BT3_EDRAM_SABOTA) exige BT3_AUTOTESTES=1; ignorada");
+    }
     if (gX360Dev == NULL) {
         Diario_Escrever("gs_d3d: sem dispositivo (a main não o criou)");
         return 0;
@@ -5111,6 +5166,7 @@ static int d3d_init(void) {
     QueryPerformanceCounter(&sUltimoFim);
     sVbHw = env_num("BT3_VBLANK_HW", 1) != 0; /* (F5, etapa 8, seção 18: a espera pelo vblank de hardware) */
     vblank_init(); /* (F5, etapa 8: a medida da tela e o vblank de hardware) */
+    carimbo_init("fim");
     return 1;
 }
 
@@ -6858,7 +6914,12 @@ static void nat_init(void) {
             sNativos = 0;
         } else {
             mem_cria(CL_ALVO, bytes);
-            nat_autoteste(forcado);
+            if (sAutotestes) {
+                nat_autoteste(forcado);
+            } else {
+                Diario_Escrever("gs_d3d: autotestes pulados (BT3_AUTOTESTES=0): nativas %u (as que o autoteste sempre deixou, sem a prova)",
+                                sNativos);
+            }
         }
     }
     Diario_Escrever("gs_d3d: nativas: BT3_NATIVOS=%u (contorno %s, tabelas pelos ids %s, tabelas pela profundidade %s%s); "

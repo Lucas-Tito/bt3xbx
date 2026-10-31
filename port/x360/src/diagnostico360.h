@@ -3,7 +3,7 @@
 #define DIAGNOSTICO360_H
 static int Diagnostico360_Chave(const char *nome) {
     static const char *const chaves[] = {
-        "BT3_TEMPOS", "BT3_ESTADO_TEMPOS", "BT3_FILME_MEDIDAS", "BT3_SOM_MEDIDAS",
+        "BT3_AUTOTESTES", "BT3_TEMPOS", "BT3_ESTADO_TEMPOS", "BT3_FILME_MEDIDAS", "BT3_SOM_MEDIDAS",
         "BT3_LOG_SINCRONO", "BT3_LOG_FLUSH_MS", "BT3_PICOS", "BT3_PICOS_TELA",
         "BT3_CORTES", "BT3_CORTES_GPU", "BT3_COMUM_GPU", "BT3_CADEIA_CPU",
         "BT3_FILME_LOG", "BT3_SOM_DERIVA", "BT3_MPEG_MEDE", "BT3_FILME_SHOTS",
