@@ -66,7 +66,7 @@ DWORD GetLastError();
 DWORD GetTickCount();
 void Sleep(unsigned);
 void ExitThread(DWORD);
-void XLaunchNewImage(void *, unsigned);
+void XLaunchNewImage(const void *, unsigned);
 void *VirtualAlloc(void *, unsigned, unsigned, unsigned);
 LONG InterlockedExchange(volatile LONG *, LONG);
 LONG InterlockedCompareExchange(volatile LONG *, LONG, LONG);

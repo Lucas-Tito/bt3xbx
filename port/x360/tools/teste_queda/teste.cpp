@@ -16,7 +16,7 @@ DWORD GetTickCount() { return agora; }
 DWORD GetLastError() { return 8; }
 void Sleep(unsigned n) { agora += n; }
 void ExitThread(DWORD) { throw ThreadExit(); }
-void XLaunchNewImage(void *, unsigned) { Evento("dashboard"); throw Dashboard(); }
+void XLaunchNewImage(const void *, unsigned) { Evento("dashboard"); throw Dashboard(); }
 void *VirtualAlloc(void *, unsigned, unsigned, unsigned) { return NULL; }
 LONG InterlockedExchange(volatile LONG *p, LONG v) { LONG a=*p; *p=v; return a; }
 LONG InterlockedCompareExchange(volatile LONG *p, LONG v, LONG c) { LONG a=*p; if(a==c)*p=v; return a; }
