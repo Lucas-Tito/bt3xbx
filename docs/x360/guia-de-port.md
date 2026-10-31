@@ -226,8 +226,9 @@ Cuidados encontrados nessa leitura, já corrigidos nas ferramentas:
 mas sua saída 1 só exige as pendências do essencial. Com os 82 ganchos instalados, pode sair 0 com chamadas
 ausentes. Para afirmar cobertura completa, compare nominalmente `unpacks.levantar()` com as chamadas dos logs,
 e os arquivos das faixas do `--disco` com os `LEU`. Gancho, conversão e comportamento concluído são provas
-distintas. `Roteiro_Pad` atualmente só fornece entrada ao `socket=0`; os dois controles dados como ligados pelo
-teste não provam o jogador 2 nem a tela dividida. Levantamento e limites em [F7/00-escopo](plano/F7/00-escopo.md).
+distintas. No levantamento inicial, `Roteiro_Pad` só fornecia entrada ao `socket=0`; os dois controles dados como
+ligados não provavam o jogador 2. A [etapa 3](plano/F7/03.md) acrescenta a entrada e suas provas.
+Levantamento e limites em [F7/00-escopo](plano/F7/00-escopo.md).
 
 O controle do jogador 1 sai de um arquivo de texto (`BT3_ROTEIRO=arquivo`), lido por `port/x360/headless/roteiro.c`
 nas três builds: x86 e PPC sem janela (pelo `Port_PadRead` do `sem_janela.c`) e 360 (pelo `pad360.c`, que com um
@@ -2746,6 +2747,51 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   o jogo aceita (regra do PS2): procure um estrago que `save_entre.preve` recuse de fato.
 - **O cartão de antes tem de recusar o marco.** Uma receita cujos `depois` já valem antes do evento não prova nada (a
   primeira versão do recorde da Sobrevivência só conferia preservação); o `valida` e o `confere --antes` recusam.
+
+### Dois controles e duas vistas na F7 (etapa 3)
+
+- `jogador 1|2` escolhe a porta dos próximos `aperta`, `segura` e `gira`. É seleção na leitura do arquivo,
+  guardada em cada passo; `inclui` conserva a escolha. Os roteiros antigos começam em 1. `juntos B1 B2 N` segura
+  os dois botões no mesmo quadro (`0` neutro). O soquete 0 prepara o par e avança o relógio uma vez; o 1 só lê a
+  cópia. Ambos continuam dados como conectados pelo teste. Desconexão/quadrante físico pede o console sem roteiro.
+- `BT3_DOIS=1` observa os estados reais dos seletores, os pares preparados e, no backend falso, as tesouras,
+  os índices 3D por metade e o hash das matrizes das duas câmeras. `BT3_PAD_REC` grava os bytes efetivamente
+  devolvidos pelo `scePad2Read`; `f7_dividido.py entrada` cruza todos os pares com o log e exige a mesma quantidade
+  de quadros, escolhas, ações de cada lado, pausas, resultado e retorno. Não basta comparar logs entre si.
+- **Cancelar não é CÍRCULO no padrão do jogo.** No seletor, `PADG_TRIANGLE` volta da lista de itens à grade;
+  CÍRCULO não a cancela. Observar `CharSelSide.state` (2 para 0 só no lado 1) recusou o primeiro ensaio que
+  apertava o botão errado e ainda chegava ao fim.
+- **Nem todo Blast 2 toma a tela cheia.** O Kamehameha carregável (ação 0x10F) manteve as duas vistas; a investida
+  de Goku Early (`L2+CIMA+TRIANGULO`, `BtlSuper_RequestCut`) forneceu a transição real. O verificador exige
+  geometria 3D sob tesoura cheia e, depois, as duas metades, além do menu novamente cheio. Não se altera câmera
+  nem bandeira de prioridade para fabricar essa prova.
+- **Uma linha de teste precisa acabar antes do stderr.** No backend falso, o hash da lista vai ao stderr.
+  O stdout bufferizado cortava algumas linhas `f7v:` no meio ao juntar `2>&1`, parecendo uma janela menor.
+  `fflush(stdout)` após cada linha de observação preserva os registros; o verificador exige a janela inteira,
+  sem baixar o denominador para acomodar linhas perdidas.
+- `f7_dividido.sh --servico` arma uma única fila sob `flock ~/wsl.lock`, na própria worktree, com builds do HEAD,
+  roteiros sem mapa, imagens/memória, pares gravados, listas do backend falso, negativos e save. Precisa de
+  `F7_SAIDA` nova fora do repositório e `BASE_X86` preservada de `0a9cccb1`. Os resultados vão a logs por passo;
+  `resumo.txt` termina em `FIM RC=0` somente depois de tudo. A espera é do shell, sem ler logs em andamento.
+- A `.text` da base F7/02 recompilada nesta worktree é `0e10191e83bed8268e133ff56a24504a27c7ea28`, posterior à
+  referência F6 `43444ea4d03a6d448aa1ae74a631e35b356a7caa`: a etapa 2 já acrescentou testes. Para a etapa 3, comparar
+  os objetos sem depuração com essa base; `x360_roteiro.o` e o carimbo de `x360_passos.o` podem diferir. Preservar
+  também a cópia de ligação `ligar/menu_menu_za_d.o`, gerada de `obj/menu_menu_za_d.o` por
+  `objcopy --redefine-sym pow=Port_PowDuplo`, ao usar o verificador recursivo de objetos da F5.
+- **A corrente tem duas descrições do mesmo trabalho.** `EftChain_Init`/`Update`/`Term` usam `EftArc` (0xF10);
+  `EftChain_Draw` usa a vista parcial `EftChainWork`, lê `arg.objId`, `type` e `flags` nos mesmos deslocamentos
+  e delega a `DrawStrands`. O contexto deve escolher `EftArc` completo, exigindo esse conjunto de vistas, em vez
+  de recusar a classe ou aceitar só o tipo parcial. O +0x3C do argumento é enchimento de `EftChainArg`, copiado
+  como `EftArcArg.unk3C` no init e sem leitor; só esses quatro bytes ficam inativos.
+- **Brilho devolvido à lista livre ainda guarda posições calculadas.** `EftGlow_FreeParts`/`StepParts`
+  conservam só `next` nas partículas livres. Na volta da investida, 70 livres e nenhuma ativa produziram
+  116 palavras `float-proximo` e 11 fora do formato na arena. Conferir dono, capacidade, limite de 70 entregues,
+  alinhamento, elos, ausência de ciclos e partição das listas nas duas arquiteturas, como na aura. Comparar
+  integralmente as partículas ativas; nas livres, só `next`. Não ampliar tolerância nem aceitar classes por teto.
+  `teste_memoria_luta.py` adultera também o dono, a contagem e os elos do brilho, e as flags da corrente.
+- Uma rodada interrompida sem `FIM RC=0` não passou, mesmo se as imagens coincidirem. Preservar os artefatos,
+  corrigir a causa demonstrada nos dumps e lançar pasta nova com **as duas** variáveis `F7_SAIDA` e `BASE_X86`.
+  Retomar o script sem `BASE_X86` só recusa a chamada, antes de criar serviço ou conferir qualquer rede.
 
 ### Censo do elenco da F7 (etapa 4, 29/10/2026)
 

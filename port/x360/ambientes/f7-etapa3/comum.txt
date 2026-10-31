@@ -1,0 +1,26 @@
+# Base da sonda F7/03. Usar o gerador para dar um save novo e exclusivo a cada execução.
+-BT3_DEMO
+-BT3_PAD_PLAY
+-BT3_PAD_REC
+-BT3_SETTINGS
+-BT3_HASH
+-BT3_NOMOVIE
+-BT3_NOSOUND
+-BT3_SOM_TESTE
+-BT3_UNCAPPED
+-BT3_SHOT
+-BT3_SHOT_LISTA
+BT3_ISO=game:\bt3_convertida.iso
+BT3_GS=gpu
+BT3_SOUND_TICKS=1
+BT3_VU1=1
+BT3_VU_VERTS=98304
+BT3_MEM_PISO_MB=32
+BT3_MEM_TEX_MB=128
+BT3_GS_THREAD=1
+BT3_GS_DESENHO=1
+BT3_WIDE=1
+BT3_SOM=1
+BT3_SOM_DERIVA=1
+# O rastro dos dois controles é para conferir o fluxo; o ambiente 04 usa XInput real.
+BT3_DOIS=1

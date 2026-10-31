@@ -50,8 +50,8 @@ static int ler(int quadrante, XINPUT_STATE *e) {
     return XInputGetState((DWORD)quadrante, e) == ERROR_SUCCESS;
 }
 
-/* Roteiro de controle (BT3_ROTEIRO, port/x360/headless/roteiro.c, F4 etapa 4): o jogador 1 vem do roteiro e os
-   dois controles contam como ligados, como na build sem janela (scePad2GetState sempre "pronto"); o XInput não é
+/* Roteiro de controle (BT3_ROTEIRO, port/x360/headless/roteiro.c, F4 etapa 4): os dois jogadores vêm do roteiro e
+   seus controles contam como ligados, como na build sem janela (scePad2GetState sempre "pronto"); o XInput não é
    lido. */
 extern int Roteiro_Ativo(void);
 extern int Roteiro_Pad(int socket, unsigned char *data);

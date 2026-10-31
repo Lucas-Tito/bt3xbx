@@ -1,6 +1,6 @@
 /*
  * Roteiros de controle (F4, etapa 4; o formato está no guia, docs/x360/guia-de-port.md, seção 2, "Roteiros de
- * controle"; os roteiros, em port/x360/roteiros): o controle do jogador 1 tirado de um
+ * controle"; os roteiros, em port/x360/roteiros): os controles dos dois jogadores tirados de um
  * arquivo de texto, passo a passo, com cada espera ancorada no estado do jogo (a tela do gerenciador de menus, o
  * estado do fluxo do cartão, a luta) e não no número do quadro. Uma diferença de tempo entre a x86, a PPC no qemu e o
  * console (uma carga mais lenta, uma tela que demora a aceitar entrada) não desalinha o resto do roteiro.
@@ -37,6 +37,8 @@
 #include <stddef.h>
 
 #include "sys/save.h"      /* gSaveData (SaveData), Save_UnlockAll */
+#include "menu/menu_d.h"
+#include "battle/btl_cam.h"
 #include "battle/battle.h" /* BattleWork (Battle_GetWork): a regra, os lados, o resultado e as bandeiras da luta */
 
 /* O campo do "confere som" onde o jogo o tem (save.h: 0x16A4). Este arquivo compila com os tipos do jogo
@@ -50,7 +52,6 @@ typedef char RoteiroLutaConfere[offsetof(BattleWork, flags) == 0x19F0 && offseto
 
 /* O estado do jogo que identifica a tela. Os tipos completos são do jogo; aqui só os campos lidos, nos mesmos
    deslocamentos (as três builds têm ponteiros de 32 bits). */
-extern struct { int unk0[5]; int flags; int mode; } *gProgress; /* include/menu/menu_a.h: flags 0x14, mode 0x18 */
 extern struct { int unk0[9]; int state; } *gMcFlow;             /* include/sys/mcflow_a.h: state 0x24; NULL fora */
 extern struct { int state; } *gBtlSeq;                         /* include/battle/btl_seq.h: >= 2 com a luta andando */
 /* (F5, etapa 9) a Referência de personagens (include/menu/menu_h.h: state em 0x1628, CHARREF_ST_VIEW 7, o modelo 3D
@@ -526,14 +527,59 @@ void __wrap_BtlMember_SubBlast(void *chr, int amount) {
 }
 #endif
 
+/* Os seletores reais, inclusive cancelamento e confirmação simultânea. */
+static void f7_selecao(void) {
+    static int antes[5] = {-1, -1, -1, -1, -1};
+    int v[5];
+    char s[220];
+    if (getenv("BT3_DOIS") == NULL || tela_atual() != 39 || gCharSel == NULL ||
+        gCharSel->side[0] == NULL || gCharSel->side[1] == NULL) return;
+    v[0] = gCharSel->players;
+    v[1] = gCharSel->side[0]->state; v[2] = gCharSel->side[1]->state;
+    v[3] = gCharSel->side[0]->chara; v[4] = gCharSel->side[1]->chara;
+    if (memcmp(v, antes, sizeof(v)) == 0) return;
+    memcpy(antes, v, sizeof(v));
+    sprintf(s, "roteiro: selecao jogadores %d estados %d %d personagens %d %d vblank %u quadro %u",
+            v[0], v[1], v[2], v[3], v[4], gPortVBlanks, sQuadro);
+    diz(s);
+}
+
+/* F7: instantâneo só de leitura para o backend falso, com os mesmos tipos das câmeras.
+   Hash por valor de palavra, independente da ordem dos bytes. Nenhuma câmera é alterada pelo teste. */
+int Roteiro_Cameras(unsigned *v) {
+    int l, i;
+    if (tela_atual() != TELA_LUTA || gBtlCam == NULL) {
+        v[10] = sQuadro;
+        return 0;
+    }
+    v[0] = (unsigned)seq_atual();
+    v[1] = (unsigned)Battle_GetWork()->setup.rule.screenMode;
+    for (l = 0; l < 2; l++) {
+        const BtlCamView *c = &gBtlCam->views[l];
+        unsigned h = 2166136261u, w;
+        for (i = 0; i < 16; i++) {
+            memcpy(&w, (const char *)&c->view.world2view + i * 4, 4);
+            h = (h ^ w) * 16777619u;
+        }
+        v[2 + l * 4] = (unsigned)c->split;
+        v[3 + l * 4] = h;
+        v[4 + l * 4] = (unsigned)c->view.scissorX0;
+        v[5 + l * 4] = (unsigned)c->view.scissorX1;
+    }
+    v[10] = sQuadro;
+    return 1;
+}
+
 /* ------------------------------------------------------------------ o roteiro */
 
 enum { P_ESPERA, P_QUADROS, P_APERTA, P_SEGURA, P_DESBLOQUEIA, P_MARCA, P_FIM, P_REPETE, P_VOLTA, P_CONFERE, P_TERMINA,
-       P_FUNDE, P_DESEJO, P_RASTREIA, P_GIRA, P_MISSOES, P_RECEITA };
+       P_FUNDE, P_DESEJO, P_RASTREIA, P_GIRA, P_MISSOES, P_RECEITA, P_JUNTOS };
 enum { C_NADA, C_TELA, C_MCFLOW, C_LUTA, C_ACAO, C_SEQ, C_PAUSA, C_DANO, C_KI, C_JANELA, C_FORMA, C_BLAST, C_TIME };
 
 typedef struct Passo {
     int tipo;
+    int jogador;       /* 0 ou 1, selecionado na leitura por "jogador 1|2" */
+    unsigned segundo;  /* P_JUNTOS: botões do jogador 2 no mesmo quadro */
     unsigned botoes;    /* P_APERTA, P_SEGURA: os bits de pad360.c (1 = apertado) */
     int n;              /* P_QUADROS, P_SEGURA: quadros; P_APERTA: vezes (sem "ate") */
     int segura, solta;  /* P_APERTA: o ritmo de cada vez */
@@ -570,7 +616,9 @@ static int sAbertos[8], sNAbertos; /* os "repete" ainda sem "volta", na leitura 
 static struct { int passo, t, inicio; } sLaco[8]; /* os "repete" em andamento: o passo, quadros nele, quadro da volta */
 static int sNLaco;
 static int sCartaoVazio = 1;    /* sem o arquivo de dados do save no começo da rodada (P_DESBLOQUEIA) */
-static unsigned char sLx = 0x80, sLy = 0x80; /* (F5, etapa 9) o analógico esquerdo deste quadro (0x80 no centro) */
+static int sJogadorLido, sJogadorQuadro;
+static unsigned sBotoes[2];
+static unsigned char sLx[2] = {0x80, 0x80}, sLy[2] = {0x80, 0x80}; /* (F5, etapa 9) o analógico esquerdo deste quadro (0x80 no centro) */
 
 static const struct { const char *nome; unsigned bit; } kBotoes[] = {
     {"SELECT", 0x0001}, {"L3", 0x0002}, {"R3", 0x0004}, {"START", 0x0008}, {"CIMA", 0x0010}, {"DIREITA", 0x0020},
@@ -747,6 +795,7 @@ static Passo *novo(const char *onde, int tipo) {
     p = &sPassos[sN++];
     memset(p, 0, sizeof(*p));
     p->tipo = tipo;
+    p->jogador = sJogadorLido;
     strncpy(p->onde, onde, sizeof(p->onde) - 1);
     return p;
 }
@@ -767,6 +816,12 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
     Passo *p;
     int i;
     if (n == 0) {
+        return;
+    }
+    if (igual(pal[0], "jogador")) {
+        if (n != 2) erro_linha(onde, "jogador 1|2", NULL);
+        sJogadorLido = numero(onde, pal[1]) - 1;
+        if (sJogadorLido < 0 || sJogadorLido > 1) erro_linha(onde, "jogador 1|2", NULL);
         return;
     }
     if (igual(pal[0], "inclui")) {
@@ -816,6 +871,14 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         p->botoes = botoes(onde, n > 1 ? pal[1] : NULL);
         p->n = numero(onde, n > 2 ? pal[2] : NULL);
         i = 3;
+    } else if (igual(pal[0], "juntos")) {
+        if (n != 4) erro_linha(onde, "juntos B1 B2 N (0 para neutro)", NULL);
+        p = novo(onde, P_JUNTOS);
+        p->botoes = igual(pal[1], "0") ? 0 : botoes(onde, pal[1]);
+        p->segundo = igual(pal[2], "0") ? 0 : botoes(onde, pal[2]);
+        p->n = numero(onde, pal[3]);
+        if (p->n < 1) erro_linha(onde, "juntos: N pelo menos 1", NULL);
+        i = 4;
     } else if (igual(pal[0], "gira")) { /* (F5, etapa 9) gira LX LY N: o analógico esquerdo em (LX, LY), N quadros */
         p = novo(onde, P_GIRA);
         if (n != 4) {
@@ -846,6 +909,13 @@ static void linha(const char *caminho, const char *onde, char **pal, int n) {
         p = novo(onde, P_MISSOES);
         p->n = numero(onde, pal[2]);
         if (p->n != 29) erro_linha(onde, "prepara missoes 29: receita fechada da F7", NULL);
+        i = 3;
+    } else if (igual(pal[0], "confere") && n > 1 && igual(pal[1], "dividido")) {
+        if (n != 3) erro_linha(onde, "confere dividido 0|1", NULL);
+        p = novo(onde, P_CONFERE);
+        p->cond = 6;
+        p->valor = numero(onde, pal[2]);
+        if (p->valor != 0 && p->valor != 1) erro_linha(onde, "confere dividido 0|1", NULL);
         i = 3;
     } else if (igual(pal[0], "confere") && n > 1 && igual(pal[1], "membro")) {
         int k;
@@ -1163,6 +1233,7 @@ static void proximo(void) {
 /* um quadro do roteiro passou: conta nos "repete" em andamento */
 static unsigned consome(unsigned b) {
     int k;
+    sBotoes[sJogadorQuadro] = b;
     for (k = 0; k < sNLaco; k++) {
         sLaco[k].t++;
     }
@@ -1203,7 +1274,8 @@ static void so_teste(const Passo *p, const char *nome) {
 /* os botões do jogador 1 neste quadro, andando o roteiro */
 static unsigned quadro(void) {
     char s[300];
-    sLx = sLy = 0x80; /* (o analógico volta ao centro a cada quadro; só o "gira" o move) */
+    sBotoes[0] = sBotoes[1] = 0;
+    sLx[0] = sLx[1] = sLy[0] = sLy[1] = 0x80; /* (o analógico volta ao centro a cada quadro; só o "gira" o move) */
     for (;;) {
         Passo *p;
         int k, saiu = 0;
@@ -1228,6 +1300,7 @@ static unsigned quadro(void) {
             return 0;
         }
         p = &sPassos[sPasso];
+        sJogadorQuadro = p->jogador;
         switch (p->tipo) {
         case P_REPETE:
             prepara(p);
@@ -1287,14 +1360,23 @@ static unsigned quadro(void) {
             }
             sT++;
             return consome(p->tipo == P_SEGURA ? p->botoes : 0);
+        case P_JUNTOS:
+            if (sT >= p->n) {
+                proximo();
+                continue;
+            }
+            sT++;
+            sBotoes[0] = p->botoes;
+            sJogadorQuadro = 1;
+            return consome(p->segundo);
         case P_GIRA:
             if (sT >= p->n) {
                 proximo();
                 continue;
             }
             sT++;
-            sLx = (unsigned char)(0x80 + p->lx);
-            sLy = (unsigned char)(0x80 + p->ly);
+            sLx[p->jogador] = (unsigned char)(0x80 + p->lx);
+            sLy[p->jogador] = (unsigned char)(0x80 + p->ly);
             return consome(0);
         case P_MISSOES: {
             int k;
@@ -1343,6 +1425,19 @@ static unsigned quadro(void) {
             proximo();
             continue;
         case P_CONFERE:
+            if (p->cond == 6) {
+                const BattleSetup *b = &Battle_GetWork()->setup;
+                if (tela_atual() != TELA_LUTA || b->rule.screenMode != p->valor ||
+                    b->sides[0].control != BTL_CONTROL_PAD || b->sides[0].pad != 0 ||
+                    (p->valor && (b->sides[1].control != BTL_CONTROL_PAD || b->sides[1].pad != 1)))
+                    falha("confere dividido: tela, regra ou controles trocados");
+                sprintf(s, "roteiro: dividido %d controles %d/%d %d/%d vblank %u quadro %u", p->valor,
+                        b->sides[0].control, b->sides[0].pad, b->sides[1].control, b->sides[1].pad,
+                        gPortVBlanks, sQuadro);
+                diz(s);
+                proximo();
+                continue;
+            }
             if (p->cond == 5) {
                 int l = p->luta[0], id = membro_de(l, 0), traje = membro_de(l, 4);
                 int variante = membro_de(l, 0x60), blast = membro_de(l, LUT_BLAST);
@@ -1714,42 +1809,58 @@ void Roteiro_SomEstado(void) {
 }
 
 /* O Port_PadRead das builds com roteiro: 18 bytes como o scePad2Read (botões ativos em 0, analógicos no centro,
-   pressões zeradas); 0 sem roteiro, e no jogador 2 (o plat_stub.c preenche o controle parado, como sem janela). */
+   pressões zeradas); 0 sem roteiro, os dois jogadores recebem o quadro preparado na leitura do soquete 0. */
 int Roteiro_Pad(int socket, unsigned char *data) {
     unsigned b;
     int t, m;
-    char s[120], n[16];
-    if (!Roteiro_Ativo() || socket != 0) {
+    char s[220], n[16];
+    if (!Roteiro_Ativo() || socket < 0 || socket > 1) {
         return 0;
     }
-    /* o rastro: cada troca de tela e de estado do fluxo do cartão, vista na leitura do controle */
-    t = tela_atual();
-    if (t != sTela) {
-        sTela = t;
-        nome_tela(t, n);
-        sprintf(s, "tela %s vblank %u quadro %u", n, gPortVBlanks, sQuadro);
-        diz(s);
-    }
-    m = mcflow_atual();
-    if (m != sMcflow) {
-        sMcflow = m;
-        sprintf(s, "mcflow %d vblank %u quadro %u", m, gPortVBlanks, sQuadro);
-        diz(s);
-    }
-    luta_quadro();
-    f7_quadro();
-    elenco_quadro();
-    b = quadro();
+    if (socket == 0) {
+        /* o rastro: cada troca de tela e de estado do fluxo do cartão, vista na leitura do controle */
+        t = tela_atual();
+        if (t != sTela) {
+            sTela = t;
+            nome_tela(t, n);
+            sprintf(s, "tela %s vblank %u quadro %u", n, gPortVBlanks, sQuadro);
+            diz(s);
+        }
+        m = mcflow_atual();
+        if (m != sMcflow) {
+            sMcflow = m;
+            sprintf(s, "mcflow %d vblank %u quadro %u", m, gPortVBlanks, sQuadro);
+            diz(s);
+        }
+        luta_quadro();
+        f7_quadro();
+        f7_selecao();
+        elenco_quadro();
+        quadro();
 #ifndef PORT_X360
-    Imagens_Quadro(sQuadro);
+        Imagens_Quadro(sQuadro);
 #endif
-    sQuadro++;
+        sQuadro++;
+    }
+    b = sBotoes[socket];
+    if (socket == 1 && getenv("BT3_DOIS") != NULL) {
+        static unsigned antes[6] = {~0u, ~0u, ~0u, ~0u, ~0u, ~0u};
+        unsigned atual[6];
+        atual[0] = sBotoes[0]; atual[1] = sBotoes[1];
+        atual[2] = sLx[0]; atual[3] = sLy[0]; atual[4] = sLx[1]; atual[5] = sLy[1];
+        if (memcmp(antes, atual, sizeof(atual)) != 0) {
+            sprintf(s, "roteiro: pads %04x %04x analogicos %u %u %u %u vblank %u quadro %u",
+                    sBotoes[0], sBotoes[1], sLx[0], sLy[0], sLx[1], sLy[1], gPortVBlanks, sQuadro - 1);
+            diz(s);
+            memcpy(antes, atual, sizeof(atual));
+        }
+    }
     memset(data, 0, 18);
     data[0] = (unsigned char)(~b & 0xFF);
     data[1] = (unsigned char)(~(b >> 8) & 0xFF);
     data[2] = data[3] = 0x80;
-    data[4] = sLx; /* PAD_DATA_LX e PAD_DATA_LY (include/sys/pad.h) */
-    data[5] = sLy;
+    data[4] = sLx[socket]; /* PAD_DATA_LX e PAD_DATA_LY (include/sys/pad.h) */
+    data[5] = sLy[socket];
     return 18;
 }
 

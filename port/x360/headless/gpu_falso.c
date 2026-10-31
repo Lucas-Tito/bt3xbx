@@ -436,6 +436,38 @@ static void alfa_confere(const GsQuadro *q) {
 #ifdef GS_LOTES
 #include "lotes_envio.h"
 #endif
+/* F7: geometria 3D realmente entregue em cada tesoura, sem confundir HUD com cenário.
+   BT3_SCALE=1 é exigido pelo lançador. Este backend não rasteriza: conteúdo significa
+   índices de primitivas, e as imagens de software são conferidas numa rede separada. */
+extern int Roteiro_Cameras(unsigned *v);
+static void f7_perfil(unsigned quadro);
+static void f7_vistas(const Vista *q) {
+    unsigned v[11], n[3] = {0, 0, 0}, d[3] = {0, 0, 0};
+    uint32_t i;
+    int batalha;
+    if (getenv("BT3_DOIS") == NULL) return;
+    batalha = Roteiro_Cameras(v);
+    for (i = 0; i < q->drawCount; i++) {
+        const GsDraw *p = &q->draws[i];
+        int k, x = p->scissor[0], w = p->scissor[2];
+        if ((batalha ? !p->vu : p->vu) || p->native || p->count < 3 || p->target < 0 ||
+            p->target >= q->targetCount || (int)q->targets[p->target].fbp != q->fbp) continue;
+        k = x + w <= 256 ? 0 : x >= 256 ? 1 : 2;
+        n[k] += p->count;
+        d[k]++;
+    }
+    if (!batalha) {
+        printf("f7m: gs %u quadro %u indices %u %u %u desenhos %u %u %u\n",
+               q->quadro, v[10], n[0], n[1], n[2], d[0], d[1], d[2]);
+        fflush(stdout);
+        return;
+    }
+    printf("f7v: gs %u quadro %u seq %u modo %u cameras %u %08x %u %u %u %08x %u %u indices %u %u %u desenhos %u %u %u totais %u %u %u\n",
+           q->quadro, v[10], v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9],
+           n[0], n[1], n[2], d[0], d[1], d[2], q->drawCount, q->vuIdxCount, q->vuUniCount);
+    fflush(stdout);
+}
+
 static void fake_frame_end(void) {
     uint32_t i;
     uint64_t quadro = 1469598103934665603ull;
@@ -463,6 +495,8 @@ static void fake_frame_end(void) {
     q.fbp = gGsMainFbp; q.quadro = gGsFrame; q.anchor = gsAnchor; q.skipped = gsSkipped; q.native = gsNative; q.dividido = 0;
 #endif
 
+    f7_vistas(&q);
+    f7_perfil(q.quadro);
     comum_lista(&q);
 
     if (q.dividido) { /* a S_TEX e as contagens da gravação vieram na entrega */
@@ -683,6 +717,24 @@ static inline uint64_t tique(void) {
 #else
 static inline uint64_t tique(void) { return 0; }
 #endif
+
+/* Variação dos contadores do perfil já existente, por quadro. Tiques só têm sentido na x86. */
+static void f7_perfil(unsigned quadro) {
+    static uint64_t antes[3];
+    uint64_t agora[3] = {0, 0, 0};
+    int f;
+    if (getenv("BT3_DOIS") == NULL || sPerfil != 1) return;
+    for (f = 0; f < F_N; f++) {
+        agora[0] += sFam[f].chamadas;
+        agora[1] += sFam[f].tiques;
+        agora[2] += sFam[f].tiques_desenho;
+    }
+    printf("f7p: gs %u chamadas %llu tiques %llu gravacao %llu\n", quadro,
+           (unsigned long long)(agora[0] - antes[0]), (unsigned long long)(agora[1] - antes[1]),
+           (unsigned long long)(agora[2] - antes[2]));
+    fflush(stdout);
+    memcpy(antes, agora, sizeof(antes));
+}
 
 #define AMOSTRAS_MAX 65536
 static struct { uint32_t pc, n; } sAmostra[AMOSTRAS_MAX];
