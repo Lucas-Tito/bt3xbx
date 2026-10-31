@@ -43,16 +43,16 @@ def prepara(p, rodada, modo, repeticoes=2):
             env.update(BT3_SHOT_LISTA=QUADROS_IMAGEM, BT3_SHOT_CHEIA='1', BT3_SHOT_PASTA='shots_' + rodada + '_' + n)
         else:
             env['BT3_ROTEIRO'] = r'game:\f5_treino.txt'
-        (p / f'ambiente_{n}.txt').write_text('-BT3_DEMO\n' + '\n'.join(f'{k}={v}' for k, v in env.items()) + '\n')
+        (p / f'environment_{n}.txt').write_text('-BT3_DEMO\n' + '\n'.join(f'{k}={v}' for k, v in env.items()) + '\n')
         man.append(dict(abertura=n, build=b, save=save, modo=modo, lotes=l, envio=e, ambiente=env))
     (p / 'manifesto.json').write_text(json.dumps(man, indent=2) + '\n')
     (p / 'ordem.txt').write_text(''.join(f'{m["abertura"]} {m["build"]}\n' for m in man))
-    shutil.copyfile(p / f'ambiente_{man[0]["abertura"]}.txt', p / 'environment.txt')
+    shutil.copyfile(p / f'environment_{man[0]["abertura"]}.txt', p / 'environment.txt')
     (p / 'LEIA.txt').write_text(f'''Rodada {rodada}, F5 seção 40: {modo}, {len(man)} aberturas.
 Builds do mesmo commit, com carimbo e manifesto de hashes antes de enviar. Build normal sem chaves;
 lotes com BT3_GS_LOTES=1; sufixo alfa com BT3_ALFA_ORIGEM=1; prefixo perfil com BT3_PERFIL_CADEIA=1.
 Nunca reutilizar save/pasta já existente: conferir TODOS os nomes do manifesto antes da primeira abertura.
-Abrir na ordem.txt, copiando ambiente_NOME.txt para environment.txt e o xex da build indicada.
+Abrir na ordem.txt, copiando environment_NOME.txt para environment.txt e o xex da build indicada.
 ctl: ambas as partes desligadas; pln: só plano/DATE da seção 38; lot: envio durante a gravação.
 Sem VU1 direto, EDRAM residente ou plano anterior válido não há envio antecipado. Conferir linhas lotes dos quadros.
 Tempo: nenhuma captura; BT3_RELOGIO_MARCAS=0. prefixos_teto.py --console LOG --so-relogio deve aceitar cada log.
@@ -81,7 +81,7 @@ def confere(p, rodada, modo, repeticoes):
         if m['save'] != save or save in saves or len(save) > 42:
             raise ValueError('save repetido, estranho ou longo')
         saves.add(save)
-        linhas = (p / f'ambiente_{n}.txt').read_text().splitlines()
+        linhas = (p / f'environment_{n}.txt').read_text().splitlines()
         real = dict(x.split('=', 1) for x in linhas if '=' in x)
         if len(linhas) != len(real) + 1 or linhas[0] != '-BT3_DEMO' or real != env:
             raise ValueError('ambiente adulterado ou chave repetida')
@@ -102,7 +102,7 @@ def confere(p, rodada, modo, repeticoes):
             raise ValueError('captura fora da rodada de imagem')
     if (p / 'ordem.txt').read_text() != ''.join(f'{m["abertura"]} {m["build"]}\n' for m in man):
         raise ValueError('ordem diferente')
-    if (p / 'environment.txt').read_bytes() != (p / f'ambiente_{man[0]["abertura"]}.txt').read_bytes():
+    if (p / 'environment.txt').read_bytes() != (p / f'environment_{man[0]["abertura"]}.txt').read_bytes():
         raise ValueError('primeiro ambiente diferente')
 
 
@@ -112,7 +112,7 @@ def mutantes():
             p = Path(t) / modo
             prepara(p, 'teste40', modo)
             m = json.loads((p / 'manifesto.json').read_text())[0]
-            f = p / f'ambiente_{m["abertura"]}.txt'
+            f = p / f'environment_{m["abertura"]}.txt'
             original = f.read_text()
             for a, b in (('BT3_LOTES_ENVIO=', 'BT3_LOTES_ENVIO=9'), ('sv_teste40_', 'sv_antigo_'),
                          ('BT3_VU1_DIRETO=1', 'BT3_VU1_DIRETO=0'), ('BT3_CADEIA_CPU=0', 'BT3_CADEIA_CPU=1')):

@@ -67,11 +67,11 @@ def prepara(saida, rodada, quadros, repeticoes, modo='relogio'):
             extra = ['BT3_RELOGIO_GRAV=0', f'BT3_LOTES={liga}', f'BT3_SHOT_LISTA={lista}', 'BT3_SHOT_CHEIA=1', f'BT3_SHOT_PASTA={pasta}']
             m = {'relogio': '0', 'lotes': liga, 'pasta': pasta}
         linhas = COMUM + extra + [f'BT3_SAVES=game:\\{save}']
-        (saida / f'ambiente_{nome}.txt').write_text('\n'.join(linhas) + '\n')
+        (saida / f'environment_{nome}.txt').write_text('\n'.join(linhas) + '\n')
         manifesto.append(dict({'abertura': nome, 'build': build, 'save': save, 'modo': modo}, **m))
     (saida / 'manifesto.json').write_text(json.dumps(manifesto, indent=2) + '\n')
     (saida / 'ordem.txt').write_text('\n'.join(f'{c[0]} {c[1]}' for c in casos) + '\n')
-    shutil.copyfile(saida / f'ambiente_{casos[0][0]}.txt', saida / 'environment.txt')
+    shutil.copyfile(saida / f'environment_{casos[0][0]}.txt', saida / 'environment.txt')
     if modo == 'imagem':
         (saida / 'LEIA.txt').write_text(f'''Rodada {rodada}: a imagem do BT3_GS_LOTES, primeira parte (F5, seção 38 do 08-gravacao.md).
 Duas builds do mesmo commit (ordem.txt: abertura e build): normal (build_f2.sh) e lotes (BT3_GS_LOTES=1). Antes de abrir:
@@ -104,7 +104,7 @@ def confere(pasta, rodada):
     if len(set(saves)) != len(saves) or any(not s.startswith(f'sv_{rodada}_') or len(s) > 42 for s in saves):
         raise ValueError('saves repetidos, de outra rodada ou longos demais')
     for m in man:
-        t = (pasta / f'ambiente_{m["abertura"]}.txt').read_text().splitlines()
+        t = (pasta / f'environment_{m["abertura"]}.txt').read_text().splitlines()
         if t[:len(COMUM)] != COMUM:
             raise ValueError(f'{m["abertura"]}: ambiente comum diferente')
         rel = [x for x in t if x.startswith('BT3_RELOGIO_GRAV=')]
@@ -127,7 +127,7 @@ def confere(pasta, rodada):
                 raise ValueError(f'{m["abertura"]}: captura ou lotes diferentes do manifesto')
             if (m['build'] == 'lotes') != m['abertura'].startswith('l') or (m['lotes'] == 1) != m['abertura'].startswith('lot'):
                 raise ValueError(f'{m["abertura"]}: build ou chave trocada')
-    if (pasta / 'environment.txt').read_text() != (pasta / f'ambiente_{man[0]["abertura"]}.txt').read_text():
+    if (pasta / 'environment.txt').read_text() != (pasta / f'environment_{man[0]["abertura"]}.txt').read_text():
         raise ValueError('environment.txt não é o da primeira abertura')
     return len(man)
 
@@ -139,13 +139,13 @@ def mutantes():
         assert confere(base, 'teste1') == 8
         estragos = {
             'save repetido': ('manifesto.json', lambda s: s.replace('sv_teste1_ctl1', 'sv_teste1_rel1')),
-            'carimbos no controle': ('ambiente_ctl1.txt', lambda s: s.replace('BT3_RELOGIO_MARCAS=0', 'BT3_RELOGIO_MARCAS=1')),
-            'relógio desligado': ('ambiente_rel2.txt', lambda s: s.replace('BT3_RELOGIO_GRAV=6930,6960', 'BT3_RELOGIO_GRAV=0')),
+            'carimbos no controle': ('environment_ctl1.txt', lambda s: s.replace('BT3_RELOGIO_MARCAS=0', 'BT3_RELOGIO_MARCAS=1')),
+            'relógio desligado': ('environment_rel2.txt', lambda s: s.replace('BT3_RELOGIO_GRAV=6930,6960', 'BT3_RELOGIO_GRAV=0')),
             'controle sem a lista': ('manifesto.json', lambda s: s.replace('"relogio": "6930,6960",\n    "marcas": 0', '"relogio": "0",\n    "marcas": 0', 1)),
-            'cadeia ligada': ('ambiente_rela1.txt', lambda s: s.replace('BT3_CADEIA_CPU=0', 'BT3_CADEIA_CPU=1')),
-            'picos desligado': ('ambiente_rel1.txt', lambda s: s.replace('BT3_PICOS=36', 'BT3_PICOS=0')),
+            'cadeia ligada': ('environment_rela1.txt', lambda s: s.replace('BT3_CADEIA_CPU=0', 'BT3_CADEIA_CPU=1')),
+            'picos desligado': ('environment_rel1.txt', lambda s: s.replace('BT3_PICOS=36', 'BT3_PICOS=0')),
             'build normal': ('manifesto.json', lambda s: s.replace('"perfil+alfa"', '"alfa"', 1)),
-            'save de outra rodada': ('ambiente_ctla2.txt', lambda s: s.replace('sv_teste1_ctla2', 'sv_ap35a2810_ctla2')),
+            'save de outra rodada': ('environment_ctla2.txt', lambda s: s.replace('sv_teste1_ctla2', 'sv_ap35a2810_ctla2')),
         }
         for nome, (arq, f) in estragos.items():
             c = Path(d) / re.sub(r'\W', '_', nome)
@@ -161,10 +161,10 @@ def mutantes():
         prepara(img, 'teste2', [6930, 6960], 2, 'imagem')
         assert confere(img, 'teste2') == 6
         for nome, (arq, f) in {
-            'lotes desligado na lot': ('ambiente_lot1.txt', lambda s: s.replace('BT3_LOTES=1', 'BT3_LOTES=0')),
-            'pasta repetida': ('ambiente_lct2.txt', lambda s: s.replace('shots_teste2_lct2', 'shots_teste2_lot2')),
+            'lotes desligado na lot': ('environment_lot1.txt', lambda s: s.replace('BT3_LOTES=1', 'BT3_LOTES=0')),
+            'pasta repetida': ('environment_lct2.txt', lambda s: s.replace('shots_teste2_lct2', 'shots_teste2_lot2')),
             'build trocada': ('manifesto.json', lambda s: s.replace('"build": "normal"', '"build": "lotes"', 1)),
-            'captura reduzida': ('ambiente_nor2.txt', lambda s: s.replace('BT3_SHOT_CHEIA=1', 'BT3_SHOT_CHEIA=0')),
+            'captura reduzida': ('environment_nor2.txt', lambda s: s.replace('BT3_SHOT_CHEIA=1', 'BT3_SHOT_CHEIA=0')),
         }.items():
             c = Path(d) / ('i_' + re.sub(r'\W', '_', nome))
             shutil.copytree(img, c)

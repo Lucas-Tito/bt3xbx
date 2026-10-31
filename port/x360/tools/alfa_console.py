@@ -39,11 +39,11 @@ def prepara(saida, rodada):
                 f'BT3_ALFA_CONFERE={confere}',f'BT3_VU_CONSTANTES={c}',f'BT3_VU_FECHO={f}',
                 f'BT3_CADEIA_CPU={cpu}','BT3_CORTES=0','BT3_CORTES_GPU=0','BT3_COMUM_GPU=0',
                 f'BT3_SAVES=game:\\{save}']
-        (saida/f'ambiente_{nome}.txt').write_text('\n'.join(linhas)+'\n')
+        (saida/f'environment_{nome}.txt').write_text('\n'.join(linhas)+'\n')
         manifesto.append({'abertura':nome,'build':build,'save':save,'oraculo':confere,'cpu':cpu})
     (saida/'manifesto.json').write_text(json.dumps(manifesto,indent=2)+'\n')
     (saida/'ordem.txt').write_text('\n'.join(f'{c[0]} {c[1]}' for c in casos)+'\n')
-    shutil.copyfile(saida/'ambiente_base1.txt',saida/'environment.txt')
+    shutil.copyfile(saida/'environment_base1.txt',saida/'environment.txt')
     (saida/'LEIA.txt').write_text('''Rodada de alfa com quatro builds do mesmo commit (ordem.txt: abertura e build). Conferir carimbo, a linha
 "gs_d3d: alfa exato na origem" presente só nas builds alfa e perfil+alfa, e inexistência de TODOS os saves do manifesto
 antes de abrir. normal: build_f2.sh; alfa: BT3_ALFA_ORIGEM=1; perfil: BT3_PERFIL_CADEIA=1; perfil+alfa: as duas.

@@ -70,8 +70,12 @@ def conferir(arquivos, excecoes):
     # Uma linha permitida não pode autorizar uma cópia adicional em outro ponto.
     for e in excecoes:
         k = e['arquivo'], e['sha256']
-        original = subprocess.check_output(['git', 'show', BASE+':'+e['arquivo']], cwd=RAIZ).decode().splitlines()
-        linha = original[e['linha_na_base']-1]
+        if 'linha_atual' in e:  # exceção de arquivo posterior à base: confere na árvore atual
+            original = arquivos[e['arquivo']].decode().splitlines()
+            linha = original[e['linha_atual']-1]
+        else:
+            original = subprocess.check_output(['git', 'show', BASE+':'+e['arquivo']], cwd=RAIZ).decode().splitlines()
+            linha = original[e['linha_na_base']-1]
         exigir(hashlib.sha256(linha.encode()).hexdigest() == e['sha256'], 'exceção não corresponde à base')
         exigir(vistas[k] == len(ANTIGOS.findall(linha)), 'exceção ausente ou duplicada: '+e['arquivo'])
     print(f"inventário: {len(antigas)} ocorrências antigas justificadas em {len(vistas)} linhas; nenhum nome antigo ativo")
