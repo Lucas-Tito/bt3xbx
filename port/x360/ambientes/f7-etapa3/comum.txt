@@ -1,4 +1,5 @@
 # Base da sonda F7/03. Usar o gerador para dar um save novo e exclusivo a cada execução.
+BT3_LOG=1
 -BT3_DEMO
 -BT3_PAD_PLAY
 -BT3_PAD_REC

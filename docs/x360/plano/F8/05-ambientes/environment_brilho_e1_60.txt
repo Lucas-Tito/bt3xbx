@@ -1,4 +1,5 @@
 -BT3_DEMO
+BT3_LOG=1
 BT3_ISO=game:\bt3_convertida.iso
 BT3_GS=gpu
 BT3_WIDE=1
