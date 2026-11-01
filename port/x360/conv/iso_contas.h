@@ -15,6 +15,9 @@ typedef struct IcContas {
     int atual;
     /* A verificação: MiB relidos e o total (a ISO inteira), e uma batida por bloco relido, que gira o indicador. */
     conv_u32 verif_mb, verif_total_mb, verif_blocos;
+    /* A passagem única (cópia e conversão): MiB gravados, o total e uma batida por lote gravado. Depois do último
+       arquivo convertido ainda há o fim da ISO a copiar, e é esta linha que mostra que ele anda. */
+    conv_u32 passe_mb, passe_total_mb, passe_blocos;
 } IcContas;
 #ifdef __cplusplus
 extern "C" {

@@ -18,6 +18,9 @@ static TelaEstado estado(int fase, unsigned pc, const unsigned feito[5], int atu
     }
     e.c.atual = atual;
     e.c.batidas = batidas;
+    e.c.passe_total_mb = 2880;
+    e.c.passe_mb = fase >= IC_VERIFICAR ? 2880 : pc * 2880 / 60;
+    e.c.passe_blocos = batidas / 5;
     e.ms = ms;
     return e;
 }
@@ -93,11 +96,48 @@ int main(int argc, char **argv) {
         e.c.batidas = 7;
         telaDesenhar(&gB, e, v);
         exigir(memcmp(gA.px, gB.px, sizeof(gA.px)) != 0, "o giro não avançou na batida seguinte");
-        /* O giro fica só na linha da categoria em conversão (menus: a linha 7 da tela). */
+        /* O giro fica só na linha da categoria em conversão (menus: a linha 8 da tela). */
         for (int i = 0; i < 1280 * 720; i++)
             if (gA.px[i] != gB.px[i])
-                exigir(i / 1280 >= TELA_Y + 7 * TELA_PASSO && i / 1280 < TELA_Y + 8 * TELA_PASSO,
+                exigir(i / 1280 >= TELA_Y + 8 * TELA_PASSO && i / 1280 < TELA_Y + 9 * TELA_PASSO,
                        "o giro desenhou fora da linha da categoria atual");
+        /* Todas as categorias prontas e a passagem ainda copiando o fim da ISO (o que o Lucas viu parado em
+           1/11): o giro vai para a linha da cópia (linha 5) e anda por lote gravado, não por batida. */
+        e = estado(IC_CONVERTER, 55, tudo, -1, 3366, 1000);
+        e.c.passe_blocos = 10;
+        telaDesenhar(&gA, e, v);
+        e.c.batidas = 3367;
+        telaDesenhar(&gB, e, v);
+        exigir(!memcmp(gA.px, gB.px, sizeof(gA.px)), "a linha da cópia girou com batida de conversão");
+        e.c.passe_blocos = 11;
+        telaDesenhar(&gB, e, v);
+        exigir(memcmp(gA.px, gB.px, sizeof(gA.px)) != 0, "a cópia do fim da ISO não gira por lote");
+        for (int i = 0; i < 1280 * 720; i++)
+            if (gA.px[i] != gB.px[i])
+                exigir(i / 1280 >= TELA_Y + 5 * TELA_PASSO && i / 1280 < TELA_Y + 6 * TELA_PASSO,
+                       "o giro da cópia desenhou fora da linha da cópia");
+        e.c.passe_mb = 2001;
+        telaDesenhar(&gB, e, v);
+        e.c.passe_mb = 2002;
+        telaDesenhar(&gA, e, v);
+        exigir(memcmp(gA.px, gB.px, sizeof(gA.px)) != 0, "o contador de MB da cópia não aparece");
+        /* Na verificação, o giro anda por bloco relido, na linha 11. */
+        e = estado(IC_VERIFICAR, 80, tudo, -1, 3366, 1000);
+        e.c.verif_total_mb = 2880;
+        e.c.verif_blocos = 4;
+        telaDesenhar(&gA, e, v);
+        e.c.verif_blocos = 5;
+        telaDesenhar(&gB, e, v);
+        exigir(memcmp(gA.px, gB.px, sizeof(gA.px)) != 0, "a verificação não gira por bloco relido");
+        for (int i = 0; i < 1280 * 720; i++)
+            if (gA.px[i] != gB.px[i])
+                exigir(i / 1280 >= TELA_Y + 11 * TELA_PASSO && i / 1280 < TELA_Y + 12 * TELA_PASSO,
+                       "o giro da verificação desenhou fora da linha dela");
+        e.c.verif_mb = 1000;
+        telaDesenhar(&gA, e, v);
+        e.c.verif_mb = 1001;
+        telaDesenhar(&gB, e, v);
+        exigir(memcmp(gA.px, gB.px, sizeof(gA.px)) != 0, "o contador de MB da verificação não aparece");
         /* Cores: sem falha, nada de vermelho e o OK é verde; com falha, o FAILED é vermelho e some o giro. */
         e = estado(IC_CONVERTER, 41, meio, IC_CAT_MENUS, 478, 372000);
         telaDesenhar(&gA, e, v);

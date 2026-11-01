@@ -256,6 +256,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     for (i = 0; i < n; i++)
         IsoContas_Planejar(&contas, Conv_FormatoDe(e[i].nome), e[i].tam);
     total = IsoContas_Total(&contas, iso);
+    contas.passe_total_mb = IC_TAMANHO >> 20;
     progresso(io, IC_IDENTIFICAR, 0, total);
     categorias(io, &contas);
     r = IC_FORMATO;
@@ -342,6 +343,9 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
         if (!io->enviar(io->ctx, atual->pos, b, atual->tam))
             goto fim;
         /* Cópia e conversão são uma passagem: cada byte lido e gravado conta. */
+        contas.passe_mb = (atual->pos + atual->tam) >> 20;
+        contas.passe_blocos++;
+        categorias(io, &contas);
         progresso(io, IC_CONVERTER, IsoContas_Passagem(&contas, (atual->pos + atual->tam) >> 10), total);
     }
     if (escrita && !io->esperar_gravacao(io->ctx))

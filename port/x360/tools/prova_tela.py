@@ -64,10 +64,12 @@ def main():
                 print(f"png: {args.png / (f.stem + '.png')}", flush=True)
         texto = DESENHO.read_text()
         mutantes = [
-            ("giro por tempo em vez de batida", "telaGiro(i == 6 ? e.c.verif_blocos : e.c.batidas)", "telaGiro(e.ms / 250)", "giro mudou com o tempo"),
+            ("giro por tempo em vez de batida", "telaGiro(giro)", "telaGiro(giro * 0 + e.ms / 250)", "giro mudou com o tempo"),
             ("giro parado", "[batidas & 3]", "[0]", "giro não avançou"),
             ("FAILED sem vermelho", "ISO_CONV_T_FALHOU, TELA_FALHA", "ISO_CONV_T_FALHOU, TELA_TEXTO", "sem FAILED vermelho"),
-            ("giro em toda linha", "gira_agora = !ok && e.fase == IC_CONVERTER && e.c.atual == i - 1;", "gira_agora = !ok;", "fora da linha da categoria atual"),
+            ("cópia sem giro", "gira_agora = !ok && e.fase == IC_CONVERTER && telaCategoriaAtual(e) < 0;", "gira_agora = false;", "não gira por lote"),
+            ("verificação sem contador", "if (e.c.verif_total_mb)", "if (0)", "contador de MB da verificação não aparece"),
+            ("giro em toda linha", "gira_agora = !ok && telaCategoriaAtual(e) == i - TELA_L_CAT;", "gira_agora = !ok;", "fora da linha da categoria atual"),
             ("OK antes da conferência", "ok = e.fase >= IC_COPIAR;", "ok = true;", "OK verde antes"),
         ]
         for i, (nome, de, para, acusacao) in enumerate(mutantes):

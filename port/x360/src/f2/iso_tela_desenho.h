@@ -88,19 +88,23 @@ struct TelaEstado {
     unsigned ms;
 };
 
-/* A etapa em andamento: 0 = conferência, 1..5 = categorias, 6 = verificação. */
+/* As linhas: 0 = conferência, 1 = a passagem (cópia), 2..6 = categorias, 7 = verificação. */
+#define TELA_L_COPIA 1
+#define TELA_L_CAT 2
+#define TELA_L_VERIF 7
+/* A categoria em conversão agora, ou -1 se a passagem está só copiando. */
+static int telaCategoriaAtual(const TelaEstado &e) {
+    if (e.fase == IC_CONVERTER && e.c.atual >= 0 && e.c.atual < IC_NCATS && e.c.feito[e.c.atual] < e.c.total[e.c.atual])
+        return e.c.atual;
+    return -1;
+}
+/* A linha da etapa em andamento (onde vai o FAILED). */
 static int telaEtapaAtual(const TelaEstado &e) {
-    int i;
     if (e.fase <= IC_COPIAR)
         return 0;
-    if (e.fase == IC_CONVERTER) {
-        if (e.c.atual >= 0 && e.c.feito[e.c.atual] < e.c.total[e.c.atual])
-            return 1 + e.c.atual;
-        for (i = 0; i < IC_NCATS; i++)
-            if (e.c.feito[i] < e.c.total[i])
-                return 1 + i;
-    }
-    return 6;
+    if (e.fase == IC_CONVERTER)
+        return telaCategoriaAtual(e) >= 0 ? TELA_L_CAT + telaCategoriaAtual(e) : TELA_L_COPIA;
+    return TELA_L_VERIF;
 }
 /* Rótulo, pontinhos até a coluna fixa e o contador alinhado à direita. */
 static void telaLinha(char *out, const char *rotulo, const char *contador) {
@@ -128,24 +132,34 @@ static void telaDesenhar(D3DDevice *dev, const TelaEstado &e, const char *versao
     texto(dev, ISO_CONV_T_AVISO, TELA_X, TELA_Y + (l++) * TELA_PASSO, TELA_ESCALA, TELA_TEXTO);
     l++;
     gira[1] = 0;
-    for (i = 0; i < 7; i++, l++) {
-        const char *rotulo = i == 0 ? ISO_CONV_T_CONFERINDO : i == 6 ? ISO_CONV_T_VERIFICANDO : ISO_CONV_T_CATEGORIAS[i - 1];
+    for (i = 0; i <= TELA_L_VERIF; i++, l++) {
+        const char *rotulo = i == 0 ? ISO_CONV_T_CONFERINDO : i == TELA_L_COPIA ? ISO_CONV_T_COPIANDO
+                           : i == TELA_L_VERIF ? ISO_CONV_T_VERIFICANDO : ISO_CONV_T_CATEGORIAS[i - TELA_L_CAT];
         bool ok = false, gira_agora = false;
+        unsigned giro = e.c.batidas;
         cnt[0] = 0;
         if (i == 0) {
             ok = e.fase >= IC_COPIAR;
-        } else if (i == 6) {
+        } else if (i == TELA_L_COPIA) {
+            /* MiB gravados na passagem; gira por lote gravado quando nenhuma categoria está convertendo. */
+            if (e.c.passe_total_mb)
+                sprintf(cnt, "%u/%u MB", (unsigned)e.c.passe_mb, (unsigned)e.c.passe_total_mb);
+            ok = e.fase >= IC_VERIFICAR;
+            gira_agora = !ok && e.fase == IC_CONVERTER && telaCategoriaAtual(e) < 0;
+            giro = e.c.passe_blocos;
+        } else if (i == TELA_L_VERIF) {
             /* MiB relidos da ISO convertida; o giro avança um por bloco relido. */
             if (e.c.verif_total_mb)
                 sprintf(cnt, "%u/%u MB", (unsigned)e.c.verif_mb, (unsigned)e.c.verif_total_mb);
             ok = e.fase >= IC_PUBLICAR;
             gira_agora = !ok && e.fase == IC_VERIFICAR;
+            giro = e.c.verif_blocos;
         } else {
-            unsigned total = e.c.total[i - 1], feito = e.c.feito[i - 1];
+            unsigned total = e.c.total[i - TELA_L_CAT], feito = e.c.feito[i - TELA_L_CAT];
             if (total)
                 sprintf(cnt, "%u/%u", feito, total);
             ok = total > 0 && feito == total;
-            gira_agora = !ok && e.fase == IC_CONVERTER && e.c.atual == i - 1;
+            gira_agora = !ok && telaCategoriaAtual(e) == i - TELA_L_CAT;
         }
         telaLinha(buf, rotulo, cnt);
         texto(dev, buf, TELA_X, TELA_Y + l * TELA_PASSO, TELA_ESCALA, TELA_TEXTO);
@@ -154,7 +168,7 @@ static void telaDesenhar(D3DDevice *dev, const TelaEstado &e, const char *versao
         else if (ok)
             telaMarca(dev, l, ISO_CONV_T_OK, TELA_OK);
         else if (gira_agora) {
-            gira[0] = telaGiro(i == 6 ? e.c.verif_blocos : e.c.batidas);
+            gira[0] = telaGiro(giro);
             telaMarca(dev, l, gira, TELA_TEXTO);
         }
     }

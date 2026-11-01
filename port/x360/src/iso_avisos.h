@@ -27,6 +27,7 @@ static const char *const ISO_CONV_T_TITULO = "BT3 X360 %s  ISO CONVERSION";
 static const char *const ISO_CONV_T_PRAZO = "THIS CAN TAKE UP TO 30 MINUTES.";
 static const char *const ISO_CONV_T_AVISO = "DO NOT TURN OFF THE CONSOLE.";
 static const char *const ISO_CONV_T_CONFERINDO = "CHECKING ORIGINAL ISO";
+static const char *const ISO_CONV_T_COPIANDO = "COPYING GAME DATA";
 /* Na ordem de IC_CAT_* (personagens, cenários, menus, batalha, sons). */
 static const char *const ISO_CONV_T_CATEGORIAS[5] = {"CONVERTING CHARACTERS", "CONVERTING STAGES", "CONVERTING MENUS",
                                                      "CONVERTING BATTLE DATA", "CONVERTING SOUNDS"};
