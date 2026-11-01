@@ -264,7 +264,7 @@ def main():
     with convertido.open("r+b") as f:
         f.seek(pos); b = f.read(1); f.seek(pos); f.write(bytes([b[0] ^ 1]))
     r = subprocess.run(conferir, capture_output=True, text=True)
-    exigir(r.returncode == 1 and "bytes diferentes" in r.stderr,
+    exigir(r.returncode == 1 and "bytes differ" in r.stderr,
            "conferência Python integral aceitou byte estragado")
     with convertido.open("r+b") as f:
         f.seek(pos); f.write(b)
