@@ -296,3 +296,13 @@ com o código antigo e o novo, md5 de cada arquivo gravado.
 
 Ganho de 3,9 vezes no x86 e 6,2 no PowerPC emulado, que tem cache e memória mais parecidos com o 360. A ISO
 convertida não muda: nenhuma versão nova da marca.
+
+## Pergunta própria no lugar das caixas do sistema (1/11/2026)
+
+Um tester num Xbox 360 com Bad Avatar (exploit de software, sem DashLaunch), abrindo pela Aurora, via a pergunta de
+conversão (`XShowMessageBoxUI`) aparecer e fechar sozinha; o jogo a tratava como Cancel e voltava ao painel. Esperar os
+controles soltarem antes da caixa não resolveu, então a suspeita é a própria caixa do sistema. `iso_tela.cpp` agora
+desenha a pergunta e as caixas de sucesso, falha, espaço e destino na tela de terminal (fonte 5x7, `telaPergunta` em
+`iso_tela_desenho.h`) e lê o XInput das quatro portas a cada quadro: esquerda e direita trocam o botão, A confirma, B
+cancela, e um botão só vale depois de visto solto (um A já apertado ao abrir nunca confirma). Cancel abre selecionado.
+A caixa de ISO recusada da `main360.cpp` continua do sistema. A prova mora em `teste_iso_tela.py` e `prova_tela.py`.

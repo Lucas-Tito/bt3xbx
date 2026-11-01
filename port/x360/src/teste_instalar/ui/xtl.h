@@ -32,8 +32,8 @@ struct MESSAGEBOX_RESULT {
 struct XOVERLAPPED {
     unsigned espera;
 };
-extern unsigned gApresentados, gCriadas, gConvertidas, gLimpas, gCaixas;
-extern int gEscolha, gLimpar, gConverter, gThreadFalha, gNegar;
+extern unsigned gApresentados, gCriadas, gConvertidas, gLimpas;
+extern int gLimpar, gConverter, gThreadFalha;
 void TesteExigir(bool ok, const char *msg);
 struct D3DDevice {
     void Clear(unsigned n, const D3DRECT *r, unsigned, unsigned, float, unsigned) {
@@ -83,25 +83,41 @@ inline void CloseHandle(HANDLE t) {
 inline void ZeroMemory(void *p, std::size_t n) {
     std::memset(p, 0, n);
 }
-inline DWORD XShowMessageBoxUI(unsigned, const wchar_t *titulo, const wchar_t *texto, unsigned n, LPCWSTR *b,
-                               unsigned padrao, unsigned, MESSAGEBOX_RESULT *r, XOVERLAPPED *) {
-    TesteExigir(titulo && texto && b && n >= 1 && n <= 2, "caixa inválida");
-    TesteExigir(!std::wcsstr(texto, L"ambiente.txt") && !std::wcsstr(texto, L"environment.txt") && !std::wcsstr(texto, L"BT3_"), "texto interno exposto");
-    if (n == 2)
-        TesteExigir(padrao == 1, "pergunta sem Cancel padrão");
-    if (gNegar) {
-        gNegar--;
-        return ERROR_ACCESS_DENIED;
-    }
-    gCaixas++;
-    r->dwButtonPressed = n == 2 ? (unsigned)gEscolha : 0;
-    return ERROR_IO_PENDING;
+/* A tela própria não usa mais a caixa do sistema: qualquer chamada reprova o teste. */
+inline DWORD XShowMessageBoxUI(unsigned, const wchar_t *, const wchar_t *, unsigned, LPCWSTR *, unsigned, unsigned,
+                               MESSAGEBOX_RESULT *, XOVERLAPPED *) {
+    TesteExigir(false, "XShowMessageBoxUI chamada: a pergunta tem de ser própria");
+    return ERROR_ACCESS_DENIED;
 }
-inline bool XHasOverlappedIoCompleted(XOVERLAPPED *o) {
-    return o->espera++ >= 3;
-}
-inline DWORD XGetOverlappedResult(XOVERLAPPED *, DWORD *fim, int) {
-    *fim = 0;
+/* O controle simulado: o roteiro tem um caractere por quadro (uma leitura da porta gPorta por quadro).
+   '.' solto, 'A', 'B', 'L' e 'R' do d-pad, 'l' e 'r' analógico esquerdo forte, 'w' analógico fraco.
+   Depois do fim do roteiro tudo fica solto. As outras portas estão desconectadas. */
+typedef unsigned short WORD;
+#define XUSER_MAX_COUNT 4
+#define ERROR_DEVICE_NOT_CONNECTED 1167
+#define XINPUT_GAMEPAD_DPAD_LEFT 4
+#define XINPUT_GAMEPAD_DPAD_RIGHT 8
+#define XINPUT_GAMEPAD_A 0x1000
+#define XINPUT_GAMEPAD_B 0x2000
+struct XINPUT_GAMEPAD {
+    WORD wButtons;
+    short sThumbLX;
+};
+struct XINPUT_STATE {
+    XINPUT_GAMEPAD Gamepad;
+};
+extern const char *gRoteiro;
+extern unsigned gLidos, gPorta;
+inline DWORD XInputGetState(DWORD porta, XINPUT_STATE *e) {
+    char c;
+    if (porta != gPorta)
+        return ERROR_DEVICE_NOT_CONNECTED;
+    TesteExigir(gLidos < 100000, "pergunta não fechou");
+    c = gLidos < std::strlen(gRoteiro) ? gRoteiro[gLidos] : '.';
+    gLidos++;
+    e->Gamepad.wButtons = c == 'A' ? XINPUT_GAMEPAD_A : c == 'B' ? XINPUT_GAMEPAD_B
+                        : c == 'L' ? XINPUT_GAMEPAD_DPAD_LEFT : c == 'R' ? XINPUT_GAMEPAD_DPAD_RIGHT : 0;
+    e->Gamepad.sThumbLX = c == 'l' ? -20000 : c == 'r' ? 20000 : c == 'w' ? -10000 : 0;
     return ERROR_SUCCESS;
 }
 #endif

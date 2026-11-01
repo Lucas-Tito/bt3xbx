@@ -30,13 +30,25 @@ def main():
     with tempfile.TemporaryDirectory(prefix="iso-tela-") as tmp:
         pasta = Path(tmp)
         exe = compilar(pasta, FONTE)
-        for caso in ("sucesso", "cancelar", "limpeza", "thread", "espaco", "destino", "falha", "guide"):
+        for caso in ("sucesso", "esquerda_direita", "analogico", "analogico_fraco", "cancelar", "cancelar_b",
+                     "direita_cancela", "ja_apertado", "preso", "outra_porta", "apresenta", "sucesso_b", "limpeza",
+                     "thread", "espaco", "destino", "falha", "falha_b"):
             rodar(exe, caso)
         for i, (de, para, caso) in enumerate([
             ("XSetThreadProcessor(h, 2)", "XSetThreadProcessor(h, 4)", "sucesso"),
             ("WaitForSingleObject(h, 0)", "WaitForSingleObject(h, 1)", "sucesso"),
-            ("pergunta ? 1 : 0", "pergunta ? 0 : 0", "cancelar"),
             ("r = trabalhar(dev, limpar);", "r = IC_OK;", "limpeza"),
+            ("int sel = dois ? 1 : 0,", "int sel = 0,", "cancelar"),
+            ("borda = agora & armado[p]", "borda = agora | (armado[p] & 0)", "ja_apertado"),
+            ("borda = agora & armado[p]", "borda = agora | (armado[p] & 0)", "preso"),
+            ("} else if (borda & PAD_B) {", "} else if (0) {", "cancelar_b"),
+            ("escolha = sel;", "escolha = 1;", "sucesso"),
+            ("(borda & PAD_ESQ) && sel != 0", "(borda & PAD_ESQ) && 0", "sucesso"),
+            ("sThumbLX < -PAD_LIMIAR", "sThumbLX < -5000", "analogico_fraco"),
+            ("        dev->Present(NULL, NULL, NULL, NULL);\n    }\n    Diario_Escrever(\"tela: pergunta '%s' escolheu",
+             "    }\n    Diario_Escrever(\"tela: pergunta '%s' escolheu", "apresenta"),
+            ("    Diario_Escrever(\"tela: pergunta '%s' aberta",
+             "    XShowMessageBoxUI(0, titulo, msg, 0, 0, 0, 0, 0, 0);\n    Diario_Escrever(\"tela: pergunta '%s' aberta", "sucesso"),
         ]):
             d = pasta / str(i)
             d.mkdir()
