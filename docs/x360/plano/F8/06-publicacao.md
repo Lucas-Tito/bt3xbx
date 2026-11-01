@@ -274,3 +274,26 @@ uma queda nesse conteúdo deve ser reportada.
 on Broly's stage... split-screen battles when many effects are on screen at once"), corrigida pelo Lucas no repositório
 e nas notas da release em 1/11/2026 (a4296757). Ele decidiu não trocar o zip publicado: a frase nova entra no pacote da
 próxima versão.
+
+## 8. A publicação da 1.0.1 (1/11/2026)
+
+Publicada em https://github.com/Lucas-Tito/bt3xbx/releases/tag/bt3-x360-v1.0.1, a tag sobre 040b0fa4 (carimbo
+`040b0fa4 diff:da39a3ee5e`). Motivo: um tester num console com Bad Avatar, abrindo pela Aurora, via a pergunta de
+conversão (a caixa do sistema, `XShowMessageBoxUI`) abrir e fechar sozinha, e o jogo voltava ao painel; também não
+aparecia nenhum log com `BT3_LOG=1`, o que ainda não tem explicação (suspeita: o jogo não grava na pasta dele). Esperar
+os controles soltarem antes da caixa não resolveu (build de teste revertida, ramo apagado).
+
+- A pergunta de conversão e as mensagens de sucesso e falha passaram a ser desenhadas pelo jogo na tela de terminal
+  ([03-conversao-console](03-conversao-console.md)), com o controle lido direto e só botão solto e apertado de novo
+  valendo; conferida pelo Lucas no console dele. Ainda não testada no Bad Avatar.
+- O problema conhecido novo (README do pacote e CONTRIBUTING): no Bad Avatar as caixas do sistema que sobraram (ISO
+  ausente ou ilegível, queda) podem fechar sozinhas.
+- O `.dat`, o `.swap` e os conversores não mudaram: a ISO convertida pela 1.0.0 serve, sem reconversão.
+
+| Item | Valor |
+|---|---|
+| Zip | `bt3-x360-1.0.1.zip`, SHA256 `cbc35dd16d5e74e68316915bacd54813d9917e550a26de29a2e2d27a0345ba85` |
+| `default.xex` | md5 `f445c8ac4ac927085433c61e4e2362d4` |
+| `.map` da build | `build/x360/pacote/default-040b0fa4.map`, fora do git |
+
+Conferência: o zip baixado da página pública deu o mesmo SHA256 e os 37 arquivos do `SHA256SUMS.txt` conferiram.
