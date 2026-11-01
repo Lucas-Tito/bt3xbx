@@ -7,6 +7,10 @@ Uso: subir.py [--ip IP] [--destino /Hdd1/HOMEBREW/bt3xbx] [--nome NOME] ARQUIVO.
                                                             BT3_SHOT; só no WSL, são imagens do jogo)
      subir.py --achar                                       (só procura o console)
 
+Configuração: subir.py --nome environment.txt CAMINHO/environment_teste.txt
+Saída de texto: subir.py --baixar output.txt > CAMINHO/output.txt
+O diário continua bt3xbx.log. Os nomes são usados literalmente, sem tradução automática.
+
 Regras do servidor da FreeStyle (hiddriver/docs/ftp-no-xbox.md): só responde com o console parado
 na FreeStyle; uma conexão por vez; não responde ao QUIT (fechar com close()); sem REST; RETR só
 depois de CWD; ler arquivo sendo gravado trava o servidor. Por isso: envia com nome temporário,
@@ -223,4 +227,5 @@ def main():
         f.close()  # nunca quit(): o servidor não responde ao QUIT
 
 
-main()
+if __name__ == "__main__":
+    main()

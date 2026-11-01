@@ -39,7 +39,7 @@ thread desenha o N. Estimativa: de 48 para uns 38 a 42 ms. Não fecha os 30 fps 
    para cada uma, diga de que lado roda e por quê. Texturas pelo caminho do XG na gravação; alvos e pipelines viram pedidos
    resolvidos na thread de desenho (o número que a gravação recebe é uma vaga, preenchida antes de o quadro ser desenhado).
 3. **A thread de desenho no 360** (`port/x360/src`): dona do dispositivo (o `d3d_init`, o `Present`, o `GsD3d_Repete` da
-   Guide, o `GsD3d_Soltar` na saída e na queda passam para ela); a de gravação sem o dispositivo. Chave nova no `ambiente.txt`,
+   Guide, o `GsD3d_Soltar` na saída e na queda passam para ela); a de gravação sem o dispositivo. Chave nova no `environment.txt`,
    `BT3_GS_DESENHO=1`, que só vale com `BT3_GS_THREAD=1`; sem ela, tudo como no degrau 1. Thread de hardware do desenho por
    `BT3_GS_DESENHO_HW` (padrão 3, a irmã do jogo; a 1, irmã da gravação, para comparar: o estudo manda medir as duas; nunca a 4
    nem a 5, do áudio). O vigia diz o estado das três threads. Você NÃO consegue compilar o 360: C89 do `cl.exe` e o C++ do
@@ -61,7 +61,7 @@ liberada sem esperar os dois quadros, e o pedido de alvo resolvido depois do des
   (`cc46fa0752f092fca305bc8bf2e2e54390763af0`) só muda por código de teste, provado pelos objetos.
 - Cada verificador novo visto falhando de propósito (commit antes de estragar; confira com `assert` que a sabotagem casou).
 - Ao fim, a seção "Degrau 2" no `08-threads.md`: o que foi feito, as provas, a estimativa no 360, o que falta compilar e conferir
-  no console e o roteiro da rodada. O `ambiente.txt` do roteiro começa com `-BT3_DEMO` (sem ela o jogo abre na demo) e tem as três
+  no console e o roteiro da rodada. O `environment.txt` do roteiro começa com `-BT3_DEMO` (sem ela o jogo abre na demo) e tem as três
   aberturas: `BT3_GS_THREAD=1` com `BT3_GS_DESENHO=1` e `BT3_GS_DESENHO_HW=3`, o mesmo com `BT3_GS_DESENHO_HW=1`, e só
   `BT3_GS_THREAD=1` (o degrau 1, para comparar).
 

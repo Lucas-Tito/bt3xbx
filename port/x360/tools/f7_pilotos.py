@@ -18,7 +18,7 @@ from f7_cobertura import destino_externo
 import save_entre
 
 LOGS = ('x86_a.txt', 'x86_b.txt', 'gdb.txt', 'x86r.txt', 'ppcsm.txt',
-        'img/x86/saida.txt', 'img/ppc/saida.txt')
+        'img/x86/output.txt', 'img/ppc/output.txt')
 
 
 def conferir(caso, pasta):

@@ -1,3 +1,8 @@
+BT3_LOG=1
+BT3_ESTADO_TEMPOS=1
+BT3_FILME_MEDIDAS=1
+BT3_SOM_MEDIDAS=1
+BT3_TEMPOS=1
 # Próxima rodada da F6: ver LEIA-ME.md nesta pasta.
 -BT3_DEMO
 BT3_ISO=game:\bt3_convertida.iso

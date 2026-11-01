@@ -8,12 +8,12 @@
  *   - mods/...    arquivo de verdade, como no PC;
  *   - disc/...    o arquivo da ISO (ISO 9660, sem extensões: nomes em maiúsculas com ";1");
  *   - pzsN/...    a entrada do AFS dentro da ISO.
- * A ISO tem de ser a convertida no PC (decisão 23, port/x360/tools/convert_iso.py): Iso_Iniciar identifica o volume
+ * A carga exige a ISO convertida (decisão 23): o PC ou iso_instalar.c a prepara antes do jogo. Iso_Iniciar identifica o volume
  * e o SYSTEM.CNF antes de procurar a marca (docs/x360/formatos/iso-convertida.md); recusa a imagem incompatível,
- * ilegível ou original sem converter (Iso_Recusada; a main mostra a caixa
+ * ilegível ou original sem converter (Iso_Recusada; a main oferece a instalação da original ou mostra a caixa
  * do sistema e o jogo não começa). Da ISO convertida, a entrada com conversor (Conv_FormatoDe, port/x360/conv) já
  * vem na ordem do 360: é lida inteira na abertura, sem Conv_Arquivo; o resto (fluxos de som, filmes) é lido da ISO
- * a cada fread. Os conteúdos comprimidos (BPE) continuam convertidos depois de descomprimidos, pelos ganchos do
+ * a cada fread. Os menus BPE já trazem o conteúdo convertido. Folhas e animações ainda usam os ganchos do
  * jogo (port/x360/conv/conv_jogo.c). Um arquivo de mods/ ou de uma pasta solta (sem ISO) está no formato do PS2 e
  * o que tem conversor se converte ao abrir (Iso_DeArquivo; os mods/ ficam assim até as últimas fases). O arquivo
  * aberto é um IsoArq do vetor sAbertos, e as funções de stdio do shim (Port_X360Fread...) reconhecem um IsoArq
@@ -85,7 +85,7 @@ unsigned gPicosIsoN;
 unsigned __int64 gPicosIsoBytes, gPicosIsoTiques;
 
 static int ler(__int64 pos, void *buf, unsigned long n) {
-    LARGE_INTEGER p, t0, t1;
+    LARGE_INTEGER p, t0 = {0}, t1;
     DWORD lidos = 0;
     BOOL ok;
     /* a thread de leitura dos fluxos pelo handle dela; as outras pelo comum */
@@ -93,14 +93,16 @@ static int ler(__int64 pos, void *buf, unsigned long n) {
     HANDLE h = propria ? sIsoLeitora : sIso;
     CRITICAL_SECTION *trava = propria ? &sTravaLeitora : &sTrava;
     p.QuadPart = pos;
-    QueryPerformanceCounter(&t0);
+    if (gX360Log) QueryPerformanceCounter(&t0);
     EnterCriticalSection(trava);
     ok = SetFilePointerEx(h, p, NULL, FILE_BEGIN) && ReadFile(h, buf, n, &lidos, NULL);
     LeaveCriticalSection(trava);
-    QueryPerformanceCounter(&t1);
-    gPicosIsoN++;
-    gPicosIsoBytes += n;
-    gPicosIsoTiques += (unsigned __int64)(t1.QuadPart - t0.QuadPart);
+    if (gX360Log) {
+        QueryPerformanceCounter(&t1);
+        gPicosIsoN++;
+        gPicosIsoBytes += n;
+        gPicosIsoTiques += (unsigned __int64)(t1.QuadPart - t0.QuadPart);
+    }
     return ok && lidos == n;
 }
 
@@ -119,7 +121,7 @@ static void hexa(const unsigned char *p, unsigned n, char *s) {
 }
 
 /* A marca da ISO convertida no PC (decisão 23, docs/x360/formatos/iso-convertida.md): 512 bytes em 0x3DF400 que
-   começam por "BT3X360-ISO" e cinco zeros. A versão 2 exige o pacote de ícones (decisão 30). */
+   começam por "BT3X360-ISO" e cinco zeros. A versão 3 exige também as duas transições de cenário convertidas. */
 static int tem_marca(const char *caminho) {
     static unsigned char m[MARCA_TAM];
     static char md5[33], fontes[65], exe[65];

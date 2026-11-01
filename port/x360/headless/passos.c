@@ -49,6 +49,15 @@
 #define BT3_CARIMBO "sem carimbo"
 #endif
 static const char kCarimbo[64] = BT3_CARIMBO;
+/* a versão da release (port/x360/package/versao.env, que o build_f2.sh passa em BT3_VERSAO): a mesma do README do pacote */
+#ifndef BT3_VERSAO
+#define BT3_VERSAO "sem versao"
+#endif
+static const char kVersao[16] = BT3_VERSAO;
+#ifdef PORT_X360
+const char *Port_Carimbo360(void) { return kCarimbo; }
+const char *Port_Versao360(void) { return kVersao; }
+#endif
 
 extern unsigned gPortVBlanks;           /* plat_stub.c */
 extern unsigned long long gPortSleptNs; /* plat_stub.c: a espera de vblank até agora */
@@ -63,9 +72,13 @@ void Roteiro_Rastro(const char *linha); /* roteiro.c */
 /* o backend: os descartes acumulados desde o começo (gs_d3d.cpp no 360; 0 sem backend, sem_janela.c) */
 int Passos_Descartes(unsigned *v, int n);
 #define N_DESC 8
+/* src/battle/stgm_a.c e plat_stub.c: BT3_DIVIDIDA_RECORTE, as malhas do estágio não enviadas à VU1 e as que iriam */
+extern unsigned gPortRecPulados, gPortRecTotal;
+int Port_DivididaRecorte(void);
 
 #ifdef PORT_X360
 void Diario_Escrever(const char *formato, ...);
+extern int gX360Log;
 /* plat_stub.c: a espera de vblank acumulada desde o boot (ninguém zera), as esperas de fato, as que acabaram no vblank de
    hardware, as que acordaram 1 ms ou mais atrasadas e o pior atraso desde a última leitura (este o passos zera) */
 extern unsigned long long gPortVBlankEsperaNs;
@@ -104,6 +117,7 @@ static unsigned long long sUltImagem;
 static int sTemImagem;
 static unsigned sUltGs;
 static unsigned sDesc0[N_DESC];
+static unsigned sRecPulados0, sRecTotal0;
 #ifdef PORT_X360
 static unsigned sTela0[N_TELA], sEsperas0, sPeloHw0, sAtrasadas0, sEsperasPasso;
 static int sTemTela;
@@ -157,6 +171,8 @@ static void abre(void) {
     sN = sNInt = sRepetidas = 0;
     sTemImagem = 0;
     sVbAbriu = gPortVBlanks;
+    sRecPulados0 = gPortRecPulados;
+    sRecTotal0 = gPortRecTotal;
     if (Passos_Descartes(sDesc0, N_DESC) <= 0) {
         memset(sDesc0, 0, sizeof(sDesc0));
     }
@@ -264,10 +280,20 @@ static void fecha(const char *motivo) {
                 sJanela, desc[0], desc[1], desc[2], desc[3], desc[4], desc[5], desc[6], desc[7]);
     }
     escreve(s);
+    if (Port_DivididaRecorte()) {
+        unsigned pul = gPortRecPulados - sRecPulados0, tot = gPortRecTotal - sRecTotal0;
+        sprintf(s, "passos: janela %u recorte: %u de %u malhas do estágio (programa 4) não foram à VU1 (%.1f%%), %.1f por "
+                "passo de %.1f", sJanela, pul, tot, tot ? 100.0 * pul / tot : 0.0, sN ? (double)pul / sN : 0.0,
+                sN ? (double)tot / sN : 0.0);
+        escreve(s);
+    }
 }
 
 /* a fronteira de passo: a leitura do controle do jogador 1 */
 void Passos_Leitura(void) {
+#ifdef PORT_X360
+    if (!gX360Log) return;
+#endif
     unsigned long long t = agora_ns(), espera = ESPERA_ACUMULADA;
     unsigned vb = gPortVBlanks;
     int pausa, luta;
@@ -311,6 +337,9 @@ void Passos_Leitura(void) {
 
 /* uma imagem apresentada (o backend, logo depois do Present): o quadro do GS e o tempo dentro do Present */
 void Passos_Apresentou(unsigned quadroGs, unsigned presentUs) {
+#ifdef PORT_X360
+    if (!gX360Log) return;
+#endif
     unsigned long long t = agora_ns();
     sPresentUs += presentUs;
     sImagens++;

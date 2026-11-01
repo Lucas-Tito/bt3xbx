@@ -480,7 +480,7 @@ nativas, a metade baixa primeiro**, na memória principal e na da VU.
 Etapa 7 da F3. A gravação do quadro é a do port de PC (`port/src/gs/gs_draw.c`, compilada no 360 sem mudança além da
 escolha do backend em `#ifdef PORT_X360`); o backend novo é `port/x360/src/gs/gs_d3d.cpp`, com os shaders em
 `gs_d3d.hlsl` (tradução de `gs.vert` e `gs.frag`) compilados pelo `fxc` do XDK no `build_f2.sh`. A mesma build roda
-sem janela (padrão) ou desenhando (`BT3_GS=gpu` no `ambiente.txt`).
+sem janela (padrão) ou desenhando (`BT3_GS=gpu` no `environment.txt`).
 
 Padrões que o Lucas deixou e que podem ser revertidos:
 
@@ -591,7 +591,7 @@ Detalhes que a revisão crítica trouxe:
 - **Guide pausando a luta:** `XNotifyCreateListener` com `XN_SYS_UI`, controle parado com a Guide aberta, e os botões
   segurados mascarados até soltar.
 - **Teste sem ninguém no console:** o boot pelos menus agora exige um controle ligado, e o `BT3_PAD_PLAY` não toca sem
-  controle. Uma chave do `ambiente.txt` pode dar o controle como sempre ligado.
+  controle. Uma chave do `environment.txt` pode dar o controle como sempre ligado.
 
 ## 22. F4: todos os menus, o essencial antes; save nativo em `game:\saves` (13/10/2026)
 
@@ -635,25 +635,27 @@ Escolhas do Lucas para a F4 (`plano/F4/00-escopo.md`):
   - Dragon Net Battle escondido no 360, com o mesmo valor em x86, PPC e console, para os roteiros não se
     desalinharem no menu.
 
-## 23. ISO convertida no PC, exigida pelo jogo (14/10/2026; passo futuro)
+## 23. ISO convertida antes do jogo (14/10/2026; revista pelo Lucas em 29/10/2026)
 
-Escolha do Lucas: a conversão dos arquivos sai do console e vai para um passo de instalação no PC. Não é opção: é o
-caminho do port, num passo futuro (F5, logo depois do teto de memória).
+A escolha de 14/10 tirou a conversão da carga e criou uma ISO preparada no PC. O Lucas reviu **somente onde a
+conversão roda**: ao encontrar a USA original na raiz, o próprio console oferece prepará-la, com progresso e
+preservação da original. O PC continua disponível com `convert_iso.py`. Implementação e provas locais em
+[plano/F8/03-conversao-console.md](plano/F8/03-conversao-console.md); XDK e console aguardam revisão.
 
-- **Como:** um script de PC lê a ISO do próprio usuário (SLUS-21678, hashes conferidos) e grava uma ISO convertida,
-  do mesmo tamanho: os conversores trocam no lugar, sem mudar tamanho nem posição (decisão 18), então a estrutura da
-  ISO e dos AFS fica a mesma. O núcleo já existe na `conv_tool` (`--disco` converte todos os conteúdos).
-- **O jogo exige a ISO convertida:** a original é recusada com mensagem clara na tela, sem detecção dupla nem
-  conversão de reserva no console. A conversão na carga (`Conv_Arquivo` no `iso360.c`) sai do 360.
+- **Como:** os dois caminhos usam os conversores C comuns e produzem uma ISO do mesmo tamanho, sem mudar posições
+  ou tabelas ISO/AFS. Tamanho e identidade da USA SLUS-21678 são conferidos integralmente antes da publicação.
+  No console, após o pedido de otimização de 29/10, o SHA256 é calculado na passagem da cópia/conversão;
+  a reabertura confere índices, entradas convertidas, marca e amostras. Os limites estão na nota da F8.
+- **O jogo exige a ISO convertida:** o console converte uma vez, antes do jogo, e reinicia o título após publicar a
+  saída conferida. A carga continua sem `Conv_Arquivo` para as entradas da ISO; não há conversão de reserva por carga.
 - **Por quê:** a carga deixa de pagar a conversão (500 ms na luta medida na decisão 18, 264 ms só no cenário), e o
-  console fica com um caminho só. Continua sem instalação no console, com um arquivo só no FATX e nenhum byte do
-  jogo no repositório ou no release: o script roda no PC de quem tem o disco.
-- **Fica para uma etapa posterior:** os conteúdos comprimidos (BPE) dos menus, que só se convertem depois de
-  descomprimidos (`Sprite_Unpack`, F4). Pré-convertê-los exige descomprimir, converter e comprimir de novo, com um
-  compressor BPE que ainda não existe; até lá, eles continuam convertidos no console.
-- **A definir na implementação:** a marca que distingue a ISO convertida da original, e os arquivos de `mods/`.
-- **Substitui**, quando for feito, a conversão na carga da decisão 18; o resto dela (ISO única, sem instalador no
-  console) continua.
+  jogo continua com um caminho só, um arquivo no FATX e nenhum byte do jogo no repositório ou no release.
+- **Conteúdos comprimidos (BPE):** continuam convertidos depois de descomprimidos (`Sprite_Unpack`, F4).
+  Não há recompressão nem mudança deste requisito.
+- **Marca e mods:** marca embutida na folga AFS comprovadamente livre, versão 3; `mods/` continuam convertidos na
+  abertura. Os ícones do Kenney entram na instalação comum, conforme a decisão 30.
+- Substitui a conversão na carga da decisão 18. Permanecem a ISO única e a ausência de pastas extraídas no console;
+  a instalação inicial no console é a única parte revista em relação ao texto de 14/10.
 
 
 ## 24. F5: a luta de teste e as escolhas de arquitetura (16/10/2026)
@@ -720,7 +722,7 @@ mostra mais objetos), e a resolução maior (o 720p adiado) vem depois. Escolhas
 2. **Menus:** esticados, como no PC.
 3. **HUD:** estreitado como no PC; na escala 1 ele perde definição (uma coluna em quatro ou borrado), aceito por enquanto;
    a cura (uma escala horizontal de 1,5) vem com a resolução maior.
-4. **A escolha** vem do `ambiente.txt` (`BT3_WIDE=1`) por enquanto; o ajuste de vídeo do painel do console como padrão fica
+4. **A escolha** vem do `environment.txt` (`BT3_WIDE=1`) por enquanto; o ajuste de vídeo do painel do console como padrão fica
    para depois.
 5. **As medições** de desempenho (os roteiros no console e no WSL) passam a usar `BT3_WIDE=1` dos dois lados.
 
@@ -885,3 +887,38 @@ o FXAA por cima não acrescentou (`plano/F8/10-msaa.md`, seção 8). A rodada do
 3. **O FXAA sai do padrão** (`BT3_FXAA=0`) e a `BT3_OTIM_SEMTEX` entra (uns 2,6 ms, sem mudar um pixel).
 4. **Os 60 quadros por segundo ficam para depois** (a interpolação do port de PC dobraria o trabalho da GPU), e não há
    meta numérica para o MSAA agora.
+
+## 38. F5: a primeira release sai com a exceção E (31/10/2026)
+
+O reprojeto da decisão 29 não fechou o zero: os prefixos (`BT3_GS_LOTES`) pioraram o ritmo até desligados e saíram da
+primeira release (`plano/F5/08-gravacao.md`, seção 41), e o alfa exato entrou como padrão (decisão 32). No duelo do
+`f5_duelo.txt` a build normal ficou com 3 imagens de três vblanks em 2.334 no combate e nenhuma de quatro ou mais
+(`nor1`, rodada `le40a2910` de 30/10). O Lucas aceitou a exceção E do item 4 da decisão 29 para a primeira release:
+imagens de três vblanks só nas trocas de cena dentro da luta, nenhuma de quatro ou mais, conferidas na sessão final com
+a build da release; a mesma regra vale para a tela dividida da F7 (decisão 28). O zero continua como meta depois da
+release.
+
+## 39. F8: a tela dividida da primeira release sai com o recorte do estágio e o desenho no núcleo do áudio (31/10/2026)
+
+O Lucas achou lenta a luta dividida e quis a melhora nesta release (`plano/F8/13-tela-dividida.md`). No roteiro
+`f7_perfil_dividido.txt` (só defesa, três janelas de 600 passos), o trabalho por passo e as imagens de três vblanks ou
+mais ficaram assim:
+
+| Rodada | Variante | p50 | p95 | 3 ou mais | Velocidade do jogo |
+|---|---|---:|---:|---:|---:|
+| `dvb` | base da release | 34,5 | 39,2 | 16,9% | 92,5% |
+| `dvc` | recorte do estágio (C1) | 33,3 | 36,4 | 7,9% | 96,5% |
+| `dvd` | C1 e a cópia do XDK (D2) | 35,8 | | 21,3% | pior |
+| `dvh4` | C1 e o desenho na hw4 | 30,2 | 30,4 | 0,4% | 100% |
+| `dvh5` | C1 e o desenho na hw5 | 30,2 | 30,4 | 0,8% na janela fria, 0 nas outras | 100% |
+
+O som não perdeu nada nas duas do núcleo do áudio (faltas 0, BuffersQueued mínimo 3, pior bloco 0). O duelo de um
+jogador (`f5_duelo.txt`, `dh5duelo` contra a `i1` do mesmo dia) ficou igual: combate com trabalho p50 25,81 contra
+25,72 ms e p95 30,69 contra 30,61, razão 0,9972 nos dois, as mesmas 3 imagens de três vblanks em 2.334, som sem falta.
+
+1. **`BT3_DIVIDIDA_RECORTE` passa a ligada por padrão no 360** (desligável com 0; no port de PC continua desligada).
+   A imagem é a mesma: dez capturas iguais na x86 com e sem, e a sabotagem do recorte mudou nove delas.
+2. **`BT3_GS_DESENHO_HW` passa a 5 por padrão** (a irmã do misturador do áudio), no lugar da 3. A 5 ficou à frente da 4
+   no pior caso da janela fria (p99 34,6 contra 48,1 ms).
+3. **A cópia do XDK (D2, `BT3_COPIA_XMEM`) fica de fora**: a gravação piorou de 33,2 para 35,9 ms.
+4. A luta dividida jogada à mão se confere na sessão final da release; a regra da decisão 38 vale para ela.

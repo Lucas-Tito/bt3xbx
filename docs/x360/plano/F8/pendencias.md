@@ -16,22 +16,28 @@ A mensagem é a mesma para qualquer ISO sem a marca.
    distingue pela identificação do disco (o `SYSTEM.CNF` e o volume) antes de olhar a marca.
    Implementado no WSL em [01-avisos](01-avisos.md), junto com a busca pela convertida (item 6); build e sessão no
    360 ficam para a revisão.
-2. **Conversão no próprio console** (pergunta para quando a F8 for escopada; seria rever a decisão 23): o código de
-   conversão já rodou no console antes da decisão 23; o custo é ler e gravar 3 GB no FATX, com tela de progresso, e os
-   conteúdos comprimidos (BPE) continuariam convertidos na carga.
+2. **Conversão no próprio console** (decisão 23 revista pelo Lucas): implementada no WSL em
+   [03-conversao-console](03-conversao-console.md), com os conversores C comuns, ícones, autenticação integral,
+   temporário, conferência e publicação. A carga continua lendo a ISO preparada; BPE se converte na carga.
+   Build XDK, sessão FATX/Guide e aprovação dos textos provisórios aguardam a revisão.
+
 
 ## Os textos para o usuário (22/10/2026)
 
 3. **Todo aviso que aparece para o usuário em inglês** (pedido): as caixas do sistema (a ISO recusada, a falta de
    memória, a queda), as telas de falha e qualquer texto do port na tela. O que vai só para o log (`bt3xbx.log`,
-   `saida.txt`) pode seguir em português. Fazer o levantamento dos textos visíveis (as chamadas de `XShowMessageBoxUI`,
+   `output.txt`) pode seguir em português. Fazer o levantamento dos textos visíveis (as chamadas de `XShowMessageBoxUI`,
    as telas de cor por fase e os textos desenhados pelo port) antes de traduzir.
    Levantamento e tradução em [01-avisos](01-avisos.md); as telas de cor não tinham texto.
+   A queda ganhou a caixa aprovada e `crash.txt` em inglês em [04-queda-e-logs](04-queda-e-logs.md).
+   Saves padrão já usam nomes em inglês; cores de fase só com diagnóstico. Aceite visual no 360 pendente.
+   A tradução dos arquivos de diagnóstico e dos modelos de ambiente está em
+   [05-arquivos-ingles](05-arquivos-ingles.md), com inventário, provas nativas e limites de validação.
 9. **A caixa de ISO ausente fala com o usuário comum** (visto pelo Lucas no console, 28/10/2026): a recusa funciona
    (a caixa aparece e o jogo não começa), mas o texto mistura inglês com os nomes em português dos arquivos e manda
-   mexer no `BT3_ISO` do `ambiente.txt`, que só o projeto usa. O texto deve dizer que a ISO não está na pasta raiz do
+   mexer no `BT3_ISO` do `environment.txt`, que só o projeto usa. O texto deve dizer que a ISO não está na pasta raiz do
    jogo com o nome esperado, dizendo o nome. Os nomes que o usuário vê (a ISO convertida, o script de conversão)
-   passam para inglês, e nenhuma caixa cita o `ambiente.txt`. Vale para as outras caixas da ISO também.
+   passam para inglês, e nenhuma caixa cita o `environment.txt`. Vale para as outras caixas da ISO também.
    Implementado no WSL em [02-icones](02-icones.md): `bt3-x360.iso`, `convert_iso.py` e marca versão 2.
    Aparência das caixas e ícones no console aguardam a revisão.
 
@@ -67,8 +73,10 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
 
 7. **Todos os logs desligados por padrão** (pedido do Lucas, 28/10/2026): no release, o jogo não grava nada que só
    serve ao desenvolvimento. O `bt3xbx.log` e o diário, as medidas (picos, tempos, cortes, perfis da GPU e da CPU,
-   deriva do som, filme) e as capturas ficam desligados sem `ambiente.txt`, e continuam ligáveis por ele para teste.
-   Conferir no console que, desligados, não custam nada no quadro nem gravam arquivo.
+   deriva do som, filme) e as capturas ficam desligados sem `environment.txt`, e continuam ligáveis por ele para teste.
+   Implementado no WSL em [04-queda-e-logs](04-queda-e-logs.md): `BT3_LOG=1` obrigatório, tempos
+   desligados e ambientes de teste explícitos. Ensaios e varredura passaram. Conferir no console a árvore
+   completa de arquivos e o custo no quadro pelo método da nota; custo literalmente zero não foi medido.
 
 11. **As duas provas de console que restam da F6** (decisão do Lucas, 28/10/2026, para não repetir depois): a
     sessão longa (uns 30 min de jogo livre, com ciclos de luta e menu e a Guide algumas vezes, a memória no mesmo
@@ -89,6 +97,11 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     nativo do autor sobre o Tenkaichi3Decomp e a branch `tagteam-exp` do upstream, `pesquisa/05-tag-team.md`). Só
     análise: formatos, conversão para big-endian, memória e desempenho no Xenon, e a licença (o código do Tag Team de PC
     é AGPL-3.0; trazê-lo muda a licença do port, decisão a tomar então). Não mexe na decisão 16 nem antecipa a F9.
+16. **As regras das issues, para rever no fechamento** (Lucas, 29/10/2026): ficam como estão por enquanto, mas ele não
+    concorda com a forma atual. Hoje: dois formulários (queda e defeito sem queda), queda sem `crash.txt` fechada na
+    hora pela ação e reaberta quando o arquivo chega, respostas prontas por rótulo, nada fecha por prazo
+    ([06-publicacao](06-publicacao.md), seção 5a). Em aberto: se o formulário de defeito sem queda continua (ele não tem
+    `crash.txt` para exigir) e o que mais mudar; perguntar ao Lucas antes de mexer.
 
 ## A abertura do repositório, a última parte do plano (27/10/2026)
 
@@ -109,6 +122,17 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     O MSAA 2x da EDRAM no lugar ou ao lado do FXAA: estudo de custo e protótipo sob `BT3_MSAA=2` em
     [10-msaa.md](10-msaa.md) (30/10/2026, branch `claude/f8-msaa`), com a rodada de console preparada.
 
+17. **A biblioteca da VU0 do port em float nativo no 360** (30/10/2026; o Lucas deixou como ponto de melhoria, sem mudar
+    essa lógica agora): os floats andam como bits `uint32_t` e cada conta vai e volta pela memória (load-hit-store); na luta
+    comum isso é uns 11,7 ms por quadro da thread do jogo, e o conserto estimado ganharia 8 a 9 ms. Exige provar o mesmo
+    resultado na x86, na PPC e no 360 pelos roteiros. Estudo em [11-cpu-vu0](11-cpu-vu0.md), item A; o item B (a projeção
+    por vértice na explosão do planeta) foi feito antes da release.
+18. **A luta de tela dividida mais rápida** (31/10/2026, pedido do Lucas): roda a 25,4 quadros por segundo, com o jogo a
+    85% da velocidade; a gravação do GS (39,6 ms), o jogo (33,8) e o desenho (30,1) estão todos perto do limite. Os pontos
+    de melhoria, com ganho e custo, estão em [13-tela-dividida](13-tela-dividida.md). O recorte justo do estágio (C1) e o
+    desenho no núcleo do áudio (ponto A) entraram na 1.0 por padrão, com 30 quadros firmes no roteiro (decisão 39); a
+    cópia especializada (D2) piorou e ficou de fora. O resto fica para a 1.1.
+
 ## Fora do plano do port (28/10/2026)
 
 10. **As provas da F6 que ficaram por fazer no console** (o Lucas tirou do plano: não são importantes o suficiente).
@@ -117,3 +141,12 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     abertura recusa porque as duas primeiras imagens saem antes de o BGM ter posição (`geracao=0`, uns 33 ms, ninguém
     percebe); fica como está. Etapa 8: a escuta de 11 min com a Guide, o tom de 1 kHz e o Treino sem som. Os
     ambientes estão prontos em `build/sessao_2810b/subir/` (`f6e7b_03` a `08`) se um dia valer rodar.
+
+## Recuperação da queda (29/10/2026)
+
+13. **Queda com aviso claro e relatório independente dos logs** (aprovado pelo Lucas): caixa do sistema
+    `Unexpected error`, relatório inglês `crash.txt` com carimbo e contexto, OK seguido de desmontagem com teto
+    e retorno ao painel. Implementado e ensaiado no WSL em [04-queda-e-logs](04-queda-e-logs.md), sobre
+    [F7/queda-freestyle](../F7/queda-freestyle.md). Produtores gráficos param antes da caixa para a main apresentar;
+    cargas, som e vídeo terminam depois do OK. Falha de caixa conserva o caminho de tela e botão.
+    Compilação XDK, Guide, FATX, painel respondendo e reabertura continuam pendentes na revisão.

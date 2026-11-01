@@ -1,11 +1,11 @@
 # Próxima rodada da F6, etapas 7 e 8
 
 Uma build do commit deste branch, feita e conferida no Linux. Este preparo não acessou o console.
-Cada `.txt` desta pasta substitui `game:\ambiente.txt`. Saves e capturas usam o nome
+Cada `.txt` desta pasta substitui `game:\environment.txt`. Saves e capturas usam o nome
 `f6e7b_` seguido do nome do arquivo, sem `.txt`: oito nomes diferentes, ainda não usados.
 As pastas devem estar ausentes ou vazias antes da primeira abertura. Se repetir uma abertura, acrescentar
 `_r2`, `_r3` etc. **tanto** a `BT3_SAVES` quanto a `BT3_SHOT_PASTA`; não reaproveitar capturas nem cartões.
-Guardar `bt3xbx.log` e, se houver, `saida.txt`, antes de abrir o próximo ambiente, em pastas com esses mesmos nomes.
+Guardar `bt3xbx.log` e, se houver, `output.txt`, antes de abrir o próximo ambiente, em pastas com esses mesmos nomes.
 
 | Ordem e ambiente | Ação e prova |
 |---|---|

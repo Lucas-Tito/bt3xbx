@@ -13,6 +13,12 @@ BT3, 04 é onde ficam os ícones dos botões e o custo de trocá-los, 05 é o es
 Mantido vivo: cada aprendizado que custou uma rodada entra aqui (seção 6) no mesmo commit da
 correção.
 
+Em **29/10/2026**, por decisão do Lucas, os arquivos de configuração e de saída do projeto passaram a
+se chamar `environment.txt` e `output.txt`; `bt3xbx.log` continua com o mesmo nome. Não há leitura
+alternativa. Modelos para copiar ao console usam `environment_*.txt`. Referências aos nomes anteriores
+nos registros de rodadas descrevem os artefatos daquela época; os exemplos reutilizáveis usam os nomes
+atuais. O [inventário e as provas da troca](plano/F8/05-arquivos-ingles.md) justificam cada exceção.
+
 ---
 
 ## 1. O setup
@@ -121,14 +127,14 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 - **`Clear` com o preto exato não limpa** o back buffer no caminho de desenho do backend (F5, etapa 1): pedindo
   `0xFF000000` as barras do 4:3 ficavam com o azul da tela de fase anterior, pedindo `0xFF00FF00` saíam verdes e
   pedindo `0xFF010101`, pretas. A causa no D3D do 360 não foi achada; limpe com `0xFF010101`. Ponha a cor de um teste
-  visual no `ambiente.txt`: três aberturas de 30 s acharam isso sem recompilar.
+  visual no `environment.txt`: três aberturas de 30 s acharam isso sem recompilar.
 - **Desde 23/10/2026 os padrões do `Ambiente_Carregar` são o jogo como ele roda:** sem a demonstração, a GPU com a VU1, as
-  duas threads, o som e o 16:9. Um `ambiente.txt` antigo que contava com o padrão de antes (a luta de demonstração, sem
+  duas threads, o som e o 16:9. Um `environment.txt` antigo que contava com o padrão de antes (a luta de demonstração, sem
   desenho, sem som) precisa dizer `BT3_DEMO=1`, `BT3_GS=none`, `-BT3_SOM`; a ISO continua pela busca em `game:\` ou pelo
   `BT3_ISO`. Desde a F8, `01-avisos`, a busca automática percorre as `.iso` até achar uma convertida compatível;
   `BT3_ISO` explícito continua definitivo.
 - **Antes de dizer que uma variável falta no console, leia os padrões do `Ambiente_Carregar`**
-  (`port/x360/src/f2/posix360.c`): o `getenv` do 360 é aquela tabela mais o `ambiente.txt`, não o da CRT nem o
+  (`port/x360/src/f2/posix360.c`): o `getenv` do 360 é aquela tabela mais o `environment.txt`, não o da CRT nem o
   `port/x360/src/ambiente.c` da F1. O estudo da F6 deu o `BT3_SOUND_TICKS` como ausente, a primeira rodada da VU1 da
   F5 o pôs no `ambiente.txt` para provar, e ele já era padrão desde a F2: a rodada não separou nada.
 
@@ -144,7 +150,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `make_spa.py` | gera o SPA (XDBF: XTHD, XSTC, nome, ícone 64x64), porque o `spac.exe` é .NET e não roda no wine |
 | `make_icon.py` | ícone próprio, sem arte do jogo |
 | `subir.py` | FTP para o console com conferência de md5; `--baixar` traz o log, e antes renomeia o arquivo no console para `NOME.lido` (ler um arquivo que o jogo está gravando trava o servidor) |
-| `build_f2.sh` | o jogo inteiro até o `default.xex` (F2): `c89.py`, `cl.exe`, `coff.py`, link com stubs automáticos para o que falta, `dat360.py`, `imagexex`. Desde a F3 leva o backend D3D9 (`port/x360/src/gs`, shaders pelo `fxc`): sem janela por padrão, desenhando com `BT3_GS=gpu` no `ambiente.txt` |
+| `build_f2.sh` | o jogo inteiro até o `default.xex` (F2): `c89.py`, `cl.exe`, `coff.py`, link com stubs automáticos para o que falta, `dat360.py`, `imagexex`. Desde a F3 leva o backend D3D9 (`port/x360/src/gs`, shaders pelo `fxc`): sem janela por padrão, desenhando com `BT3_GS=gpu` no `environment.txt` |
 | `c89.py` | rebaixa o C do jogo e do port para o C89 do `cl` pelo AST do clang (literal composto, declaração no meio do bloco, `typeof`, expressão-comando, case com intervalo), com os headers mínimos de `port/x360/shim` |
 | `coff.py` | as tabelas do executável (esqueleto `port/data/*.s`) como objetos COFF do 360; `--absoluto NOME=VALOR` faz o papel do `--defsym` |
 | `dat360.py` | `default.dat` e `default.swap` ao lado do `.xex`, pelo `.map` da Microsoft (o `esqueleto()` do `headless.py` para o 360) |
@@ -154,7 +160,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 | `subir_f2.sh` | envia o `.xex` sempre junto com o `.dat` e o `.swap` da mesma build: os dois dependem dos endereços do `.map`, e um par de outra build copia as tabelas para o lugar errado sem erro nenhum |
 | `teste_diario.sh` | o `diario.c` (anel e thread escritora) no Linux, com uma API do Xbox de brinquedo e um disco de 40 ms por flush: ordem, integridade, que quem escreve não espera, a queda, o anel cheio; `--mutantes` estraga o `diario.c` de quatro jeitos e exige que o teste acuse cada um |
 | `picos_log.py` | de um `bt3xbx.log` do console, a média, o pior quadro e a média sem o pior de cada trecho de 60 quadros, e o custo por linha gravada do relatório anterior (`F5/08.md`, "Os logs e os engasgos") |
-| `som_ambiente.py` | (F6, etapa 1, rede 1) todo `getenv` e todo ramo de janela e de rede dos arquivos do som e dos filmes, com o valor no 360 (padrões do `posix360.c` e `--ambiente ambiente.txt`), nos roteiros do WSL e no PC, e o caminho que cada um dá; sai com 1 numa variável ou ramo sem classe ou num caminho que diverge entre o 360 e o WSL fora das divergências esperadas; `--mutantes` estraga cópias de seis jeitos (o sexto, F6 etapa 3: uma chave nova da camada do console) |
+| `som_ambiente.py` | (F6, etapa 1, rede 1) todo `getenv` e todo ramo de janela e de rede dos arquivos do som e dos filmes, com o valor no 360 (padrões do `posix360.c` e `--ambiente environment.txt`), nos roteiros do WSL e no PC, e o caminho que cada um dá; sai com 1 numa variável ou ramo sem classe ou num caminho que diverge entre o 360 e o WSL fora das divergências esperadas; `--mutantes` estraga cópias de seis jeitos (o sexto, F6 etapa 3: uma chave nova da camada do console) |
 | `som_estado.py` | (F6, etapa 1) as linhas `som:` do `BT3_SOM_ESTADO=N` (o estado dos seis players, a boca, as bandeiras dos menus e a tela de resultado da História, por mudança e a cada N leituras do controle; no console com o tempo real): `compara` (console contra x86, vblank a vblank), `falas` (cada fala em vblanks e em ms), `parada` (a porta fechada da tela de resultado) |
 | `survey.sh`, `survey_tally.py` | levantamento do código do jogo (o que depende de hardware do PS2) |
 
@@ -220,8 +226,9 @@ Cuidados encontrados nessa leitura, já corrigidos nas ferramentas:
 mas sua saída 1 só exige as pendências do essencial. Com os 82 ganchos instalados, pode sair 0 com chamadas
 ausentes. Para afirmar cobertura completa, compare nominalmente `unpacks.levantar()` com as chamadas dos logs,
 e os arquivos das faixas do `--disco` com os `LEU`. Gancho, conversão e comportamento concluído são provas
-distintas. `Roteiro_Pad` atualmente só fornece entrada ao `socket=0`; os dois controles dados como ligados pelo
-teste não provam o jogador 2 nem a tela dividida. Levantamento e limites em [F7/00-escopo](plano/F7/00-escopo.md).
+distintas. No levantamento inicial, `Roteiro_Pad` só fornecia entrada ao `socket=0`; os dois controles dados como
+ligados não provavam o jogador 2. A [etapa 3](plano/F7/03.md) acrescenta a entrada e suas provas.
+Levantamento e limites em [F7/00-escopo](plano/F7/00-escopo.md).
 
 O controle do jogador 1 sai de um arquivo de texto (`BT3_ROTEIRO=arquivo`), lido por `port/x360/headless/roteiro.c`
 nas três builds: x86 e PPC sem janela (pelo `Port_PadRead` do `sem_janela.c`) e 360 (pelo `pad360.c`, que com um
@@ -385,7 +392,7 @@ linha de todo log é "passos: origem COMMIT diff:HASH", o carimbo da build (`hea
 | detector de visões (`BT3_VISOES` no `rastreio.c`, `visoes.py`) | acusa memória gravada com uma largura e lida com outra (u8 de um s32, u64 sobre dois u32). A lista de pares já tratados fica em `visoes_resolvidas.tsv` |
 | `tipos.py` | liga cada leitura do rastreio a struct e campo do código (coluna do DWARF + AST JSON do clang) |
 | `port/x360/conv/` (`conv_tool`) | conversores por formato em C89, para o instalador do 360 e para o PC: troca in-place com limite conferido e cada byte marcado; `conv_tool --mapa` confere contra o rastreio e mede a cobertura (decisão 12); `--disco` termina com o censo dos arquivos de menu por faixa de id (quantos arquivos e contêineres BPE ainda sem conversor); `--pecas` valida cada peça comum dos menus (`formatos/menus-pecas.md`) só na seção dela, em todo pacote do disco que a usa (a tabela `sUsos`), antes de o pacote inteiro ganhar conversor, e com `--mapa` confere só as posições dessa seção. No `--mapa`, uma leitura de 2, 4 ou 8 bytes sobre texto que o conversor deixou em bytes (o laço do fim do rótulo do Flash vira `strlen` na x86r) conta à parte, "em cadeia de texto lida por inteiro". Arquivo e seção para formato numa tabela só (`sFaixas`, conv.c). A `conv_tool` se compila sem `conv_jogo.c`, a ponte do jogo, que cita funções dele. Cada conteúdo descomprimido (`ARQ@0xN#bpe`) se converte também pelo caminho do jogo (`Conv_FormatoBits`, o mapa de bits de `conv_jogo.c`): bytes, resultado e cobertura têm de ser os mesmos, e o conteúdo tem de caber em `CONV_JOGO_MAX` |
-| `convert_iso.py` e `teste_iso_convertida.py` | instalação no PC da decisão 23: usa `conv_tool --lista-conversores` e `--saida`, publica uma ISO do mesmo tamanho só depois da reabertura integral; `--conferir --dados DIR` confere outra vez contra os dados extraídos. O teste completo provoca recusas e estragos e roda `--disco`. Contrato e comandos em `formatos/iso-convertida.md`; marca versão 2 com ícones Kenney e recusa de conversões antigas no 360 |
+| `convert_iso.py` e `teste_iso_convertida.py` | instalação no PC da decisão 23: usa `conv_tool --lista-conversores` e `--saida`, publica uma ISO do mesmo tamanho só depois da reabertura integral; `--conferir --dados DIR` confere outra vez contra os dados extraídos. O teste completo provoca recusas e estragos e roda `--disco`. Contrato e comandos em `formatos/iso-convertida.md`; marca versão 3 com ícones Kenney, transições de cenário e recusa de conversões antigas no 360 |
 | `teste_iso_avisos.py` | F8: o leitor `iso360.c` real sobre a API de teste do Linux, com cabeçalhos, diretórios e AFS inventados em imagens esparsas; confere identificação, recusas e escolha da convertida, exige falha numa cópia estragada e acusa seis mutantes em execução; sem console nem emulador |
 | `elfdados.py` | retipa as tabelas de dados do executável (o splat põe `.long` em tudo) pela largura lida |
 | `bitfields.py` | reescreve os campos de bits do C pré-processado para o GCC big-endian ter a ordem do PS2 (no 360 é `#pragma bitfield_order(lsb_to_msb)`) |
@@ -1234,7 +1241,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **O `NLST` do FTP da FreeStyle devolve as linhas no formato do `LIST`** (permissões, tamanho, nome): pegue o último
   campo, como o `subir.py` faz com o `LIST`.
 - **Capturas do console nos mesmos quadros da referência:** `BT3_SHOT_LISTA=G,G...` (até 32 quadros do GS) no
-  `ambiente.txt` grava só esses quadros, com ou sem o `BT3_SHOT`. Os números vêm da linha "imagem: ... gs G" da build
+  `environment.txt` grava só esses quadros, com ou sem o `BT3_SHOT`. Os números vêm da linha "imagem: ... gs G" da build
   sem janela, e o `compara_quadros.py` mede uma contra a outra.
 - **O WSL não tem numpy:** o `compara_quadros.py` tem um caminho em Python puro, mais lento. Não conte com o numpy em
   ferramenta que roda lá.
@@ -1272,7 +1279,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   contadores do log, medidas das capturas (`ppm_stats.py`) contra a referência, e só então o shader. Nitidez e
   saturação medidas na área 3D (fora da caixa da pausa) dão ordem de grandeza; o viés do rasterizador de software
   (textura lida no ponto) é de uns 15% no gradiente, então 2 a 8 vezes é defeito. Quando a causa é uma passada de
-  tela, `BT3_FX_OFF=8|16|24` no `ambiente.txt` (valem no 360 sem build nova; o 24 provou a triagem na rodada da
+  tela, `BT3_FX_OFF=8|16|24` no `environment.txt` (valem no 360 sem build nova; o 24 provou a triagem na rodada da
   etapa 7) a separa em uma rodada.
 - **Profundidade presa por vértice não é o depth clamp: o chão perto da câmera some.** Na F5 (etapas 6 e 7) os
   programas da VU1 prendiam o z de recorte em 0..w por vértice, para imitar o depth clamp do PC (o D3D9 do Xenos não
@@ -1781,7 +1788,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   até a idade do último flush (250 ms). Mantenha a chave que volta ao jeito síncrono (`BT3_LOG_SINCRONO`): é o que
   permite medir um contra o outro com a mesma build. O hiddriver (`referencias_log`) foi o modelo; o CollectionUI faz
   como o 360 fazia, e aguenta porque não tem lógica pesada por quadro.
-- **O arquivo "c" da CRT (`saida.txt`) também é um flush.** Cada `fflush` de um arquivo aberto com "c" chama
+- **O arquivo "c" da CRT (`output.txt`) também é um flush.** Cada `fflush` de um arquivo aberto com "c" chama
   `FlushFileBuffers` (também vazio); o `printf` do port dava um por chamada, e o vblank um por quadro. O commit passou
   para o gancho da thread do diário.
 - **Um arquivo de log que o jogo grava por quadro (`hash.txt`) tem de ser opt-in no console**: ele estende o arquivo do
@@ -1807,7 +1814,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Uma queda do WSL no meio de uma prova negativa deixa a sabotagem no arquivo.** Depois de uma queda, `git diff` antes de tudo.
 - **Gravação e dispositivo de uma thread só.** O que o frontend faz ao gravar (textura, alvo, shader) é D3D: o canal da GIF (o clear do quadro) também grava, então
   vai para a thread de gravação como trabalho que o jogo espera; no 360 isso evita criar recurso fora da thread dona.
-- **O `ambiente.txt` de uma rodada de menus começa com `-BT3_DEMO`.** A build sem janela liga a luta de demonstração por padrão
+- **O `environment.txt` de uma rodada de menus começa com `-BT3_DEMO`.** A build sem janela liga a luta de demonstração por padrão
   (`posix360.c`); sem a linha, o jogo abre direto na demo e sai com a tela verde. Copiar o bloco de uma nota antiga sem ela custou uma abertura.
 - **Medição de tempo fina custa no Xenon o que não custa na x86.** A medição por família da gravação (umas 24 mil leituras do
   `mftb` por quadro) custou uns 3 ms da luta no console (39,3 contra 36,2 ms). Compare desempenho sempre com a medição desligada
@@ -2592,6 +2599,39 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   diferença de pixels nem retirar a imagem exigida. A referência antiga do Data Center, anterior à senha
   e ao Replay, também precisa de revisão explícita; não regravar automaticamente só para obter código zero.
 
+### Metadados exatos do alfa (F5, gravação, seção 36)
+
+- O alfa exato existe só na build com `BT3_ALFA_ORIGEM` (`build_f2.sh` com a variável, `headless.py --alfa`): guarda
+  um byte por desenho no jogo de listas, em memória comum. Na VU, só `misc[3]==3` consulta os alfas dos vértices
+  referidos; as demais camadas usam `color0[3]`. A união de fusões inclui somente trechos não vazios. Aplicar a
+  máscara no desenho fechado, mantendo nativas/count fora da amostra e preservando os dois contadores. O limite
+  continua sendo `>128`, não `>=128`.
+- **Chave nova em caminho quente é de compilação, não de execução.** A primeira versão testava `BT3_ALFA_FORA` a cada
+  vértice no `put`; é o mesmo custo desligado que fez a longa do 7170 (seção 35). Com a chave na compilação, a prova
+  de "desligado sem regressão" vira texto e objeto: `alfa_igual.py BASE` exige o texto da main nos fontes do console
+  com os blocos tirados, e os objetos sem depuração da build normal têm de ser os da main. Ligar a gravação ao
+  backend por um símbolo (`gGsAlfaOrigem`) para que uma build com a chave só de um lado não feche a ligação.
+- O falso compara cada desenho de cada quadro com a varredura original na build com o alfa. No D3D,
+  `BT3_ALFA_CONFERE=1` repete a varredura somente na amostra periódica e acusa diferenças no diário;
+  essa abertura tem custo de oráculo e não serve para anunciar ganho em U. Nenhuma leitura dos buffers
+  combinados foi movida para depois de Present. Os metadados viajam no mesmo rodízio das listas.
+
+### Ensaio dos prefixos no falso (F5, gravação, seção 36)
+
+- `BT3_GS_PREFIXOS=1|2` existe somente no backend falso. Publica até `drawCount-1`, pois a última vaga
+  ainda pode fundir. Uma fila de oito descritores tem um consumidor e drena antes da entrega normal;
+  o consumidor confere novamente os dados referidos, a sequência e versões lógicas de alvos. Atrasos
+  de 1/5/20 ms cobrem a primeira leitura de cada quadro. Não há interpretação de D3D concorrente.
+- **Um ensaio que carrega todas as barreiras mede a barreira, não a cadeia.** O modo 1 marcava as cinco consultas
+  integrais e deu "teto 0"; olhando cada consulta, só o `ed_plano` lê a lista inteira e só um marcador DATE (o 94 do
+  6960, que olha até o 1342) prende o resto. O modo 2 faz o censo das regras reais (plano previsto, z da visita, DATE
+  curto) e a curva do relógio da gravação; `prefixos_teto.py` simula C/U por desenho com o perfil fino do console,
+  calibrado nos P/U sem marcas. Antes de declarar uma partição inviável, listar o que cada consulta ao futuro lê de
+  verdade e quanto custa a alternativa que não muda a imagem.
+- A versão lógica de alvo não é um snapshot dos recursos D3D; o teto não conta fila, disputa de memória/SMT, lotes
+  pequenos no buffer de comandos nem plano previsto errado. A integração `BT3_GS_LOTES` continua exigindo as provas
+  da seção 28 e o console.
+
 ### Alfa ap35a2810: medir o que saiu do filtro e conferir os descartes dos picos (F5, seção 37)
 
 - Com `BT3_PICOS=36`, a melhora pode retirar o quadro inteiro do log: `picos_escreve` só publica se o intervalo
@@ -2708,6 +2748,51 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **O cartão de antes tem de recusar o marco.** Uma receita cujos `depois` já valem antes do evento não prova nada (a
   primeira versão do recorde da Sobrevivência só conferia preservação); o `valida` e o `confere --antes` recusam.
 
+### Dois controles e duas vistas na F7 (etapa 3)
+
+- `jogador 1|2` escolhe a porta dos próximos `aperta`, `segura` e `gira`. É seleção na leitura do arquivo,
+  guardada em cada passo; `inclui` conserva a escolha. Os roteiros antigos começam em 1. `juntos B1 B2 N` segura
+  os dois botões no mesmo quadro (`0` neutro). O soquete 0 prepara o par e avança o relógio uma vez; o 1 só lê a
+  cópia. Ambos continuam dados como conectados pelo teste. Desconexão/quadrante físico pede o console sem roteiro.
+- `BT3_DOIS=1` observa os estados reais dos seletores, os pares preparados e, no backend falso, as tesouras,
+  os índices 3D por metade e o hash das matrizes das duas câmeras. `BT3_PAD_REC` grava os bytes efetivamente
+  devolvidos pelo `scePad2Read`; `f7_dividido.py entrada` cruza todos os pares com o log e exige a mesma quantidade
+  de quadros, escolhas, ações de cada lado, pausas, resultado e retorno. Não basta comparar logs entre si.
+- **Cancelar não é CÍRCULO no padrão do jogo.** No seletor, `PADG_TRIANGLE` volta da lista de itens à grade;
+  CÍRCULO não a cancela. Observar `CharSelSide.state` (2 para 0 só no lado 1) recusou o primeiro ensaio que
+  apertava o botão errado e ainda chegava ao fim.
+- **Nem todo Blast 2 toma a tela cheia.** O Kamehameha carregável (ação 0x10F) manteve as duas vistas; a investida
+  de Goku Early (`L2+CIMA+TRIANGULO`, `BtlSuper_RequestCut`) forneceu a transição real. O verificador exige
+  geometria 3D sob tesoura cheia e, depois, as duas metades, além do menu novamente cheio. Não se altera câmera
+  nem bandeira de prioridade para fabricar essa prova.
+- **Uma linha de teste precisa acabar antes do stderr.** No backend falso, o hash da lista vai ao stderr.
+  O stdout bufferizado cortava algumas linhas `f7v:` no meio ao juntar `2>&1`, parecendo uma janela menor.
+  `fflush(stdout)` após cada linha de observação preserva os registros; o verificador exige a janela inteira,
+  sem baixar o denominador para acomodar linhas perdidas.
+- `f7_dividido.sh --servico` arma uma única fila sob `flock ~/wsl.lock`, na própria worktree, com builds do HEAD,
+  roteiros sem mapa, imagens/memória, pares gravados, listas do backend falso, negativos e save. Precisa de
+  `F7_SAIDA` nova fora do repositório e `BASE_X86` preservada de `0a9cccb1`. Os resultados vão a logs por passo;
+  `resumo.txt` termina em `FIM RC=0` somente depois de tudo. A espera é do shell, sem ler logs em andamento.
+- A `.text` da base F7/02 recompilada nesta worktree é `0e10191e83bed8268e133ff56a24504a27c7ea28`, posterior à
+  referência F6 `43444ea4d03a6d448aa1ae74a631e35b356a7caa`: a etapa 2 já acrescentou testes. Para a etapa 3, comparar
+  os objetos sem depuração com essa base; `x360_roteiro.o` e o carimbo de `x360_passos.o` podem diferir. Preservar
+  também a cópia de ligação `ligar/menu_menu_za_d.o`, gerada de `obj/menu_menu_za_d.o` por
+  `objcopy --redefine-sym pow=Port_PowDuplo`, ao usar o verificador recursivo de objetos da F5.
+- **A corrente tem duas descrições do mesmo trabalho.** `EftChain_Init`/`Update`/`Term` usam `EftArc` (0xF10);
+  `EftChain_Draw` usa a vista parcial `EftChainWork`, lê `arg.objId`, `type` e `flags` nos mesmos deslocamentos
+  e delega a `DrawStrands`. O contexto deve escolher `EftArc` completo, exigindo esse conjunto de vistas, em vez
+  de recusar a classe ou aceitar só o tipo parcial. O +0x3C do argumento é enchimento de `EftChainArg`, copiado
+  como `EftArcArg.unk3C` no init e sem leitor; só esses quatro bytes ficam inativos.
+- **Brilho devolvido à lista livre ainda guarda posições calculadas.** `EftGlow_FreeParts`/`StepParts`
+  conservam só `next` nas partículas livres. Na volta da investida, 70 livres e nenhuma ativa produziram
+  116 palavras `float-proximo` e 11 fora do formato na arena. Conferir dono, capacidade, limite de 70 entregues,
+  alinhamento, elos, ausência de ciclos e partição das listas nas duas arquiteturas, como na aura. Comparar
+  integralmente as partículas ativas; nas livres, só `next`. Não ampliar tolerância nem aceitar classes por teto.
+  `teste_memoria_luta.py` adultera também o dono, a contagem e os elos do brilho, e as flags da corrente.
+- Uma rodada interrompida sem `FIM RC=0` não passou, mesmo se as imagens coincidirem. Preservar os artefatos,
+  corrigir a causa demonstrada nos dumps e lançar pasta nova com **as duas** variáveis `F7_SAIDA` e `BASE_X86`.
+  Retomar o script sem `BASE_X86` só recusa a chamada, antes de criar serviço ou conferir qualquer rede.
+
 ### Censo do elenco da F7 (etapa 4, 29/10/2026)
 
 - **Escolha por estado, não por toques.** A condição `time L CAMPO N` lê a TeamSel (personagem sob o cursor,
@@ -2726,3 +2811,464 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   varrer a linha com sete DIREITA. Os estágios 4 e 27 não estão no Duelo, só no Torneio.
 - **Ssh dentro de um script lido pelo stdin come o resto do script.** `echo ... | bash` com um `ssh deck "..."` no
   meio parou em silêncio depois dele; use `ssh -n` ou grave o script num arquivo antes de rodar.
+### Medir antes de integrar e comparar builds do XDK (F5, gravação, seção 38)
+
+- **Os `.obj` do `cl` nunca saem iguais** (carimbo do COFF, linhas da depuração): `cmp` acusa todos os 348. A prova
+  de que uma chave de compilação desligada não muda a build normal é a desmontagem: `xdk_objetos.py RAIZ A B` roda o
+  `link /dump /disasm` de todos os objetos na imagem do XDK, normaliza os rótulos que dependem da linha (`$M`, `$LN`
+  e os rótulos C viram `$nome$NNN`) e compara as funções do `.map` (os `__unwind$N` mudam de número com qualquer
+  função nova no objeto: contar por objeto). `--espera-diferente` diz quais podem mudar; sem ele, a mesma comparação
+  tem de sair com 1 numa diferença real.
+- **Uma medida nova no caminho da gravação vai na build de perfil, chave de compilação até o `c89.py`.** O `gs_draw.c`
+  passa pelo `c89.py`, não pelo `cl` do backend: a chave do `build_f2.sh` tem de chegar aos dois, como o alfa.
+  O relógio por desenho (`BT3_RELOGIO_GRAV`) escreve os carimbos pela thread de desenho, depois do `cadeia_fim`,
+  quatro linhas por quadro, para não pôr o diário no tempo do quadro medido.
+- **O controle da mesma build precisa da sua própria linha.** Com `BT3_PICOS=36` um quadro que melhora some do log
+  (seção 37); comparar a abertura com a medida contra uma sem ela pelo picos perde justamente os quadros bons. O
+  relógio fecha cada quadro da lista com G, P e U desde J, e `BT3_RELOGIO_MARCAS=0` tira só os carimbos.
+- **Uma integração que muda dependência e tempo ao mesmo tempo não se prova.** O `BT3_GS_LOTES` começou pelas duas
+  consultas ao futuro (plano previsto, DATE curto) com o envio ainda na entrega: a captura igual prova a imagem sem
+  o envio por lotes no meio, e só depois o envio muda o tempo.
+- Teste nativo de código do 360 com g++: `unsigned __int64` só compila com `#define __int64 long long` (um `typedef`
+  não aceita o `unsigned` na frente).
+
+
+### Analisar o relógio e a imagem dos lotes (F5, gravação, seção 39)
+
+- O modelo C normaliza os carimbos pelo G da própria abertura com marcas. Para retirar o efeito delas, aplicar
+  essa fração ao G do controle da mesma build/repetição e recalibrar P/U nesse controle; o comando sem essa troca
+  ainda usa as constantes históricas. Conservar também o resultado original para reproduzir a comparação.
+- O perfil fino anterior ao alfa não contém o rateio da build com alfa. Trocar só o total escala também o antigo
+  custo inicial do alfa. Publicar a hipótese do rateio e a sensibilidade sem `outros`, sem somar um ganho antigo
+  à recuperação do cronograma; prazo de um quadro que sumiu do picos continua sendo referência, não nova medida.
+- `compara_quadros.py` procura `frame_NNNNN.ppm` no segundo diretório, mesmo ao comparar duas capturas do console.
+  Criar links fora do git; exigir todos os números e dimensões e igualdade exata. Seu código 0 significa medida
+  produzida: falta de referência ou um pixel diferente não reprova por si, e 100,00% pode ser arredondamento.
+  Na li37 as capturas cheias são 853x597, não o tamanho alocado do alvo 864x608. Recalcular o FNV do arquivo inteiro
+  para associar a captura ao diário, preservando também SHA256.
+- Captura cheia para a GPU e lê/grava a imagem: as seis li37 têm 20 imagens de quatro ou mais vblanks no combate,
+  até 22. Não transferir esses histogramas ao aceite de desempenho ou à exceção E; os relógios sem captura são
+  outra evidência. A longa marginal 7109 → 7110 dos perfis sem alfa também não vira troca de cena por hipótese.
+
+### Enviar durante a gravação com a dona do D3D livre (F5, gravação, seção 40)
+
+- Uma vaga com produtor esperando apenas o consumo CPU permite sobrepor GPU e gravação sem tornar todas as tabelas
+  concorrentes de uma vez. O consumidor precisa voltar ao seu laço entre faixas; esperar novos desenhos dentro de
+  `frame_end` congela a Guide. Publicação da VU1 combinada exige `sync` completo antes de sinalizar a vaga.
+- **Resolver para liberar a EDRAM pode mudar DATE sem corrida nenhuma.** A fonte do DATE pode ser a própria textura
+  do alvo; um Resolve extra no meio dos seus leitores muda o alfa lido por alias. A primeira implementação conserva
+  cada sequência inteira numa faixa. O teto que supunha só 64 de consulta não prevê essa barreira.
+- **Cor ou z que só nascerão na entrega não podem receber prefixo.** Sem cor, `ed_fim` perde pixels antes de
+  `alvos_sem_textura` criar a textura; sem restauro de z, a faixa seguinte limpa a profundidade já escrita. Recusar o
+  envio antecipado nesses casos, não consumir e tentar reparar no fim. As duas guardas têm sabotagens na auditoria.
+- O `cleared` próprio do desenho deve sobreviver por versão entre retratos parciais. Antecipá-lo na gravação muda a
+  seleção de texturas. Filas de profundidades e pendências só trocam na entrega final, como a cerca de reaproveitar VU1.
+- **A imagem que a Guide repete tem de continuar completa.** Sem FXAA, o ponteiro da imagem anterior pode ser um alvo
+  que os prefixos já modificaram. O candidato só envia com a imagem anterior na textura própria do FXAA. Restaurar a
+  EDRAM entre faixas não resolve sozinho a posse dessa imagem.
+- Uma amostra integral como `alfa_alto` não pode virar amostra só do primeiro prefixo. Isso retira trabalho apenas da
+  abertura ligada, alterando custo e denominadores. Conservar a varredura inteira no fecho, com e sem alfa.
+- Build nova numa worktree sem `gen/data` pode ligar com centenas de stubs e parecer válida. Gerar dados pelo
+  `gen_data.py --asm asm`, fazer a x86 antes da PPC e conferir stubs antes de executar. As tentativas preliminares sem
+  esses dados não contam como execução do jogo. Não copiar `.s` com `incbin` de outro caminho. Os logs da seção 38 tinham 450 stubs, sem as 72 tabelas; a referência
+  `9f2cdb49...` era dessa ligação incompleta. Com dados gerados, a preliminar da seção 40 tem 104 stubs e `43444ea4...`:
+  comparar base e final com dados equivalentes, sem confundir mudança de ligação com mudança dos fontes.
+- Com envio parcial, `msFim` vai do primeiro lote ao fecho e inclui os intervalos em que a gravação trabalhou e a dona
+  D3D ficou ociosa. Não compará-lo como CPU ocupada nem como F integral antigo: medir prazo da imagem e J/G/P/U.
+- Sessão de agente sem `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS`: `systemd-run --user` pode dizer `No medium found`
+  mesmo com o gerenciador do usuário vivo. Conferir `/run/user/$(id -u)/bus` e passar explicitamente essas duas
+  variáveis ao disparo e ao comando do marcador de espera. Não deixar marcador que sai falso só por faltar o barramento.
+- **Comparação que já difere na referência não leva critério zero.** Entre `x86gv` e `ppcg` a build normal difere em 11
+  quadros do duelo desde a etapa das threads; a conferência dos lotes exigiu zero e perdeu a rodada depois de duas horas.
+  Antes de armar, rodar cada comparador nos logs da última rodada de referência e escrever o critério como "igual ao da
+  normal" (mesmos quadros e hashes), com cópias de um quadro a mais, um a menos e um hash trocado vistas falhando.
+- **O GCC do WSL não compila o `gs_d3d.cpp`.** Um método de `D3DDevice` que o XDK não tem só aparece no `cl.exe`: o
+  `KickOff` é do `D3DXps`; no `D3DDevice`, quem manda a fila à GPU sem esperar é o `InsertFence` (só na thread dona,
+  fora de tiling). A auditoria do protocolo confere cada chamada contra a lista conferida no `d3d9.h`.
+
+### Uma chave de ambiente em 0 não desliga o que roda antes dela (F5, gravação, seção 41)
+
+- **A `ctl` (tudo desligado por ambiente) tem de bater com a build sem a variante antes de qualquer conclusão.** Na
+  `le40a2910` a build dos lotes com as duas chaves em 0 atrasou 56 imagens na luta contra 3 da normal: o `gs_lotes_passo`
+  esperava o desenho do quadro anterior e só depois perguntava ao backend, onde a chave era lida. Toda espera, trava ou
+  laço de uma variante sai antes de qualquer sincronização quando a chave está em 0, e o controle por ambiente só vale
+  depois de ser visto igual à build normal no console.
+
+### Provar no host que uma otimização de `src/` dá os mesmos bits (F8, item B, `plano/F8/11-cpu-vu0.md`)
+
+- **Reaproveitar resultado da VU0 emulada exige olhar o estado que ela deixa.** As rotinas de `vu0_a.c` escrevem em
+  `gRefVu0` (vf, ACC, Q, flags); pular uma chamada só vale se a última escritora de cada registrador continuar a mesma.
+  O teste compara o `gRefVu0` inteiro depois do desenho, e o mutante "ordem trocada" mostra que essa comparação pega.
+- **Esta máquina não tem a libc nem a libgcc de 32 bits** (`gcc -m32` compila e não liga). O `teste_explosao.py` liga
+  sem libc: `_start`, `write`/`exit` pelo `int 0x80`, as funções de memória e a divisão de 64 bits em
+  `teste_explosao_rt.c`; os headers da libc pedem um `gnu/stubs-32.h` (vazio) e `-idirafter /usr/include/<multiarch>`.
+- **`objcopy --weaken` enfraquece também as referências que faltam**, e o link estático liga uma função fraca não
+  definida ao endereço 0: o teste caía em `0x00000000` sem nenhum erro de link. Enfraquecer só os símbolos definidos
+  (`nm -g --defined-only` e `--weaken-symbol`).
+- **O gcc põe as funções pequenas do mesmo arquivo dentro da que se testa** (`EftBurst_SetTexture`,
+  `EftBurst_PutModelEnvEnd`): um stub delas não intercepta nada. O teste fornece o que elas chamam (`Tex_Upload`, `gGfx`).
+- **Uma multiplicação por 1,0 que a otimização introduz depende do modelo de float de cada build**: no PC a divisão da
+  VU0 nunca dá denormal nem infinito, no 360 (`float360.c`, FPU nativa) dá. Conferir nos 2^32 padrões de cada modelo
+  (`--identidade`, uns 3 minutos por variante) e o `dumpbin /disasm` do `.obj` velho e novo atrás de `fmadds`/`fnmsubs`.
+- Numa worktree nova `port/build/` não existe: `cp -a .../port/build/gen port/build/` cria `port/build` com o conteúdo
+  de `gen` (sem a pasta `gen`). Fazer `mkdir -p port/build` antes.
+- Uma build disparada com a árvore suja leva `diff:` diferente de `da39a3ee5e` no carimbo: fazer o commit antes do
+  `build_f2.sh` para o log do console apontar um commit.
+
+### Queda na relocação: diagnóstico da pilha (28/10/2026)
+
+O LR dentro de `Res_RelocateOffsets` pode apontar para a chamada da guarda dentro dela e não para quem pediu a
+relocação. O filtro do 360 registra agora r3..r10 atuais e r28..r31 preservados, com os 64 bits (podem ter mudado desde a entrada), identidade das threads,
+vblank, quadro, fase e até 12 elos da cadeia do r1. No ABI do XDK, o elo em `0(r1)` aponta para o quadro anterior;
+o retorno salvo está em `anterior-8`, não em `r1+4` como no ABI Linux PPC. Referência: [exemplo de instrumentação
+Xbox 360 da GDC 2012, páginas 2 a 5](https://media.gdcvault.com/gdc2012/slides/Programming%20Track/Adisak_Pochanayon_CPU_Instrumentation_Handouts.pdf).
+Cada leitura usa SEH local; alinhamento de 16, progressão crescente e alcance de 16 MB limitam a caminhada.
+São candidatos a retorno: folhas, prólogos incompletos e chamadas de cauda limitam a interpretação.
+`teste_pilha360.py` exercita memória sintética; `--mutante` retira a guarda de progressão numa cópia e tem de falhar.
+A fase passa da inicialização para menus/carga ou luta no `Port_StateLog`, em vez de conservar o rótulo da reserva
+inicial durante toda a sessão. O encerramento e a saída ao dashboard também recebem rótulos próprios. A integração SEH e os endereços reais ainda exigem compilação XDK e console.
+
+
+### Arquivos fora das faixas cadastradas: transições de cenário
+
+`conv_tool --disco` passou sem erro mesmo sem os ids 0x1BF/0x1C0. Eles ficam entre o fim dos cenários (0x1BE)
+e o início dos menus (0x1C1), e `BtlLoad_StepStageChange` os lê diretamente, sem `Sprite_Unpack`.
+O verificador dos ganchos não cobre esse leitor. Conferir também as chamadas `File_Request3` e os ids derivados;
+um censo de formatos cadastrados não mede as omissões do próprio cadastro.
+O formato está em [transicao.md](formatos/transicao.md); os dois arquivos têm a mesma estrutura completa.
+O modelo da transição usa deslocamentos de imagem em bytes; o `TexFile` das partículas usa palavras.
+Os triângulos têm cores RG/BA lidas como u16, que também precisam de troca.
+O teste negativo da assinatura acusou uma build de conversor anterior à guarda: recompilar a ferramenta após
+alterar seu fonte faz parte da prova, assim como recompilar o jogo. `headless.py` agora pode ser importado sem
+iniciar uma build; o caso isolado reutiliza suas flags e a preparação dos leitores originais.
+
+A instalação passa a exigir marca de versão 3 no instalador e no leitor do console. Uma ISO versão 2 já instalada
+continua com as transições cruas mesmo após recompilar o `.xex`. É preciso reconverter a ISO americana original,
+sem usar uma convertida como origem. `teste_iso_avisos.py` exercita também a recusa explícita da versão 2.
+
+
+Na investigação `queda-relocate`, a espera única pelo `flock ~/wsl.lock` ficou mais de 70 minutos sem obter
+a trava, acima do dobro do teto de 30 minutos preparado para a reprodução PPC inicial. A espera própria foi
+encerrada pelo PID, sem sinalizar o detentor ou as demais filas. Não confundir compilação PPC, conversão e
+casos nativos aprovados com execução PPC: a reprodução e os critérios de jogo ficaram pendentes.
+
+
+### A ISO sintética do teste de fluxos acompanha a versão do leitor
+
+Depois de exigir a ISO versão 3, o `teste_som360.sh` ainda fabricava a marca versão 2. As três
+rodadas positivas falhavam na recusa da ISO antes de testar qualquer fluxo; os mutantes também
+falhavam ali e não provavam suas sabotagens. O gerador agora usa `ISO_MARCA_VERSAO` do mesmo
+`iso360.h` levado à compilação do ensaio. Exigir primeiro o caso positivo e ler a causa dos
+negativos, em vez de contar toda saída não zero como prova da sabotagem.
+
+
+### Uma queda exige esperar o GS antes de soltar o D3D
+
+`Port_GsPararJa` e `GsDraw_DesenhoPararJa` só pedem parada. Mesmo um estado ocioso não prova
+que a thread acabou. A main espera os handles reais do jogo e das duas threads do GS antes de
+recuperar a posse do dispositivo. Na parada assíncrona, a gravação não chama a callback que faz
+`pthread_join` do desenho: ela fecharia o handle que a main ainda precisa esperar. O ensaio acusa
+o mutante que reativa essa callback. Quando o desenho cai, o jogo também precisa parar de publicar
+trabalho para a gravação: uma espera que não observa a saída fica presa num GS já encerrado. O ramo
+do 360 consulta o pedido fora da trava e desperta em até 50 ms para observá-lo de novo. O ensaio
+recorta essa espera e acusa o mutante sem o checkpoint, inclusive se alguém tentar sair com a trava
+tomada. Cargas, fluxos e som também têm esperas com teto e resultado no
+log. A desmontagem usa auxiliares na thread de hardware 1, com teto externo consultado pela main;
+ela continua apresentando assim que os produtores gráficos terminam. Nenhum `join` infinito ou
+espera da GPU roda na thread que estava apresentando. Na liberação final, a apresentação termina.
+
+Se uma thread ou a GPU exceder o teto, preservar recursos possivelmente em uso e tentar o painel;
+liberar sob uma thread viva pode causar outra exceção antes do lançamento. Uma segunda exceção na
+auxiliar também precisa ser consumida pelo filtro do título. Registrar a solicitação de
+`XLaunchNewImage` antes de fechar o diário não prova que a FreeStyle iniciou: exigir a home
+respondendo e reabertura do jogo nas variantes de queda do jogo e do desenho. Receita e limites em
+[F7/queda-freestyle](plano/F7/queda-freestyle.md). Os ensaios `teste_saida360.py --mutantes` e
+`teste_paradas360.py` compilam as rotinas reais sobre uma API simulada e exigem as sabotagens acusadas.
+
+Numa worktree nova, `headless.py` pode ligar com stubs mesmo sem `port/build/gen/data` preparado.
+Antes de comparar a x86, gerar as tabelas com `gen_data.py --asm CAMINHO_DESTA_WORKTREE/asm`.
+A primeira tentativa desta tarefa tinha só 327 objetos e SHA1 diferente; depois das 72 tabelas,
+voltaram os 399 objetos e a `.text` idêntica à base. Não aceitar só a mensagem de ligação bem-sucedida.
+
+
+### Desligar logs exige tratar o FILE nulo e separar diagnóstico da reprodução
+
+Na F8, [04-queda-e-logs](plano/F8/04-queda-e-logs.md), `BT3_LOG=1` passou a ser obrigatório.
+A abertura comum recusa escritas auxiliares sem log, além de filtrar as chaves, pois há
+despejos de erro na VU1 que não dependem de uma chave. Saves e configurações explícitas seguem
+permitidos. O ambiente precisa ser lido antes de abrir o diário, e as opções do próprio diário só podem ser
+consultadas depois de publicar o log ligado: antes disso o filtro de chaves de diagnóstico as oculta.
+Não devolver NULL como stderr sem embrulhar `fprintf` e as outras operações do shim: a CRT não
+aceita esse FILE. Os embrulhos descartam antes de formatar e preservam os arquivos reais.
+O ensaio local de ambiente também expôs a cópia da última entrada sobre ela mesma na remoção;
+a tabela agora evita a cópia idêntica e usa `memmove` de linhas inteiras.
+
+Estatística de filme antes alocava e media dentro da reprodução. Ao separá-la, `Filme360_Fechou`
+precisa liberar as vagas mesmo sem vetor de medidas; o controle negativo sem essa chamada falha.
+`BT3_TEX_ORIGEM` é cache de texturas e `BT3_FILME` é reprodução, não medidas: não entram na lista
+de diagnóstico. Relógios de prazos, áudio e vblank também permanecem funcionais.
+As chaves novas `BT3_ESTADO_TEMPOS`, `BT3_FILME_MEDIDAS` e `BT3_SOM_MEDIDAS` restauram apenas as
+contas antes incondicionais; atualizar todos os ambientes e geradores junto com o padrão.
+
+O relatório de queda não pode depender do diário nem fazer flush na thread que caiu: no áudio isso
+poderia pôr E/S nas threads 4 e 5. Copiar o contexto e a cadeia protegida, depois gravar numa auxiliar 1.
+Parar e esperar os produtores gráficos antes de a main retomar o D3D para a caixa; desmontar os
+recursos restantes depois do OK. Uma caixa que afirma relatório salvo só abre após escrita completa,
+flush e fechamento conferidos. Os ensaios com API simulada compilam a main real e exigem sabotagens;
+não substituem Guide, FATX, concorrência nem custo por quadro no Xenon.
+
+Para gerar todas as tabelas numa worktree nova, além de `asm` também é necessário o link `assets`
+para os dados só leitura: a VU1 vem de `assets/cod/1BF6B0.textbin.bin`. Uma falha de `gen_data.py`
+não pode ser seguida de uma comparação x86 como se a geração tivesse passado. Exigir `set -euo pipefail`,
+os 399 objetos e a comparação sem depuração, além do SHA1 da `.text`.
+
+O `teste_cadeia_cpu.py` comparava o fonte inteiro sem as marcas contra `bbc07118`, anterior aos
+diagnósticos optativos de `78dbb29c`. Isso recusava até alterações de comentário ao chegar à prova dos
+geradores. A referência agora é `78dbb29c`: retira as marcas dos dois lados e atualiza somente o nome
+da configuração nos comentários da referência. A comparação continua integral, incluindo argumentos
+e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
+
+### Instalação inicial no console (F8, conversão)
+
+- O `xtl.h` do XDK não define `INVALID_FILE_ATTRIBUTES`. Comparar `GetFileAttributes` com `(DWORD)-1`,
+  como já faz `posix360.c`. A camada `teste_instalar/xtl.h` também não deve definir essa constante:
+  removê-la fez o compilador nativo recusar o adaptador antigo com o mesmo identificador ausente do XDK.
+  As APIs simuladas não comprovam disponibilidade no SDK; sem seus headers no WSL, a build XDK segue pendente.
+- A marca versão 3 inclui o SHA256 do **executável PC**, além dos fontes. Não comparar `.xex` ou ferramenta
+  nativa recompilada com outro compilador esperando a mesma marca. `preparar_iso_console.py` gera no host o selo
+  e conserva o `conv_tool` que deve ser passado ao `convert_iso.py --conv-tool` na prova de igualdade literal.
+- Depois de preparar a ISO com D3D ativo, relançar o título. Tentar reservar o heap fixo do PS2 nesse processo
+  violaria a ordem de `Preparar`: a CRT/D3D já pode ter ocupado os endereços baixos. A conversão fica antes do
+  jogo e do áudio, numa thread de hardware 2; a main apresenta e os textos da instalação são estáticos.
+- O teste do fluxo de áudio ainda criava marca 2 e passou a parar na guarda da marca 3 antes de testar o áudio.
+  O gerador agora usa `ISO_MARCA_VERSAO`. Uma falha de identidade na imagem sintética não é regressão do fluxo.
+  Rodar a prova de adiantamento sem outra tarefa saturando CPU/disco: sua exigência de nenhuma falta depende
+  de a thread leitora ser escalonada a tempo. Não relaxar os limites para aceitar uma execução disputada.
+- Uma worktree nova pode ligar a x86 sem `port/build/gen/data`, preenchendo tabelas ausentes com stubs. Isso
+  não reproduz a referência: a rodada inicial deu 450 stubs e `.text` diferente do hash histórico, mesmo com
+  objetos iguais à base recompilada. Preparar os dados locais antes de julgar e conferir também `obj_data/`.
+  Na cópia privada dos `.s`, corrigir o `.incbin` absoluto de `vu1_micro.data.s` para o dado somente leitura,
+  como já registrado na seção de caminhos absolutos; nunca editar a árvore compartilhada em `/srv/bt3/dados`.
+
+
+### Reduzir E/S da instalação sem esconder a cobertura (F8, 29/10/2026)
+
+- Contar tráfego do caminho inteiro antes de estimar: duas autenticações, comparação contra a origem e
+  remendos de entradas custavam 20,91 GB, não somente duas leituras e uma escrita. A passagem sequencial com
+  hash da origem antes de converter, hash da saída na escritora e releitura seletiva fica em 7,49 GB.
+- Antecipar índices sem cache quebra a promessa de uma leitura por byte. Guardar os metadados até o fim,
+  usar esses bytes na passagem e comparar todos literalmente após reabrir, incluindo o meio da tabela AFS2.
+- Três buffers permitem próxima leitura, conversão atual e escrita anterior com donos diferentes. Drenar ambos
+  os pedidos em toda saída, inclusive falha; só então soltar buffers/apagar. Usar threads 1, 2 e 3, com a main
+  apresentando, antes do jogo/áudio. Eventos e handles distintos bastam para sobrepor E/S síncrona no XDK.
+- Hash durante escrita identifica os bytes enviados, não prova persistência integral. Documentar amostras e
+  provar um erro deliberado fora delas que passa. CRC32 é soma rápida contra erro acidental, não autenticação.
+- Para provar C/Python com uma ISO de teste, conferir a C inteira com `convert_iso.py --conferir --dados`,
+  guardar hashes, apagar a C e só então produzir a Python. A conferência integral deve recusar um byte que
+  ficou fora da amostra do console. Remover imagens de rodadas antigas antes de criar novas; preservar logs.
+
+- Congelar `conv/*.[ch]` e `convert_iso.py` durante toda a prova C/Python. A ferramenta e o selo são preparados
+  no começo, mas o Python recalcula a identidade dos fontes no fim. Uma rodada de desenvolvimento recusou a
+  marca porque os fontes foram editados durante as sabotagens, embora a C tivesse concluído: não comparar
+  selos de instantes diferentes. Recompilar do commit final e não editar esses fontes até acabar a conferência.
+
+### A passagem única que autenticou errado no console (F8, 29/10/2026 à noite)
+
+- A primeira conversão acelerada no 360 recusou a ISO USA íntegra em 66% ("identidade SHA256 da original não
+  confere"), depois de passar no ensaio nativo com a mesma ISO. O que só ela fazia, e a versão lenta (que
+  converteu de manhã) não: lotes começando em posições fora do setor (fim de entrada de tamanho quebrado) e
+  índices do cache emendados por `memcpy` no meio do buffer, com `ReadFile` do resto a partir de posição e
+  endereço quebrados. O `ReadFile` do XDK faz DMA direto no buffer do título; a documentação só promete o DMA
+  direto com começo e tamanho em setores e buffer alinhado. Correção: todo lote começa e termina em múltiplo de
+  2048 (o setor do USB; o do HD é 512), cai inteiro no início de um buffer alinhado a 128 num `ReadFile` só, e o
+  cache dos índices é comparado com o lote em vez de emendado (relê 552.004 bytes dos 3 GB).
+- O ensaio nativo não pegou porque o `ReadFile` simulado é um `read` POSIX, que não tem alinhamento. Agora a
+  leitora simulada (thread 3) exige o contrato do DMA, e a versão quebrada é vista caindo nele; um núcleo
+  mutante sem a regra do setor também cai.
+- A causa não foi vista no console (sem xbdm): é a diferença que sobrou. Por isso o núcleo leva o estado do
+  SHA256 da origem a cada 64 MiB (`iso_marcos.h`, resumos, nenhum byte do jogo) e para no primeiro marco errado,
+  dizendo no log a janela e o lote. Se voltar a falhar, o log já aponta onde.
+
+
+### A vibração (F8, `plano/F8/07-vibracao.md`)
+
+- **Ver se o jogo manda todo quadro antes de desenhar paradas.** O `Pad_Update` manda o pedido de vibração aos dois
+  controles em todo quadro, zero quando não há pedido: a opção desligada, a pausa e os menus param os motores pelo
+  próprio jogo. O port só precisa cobrir o que o jogo não vê: a Guide (o jogo não pausa nela) e a thread do jogo
+  parada (queda, saída, carga presa), com uma vigia fora dela e sem tocar a saída e a queda do `main360.cpp`.
+- **Dois ouvintes de `XNOTIFY_SYSTEM` convivem** (a amostra `RichPresence` do XDK cria um próprio além do da
+  `AtgSignIn`): o módulo novo abre o seu em vez de depender do do som, que só existe com `BT3_SOM`.
+- **O `xdk_objetos.py` não está na main**, está no branch `claude/f5-lotes` (usar de outra worktree, sem copiar). A
+  build de base precisa ser feita **antes** de editar a worktree (o `build_f2.sh` lê os fontes em dois passos e o
+  carimbo no começo) e copiada com `obj/`, `x360/`, `dados/` e o `.map`: sem `dados/` a lista de objetos difere e
+  ele falha antes de comparar. Um objeto com estáticas novas muda a desmontagem das funções que não mudaram
+  (registradores e endereços): ele inteiro vai no `--espera-diferente`.
+- **Provar o x86 sem WSL quando a mudança é só um `#ifdef PORT_X360`:** `gcc -E -P` do arquivo da main e do branch,
+  com os `-I` do `compile_flags.txt` e sem `PORT_X360`, tem de dar o mesmo texto (com e sem `PORT_BIG_ENDIAN`, a PPC
+  do WSL); com `PORT_X360` tem de diferir, para ver o verificador falhando.
+
+### Autoteste de boot que descobre o hardware
+
+- **Quando a resposta é conhecida, vira valor fixo.** Um autoteste que descobre comportamento do hardware (aqui, o modo de
+  restauro da profundidade, a máscara de cada amostra do MSAA e as passadas nativas) custou de 3,8 a 5 s de boot no console
+  e sempre deu o mesmo resultado. Passa a valor fixo no padrão, com uma linha no diário dizendo o que foi pulado e com que
+  valor; o teste continua no código, atrás de uma chave de desenvolvimento (`BT3_AUTOTESTES=1`, só com log). As provas que só
+  fazem sentido com o teste (sabotagens, a volta exata) exigem a chave, em vez de rodar sem a verificação. Carimbe o começo e
+  o fim do init no diário para a rodada seguinte medir o ganho.
+
+### ISO v4: antecipar BPE sem aumentar as entradas (29/10/2026)
+
+- Recompressão gulosa do arquivo inteiro perdeu espaço em 41 pacotes, mesmo
+  mantendo os tamanhos e tentando vários limites de bloco. Os originais usam
+  blocos de até 10.000 bytes; aproximar esse limite ainda deixou 33 falhas.
+  Conservar os blocos inalterados e tentar a gramática original nos alterados,
+  por programação dinâmica, resolveu o encaixe no ensaio integral. Uma nova
+  gramática é alternativa por bloco. Sempre conferir a descompressão completa
+  antes de gravar; falta de espaço é erro fatal, nunca truncamento.
+- Um fluxo BPE recomprimido tem bytes diferentes com o mesmo conteúdo lógico.
+  Marcar o fluxo como bytes e aceitar igualdade deixa passar pacote cru. As
+  marcas dos menus agora levam `.convertido` ao lado de `.orig`; o comparador
+  exige os bytes convertidos exatos nas posições que o jogo não escreveu.
+  `teste_menus_iso.py` estraga as duas provas, na equivalência e na memória.
+- Worktree nova não traz os links de dados: criá-los para `/srv/bt3/dados`, sem
+  copiar nem escrever nas pastas. O primeiro ensaio aqui só viu "não abre".
+
+- A versão também é literal em `IsoConv_Executar`, na validação do selo antes
+  da passagem, além de `ISO_MARCA_VERSAO` e `convert_iso.VERSAO`. Esquecer esse
+  ponto recusou o selo v4 antes de ler o fluxo. O mutante de alinhamento então
+  falhou no `free` do ponteiro propositalmente desalinhado, em vez de chegar à
+  guarda DMA esperada. Conferir o primeiro erro e procurar também `selo + 16`
+  ao subir a versão. O ensaio C completo acusou a incompatibilidade.
+
+- A rodada oficial deve iniciar os ensaios dentro do serviço, inclusive os
+  instaladores nativos. Esperar pelos PIDs de comandos iniciados na sessão
+  anterior não os protege do encerramento dessa sessão: os dois instaladores
+  pararam sem conclusão. Log incompleto não prova defeito na conversão.
+  O marcador da fila `~/espera/TAREFA` contém na primeira linha um comando
+  que retorna zero enquanto o serviço está ativo, não uma descrição.
+- O banco externo precisa da revisão com `objeto`, `troca`, `CONV=`, `objcru`
+  e `transcru` (na rodada iso-v4, `07f5f5a7`). A revisão `0eef00b5` antecede
+  essa extensão e não prova esses casos, mesmo ligada aos objetos atuais.
+  Conferir tanto a unidade C quanto o script e o comparador antes de armar.
+
+- Adaptar um banco de outro checkout exige trocar também o `sys.path` do
+  Python embutido em `banco.sh`, além dos caminhos de `banco.py`. Na rodada
+  iso-v4 ele ainda apontava para o checkout sem o módulo: a lista de regiões
+  ficou vazia, a geração de marcas não fez trabalho e os 131 casos reprovaram
+  por falta de marcas, embora a PPC tivesse terminado. A preparação agora
+  para no erro de importação, exige regiões não vazias e para no erro de
+  `--marcas`. A importação quebrada e a lista vazia foram vistas reprovando.
+  Só `test -s` não basta: um `print` sem nomes grava uma quebra de linha.
+- No controle de byte alterado do banco, saída 2 da comparação significa
+  retrato ou marca faltante, e não prova diferença no conteúdo. O adaptador
+  conserva esse código e só aceita saída 1 como estrago reprovado pela
+  comparação. Os 131 retratos preservados passaram com marcas completas;
+  o byte alterado reprovou por diferença, sem região sem marcas.
+- `save_mc.sh` desta base não imprime `tudo certo` e não julga todos os
+  estados que resume. O lançador da iso-v4 confere os casos unitários, a
+  chegada ao menu, os estados A/B1/B2 contra a x86, o erro de escrita F e
+  a recuperação byte a byte com `confere_save_mc.py`, antes de registrar
+  aprovação. Cópias com estados, save, teste unitário, chegada ao menu,
+  temporário ou falha injetada alterados reprovaram separadamente.
+
+- A leitura de um retrato menor substitui setores de 0x800 bytes do buffer,
+  deixando sufixos dos arquivos anteriores. Com a ISO v4, esses sufixos têm
+  fluxos recomprimidos diferentes na x86 e na PPC. A rodada do Duelo passou
+  na carga e nas oito imagens, mas o comparador ainda julgava os sufixos por
+  palavra, acusando diferenças nas telas 39, 00923 e 00921. Antes de dispensar
+  o resto do buffer, conferir sua origem: o `memdiff.py` agora reconhece na
+  x86 um sufixo inteiro de referência `.orig`, na mesma posição, após o último
+  setor do arquivo atual, e exige exatamente a saída `.convertido` na PPC.
+  Só usa arquivos inteiros lidos pela rodada, com pelo menos 64 bytes não
+  nulos no sufixo; referências conflitantes param a comparação. O conteúdo
+  vivo continua conferido pelas marcas. `teste_memoria_menus.py` exercita a
+  regra e as recusas; cópias do dump real com sufixo cru, byte alterado no
+  sufixo e byte alterado no arquivo vivo reprovaram no julgamento completo.
+  A reanálise preservada do Duelo passou; continua sendo investigação, sem
+  substituir a repetição oficial das builds finais.
+
+- No Ultimate da ISO v4, não bastou procurar sufixos na posição original.
+  O heap reutilizou e dividiu os blocos: na tela 21, o buffer do retrato
+  00782 contém outro fragmento de 00782 deslocado em `0x3680`, seguido pelo
+  resto de 00760 com o mesmo deslocamento. No fim, os buffers novos do Sim
+  Dragon dividem 00782 entre dois blocos e preservam mais uma cauda antiga.
+  Todos esses trechos coincidiram exatamente com a saída antecipada.
+  `memoria_menus.py` procura âncoras exatas de 128 bytes na x86, com pelo
+  menos 64 não nulos e deslocamento múltiplo de 16, e expande a igualdade
+  até os limites do fragmento. Cada byte PPC deve coincidir com a referência
+  convertida; conflito de saídas interrompe a comparação. A busca protege
+  os setores do arquivo vivo. Sem arquivo vivo, só alcança os dados do
+  buffer cru `faceFile` de `0x16800`, sem tipo nem contexto dinâmico, nunca
+  cabeçalhos, estruturas ou o conteúdo descomprimido `faceRes`.
+  Não ampliar `BUFFER_IMAGEM_VAZIO` ou aceitar diferenças pelo tamanho:
+  fragmentos crus e bytes alterados precisam reprovar também nesses buffers.
+  A reanálise integral do Ultimate passou. As duas cópias reais íntegras
+  passaram, e cinco cópias estragadas reprovaram com saída 1: fragmento cru,
+  byte no fragmento e byte no arquivo vivo da tela 21, mais fragmento cru
+  e byte no buffer sem arquivo vivo do fim. Logs em
+  `~/iso-v4/sonda-fragmentos.log`; testes sintéticos também recusam cabeça
+  deslocada, cauda cortada e dois fragmentos crus ou alterados.
+
+- No Disc Fusion da ISO v4, o cabeçalho do pacote de seções 00451, com
+  contagem 6 e primeiro deslocamento 64, passou no teste de dois tamanhos
+  plausíveis usado para selecionar referências BPE inteiras. Quatro trechos
+  curtos do buffer de retrato coincidiam com bytes repetidos desse pacote;
+  exigir sua versão recomprimida criou diferenças falsas onde x86 e PPC
+  eram idênticas. O pacote não é uma referência de arquivo BPE inteiro.
+  Além do cabeçalho, exigir o conteúdo registrado em `@0x0#bpe.orig` e seu
+  tamanho igual ao tamanho descomprimido. Não inferir o formato só por dois
+  inteiros pequenos. O teste sintético recusa pacote sem esse conteúdo,
+  tamanho incompatível e truncamento; restaurar o detector antigo numa cópia
+  fez a asserção do pacote falhar de propósito. A tela 29 preservada passou
+  com a seleção corrigida, sem mudar classes ou tetos. A reanálise não
+  substitui a rodada oficial das builds finais.
+
+- Na rodada iso-v4 de 30/10, a reserva do C: interrompeu o ciclo antes de
+  abrir o log de Shenlong. O trap anotou o nome do próximo roteiro e saída
+  1, mas isso não significava reprovação do jogo. Ao julgar, conferir se o
+  comando chegou a executar e preservar a tabela bruta; registrar bloqueio
+  de infraestrutura separadamente. O cartão sem dumps nem imagens pôde
+  passar em um serviço próprio sob a mesma trava. Essa prova independente
+  não aprova os roteiros de menu que ficaram sem execução, nem autoriza
+  reduzir a reserva física ou renovar o prazo.
+
+- A correção anterior tirou os pacotes de seções das referências, e isso
+  inverteu o julgamento dos restos de pacote: num buffer de retrato, um
+  trecho de 00451 cru passava como igual-sem-inverter e o mesmo trecho
+  convertido reprovava como diferente (cópias da tela 29 do Disc Fusion).
+  A causa era outra: conteúdo repetido, dentro do pacote ou de um arquivo
+  dentro de outro (0x110 bytes de 00475 dentro de 00451), escolhia uma
+  saída arbitrária. Agora todo arquivo inteiro antecipado é referência, e
+  cada fragmento achado pela x86 é procurado em todos os originais, em
+  qualquer posição: só vale se todas as cópias derem a mesma saída
+  convertida. O ambíguo não escolhe referência, fica com a comparação por
+  palavra e sai no log ("restos ambíguos"); sobreposição de dois trechos
+  únicos com saídas diferentes também. Não resolver ambiguidade excluindo
+  um formato inteiro: o que se exclui volta para a tolerância antiga.
+
+- Dois mutantes do identificador de fragmentos sobreviviam ao teste
+  sintético: a expansão para trás que entrava no conteúdo vivo e a falta da
+  recusa de original e convertido com tamanhos diferentes. Um terceiro, a
+  âncora sem o mínimo de bytes não nulos, passou a sobreviver quando a
+  unicidade cobriu o caso dos zeros. Cada regra do identificador tem de ter
+  um caso próprio no teste, e a lista de mutantes roda de novo a cada
+  mudança dele (`~/revisao-iso-v4/mutantes-isoverif.log`).
+
+### Pular o envio à VU1 sem mudar a imagem (F8, tela dividida, C1, `plano/F8/13-tela-dividida.md`)
+
+- O jogo recorta o estágio de cada metade com a largura da tela cheia (o `StgFrustum_Build` lê `scissorX0` e `scissorY0` como
+  `x0` e `x1`). Trocar o recorte muda a fase da animação de textura (ela avança no desenho). O caminho seguro é manter o
+  recorte largo decidindo tudo e usar uma segunda tabela, do ramo da meia largura sobre uma cópia da vista, só para
+  decidir se o `Vu1Pkt_CallProg4` sai. Cada chamada reinicia a VU1 (`MSCALF 0`) e traz a cabeça de objeto e o A+D de cada
+  lote; o pacote de textura e a animação ficam fora da chamada, então pular só ela não deixa estado para as malhas
+  seguintes. A tabela estreita nunca escreve `cell->vis`.
+- Prova na x86: as capturas do roteiro `f7_dividido` (várias distâncias depois de `marca ponto dividido`) idênticas com a chave
+  ligada e desligada, a mesma chave num duelo de um jogador pulando zero malhas, e uma cópia com as normais laterais
+  encolhidas de propósito tendo de dar imagem diferente (deu, 345 bytes por captura). O hash do estado inteiro
+  (coluna 2 do `BT3_HASH`) NÃO é determinístico de uma rodada para a outra, nem com a chave desligada nas duas; o que vale é a
+  coluna 3 (os valores da luta) mais as imagens.
+- Armadilhas do WSL: a base `43b27d0a` não tem os roteiros da F7 etapa 3 (`f7_dividido.txt`, `BT3_DOIS`); levar o ramo
+  inteiro por `git bundle` em base64 pela entrada padrão (o `ssh` recusa linha de comando longa). O `ssh ... | grep -v`
+  devolve sempre 0: esperar uma rodada com `until ... && echo PRONTO | grep -q PRONTO`, e um marcador novo por rodada
+  (o `FIM` antigo no mesmo arquivo encerra a espera na hora). A primeira compilação do `headless.py` numa árvore nova
+  falhou duas vezes com "unable to rename temporary" nos objetos; repetir a compilação completa passou.

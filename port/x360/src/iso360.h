@@ -13,7 +13,7 @@ enum {
     ISO_ILEGIVEL = 4
 };
 #define ISO_NOME "bt3-x360.iso"
-#define ISO_MARCA_VERSAO 2
+#define ISO_MARCA_VERSAO 4
 void Iso_Iniciar(void);
 int Iso_Recusada(void);
 const char *Iso_Pedida(void); /* caminho escolhido, inclusive nas recusas da busca automática */

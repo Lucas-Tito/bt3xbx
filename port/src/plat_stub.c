@@ -393,7 +393,15 @@ static int pad_read(int socket, unsigned char *data) {
     return 18;
 }
 int sceVibGetProfile() { return 0; }
+#ifdef PORT_X360 /* the 360's controllers vibrate (port/x360/src/f2/pad360.c): data is Pad_SendActuator's vibData */
+extern int Port_PadVibrar(int socket, unsigned data);
+int sceVibSetActParam(int socket, int profileSize, unsigned char *profile, int dataSize, void *data) {
+    (void)profileSize; (void)profile; (void)dataSize;
+    return Port_PadVibrar(socket, *(const unsigned short *)data);
+}
+#else
 int sceVibSetActParam() { return 0; }
+#endif
 
 /* ---- MPEG movies: port/src/plat_movie.c ---- */
 
@@ -432,6 +440,22 @@ void Port_SetAspectMilli(int milli) {
 }
 int Port_IsWide(void) {
     return Port_AspectMilli() > 1340;
+}
+/* BT3_DIVIDIDA_RECORTE=1: in the split-screen fight the stage meshes that fall wholly outside the tight half-width
+   frustum are not sent to the VU1 (src/battle/stgm_a.c). The picture and the game state stay the same. Read once.
+   On by default on the Xbox 360 (the split fight is CPU bound there), off elsewhere; 0 turns it off. */
+int Port_DivididaRecorte(void) {
+    static int sLido = 0, sLiga = 0;
+    if (!sLido) {
+        const char *e = getenv("BT3_DIVIDIDA_RECORTE");
+#ifdef PORT_X360
+        sLiga = e == NULL || atoi(e) != 0;
+#else
+        sLiga = e != NULL && atoi(e) != 0;
+#endif
+        sLido = 1;
+    }
+    return sLiga;
 }
 /* The picture's width over the console's 4:3 width (1 = not wide). */
 /* In the menus it is 1: their pages are composed for 4:3 (backdrops, scrolling scenery, 2D and 3D placed against

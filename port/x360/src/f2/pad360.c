@@ -5,7 +5,9 @@
    "pronto" e o jogo mostra o aviso de controle desconectado.
 
    Botões como na build de PC com controle (as posições do DualShock 2): A = X, B = círculo, X = quadrado,
-   Y = triângulo, LB/RB = L1/R1, LT/RT = L2/R2, cliques dos analógicos = L3/R3, START = START, BACK = SELECT. */
+   Y = triângulo, LB/RB = L1/R1, LT/RT = L2/R2, cliques dos analógicos = L3/R3, START = START, BACK = SELECT.
+
+   A vibração do jogo vai para o controle do jogador pelo XInputSetState (F8, no fim deste arquivo). */
 #include <xtl.h>
 #include <string.h>
 #include "diario.h"
@@ -50,8 +52,8 @@ static int ler(int quadrante, XINPUT_STATE *e) {
     return XInputGetState((DWORD)quadrante, e) == ERROR_SUCCESS;
 }
 
-/* Roteiro de controle (BT3_ROTEIRO, port/x360/headless/roteiro.c, F4 etapa 4): o jogador 1 vem do roteiro e os
-   dois controles contam como ligados, como na build sem janela (scePad2GetState sempre "pronto"); o XInput não é
+/* Roteiro de controle (BT3_ROTEIRO, port/x360/headless/roteiro.c, F4 etapa 4): os dois jogadores vêm do roteiro e
+   seus controles contam como ligados, como na build sem janela (scePad2GetState sempre "pronto"); o XInput não é
    lido. */
 extern int Roteiro_Ativo(void);
 extern int Roteiro_Pad(int socket, unsigned char *data);
@@ -122,4 +124,144 @@ int Port_PadRead(int socket, unsigned char *data) {
     data[4] = eixo(e->Gamepad.sThumbLX, 0);
     data[5] = eixo(e->Gamepad.sThumbLY, 1);
     return 18;
+}
+
+/* ---- A vibração (F8, decisão 33.4, plano/F8/07-vibracao.md) ----
+   O jogo pede a vibração de cada lutador uma vez por quadro (BtlChar_UpdateVibration, src/battle/btl_char_get.c, só com
+   a opção de vibração daquele jogador ligada, fora do replay e nunca para a CPU) e o Pad_Update manda o pedido do quadro
+   ao controle (Pad_SendActuator, src/sys/pad.c, pelo sceVibSetActParam de port/src/plat_stub.c): bit 0 o motor pequeno
+   ligado ou não, bits 1 a 8 a força do grande, que o jogo nunca passa de 127. Todo quadro sem pedido manda zero: a pausa
+   da luta (BATTLE_FLAG_PAUSE pula o BtlChar_EndFrame), os menus e a opção desligada param os motores pelo próprio jogo.
+   No 360: o grande vai no motor esquerdo (o grave), com 127 na força máxima, e o pequeno no direito (o agudo), ligado ou
+   desligado, no controle que o jogador tem agora (sQuadrante). O XInputSetState só é chamado quando o valor muda.
+   O que o jogo não cobre, a vigia (uma thread na 1, a cada 20 ms) cobre: com a Guide ou outra tela do sistema aberta
+   (XN_SYS_UI, o que inclui a caixa de queda) e quando o jogo para de mandar por mais de VIGIA_MS (queda, saída, carga
+   presa), os motores param; com a tela do sistema aberta o jogo também só manda zero. Um controle que some perde a
+   vibração com ele, e o que entra começa parado. */
+#define VIGIA_MS 250
+
+static CRITICAL_SECTION sVibTrava;       /* o último enviado; o jogo espera, a vigia só tenta (TryEnter) */
+static int sVibPronta;                   /* 1 depois da trava, da vigia e do ouvinte (só a thread do jogo muda) */
+static int sVibQuad[2] = {-1, -1};       /* onde está o último valor enviado de cada jogador (-1: nenhum) */
+static WORD sVibGrave[2], sVibAgudo[2];  /* o último valor enviado */
+static int sVibVisto[2];                 /* a primeira vibração de cada jogador já foi para o diário */
+static volatile DWORD sVibQuando;        /* GetTickCount da última chamada do jogo */
+static volatile LONG sVibSistema;        /* a Guide ou outra tela do sistema aberta (XN_SYS_UI) */
+static HANDLE sOuvinte;
+
+/* com a trava: leva o jogador ao valor no quadrante (-1: sem controle); o quadrante antigo, se vibrava, para antes */
+static void motores(int socket, int quad, WORD grave, WORD agudo) {
+    XINPUT_VIBRATION v;
+    DWORD r;
+
+    if (sVibQuad[socket] >= 0 && sVibQuad[socket] != quad && (sVibGrave[socket] != 0 || sVibAgudo[socket] != 0)) {
+        v.wLeftMotorSpeed = 0;
+        v.wRightMotorSpeed = 0;
+        XInputSetState((DWORD)sVibQuad[socket], &v); /* (o controle que sumiu já parou: o erro não importa) */
+    }
+    if (quad < 0) {
+        sVibQuad[socket] = -1;
+        sVibGrave[socket] = 0;
+        sVibAgudo[socket] = 0;
+        return;
+    }
+    if (quad == sVibQuad[socket] && grave == sVibGrave[socket] && agudo == sVibAgudo[socket]) {
+        return;
+    }
+    v.wLeftMotorSpeed = grave;
+    v.wRightMotorSpeed = agudo;
+    r = XInputSetState((DWORD)quad, &v);
+    sVibQuad[socket] = quad;
+    sVibGrave[socket] = grave;
+    sVibAgudo[socket] = agudo;
+    if (!sVibVisto[socket] && (grave != 0 || agudo != 0)) {
+        sVibVisto[socket] = 1;
+        Diario_Escrever("vibração: a primeira do jogador %d, quadrante %d, grave %u, agudo %u (XInputSetState %u)",
+                        socket + 1, quad + 1, (unsigned)grave, (unsigned)agudo, (unsigned)r);
+    }
+}
+
+/* a vigia: para os motores ligados, se a trava estiver livre (senão, na volta seguinte) */
+static void pararMotores(const char *motivo) {
+    int s, parou = 0;
+
+    if (!TryEnterCriticalSection(&sVibTrava)) {
+        return;
+    }
+    for (s = 0; s < 2; s++) {
+        if (sVibQuad[s] >= 0 && (sVibGrave[s] != 0 || sVibAgudo[s] != 0)) {
+            motores(s, sVibQuad[s], 0, 0);
+            parou = 1;
+        }
+    }
+    LeaveCriticalSection(&sVibTrava);
+    if (parou) {
+        Diario_Escrever("vibração: motores parados (%s)", motivo);
+    }
+}
+
+static DWORD WINAPI Vigia(LPVOID arg) {
+    DWORD id;
+    ULONG_PTR valor;
+    (void)arg;
+    for (;;) {
+        Sleep(20);
+        while (sOuvinte != NULL && XNotifyGetNext(sOuvinte, 0, &id, &valor)) {
+            if (id == XN_SYS_UI && (valor != 0) != (sVibSistema != 0)) {
+                InterlockedExchange(&sVibSistema, valor != 0);
+                Diario_Escrever("vibração: tela do sistema %s", valor != 0 ? "aberta" : "fechada");
+            }
+        }
+        if (sVibSistema) {
+            pararMotores("tela do sistema aberta");
+        } else if (GetTickCount() - sVibQuando > VIGIA_MS) {
+            pararMotores("o jogo parou de mandar");
+        }
+    }
+}
+
+static void iniciarVibracao(void) {
+    HANDLE t;
+
+    InitializeCriticalSection(&sVibTrava);
+    sVibQuando = GetTickCount();
+    sOuvinte = XNotifyCreateListener(XNOTIFY_SYSTEM); /* (o do som360.cpp é outro: cada ouvinte recebe tudo) */
+    if (sOuvinte == INVALID_HANDLE_VALUE) {
+        sOuvinte = NULL;
+    }
+    t = CreateThread(NULL, 64 * 1024, Vigia, NULL, CREATE_SUSPENDED, NULL); /* (o diário com BT3_LOG_SINCRONO grava aqui) */
+    if (t != NULL) {
+        XSetThreadProcessor(t, 1); /* (a 1, com o diário e o vigia do som: nunca a 4 e a 5 do XAudio2) */
+        ResumeThread(t);
+        CloseHandle(t);
+    }
+    Diario_Escrever("vibração: pronta (ouvinte do sistema %s, vigia %s)", sOuvinte != NULL ? "aberto" : "recusado",
+                    t != NULL ? "na thread de hardware 1" : "recusada");
+    sVibPronta = 1;
+}
+
+/* O sceVibSetActParam do 360 (plat_stub.c): dados é o vibData do Pad_SendActuator, na ordem da máquina. */
+int Port_PadVibrar(int socket, unsigned dados) {
+    unsigned forca = (dados >> 1) & 0xFF;
+    WORD grave, agudo;
+    int quad;
+
+    if (socket < 0 || socket > 1 || Roteiro_Ativo()) {
+        return 0;
+    }
+    if (!sVibPronta) {
+        iniciarVibracao();
+    }
+    sVibQuando = GetTickCount();
+    grave = (WORD)(forca >= 127 ? 65535 : forca * 65535 / 127);
+    agudo = (WORD)((dados & 1) ? 65535 : 0);
+    if (sVibSistema) {
+        grave = 0;
+        agudo = 0;
+    }
+    quad = sLigado[socket] ? sQuadrante[socket] : -1;
+    EnterCriticalSection(&sVibTrava);
+    motores(socket, quad, grave, agudo);
+    LeaveCriticalSection(&sVibTrava);
+    return 1;
 }

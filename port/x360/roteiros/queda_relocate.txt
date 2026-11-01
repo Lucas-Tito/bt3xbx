@@ -1,0 +1,68 @@
+# Team Battle, Vegeta (End) SSJ2 (36) contra Broly Lendário (133), um membro por lado.
+# Grade de TeamSel: células 17 e 73, forma 2 em ambas; cartão novo, sem itens.
+inclui boot.txt
+rastreia luta
+quadros 90
+aperta BAIXO 3
+aperta X ate tela 38
+quadros 120
+aperta X
+quadros 40
+aperta BAIXO
+quadros 20
+aperta X
+espera tela 40 max 600
+quadros 150
+aperta DIREITA 3
+aperta BAIXO 2
+aperta X
+quadros 50
+aperta BAIXO 2
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta DIREITA
+quadros 20
+aperta X
+quadros 50
+aperta DIREITA 2
+aperta BAIXO 10
+aperta X
+quadros 50
+aperta BAIXO 2
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta X
+quadros 50
+aperta DIREITA
+quadros 20
+aperta X
+quadros 60
+quadros 30
+aperta X
+espera luta max 3000
+espera seq 3 max 1200
+confere luta 36 0 133 0 0 0 4 13
+marca equipe_confirmada
+ritmo 200 2
+aperta L2 ate ki 0 100000 max 3000
+segura L2 400
+ritmo 6 6
+aperta L2+BAIXO+TRIANGULO ate acao 0 0x105-0x12F max 600
+espera dano 1 max 600
+quadros 180
+marca primeiro_final_flash
+ritmo 200 2
+aperta L2 ate ki 0 100000 max 3000
+segura L2 400
+ritmo 6 6
+aperta L2+BAIXO+TRIANGULO ate acao 0 0x105-0x12F max 600
+espera dano 1 max 600
+quadros 300
+marca tecnica_concluida
+fim

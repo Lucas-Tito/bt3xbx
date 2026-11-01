@@ -3,7 +3,7 @@
 
 Cada getenv e cada ramo de janela (GsGpu_Enabled) e de rede (Port_NetSession, Port_NetVoiceAlt) dos arquivos que
 mexem no som e nos filmes, e o caminho que cada um dá em cada lugar. O 360 lê o ambiente de uma tabela
-(port/x360/src/f2/posix360.c: os padrões do Ambiente_Carregar e por cima o game:\\ambiente.txt); o que não está
+(port/x360/src/f2/posix360.c: os padrões do Ambiente_Carregar e por cima o game:\\environment.txt); o que não está
 nela devolve NULL em silêncio (a lição da F6, 00-escopo.md seção 1.1). O WSL roda os roteiros com o export do
 port/x360/tools/roteiros.sh. O PC (o programa de release) começa sem nenhuma variável e com a janela.
 
@@ -14,7 +14,7 @@ Sai com 1 quando:
   - um arquivo da lista tem um getenv, um GsGpu_Enabled() ou uma chamada de rede que o inventário (INVENTARIO,
     RAMOS) não conhece, ou deixou de ter um que ele conhece (a conta por arquivo tem de bater);
   - um caminho do som (CAMINHOS) dá um valor no 360 e outro no WSL, fora das divergências esperadas (ESPERADAS),
-    em qualquer cenário: o 360 sem desenho (os padrões e os ambiente.txt dados), o 360 com desenho (BT3_GS=gpu) e
+    em qualquer cenário: o 360 sem desenho (os padrões e os environment.txt dados), o 360 com desenho (BT3_GS=gpu) e
     os roteiros do WSL;
   - o 360 sem desenho perde uma variável que os roteiros do WSL definem e que o inventário diz que muda o som.
 --raiz aponta outra cópia dos arquivos (o controle negativo: uma cópia estragada num diretório temporário).
@@ -63,6 +63,7 @@ INVENTARIO = {
     "BT3_WINDOW": ("fora", "plat_stub.c: tamanho da janela"),
     "BT3_SOM": ("saida", "som360.cpp (só no 360; no WSL é o arquivo do rastro, headless/som.c, fora desta lista): =1 o "
                 "SDL_InitSubSystem aceita e o jogo toca pelo XAudio2"),
+    "BT3_SOM_MEDIDAS": ("saida", "som360.cpp: latência e custo, desligados por padrão"),
     "BT3_FILME_LOG": ("saida", "som360.cpp: posição do BGM tocado por imagem apresentada, etapa 7"),
     "BT3_SOM_TESTE": ("saida", "som360.cpp: =1 o tom de teste no começo"),
     "BT3_SOM_TESTE_HZ": ("saida", "som360.cpp: a frequência do tom de teste"),
@@ -128,7 +129,7 @@ ESPERADAS = {
 }
 
 
-# As que só valem com o som do console ligado (BT3_SOM=1 no ambiente.txt, F6 etapa 3): sem ela não divergem, e nem
+# As que só valem com o som do console ligado (BT3_SOM=1 no environment.txt, F6 etapa 3): sem ela não divergem, e nem
 # precisam (ao contrário das ESPERADAS, que têm de divergir nos padrões).
 ESPERADAS_SOM360 = {
     ("360 com desenho", "snd_adx.c device (abre)"):
@@ -160,7 +161,7 @@ def padroes_360(raiz):
 
 
 def ambiente_txt(amb, caminho):
-    """Um game:\\ambiente.txt por cima (NOME=VALOR, -NOME tira, # comentário), como o Ambiente_Carregar."""
+    """Um game:\\environment.txt por cima (NOME=VALOR, -NOME tira, # comentário), como o Ambiente_Carregar."""
     amb = dict(amb)
     for linha in pathlib.Path(caminho).read_text(encoding="utf-8").splitlines():
         linha = linha.rstrip("\r\n")
@@ -194,7 +195,7 @@ def gpu_de(amb, p):
     return g == "gpu"
 
 
-# Cada mutante: (arquivo, texto a trocar, troca, ambiente.txt ou None). Todos têm de sair com 1.
+# Cada mutante: (arquivo, texto a trocar, troca, environment.txt ou None). Todos têm de sair com 1.
 MUTANTES = [
     ("port/x360/src/f2/posix360.c", 'definir("BT3_SOUND_TICKS", "1");', "", None),
     ("port/src/gs/snd_adx.c", "static int by_ticks(void) {",
@@ -228,11 +229,11 @@ def mutantes():
                     continue
                 (d / rel).write_text(t.replace(de, para), encoding="utf-8")
             if amb is not None:
-                (d / "ambiente.txt").write_text(amb, encoding="utf-8")
-                args += ["--ambiente", str(d / "ambiente.txt")]
+                (d / "environment.txt").write_text(amb, encoding="utf-8")
+                args += ["--ambiente", str(d / "environment.txt")]
             r = subprocess.run(args, capture_output=True, text=True)
             motivo = [x for x in r.stdout.splitlines() if x.startswith(">> ") and "FALHA" not in x]
-            print(f"mutante {i} ({rel or 'ambiente.txt'}): saída {r.returncode}; {motivo[0] if motivo else ''}")
+            print(f"mutante {i} ({rel or 'environment.txt'}): saída {r.returncode}; {motivo[0] if motivo else ''}")
             if r.returncode != 1:
                 falhas += 1
     print("todos os mutantes acusados" if falhas == 0 else f">> FALHA: {falhas} mutante(s) não acusado(s)")
@@ -245,7 +246,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--raiz", default=str(ROOT))
     ap.add_argument("--ambiente", action="append", default=[],
-                    help="ambiente.txt de uma rodada do console (vale para o 360 sem e com desenho)")
+                    help="environment.txt de uma rodada do console (vale para o 360 sem e com desenho)")
     a = ap.parse_args()
     raiz = pathlib.Path(a.raiz)
     erros = []
@@ -291,7 +292,7 @@ def main():
             erros.append(f"{n}: muda o som e está {'só no WSL' if n in wsl else 'só no 360'}")
 
     # 3. os caminhos
-    # (um ambiente.txt com BT3_GS=gpu já é o cenário com desenho: aí o sem desenho não se roda e sai da conta)
+    # (um environment.txt com BT3_GS=gpu já é o cenário com desenho: aí o sem desenho não se roda e sai da conta)
     cen = {}
     som360 = s360.get("BT3_SOM") == "1"
     for amb in (s360, c360):
@@ -312,8 +313,8 @@ def main():
                 else:
                     print(f"esperada ({nome}): '{k}' {c[k]} contra {cw[k]}: {motivo}")
             elif (nome, k) in ESPERADAS:
-                if a.ambiente:  # (um ambiente.txt pode desligar a diferença: BT3_NOMOVIE=1 no console)
-                    print(f"esperada ({nome}): '{k}' igual com este ambiente.txt")
+                if a.ambiente:  # (um environment.txt pode desligar a diferença: BT3_NOMOVIE=1 no console)
+                    print(f"esperada ({nome}): '{k}' igual com este environment.txt")
                 else:
                     erros.append(f"{nome}: '{k}' deixou de divergir nos padrões; tire-o de ESPERADAS")
     if erros:

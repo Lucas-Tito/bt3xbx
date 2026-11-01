@@ -158,6 +158,12 @@ static int fake_pipe_get(uint32_t key) {
     return sPipeCount++;
 }
 
+#ifdef BT3_GS_ESPERAS
+#include "prefixos.h"
+#else
+#define px_progresso() ((void)0)
+#endif
+
 /* ------------------------------------------------------------------------------------------------ o fim do quadro */
 /* o hash do quadro em seções (cada uma com a sua semente), para dizer onde duas builds divergem. (degrau 2) As seções
    depois da S_TEX se fazem num hash próprio (sH), do lado do desenho: com a divisão, o sHash continua recebendo, na
@@ -404,6 +410,64 @@ static void contagens(const Vista *q, uint32_t desenhos, int pipes) {
 
 #include "gpu_comum.h"
 
+#ifdef GS_ALFA
+#include "../include/gs_alfa.h"
+extern const int gGsAlfaOrigem;
+static void alfa_confere(const GsQuadro *q) {
+    unsigned n, des = 0, alto = 0;
+    if (q->alfa == NULL || !gGsAlfaOrigem) {
+        fprintf(stderr, "FALHA: alfa sem metadado no quadro %u\n", q->quadro);
+        abort();
+    }
+    for (n = 0; n < q->drawCount; n++) {
+        unsigned mascara = (sPipeKey[q->draws[n].pipeline] >> 16) & 15;
+        int ref = gs_alfa_referencia(q, &q->draws[n], mascara);
+        int novo = gs_alfa_metadado(q, n, mascara);
+        if (ref != novo) {
+            fprintf(stderr, "FALHA: alfa quadro %u desenho %u: %d != %d\n", q->quadro, n, ref, novo);
+            abort();
+        }
+        des += ref >= 0;
+        alto += ref > 0;
+    }
+    fprintf(stderr, "alfa: quadro %u desenhos %u altos %u, 0 diferentes\n", q->quadro, des, alto);
+}
+#endif
+#ifdef GS_LOTES
+#include "lotes_envio.h"
+#endif
+/* F7: geometria 3D realmente entregue em cada tesoura, sem confundir HUD com cenário.
+   BT3_SCALE=1 é exigido pelo lançador. Este backend não rasteriza: conteúdo significa
+   índices de primitivas, e as imagens de software são conferidas numa rede separada. */
+extern int Roteiro_Cameras(unsigned *v);
+static void f7_perfil(unsigned quadro);
+static void f7_vistas(const Vista *q) {
+    unsigned v[11], n[3] = {0, 0, 0}, d[3] = {0, 0, 0};
+    uint32_t i;
+    int batalha;
+    if (getenv("BT3_DOIS") == NULL) return;
+    batalha = Roteiro_Cameras(v);
+    for (i = 0; i < q->drawCount; i++) {
+        const GsDraw *p = &q->draws[i];
+        int k, x = p->scissor[0], w = p->scissor[2];
+        if ((batalha ? !p->vu : p->vu) || p->native || p->count < 3 || p->target < 0 ||
+            p->target >= q->targetCount || (int)q->targets[p->target].fbp != q->fbp) continue;
+        k = x + w <= 256 ? 0 : x >= 256 ? 1 : 2;
+        n[k] += p->count;
+        d[k]++;
+    }
+    if (!batalha) {
+        printf("f7m: gs %u quadro %u indices %u %u %u desenhos %u %u %u\n",
+               q->quadro, v[10], n[0], n[1], n[2], d[0], d[1], d[2]);
+        fflush(stdout);
+        return;
+    }
+    printf("f7v: gs %u quadro %u seq %u modo %u cameras %u %08x %u %u %u %08x %u %u indices %u %u %u desenhos %u %u %u totais %u %u %u\n",
+           q->quadro, v[10], v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9],
+           n[0], n[1], n[2], d[0], d[1], d[2], q->drawCount, q->vuIdxCount, q->vuUniCount);
+    fflush(stdout);
+}
+
 static void fake_frame_end(void) {
     uint32_t i;
     uint64_t quadro = 1469598103934665603ull;
@@ -413,6 +477,13 @@ static void fake_frame_end(void) {
     const uint32_t *bytes;
 #ifdef BT3_GS_ESPERAS
     const GsQuadro *g = gsQuadro;
+#ifdef GS_LOTES
+    fake_lotes_fim(g);
+#endif
+    if (!g->dividido) px_final(g);
+#ifdef GS_ALFA
+    alfa_confere(g);
+#endif
     q.draws = g->draws; q.drawCount = g->drawCount; q.verts = g->verts; q.vertCount = g->vertCount;
     q.vuVerts = g->vuVerts; q.vuVertCount = g->vuVertCount; q.vuIdx = g->vuIdx; q.vuIdxCount = g->vuIdxCount;
     q.vuUni = g->vuUni; q.vuUniCount = g->vuUniCount; q.targets = g->targets; q.targetCount = g->targetCount;
@@ -424,6 +495,8 @@ static void fake_frame_end(void) {
     q.fbp = gGsMainFbp; q.quadro = gGsFrame; q.anchor = gsAnchor; q.skipped = gsSkipped; q.native = gsNative; q.dividido = 0;
 #endif
 
+    f7_vistas(&q);
+    f7_perfil(q.quadro);
     comum_lista(&q);
 
     if (q.dividido) { /* a S_TEX e as contagens da gravação vieram na entrega */
@@ -562,6 +635,7 @@ static void fake_frame_end(void) {
    fechada no ponto em que o fim do quadro a fechava, as contagens, os bytes da cadeia, o hash normal dos desenhos); e a
    regra do gs_gpu.c para o cleared da gravação: também o alvo que recebe uma imagem enviada (native 100 e 101) */
 static void fake_entrega(const GsQuadro *q, unsigned char *limpa) {
+    px_final(q);
     uint32_t i;
     sEntregue.tex = sHash;
     sHash = 1469598103934665603ull;
@@ -592,7 +666,12 @@ static void fake_solta(GsTex tex, int alvo) {
         envenena(tex);
     }
 }
-#define FAKE_DIVISAO , fake_entrega, fake_solta_pede, fake_solta, fake_vu_jogo, fake_vu_feito
+#ifdef GS_LOTES
+#define FAKE_LOTES , fake_lotes_prontos, fake_lotes_prepara, fake_lotes_desenha
+#else
+#define FAKE_LOTES
+#endif
+#define FAKE_DIVISAO , fake_entrega, fake_solta_pede, fake_solta, fake_vu_jogo, fake_vu_feito FAKE_LOTES
 #else
 #define FAKE_DIVISAO
 #endif
@@ -638,6 +717,24 @@ static inline uint64_t tique(void) {
 #else
 static inline uint64_t tique(void) { return 0; }
 #endif
+
+/* Variação dos contadores do perfil já existente, por quadro. Tiques só têm sentido na x86. */
+static void f7_perfil(unsigned quadro) {
+    static uint64_t antes[3];
+    uint64_t agora[3] = {0, 0, 0};
+    int f;
+    if (getenv("BT3_DOIS") == NULL || sPerfil != 1) return;
+    for (f = 0; f < F_N; f++) {
+        agora[0] += sFam[f].chamadas;
+        agora[1] += sFam[f].tiques;
+        agora[2] += sFam[f].tiques_desenho;
+    }
+    printf("f7p: gs %u chamadas %llu tiques %llu gravacao %llu\n", quadro,
+           (unsigned long long)(agora[0] - antes[0]), (unsigned long long)(agora[1] - antes[1]),
+           (unsigned long long)(agora[2] - antes[2]));
+    fflush(stdout);
+    memcpy(antes, agora, sizeof(antes));
+}
 
 #define AMOSTRAS_MAX 65536
 static struct { uint32_t pc, n; } sAmostra[AMOSTRAS_MAX];
@@ -770,6 +867,7 @@ void __wrap_GsGpu_Draw(int type, int ctx, const struct GsVertex *v) {
     }
     if (sJanelaB == 0) {
         __real_GsGpu_Draw(type, ctx, v);
+        px_progresso();
     }
 }
 
@@ -844,10 +942,12 @@ void __wrap_GsGpu_DrawVu0(int layer, int ctx, const float *v, uint32_t n, const 
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu0(layer, ctx, v, n, c);
+        px_progresso();
         return;
     }
     t0 = tique();
     __real_GsGpu_DrawVu0(layer, ctx, v, n, c);
+    px_progresso();
     conta(layer == 5 ? F_P1 : layer == 2 ? F_P2 : layer == 3 ? F_P8 : layer == 4 ? F_P7 : F_P0, t0, n, i0);
 }
 void __wrap_GsGpu_DrawVu4(int ctx, const float *v, uint32_t n, const float *c) {
@@ -855,10 +955,12 @@ void __wrap_GsGpu_DrawVu4(int ctx, const float *v, uint32_t n, const float *c) {
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu4(ctx, v, n, c);
+        px_progresso();
         return;
     }
     t0 = tique();
     __real_GsGpu_DrawVu4(ctx, v, n, c);
+    px_progresso();
     conta(F_P4, t0, n, i0);
 }
 void __wrap_GsGpu_DrawVu6(int ctx, const float *v, uint32_t n, const float *c) {
@@ -866,10 +968,12 @@ void __wrap_GsGpu_DrawVu6(int ctx, const float *v, uint32_t n, const float *c) {
     uint32_t i0 = gsVuIdxCount;
     if (sPerfil <= 0 || sPerfil == 3) {
         __real_GsGpu_DrawVu6(ctx, v, n, c);
+        px_progresso();
         return;
     }
     t0 = tique();
     __real_GsGpu_DrawVu6(ctx, v, n, c);
+    px_progresso();
     conta(F_P6, t0, n, i0);
 }
 

@@ -122,16 +122,17 @@ def executar(args):
             finally:
                 alterar(copia, pos)
 
-        with copia.open("r+b") as f:
-            f.seek(iso.MARCA_POS + 16)
-            f.write(struct.pack("<I", 1))
-        try:
-            rodar([*comando, args.origem, copia, *base, "--conferir", "--dados", args.dados],
-                  trabalho / "estrago-marca-antiga.log", 1, "marca, versão ou conversor incompatível")
-        finally:
+        for versao_antiga in (1, 2, 3):
             with copia.open("r+b") as f:
                 f.seek(iso.MARCA_POS + 16)
-                f.write(struct.pack("<I", iso.VERSAO))
+                f.write(struct.pack("<I", versao_antiga))
+            try:
+                rodar([*comando, args.origem, copia, *base, "--conferir", "--dados", args.dados],
+                      trabalho / f"estrago-marca-v{versao_antiga}.log", 1, "marca, versão ou conversor incompatível")
+            finally:
+                with copia.open("r+b") as f:
+                    f.seek(iso.MARCA_POS + 16)
+                    f.write(struct.pack("<I", iso.VERSAO))
         arte = Path(t) / "arte"
         shutil.copytree(iso.RAIZ / "port/x360/arte/kenney", arte)
         png = arte / "xbox_button_color_a.png"

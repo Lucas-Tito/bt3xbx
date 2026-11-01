@@ -170,6 +170,12 @@ int main(int argc, char **argv) {
     long long pior;
     int esc4 = 0;
     char det[200];
+    int efeito = 123;
+    Diario_Escrever("%n", &efeito);
+    Diario_Descarregar();
+    Diario_Fechar();
+    confere(efeito == 123 && gPicosDiario == 0 && sTravaPronta == 0,
+            "desligado: sem formatação, contagem ou trava", "");
 
     /* 1 e 2: o jeito do anel, com o disco de 40 ms por flush */
     Diario_Abrir(arq);
@@ -262,6 +268,7 @@ if [ "${1:-}" = "--mutantes" ]; then
         fi
         echo "mutante $1: acusado ($(grep -c '^FALHOU' "$T/mutante.txt") falhas): $(grep '^FALHOU' "$T/mutante.txt" | head -2 | cut -c1-110 | tr '\n' '|')"
     }
+    mut sem-guarda-desligado '/^void Diario_Escrever/,/^}/{s/    if (sArquivo == INVALID_HANDLE_VALUE || !sTravaPronta) {/    if (0) {/}'
     # a queda: o Descarregar não faz nada
     mut sem-descarga '/^void Diario_Descarregar/,/^}/{s/    Drenar();/    \/\* sem \*\//;s/    Comitar();/    \/\* sem \*\//}'
     # a emenda do anel: a segunda parte da gravação some
@@ -270,7 +277,7 @@ if [ "${1:-}" = "--mutantes" ]; then
     mut escreve-no-disco 's/    if (sThread == NULL || sSincrono) {/    if (1) {/'
     # o anel cheio bloqueia em vez de descartar: sem a conta das perdidas
     mut sem-conta-de-perdas 's/        sPerdidas++;/        \/\* sem \*\//'
-    echo "os quatro mutantes foram acusados"
+    echo "os cinco mutantes foram acusados"
     exit 0
 fi
 

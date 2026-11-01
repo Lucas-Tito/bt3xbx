@@ -1,0 +1,22 @@
+# F7, etapa 3. Seleção compartilhada com a sonda de console.
+inclui f7_um_inicio.txt
+quadros 60
+marca ponto dividido
+segura CIRCULO 180
+quadros 2
+marca ponto perfil_fim
+termina luta vence max 1800
+espera seq 6 max 1200
+quadros 60
+aperta BAIXO 3
+quadros 20
+aperta X
+quadros 60
+aperta CIMA
+quadros 20
+aperta X
+espera tela 4 max 3000
+quadros 120
+marca ponto retorno
+quadros 30
+fim

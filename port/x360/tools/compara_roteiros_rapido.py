@@ -178,7 +178,7 @@ def comparar(a, b):
     for nome in sorted(arquivos):
         igual(nome)
     for alvo in ('x86', 'ppc'):
-        nome = f'img/{alvo}/saida.txt'
+        nome = f'img/{alvo}/output.txt'
         x, y = ((p / nome).read_text(errors='replace').splitlines() for p in (a, b))
         exigir([l for l in x if l.startswith('imagem:')] == [l for l in y if l.startswith('imagem:')],
                f'momento de captura diferente: {alvo}')
@@ -226,7 +226,7 @@ def mutantes():
                  'som_a.txt som_b.txt som_p.txt som_pa.txt som_xa.txt '
                  'ha.txt hq.txt hm.txt hqa.txt hxa.txt ppcsm.txt gdb.txt '
                  'mem_62/hq.txt.dump mem_62/hq.txt.pages img/x86/teste.ppm img/ppc/teste.ppm '
-                 'img/x86/saida.txt img/ppc/saida.txt').split()
+                 'img/x86/output.txt img/ppc/output.txt').split()
         for raiz in (a, b):
             for nome in nomes:
                 f = raiz / nome

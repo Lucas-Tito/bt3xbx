@@ -106,7 +106,7 @@ parciais da H9). Se o WSL reiniciar antes, o serviço some: armar de novo com a 
 
 O `.xex` é o da main (nenhuma mudança no 360 neste branch). Ambientes em [05-ambientes](05-ambientes/), um por abertura;
 cada um grava as capturas numa pasta própria (`game:\shots_<nome>`). Envio, com o console na FreeStyle e o `.xex` e o
-`shenlong.txt` da main já lá: `python3 port/x360/tools/subir.py --nome ambiente.txt docs/x360/plano/F8/05-ambientes/ambiente_<nome>.txt`;
+`shenlong.txt` da main já lá: `python3 port/x360/tools/subir.py --nome environment.txt docs/x360/plano/F8/05-ambientes/environment_<nome>.txt`;
 abrir o `.xex`; no fim, voltar à FreeStyle, `subir.py --baixar bt3xbx.log` (para o Linux, só o log) e, **no WSL**,
 `subir.py --baixar-pasta shots_<nome> --para ~/brilho/console/<nome>`. Antes de baixar, conferir o espaço do C:
 (as 241 capturas de uma abertura do Shenlong são uns 200 MB).

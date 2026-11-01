@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """F5, etapa 8, degrau 1 (no WSL): quantos quadros de duas rodadas --gpu têm a lista diferente, e onde.
 
-    divergencias.py BASE OUTRO [--secoes 2,4,5,6 | --normal]
+    divergencias.py BASE OUTRO [--secoes 2,4,5,6 | --normal] [--como BASE_REF OUTRO_REF]
 
 Casa as linhas `gpu_falso: quadro N lista ...` dos dois logs pelo número do quadro (não pela posição: uma rodada que
 cai no meio ou pula um quadro não desloca as outras). Diz: quadros de cada lado, quadros só de um lado, quadros com a lista
@@ -17,6 +17,9 @@ constantes), como o SECOES do vu1_perfil.sh compara.
 --normal: compara as linhas `gpu_falso: normal quadro N HASH` (BT3_GPU_NORMAL=1), o hash do quadro em que cada textura do
 desenho vale pelo conteúdo decodificado e não pelo número de criação: duas rodadas que decodificam um número diferente de
 texturas se comparam pelo que cada desenho amostra de fato (as listas "de sempre" divergem desde a primeira textura a menos).
+--como: em vez de nenhum quadro diferente, exige a mesma diferença do par BASE_REF OUTRO_REF: os mesmos quadros com a lista
+diferente e, em cada um, o mesmo hash da BASE que o da BASE_REF e o mesmo do OUTRO que o do OUTRO_REF (entre arquiteturas, a
+diferença conhecida da build normal). Um quadro a mais, um a menos ou um hash trocado reprova; as outras exigências continuam.
 """
 import collections
 import re
@@ -76,6 +79,13 @@ def main():
     normal = "--normal" in args
     if normal:
         args.remove("--normal")
+    como = None
+    if "--como" in args:
+        i = args.index("--como")
+        como = args[i + 1:i + 3]
+        if len(como) != 2:
+            sys.exit(__doc__)
+        del args[i:i + 3]
     if "--secoes" in args:
         i = args.index("--secoes")
         secoes = [int(x) for x in args[i + 1].split(",")]
@@ -91,6 +101,20 @@ def main():
     comuns = sorted(set(a) & set(b))
     so_a, so_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
     dif = [n for n in comuns if a[n] != b[n]]
+    dif_ok = not dif
+    if como:
+        # lido depois de guardar soltas e misturadas do OUTRO: le() as zera
+        ra, _, _, _ = le(como[0], secoes, normal)
+        rb, _, _, _ = le(como[1], secoes, normal)
+        if normal and (not ra or not rb):
+            sys.exit("ERRO: nenhuma linha 'gpu_falso: normal quadro' na referência " + (como[0] if not ra else como[1]))
+        ref = {n: (ra[n], rb[n]) for n in set(ra) & set(rb) if ra[n] != rb[n]}
+        aqui = {n: (a[n], b[n]) for n in dif}
+        mais, menos = sorted(set(aqui) - set(ref)), sorted(set(ref) - set(aqui))
+        trocados = sorted(n for n in set(aqui) & set(ref) if aqui[n] != ref[n])
+        print(f"referência: {len(ref)} quadros diferentes; a mais: {len(mais)} {mais[:12]}; a menos: {len(menos)} "
+              f"{menos[:12]}; hash trocado: {len(trocados)} {trocados[:12]}")
+        dif_ok = not mais and not menos and not trocados
     print(f"base: {len(a)} quadros{'' if fim_a else ' (SEM a linha final: caiu)'}; outro: {len(b)} quadros"
           f"{'' if fim_b else ' (SEM a linha final: caiu)'}")
     print(f"só na base: {len(so_a)}" + (f" (de {so_a[0]} a {so_a[-1]})" if so_a else "") +
@@ -125,9 +149,9 @@ def main():
         print(f"desenhos com textura já solta: {soltas_b}")
     if mist_a or mist_b:
         print(f"linhas misturadas (outra escrita no meio da linha do quadro): base {mist_a}, outro {mist_b}")
-    ok = not so_a and not so_b and not dif and fim_b is not None and not corridas and contador_ok and not soltas_b \
+    ok = not so_a and not so_b and dif_ok and fim_b is not None and not corridas and contador_ok and not soltas_b \
         and not mist_a and not mist_b
-    print("iguais" if ok else "DIFERENTES")
+    print(("iguais" + (" à referência" if como else "")) if ok else "DIFERENTES")
     sys.exit(0 if ok else 1)
 
 

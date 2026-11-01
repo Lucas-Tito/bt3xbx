@@ -91,7 +91,7 @@ def tira_marcas(s):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--saida', type=Path, required=True)
-    p.add_argument('--base', default='bbc07118')
+    p.add_argument('--base', default='78dbb29c')
     a = p.parse_args()
     a.saida.mkdir(parents=True, exist_ok=True)
     cab = (RAIZ/'port/x360/src/gs/cadeia_cpu.h').read_text()
@@ -117,6 +117,8 @@ def main():
         print(nome, 'sabotagem acusada' if troca else 'tudo certo', r.returncode)
     fonte = RAIZ/'port/x360/src/gs/gs_d3d.cpp'
     base = subprocess.check_output(['git', 'show', a.base+':port/x360/src/gs/gs_d3d.cpp'], cwd=RAIZ, text=True)
+    # A base atual já tem a instrumentação e os diagnósticos optativos. Só os nomes nos comentários mudam aqui.
+    base = tira_marcas(base).replace('ambiente'+'.txt', 'environment.txt')
     atual = fonte.read_text()
     assert tira_marcas(atual) == base, 'as chamadas originais mudaram'
     ruim = atual.replace('sDev->DrawIndexedVertices(D3DPT_TRIANGLELIST, 0, ini, d->count)',
@@ -156,7 +158,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='bt3-ambientes-') as d:
         pasta = Path(d)/'nova'
         assert gerador.prepara(pasta, 'prova32') == 34
-        saves = [next(l for l in arq.read_text().splitlines() if l.startswith('BT3_SAVES=')) for arq in pasta.glob('ambiente_*.txt')]
+        saves = [next(l for l in arq.read_text().splitlines() if l.startswith('BT3_SAVES=')) for arq in pasta.glob('environment_*.txt')]
         assert len(saves) == len(set(saves)) == 34
         for rodada, destino in [('prova32', pasta), ('nome_invalido', Path(d)/'outra')]:
             try: gerador.prepara(destino, rodada)

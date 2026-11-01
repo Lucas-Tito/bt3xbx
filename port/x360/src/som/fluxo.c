@@ -16,7 +16,8 @@
 
 #ifdef _XBOX
 #include <xtl.h>
-#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o ambiente.txt) */
+#include "diario.h"
+#pragma warning(disable : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt) */
 #else
 #include <pthread.h>
 #include <time.h>
@@ -76,7 +77,7 @@ static FluxoContadores sCont;
 #ifdef _XBOX
 static CRITICAL_SECTION sTrava;
 static HANDLE sAcorda, sThread;
-static unsigned agora_ms(void) { return GetTickCount(); }
+static unsigned agora_ms(void) { return gX360Log ? GetTickCount() : 0; }
 static void trava(void) { EnterCriticalSection(&sTrava); }
 static void destrava(void) { LeaveCriticalSection(&sTrava); }
 static void acorda(void) { SetEvent(sAcorda); }
@@ -425,15 +426,23 @@ void Fluxo_Fechar(Fluxo *f) {
 }
 
 void Fluxo_Parar(void) {
+#ifdef _XBOX
+    if (!sLigado || sThread == NULL) return;
+#else
     if (!sLigado || sParado) {
         return;
     }
+#endif
     trava();
     sSair = 1;
     acorda();
     destrava();
 #ifdef _XBOX
-    WaitForSingleObject(sThread, 2000);
+    {
+        DWORD r = WaitForSingleObject(sThread, 2000);
+        Diario_Escrever("saída: carga fluxos: espera=%08X teto=2000 ms", (unsigned)r);
+        if (r == WAIT_OBJECT_0) { CloseHandle(sThread); sThread = NULL; }
+    }
 #else
     pthread_join(sThread, NULL);
 #endif

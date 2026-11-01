@@ -1,0 +1,362 @@
+[
+  {
+    "arquivo": "docs/x360/guia-de-port.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 133,
+    "sha256": "c39258162d0d4d0891a8e50ccd0cf2b90dc72a5fc5952cf0accb46729000da12"
+  },
+  {
+    "arquivo": "docs/x360/guia-de-port.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 708,
+    "sha256": "ae332c6c29e1aaadbe706a920bf26097ab519e9166ee3b41cba02afeb1bce8ed"
+  },
+  {
+    "arquivo": "docs/x360/guia-de-port.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 1207,
+    "sha256": "c714dfeae6b6060728a3a7eec7c03af53e63259416f60b2856a68652aed8a217"
+  },
+  {
+    "arquivo": "docs/x360/plano/F4/01-02.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 11,
+    "sha256": "84e5eb5230b68899464811cfa4b6401f050da187f83d022eb2ec5c19fd4ed1e6"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/02.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 83,
+    "sha256": "1f31ee0ea5eca9282b5cd11cb303f1fa59eb6da17484b627040d666a90af432e"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/02.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 128,
+    "sha256": "52c21d426e7d0c5e2ecf29f9b9611e501976a68a3d1de36682eeda100ab82569"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/02.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 167,
+    "sha256": "ef90fcc6942f6864474993a8d9a6d9743b01eaf7764f94ebc8799a94f336ce13"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/06.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 156,
+    "sha256": "a22f021d4b2fee3ea175fbda1be5feee3f41d927df1f0c05e58ba34e824052ae"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/06.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 305,
+    "sha256": "f3038fa654d42a2daa6b68e41b398d3623d39f5eeff3f90a2ea37d173f93ea04"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/07.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 385,
+    "sha256": "1b1a3b7b50af15c436e83b4db951a28ff370c3d78755b4853d8c7e0fbc80801f"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-degrau2.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 376,
+    "sha256": "e944b0a6bac09e73a06f709d13b53cd5f2c455eb534a9e7e0bd260b2eff92d05"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 610,
+    "sha256": "e1ab389e01b12796a712d8a2ba1589845fe7f4ae672b363073ce8aac4113598f"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 653,
+    "sha256": "ff1fed5d56e42d9d1cf5344e260c17dcd900e7bb0af28dcaef2f6f512ea3af2d"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 666,
+    "sha256": "ed989d8570444fba9ff64dd5bc5c6cc148b23ecb84d87ef76e51871566752cf0"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 861,
+    "sha256": "362c7ae3d6cc1525097df946c62d361bc72c530d34dff4eac396e813c0ab2915"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 867,
+    "sha256": "d87d44e817c82cbcf5ce655c34660d47049f174dbde4ab9945d84a66fdb8ccdf"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 3798,
+    "sha256": "18d6010a61653c23af9ed0fa80392245905d3bd2915d95becff01177b087a2ff"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 3868,
+    "sha256": "ea98d9aa36981e28275c6ddd9a66e5f2e2cfca589def153b7ad11c8fb8169a98"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 4232,
+    "sha256": "dbbbf80d701cb396e3a31203bc9b4c273ce0c762e7d51e021cdc94b8dd69f7de"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 4515,
+    "sha256": "7bc969b21a832b355cf37bcc7b8d58fbe42829b077043d2cbd3e6252b0270dc2"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-gravacao.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 4733,
+    "sha256": "5bbf1fde3da27e8622ab6bdf31e2bc9de7b569dc557f96b5458c0e3a8efc0dc5"
+  },
+  {
+    "arquivo": "docs/x360/plano/F5/08-threads.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 617,
+    "sha256": "7faba75b8f8122c73938e293e0e6685fab40d2590c8863e50f494ee0b4bc4562"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/00-escopo.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 402,
+    "sha256": "ff3d0dc535e96fafd08c583fc1ec4f8ea4e7f1176f98771f705a5649d4f850e9"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/01.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 14,
+    "sha256": "b64ef1de335c34dbb7c978caf00e1ca81980ed1a74086a04f15740a0251cae1f"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/01.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 59,
+    "sha256": "add8baf0b708593519d155242e85df0ded6453d3ccfe37188f07bc9c8786f589"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/01.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 60,
+    "sha256": "1576f10e7bc555e1c076394b7893b8320034643b6466bff446858312558721f7"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/01.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 226,
+    "sha256": "90ce9fa2334954f4fb8bbfaa30f00cbee313bc9e6b8390a7b957f3c75f79b115"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/03.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 184,
+    "sha256": "572c40c3b017527e556b5bb2fbaccde18e478c1639827cb80b2986d2071447ee"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/05.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 199,
+    "sha256": "54f2e0780b95826a9b0a79e1dd8ceed0a9dc5e03890746979e6bb47bb591b4c3"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/05.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 229,
+    "sha256": "00b726d7f8853c8fc4956cb91d435e656c93cbb8d02a27dff7074aebe9ca45de"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/05.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 244,
+    "sha256": "b3747fe0e94a19d78fcbfd40f5bb909c1de420f1f15fa4d7fe71a5a33f269563"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/05.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 276,
+    "sha256": "770127c1507cdad4b6d094f8aae0b3ba71802d1b8761c51039c99516170d0b5e"
+  },
+  {
+    "arquivo": "docs/x360/plano/F6/05.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 352,
+    "sha256": "c8e93fce6908428759b9014f2bab05ccd51895758ad6872c3c1d8faa2dd05d51"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/16x9.md",
+    "motivo": "registro de rodada anterior a 29/10/2026; preserva o nome do artefato ou texto observado",
+    "linha_na_base": 14,
+    "sha256": "5bd81b22ae3ba5872723cd49b21730123d08d48052d1a6b5784a2b34e8321d33"
+  },
+  {
+    "arquivo": "port/x360/tools/teste_iso_avisos.py",
+    "motivo": "controle negativo: proíbe citar o nome antigo nas caixas da ISO",
+    "linha_na_base": 201,
+    "sha256": "289dff3148dbc6f03d59e4ca8dd1903435382408bd04394709a67c0dccaec3ed"
+  },
+  {
+    "arquivo": "port/x360/tools/teste_iso_avisos.py",
+    "motivo": "controle negativo: proíbe citar o nome antigo nas caixas da ISO",
+    "linha_na_base": 220,
+    "sha256": "4f0c6228102b8ab32c82c42ea16a6445ca94e61ccb211f8c16e66abcde823d2e"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/03-conversao-console.md",
+    "motivo": "texto histórico do estudo de conversão: cita o nome antigo que o código usava antes da troca",
+    "linha_atual": 41,
+    "sha256": "b2eefce757f38d27afb59b7f58459941247ba8a6c9a56f388a403de6a03f0ab9"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/06-publicacao.md",
+    "motivo": "texto histórico da publicação: descreve os nomes proibidos no pacote, incluindo o antigo",
+    "linha_atual": 81,
+    "sha256": "caab9f71b3d3e87e8502b8a76964641b0ffd52d1e919d5a968126cefdf8e40e0"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/06-publicacao.md",
+    "motivo": "texto histórico da publicação: descreve os nomes proibidos no pacote, incluindo o antigo",
+    "linha_atual": 137,
+    "sha256": "519aaeabb5c3a0778f1e88436743dae93200ba06ca202372a2c2fcdccbac212e"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 185,
+    "sha256": "4174db6d2014a2497d87025d46e67cc6426e9761040f86ff0c6d3311bf594806"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 188,
+    "sha256": "1eec061a9a2d83e288abaa247bf4d458c0bd4c10aac6964da5533d47a810e55e"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 192,
+    "sha256": "af43b850e1ef490397514a2de7ad7e14a4c6896faf7c9606077f6faad77fb996"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 193,
+    "sha256": "ba5839afeb1713b48044ad853fe8c98c5e9a7fad90da813f86ac60ee9e238a17"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 194,
+    "sha256": "d79d1d6af7e03c57ed4c96565bc9dcca63bc100281319793f231026c20a34af5"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 195,
+    "sha256": "35c8d7fd41826bd401f28a8f1cac79e579c365382b8ff51a524515ebb0b36c78"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 196,
+    "sha256": "12634af77fedba93d7dc8a460ca4b295d495c5940d9af428e764a82890bf8d8a"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 197,
+    "sha256": "d96f09450665fc822be5f7e333590526fcf7946ee3b360ee2a1b1b3513b7eeac"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 202,
+    "sha256": "e1dbc33b0a7455fdda90ca7e2b35fa3605506a1b993f61ed58b734de2e9c9034"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/09-escala.md",
+    "motivo": "registro histórico da rodada de escala: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 205,
+    "sha256": "e35eeb5f1c8092b55e038c0dfa8d9c6bf7a31456b58165d0ef7055e97bd078e4"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/10-msaa.md",
+    "motivo": "registro histórico da rodada de MSAA: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 206,
+    "sha256": "ab73d5352a4fdb80c8a0e9bb330945d86b39129c2d106fc7b10b1b1ff46d162c"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/10-msaa.md",
+    "motivo": "registro histórico da rodada de MSAA: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 212,
+    "sha256": "6276f7ae77268e1ff0c9f2c9fba847ffcc79f6112ae39afad89bf48b60aed334"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/10-msaa.md",
+    "motivo": "registro histórico da rodada de MSAA: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 213,
+    "sha256": "84cfae2ef0db6b075203fde9c1b8ce3f82b32ef98b2d2f6a0e8acc923afa4aef"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/10-msaa.md",
+    "motivo": "registro histórico da rodada de MSAA: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 214,
+    "sha256": "df3e9daeb831f266c52f6d1b8ece7b5ced2c86d95a6eaf65168ab19eab57ff03"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/10-msaa.md",
+    "motivo": "registro histórico da rodada de MSAA: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 215,
+    "sha256": "582019d43efefb59cba581a8dc58701252c25ed375ddaec5bf4101a1d31561aa"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/10-msaa.md",
+    "motivo": "registro histórico da rodada de MSAA: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 240,
+    "sha256": "e5dc80320208d9b08ed4894de546e11fd14a01b4d6d2b1b1ee27541216c27e35"
+  },
+  {
+    "arquivo": "docs/x360/plano/F8/10-msaa.md",
+    "motivo": "registro histórico da rodada de MSAA: preserva os nomes dos modelos enviados ao console na época",
+    "linha_atual": 481,
+    "sha256": "1c3c4fe73bb38b3be360c793d7b977f53629de0726fed209e4c9207d4a22551c"
+  },
+  {
+    "arquivo": "port/x360/src/teste_instalar/ui/xtl.h",
+    "motivo": "controle negativo: o teste garante que o texto da tela não cita o nome antigo",
+    "linha_atual": 89,
+    "sha256": "e30323600991f6ae3ff20d8169b36130a1cea67ce8bfe59ebdad64e24dbc9fd1"
+  },
+  {
+    "arquivo": "port/x360/tools/pacote_confere.py",
+    "motivo": "controle negativo: o conferidor do pacote proíbe o nome antigo dos modelos dentro do release",
+    "linha_atual": 11,
+    "sha256": "7796eda9f3a2db6b2e2b8c038c6371073a1c0e6b63fe2a205228c9d246da6ed8"
+  },
+  {
+    "arquivo": "port/x360/tools/pacote_confere.py",
+    "motivo": "controle negativo: o conferidor do pacote proíbe o nome antigo dos modelos dentro do release",
+    "linha_atual": 65,
+    "sha256": "cfed630cba4c1997373c7d12e5cedf146f538e2496eb20841683f6b7db7b511e"
+  },
+  {
+    "arquivo": "port/x360/tools/teste_pacote.py",
+    "motivo": "controle negativo: planta o nome antigo no pacote para provar que o conferidor o reprova",
+    "linha_atual": 99,
+    "sha256": "f915e750889ee79ab6605d22ec07ece4487727e7d47554427f3738f44bfe4336"
+  }
+]

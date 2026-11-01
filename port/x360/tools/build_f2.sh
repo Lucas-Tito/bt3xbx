@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # F2: o jogo para o Xbox 360 (port/x360/src/f2/main360.cpp), da preparação ao .xex. Sem janela por padrão; com
-# BT3_GS=gpu no ambiente.txt, desenhando pelo backend D3D9 (port/x360/src/gs/gs_d3d.cpp, F3, etapa 7).
+# BT3_GS=gpu no environment.txt, desenhando pelo backend D3D9 (port/x360/src/gs/gs_d3d.cpp, F3, etapa 7).
 #   port/x360/tools/build_f2.sh          ->  build/x360/f2/default.xex (+ .map, .pdb)
 # Passos:
 #   1. c89.py (imagem bt3xbx-ferramentas): cada fonte do jogo e do port vira C89 para o cl;
@@ -24,18 +24,32 @@ mkdir -p $OUT/c89 $OUT/obj $OUT/dados $OUT/x360 $OUT/shaders
 TITLE_ID=$(grep '^TITLE_ID=' port/x360/package/titulo.env | cut -d= -f2-)
 TITLE_NAME=$(grep '^TITLE_NAME=' port/x360/package/titulo.env | cut -d= -f2-)
 
+# O selo da versão 4 inclui o executável PC. Gerado uma vez no host para os dois caminhos.
+python3 port/x360/tools/preparar_iso_console.py
+
 echo "== 1. preparação (c89.py)"
 rm -f $OUT/c89/*.c
 # (F5, etapa 3) o carimbo do commit no log do console (port/x360/headless/passos.c: "passos: origem ..."), no formato
 # do headless.py: o commit e o sha1 da diferença para ele, com os arquivos novos (da39a3ee5e: sem diferença)
 CARIMBO="$(git rev-parse --short HEAD) diff:$( { git diff HEAD; git ls-files -o --exclude-standard -z | xargs -0 -r cat; } | sha1sum | cut -c1-10)"
 echo "   carimbo: $CARIMBO"
-docker run --rm --user "$(id -u):$(id -g)" -e BT3_CARIMBO="$CARIMBO" -v "$RAIZ":/app -w /app bt3xbx-ferramentas python3 port/x360/tools/c89.py $OUT/c89 | tail -2
+# a versão da release, a mesma do README do pacote (port/x360/package/versao.env): no crash.txt, no log e no pacote
+BT3_VERSAO=$(grep '^VERSION=' port/x360/package/versao.env | cut -d= -f2-)
+echo "   versão: $BT3_VERSAO"
+# (F5, seção 36) BT3_ALFA_ORIGEM=1: a build com o alfa exato calculado na gravação, nos dois lados (gs_draw.c pelo c89.py e o
+# backend). O log da build com ele diz "gs_d3d: alfa exato na origem"; o carimbo é o mesmo commit. Ligado por padrão desde
+# 30/10 (rodadas le40a2910 e im40a2910: tempo igual ao da normal e as 22 capturas iguais); BT3_ALFA_ORIGEM=0 faz a normal.
+BT3_ALFA_ORIGEM=${BT3_ALFA_ORIGEM:-1}
+ALFA=""; [ "$BT3_ALFA_ORIGEM" = 1 ] && ALFA="-D BT3_ALFA_ORIGEM" && echo "   build com o alfa na origem: BT3_ALFA_ORIGEM"
+# (F5, seção 38) BT3_GS_LOTES=1: a build dos lotes (gravação pelo c89.py e backend gs_d3d.cpp); o log dela diz "gs_d3d: lotes (BT3_GS_LOTES)"
+[ "${BT3_GS_LOTES:-0}" = 1 ] && ALFA="$ALFA -D BT3_GS_LOTES" && echo "   build com os lotes: BT3_GS_LOTES"
+docker run --rm --user "$(id -u):$(id -g)" -e BT3_CARIMBO="$CARIMBO" -e BT3_VERSAO="$BT3_VERSAO" -e BT3_GS_LOTES="${BT3_GS_LOTES:-0}" -e BT3_ALFA_ORIGEM="$BT3_ALFA_ORIGEM" -e BT3_PERFIL_CADEIA="${BT3_PERFIL_CADEIA:-0}" -v "$RAIZ":/app -w /app bt3xbx-ferramentas python3 port/x360/tools/c89.py $OUT/c89 | tail -2
 
 echo "== 2. compilação (cl.exe)"
 CLFLAGS="-c -Ox -Oi -fp:precise -fp:except- -GS- -Gy -GF -MT -W3 -Zi"
-# (F5, seção 35) BT3_PERFIL_CADEIA=1: a build de perfil, com as marcas do diagnóstico da CPU (gs/cadeia_cpu.h); a normal
-# fica sem elas, porque mesmo desligadas custavam tempo no fim do quadro
+# (F5, seção 35) BT3_PERFIL_CADEIA=1: a build de perfil, com as marcas do diagnóstico da CPU (gs/cadeia_cpu.h) e, desde a
+# seção 38, o relógio da gravação por desenho (gs_draw.c pelo c89.py); a normal fica sem elas, porque mesmo desligadas
+# custavam tempo no fim do quadro
 PERFIL=""; [ "${BT3_PERFIL_CADEIA:-0}" = 1 ] && PERFIL="-D BT3_PERFIL_CADEIA" && echo "   build de perfil: BT3_PERFIL_CADEIA"
 port/x360/tools/cl_jogo.sh $OUT/c89 $OUT/obj $CLFLAGS -Fd$OUT/obj/ >/dev/null
 python3 port/x360/tools/cl_resumo.py $OUT/obj | head -1
@@ -54,13 +68,13 @@ docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app 
   for f in port/x360/src/gs/*.cpp; do
     n=$(basename ${f%.*})
     INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX -D PORT_X360 -D PORT_BIG_ENDIAN \
-      '"$CLFLAGS $PERFIL"' -TP -EHsc -GR- -Iport/x360/src -Iport/src/gs -Iport/x360/src/gs/cl -I'"$OUT"'/shaders \
+      '"$CLFLAGS $PERFIL $ALFA"' -TP -EHsc -GR- -Iport/x360/src -Iport/src/gs -Iport/x360/src/gs/cl -I'"$OUT"'/shaders \
       -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
   done
-  for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp port/x360/src/som/*.c port/x360/src/som/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do
+  for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/iso_instalar.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp port/x360/src/som/*.c port/x360/src/som/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do
     n=$(basename ${f%.*}); t=-TC; case $f in *.cpp) t="-TP -EHsc -GR-";; esac
     INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX '"$CLFLAGS"' $t \
-      -Iport/x360/src -Iport/x360/conv -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
+      -Iport/x360/src -Iport/x360/conv -Ibuild/x360/iso -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
   done
   chown -R '"$(id -u):$(id -g)"' '"$OUT"'
   exit $ok'

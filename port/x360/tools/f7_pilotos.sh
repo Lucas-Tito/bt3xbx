@@ -73,8 +73,8 @@ if [ "$modo" = ensaio ]; then
         rm -rf "$S/ensaio-$n"
         mkdir -p "$S/ensaio-$n"
         BT3_ROTEIRO="port/x360/roteiros/$n.txt" BT3_SAVES="$S/ensaio-$n/cartao" \
-            timeout 900 port/build/x86/bt3_x86 2>&1 | tee "$S/ensaio-$n/saida.txt" >/dev/null
-        tail -8 "$S/ensaio-$n/saida.txt"
+            timeout 900 port/build/x86/bt3_x86 2>&1 | tee "$S/ensaio-$n/output.txt" >/dev/null
+        tail -8 "$S/ensaio-$n/output.txt"
     done
     echo 'ensaio: tudo certo'
     exit 0

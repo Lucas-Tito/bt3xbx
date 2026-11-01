@@ -1,3 +1,8 @@
+BT3_LOG=1
+BT3_ESTADO_TEMPOS=1
+BT3_FILME_MEDIDAS=1
+BT3_SOM_MEDIDAS=1
+BT3_TEMPOS=1
 # Abertura 1: hud. Ver LEIA-ME.md. Pastas novas obrigatórias.
 BT3_ISO=game:\bt3-x360.iso
 BT3_SAVES=game:\ic2810k_01_hud_s

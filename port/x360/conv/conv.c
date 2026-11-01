@@ -244,7 +244,9 @@ void Conv_MenuInativo(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuCharRef(ConvCtx *c, conv_ofs base, conv_ofs tam);
 void Conv_MenuShenlong(ConvCtx *c, conv_ofs base, conv_ofs tam);
 
+void Conv_Transicao(ConvCtx *c, conv_ofs base, conv_ofs tam);
 static const Formato sFormatos[] = {
+    {"transicao", Conv_Transicao},
     {"menu_inativo", Conv_MenuInativo},         /* sem leitor: só bytes, menus-ref.md */
     {"menu_charref", Conv_MenuCharRef},         /* menus-ref.md, modo 60 */
     {"menu_shenlong", Conv_MenuShenlong},       /* modos 70 e 71 */
@@ -268,7 +270,7 @@ static const Formato sFormatos[] = {
     {"labio_luta", Conv_LabioLuta},            /* 4: as faixas de boca das falas (BtlScript_GetFile8Entry) */
     {"menu_pacote", Conv_MenuPacote},          /* menus.md 2: arquivo de menu (tabela de seções em BPE) */
     {"menu_bpe", Conv_MenuBpe},                /* 3: um contêiner BPE inteiro (recursos do cartão, imagens) */
-    /* menus.md 5: pacotes de tela descomprimidos, em tempo de jogo (Port_ConvertMenuPack, um por chamador) */
+    /* menus.md 5: conteúdos antecipados na ISO v4, antes de recomprimir os pacotes de tela. */
     {"menu_cartao", Conv_MenuCartao},          /* 5.1: tela do cartão (BootCard_Init) */
     {"menu_logos", Conv_MenuLogos},            /* 5.2: logos do boot (FirstRun_Main) */
     {"menu_mcflow", Conv_MenuMcFlow},          /* 5.3: recursos do cartão (McFlow_Init) */
@@ -317,13 +319,14 @@ static const Formato sFormatos[] = {
    ids de arquivo do jogo 1..0xD47 são a partição 1 (pzs3us1/NNNNN.bin, índice id - 1; include/sys/file.h).
    Seção (ConvFaixa.secao): CONV_ARQ é o arquivo como está no disco (Conv_Arquivo, iso360.c); 0 é o conteúdo do
    contêiner BPE que começa no deslocamento 0 do arquivo; n >= 1 é o conteúdo da seção n da tabela do arquivo
-   (menu_pacote, menus.md 2.1). O conteúdo descomprimido se converte em tempo de jogo, pelo gancho de quem chama o
-   Sprite_Unpack (menus.md 4); a conv_tool usa estas linhas no --mapa e no --disco. As faixas da mesma seção não se
+   (menu_pacote, menus.md 2.1). Os menus são convertidos antes de recomprimir na ISO v4; folhas e animações
+   mantêm os ganchos de carga. A conv_tool usa estas linhas no --mapa e no --disco. As faixas da mesma seção não se
    sobrepõem (a conv_tool confere a cada execução: faixas_conferidas). */
 static const ConvFaixa sFaixas[] = {
-    /* ShenScene_StepLoad: os três dragões e as duas variantes das esferas, todos slots de modelo (N = 252). */
-    {0xD3C - 1, 0xD3D - 1, CONV_ARQ, "personagem"},
-    {0xD45 - 1, 0xD47 - 1, CONV_ARQ, "personagem"},
+    /* BtlLoad_StepStageChange: os dois filmes de destruição de cenário. */
+    {0x1BF - 1, 0x1C0 - 1, CONV_ARQ, "transicao"},
+    /* BTL_FILE_OBJECT: modelos extras dos golpes (ids >= 256), dragões e esferas de ShenScene. */
+    {0xD1C - 1, 0xD47 - 1, CONV_ARQ, "personagem"},
     /* Referência e Shenlong (menus-ref.md); a seção 1 do 472 não tem Sprite_Unpack no jogo. */
     {462, 462, CONV_ARQ, "menu_pacote"}, /* tabela de três seções vazias */
     {472, 472, 1, "menu_inativo"},
@@ -558,7 +561,9 @@ int Conv_FormatoBits(const char *formato, const char *nome, conv_u8 *buf, conv_o
 
 int Conv_Arquivo(const char *nome, conv_u8 *buf, conv_ofs tam, conv_u8 *feito, char *msg, int nmsg) {
     const char *f = formato_de(nome);
-    return f != NULL ? Conv_Formato(f, nome, buf, tam, feito, msg, nmsg) : 0;
+    int r = f != NULL ? Conv_Formato(f, nome, buf, tam, feito, msg, nmsg) : 0;
+    if (r == 1 && Conv_MenusISO(nome, buf, tam, msg, nmsg) < 0) return -1;
+    return r;
 }
 
 const char *Conv_FormatoDe(const char *nome) {

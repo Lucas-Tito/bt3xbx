@@ -90,6 +90,9 @@ extern void BtlObjDraw_Draw(void);
 extern void StgModel_InitStage(void);
 extern void StgModel_Cull(s32 view);
 extern void StgModel_Draw(s32 view);
+#ifdef PORT
+extern s32 gPortStgHalf; /* stgm_a.c */
+#endif
 extern void Snd_StopBankAndResume(s32 arg);
 extern void Snd_SendFighters(void);
 extern void BtlLoad_PollObjectRequest(void);
@@ -274,12 +277,18 @@ s32 Battle_DrawSplit(void) {
 
     Dbg_ProfMark(gBattleProf);
     Gfx_MarkPass(1);
+#ifdef PORT
+    gPortStgHalf = 1; /* the two views of this loop are halves of the screen (stgm_a.c, BT3_DIVIDIDA_RECORTE) */
+#endif
     for (i = 0; i < 2; i++) {
         BtlCam_SelectView(i);
         BtlCam_ApplyView(1);
         StgModel_Cull(gBtlCamView);
         StgModel_Draw(gBtlCamView);
     }
+#ifdef PORT
+    gPortStgHalf = 0;
+#endif
     Dbg_ProfColor(gBattleProf, 0x80FF4040);
     Dbg_ProfMark(gBattleProf);
     Gfx_MarkPass(3);

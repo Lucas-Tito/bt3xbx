@@ -454,6 +454,17 @@ static int um(const char *dados, const char *rel) {
             fclose(fp);
         }
     }
+    /* O fluxo BPE recomprimido não se compara byte a byte com o PS2: a memória
+       usa a referência convertida exata ao lado das marcas e do original. */
+    if (marcas != NULL && r > 0 && !bpe && Conv_FormatoDe(rel) != NULL &&
+        (!strcmp(Conv_FormatoDe(rel), "menu_pacote") || !strcmp(Conv_FormatoDe(rel), "menu_bpe"))) {
+        char *q;
+        sprintf(caminho, "%s/%s.convertido", marcas, rel);
+        for (q = caminho + strlen(marcas) + 1; *q; q++) if (*q == '/') *q = '_';
+        fp = fopen(caminho, "wb");
+        if (fp == NULL || fwrite(buf, 1, (size_t)tam, fp) != (size_t)tam) falhas++;
+        if (fp != NULL) fclose(fp);
+    }
     if (saida != NULL && r > 0 && !bpe) {
         FILE *lista;
         if (icones && strcmp(rel, "pzs3us1/00004.bin") == 0 &&

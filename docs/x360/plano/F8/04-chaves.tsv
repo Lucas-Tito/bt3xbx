@@ -1,0 +1,192 @@
+chave	classe	tabela_do_360	consumidores
+BT3_AFIADO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_ALFA_CONFERE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_ALVO_AREA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_ASPECT	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_stub.c
+BT3_AT	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/headless.c
+BT3_ATE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/f2/estado360.c
+BT3_AUTOTESTES	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_BGM_DEBUG	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	src/menu/menu_c_e.c
+BT3_BURN_MS	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_CADEIA_CPU	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/cadeia_cpu.h
+BT3_CAMCHECK	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/headless.c
+BT3_CHARA	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/headless.c
+BT3_CLASH_SQUARE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/sem_janela.c
+BT3_COMUM_GPU	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_CORTE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_CORTES	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/cortes_impl.h
+BT3_CORTES_GPU	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_COR_FUNDO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_COSTUME	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/headless.c
+BT3_CRASH_TEST	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_mem.c
+BT3_DATA	configuração ou teste explícito	game:\\gamedata	port/src/plat_extras.c,port/src/plat_file.c,port/src/plat_mem.c,port/src/plat_songs.c,port/src/plat_stages.c,port/x360/src/f2/mpeg_mede.c,port/x360/src/f2/posix360.c
+BT3_DEMO	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/headless.c
+BT3_DESBLOQUEIO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/roteiro.c
+BT3_DISPLAY	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_DIVIDIDA_RECORTE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_stub.c
+BT3_DOIS	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/roteiro.c
+BT3_DUMP	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/headless.c
+BT3_EDRAM_RESIDENTE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_EDRAM_SABOTA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_ENVIO_CONTA	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_ENVIO_RAPIDO	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_ESCALA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_ESTADO_TEMPOS	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/f2/estado360.c
+BT3_EXTRA_STAGES	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_stages.c
+BT3_F7	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/roteiro.c
+BT3_FBA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_FILE_ALIAS	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_file.c
+BT3_FILME	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/f2/filme360.c
+BT3_FILME_BLOCO_KB	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/f2/filme360.c
+BT3_FILME_LOG	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp,port/x360/src/som/som360.cpp
+BT3_FILME_MEDIDAS	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/f2/filme360.c
+BT3_FILME_SHOTS	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_FLUXO_BLOCO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/som/fluxo.c
+BT3_FLUXO_SABOTA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/som/fluxo.c
+BT3_FULLSCREEN	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_FXAA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_FX_OFF	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_GLOW	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_GPU_API	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_GS	configuração ou teste explícito	gpu	port/src/gs/gs_core.c,port/x360/src/f2/main360.cpp,port/x360/src/f2/posix360.c
+BT3_GS_ATRASO_US	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_GS_CAP_DIV	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_GS_DESENHO	configuração ou teste explícito	1	port/src/gs/gs_draw.c,port/x360/src/f2/posix360.c
+BT3_GS_DESENHO_ATRASO_US	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_GS_DESENHO_HW	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/f2/main360.cpp
+BT3_GS_DUMP	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_GS_FROM	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_GS_PROBE	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_GS_RACE	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_GS_SEM_COPIA	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_GS_STOP	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_GS_TEX_MAX	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_GS_THREAD	configuração ou teste explícito	1	port/src/gs/gs_core.c,port/x360/src/f2/posix360.c
+BT3_GS_VERBOSE	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_core.c,port/src/gs/gs_vu1.c,port/src/plat_stub.c
+BT3_GS_ZDUMP	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_core.c
+BT3_HASH	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/headless.c,port/x360/src/f2/estado360.c
+BT3_HUD_SWAP	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/sem_janela.c
+BT3_INTERP	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c,port/x360/src/gs/gs_d3d.cpp
+BT3_INTERP_3D	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_CUTLOG	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_DUMP	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_FRAMES	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_JUMPS	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_LINEAR	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_LOG	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_ONE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_ONLY	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_PART	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_SKIP	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_STEPLOG	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_T	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_INTERP_THROUGH	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_ISO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/iso360.c
+BT3_LOG	liga o diagnóstico somente com valor 1	ausente; padrão local no consumidor	port/x360/src/f2/posix360.c
+BT3_LOG_FLUSH_MS	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/f2/posix360.c
+BT3_LOG_SINCRONO	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/f2/posix360.c
+BT3_LOTES	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_LOTES_ENVIO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_MC_FALHA	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_mc.c
+BT3_MEM_PISO_MB	configuração ou teste explícito	32	port/x360/src/f2/posix360.c,port/x360/src/gs/gs_d3d.cpp
+BT3_MEM_TEX_MB	configuração ou teste explícito	128	port/x360/src/f2/posix360.c,port/x360/src/gs/gs_d3d.cpp
+BT3_MENU_ITEM4	configuração ou teste explícito	0	port/src/headless.c,port/x360/src/f2/posix360.c
+BT3_MPEG_MEDE	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/f2/mpeg_mede.c
+BT3_MSAA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_MSAA_2D	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_MSAA_A2C	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_MSAA_CONTORNO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_MSAA_SABOTA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_MSAA_VAGAS	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_MSAA_VOLTA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_NAMEFONT_DISC	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/namefont.c
+BT3_NAMEFONT_OUT	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/namefont.c
+BT3_NAMEFONT_TEST	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/namefont.c
+BT3_NATIVOS	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_NOMOVIE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_movie.c
+BT3_NOSOUND	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/snd_adx.c
+BT3_OTIM	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_OTIM_DATE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_OTIM_LIMPA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_OTIM_NEVOA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_OTIM_PS	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_OTIM_SEMTEX	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_PACED	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_stub.c
+BT3_PAD_PLAY	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_movie.c,port/src/plat_stub.c
+BT3_PAD_REC	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/plat_stub.c
+BT3_PAD_TABLE	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/plat_stub.c
+BT3_PICOS	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_PICOS_TELA	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_PRESENT_LOG	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_PS_TRIVIAL	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_QUEDA_TESTE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/f2/main360.cpp
+BT3_QUEDA_TESTE_THREAD	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/f2/main360.cpp
+BT3_RECEITA	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/roteiro.c
+BT3_RELOGIO_GRAV	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_RELOGIO_MARCAS	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_REPLAY	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/headless.c
+BT3_ROTEIRO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/roteiro.c
+BT3_SAVES	configuração ou teste explícito	game:\\saves	port/src/plat_mc.c,port/x360/headless/roteiro.c,port/x360/src/f2/posix360.c
+BT3_SCALE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_SEAM_CHECK	configuração ou teste explícito	ausente; padrão local no consumidor	src/port/vu0_a.c
+BT3_SEED	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_sys.c
+BT3_SETTINGS	configuração ou teste explícito		port/src/plat_settings.c,port/x360/src/f2/posix360.c
+BT3_SE_GAIN	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/snd_se.c
+BT3_SHOT	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_core.c,port/x360/src/gs/gs_d3d.cpp
+BT3_SHOT_CHEIA	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_SHOT_FROM	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_SHOT_LISTA	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_SHOT_PASTA	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_SHOT_TO	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_SND_VERBOSE	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/snd_adx.c,port/src/gs/snd_se.c
+BT3_SOM	configuração ou teste explícito	1	port/x360/src/f2/posix360.c,port/x360/src/som/som360.cpp
+BT3_SOM_DERIVA	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/som/som360.cpp
+BT3_SOM_ESTADO	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/roteiro.c
+BT3_SOM_MEDIDAS	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/x360/src/som/som360.cpp
+BT3_SOM_TESTE	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/som/som360.cpp
+BT3_SOM_TESTE_HZ	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/som/som360.cpp
+BT3_SOM_TESTE_S	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/som/som360.cpp
+BT3_SONGS	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_extras.c
+BT3_SONG_DEBUG	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/headless.c
+BT3_SOUND	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/snd_adx.c
+BT3_SOUND_TICKS	configuração ou teste explícito	1	port/src/gs/snd_adx.c,port/x360/src/f2/posix360.c
+BT3_STACK_TEST	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_mem.c
+BT3_STAGES	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_extras.c
+BT3_STAGES_DEBUG	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	src/menu/menu_c_e.c
+BT3_STAGE_BUF	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_stages.c
+BT3_STAGE_REPLACE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/headless.c
+BT3_SYNCTEST	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/snd_adx.c
+BT3_TEMPOS	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c,port/x360/src/gs/gs_d3d.cpp
+BT3_TEST_BGM	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_songs.c
+BT3_TEST_SCREEN	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_stages.c
+BT3_TEST_STAGE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/plat_stages.c
+BT3_TEX_2D	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_TEX_ALPHA	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_TEX_CONTA	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_TEX_DUMP	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_TEX_ORIGEM	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_TEX_RAPIDA	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_TEX_TILED	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_TRACE	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/headless.c
+BT3_TRACE_CAM	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/headless.c
+BT3_TRACE_SEQ	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/headless.c
+BT3_UNCAPPED	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c,port/src/plat_stub.c
+BT3_UNPACK_CONTA	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_vu1.c
+BT3_UNPACK_PRE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_vu1.c
+BT3_VARIANT	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/headless.c
+BT3_VBLANK_HW	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp
+BT3_VIEW	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/headless/sem_janela.c
+BT3_VU1	configuração ou teste explícito	1	port/src/gs/gs_vu1.c,port/x360/src/f2/posix360.c
+BT3_VU1_DIRETO	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c,port/x360/src/gs/gs_d3d.cpp
+BT3_VU_CALLS	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_vu1.c
+BT3_VU_CONSTANTES	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_VU_CONST_CONFERE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_VU_DUMP	diagnóstico (exige BT3_LOG=1)	ausente; padrão local no consumidor	port/src/gs/gs_vu1.c
+BT3_VU_ESTADO_CONFERE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_VU_FECHO	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_VU_INTERP	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_vu1.c
+BT3_VU_PLANO_CONFERE	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c
+BT3_VU_VERTS	configuração ou teste explícito	98304	port/x360/src/f2/posix360.c,port/x360/src/gs/gs_d3d.cpp
+BT3_WIDE	configuração ou teste explícito	1	port/src/plat_stub.c,port/x360/src/f2/posix360.c
+BT3_WINDOW	configuração ou teste explícito	ausente; padrão local no consumidor	port/src/gs/gs_draw.c,port/src/plat_stub.c
+BT3_Z	configuração ou teste explícito	ausente; padrão local no consumidor	port/x360/src/gs/gs_d3d.cpp

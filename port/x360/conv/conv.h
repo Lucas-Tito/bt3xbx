@@ -124,4 +124,9 @@ typedef struct ConvIcone360 {
 } ConvIcone360;
 int Conv_Icones360(conv_u8 *buf, conv_ofs tam, const ConvIcone360 *arte, unsigned n, char *msg);
 
+
+/* ISO v4: conteúdo dos menus convertido e recomprimido antes da carga. */
+int Conv_MenusISO(const char *nome, conv_u8 *buf, conv_ofs tam, char *msg, int nmsg);
+int Conv_BpeAbrir(const conv_u8 *p, conv_ofs n, conv_u8 *out, conv_ofs tam);
+
 #endif

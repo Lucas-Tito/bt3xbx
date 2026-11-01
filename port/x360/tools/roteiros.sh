@@ -258,7 +258,7 @@ for n in "${NOMES[@]}"; do
         JUNTA=0
         if [ "${RAPIDO:-1}" = 1 ] && [ "${MEM:-fim}" != menu ]; then
             JUNTA=1
-            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao && $n != f7_elenco_* ]] || PONTOS=(--pontos)
+            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao && $n != f7_dividido && $n != f7_elenco_* ]] || PONTOS=(--pontos)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
         fi
@@ -298,8 +298,8 @@ for n in "${NOMES[@]}"; do
             if [ "$JUNTA" = 1 ]; then
                 while read -r t VT; do cp $D/ppcsm.txt $D/mem_$t/ppc.txt; done < $D/mem_telas.txt
                 if [ -n "${IMG:-}" ]; then
-                    cp $D/ppcsm.txt $D/img/ppc/saida.txt
-                    cp $D/x86mem.txt $D/img/x86/saida.txt
+                    cp $D/ppcsm.txt $D/img/ppc/output.txt
+                    cp $D/x86mem.txt $D/img/x86/output.txt
                 fi
             fi
         fi
@@ -377,7 +377,7 @@ for n in "${NOMES[@]}"; do
             # seleções, Treino, Opções): no fim da luta o pacote, os retratos, os estágios e as páginas já foram
             # liberados, e só ali as conversões da etapa 5b estão vivas. Cada tela exige os conteúdos dela vivos e
             # conformes (roteiros.py TELAS_MEM); uma rodada a mais da PPC e da x86 por tela
-            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao && $n != f7_elenco_* ]] || PONTOS=(--pontos)
+            PONTOS=(); [[ $n != f5_* && $n != f7_transformacao && $n != f7_dividido && $n != f7_elenco_* ]] || PONTOS=(--pontos)
             python3 port/x360/tools/roteiros.py vblanks_mem $D/telas_a.txt "${PONTOS[@]}" > $D/mem_telas.txt ||
                 falhou "vblanks_mem sem as telas"
             while read -r t VT; do
@@ -430,20 +430,20 @@ for n in "${NOMES[@]}"; do
                 rm -rf $I/$b; mkdir -p $I/$b; cp $D/imagens.txt $I/$b/lista.txt
                 if [ $b = x86 ]; then
                     env "${IMGENV[@]}" BT3_IMAGENS=$I/$b/lista.txt BT3_ROTEIRO=$R BT3_SAVES=$I/$b/s /usr/bin/time -a -o "$D/tempos.tsv" -f 'imagem-x86\t%e' timeout 900 \
-                        $B/x86/bt3_x86 > $I/$b/saida.txt 2>&1 < /dev/null
+                        $B/x86/bt3_x86 > $I/$b/output.txt 2>&1 < /dev/null
                 else
                     env "${IMGENV[@]}" BT3_IMAGENS=$I/$b/lista.txt BT3_DATA=$D/dados \
                         BT3_CONVERTIDOS=$D/dados/mods/convertidos.txt BT3_ROTEIRO=$R BT3_SAVES=$I/$b/s \
-                        /usr/bin/time -a -o "$D/tempos.tsv" -f 'imagem-ppc\t%e' timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $I/$b/saida.txt 2>&1 < /dev/null
+                        /usr/bin/time -a -o "$D/tempos.tsv" -f 'imagem-ppc\t%e' timeout ${TP:-3600} qemu-ppc $B/ppc/bt3_ppc > $I/$b/output.txt 2>&1 < /dev/null
                 fi
             fi
-            python3 port/x360/tools/roteiros.py telas $I/$b/saida.txt > $I/$b/telas.txt
+            python3 port/x360/tools/roteiros.py telas $I/$b/output.txt > $I/$b/telas.txt
             cmp_i=$(python3 port/x360/tools/roteiros.py compara $D/telas_a.txt $I/$b/telas.txt)
-            echo "   imagens ($b): $(grep -c '^imagem: ' $I/$b/saida.txt) gravadas; rastro: $cmp_i"
+            echo "   imagens ($b): $(grep -c '^imagem: ' $I/$b/output.txt) gravadas; rastro: $cmp_i"
             grep -q '^iguais' <<< "$cmp_i" || falhou "imagens: o rastro da $b com o rasterizador diferente do da x86"
         done
         python3 port/x360/tools/roteiros.py compara_imagens $D/imagens.txt $I/x86 $I/ppc \
-            --saidas $I/x86/saida.txt $I/ppc/saida.txt --telas $D/telas_a.txt > $D/imagens_compara.txt
+            --saidas $I/x86/output.txt $I/ppc/output.txt --telas $D/telas_a.txt > $D/imagens_compara.txt
         r=$?
         sed 's/^/   /' $D/imagens_compara.txt
         [ $r = 0 ] || falhou "imagens das telas diferentes entre a x86 e a PPC"
