@@ -39,7 +39,7 @@ typedef struct Instalar {
 } Instalar;
 static volatile LONG sFase, sPorcento;
 /* Contagem por categoria para a tela, publicada campo a campo com Interlocked (a tela só lê). */
-static volatile LONG sTotal[IC_NCATS], sFeito[IC_NCATS], sAtual = -1, sBatidas;
+static volatile LONG sTotal[IC_NCATS], sFeito[IC_NCATS], sAtual = -1, sBatidas, sVerif, sVerifTotal, sVerifBlocos;
 static const char *const sEtapas[5] = {"identificar", "copiar", "converter", "verificar", "publicar"};
 static int sEtapa = -1;
 static DWORD sEtapaInicio;
@@ -284,6 +284,9 @@ static void categorias(void *ctx, const IcContas *c) {
     }
     InterlockedExchange(&sAtual, (LONG)c->atual);
     InterlockedExchange(&sBatidas, (LONG)c->batidas);
+    InterlockedExchange(&sVerif, (LONG)c->verif_mb);
+    InterlockedExchange(&sVerifTotal, (LONG)c->verif_total_mb);
+    InterlockedExchange(&sVerifBlocos, (LONG)c->verif_blocos);
 }
 /* MB decimais por segundo, a mesma unidade do modelo de tempo da nota. */
 static double mbs(conv_u32 bytes, DWORD ms) { return ms ? (double)bytes / 1000.0 / (double)ms : 0.0; }
@@ -299,6 +302,9 @@ void IsoInstalar_Contas(IcContas *c) {
     }
     c->atual = (int)InterlockedCompareExchange(&sAtual, 0, 0);
     c->batidas = (conv_u32)InterlockedCompareExchange(&sBatidas, 0, 0);
+    c->verif_mb = (conv_u32)InterlockedCompareExchange(&sVerif, 0, 0);
+    c->verif_total_mb = (conv_u32)InterlockedCompareExchange(&sVerifTotal, 0, 0);
+    c->verif_blocos = (conv_u32)InterlockedCompareExchange(&sVerifBlocos, 0, 0);
     c->extra_total = c->extra_feito = 0;
 }
 int IsoInstalar_Limpar(void) {
@@ -347,6 +353,9 @@ int IsoInstalar_Executar(const char *origem) {
     }
     InterlockedExchange(&sAtual, -1);
     InterlockedExchange(&sBatidas, 0);
+    InterlockedExchange(&sVerif, 0);
+    InterlockedExchange(&sVerifTotal, 0);
+    InterlockedExchange(&sVerifBlocos, 0);
     progresso(&c, IC_IDENTIFICAR, 0, 1);
     Diario_Escrever("conversão: início, %u bytes", (unsigned)IC_TAMANHO);
     if (!abrir_operacao(&c, &c.leitora, 0) || !abrir_operacao(&c, &c.escritora, 1)) {

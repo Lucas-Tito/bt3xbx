@@ -64,7 +64,7 @@ def main():
                 print(f"png: {args.png / (f.stem + '.png')}", flush=True)
         texto = DESENHO.read_text()
         mutantes = [
-            ("giro por tempo em vez de batida", "telaGiro(e.c.batidas)", "telaGiro(e.ms / 250)", "giro mudou com o tempo"),
+            ("giro por tempo em vez de batida", "telaGiro(i == 6 ? e.c.verif_blocos : e.c.batidas)", "telaGiro(e.ms / 250)", "giro mudou com o tempo"),
             ("giro parado", "[batidas & 3]", "[0]", "giro não avançou"),
             ("FAILED sem vermelho", "ISO_CONV_T_FALHOU, TELA_FALHA", "ISO_CONV_T_FALHOU, TELA_TEXTO", "sem FAILED vermelho"),
             ("giro em toda linha", "gira_agora = !ok && e.fase == IC_CONVERTER && e.c.atual == i - 1;", "gira_agora = !ok;", "fora da linha da categoria atual"),

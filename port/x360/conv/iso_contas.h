@@ -13,6 +13,8 @@ typedef struct IcContas {
     conv_u32 batidas;
     /* Categoria da entrada em conversão agora, ou -1. */
     int atual;
+    /* A verificação: MiB relidos e o total (a ISO inteira), e uma batida por bloco relido, que gira o indicador. */
+    conv_u32 verif_mb, verif_total_mb, verif_blocos;
 } IcContas;
 #ifdef __cplusplus
 extern "C" {

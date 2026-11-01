@@ -78,7 +78,7 @@ static void texto(D3DDevice *dev, const char *s, int x, int y, int escala, unsig
 #define TELA_X 80
 #define TELA_Y 90
 #define TELA_PASSO 32
-#define TELA_COLUNA 36 /* o contador termina nesta coluna; o OK, o giro ou o FAILED vêm logo depois */
+#define TELA_COLUNA 42 /* o contador termina nesta coluna; o OK, o giro ou o FAILED vêm logo depois */
 
 struct TelaEstado {
     int fase;
@@ -135,7 +135,11 @@ static void telaDesenhar(D3DDevice *dev, const TelaEstado &e, const char *versao
         if (i == 0) {
             ok = e.fase >= IC_COPIAR;
         } else if (i == 6) {
+            /* MiB relidos da ISO convertida; o giro avança um por bloco relido. */
+            if (e.c.verif_total_mb)
+                sprintf(cnt, "%u/%u MB", (unsigned)e.c.verif_mb, (unsigned)e.c.verif_total_mb);
             ok = e.fase >= IC_PUBLICAR;
+            gira_agora = !ok && e.fase == IC_VERIFICAR;
         } else {
             unsigned total = e.c.total[i - 1], feito = e.c.feito[i - 1];
             if (total)
@@ -144,15 +148,13 @@ static void telaDesenhar(D3DDevice *dev, const TelaEstado &e, const char *versao
             gira_agora = !ok && e.fase == IC_CONVERTER && e.c.atual == i - 1;
         }
         telaLinha(buf, rotulo, cnt);
-        if (i == 6) /* a verificação não tem contador: só o rótulo, e a barra logo abaixo mostra o andamento */
-            sprintf(buf, "> %s", rotulo);
         texto(dev, buf, TELA_X, TELA_Y + l * TELA_PASSO, TELA_ESCALA, TELA_TEXTO);
         if (i == falha)
             telaMarca(dev, l, ISO_CONV_T_FALHOU, TELA_FALHA);
         else if (ok)
             telaMarca(dev, l, ISO_CONV_T_OK, TELA_OK);
         else if (gira_agora) {
-            gira[0] = telaGiro(e.c.batidas);
+            gira[0] = telaGiro(i == 6 ? e.c.verif_blocos : e.c.batidas);
             telaMarca(dev, l, gira, TELA_TEXTO);
         }
     }

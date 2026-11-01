@@ -353,6 +353,8 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     if (memcmp(hash, esperado, 32))
         goto fim;
     io->hash_saida(io->ctx, io->sha_saida);
+    contas.verif_total_mb = IC_TAMANHO >> 20;
+    categorias(io, &contas);
     progresso(io, IC_VERIFICAR, IsoContas_Verificacao(&contas, iso, 0), total);
     r = IC_IO;
     msg = "falha ao sincronizar, fechar ou reabrir";
@@ -388,6 +390,9 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
         io->hash_releitura_ms += io->relogio() - inicio;
         pos += z;
         io->relidos += z;
+        contas.verif_mb = pos >> 20;
+        contas.verif_blocos++;
+        categorias(io, &contas);
         progresso(io, IC_VERIFICAR, IsoContas_Verificacao(&contas, iso, pos >> 10), total);
     }
     IsoSha_Final(&releitura, hash);

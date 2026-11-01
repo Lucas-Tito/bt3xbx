@@ -59,9 +59,13 @@ int main(int argc, char **argv) {
         telaDesenhar(&gA, e, v);
         ppm(argv[2], "tela-2-meio", gA);
         e = estado(IC_VERIFICAR, 83, tudo, -1, 3366, 1311000);
+        e.c.verif_total_mb = 2880;
+        e.c.verif_mb = 1440;
+        e.c.verif_blocos = 180;
         telaDesenhar(&gA, e, v);
         ppm(argv[2], "tela-3-verificacao", gA);
         e = estado(IC_PUBLICAR, 100, tudo, -1, 3366, 1500000);
+        e.c.verif_total_mb = e.c.verif_mb = 2880;
         telaDesenhar(&gA, e, v);
         ppm(argv[2], "tela-4-pronto", gA);
         e = estado(IC_CONVERTER, 41, queda, IC_CAT_MENUS, 478, 372000);

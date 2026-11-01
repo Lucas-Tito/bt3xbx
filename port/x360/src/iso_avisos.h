@@ -30,7 +30,7 @@ static const char *const ISO_CONV_T_CONFERINDO = "CHECKING ORIGINAL ISO";
 /* Na ordem de IC_CAT_* (personagens, cenários, menus, batalha, sons). */
 static const char *const ISO_CONV_T_CATEGORIAS[5] = {"CONVERTING CHARACTERS", "CONVERTING STAGES", "CONVERTING MENUS",
                                                      "CONVERTING BATTLE DATA", "CONVERTING SOUNDS"};
-static const char *const ISO_CONV_T_VERIFICANDO = "VERIFYING NEW ISO";
+static const char *const ISO_CONV_T_VERIFICANDO = "VERIFYING CONVERTED ISO";
 static const char *const ISO_CONV_T_DECORRIDO = "ELAPSED";
 static const char *const ISO_CONV_T_OK = "OK";
 static const char *const ISO_CONV_T_FALHOU = "FAILED";
