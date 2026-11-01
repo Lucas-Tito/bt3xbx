@@ -20,6 +20,21 @@ static const wchar_t *const ISO_CONV_FALHA = L"The ISO could not be converted. C
 static const wchar_t *const ISO_CONV_DESTINO = L"Rename your original ISO to bt3.iso and try again. The name bt3-x360.iso is reserved for the converted ISO.";
 static const char *const ISO_CONV_PROGRESSO[] = { "Checking ISO...", "Copying ISO...", "Converting ISO...", "Verifying ISO...", "Finishing..." };
 static const char *const ISO_CONV_AGUARDE = "Please wait. Do not turn off the console.";
+/* Tela de progresso em estilo de terminal (só maiúsculas: a fonte 5x7 do port não tem minúsculas).
+   Pendente de aprovação do Lucas: todas as linhas abaixo. A versão entra no %s do título. */
+static const char *const ISO_CONV_T_TITULO = "BT3 X360 %s  ISO CONVERSION";
+/* A conversão inteira levou 9 min 21 s no HD interno do console do Lucas (1/11/2026); 15 dá folga para mídia lenta. */
+static const char *const ISO_CONV_T_PRAZO = "THIS CAN TAKE UP TO 15 MINUTES.";
+static const char *const ISO_CONV_T_AVISO = "DO NOT TURN OFF THE CONSOLE.";
+static const char *const ISO_CONV_T_CONFERINDO = "CHECKING ORIGINAL ISO";
+static const char *const ISO_CONV_T_COPIANDO = "COPYING GAME DATA";
+/* Na ordem de IC_CAT_* (personagens, cenários, menus, batalha, sons). */
+static const char *const ISO_CONV_T_CATEGORIAS[5] = {"CONVERTING CHARACTERS", "CONVERTING STAGES", "CONVERTING MENUS",
+                                                     "CONVERTING BATTLE DATA", "CONVERTING SOUNDS"};
+static const char *const ISO_CONV_T_VERIFICANDO = "VERIFYING CONVERTED ISO";
+static const char *const ISO_CONV_T_DECORRIDO = "ELAPSED";
+static const char *const ISO_CONV_T_OK = "OK";
+static const char *const ISO_CONV_T_FALHOU = "FAILED";
 static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto) {
     *titulo = L"Cannot read ISO";
     *texto = L"The ISO is unreadable, incomplete or damaged. Copy " ISO_LARGO(ISO_NOME)

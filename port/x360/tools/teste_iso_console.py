@@ -42,6 +42,13 @@ def validar_fluxo(texto, sha=None):
         exigir(re.search(rf"conversão: etapa {etapa} em \d+ ms", texto), f"tempo da etapa {etapa} ausente")
     exigir("progresso: 101 valores distintos, de 0 a 100, fase final 4, retrocessos=0" in texto,
            "porcentagem não foi única e monotônica de 0 a 100")
+    # Categorias da tela: as contas fecham no total do inventário e cada entrada convertida bate uma vez.
+    m = re.search(r"categorias: feitos (\d+) de (\d+)", texto)
+    b = re.search(r"batidas=(\d+)", texto)
+    exigir(m and b and int(m[1]) == int(m[2]) == int(b[1]) == 3366,
+           "categorias não fecham em 3366 entradas ou as batidas não são uma por entrada")
+    for nome in re.findall(r"(\w+) (\d+)/(\d+)", re.search(r"categorias: personagens.*", texto)[0]):
+        exigir(nome[1] == nome[2] and int(nome[2]) > 0, f"categoria {nome[0]} não terminou ou está vazia")
     sobrepostas = re.search(r"pedidos sobrepostos=(\d+)", texto)
     exigir(sobrepostas and int(sobrepostas[1]) > 0, "nenhuma E/S sobreposta foi pedida")
     gravacoes = re.search(r"gravações=(\d+)", texto)
@@ -170,7 +177,7 @@ def main():
     # Porcentagem de etapa que volta a zero na releitura (o comportamento antigo)
     # num núcleo mutante: converte certo, mas o verificador do registro recusa.
     nucleo = (pc.RAIZ / "port/x360/conv/iso_conv.c").read_text()
-    de = "progresso(io, IC_VERIFICAR, 2 * iso + (pos >> 10), total);"
+    de = "progresso(io, IC_VERIFICAR, IsoContas_Verificacao(&contas, iso, pos >> 10), total);"
     exigir(de in nucleo, "mutação do progresso não encontrou alvo")
     mutante = d / "progresso"
     mutante.mkdir()
@@ -257,7 +264,7 @@ def main():
     with convertido.open("r+b") as f:
         f.seek(pos); b = f.read(1); f.seek(pos); f.write(bytes([b[0] ^ 1]))
     r = subprocess.run(conferir, capture_output=True, text=True)
-    exigir(r.returncode == 1 and "bytes diferentes" in r.stderr,
+    exigir(r.returncode == 1 and "bytes differ" in r.stderr,
            "conferência Python integral aceitou byte estragado")
     with convertido.open("r+b") as f:
         f.seek(pos); f.write(b)

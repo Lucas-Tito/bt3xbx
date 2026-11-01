@@ -59,6 +59,20 @@ int main(int argc, char **argv) {
     r = IsoInstalar_Executar(argv[1]);
     printf("progresso: %u valores distintos, de %u a %d, fase final %d, retrocessos=%u\n", sDistintos, sPrimeiro, sPc,
            sFase, sRetrocessos);
+    if (r == 0) {
+        IcContas c;
+        unsigned i, feitos = 0, totais = 0;
+        IsoInstalar_Contas(&c);
+        for (i = 0; i < IC_NCATS; i++) {
+            feitos += c.feito[i];
+            totais += c.total[i];
+        }
+        printf("categorias: personagens %u/%u cenarios %u/%u menus %u/%u batalha %u/%u sons %u/%u batidas=%u\n",
+               (unsigned)c.feito[0], (unsigned)c.total[0], (unsigned)c.feito[1], (unsigned)c.total[1],
+               (unsigned)c.feito[2], (unsigned)c.total[2], (unsigned)c.feito[3], (unsigned)c.total[3],
+               (unsigned)c.feito[4], (unsigned)c.total[4], (unsigned)c.batidas);
+        printf("categorias: feitos %u de %u\n", feitos, totais);
+    }
     printf("resultado: %d\n", r);
     return r;
 }

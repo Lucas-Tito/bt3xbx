@@ -54,10 +54,12 @@ Option A: on the console
      will be kept.
 
    Cancel is selected first. Move to Convert and press A.
-3. A progress screen shows the step (Checking ISO..., Copying ISO..., Converting ISO...,
-   Verifying ISO..., Finishing...), a bar and a percentage, with the line "Please wait. Do not
-   turn off the console." The console reads the whole ISO, writes the converted one and then
-   reads it back to make sure every byte was stored correctly.
+3. A progress screen lists each step: checking your original ISO, copying the game data,
+   converting characters, stages, menus, battle data and sounds (each with a counter), and
+   verifying the converted ISO. A bar and the elapsed time stay below. It takes about 10
+   minutes on the internal hard drive, and up to 15. Do not turn off the console. The console
+   reads the whole ISO, writes the converted one and then reads it back to make sure every
+   byte was stored correctly.
 4. At the end:
 
      ISO ready
