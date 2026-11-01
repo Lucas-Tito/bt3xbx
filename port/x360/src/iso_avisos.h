@@ -23,8 +23,8 @@ static const char *const ISO_CONV_AGUARDE = "Please wait. Do not turn off the co
 /* Tela de progresso em estilo de terminal (só maiúsculas: a fonte 5x7 do port não tem minúsculas).
    Pendente de aprovação do Lucas: todas as linhas abaixo. A versão entra no %s do título. */
 static const char *const ISO_CONV_T_TITULO = "BT3 X360 %s  ISO CONVERSION";
-/* Provisório até a medida no console. */
-static const char *const ISO_CONV_T_PRAZO = "THIS CAN TAKE UP TO 30 MINUTES.";
+/* A conversão inteira levou 9 min 21 s no HD interno do console do Lucas (1/11/2026); 15 dá folga para mídia lenta. */
+static const char *const ISO_CONV_T_PRAZO = "THIS CAN TAKE UP TO 15 MINUTES.";
 static const char *const ISO_CONV_T_AVISO = "DO NOT TURN OFF THE CONSOLE.";
 static const char *const ISO_CONV_T_CONFERINDO = "CHECKING ORIGINAL ISO";
 static const char *const ISO_CONV_T_COPIANDO = "COPYING GAME DATA";
