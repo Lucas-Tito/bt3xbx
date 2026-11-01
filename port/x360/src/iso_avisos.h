@@ -37,8 +37,9 @@ static const char *const ISO_CONV_T_OK = "OK";
 static const char *const ISO_CONV_T_FALHOU = "FAILED";
 static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto) {
     *titulo = L"Cannot read ISO";
-    *texto = L"The ISO is unreadable, incomplete or damaged. Copy " ISO_LARGO(ISO_NOME)
-             L" to the root of the game folder again, or create a new image from your disc and run convert_iso.py on your PC.";
+    /* Textos da ausente e da ilegível revistos pelo Lucas em 1/11/2026: sem citar o nome reservado da convertida,
+       que levava quem tem só a original a dar a ela o nome bt3-x360.iso. */
+    *texto = L"The ISO in the game folder is unreadable, incomplete or damaged.";
     if (motivo == ISO_ORIGINAL) {
         *titulo = L"ISO conversion required";
         *texto = L"Convert your original USA SLUS-21678 ISO on your PC with convert_iso.py. "
@@ -49,7 +50,7 @@ static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto)
                  L"Copy the result to the root of the game folder as " ISO_LARGO(ISO_NOME) L", next to default.xex.";
     } else if (motivo == ISO_AUSENTE) {
         *titulo = L"ISO not found";
-        *texto = L"The ISO was not found in the root of the game folder with the expected name: " ISO_LARGO(ISO_NOME) L".";
+        *texto = L"No ISO in the game folder. Copy your original USA ISO next to default.xex.";
     }
 }
 #endif

@@ -215,14 +215,19 @@ int main(void) {
         if (strcmp(ISO_CONV_PROGRESSO[i], progresso[i])) return 1;
     for (i = 1; i <= 4; i++) {
         Iso_Aviso(i, &titulo, &texto);
-        if (!wcsstr(texto, L"bt3-x360.iso") || !wcsstr(texto, L"root of the game folder") ||
-            (i != 2 && !wcsstr(texto, L"convert_iso.py")) || wcsstr(texto, L"ambiente.txt") ||
-            wcsstr(texto, L"environment.txt") ||
-            wcsstr(texto, L"BT3_ISO")) return 1;
+        if (wcsstr(texto, L"ambiente.txt") || wcsstr(texto, L"environment.txt") || wcsstr(texto, L"BT3_ISO")) return 1;
+        /* A original e a versão não suportada ensinam a conversão no PC e o nome da convertida. */
+        if ((i == 1 || i == 3) && (!wcsstr(texto, L"bt3-x360.iso") || !wcsstr(texto, L"root of the game folder") ||
+                                   !wcsstr(texto, L"convert_iso.py"))) return 1;
+        /* A ausente e a ilegível (1/11/2026) nunca citam o nome reservado da convertida. */
+        if ((i == 2 || i == 4) && wcsstr(texto, L"bt3-x360")) return 1;
     }
     Iso_Aviso(2, &titulo, &texto);
-    if (wcscmp(titulo, L"ISO not found") || !wcsstr(texto, L"expected name") ||
-        wcscmp(wcsstr(texto, L"bt3-x360.iso"), L"bt3-x360.iso.")) return 1;
+    if (wcscmp(titulo, L"ISO not found") ||
+        wcscmp(texto, L"No ISO in the game folder. Copy your original USA ISO next to default.xex.")) return 1;
+    Iso_Aviso(4, &titulo, &texto);
+    if (wcscmp(titulo, L"Cannot read ISO") ||
+        wcscmp(texto, L"The ISO in the game folder is unreadable, incomplete or damaged.")) return 1;
     Iso_Aviso(1, &titulo, &texto);
     if (wcscmp(titulo, L"ISO conversion required")) return 1;
     puts("textos: tudo certo");
@@ -238,10 +243,11 @@ int main(void) {
         raise ValueError("textos públicos incompatíveis")
     for j, (de, para) in enumerate([("root of the game folder", "ambiente.txt"),
                                   ("root of the game folder", "environment.txt"),
-                                  ("expected name", "nome esperado"),
+                                  ("No ISO in the game folder.", "No ISO found."),
+                                  ("next to default.xex.\";", "next to default.xex as bt3-x360.iso.\";"),
+                                  ("unreadable, incomplete or damaged.", "damaged. Copy bt3-x360.iso again."),
                                   ("ISO conversion required", "Unsupported converted ISO version"),
                                   ("convert_iso.py", "iso_convertida.py"),
-                                  ('ISO_LARGO(ISO_NOME) L".";', 'ISO_LARGO(ISO_NOME) L". Copy it there.";'),
                                   ('L"Convert ISO"', 'L"Prepare ISO"'),
                                   ("? It needs 3 GB", "? This takes up to 40 minutes and needs 3 GB"),
                                   ("The ISO could not be converted.", "The ISO could not be prepared."),
