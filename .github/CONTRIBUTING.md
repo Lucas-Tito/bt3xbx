@@ -17,6 +17,8 @@ with the label `known-issue`.
 * The planet explosion animation runs slowly for about 3 seconds, and split-screen battles can
   slow down.
 * The online mode (Dragon Net Battle) is not available.
+* On consoles running Bad Avatar, the system's message boxes (missing or unreadable ISO, the
+  crash box) can close by themselves. The ISO conversion question is not affected since 1.0.1.
 
 Not every character, stage, story battle and mode has been played on the console yet: a crash or a
 problem in one of them is not a known issue, so please do report it.

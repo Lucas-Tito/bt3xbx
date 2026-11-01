@@ -153,5 +153,9 @@ the "Bug report" form. Please read the known issues below first.
 * Not every character, costume, transformation, stage, story battle and mode has been played
   on the console for this version. If one of them crashes, please report it (section 5).
 * The online mode (Dragon Net Battle) is not available.
+* On consoles running Bad Avatar, the system's message boxes can close by themselves before
+  you can read them, and the game returns to the dashboard. Since 1.0.1 the ISO conversion
+  question is drawn by the game and is not affected, but the boxes for a missing or
+  unreadable ISO and the crash box still use the system's.
 * The planet explosion animation runs slowly (about 3 seconds at around 15 frames per
   second), and split-screen battles can slow down.
