@@ -233,3 +233,37 @@ adaptador usam agora o cabeçalho sem a constante; logs e escopo da rodada ficam
 A tabela da rodada final, os hashes, commits e o SHA1 da `.text` ficam no relatório externo
 `~/entrega-conv-console.md`. Build XDK, contratos efetivos das APIs FATX, aparência das caixas/barra, reinício,
 interrupção elétrica, desempenho Xenon e Guide real continuam para a revisão do Lucas. As simulações não os aprovam.
+
+## Tela de conversão em estilo de terminal (31/10/2026)
+
+Motivo: a barra pesada só por bytes ficava perto de 10% por muitos minutos nos 690 pacotes de menu (recompressão
+BPE) e parecia travada. A tela agora é um terminal, cinza-claro no preto, fonte 5x7 na escala 3, ainda só com
+`Clear` de retângulos (sem shader nem arquivo). Linhas: conferência da ISO, uma por categoria com `feitos/total`,
+a verificação, a barra do processo inteiro e o tempo decorrido (`GetTickCount` da thread que desenha). OK em
+verde; na falha, a linha da etapa em andamento termina em `FAILED` vermelho e a caixa de falha segue igual.
+
+- **Categorias** (`conv/iso_contas.c`, aritmética pura): `characters` (personagem, personagem_anim,
+  personagem_efeitos, rosto), `stages` (cenario), `menus` (todo `menu_*`), `sounds` (som) e `battle data` (o resto).
+  O total sai do inventário, no planejamento; os feitos, do laço. O adaptador publica por Interlocked os feitos, os
+  totais, a categoria em conversão e as **batidas** (uma por entrada convertida).
+- **Giro** `| / - \` no fim da linha da categoria atual: avança por batida, nunca por tempo, para parar se o conversor
+  travar. O tempo decorrido anda sozinho, então "tempo andando e giro parado" denuncia um conversor preso.
+- **Barra pesada pelo trabalho**: unidades em KiB como antes (3 x ISO) mais `IC_PESO_MENU` (12, provisório até a
+  calibração pela medida no console de 31/10) por KiB de cada entrada `menu_*`. O progresso é publicado a cada peça
+  convertida, não só a cada lote, e continua monótono de 0 a 100 com a fase final de publicação.
+- Textos novos em `iso_avisos.h` (`ISO_CONV_T_*`), **pendentes de aprovação do Lucas**; o prazo de 30 minutos é
+  provisório até a medida. A versão vem de `package/versao.env` (o `build_f2.sh` passa `-D BT3_VERSAO_NUM`).
+- O desenho mora em `src/f2/iso_tela_desenho.h`, para a prova host compilar o mesmo código.
+
+Prova local, sem console nem WSL:
+
+```sh
+python3 port/x360/tools/prova_tela.py --png DIR   # desenho real num D3D falso: giro, cores, falha, limites; 6 PNGs
+python3 port/x360/tools/teste_iso_contas.py        # contas e peso com inventário sintético (sem bytes do jogo)
+python3 port/x360/tools/teste_iso_tela.py          # fluxo C++ das caixas
+```
+
+Os dois primeiros veem cópias estragadas falharem com saída 1 (giro por tempo, giro parado, giro em toda linha, FAILED
+sem vermelho, OK antes da conferência, sem peso de menu, total sem o extra, contagem que não fecha, batida que não
+avança, categoria errada, verificação que retrocede). `teste_iso_console.py` (WSL, com a ISO) passou a exigir que as
+categorias fechem em 3.366 entradas, com uma batida por entrada.
