@@ -70,6 +70,12 @@ def main():
             ("cópia sem giro", "gira_agora = !ok && e.fase == IC_CONVERTER && telaCategoriaAtual(e) < 0;", "gira_agora = false;", "não gira por lote"),
             ("verificação sem contador", "if (e.c.verif_total_mb)", "if (0)", "contador de MB da verificação não aparece"),
             ("giro em toda linha", "gira_agora = !ok && telaCategoriaAtual(e) == i - TELA_L_CAT;", "gira_agora = !ok;", "fora da linha da categoria atual"),
+            ("sem ? na fonte", "case '?': return 47;", "case '?': return -1;", "caractere de texto sem desenho"),
+            ("sem , na fonte", "case ',': return 48;", "case ',': return -1;", "caractere de texto sem desenho"),
+            ("sem < na fonte", "case '<': return 49;", "case '<': return -1;", "caractere de botão ou ajuda sem desenho"),
+            ("sem marca no selecionado", 'sel == 1 ? "> %s <" : "  %s  "', '"  %s  "', "botões com Cancel selecionado"),
+            ("linha de 80 colunas", "#define TELA_P_COLUNAS 60", "#define TELA_P_COLUNAS 80", None),
+            ("seleção sem efeito no desenho", "sel == 0 ? \"> %s <\" : \"  %s  \", b0", "\"  %s  \", b0", "botões com Convert selecionado"),
             ("OK antes da conferência", "ok = e.fase >= IC_COPIAR;", "ok = true;", "OK verde antes"),
         ]
         for i, (nome, de, para, acusacao) in enumerate(mutantes):

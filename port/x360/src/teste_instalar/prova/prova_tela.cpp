@@ -1,5 +1,5 @@
 /* Prova host da tela de conversão: compila o desenho real (f2/iso_tela_desenho.h) com o D3D falso e
-     prova_tela gravar DIR [VERSAO]   grava tela-*.ppm (1280x720) de cinco estados
+     prova_tela gravar DIR [VERSAO]   grava tela-*.ppm (1280x720) de estados
      prova_tela checar       confere o giro, as cores, a falha e os limites; sai com 1 e "FALHA:" se algo quebra */
 #include "xtl.h"
 #include <string.h>
@@ -79,6 +79,14 @@ int main(int argc, char **argv) {
         e.c.total[0] = e.c.total[1] = e.c.total[2] = e.c.total[3] = e.c.total[4] = 0;
         telaDesenhar(&gA, e, v);
         ppm(argv[2], "tela-0-conferindo", gA);
+        telaPergunta(&gA, v, ISO_CONV_TITULO, ISO_CONV_PERGUNTA, ISO_CONV_SIM, ISO_CONV_NAO, 1);
+        ppm(argv[2], "pergunta-1-cancel", gA);
+        telaPergunta(&gA, v, ISO_CONV_TITULO, ISO_CONV_PERGUNTA, ISO_CONV_SIM, ISO_CONV_NAO, 0);
+        ppm(argv[2], "pergunta-2-convert", gA);
+        telaPergunta(&gA, v, ISO_CONV_FALHA_TITULO, ISO_CONV_FALHA, ISO_CONV_OK, NULL, 0);
+        ppm(argv[2], "pergunta-3-falha", gA);
+        telaPergunta(&gA, v, ISO_CONV_FALHA_TITULO, ISO_CONV_DESTINO, ISO_CONV_OK, NULL, 0);
+        ppm(argv[2], "pergunta-4-destino", gA);
         return 0;
     }
     if (!strcmp(argv[1], "checar")) {
@@ -167,6 +175,51 @@ int main(int argc, char **argv) {
         e.ms = 61000;
         telaDesenhar(&gB, e, v);
         exigir(memcmp(gA.px, gB.px, sizeof(gA.px)), "a barra e o tempo não aparecem");
+        /* A pergunta própria: toda letra dos textos tem desenho, as linhas cabem em 60 colunas e na tela, só as quatro
+           cores da paleta, e a seleção troca só os botões. */
+        {
+            static const wchar_t *const todos[] = {ISO_CONV_TITULO, ISO_CONV_PERGUNTA, ISO_CONV_SIM, ISO_CONV_NAO,
+                                                   ISO_CONV_OK, ISO_CONV_SUCESSO, ISO_CONV_PRONTA,
+                                                   ISO_CONV_ESPACO_TITULO, ISO_CONV_ESPACO, ISO_CONV_FALHA_TITULO,
+                                                   ISO_CONV_FALHA, ISO_CONV_DESTINO};
+            char a[600], linhas[TELA_P_LINHAS][TELA_P_COLUNAS + 1], botoes[96];
+            for (unsigned k = 0; k < sizeof(todos) / sizeof(todos[0]); k++) {
+                telaAscii(a, (int)sizeof(a), todos[k]);
+                for (int i = 0; a[i]; i++)
+                    exigir(a[i] == ' ' || indiceLetra(a[i]) >= 0, "caractere de texto sem desenho na fonte");
+                int n = telaQuebrar(linhas, TELA_P_LINHAS, a), total = 0;
+                exigir(n >= 1 && n < TELA_P_LINHAS, "mensagem sem linhas ou cortada");
+                for (int i = 0; i < n; i++) {
+                    exigir(strlen(linhas[i]) <= TELA_P_COLUNAS && linhas[i][0] != ' ', "linha longa ou com espaço na frente");
+                    total += (int)strlen(linhas[i]) + (i + 1 < n);
+                }
+                exigir(total == (int)strlen(a), "a quebra perdeu texto");
+            }
+            telaBotoes(botoes, "CONVERT", "CANCEL", 1);
+            exigir(!strcmp(botoes, "     CONVERT      > CANCEL <"), "botões com Cancel selecionado");
+            telaBotoes(botoes, "CONVERT", "CANCEL", 0);
+            exigir(!strcmp(botoes, "   > CONVERT <      CANCEL  "), "botões com Convert selecionado");
+            telaBotoes(botoes, "OK", NULL, 0);
+            exigir(!strcmp(botoes, "   > OK <"), "botão único");
+            for (int k = 0; k < 3; k++) {
+                const char *t = k == 0 ? botoes : k == 1 ? ISO_CONV_T_AJUDA_DOIS : ISO_CONV_T_AJUDA_UM;
+                for (int i = 0; t[i]; i++)
+                    exigir(t[i] == ' ' || indiceLetra(t[i]) >= 0, "caractere de botão ou ajuda sem desenho na fonte");
+            }
+            telaPergunta(&gA, v, ISO_CONV_TITULO, ISO_CONV_PERGUNTA, ISO_CONV_SIM, ISO_CONV_NAO, 1);
+            telaPergunta(&gB, v, ISO_CONV_TITULO, ISO_CONV_PERGUNTA, ISO_CONV_SIM, ISO_CONV_NAO, 0);
+            exigir(memcmp(gA.px, gB.px, sizeof(gA.px)) != 0, "a seleção não aparece");
+            for (int i = 0; i < 1280 * 720; i++)
+                exigir((gA.px[i] == TELA_FUNDO || gA.px[i] == TELA_TEXTO) && (gB.px[i] == TELA_FUNDO || gB.px[i] == TELA_TEXTO),
+                       "cor fora da paleta na pergunta");
+            /* O desenho só difere na linha dos botões: linha 6 (título, branco, caixa, 2 linhas, branco, botões). */
+            for (int i = 0; i < 1280 * 720; i++)
+                if (gA.px[i] != gB.px[i])
+                    exigir(i / 1280 >= TELA_Y + 6 * TELA_PASSO && i / 1280 < TELA_Y + 7 * TELA_PASSO,
+                           "a seleção mexeu fora da linha dos botões");
+            /* Letras novas desenham algo. */
+            exigir(indiceLetra('?') >= 0 && indiceLetra(',') >= 0, "faltam ? e , na fonte");
+        }
         std::puts("prova_tela: tudo certo");
         return 0;
     }
