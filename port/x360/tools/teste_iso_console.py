@@ -177,7 +177,7 @@ def main():
     # Porcentagem de etapa que volta a zero na releitura (o comportamento antigo)
     # num núcleo mutante: converte certo, mas o verificador do registro recusa.
     nucleo = (pc.RAIZ / "port/x360/conv/iso_conv.c").read_text()
-    de = "progresso(io, IC_VERIFICAR, 2 * iso + (pos >> 10), total);"
+    de = "progresso(io, IC_VERIFICAR, IsoContas_Verificacao(&contas, iso, pos >> 10), total);"
     exigir(de in nucleo, "mutação do progresso não encontrou alvo")
     mutante = d / "progresso"
     mutante.mkdir()
