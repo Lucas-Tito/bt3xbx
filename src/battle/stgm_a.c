@@ -59,6 +59,39 @@ extern void Vu0Cur_StoreMtx(void *m);
 extern void Vu0Cur_LoadMtx(void *m);
 extern void *memset(void *, s32, u32);
 
+#ifdef PORT
+/*
+ * BT3_DIVIDIDA_RECORTE: in the split-screen fight every half view culls the stage with the full-screen width
+ * (StgFrustum_Build never takes its half-width branch), so each half sends VU1 the meshes of the other half too. The
+ * game keeps culling, animating textures and queueing state exactly as before; a second table, built with the tight
+ * half-width frustum, only decides whether the mesh is sent to VU1 (Vu1Pkt_CallProg4), which the scissor of the half
+ * would discard anyway. The tight table never writes cell->vis or the game's own table.
+ */
+extern void *realloc(void *, unsigned long);
+extern s32 Port_DivididaRecorte(void);
+extern void StgFrustum_BuildHalf(void *view, StgMFrustum *fr);
+extern s32 StgView_IsHalf(void *view);
+s32 gPortStgHalf;                 /* set by Battle_DrawSplit around its stage loop: only there is a view a half */
+unsigned gPortRecPulados;         /* meshes not sent to VU1 program 4, since the start */
+unsigned gPortRecTotal;           /* meshes that would have been sent, in the views where the tight table was on */
+static u8 *sVisNarrow;
+static s32 sVisNarrowCap;
+static s32 sNarrowOn;
+#define STGM_CALL4(chain, idx)                  \
+    do {                                        \
+        if (sNarrowOn) {                        \
+            gPortRecTotal++;                    \
+            if (sVisNarrow[idx] == 0) {         \
+                gPortRecPulados++;              \
+                break;                          \
+            }                                   \
+        }                                       \
+        Vu1Pkt_CallProg4(chain);                \
+    } while (0)
+#else
+#define STGM_CALL4(chain, idx) Vu1Pkt_CallProg4(chain)
+#endif
+
 /* Draws the animated stage objects: for each animation, every object that plays it, posed at its frame. */
 void StgModel_DrawAnims(void) {
     f32 mtx[16];
@@ -190,6 +223,48 @@ void StgModel_CullCell(StgMCell *cell, f32 size, s32 vis, struct StgFrustum *fr)
     }
 }
 
+#ifdef PORT
+/* StgModel_CullCell with the tight frustum: the same walk, but only into the tight table (cell->vis is the game's). */
+static void StgModel_CullCellNarrow(StgMCell *cell, f32 size, s32 vis, StgMFrustum *fr, u8 *tbl) {
+    f32 half = (size + size) / (f32)(1 << cell->depth);
+    s32 i;
+    s32 j;
+    s32 k;
+    StgMPart *part;
+
+    if (vis == 1) {
+        vis = StgFrustum_TestBox(fr, cell->x, cell->y, cell->z, half);
+    }
+    if (vis == 2) {
+        return;
+    }
+    for (i = 0; i < cell->partCount; i++) {
+        part = cell->parts[i];
+        if (part == NULL) {
+            continue;
+        }
+        if (!(u16)(part->flags & 1)) {
+            continue;
+        }
+        if (vis != 0 && StgFrustum_TestPart(part, fr) == 2) {
+            continue;
+        }
+        for (j = 0; j < part->count; j++) {
+            tbl[part->meshes[j]->visIdx] = 1;
+        }
+    }
+    for (k = 0; k < 2; k++) {
+        for (j = 0; j < 2; j++) {
+            for (i = 0; i < 2; i++) {
+                if (cell->child[k][j][i] != NULL) {
+                    StgModel_CullCellNarrow(cell->child[k][j][i], size, vis, fr, tbl);
+                }
+            }
+        }
+    }
+}
+#endif
+
 /* Builds the visibility table for one view: the culling tree, the always-drawn parts, then the debris. */
 void StgModel_Cull(void *view) {
     StgMFrustum fr;
@@ -200,6 +275,9 @@ void StgModel_Cull(void *view) {
     u32 i;
     s32 j;
 
+#ifdef PORT
+    sNarrowOn = 0;
+#endif
     if (Battle_GetWork()->flags & 0x2000) {
         return;
     }
@@ -222,6 +300,32 @@ void StgModel_Cull(void *view) {
             }
         }
     }
+#ifdef PORT
+    if (gPortStgHalf && Port_DivididaRecorte() && StgView_IsHalf(view)) {
+        StgMFrustum frn;
+
+        if (sVisNarrowCap < gBtlStage->visSize) {
+            sVisNarrow = (u8 *)realloc(sVisNarrow, gBtlStage->visSize);
+            sVisNarrowCap = sVisNarrow != NULL ? gBtlStage->visSize : 0;
+        }
+        if (sVisNarrow != NULL) {
+            memset(sVisNarrow, 0, gBtlStage->visSize);
+            StgFrustum_BuildHalf(view, &frn);
+            StgModel_CullCellNarrow(root, gBtlStage->size, 1, &frn, sVisNarrow);
+            if (list->count != 0) {
+                StgMPart *parts = list->parts;
+
+                for (i = 0; i < list->count; i++) {
+                    part = &parts[i];
+                    for (j = 0; j < part->count; j++) {
+                        sVisNarrow[part->meshes[j]->visIdx] = 1;
+                    }
+                }
+            }
+            sNarrowOn = 1; /* (the debris fade below marks this table too) */
+        }
+    }
+#endif
     StgModel_FadeDebris();
 }
 
@@ -266,6 +370,11 @@ void StgModel_FadeDebris(void) {
                 mesh = piece->meshes[k];
                 mesh->alpha = alpha;
                 tbl[mesh->visIdx] = 1;
+#ifdef PORT
+                if (sNarrowOn) {
+                    sVisNarrow[mesh->visIdx] = 1;
+                }
+#endif
             }
         }
     }
@@ -324,7 +433,7 @@ s32 StgModel_DrawDebris(s32 drawn, u8 *vis) {
                     StgModel_SetTexture(mats[i].tex);                           \
                 }                                                               \
                 chain = mesh[j].chain;                                          \
-                Vu1Pkt_CallProg4(chain);                                        \
+                STGM_CALL4(chain, mesh[j].visIdx);                              \
             }                                                                   \
         }                                                                       \
     }
@@ -446,7 +555,7 @@ void StgModel_Draw(void *view) {
                     prog = mesh[j].prog;
                 }
                 if (mesh[j].prog == 0) {
-                    Vu1Pkt_CallProg4(chain);
+                    STGM_CALL4(chain, mesh[j].visIdx);
                 }
             }
         }
