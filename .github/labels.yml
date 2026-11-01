@@ -43,3 +43,6 @@
 - name: wontfix
   color: ffffff
   description: Will not be changed
+- name: spam
+  color: 000000
+  description: Offensive language, advertising or link spam; closed and locked automatically

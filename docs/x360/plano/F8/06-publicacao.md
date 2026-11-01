@@ -203,14 +203,22 @@ O Lucas não quis fechar nada por prazo (os 14 dias saíram das regras e dos ró
    `feature-request` (rótulo novo) e `wontfix` comentam e fecham; `piracy` comenta, fecha e tranca (apagar a issue e
    bloquear a conta continuam à mão, o token da ação não pode); `needs-crash-txt` e `needs-info` só comentam. A mesma
    resposta não sai duas vezes (marca escondida no comentário).
+3. **Moderação** (31/10/2026; a preocupação do Lucas é spam, palavrão e baixaria): issue ou comentário de quem não é
+   dono, membro nem colaborador passa por uma lista de palavrões e ofensas em inglês e português (`OFENSAS`), outra de
+   propaganda (`PROPAGANDA`) e um teto de 4 links que não sejam anexos do GitHub. O texto se compara sem acento, em
+   minúsculas, com as trocas de letra comuns (`sh1t`, `p0rra`) e por palavra inteira (`Scunthorpe`, `computador` e
+   `disputa` passam). Issue pega: rótulo `spam` (novo, o 15º), fechada e trancada, sem resposta. Comentário pego: oculto
+   pelo `minimizeComment` como abuso (ofensa) ou spam. Quem cuida revê pelo rótulo e pelos ocultos e desfaz à mão.
 
-**Prova** (`node .github/scripts/teste_triagem.js`, GitHub falso): 16 casos, `tudo certo`. Vista falhando com seis
+**Prova** (`node .github/scripts/teste_triagem.js`, GitHub falso): 28 casos desde a moderação, `tudo certo`; a
+moderação vista falhando com sete cópias estragadas (sem a chamada, sem a isenção do dono, sem cada uma das duas
+fronteiras de palavra, sem tirar o acento, sem o teto de links, classificação errada do oculto), todas com saída 1. Vista falhando com seis
 cópias estragadas da triagem, cada uma acusada com saída 1: aceitar qualquer texto como `crash.txt` (4 falhas), anexo
 de qualquer nome (1), não fechar a queda sem arquivo (1), não trancar a pirataria (2), reabrir por comentário de
 qualquer pessoa (2), comentar a mesma resposta de novo (2). Não roda no GitHub de verdade até o repositório subir;
 na primeira issue real, conferir a execução na aba Actions.
 
-**Provisório:** o Lucas deixou assim por enquanto, mas não concorda com a forma; volta no fechamento (pendência 16).
+**Fechado em 31/10/2026** (pendência 16): o Lucas manteve os formulários e a triagem e pediu a moderação (item 3).
 
 ## 6. O que o Lucas deve auditar
 

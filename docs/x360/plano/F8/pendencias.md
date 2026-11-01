@@ -100,8 +100,8 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
 16. **As regras das issues, para rever no fechamento** (Lucas, 29/10/2026): ficam como estão por enquanto, mas ele não
     concorda com a forma atual. Hoje: dois formulários (queda e defeito sem queda), queda sem `crash.txt` fechada na
     hora pela ação e reaberta quando o arquivo chega, respostas prontas por rótulo, nada fecha por prazo
-    ([06-publicacao](06-publicacao.md), seção 5a). Em aberto: se o formulário de defeito sem queda continua (ele não tem
-    `crash.txt` para exigir) e o que mais mudar; perguntar ao Lucas antes de mexer.
+    ([06-publicacao](06-publicacao.md), seção 5a). **Fechado em 31/10/2026:** o Lucas manteve os dois formulários e a
+    triagem; a preocupação dele era spam, palavrão e baixaria, e a triagem ganhou a moderação automática (seção 5a, item 3).
 
 ## A abertura do repositório, a última parte do plano (27/10/2026)
 

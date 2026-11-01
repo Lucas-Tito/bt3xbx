@@ -5,6 +5,9 @@
 //    Se o autor editar a issue ou comentar com o crash.txt, ela reabre sozinha.
 // 2. Quando quem cuida do repositório põe um rótulo de motivo, sai a resposta pronta dele e, conforme o
 //    rótulo, a issue fecha (e tranca, na pirataria). Nada fecha por prazo.
+// 3. Moderação (Lucas, 31/10/2026): issue ou comentário de quem não é do repositório com palavrão, ofensa ou cara de
+//    spam (propaganda, muitos links) some sem resposta: a issue fecha, ganha o rótulo spam e tranca; o comentário fica
+//    oculto. Quem cuida do repositório revê pelo rótulo e pelos ocultos e desfaz à mão quando errar.
 // Teste: node .github/scripts/teste_triagem.js
 
 const MARCA = (nome) => `<!-- bt3-triagem:${nome} -->`;
@@ -42,6 +45,66 @@ const RESPOSTAS = {
   'needs-info': { texto: 'Some information is missing or unclear. Please answer by editing the issue or in a comment.' },
 };
 
+// Moderação. O texto se compara sem acento, em minúsculas e com as trocas de letra mais comuns (0 por o, 4 e @ por a...),
+// palavra inteira; quem é do repositório nunca passa por aqui.
+const OFENSAS = [
+  // inglês
+  'fuck', 'fucking', 'fucker', 'fucked', 'motherfucker', 'shit', 'bullshit', 'bitch', 'bitches', 'asshole', 'cunt',
+  'dick', 'dickhead', 'pussy', 'bastard', 'retard', 'retarded', 'whore', 'slut', 'faggot', 'fag', 'nigger', 'nigga',
+  'stfu', 'kys',
+  // português
+  'porra', 'caralho', 'merda', 'bosta', 'puta', 'puto', 'putaria', 'foda', 'fodase', 'foder', 'fodido', 'cu', 'cuzao',
+  'arrombado', 'arrombada', 'viado', 'viadinho', 'buceta', 'piroca', 'pau no cu', 'vai se foder', 'filho da puta', 'fdp',
+  'otario', 'otaria', 'babaca', 'idiota', 'imbecil', 'retardado', 'retardada', 'desgracado', 'desgracada', 'vagabundo',
+  'vagabunda', 'corno', 'krl', 'pqp', 'vsf', 'tnc',
+];
+const PROPAGANDA = [
+  'casino', 'cassino', 'betting', 'bet365', 'crypto', 'bitcoin', 'forex', 'onlyfans', 'viagra', 'escort', 'loan',
+  'airdrop', 'free robux', 'free v-bucks', 'whatsapp', 'telegram', 'click here', 'clique aqui',
+];
+const MAX_LINKS = 4;
+
+function normaliza(texto) {
+  return (texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/0/g, 'o').replace(/1/g, 'i').replace(/3/g, 'e').replace(/[4@]/g, 'a').replace(/5|\$/g, 's').replace(/7/g, 't');
+}
+
+const temPalavra = (texto, p) => new RegExp(`(^|[^a-z])${p.replace(/ /g, '[^a-z]+')}($|[^a-z])`).test(texto);
+
+function motivoModeracao(texto) {
+  const t = normaliza(texto);
+  if (OFENSAS.some((p) => temPalavra(t, p))) return 'ofensa';
+  if (PROPAGANDA.some((p) => temPalavra(t, p))) return 'propaganda';
+  const links = ((texto || '').match(/https?:\/\//g) || []).length;
+  const anexos = ((texto || '').match(/https:\/\/github\.com\/user-attachments\//g) || []).length;
+  if (links - anexos > MAX_LINKS) return 'links';
+  return null;
+}
+
+const DO_REPOSITORIO = ['OWNER', 'MEMBER', 'COLLABORATOR'];
+
+async function moderar(github, alvo, eventName, payload, issue) {
+  if (eventName === 'issues' && ['opened', 'edited'].includes(payload.action)) {
+    if (DO_REPOSITORIO.includes(issue.author_association)) return null;
+    const motivo = motivoModeracao(`${issue.title || ''}\n${issue.body || ''}`);
+    if (!motivo) return null;
+    await github.rest.issues.addLabels({ ...alvo, labels: ['spam'] });
+    if (issue.state === 'open') await github.rest.issues.update({ ...alvo, state: 'closed', state_reason: 'not_planned' });
+    if (!issue.locked) await github.rest.issues.lock({ ...alvo, lock_reason: 'spam' });
+    return `moderada (${motivo})`;
+  }
+  if (eventName === 'issue_comment' && payload.action === 'created' && payload.comment) {
+    if (DO_REPOSITORIO.includes(payload.comment.author_association)) return null;
+    const motivo = motivoModeracao(payload.comment.body);
+    if (!motivo) return null;
+    await github.graphql(
+      'mutation($id: ID!, $c: ReportedContentClassifiers!) { minimizeComment(input: {subjectId: $id, classifier: $c}) { clientMutationId } }',
+      { id: payload.comment.node_id, c: motivo === 'ofensa' ? 'ABUSE' : 'SPAM' });
+    return `comentário oculto (${motivo})`;
+  }
+  return null;
+}
+
 async function jaComentou(github, alvo, nome) {
   const lista = await github.paginate(github.rest.issues.listComments, { ...alvo, per_page: 100 });
   return lista.some((c) => (c.body || '').includes(MARCA(nome)));
@@ -60,6 +123,9 @@ module.exports = async function triagem({ github, context }) {
   const alvo = { owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number };
   const rotulos = (issue.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
   const ehQueda = rotulos.includes('crash');
+
+  const moderada = await moderar(github, alvo, eventName, payload, issue);
+  if (moderada) return moderada;
 
   if (eventName === 'issues' && payload.action === 'labeled') {
     const nome = payload.label && payload.label.name;
@@ -109,3 +175,4 @@ module.exports = async function triagem({ github, context }) {
 
 module.exports.temCrashTxt = temCrashTxt;
 module.exports.RESPOSTAS = RESPOSTAS;
+module.exports.motivoModeracao = motivoModeracao;

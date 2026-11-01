@@ -13,7 +13,8 @@ function falso(comentarios = []) {
     removeLabel: async (a) => feito.push(['rótulo-', a.name]),
     lock: async (a) => feito.push(['tranca', a.lock_reason]),
   } };
-  return { feito, github: { rest, paginate: async () => comentarios.slice() } };
+  const graphql = async (q, v) => feito.push(['oculta', v.c]);
+  return { feito, github: { rest, graphql, paginate: async () => comentarios.slice() } };
 }
 const ctx = (eventName, payload) => ({ eventName, payload, repo: { owner: 'o', repo: 'r' } });
 const issue = (labels, body, state = 'open', extra = {}) => ({ number: 7, labels: labels.map((name) => ({ name })), body, state, user: { login: 'autor' }, locked: false, ...extra });
@@ -39,6 +40,21 @@ const casos = [
   ['rótulo needs-info comenta sem fechar', ctx('issues', { action: 'labeled', label: { name: 'needs-info' }, issue: issue(['bug', 'needs-info'], 'x') }),
     'resposta needs-info', (f) => f.some((x) => x[0] === 'comenta') && !f.some((x) => x[0] === 'estado')],
   ['rótulo feature-request comenta e fecha', ctx('issues', { action: 'labeled', label: { name: 'feature-request' }, issue: issue(['bug', 'feature-request'], 'x') }), 'resposta feature-request', null],
+  ['issue com palavrão fecha, rotula e tranca', ctx('issues', { action: 'opened', issue: issue(['bug'], 'this port is sh1t, you f*ck') }), 'moderada (ofensa)',
+    (f) => f.some((x) => x[1] === 'spam') && f.some((x) => x[1] === 'closed') && f.some((x) => x[0] === 'tranca')],
+  ['issue com palavrão em português e acento', ctx('issues', { action: 'opened', issue: issue(['bug'], 'que PÔRRA é essa') }), 'moderada (ofensa)', null],
+  ['palavrão no título também conta', ctx('issues', { action: 'opened', issue: issue(['bug'], 'texture wrong', 'open', { title: 'vai se foder' }) }), 'moderada (ofensa)', null],
+  ['propaganda fecha', ctx('issues', { action: 'opened', issue: issue(['bug'], 'Best crypto airdrop, join our Telegram') }), 'moderada (propaganda)', null],
+  ['muitos links fecha', ctx('issues', { action: 'opened', issue: issue(['bug'], 'a http://a b http://b c http://c d http://d e http://e') }), 'moderada (links)', null],
+  ['anexos não contam como links', ctx('issues', { action: 'opened', issue: issue(['bug'], [1, 2, 3, 4, 5, 6].map((n) => `https://github.com/user-attachments/assets/${n}`).join(' ')) }), 'não é queda', (f) => f.length === 0],
+  ['palavra que contém outra passa (Scunthorpe, cucumber, computador)', ctx('issues', { action: 'opened', issue: issue(['bug'], 'Scunthorpe cucumber computador escuro shitake assassin disputa') }), 'não é queda', (f) => f.length === 0],
+  ['queda com crash.txt e sem ofensa segue a regra da queda', ctx('issues', { action: 'opened', issue: issue(['crash'], CRASH) }), 'com crash.txt', (f) => f.length === 0],
+  ['dono do repositório nunca é moderado', ctx('issues', { action: 'opened', issue: issue(['bug'], 'porra', 'open', { author_association: 'OWNER' }) }), 'não é queda', (f) => f.length === 0],
+  ['comentário ofensivo fica oculto como abuso', ctx('issue_comment', { action: 'created', comment: { body: 'filho da puta', node_id: 'C1', user: { login: 'x' } }, issue: issue(['bug'], 'x') }),
+    'comentário oculto (ofensa)', (f) => f.length === 1 && f[0][0] === 'oculta' && f[0][1] === 'ABUSE'],
+  ['comentário de propaganda fica oculto como spam', ctx('issue_comment', { action: 'created', comment: { body: 'clique aqui', node_id: 'C2', user: { login: 'x' } }, issue: issue(['bug'], 'x') }),
+    'comentário oculto (propaganda)', (f) => f[0] && f[0][1] === 'SPAM'],
+  ['comentário de colaborador não é moderado', ctx('issue_comment', { action: 'created', comment: { body: 'merda', author_association: 'COLLABORATOR', user: { login: 'x' } }, issue: issue(['bug'], 'x') }), 'não é queda', (f) => f.length === 0],
   ['rótulo confirmed não faz nada', ctx('issues', { action: 'labeled', label: { name: 'confirmed' }, issue: issue(['bug'], 'x') }), 'rótulo sem resposta', (f) => f.length === 0],
 ];
 

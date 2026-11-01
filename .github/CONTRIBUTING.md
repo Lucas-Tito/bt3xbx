@@ -47,11 +47,15 @@ These issues are closed (or deleted) without an answer:
 3. Anything about getting the game (`piracy`), spam or abuse is deleted, and the account is
    blocked from the repository.
 
+Offensive language, insults and advertising are caught automatically: an issue with them is
+closed and locked with the label `spam`, and a comment with them is hidden. Keep it civil, even
+when the game crashes.
+
 ## Labels
 
 The full list, with colours and meanings, is in [labels.yml](labels.yml): `crash`, `bug`,
 `needs-triage`, `needs-crash-txt`, `needs-info`, `confirmed`, `known-issue`, `fixed-next`,
-`duplicate`, `not-supported`, `piracy`, `off-topic`, `feature-request` and `wontfix`.
+`duplicate`, `not-supported`, `piracy`, `off-topic`, `feature-request`, `wontfix` and `spam`.
 
 ## Code
 
