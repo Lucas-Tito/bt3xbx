@@ -127,18 +127,19 @@ extern "C" void Port_GsThreadPartida(void) {
 }
 
 /* (F5, etapa 8, degrau 2, etapa 4) O primeiro que a thread de desenho do gs_draw.c faz (BT3_GS_DESENHO=1): a identidade (a
-   queda dela tem ramo próprio no AoMorrer) e o processador, pelo BT3_GS_DESENHO_HW: 3 (o padrão, a irmã do jogo, no núcleo
-   1) ou 1 (a irmã da gravação, no núcleo 0), para comparar; desde 31/10 também 4 ou 5 (o núcleo 2, do áudio: o XAudio2
-   na 4 e o misturador na 5, este em prioridade máxima), para tirar o desenho do núcleo do jogo na tela dividida
-   (plano/F8/13-tela-dividida.md, ponto A; conferir o som pelas linhas "som (vigia)"). Nunca a 0 e a 2 (gravação e jogo). */
+   queda dela tem ramo próprio no AoMorrer) e o processador, pelo BT3_GS_DESENHO_HW: 5 (o padrão desde 31/10, a irmã do
+   misturador do áudio, no núcleo 2: tira o desenho do núcleo do jogo; na tela dividida o trabalho p50 caiu de 33,3 para
+   30,2 ms sem falta no som, e o duelo de um jogador ficou igual; plano/F8/13-tela-dividida.md, ponto A), 4 (a irmã do
+   XAudio2), 3 (o padrão até 31/10, a irmã do jogo, no núcleo 1) ou 1 (a irmã da gravação, no núcleo 0), para comparar;
+   conferir o som pelas linhas "som (vigia)". Nunca a 0 e a 2 (gravação e jogo). */
 extern "C" void Port_GsDesenhoPartida(void) {
 #pragma warning(suppress : 4996) /* (o getenv é o de posix360.c, que lê o environment.txt) */
     const char *e = getenv("BT3_GS_DESENHO_HW");
-    int hw = e != NULL ? atoi(e) : 3;
+    int hw = e != NULL ? atoi(e) : 5;
     _controlfp(_RC_CHOP, _MCW_RC); /* (o mesmo arredondamento do frame_end na thread de gravação) */
     if (hw != 1 && hw != 3 && hw != 4 && hw != 5) {
-        Diario_Escrever("BT3_GS_DESENHO_HW=%s recusado (só 1, 3, 4 ou 5): fica a 3", e);
-        hw = 3;
+        Diario_Escrever("BT3_GS_DESENHO_HW=%s recusado (só 1, 3, 4 ou 5): fica a 5", e);
+        hw = 5;
     }
     XSetThreadProcessor(GetCurrentThread(), (DWORD)hw);
     gThreadDesenho = GetCurrentThreadId();

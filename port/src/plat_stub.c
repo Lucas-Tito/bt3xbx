@@ -442,12 +442,17 @@ int Port_IsWide(void) {
     return Port_AspectMilli() > 1340;
 }
 /* BT3_DIVIDIDA_RECORTE=1: in the split-screen fight the stage meshes that fall wholly outside the tight half-width
-   frustum are not sent to the VU1 (src/battle/stgm_a.c). The picture and the game state stay the same. Read once. */
+   frustum are not sent to the VU1 (src/battle/stgm_a.c). The picture and the game state stay the same. Read once.
+   On by default on the Xbox 360 (the split fight is CPU bound there), off elsewhere; 0 turns it off. */
 int Port_DivididaRecorte(void) {
     static int sLido = 0, sLiga = 0;
     if (!sLido) {
         const char *e = getenv("BT3_DIVIDIDA_RECORTE");
+#ifdef PORT_X360
+        sLiga = e == NULL || atoi(e) != 0;
+#else
         sLiga = e != NULL && atoi(e) != 0;
+#endif
         sLido = 1;
     }
     return sLiga;

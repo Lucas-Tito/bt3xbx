@@ -129,8 +129,9 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     por vértice na explosão do planeta) foi feito antes da release.
 18. **A luta de tela dividida mais rápida** (31/10/2026, pedido do Lucas): roda a 25,4 quadros por segundo, com o jogo a
     85% da velocidade; a gravação do GS (39,6 ms), o jogo (33,8) e o desenho (30,1) estão todos perto do limite. Os pontos
-    de melhoria, com ganho e custo, estão em [13-tela-dividida](13-tela-dividida.md). O recorte justo do estágio (C1) e a
-    cópia especializada (D2) começaram para a 1.0, atrás de chave; o resto fica para a 1.1.
+    de melhoria, com ganho e custo, estão em [13-tela-dividida](13-tela-dividida.md). O recorte justo do estágio (C1) e o
+    desenho no núcleo do áudio (ponto A) entraram na 1.0 por padrão, com 30 quadros firmes no roteiro (decisão 39); a
+    cópia especializada (D2) piorou e ficou de fora. O resto fica para a 1.1.
 
 ## Fora do plano do port (28/10/2026)
 

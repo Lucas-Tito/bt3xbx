@@ -897,3 +897,28 @@ primeira release (`plano/F5/08-gravacao.md`, seção 41), e o alfa exato entrou 
 imagens de três vblanks só nas trocas de cena dentro da luta, nenhuma de quatro ou mais, conferidas na sessão final com
 a build da release; a mesma regra vale para a tela dividida da F7 (decisão 28). O zero continua como meta depois da
 release.
+
+## 39. F8: a tela dividida da primeira release sai com o recorte do estágio e o desenho no núcleo do áudio (31/10/2026)
+
+O Lucas achou lenta a luta dividida e quis a melhora nesta release (`plano/F8/13-tela-dividida.md`). No roteiro
+`f7_perfil_dividido.txt` (só defesa, três janelas de 600 passos), o trabalho por passo e as imagens de três vblanks ou
+mais ficaram assim:
+
+| Rodada | Variante | p50 | p95 | 3 ou mais | Velocidade do jogo |
+|---|---|---:|---:|---:|---:|
+| `dvb` | base da release | 34,5 | 39,2 | 16,9% | 92,5% |
+| `dvc` | recorte do estágio (C1) | 33,3 | 36,4 | 7,9% | 96,5% |
+| `dvd` | C1 e a cópia do XDK (D2) | 35,8 | | 21,3% | pior |
+| `dvh4` | C1 e o desenho na hw4 | 30,2 | 30,4 | 0,4% | 100% |
+| `dvh5` | C1 e o desenho na hw5 | 30,2 | 30,4 | 0,8% na janela fria, 0 nas outras | 100% |
+
+O som não perdeu nada nas duas do núcleo do áudio (faltas 0, BuffersQueued mínimo 3, pior bloco 0). O duelo de um
+jogador (`f5_duelo.txt`, `dh5duelo` contra a `i1` do mesmo dia) ficou igual: combate com trabalho p50 25,81 contra
+25,72 ms e p95 30,69 contra 30,61, razão 0,9972 nos dois, as mesmas 3 imagens de três vblanks em 2.334, som sem falta.
+
+1. **`BT3_DIVIDIDA_RECORTE` passa a ligada por padrão no 360** (desligável com 0; no port de PC continua desligada).
+   A imagem é a mesma: dez capturas iguais na x86 com e sem, e a sabotagem do recorte mudou nove delas.
+2. **`BT3_GS_DESENHO_HW` passa a 5 por padrão** (a irmã do misturador do áudio), no lugar da 3. A 5 ficou à frente da 4
+   no pior caso da janela fria (p99 34,6 contra 48,1 ms).
+3. **A cópia do XDK (D2, `BT3_COPIA_XMEM`) fica de fora**: a gravação piorou de 33,2 para 35,9 ms.
+4. A luta dividida jogada à mão se confere na sessão final da release; a regra da decisão 38 vale para ela.

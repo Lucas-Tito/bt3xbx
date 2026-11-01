@@ -55,8 +55,8 @@ ela deixar de ser a mais lenta.
 
 | Ponto | Ganho [estimado] | Custo | Quando |
 |---|---|---|---|
-| **C1. Recorte justo do estágio na dividida**: manter a tabela larga decidindo a animação de textura (`stgm_a.c:404`) e pular só o `Vu1Pkt_CallProg4` (`stgm_a.c:327` e `:445`) das malhas fora da meia vista; imagem igual | 3 a 6 ms | 2 a 4 dias | 1.0 (implementado atrás de `BT3_DIVIDIDA_RECORTE=1`, desligada; falta medir no console) |
-| **D2. Cópia especializada** no unpack da VU1 e na cópia de vértices do `GsGpu_DrawVu0` (mesmos bytes) | 1,5 a 3 ms | 1 dia | 1.0 (em andamento) |
+| **C1. Recorte justo do estágio na dividida**: manter a tabela larga decidindo a animação de textura (`stgm_a.c:404`) e pular só o `Vu1Pkt_CallProg4` (`stgm_a.c:327` e `:445`) das malhas fora da meia vista; imagem igual | 3 a 6 ms | 2 a 4 dias | 1.0, feito (seção 6) |
+| **D2. Cópia especializada** no unpack da VU1 e na cópia de vértices do `GsGpu_DrawVu0` (mesmos bytes) | 1,5 a 3 ms | 1 dia | piorou, fora (seção 6) |
 | D3. Otimização entre arquivos (LTCG) só nos objetos do GS | 1 a 4 ms, incerto | Makefile e uma medida | 1.0 ou 1.1 |
 | D1. Atalhos por "nada mudou" entre lotes seguidos (`draw_state_vu`, `est_acerta`, `vu_uniforme_igual`, `same_state_vu`, `date_snapshot`, `vu_fecho`) | 3 a 6 ms | 3 a 5 dias | 1.1 |
 | D4. Não regravar na VRAM um envio idêntico ao anterior (`envio_faixa32`, hash de página) | 1 a 3 ms | médio | 1.1 |
@@ -75,7 +75,7 @@ ela deixar de ser a mais lenta.
 
 | Ponto | Ganho [estimado] | Custo | Quando |
 |---|---|---|---|
-| A. Desenho no núcleo do som (hw4 ou hw5) | jogo −7 a 9 ms, desenho −8 a 10 | 5 linhas, medir o som (estalos) | 1.1 |
+| A. Desenho no núcleo do som (hw4 ou hw5) | jogo −7 a 9 ms, desenho −8 a 10 | 5 linhas, medir o som (estalos) | 1.0, feito (seção 6) |
 | H. Encurtar o custo fixo por desenho (4.170 por quadro) | 5 a 10 ms | médio | 1.1 |
 
 ### Recusados
@@ -96,3 +96,20 @@ vêm desse arquivo (`StgGlare_LoadParams`; `BtlStage_HasFeature` em `stg_b.c:65`
 Sempre no mesmo roteiro, o `02_dividido` (`port/x360/tools/f7_console.py`, `port/x360/ambientes/f7-etapa3`), e não em
 luta à mão: a base com `BT3_LOG=1` e `BT3_PICOS=34` (linhas `passos: janela`, a ocupada da gravação, os lotes `vu4` e
 `vu0` por quadro), depois cada ponto ligado pela sua chave.
+
+## 6. O que entrou na 1.0 [medido, 31/10/2026]
+
+Roteiro `f7_perfil_dividido.txt` (`port/x360/tools/f7_console.py`): a luta dividida só com defesa, três janelas de 600
+passos, `BT3_PICOS=34`; coletas em `build/sessao_dividida/coleta/` (fora do git). Trabalho por passo em ms:
+
+| Rodada | Variante | p50 | p95 | 3 vblanks ou mais | Velocidade |
+|---|---|---:|---:|---:|---:|
+| `dvb` | base | 34,5 | 39,2 | 16,9% | 92,5% |
+| `dvc` | C1 (`BT3_DIVIDIDA_RECORTE=1`; 38,9% das malhas do estágio não foram à VU1) | 33,3 | 36,4 | 7,9% | 96,5% |
+| `dvd` | C1 e D2 (`BT3_COPIA_XMEM=1`; gravação de 33,2 para 35,9) | 35,8 | | 21,3% | pior |
+| `dvh4` | C1 e o desenho na hw4 | 30,2 | 30,4 | 0,4% (p99 da janela fria 48,1) | 100% |
+| `dvh5` | C1 e o desenho na hw5 | 30,2 | 30,4 | 0,8% na fria, 0 nas outras (p99 frio 34,6) | 100% |
+
+A velocidade no roteiro (92,5% na base) é maior que na luta à mão (85%): só defesa tem menos efeito na tela. O som nas
+duas do núcleo do áudio: faltas 0, BuffersQueued mínimo 3, pior bloco 0. O duelo de um jogador com o desenho na hw5
+(`dh5duelo`) ficou igual ao da build anterior (`i1`). O C1 e a hw5 viraram o padrão (decisão 39); o D2 ficou de fora.
