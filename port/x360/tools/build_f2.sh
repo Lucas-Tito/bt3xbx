@@ -73,7 +73,7 @@ docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app 
   done
   for f in port/x360/src/diario.c port/x360/src/iso360.c port/x360/src/iso_instalar.c port/x360/src/f2/*.c port/x360/src/f2/*.cpp port/x360/src/som/*.c port/x360/src/som/*.cpp $(ls port/x360/conv/*.c | grep -v conv_tool); do
     n=$(basename ${f%.*}); t=-TC; case $f in *.cpp) t="-TP -EHsc -GR-";; esac
-    INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX '"$CLFLAGS"' $t \
+    INCLUDE="Z:/xdk/include/xbox;Z:/xdk/include/crt" wine /xdk/bin/win32/cl.exe -nologo -D _XBOX -D BT3_VERSAO_NUM='"$BT3_VERSAO"' '"$CLFLAGS"' $t \
       -Iport/x360/src -Iport/x360/conv -Ibuild/x360/iso -Fo'"$OUT"'/x360/$n.obj -Fd'"$OUT"'/x360/ $f > '"$OUT"'/x360/$n.txt 2>&1 || { cat '"$OUT"'/x360/$n.txt; ok=1; }
   done
   chown -R '"$(id -u):$(id -g)"' '"$OUT"'

@@ -25,6 +25,10 @@ extern "C" void IsoInstalar_Progresso(int *fase, unsigned *pc) {
     *fase = IC_COPIAR;
     *pc = 42;
 }
+extern "C" void IsoInstalar_Contas(IcContas *c) {
+    std::memset(c, 0, sizeof(*c));
+    c->atual = -1;
+}
 int main(int argc, char **argv) {
     D3DDevice dev;
     int r;
