@@ -62,7 +62,9 @@ int Conv_BpeAbrir(const conv_u8 *p, conv_ofs n, conv_u8 *out, conv_ofs tam) {
 static conv_ofs comprimir(const conv_u8 *src, conv_ofs tam, conv_u8 *dst,
                          conv_ofs cap, unsigned limite, unsigned distintos) {
     conv_u8 bloco[32767], esq[256], dir[256], usado[256];
-    unsigned *freq = (unsigned *)malloc(65536UL * sizeof(unsigned));
+    /* A tabela de pares começa zerada e, depois de cada contagem, só os pares do bloco voltam a zero: o mesmo
+       resultado de zerar os 256 KB a cada código novo, que no 360 (1 MB de cache) era o grosso da conversão. */
+    unsigned *freq = (unsigned *)calloc(65536UL, sizeof(unsigned));
     conv_ofs in = 0, out = 0;
     if (!freq) return 0;
 #define EMITIR(v) do { if (out == cap) goto cheio; dst[out++] = (conv_u8)(v); } while (0)
@@ -82,13 +84,13 @@ static conv_ofs comprimir(const conv_u8 *src, conv_ofs tam, conv_u8 *dst,
             for (codigo = 256; codigo && usado[codigo - 1]; codigo--) {}
             if (!codigo) break;
             codigo--;
-            memset(freq, 0, 65536UL * sizeof(unsigned));
             maximo = 2; melhor = 0;
             for (i = 1; i < n; i++) {
                 par = (unsigned)bloco[i - 1] * 256 + bloco[i];
                 freq[par]++;
                 if (freq[par] > maximo) { melhor = par; maximo = freq[par]; }
             }
+            for (i = 1; i < n; i++) freq[(unsigned)bloco[i - 1] * 256 + bloco[i]] = 0;
             if (maximo <= 2) break;
             usado[codigo] = 1;
             esq[codigo] = (conv_u8)(melhor >> 8); dir[codigo] = (conv_u8)melhor;
@@ -148,7 +150,11 @@ static conv_ofs preservar(const conv_u8 *src, conv_ofs pack, const conv_u8 *ante
     conv_u8 *melhor = (conv_u8 *)malloc(100000UL);
     unsigned *custo = (unsigned *)malloc(32769UL * sizeof(unsigned));
     conv_u8 *escolha = (conv_u8 *)malloc(32768UL);
-    if (!dicionario || !tentativa || !melhor || !custo || !escolha) goto erro;
+    /* Os códigos de cada primeiro byte, em ordem crescente: a programação dinâmica só testa os que podem casar,
+       na mesma ordem de antes, então os empates continuam saindo iguais. */
+    unsigned short *cands = (unsigned short *)malloc(256UL * 256UL * sizeof(unsigned short));
+    unsigned ncand[256];
+    if (!dicionario || !tentativa || !melhor || !custo || !escolha || !cands) goto erro;
     while (in < pack) {
         conv_u8 esq[256], dir[256];
         unsigned lens[256], c = 0, cont, k, j, nb, bruto = 0, tokens;
@@ -182,14 +188,23 @@ static conv_ofs preservar(const conv_u8 *src, conv_ofs pack, const conv_u8 *ante
             menor = 0;
             /* Custo mínimo em tokens com a tabela original, inclusive os
                literais que a tabela ainda permite representar diretamente. */
+            memset(ncand, 0, sizeof(ncand));
+            for (k = 0; k < 256; k++)
+                if (lens[k]) {
+                    unsigned b = dicionario[k * 32768UL];
+                    cands[b * 256 + ncand[b]++] = (unsigned short)k;
+                }
             custo[bruto] = 0;
             for (j = bruto; j-- > 0;) {
+                unsigned b = raw[o + j], q;
                 custo[j] = 1000000;
-                for (k = 0; k < 256; k++) {
-                    unsigned l = lens[k];
-                    const conv_u8 *palavra = dicionario + k * 32768UL;
-                    if (l && l <= bruto - j && palavra[0] == raw[o + j] &&
-                        custo[j + l] + 1 < custo[j] && !memcmp(palavra, raw + o + j, l)) {
+                for (q = 0; q < ncand[b]; q++) {
+                    unsigned l;
+                    const conv_u8 *palavra;
+                    k = cands[b * 256 + q];
+                    l = lens[k];
+                    palavra = dicionario + k * 32768UL;
+                    if (l <= bruto - j && custo[j + l] + 1 < custo[j] && !memcmp(palavra, raw + o + j, l)) {
                         custo[j] = custo[j + l] + 1; escolha[j] = (conv_u8)k;
                     }
                 }
@@ -213,10 +228,10 @@ static conv_ofs preservar(const conv_u8 *src, conv_ofs pack, const conv_u8 *ante
         out += menor; in = fim; o += bruto;
     }
     if (o != tam) goto erro;
-    free(dicionario); free(tentativa); free(melhor); free(custo); free(escolha);
+    free(dicionario); free(tentativa); free(melhor); free(custo); free(escolha); free(cands);
     return out;
 erro:
-    free(dicionario); free(tentativa); free(melhor); free(custo); free(escolha);
+    free(dicionario); free(tentativa); free(melhor); free(custo); free(escolha); free(cands);
     return 0;
 }
 

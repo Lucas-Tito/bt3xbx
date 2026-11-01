@@ -233,3 +233,32 @@ adaptador usam agora o cabeçalho sem a constante; logs e escopo da rodada ficam
 A tabela da rodada final, os hashes, commits e o SHA1 da `.text` ficam no relatório externo
 `~/entrega-conv-console.md`. Build XDK, contratos efetivos das APIs FATX, aparência das caixas/barra, reinício,
 interrupção elétrica, desempenho Xenon e Guide real continuam para a revisão do Lucas. As simulações não os aprovam.
+
+## A recompressão dos menus mais rápida (31/10/2026)
+
+A primeira conversão da ISO versão 4 no console pareceu travada em 9%: o temporário parou em 447.186.944 bytes, o
+começo de `pzs3us1/00442.bin`, no lote que leva os primeiros pacotes de menu. No WSL nenhum arquivo do trecho trava
+(x86 e PowerPC emulado dão os mesmos bytes), mas os 690 pacotes de menu (`menu_pacote` e `menu_bpe`, entre uns 447 e
+500 MB da ISO) custavam 65 s de x86 só na recompressão BPE, e a barra, pesada por bytes, fica parada enquanto isso.
+
+Duas mudanças em `menus_iso.c`, com a saída idêntica:
+
+1. `comprimir` zerava a tabela de pares inteira (256 KB) a cada código novo, até umas 200 vezes por bloco e três
+   tentativas por bloco; agora a tabela nasce zerada e só os pares do bloco voltam a zero depois de cada contagem.
+2. A programação dinâmica de `preservar` testava os 256 códigos em cada posição; agora testa só os códigos cujo
+   primeiro byte casa, na mesma ordem crescente, de modo que os empates saem iguais.
+
+**Prova** (WSL, `~/menus_rapido`, os 690 pacotes tirados da ISO do Lucas, só md5 e tempos voltam): `conv_tool --saida`
+com o código antigo e o novo, md5 de cada arquivo gravado.
+
+| Build | Arquivos | Tempo | Diferentes do antigo |
+|---|---:|---:|---:|
+| x86 antigo | 690 | 59,9 s | |
+| x86 novo | 690 | 15,3 s | 0 |
+| mutante: candidatos em ordem decrescente | 690 | 15,0 s | 213 |
+| mutante: o primeiro par do bloco não volta a zero | 681 (saída 1) | 18,9 s | 675 |
+| PowerPC emulado antigo, os 30 maiores | 30 | 359,6 s | |
+| PowerPC emulado novo, os 30 maiores | 30 | 58,4 s | 0 (e 0 contra o x86 antigo) |
+
+Ganho de 3,9 vezes no x86 e 6,2 no PowerPC emulado, que tem cache e memória mais parecidos com o 360. A ISO
+convertida não muda: nenhuma versão nova da marca.
