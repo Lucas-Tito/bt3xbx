@@ -6,7 +6,7 @@
 #include "iso_avisos.h"
 #include "iso_conv.h"
 /* Fonte mínima 5x7 do port. Retângulos Clear dispensam shaders, fontes externas e qualquer leitura de
-   arquivo pela thread que apresenta. Ordem: A-Z, 0-9, . % / - \ | [ ] # : > */
+   arquivo pela thread que apresenta. Ordem: A-Z, 0-9, . % / - \ | [ ] # : > ? , < */
 static const unsigned char letras[][7] = {
     {14, 17, 17, 31, 17, 17, 17}, {30, 17, 17, 30, 17, 17, 30}, {14, 17, 16, 16, 16, 17, 14},
     {30, 17, 17, 17, 17, 17, 30}, {31, 16, 16, 30, 16, 16, 31}, {31, 16, 16, 30, 16, 16, 16},
@@ -24,7 +24,8 @@ static const unsigned char letras[][7] = {
     /* 38 */ {1, 1, 2, 4, 8, 16, 16}, /* 39 - */ {0, 0, 0, 31, 0, 0, 0}, /* 40 \ */ {16, 16, 8, 4, 2, 1, 1},
     /* 41 | */ {4, 4, 4, 4, 4, 4, 4}, /* 42 [ */ {14, 8, 8, 8, 8, 8, 14}, /* 43 ] */ {14, 2, 2, 2, 2, 2, 14},
     /* 44 # */ {10, 10, 31, 10, 31, 10, 10}, /* 45 : */ {0, 12, 12, 0, 12, 12, 0},
-    /* 46 > */ {16, 8, 4, 2, 4, 8, 16}};
+    /* 46 > */ {16, 8, 4, 2, 4, 8, 16},
+    /* 47 ? */ {14, 17, 1, 2, 4, 0, 4}, /* 48 , */ {0, 0, 0, 0, 12, 4, 8}, /* 49 < */ {1, 2, 4, 8, 4, 2, 1}};
 static int indiceLetra(int c) {
     if (c >= 'a' && c <= 'z')
         c -= 32;
@@ -44,6 +45,9 @@ static int indiceLetra(int c) {
     case '#': return 44;
     case ':': return 45;
     case '>': return 46;
+    case '?': return 47;
+    case ',': return 48;
+    case '<': return 49;
     }
     return -1; /* o espaço e o que a fonte não tem só avançam */
 }
