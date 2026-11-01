@@ -47,13 +47,13 @@ changed. Pick one of the two ways below; both give a converted ISO that the game
 Option A: on the console
 
 1. With your original ISO in the game folder (section 2), start the game.
-2. A box appears:
+2. The game asks:
 
      Convert ISO
      Convert your original USA ISO for Xbox 360? It needs 3 GB of free space. Your original
      will be kept.
 
-   Cancel is selected first. Move to Convert and press A.
+   Cancel is selected first. Press left to select Convert and press A. (B cancels.)
 3. A progress screen lists each step: checking your original ISO, copying the game data,
    converting characters, stages, menus, battle data and sounds (each with a counter), and
    verifying the converted ISO. A bar and the elapsed time stay below. It takes about 10
@@ -65,7 +65,7 @@ Option A: on the console
      ISO ready
      Conversion complete. The game will restart.
 
-   Press OK. The game restarts by itself and from now on starts normally.
+   Press A (OK). The game restarts by itself and from now on starts normally.
 
 If something goes wrong:
 

@@ -21,7 +21,7 @@ static const wchar_t *const ISO_CONV_DESTINO = L"Rename your original ISO to bt3
 static const char *const ISO_CONV_PROGRESSO[] = { "Checking ISO...", "Copying ISO...", "Converting ISO...", "Verifying ISO...", "Finishing..." };
 static const char *const ISO_CONV_AGUARDE = "Please wait. Do not turn off the console.";
 /* Tela de progresso em estilo de terminal (só maiúsculas: a fonte 5x7 do port não tem minúsculas).
-   Pendente de aprovação do Lucas: todas as linhas abaixo. A versão entra no %s do título. */
+   Aprovadas pelo Lucas no console em 1/11/2026. A versão entra no %s do título. */
 static const char *const ISO_CONV_T_TITULO = "BT3 X360 %s  ISO CONVERSION";
 /* A conversão inteira levou 9 min 21 s no HD interno do console do Lucas (1/11/2026); 15 dá folga para mídia lenta. */
 static const char *const ISO_CONV_T_PRAZO = "THIS CAN TAKE UP TO 15 MINUTES.";
@@ -35,7 +35,7 @@ static const char *const ISO_CONV_T_VERIFICANDO = "VERIFYING CONVERTED ISO";
 static const char *const ISO_CONV_T_DECORRIDO = "ELAPSED";
 static const char *const ISO_CONV_T_OK = "OK";
 static const char *const ISO_CONV_T_FALHOU = "FAILED";
-/* Linha de ajuda da pergunta própria (substitui as caixas do sistema). Pendente de aprovação do Lucas. */
+/* Linha de ajuda da pergunta própria (substitui as caixas do sistema), aprovada pelo Lucas no console em 1/11/2026. */
 static const char *const ISO_CONV_T_AJUDA_DOIS = "A: SELECT    LEFT/RIGHT: CHOOSE    B: CANCEL";
 static const char *const ISO_CONV_T_AJUDA_UM = "A: OK";
 static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto) {
