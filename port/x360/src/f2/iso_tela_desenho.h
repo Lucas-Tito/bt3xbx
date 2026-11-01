@@ -190,4 +190,81 @@ static void telaDesenhar(D3DDevice *dev, const TelaEstado &e, const char *versao
     sprintf(buf, "  %s %02u:%02u", ISO_CONV_T_DECORRIDO, seg / 60, seg % 60);
     texto(dev, buf, TELA_X, TELA_Y + l * TELA_PASSO, TELA_ESCALA, TELA_TEXTO);
 }
+
+/* A pergunta própria no lugar das caixas do sistema (Bad Avatar, sem DashLaunch: a caixa fechava sozinha).
+   Mesma tela preta de terminal, mesma margem e passo. Os textos de iso_avisos.h são wchar_t ASCII: vão para
+   maiúsculas ASCII na hora. */
+#define TELA_P_COLUNAS 60
+#define TELA_P_LINHAS 8
+static void telaAscii(char *out, int n, const wchar_t *w) {
+    int i = 0;
+    for (; w[i] && i < n - 1; i++) {
+        int c = (int)w[i];
+        out[i] = (char)(c >= 'a' && c <= 'z' ? c - 32 : (c > 0 && c < 128 ? c : '?'));
+    }
+    out[i] = 0;
+}
+/* Quebra por palavra em linhas de no máximo TELA_P_COLUNAS caracteres; devolve quantas linhas. */
+static int telaQuebrar(char linhas[][TELA_P_COLUNAS + 1], int max, const char *s) {
+    int n = 0, k = 0;
+    while (*s && n < max) {
+        int tam = 0;
+        while (s[tam] && s[tam] != ' ')
+            tam++;
+        if (tam > TELA_P_COLUNAS)
+            tam = TELA_P_COLUNAS;
+        if (k && k + 1 + tam > TELA_P_COLUNAS) {
+            linhas[n++][k] = 0;
+            k = 0;
+            if (n >= max)
+                return n;
+        }
+        if (k)
+            linhas[n][k++] = ' ';
+        memcpy(linhas[n] + k, s, (size_t)tam);
+        k += tam;
+        s += tam;
+        while (*s && *s != ' ')
+            s++;
+        while (*s == ' ')
+            s++;
+    }
+    if (k && n < max)
+        linhas[n++][k] = 0;
+    return n;
+}
+/* Botão selecionado entre "> " e " <", os outros com dois espaços de cada lado; recuo de 3. */
+static void telaBotoes(char *out, const char *b0, const char *b1, int sel) {
+    int n = sprintf(out, "   ");
+    n += sprintf(out + n, sel == 0 ? "> %s <" : "  %s  ", b0);
+    if (b1) {
+        n += sprintf(out + n, "    ");
+        sprintf(out + n, sel == 1 ? "> %s <" : "  %s  ", b1);
+    }
+}
+/* b1 nulo: caixa de um botão (a ajuda é só "A: OK"). Não apresenta: quem chama faz o Present. */
+static void telaPergunta(D3DDevice *dev, const char *versao, const wchar_t *titulo, const wchar_t *msg,
+                         const wchar_t *b0, const wchar_t *b1, int sel) {
+    char buf[256], t[TELA_P_COLUNAS * 2 + 2], m[512], x0[32], x1[32], linhas[TELA_P_LINHAS][TELA_P_COLUNAS + 1];
+    int i, n, l = 0;
+    dev->Clear(0, NULL, D3DCLEAR_TARGET, TELA_FUNDO, 1, 0);
+    sprintf(buf, ISO_CONV_T_TITULO, versao);
+    texto(dev, buf, TELA_X, TELA_Y + (l++) * TELA_PASSO, TELA_ESCALA, TELA_TEXTO);
+    l++;
+    telaAscii(t, (int)sizeof(t), titulo);
+    texto(dev, t, TELA_X, TELA_Y + (l++) * TELA_PASSO, TELA_ESCALA, TELA_TEXTO);
+    telaAscii(m, (int)sizeof(m), msg);
+    n = telaQuebrar(linhas, TELA_P_LINHAS, m);
+    for (i = 0; i < n; i++)
+        texto(dev, linhas[i], TELA_X, TELA_Y + (l++) * TELA_PASSO, TELA_ESCALA, TELA_TEXTO);
+    l++;
+    telaAscii(x0, (int)sizeof(x0), b0);
+    if (b1)
+        telaAscii(x1, (int)sizeof(x1), b1);
+    telaBotoes(buf, x0, b1 ? x1 : NULL, sel);
+    texto(dev, buf, TELA_X, TELA_Y + (l++) * TELA_PASSO, TELA_ESCALA, TELA_TEXTO);
+    l++;
+    texto(dev, b1 ? ISO_CONV_T_AJUDA_DOIS : ISO_CONV_T_AJUDA_UM, TELA_X, TELA_Y + l * TELA_PASSO, TELA_ESCALA,
+          TELA_TEXTO);
+}
 #endif

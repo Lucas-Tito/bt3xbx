@@ -1,4 +1,4 @@
-/* Instalação antes do jogo. A main só apresenta e usa a UI assíncrona do sistema. */
+/* Instalação antes do jogo. A main só apresenta; as perguntas são desenhadas aqui, sem a caixa do sistema. */
 #include <xtl.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,31 +27,70 @@ static void tela(D3DDevice *dev) {
     telaDesenhar(dev, e, kVersaoTela);
     dev->Present(NULL, NULL, NULL, NULL);
 }
-/* Atrás das caixas fica o último estado da conversão, sem voltar a 0%. */
-static void fundo(D3DDevice *dev) { tela(dev); }
-/* Buffers usados pelo sistema ficam estáticos até o término assíncrono. */
-static int caixa(D3DDevice *dev, const wchar_t *titulo, const wchar_t *msg, bool pergunta) {
-    static LPCWSTR botoes[2];
-    static MESSAGEBOX_RESULT resultado;
-    static XOVERLAPPED ov;
-    DWORD r, inicio = GetTickCount(), fim = 0;
-    botoes[0] = pergunta ? ISO_CONV_SIM : ISO_CONV_OK;
-    botoes[1] = ISO_CONV_NAO;
-    for (;;) {
-        fundo(dev);
-        ZeroMemory(&ov, sizeof(ov));
-        ZeroMemory(&resultado, sizeof(resultado));
-        r = XShowMessageBoxUI(XUSER_INDEX_ANY, titulo, msg, pergunta ? 2 : 1, botoes, pergunta ? 1 : 0, 0,
-                              &resultado, &ov);
-        if (r != ERROR_ACCESS_DENIED || GetTickCount() - inicio >= 10000)
-            break;
+/* A pergunta é nossa, não do sistema: num Bad Avatar sem DashLaunch a caixa do sistema fechava sozinha e o jogo
+   a tratava como Cancel. A tela é apresentada a cada volta (a Guide congela o console se ninguém apresenta), sem
+   espera bloqueante, e a entrada vem do XInput. */
+#define PAD_ESQ 1
+#define PAD_DIR 2
+#define PAD_A 4
+#define PAD_B 8
+#define PAD_LIMIAR 16000
+#define PAD_PORTAS 4
+static unsigned padLer(DWORD porta) {
+    XINPUT_STATE e;
+    unsigned m = 0;
+    if (XInputGetState(porta, &e) != ERROR_SUCCESS)
+        return 0;
+    if ((e.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_LEFT) || e.Gamepad.sThumbLX < -PAD_LIMIAR)
+        m |= PAD_ESQ;
+    if ((e.Gamepad.wButtons & XINPUT_GAMEPAD_DPAD_RIGHT) || e.Gamepad.sThumbLX > PAD_LIMIAR)
+        m |= PAD_DIR;
+    if (e.Gamepad.wButtons & XINPUT_GAMEPAD_A)
+        m |= PAD_A;
+    if (e.Gamepad.wButtons & XINPUT_GAMEPAD_B)
+        m |= PAD_B;
+    return m;
+}
+/* Resultado: 0 = primeiro botão (Convert ou OK), 1 = Cancel. Cancel é o selecionado ao abrir. Um botão só vale
+   depois de visto solto em algum quadro desde a abertura, por porta: o A que já estava apertado nunca confirma. */
+static int caixa(D3DDevice *dev, const char *nome, const wchar_t *titulo, const wchar_t *msg, bool dois) {
+    unsigned armado[PAD_PORTAS] = {0, 0, 0, 0};
+    int sel = dois ? 1 : 0, escolha = -1;
+    DWORD inicio = GetTickCount();
+    bool apertado = false;
+    for (DWORD p = 0; p < PAD_PORTAS; p++) { /* a leitura da abertura já conta como um quadro */
+        unsigned agora = padLer(p);
+        armado[p] = ~agora;
+        if (agora)
+            apertado = true;
     }
-    if (r != ERROR_IO_PENDING && r != ERROR_SUCCESS)
-        return -1;
-    while (!XHasOverlappedIoCompleted(&ov))
-        fundo(dev);
-    r = XGetOverlappedResult(&ov, &fim, FALSE);
-    return r == ERROR_SUCCESS ? (int)resultado.dwButtonPressed : -1;
+    Diario_Escrever("tela: pergunta '%s' aberta (%s)", nome, apertado ? "com botão apertado" : "tudo solto");
+    while (escolha < 0) {
+        for (DWORD p = 0; p < PAD_PORTAS && escolha < 0; p++) {
+            unsigned agora = padLer(p), borda = agora & armado[p];
+            armado[p] = ~agora; /* só solto arma o botão */
+            if (dois && (borda & PAD_ESQ) && sel != 0) {
+                sel = 0;
+                Diario_Escrever("tela: '%s' seleção Convert (esquerda, porta %u)", nome, (unsigned)p);
+            } else if (dois && (borda & PAD_DIR) && sel != 1) {
+                sel = 1;
+                Diario_Escrever("tela: '%s' seleção Cancel (direita, porta %u)", nome, (unsigned)p);
+            }
+            if (borda & PAD_A) {
+                escolha = sel;
+                Diario_Escrever("tela: '%s' botão A (porta %u)", nome, (unsigned)p);
+            } else if (borda & PAD_B) {
+                escolha = dois ? 1 : 0;
+                Diario_Escrever("tela: '%s' botão B (porta %u)", nome, (unsigned)p);
+            }
+        }
+        telaPergunta(dev, kVersaoTela, titulo, msg, dois ? ISO_CONV_SIM : ISO_CONV_OK, dois ? ISO_CONV_NAO : NULL,
+                     sel);
+        dev->Present(NULL, NULL, NULL, NULL);
+    }
+    Diario_Escrever("tela: pergunta '%s' escolheu %d após %u ms", nome, escolha,
+                    (unsigned)(GetTickCount() - inicio));
+    return escolha;
 }
 static char origemConversao[512];
 static DWORD WINAPI limpar(LPVOID p) {
@@ -80,10 +119,10 @@ int IsoTela_Converter(D3DDevice *dev, const char *origem) {
     /* Descarta uma instalação interrompida mesmo se o usuário cancelar a nova. */
     r = trabalhar(dev, limpar);
     if (r != IC_OK) {
-        caixa(dev, ISO_CONV_FALHA_TITULO, ISO_CONV_FALHA, false);
+        caixa(dev, "falha-limpeza", ISO_CONV_FALHA_TITULO, ISO_CONV_FALHA, false);
         return 0;
     }
-    if (caixa(dev, ISO_CONV_TITULO, ISO_CONV_PERGUNTA, true) != 0)
+    if (caixa(dev, "conversao", ISO_CONV_TITULO, ISO_CONV_PERGUNTA, true) != 0)
         return 0;
     if (strlen(origem) >= sizeof(origemConversao))
         return 0;
@@ -97,10 +136,11 @@ int IsoTela_Converter(D3DDevice *dev, const char *origem) {
     sFim = GetTickCount();
     sFalhou = r != IC_OK;
     if (r == IC_OK) {
-        caixa(dev, ISO_CONV_SUCESSO, ISO_CONV_PRONTA, false);
+        caixa(dev, "sucesso", ISO_CONV_SUCESSO, ISO_CONV_PRONTA, false);
         return 1;
     }
-    caixa(dev, r == IC_ESPACO ? ISO_CONV_ESPACO_TITULO : ISO_CONV_FALHA_TITULO,
+    caixa(dev, r == IC_ESPACO ? "espaco" : r == IC_DESTINO ? "destino" : "falha",
+          r == IC_ESPACO ? ISO_CONV_ESPACO_TITULO : ISO_CONV_FALHA_TITULO,
           r == IC_ESPACO    ? ISO_CONV_ESPACO
           : r == IC_DESTINO ? ISO_CONV_DESTINO
                             : ISO_CONV_FALHA,

@@ -35,6 +35,9 @@ static const char *const ISO_CONV_T_VERIFICANDO = "VERIFYING CONVERTED ISO";
 static const char *const ISO_CONV_T_DECORRIDO = "ELAPSED";
 static const char *const ISO_CONV_T_OK = "OK";
 static const char *const ISO_CONV_T_FALHOU = "FAILED";
+/* Linha de ajuda da pergunta própria (substitui as caixas do sistema). Pendente de aprovação do Lucas. */
+static const char *const ISO_CONV_T_AJUDA_DOIS = "A: SELECT    LEFT/RIGHT: CHOOSE    B: CANCEL";
+static const char *const ISO_CONV_T_AJUDA_UM = "A: OK";
 static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto) {
     *titulo = L"Cannot read ISO";
     /* Textos da ausente e da ilegível revistos pelo Lucas em 1/11/2026: sem citar o nome reservado da convertida,
