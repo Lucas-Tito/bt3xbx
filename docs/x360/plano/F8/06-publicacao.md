@@ -264,3 +264,8 @@ Checagem final no console com essa build (1/11/2026, todas aprovadas pelo Lucas)
 partir do zip, conversão no console em 9 min 21 s no HD interno com a tela nova, caixas de ISO ausente e ilegível
 (textos revistos), queda de teste (caixa, `crash.txt` com versão, build e cadeia, volta à FreeStyle sem laço) e a
 sessão longa com tela dividida e saída pela Guide. Sem ISO PAL para testar a caixa de versão não suportada.
+
+**Problemas conhecidos em dois lugares** (1/11/2026, pedido do Lucas): a seção 6 do `README.txt` do pacote e a seção
+"Known issues" do `.github/CONTRIBUTING.md`, que pede para não reportar o que já está lá. Toda mudança numa vale para
+a outra no mesmo commit; o item "nem todo conteúdo foi jogado no console" fica fora da lista do CONTRIBUTING, porque
+uma queda nesse conteúdo deve ser reportada.

@@ -5,6 +5,22 @@ this port. Everything you need to install and play is in
 [README.txt](https://github.com/Lucas-Tito/bt3xbx/blob/main/port/x360/package/README.txt); please
 read it, and its known issues, before opening an issue.
 
+## Known issues: please do not report these
+
+These are already known and listed in section 6 of README.txt. An issue about one of them is closed
+with the label `known-issue`.
+
+* Night stages, the desert at night above all, can look too dark (check the console's Reference
+  Levels video setting first, see README.txt).
+* On Namek, during the Shenlong animation, parts of the sky and the water can turn black for a
+  moment.
+* The planet explosion after a Final Flash on Broly's stage runs slowly for about 3 seconds, and
+  split-screen battles can slow down when many effects are on screen.
+* The online mode (Dragon Net Battle) is not available.
+
+Not every character, stage, story battle and mode has been played on the console yet: a crash or a
+problem in one of them is not a known issue, so please do report it.
+
 ## How to report
 
 * **The game closed with the "Unexpected error" box:** use the **Crash report** form and attach the
