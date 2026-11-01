@@ -25,6 +25,10 @@ static void progresso(IsoConvIO *io, int fase, conv_u32 p, conv_u32 n) {
     if (io->progresso)
         io->progresso(io->ctx, fase, p, n);
 }
+static void categorias(IsoConvIO *io, const IcContas *c) {
+    if (io->categorias)
+        io->categorias(io->ctx, c);
+}
 /* Busca só um componente, sem recursão; diretórios conhecidos menores que 1
  * MiB. */
 static int achar(IsoConvIO *io, conv_u32 pos, conv_u32 tam, const char *nome, conv_u32 *a, conv_u32 *t) {
@@ -227,8 +231,9 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     static char detalhe[200];
     unsigned n = 0, i, j, k, quantos, nlotes, janela = 0;
     /* Unidades do progresso em KiB; IC_TAMANHO é múltiplo de 2048. */
-    const conv_u32 iso = IC_TAMANHO >> 10, total = 3 * iso;
-    conv_u32 tam, inicio, pos;
+    const conv_u32 iso = IC_TAMANHO >> 10;
+    conv_u32 total = 3 * iso, tam, inicio, pos;
+    IcContas contas;
     int r = IC_IO, criado = 0, leitura = 0, escrita = 0;
     const char *msg = "falha de leitura, escrita ou sincronização";
     for (i = 0; i < 3; i++)
@@ -239,6 +244,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     l = (Lote *)malloc(MAX_PECAS * sizeof(*l));
     if (!buf[0] || !buf[1] || !buf[2] || !feito || !e || !v || !l)
         goto fim;
+    IsoContas_Iniciar(&contas);
     progresso(io, IC_IDENTIFICAR, 0, total);
     r = IC_ORIGEM;
     msg = "origem ou índices incompatíveis com a ISO USA";
@@ -246,6 +252,12 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
      metadados ficam em cache no adaptador e entram no SHA da passagem única. */
     if (!io->tamanho(io->ctx, 0, &tam) || tam != IC_TAMANHO || !inventario(io, e, &n))
         goto fim;
+    /* Totais por categoria e o peso extra dos menus, antes de planejar (que acrescenta a marca). */
+    for (i = 0; i < n; i++)
+        IsoContas_Planejar(&contas, Conv_FormatoDe(e[i].nome), e[i].tam);
+    total = IsoContas_Total(&contas, iso);
+    progresso(io, IC_IDENTIFICAR, 0, total);
+    categorias(io, &contas);
     r = IC_FORMATO;
     msg = "selo incompatível";
     if (memcmp(selo, "BT3X360-ISO\0\0\0\0\0", 16) || le32(selo + 16) != 4 || le32(selo + 20) != 512 ||
@@ -300,11 +312,16 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
             if (a->entrada >= 0) {
                 Entrada *entrada = e + a->entrada;
                 if (entrada->nome[0]) {
+                    const char *formato = Conv_FormatoDe(entrada->nome);
+                    IsoContas_Comecar(&contas, formato);
+                    categorias(io, &contas);
                     if (!converter(entrada, trecho, feito)) {
                         r = IC_FORMATO;
                         msg = "conversor recusou a entrada";
                         goto fim;
                     }
+                    IsoContas_Concluir(&contas, formato, entrada->tam);
+                    categorias(io, &contas);
                 } else {
                     for (j = 0; j < IC_MARCA_TAM; j++)
                         if (trecho[j]) {
@@ -316,6 +333,8 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
                 }
             }
             io->conversao_ms += io->relogio() - inicio;
+            /* Entrada a entrada, para a barra andar também nos menus pesados; nunca passa do fim do lote. */
+            progresso(io, IC_CONVERTER, IsoContas_Passagem(&contas, (a->pos + a->tam) >> 10), total);
         }
         if (escrita && !io->esperar_gravacao(io->ctx))
             goto fim;
@@ -323,7 +342,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
         if (!io->enviar(io->ctx, atual->pos, b, atual->tam))
             goto fim;
         /* Cópia e conversão são uma passagem: cada byte lido e gravado conta. */
-        progresso(io, IC_CONVERTER, 2 * ((atual->pos + atual->tam) >> 10), total);
+        progresso(io, IC_CONVERTER, IsoContas_Passagem(&contas, (atual->pos + atual->tam) >> 10), total);
     }
     if (escrita && !io->esperar_gravacao(io->ctx))
         goto fim;
@@ -334,7 +353,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
     if (memcmp(hash, esperado, 32))
         goto fim;
     io->hash_saida(io->ctx, io->sha_saida);
-    progresso(io, IC_VERIFICAR, 2 * iso, total);
+    progresso(io, IC_VERIFICAR, IsoContas_Verificacao(&contas, iso, 0), total);
     r = IC_IO;
     msg = "falha ao sincronizar, fechar ou reabrir";
     if (!io->reabrir(io->ctx))
@@ -369,7 +388,7 @@ int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro
         io->hash_releitura_ms += io->relogio() - inicio;
         pos += z;
         io->relidos += z;
-        progresso(io, IC_VERIFICAR, 2 * iso + (pos >> 10), total);
+        progresso(io, IC_VERIFICAR, IsoContas_Verificacao(&contas, iso, pos >> 10), total);
     }
     IsoSha_Final(&releitura, hash);
     if (memcmp(hash, io->sha_saida, 32))

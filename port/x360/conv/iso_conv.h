@@ -2,10 +2,15 @@
 #ifndef ISO_CONV_H
 #define ISO_CONV_H
 #include "conv.h"
+#include "iso_contas.h"
 #define IC_TAMANHO 3020816384U
 #define IC_MARCA_POS 0x3df400U
 #define IC_MARCA_TAM 512
 #define IC_TEMP "bt3-x360.tmp"
+/* Peso extra de cada entrada de menu na barra, por KiB da entrada (formatos menu_*): a recompressão BPE dos
+   690 pacotes custa muito mais CPU por byte que a cópia. Valor provisório: será calibrado pela medida no
+   console de 31/10 (tempo da etapa converter com e sem menus). */
+#define IC_PESO_MENU 12
 enum { IC_OK, IC_ORIGEM, IC_ESPACO, IC_IO, IC_FORMATO, IC_CONFERE, IC_DESTINO };
 enum { IC_IDENTIFICAR, IC_COPIAR, IC_CONVERTER, IC_VERIFICAR, IC_PUBLICAR };
 /* Posições e tamanhos cabem em u32, inclusive no Xenon. Nenhum FILE/long de 32 bits.
@@ -36,9 +41,13 @@ typedef struct IsoConvIO {
     int (*publicar)(void *);
     void (*descartar)(void *);
     /* Progresso do processo inteiro, em KiB lidos ou gravados: a passagem lê e
-       grava a ISO (2 partes de 3) e a releitura a lê de novo (1 parte). feito
-       nunca diminui e chega a total na publicação; a fase só avança. */
+       grava a ISO (2 partes de 3) e a releitura a lê de novo (1 parte), mais o peso
+       extra dos menus (IC_PESO_MENU por KiB). feito nunca diminui e chega a total
+       na publicação; a fase só avança. */
     void (*progresso)(void *, int, conv_u32 feito, conv_u32 total);
+    /* Contagem por categoria para a tela: chamada com os totais planejados, antes e depois de
+       cada entrada convertida. Pode ser NULL. */
+    void (*categorias)(void *, const IcContas *);
 } IsoConvIO;
 int IsoConv_Executar(IsoConvIO *io, const conv_u8 selo[IC_MARCA_TAM], char *erro, unsigned n);
 /* SHA256 portátil, sem acesso desalinhado nem dependência da ordem do host. */

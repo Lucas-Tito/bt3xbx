@@ -42,6 +42,13 @@ def validar_fluxo(texto, sha=None):
         exigir(re.search(rf"conversão: etapa {etapa} em \d+ ms", texto), f"tempo da etapa {etapa} ausente")
     exigir("progresso: 101 valores distintos, de 0 a 100, fase final 4, retrocessos=0" in texto,
            "porcentagem não foi única e monotônica de 0 a 100")
+    # Categorias da tela: as contas fecham no total do inventário e cada entrada convertida bate uma vez.
+    m = re.search(r"categorias: feitos (\d+) de (\d+)", texto)
+    b = re.search(r"batidas=(\d+)", texto)
+    exigir(m and b and int(m[1]) == int(m[2]) == int(b[1]) == 3366,
+           "categorias não fecham em 3366 entradas ou as batidas não são uma por entrada")
+    for nome in re.findall(r"(\w+) (\d+)/(\d+)", re.search(r"categorias: personagens.*", texto)[0]):
+        exigir(nome[1] == nome[2] and int(nome[2]) > 0, f"categoria {nome[0]} não terminou ou está vazia")
     sobrepostas = re.search(r"pedidos sobrepostos=(\d+)", texto)
     exigir(sobrepostas and int(sobrepostas[1]) > 0, "nenhuma E/S sobreposta foi pedida")
     gravacoes = re.search(r"gravações=(\d+)", texto)

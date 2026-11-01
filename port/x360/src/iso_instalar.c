@@ -38,6 +38,8 @@ typedef struct Instalar {
     Operacao leitora, escritora;
 } Instalar;
 static volatile LONG sFase, sPorcento;
+/* Contagem por categoria para a tela, publicada campo a campo com Interlocked (a tela só lê). */
+static volatile LONG sTotal[IC_NCATS], sFeito[IC_NCATS], sAtual = -1, sBatidas;
 static const char *const sEtapas[5] = {"identificar", "copiar", "converter", "verificar", "publicar"};
 static int sEtapa = -1;
 static DWORD sEtapaInicio;
@@ -273,11 +275,31 @@ static void progresso(void *ctx, int fase, conv_u32 p, conv_u32 n) {
     InterlockedExchange(&sFase, fase);
     InterlockedExchange(&sPorcento, (LONG)porcento);
 }
+static void categorias(void *ctx, const IcContas *c) {
+    int i;
+    (void)ctx;
+    for (i = 0; i < IC_NCATS; i++) {
+        InterlockedExchange(&sTotal[i], (LONG)c->total[i]);
+        InterlockedExchange(&sFeito[i], (LONG)c->feito[i]);
+    }
+    InterlockedExchange(&sAtual, (LONG)c->atual);
+    InterlockedExchange(&sBatidas, (LONG)c->batidas);
+}
 /* MB decimais por segundo, a mesma unidade do modelo de tempo da nota. */
 static double mbs(conv_u32 bytes, DWORD ms) { return ms ? (double)bytes / 1000.0 / (double)ms : 0.0; }
 void IsoInstalar_Progresso(int *fase, unsigned *porcento) {
     *fase = (int)InterlockedCompareExchange(&sFase, 0, 0);
     *porcento = (unsigned)InterlockedCompareExchange(&sPorcento, 0, 0);
+}
+void IsoInstalar_Contas(IcContas *c) {
+    int i;
+    for (i = 0; i < IC_NCATS; i++) {
+        c->total[i] = (conv_u32)InterlockedCompareExchange(&sTotal[i], 0, 0);
+        c->feito[i] = (conv_u32)InterlockedCompareExchange(&sFeito[i], 0, 0);
+    }
+    c->atual = (int)InterlockedCompareExchange(&sAtual, 0, 0);
+    c->batidas = (conv_u32)InterlockedCompareExchange(&sBatidas, 0, 0);
+    c->extra_total = c->extra_feito = 0;
 }
 int IsoInstalar_Limpar(void) {
     DWORD erro;
@@ -318,6 +340,13 @@ int IsoInstalar_Executar(const char *origem) {
     io.publicar = publicar;
     io.descartar = descartar;
     io.progresso = progresso;
+    io.categorias = categorias;
+    for (i = 0; i < IC_NCATS; i++) {
+        InterlockedExchange(&sTotal[i], 0);
+        InterlockedExchange(&sFeito[i], 0);
+    }
+    InterlockedExchange(&sAtual, -1);
+    InterlockedExchange(&sBatidas, 0);
     progresso(&c, IC_IDENTIFICAR, 0, 1);
     Diario_Escrever("conversão: início, %u bytes", (unsigned)IC_TAMANHO);
     if (!abrir_operacao(&c, &c.leitora, 0) || !abrir_operacao(&c, &c.escritora, 1)) {
