@@ -8,9 +8,10 @@ It is a fork of [Tenkaichi3Decomp](https://github.com/z3xox/Tenkaichi3Decomp), t
 BT3-Decompiled decompilation. Everything the Xbox 360 needs lives in `port/x360/`, `docs/x360/` and in
 `#ifdef PORT_X360` blocks; the rest is the PC port's, described below.
 
-**Status:** in development. There is no release yet; the first one is being tested on the console.
+**Status:** version 1.0.0 is out. Download it from the [Releases](https://github.com/Lucas-Tito/bt3xbx/releases)
+page and follow `README.txt` inside the zip.
 
-This repository contains **no game data**, and the release will not contain any either. You need your own disc
+This repository contains **no game data**, and neither does the release. You need your own disc
 image of the USA release. The game converts it once, on the console or on a PC, into a copy laid out for the
 Xbox 360; your original is only read.
 
