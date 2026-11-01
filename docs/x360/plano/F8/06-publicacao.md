@@ -241,3 +241,26 @@ na primeira issue real, conferir a execução na aba Actions.
 [Estimado] Antes da release, além da checagem final do escopo (4.4): rodar o `pacote.py --estrito` na árvore do
 commit marcado, o `teste_pacote.py --mutantes` sobre o zip dela, e copiar ao console a pasta `bt3-x360` do zip
 aberto para o teste do README ao pé da letra (escopo 1.1, Documentação).
+
+## 7. A publicação da 1.0.0 (1/11/2026)
+
+Publicada em https://github.com/Lucas-Tito/bt3xbx/releases/tag/bt3-x360-v1.0.0 pelo Lucas, primeiro como rascunho e
+depois aberta. A tag ficou `bt3-x360-v1.0.0` (o Lucas quis o "bt3" no nome, igual ao do zip; continua fora do padrão
+`v*` do workflow do upstream, que está desligado no fork), sobre o commit 37ae9db7, o da build do zip (carimbo
+`37ae9db7 diff:da39a3ee5e`). O README do repositório passou a apontar para a página de releases (a6fed116).
+
+| Item | Valor |
+|---|---|
+| Zip | `bt3-x360-1.0.0.zip`, 1.697.648 bytes, SHA256 `1ae881296f8f3249447b9f00a2164b0ed764ddf452dc55e7c738486c9565565d` |
+| `default.xex` | md5 `1ef9cb5ca8cbb869f3148c62779a3aa0` |
+| ISO convertida por esta release (console ou PC) | MD5 `8d32772bcd10c0d9385bbb51d810b41e` (a marca guarda a identidade dos fontes dos conversores) |
+| `.map` da build | guardado fora do git, em `build/x360/pacote/default-37ae9db7.map`, para ler os `crash.txt` |
+
+Conferência depois de publicada: o zip baixado da página pública, sem login, deu o mesmo SHA256, e os 37 arquivos
+do `SHA256SUMS.txt` conferiram. Os 15 rótulos do `labels.yml` foram criados no GitHub antes (o formulário de queda
+dependia do `crash`).
+
+Checagem final no console com essa build (1/11/2026, todas aprovadas pelo Lucas): instalação numa pasta nova a
+partir do zip, conversão no console em 9 min 21 s no HD interno com a tela nova, caixas de ISO ausente e ilegível
+(textos revistos), queda de teste (caixa, `crash.txt` com versão, build e cadeia, volta à FreeStyle sem laço) e a
+sessão longa com tela dividida e saída pela Guide. Sem ISO PAL para testar a caixa de versão não suportada.

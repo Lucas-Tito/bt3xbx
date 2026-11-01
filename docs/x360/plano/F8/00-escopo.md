@@ -154,7 +154,7 @@ pacotes de PC que o upstream publica pelo `release.yml`. Não leva nenhum asset.
 ### 4.2 Versão, nome e README do usuário
 
 [Estimado] Proposta (pergunta 7): numeração `MAJOR.MINOR.PATCH`; a primeira release completa é `1.0.0`, uma prévia
-antes da F7 seria `0.9.0`. Pacote `bt3xbx-x360-1.0.0.zip`; tag `x360-v1.0.0`, de propósito fora do padrão `v*` que
+antes da F7 seria `0.9.0`. Pacote `bt3xbx-x360-1.0.0.zip`; tag `x360-v1.0.0` (publicada como `bt3-x360-v1.0.0`, [06-publicacao](06-publicacao.md) seção 7), de propósito fora do padrão `v*` que
 dispara o `release.yml` do upstream. O nome no painel continua `Budokai Tenkaichi 3`. A versão aparece no
 `crash.txt` (ao lado do carimbo do commit), no log e no README.
 
