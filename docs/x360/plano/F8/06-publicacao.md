@@ -269,3 +269,8 @@ sessão longa com tela dividida e saída pela Guide. Sem ISO PAL para testar a c
 "Known issues" do `.github/CONTRIBUTING.md`, que pede para não reportar o que já está lá. Toda mudança numa vale para
 a outra no mesmo commit; o item "nem todo conteúdo foi jogado no console" fica fora da lista do CONTRIBUTING, porque
 uma queda nesse conteúdo deve ser reportada.
+
+**O README.txt de dentro do zip 1.0.0** ficou com a frase antiga da lentidão ("the planet explosion after a Final Flash
+on Broly's stage... split-screen battles when many effects are on screen at once"), corrigida pelo Lucas no repositório
+e nas notas da release em 1/11/2026 (a4296757). Ele decidiu não trocar o zip publicado: a frase nova entra no pacote da
+próxima versão.
