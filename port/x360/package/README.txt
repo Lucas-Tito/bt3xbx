@@ -153,6 +153,5 @@ the "Bug report" form. Please read the known issues below first.
 * Not every character, costume, transformation, stage, story battle and mode has been played
   on the console for this version. If one of them crashes, please report it (section 5).
 * The online mode (Dragon Net Battle) is not available.
-* Some heavy scenes can run slower than the rest of the game: the planet explosion after a
-  Final Flash on Broly's stage (about 3 seconds at around 15 frames per second), and
-  split-screen battles when many effects are on screen at once.
+* The planet explosion animation runs slowly (about 3 seconds at around 15 frames per
+  second), and split-screen battles can slow down.

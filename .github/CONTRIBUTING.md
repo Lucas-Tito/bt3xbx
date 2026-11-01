@@ -14,8 +14,8 @@ with the label `known-issue`.
   Levels video setting first, see README.txt).
 * On Namek, during the Shenlong animation, parts of the sky and the water can turn black for a
   moment.
-* The planet explosion after a Final Flash on Broly's stage runs slowly for about 3 seconds, and
-  split-screen battles can slow down when many effects are on screen.
+* The planet explosion animation runs slowly for about 3 seconds, and split-screen battles can
+  slow down.
 * The online mode (Dragon Net Battle) is not available.
 
 Not every character, stage, story battle and mode has been played on the console yet: a crash or a
