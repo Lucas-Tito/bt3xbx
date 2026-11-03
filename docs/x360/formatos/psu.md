@@ -54,8 +54,8 @@ Arquivo comum do cartão: `0x8497` (`EXISTS|0400|0080|FILE|RWX`); pasta: `0x8427
 - entrada, dados e o completamento até 1024 dentro do buffer ("truncated file"), nada sobrando no fim
   ("trailing data"); o número de entradas é o da pasta, então diferença aparece como um desses dois.
 
-O mymcplus é mais frouxo (lê o nome até 448 bytes, não exige o completamento do último arquivo
-além do que `read_fixed` pede). A biblioteca usa só 32 bytes de nome, que é o que o PS2 escreve.
+O mymcplus é mais frouxo no nome (lê o campo de 448 bytes e não confere o zero nem barras). A biblioteca
+usa só 32 bytes de nome, que é o que o PS2 escreve.
 
 ## Conferência do BT3 (USA)
 
