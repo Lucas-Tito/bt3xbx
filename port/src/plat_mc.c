@@ -44,7 +44,10 @@
 #define PORT_MC_ATOMIC
 #endif
 #if defined(PORT_MC_ATOMIC) && !defined(PORT_X360) && !defined(_WIN32)
-#include <unistd.h> /* fsync, _exit */
+#include <unistd.h> /* fsync, _exit, rmdir */
+#endif
+#if defined(PORT_MC_ATOMIC) && defined(PORT_X360)
+int rmdir(const char *); /* port/x360/src/f2/posix360.c (RemoveDirectory) */
 #endif
 
 #define MC_FILES 8
@@ -365,6 +368,68 @@ static int host_path(int port, const char *name, char *out, size_t size) {
 
 int func_002A1A48(void) { return 0; } /* sceMcInit */
 
+#ifdef PORT_MC_ATOMIC
+/* A leftover of an interrupted or failed save: NAME_tmp, NAME_new, or the names of 1.0.0 and 1.0.1 (NAME.tmp,
+   NAME.new; on FAT32 "icon.sys.tmp" was stored as "icon.tmp", which also ends in .tmp). */
+static int mc_is_leftover(const char *n) {
+    size_t k = strlen(n);
+    return k >= 4 && (strcmp(n + k - 4, ".tmp") == 0 || strcmp(n + k - 4, ".new") == 0 ||
+                      strcmp(n + k - 4, MC_TMP) == 0 || strcmp(n + k - 4, MC_NEW) == 0);
+}
+
+/* On the first card read of the session: a save folder with no file other than leftovers is not a save. 1.0.0 and
+   1.0.1 left the BT3 folder empty (or with icon.tmp) on every save attempt on USB drives and external disks (issues
+   #1 and #2), and the boot then read it as a damaged save ("Load failed"). Those leftovers and the folder are removed,
+   so the game sees no save and offers to create one. A folder with any other file is never touched: if it is damaged,
+   the game's own message is the right one. */
+static void mc_clean_folders(const char *card) {
+    char names[32][256], sub[700], file[1000], line[1100];
+    int n = 0, i;
+    DIR *d = opendir(card);
+    struct dirent *e;
+    if (d == NULL) {
+        return;
+    }
+    while ((e = readdir(d)) != NULL && n < 32) {
+        if (e->d_name[0] != '.' && strlen(e->d_name) < sizeof(names[0])) {
+            snprintf(names[n++], sizeof(names[0]), "%s", e->d_name);
+        }
+    }
+    closedir(d);
+    for (i = 0; i < n; i++) {
+        char left[16][256];
+        int nleft = 0, real = 0, j;
+        DIR *s;
+        snprintf(sub, sizeof(sub), "%s%s", card, names[i]);
+        s = opendir(sub);
+        if (s == NULL) {
+            continue; /* not a folder */
+        }
+        while ((e = readdir(s)) != NULL) {
+            if (e->d_name[0] == '.') {
+                continue;
+            }
+            if (mc_is_leftover(e->d_name) && nleft < 16 && strlen(e->d_name) < sizeof(left[0])) {
+                snprintf(left[nleft++], sizeof(left[0]), "%s", e->d_name);
+            } else {
+                real++;
+            }
+        }
+        closedir(s);
+        if (real) {
+            continue;
+        }
+        for (j = 0; j < nleft; j++) {
+            snprintf(file, sizeof(file), "%s/%s", sub, left[j]);
+            remove(file);
+        }
+        snprintf(line, sizeof(line), "mc: pasta %s sem save (%d sobra(s) de gravação), %s", names[i], nleft,
+                 rmdir(sub) == 0 ? "apagada" : "não pôde ser apagada");
+        MC_LOG(line);
+    }
+}
+#endif
+
 /* sceMcGetInfo: the outputs are filled when the request completes. */
 int func_002A25B8(int port, int slot, int *type, int *freeClusters, int *format) {
     char path[600];
@@ -378,6 +443,9 @@ int func_002A25B8(int port, int slot, int *type, int *freeClusters, int *format)
     }
     if (!sSeen) {
         sSeen = 1;
+#ifdef PORT_MC_ATOMIC
+        mc_clean_folders(path);
+#endif
         return request(1, -1);
     }
     return request(1, 0);
