@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
             ISO_IMP_T_TRABALHANDO_TITULO, ISO_IMP_T_AJUDA_OK, ISO_IMP_T_FEITO_TITULO, ISO_IMP_T_FEITO,
             ISO_IMP_T_FEITO_BACKUP, ISO_IMP_T_FEITO_ARQUIVOS, ISO_IMP_T_FALHA_TITULO, ISO_IMP_T_PASSO, ISO_IMP_T_MOTIVO,
             ISO_IMP_T_SISTEMA, ISO_IMP_T_INTACTO, ISO_IMP_T_RECOLOCADO, ISO_IMP_T_NAO_RECOLOCADO, ISO_IMP_T_COPIA,
-            ISO_IMP_T_MOVER, ISO_IMP_T_MOVER_DE_NOVO, ISO_IMP_T_PULAR_TITULO, ISO_IMP_T_PULAR_MOVER};
+            ISO_IMP_T_MOVER, ISO_IMP_T_MOVER_DE_NOVO, ISO_IMP_T_PULAR_TITULO, ISO_IMP_T_PULAR_MOVER, ISO_IMP_T_PULAR_DE_NOVO};
         for (unsigned k = 0; k < sizeof(fixos) / sizeof(fixos[0]); k++)
             todaLetra(fixos[k], "texto fixo");
         /* os caracteres comuns em nome de arquivo (sublinhado, parênteses de "arquivo (1).psu") têm desenho */

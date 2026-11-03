@@ -106,8 +106,10 @@ static void impResultado(ImpMsg &m, int r, const SiFalha &f, bool skip) {
     if (skip) {
         m.titulo = ISO_IMP_T_PULAR_TITULO;
         m.cor = TELA_FALHA;
+        impAdd(m, ISO_IMP_T_INTACTO);
         sprintf(b, ISO_IMP_T_PULAR_MOVER, r);
         impAdd(m, b);
+        impAdd(m, ISO_IMP_T_PULAR_DE_NOVO);
         if (f.sistema) {
             sprintf(b, ISO_IMP_T_SISTEMA, f.sistema);
             impAdd(m, b);
