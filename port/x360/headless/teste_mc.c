@@ -8,6 +8,7 @@
  * falhando (-5, e o próximo uso põe o .new no lugar), temporário truncado
  * deixado à mão, criação interrompida e arquivo maior que o primeiro. Sai com 1 se algum caso falhar.
  */
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -112,7 +113,7 @@ int main(int argc, char **argv) {
     fd = abrir("/D/F", 0x202);
     r = gravar(fd, a, 100);
     caso("criar: gravou 100 bytes e fechou com 0", fd >= 0 && r == 100 && fechar(fd) == 0);
-    caso("criar: conteúdo e nenhum .tmp/.new", conteudo("/D/F", a, 100) && !existe("D/F.tmp") && !existe("D/F.new"));
+    caso("criar: conteúdo e nenhum .tmp/.new", conteudo("/D/F", a, 100) && !existe("D/F_tmp") && !existe("D/F_new"));
 
     /* 2. um trecho no meio: o arquivo inteiro vai de novo */
     fd = abrir("/D/F", 2);
@@ -134,7 +135,7 @@ int main(int argc, char **argv) {
 
     /* 5. falha de escrita: o jogo recebe -5 e o anterior fica */
     caso("falha de escrita: o fechamento devolve -5", gravar_com_falha("/D/F", 2, 'C', 100, "escrita") == 1);
-    caso("falha de escrita: o anterior fica, sem .tmp", conteudo("/D/F", esperado, 100) && !existe("D/F.tmp"));
+    caso("falha de escrita: o anterior fica, sem .tmp", conteudo("/D/F", esperado, 100) && !existe("D/F_tmp"));
     setenv("BT3_MC_FALHA", "escrita:G", 1); /* (o filtro: só caminhos que terminam em G) */
     fd = abrir("/D/F", 2);
     gravar(fd, "Z", 1);
@@ -144,27 +145,27 @@ int main(int argc, char **argv) {
 
     /* 6. queda no meio do temporário: o anterior fica */
     caso("queda1: o processo terminou na queda", gravar_com_falha("/D/F", 2, 'D', 100, "queda1") == 86);
-    caso("queda1: sobrou o .tmp, o arquivo está lá", existe("D/F.tmp") && existe("D/F") && !existe("D/F.new"));
-    caso("queda1: a leitura seguinte dá o anterior, sem .tmp", conteudo("/D/F", esperado, 100) && !existe("D/F.tmp"));
+    caso("queda1: sobrou o .tmp, o arquivo está lá", existe("D/F_tmp") && existe("D/F") && !existe("D/F_new"));
+    caso("queda1: a leitura seguinte dá o anterior, sem .tmp", conteudo("/D/F", esperado, 100) && !existe("D/F_tmp"));
 
     /* 7. queda depois do .new (o ponto de compromisso): vale o novo */
     caso("queda2: o processo terminou na queda", gravar_com_falha("/D/F", 2, 'E', 100, "queda2") == 86);
-    caso("queda2: .new e o arquivo antigo", existe("D/F.new") && existe("D/F"));
+    caso("queda2: .new e o arquivo antigo", existe("D/F_new") && existe("D/F"));
     memset(esperado, 'E', 100);
-    caso("queda2: a leitura seguinte dá o novo, sem .new", conteudo("/D/F", esperado, 100) && !existe("D/F.new"));
+    caso("queda2: a leitura seguinte dá o novo, sem .new", conteudo("/D/F", esperado, 100) && !existe("D/F_new"));
 
     /* 8. queda entre apagar o arquivo e trocar o nome: vale o novo */
     caso("queda3: o processo terminou na queda", gravar_com_falha("/D/F", 2, 'G', 100, "queda3") == 86);
-    caso("queda3: só o .new", existe("D/F.new") && !existe("D/F"));
+    caso("queda3: só o .new", existe("D/F_new") && !existe("D/F"));
     memset(esperado, 'G', 100);
-    caso("queda3: a leitura seguinte dá o novo, sem .new", conteudo("/D/F", esperado, 100) && !existe("D/F.new"));
+    caso("queda3: a leitura seguinte dá o novo, sem .new", conteudo("/D/F", esperado, 100) && !existe("D/F_new"));
 
     /* 8b. o apagar do arquivo antigo falha (e a troca de nome não o substitui, como o MoveFile do 360): o jogo recebe
        -5 em vez de um "gravou ok" com o conteúdo antigo, e o próximo uso põe o .new no lugar */
     caso("apaga: o fechamento devolve -5", gravar_com_falha("/D/F", 2, 'I', 100, "apaga") == 1);
-    caso("apaga: o antigo e o .new ficam", existe("D/F") && existe("D/F.new") && !existe("D/F.tmp"));
+    caso("apaga: o antigo e o .new ficam", existe("D/F") && existe("D/F_new") && !existe("D/F_tmp"));
     memset(esperado, 'I', 100);
-    caso("apaga: a leitura seguinte dá o novo, sem .new", conteudo("/D/F", esperado, 100) && !existe("D/F.new"));
+    caso("apaga: a leitura seguinte dá o novo, sem .new", conteudo("/D/F", esperado, 100) && !existe("D/F_new"));
     memset(esperado, 'G', 100);
     fd = abrir("/D/F", 2);
     r = gravar(fd, esperado, 100);
@@ -172,15 +173,56 @@ int main(int argc, char **argv) {
 
     /* 9. um temporário truncado deixado à mão */
     {
+        FILE *f = fopen(hospedeiro("D/F_tmp"), "wb");
+        fwrite("lixo", 1, 4, f);
+        fclose(f);
+    }
+    caso("tmp à mão: a leitura dá o arquivo e apaga o .tmp", conteudo("/D/F", esperado, 100) && !existe("D/F_tmp"));
+
+    /* 10. criação interrompida: nada aparece (como antes de gravar) */
+    caso("criação interrompida: terminou na queda", gravar_com_falha("/D/N", 0x202, 'H', 100, "queda1") == 86);
+    caso("criação interrompida: o arquivo não existe e o .tmp some", abrir("/D/N", 1) == -4 && !existe("D/N_tmp"));
+
+    /* 10b. as sobras com os nomes antigos (NOME.tmp e NOME.new, das versões 1.0.0 e 1.0.1) também se resolvem */
+    {
         FILE *f = fopen(hospedeiro("D/F.tmp"), "wb");
         fwrite("lixo", 1, 4, f);
         fclose(f);
     }
-    caso("tmp à mão: a leitura dá o arquivo e apaga o .tmp", conteudo("/D/F", esperado, 100) && !existe("D/F.tmp"));
+    caso("tmp antigo: a leitura dá o arquivo e apaga o .tmp", conteudo("/D/F", esperado, 100) && !existe("D/F.tmp"));
+    memset(a, 'J', 100);
+    {
+        FILE *f = fopen(hospedeiro("D/F.new"), "wb");
+        fwrite(a, 1, 100, f);
+        fclose(f);
+    }
+    caso("new antigo: a leitura dá o .new, que toma o lugar", conteudo("/D/F", a, 100) && !existe("D/F.new"));
+    memcpy(esperado, a, 100);
 
-    /* 10. criação interrompida: nada aparece (como antes de gravar) */
-    caso("criação interrompida: terminou na queda", gravar_com_falha("/D/N", 0x202, 'H', 100, "queda1") == 86);
-    caso("criação interrompida: o arquivo não existe e o .tmp some", abrir("/D/N", 1) == -4 && !existe("D/N.tmp"));
+    /* 10c. nome com ponto (icon.sys): nenhum temporário com dois pontos, que o FAT32 do 360 grava com outro nome
+       ("icon.sys.tmp" vira "icon.tmp": issues #1 e #2) */
+    memset(a, 'K', 100);
+    fd = abrir("/D/icon.sys", 0x202);
+    r = gravar(fd, a, 100);
+    caso("nome com ponto: gravou", r == 100 && fechar(fd) == 0 && conteudo("/D/icon.sys", a, 100));
+    caso("nome com ponto: nenhum temporário com dois pontos usado", !existe("D/icon.sys.tmp") && !existe("D/icon.sys.new") &&
+                                                                     !existe("D/icon.sys_tmp") && !existe("D/icon.sys_new"));
+
+    /* 10d. a mesma gravação cortada no meio (queda1): o temporário que sobra na pasta não pode ter dois pontos */
+    caso("nome com ponto: terminou na queda", gravar_com_falha("/D/icon.sys", 2, 'L', 100, "queda1") == 86);
+    {
+        DIR *d = opendir(hospedeiro("D"));
+        struct dirent *e;
+        int dois = 0, sobra = 0;
+        while (d != NULL && (e = readdir(d)) != NULL) {
+            const char *p1 = strchr(e->d_name, '.');
+            if (e->d_name[0] != '.' && p1 != NULL && strchr(p1 + 1, '.') != NULL) dois++;
+            if (strncmp(e->d_name, "icon.sys", 8) == 0 && e->d_name[8] != '\0') sobra++;
+        }
+        if (d != NULL) closedir(d);
+        caso("nome com ponto: o temporário da queda tem um ponto só", dois == 0 && sobra == 1);
+    }
+    caso("nome com ponto: a leitura seguinte dá o anterior", conteudo("/D/icon.sys", a, 100));
 
     /* 11. arquivo maior, em pedaços, com um buraco */
     for (i = 0; i < (int)sizeof(grande); i++) {

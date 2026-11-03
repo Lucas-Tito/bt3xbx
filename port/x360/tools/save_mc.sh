@@ -11,8 +11,8 @@
 #      A  cartão vazio: cria o save pelo caminho atômico (as linhas "mc: gravou" no log);
 #      F  cartão vazio com BT3_MC_FALHA=escrita no arquivo de dados: a gravação falha, o jogo mostra o erro do cartão
 #         (estado 0x11) e segue, sem queda;
-#      B1 o save de A com um .tmp truncado ao lado: o boot carrega o save (estados 0x13 e 0x14) e apaga o .tmp;
-#      B2 o save de A como se a energia caísse entre apagar e trocar o nome (só o .new e um .tmp): carrega o save.
+#      B1 o save de A com um _tmp truncado ao lado: o boot carrega o save (estados 0x13 e 0x14) e apaga o _tmp;
+#      B2 o save de A como se a energia caísse entre apagar e trocar o nome (só o _new e um _tmp): carrega o save.
 #   TP=2400  segundos de cada PPC no qemu
 set -uo pipefail
 B=port/build; G=$B/save_mc
@@ -93,11 +93,11 @@ resumo A 1; resumo F
 D=card1/$DADOS
 [ -s $G/c_A/$D/$DADOS ] || { echo "A não criou o save"; exit 1; }
 for n in B1 B2; do cp -r $G/c_A $G/c_$n; done
-head -c 100 $G/c_A/$D/$DADOS > $G/c_B1/$D/$DADOS.tmp
-mv $G/c_B2/$D/$DADOS $G/c_B2/$D/$DADOS.new
-head -c 100 $G/c_A/$D/$DADOS > $G/c_B2/$D/$DADOS.tmp
+head -c 100 $G/c_A/$D/$DADOS > $G/c_B1/$D/${DADOS}_tmp
+mv $G/c_B2/$D/$DADOS $G/c_B2/$D/${DADOS}_new
+head -c 100 $G/c_A/$D/$DADOS > $G/c_B2/$D/${DADOS}_tmp
 ppc B1 12303
 ppc B2 12304
 resumo B1 2; resumo B2 2
-cmp -s $G/c_A/$D/$DADOS $G/c_B2/$D/$DADOS && echo "B2: o .new recuperado é o save de A, byte a byte"
+cmp -s $G/c_A/$D/$DADOS $G/c_B2/$D/$DADOS && echo "B2: o _new recuperado é o save de A, byte a byte"
 rm -f bt3_crash.txt
