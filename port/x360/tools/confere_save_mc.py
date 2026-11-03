@@ -37,8 +37,8 @@ def conferir(pasta):
     for nome in ("B1", "B2"):
         arquivo = pasta / f"c_{nome}" / rel
         exige(arquivo.read_bytes() == anterior, f"{nome} não recuperou o save de A")
-        exige(not Path(str(arquivo) + ".tmp").exists() and
-              not Path(str(arquivo) + ".new").exists(), f"{nome} deixou temporário")
+        exige(not any(Path(str(arquivo) + suf).exists() for suf in (".tmp", ".new", "_tmp", "_new")),
+              f"{nome} deixou temporário")
     exige(not (pasta / "c_F" / rel).exists(), "F deixou save após falha de escrita")
 
 

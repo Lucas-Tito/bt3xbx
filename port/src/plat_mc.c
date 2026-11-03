@@ -20,10 +20,14 @@
  *
  * Big-endian builds (Xbox 360 and the PowerPC test build, PORT_MC_ATOMIC): a power cut never leaves a half-written
  * save (bt3xbx, docs/x360/decisoes.md 22). A file opened for writing is held in memory; on sceMcClose the whole file
- * goes to NAME.tmp (every write, the flush to the disk and the close checked), NAME.tmp is renamed NAME.new (the
- * commit point: a .new is always complete), NAME is deleted and NAME.new renamed NAME (FATX cannot rename over an
- * existing file). Any card path that is used first finishes or undoes an interrupted save: a .new replaces NAME,
- * a .tmp is deleted. A failure is the card's own error (-5), which the game shows as "could not save".
+ * goes to NAME_tmp (every write, the flush to the disk and the close checked), NAME_tmp is renamed NAME_new (the
+ * commit point: a _new is always complete), NAME is deleted and NAME_new renamed NAME (FATX cannot rename over an
+ * existing file). Any card path that is used first finishes or undoes an interrupted save: a _new replaces NAME,
+ * a _tmp is deleted. A failure is the card's own error (-5), which the game shows as "could not save".
+ * The suffixes have no dot: the FAT32 driver of the Xbox 360 (USB drives and external disks) stores a name with two
+ * dots under another name ("icon.sys.tmp" became "icon.tmp"), so the rename that followed failed with "file not
+ * found" and no save could be made there (bt3xbx issues #1 and #2, 03/11/2026). NAME.tmp and NAME.new, the names
+ * of 1.0.0 and 1.0.1, are still finished or undone when found (they only exist on the internal disk, FATX).
  */
 #include <dirent.h>
 #include <stddef.h>
@@ -143,24 +147,32 @@ static int mc_rename(const char *from, const char *to) {
     return mc_fail("apaga", to) && mc_exists(to) ? -1 : rename(from, to);
 }
 
-/* Finishes or undoes a save that a power cut interrupted: NAME.new is complete (it is only named so after the
-   commit), NAME.tmp may be anything. */
-static void mc_recover(const char *path) {
+#define MC_TMP "_tmp" /* no dot: see the header */
+#define MC_NEW "_new"
+
+/* Finishes or undoes a save that a power cut interrupted: NAME_new is complete (it is only named so after the
+   commit), NAME_tmp may be anything. The same for NAME.new and NAME.tmp, the names of the versions before. */
+static void mc_recover_suffix(const char *path, const char *stmp, const char *snew) {
     char tmp[620], fresh[620], line[700];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-    snprintf(fresh, sizeof(fresh), "%s.new", path);
+    snprintf(tmp, sizeof(tmp), "%s%s", path, stmp);
+    snprintf(fresh, sizeof(fresh), "%s%s", path, snew);
     if (mc_exists(tmp)) {
         remove(tmp);
-        snprintf(line, sizeof(line), "mc: %s.tmp de uma gravação interrompida apagado (vale o anterior, se houver)",
-                 mc_name(path));
+        snprintf(line, sizeof(line), "mc: %s%s de uma gravação interrompida apagado (vale o anterior, se houver)",
+                 mc_name(path), stmp);
         MC_LOG(line);
     }
     if (mc_exists(fresh)) {
         mc_remove(path);
-        snprintf(line, sizeof(line), "mc: %s.new de uma gravação interrompida %s", mc_name(path),
+        snprintf(line, sizeof(line), "mc: %s%s de uma gravação interrompida %s", mc_name(path), snew,
                  mc_rename(fresh, path) == 0 ? "toma o lugar do arquivo" : "não pôde ser renomeado");
         MC_LOG(line);
     }
+}
+
+static void mc_recover(const char *path) {
+    mc_recover_suffix(path, ".tmp", ".new");
+    mc_recover_suffix(path, MC_TMP, MC_NEW);
 }
 
 /* The whole file to the disk under its name, or nothing changed: 0, or -5 (libmc: the card refused the write). */
@@ -170,8 +182,8 @@ static int mc_commit(const char *path, const unsigned char *data, long size) {
     long n = mc_fail("escrita", path) ? size / 2 : size;
     FILE *f;
 
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-    snprintf(fresh, sizeof(fresh), "%s.new", path);
+    snprintf(tmp, sizeof(tmp), "%s" MC_TMP, path);
+    snprintf(fresh, sizeof(fresh), "%s" MC_NEW, path);
     remove(tmp);
     f = fopen(tmp, MC_COMMIT_MODE);
     if (f == NULL) {
@@ -198,7 +210,7 @@ static int mc_commit(const char *path, const unsigned char *data, long size) {
     if (step == NULL) {
         remove(fresh);
         if (rename(tmp, fresh) != 0) {
-            step = "troca de nome para .new";
+            step = "troca de nome para _new";
         }
     }
     if (step != NULL) {
@@ -216,7 +228,7 @@ static int mc_commit(const char *path, const unsigned char *data, long size) {
            place of the file: an old file that could not be deleted is still there, and it is not the save */
         mc_recover(path);
         if (mc_exists(fresh) || !mc_exists(path)) {
-            snprintf(line, sizeof(line), "mc: gravação de %s (%ld bytes) FALHOU na troca de nome; fica como .new",
+            snprintf(line, sizeof(line), "mc: gravação de %s (%ld bytes) FALHOU na troca de nome; fica como _new",
                      mc_name(path), size);
             MC_LOG(line);
             return -5;
