@@ -82,6 +82,8 @@ PORT_HOST static struct { unsigned char *data; long size, cap; int dirty; } sBuf
 
 #ifdef PORT_X360
 void Diario_Escrever(const char *formato, ...);
+/* port/x360/src/f2/save_importa_360.c: com a pasta game:\export, regera o .psu do save (nunca falha para o jogo) */
+void Port_X360SaveGravado(const char *path);
 #define MC_LOG(line) Diario_Escrever("%s", line)  /* the console's log, game:\bt3xbx.log */
 #define MC_COMMIT_MODE "wbc"                      /* "c": fflush goes on to the disk (FlushFileBuffers) */
 #elif defined(_WIN32)
@@ -224,6 +226,9 @@ static int mc_commit(const char *path, const unsigned char *data, long size) {
     }
     snprintf(line, sizeof(line), "mc: gravou %s (%ld bytes): ok", mc_name(path), size);
     MC_LOG(line);
+#ifdef PORT_X360
+    Port_X360SaveGravado(path); /* exportação do .psu: o retorno não existe, uma falha dela nunca é do save */
+#endif
     return 0;
 }
 
