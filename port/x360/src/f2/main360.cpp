@@ -27,6 +27,7 @@
 #include "iso360.h"
 #include "iso_avisos.h"
 #include "iso_tela.h"
+#include "importa_tela.h"
 #include "som/som360.h"
 #include "queda360.h"
 #include "queda_teste360.h"
@@ -409,6 +410,10 @@ void __cdecl main() {
             saidaDireta = MostrarRecusa(dev, motivo);
         }
     }
+    /* Saves do PS2 em game:\import: a tela SAVE IMPORT, depois das conferências da ISO e antes de o jogo ler o cartão.
+       Sem nenhum .psu solto não aparece nada (uma procura de arquivo). */
+    if (!recusada)
+        ImportaTela_Executar(dev);
     if (gpu) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF000000, 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);

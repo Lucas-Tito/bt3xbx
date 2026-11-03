@@ -150,3 +150,17 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     [F7/queda-freestyle](../F7/queda-freestyle.md). Produtores gráficos param antes da caixa para a main apresentar;
     cargas, som e vídeo terminam depois do OK. Falha de caixa conserva o caminho de tela e botão.
     Compilação XDK, Guide, FATX, painel respondendo e reabertura continuam pendentes na revisão.
+
+## Importar e exportar saves (3/11/2026)
+
+19. **Mover o save entre o PS2 e o 360 pela pasta do jogo** (desenho aprovado pelo Lucas): a pasta `game:\import` com `.psu`
+    abre uma tela SAVE IMPORT na abertura do jogo (IMPORT ou SKIP; o save atual vai antes para `game:\backup\NNN`; os arquivos
+    vão para `done`, `skipped` e `failed`, nunca apagados), e a pasta `game:\export` faz o jogo gerar
+    `export\BASLUS-21678DBZT3.psu` a cada gravação do save. Feito no ramo `save-importa`: a lógica em C89 com sistema de
+    arquivos trocável, o gancho em `plat_mc.c` atrás de `PORT_X360`, a tela, os textos em `iso_avisos.h` (pendentes de
+    aprovação do Lucas), a seção "MOVING SAVES TO AND FROM THE PS2" do README do pacote (texto público pendente da
+    auditoria do Lucas), os testes no Linux com mutantes e a build do XDK sem stub novo. Documento:
+    [save-importacao](../../formatos/save-importacao.md).
+    **Falta:** o teste no console (FATX, `MoveFile`, `FindFirstFile`, a tela na TV, o controle), com um `.psu` de verdade
+    exportado de um PS2 ou do PCSX2; ver uma exportação no console abrir no PCSX2 pelo mymc++; aprovar os textos da tela e
+    o README; decidir se a importação vai na 1.0.2 (a lista de problemas conhecidos diz hoje que importar não existe).

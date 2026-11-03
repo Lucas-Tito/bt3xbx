@@ -90,11 +90,13 @@ inline DWORD XShowMessageBoxUI(unsigned, const wchar_t *, const wchar_t *, unsig
     return ERROR_ACCESS_DENIED;
 }
 /* O controle simulado: o roteiro tem um caractere por quadro (uma leitura da porta gPorta por quadro).
-   '.' solto, 'A', 'B', 'L' e 'R' do d-pad, 'l' e 'r' analógico esquerdo forte, 'w' analógico fraco.
+   '.' solto, 'A', 'B', 'L', 'R', 'U' e 'D' do d-pad, 'l', 'r', 'u' e 'd' analógico esquerdo forte, 'w' analógico fraco.
    Depois do fim do roteiro tudo fica solto. As outras portas estão desconectadas. */
 typedef unsigned short WORD;
 #define XUSER_MAX_COUNT 4
 #define ERROR_DEVICE_NOT_CONNECTED 1167
+#define XINPUT_GAMEPAD_DPAD_UP 1
+#define XINPUT_GAMEPAD_DPAD_DOWN 2
 #define XINPUT_GAMEPAD_DPAD_LEFT 4
 #define XINPUT_GAMEPAD_DPAD_RIGHT 8
 #define XINPUT_GAMEPAD_A 0x1000
@@ -102,6 +104,7 @@ typedef unsigned short WORD;
 struct XINPUT_GAMEPAD {
     WORD wButtons;
     short sThumbLX;
+    short sThumbLY;
 };
 struct XINPUT_STATE {
     XINPUT_GAMEPAD Gamepad;
@@ -116,8 +119,10 @@ inline DWORD XInputGetState(DWORD porta, XINPUT_STATE *e) {
     c = gLidos < std::strlen(gRoteiro) ? gRoteiro[gLidos] : '.';
     gLidos++;
     e->Gamepad.wButtons = c == 'A' ? XINPUT_GAMEPAD_A : c == 'B' ? XINPUT_GAMEPAD_B
+                        : c == 'U' ? XINPUT_GAMEPAD_DPAD_UP : c == 'D' ? XINPUT_GAMEPAD_DPAD_DOWN
                         : c == 'L' ? XINPUT_GAMEPAD_DPAD_LEFT : c == 'R' ? XINPUT_GAMEPAD_DPAD_RIGHT : 0;
     e->Gamepad.sThumbLX = c == 'l' ? -20000 : c == 'r' ? 20000 : c == 'w' ? -10000 : 0;
+    e->Gamepad.sThumbLY = c == 'u' ? 20000 : c == 'd' ? -20000 : 0;
     return ERROR_SUCCESS;
 }
 #endif
