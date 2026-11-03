@@ -128,20 +128,20 @@ int SaveImp_Procurar(const SaveFs *fs, const SiPastas *pastas, SiLista *lista) {
 
 /* ---------------------------------------------------------------- gravação segura */
 
-/* NOME.tmp com o conteúdo inteiro. Devolve 0 ou o código do sistema. */
+/* NOME_tmp com o conteúdo inteiro (sem ponto: o FAT32 do 360 troca nome com dois pontos, ver port/src/plat_mc.c). Devolve 0 ou o código do sistema. */
 static int grava_tmp(const SaveFs *fs, const char *cam, const unsigned char *buf, unsigned long n) {
     char tmp[SI_CAMINHO];
-    int r = sufixo(tmp, cam, ".tmp");
+    int r = sufixo(tmp, cam, "_tmp");
     if (r != 0) return 1;
     if (fs->tipo(fs->ctx, tmp) != 0) fs->apagar(fs->ctx, tmp);
     return fs->gravar(fs->ctx, tmp, buf, n);
 }
 
-/* A troca do mc_commit (port/src/plat_mc.c): NOME.tmp vira NOME.new, o NOME antigo sai e o .new toma o lugar. */
+/* A troca do mc_commit (port/src/plat_mc.c): NOME_tmp vira NOME_new, o NOME antigo sai e o _new toma o lugar. */
 static int troca(const SaveFs *fs, const char *cam) {
     char tmp[SI_CAMINHO], nova[SI_CAMINHO];
     int r;
-    if (sufixo(tmp, cam, ".tmp") != 0 || sufixo(nova, cam, ".new") != 0) return 1;
+    if (sufixo(tmp, cam, "_tmp") != 0 || sufixo(nova, cam, "_new") != 0) return 1;
     if (fs->tipo(fs->ctx, nova) != 0) {
         r = fs->apagar(fs->ctx, nova);
         if (r != 0) return r;
@@ -157,8 +157,8 @@ static int troca(const SaveFs *fs, const char *cam) {
 
 static void limpa_temporarios(const SaveFs *fs, const char *cam) {
     char t[SI_CAMINHO];
-    if (sufixo(t, cam, ".tmp") == 0 && fs->tipo(fs->ctx, t) != 0) fs->apagar(fs->ctx, t);
-    if (sufixo(t, cam, ".new") == 0 && fs->tipo(fs->ctx, t) != 0) fs->apagar(fs->ctx, t);
+    if (sufixo(t, cam, "_tmp") == 0 && fs->tipo(fs->ctx, t) != 0) fs->apagar(fs->ctx, t);
+    if (sufixo(t, cam, "_new") == 0 && fs->tipo(fs->ctx, t) != 0) fs->apagar(fs->ctx, t);
 }
 
 /* ---------------------------------------------------------------- movimentos */
@@ -338,7 +338,7 @@ int SaveImp_Importar(const SaveFs *fs, const SiPastas *pastas, const SiLista *li
         return r == SI_E_CAMINHO ? r : SI_E_BACKUP;
     }
     if (tinha) registra(fs, "backup feito", "", falha->backup);
-    /* 3: a pasta do save e os temporários. Falhou: o save atual segue intacto (só sobram .tmp, que se apagam). */
+    /* 3: a pasta do save e os temporários. Falhou: o save atual segue intacto (só sobram _tmp, que se apagam). */
     r = cria_caminho(fs, pastas->save);
     if (r != 0) {
         falha->passo = SI_P_GRAVAR;

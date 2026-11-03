@@ -123,7 +123,7 @@ def verifica(conv, src, tmp, mutante=False):
         return sorted(f.name for f in d.iterdir() if f.is_file() and f.suffix.lower() == ".psu") if d.exists() else []
 
     def sem_residuos(raiz, rotulo):
-        ruim = [f for f in lista_arquivos(raiz) if f.endswith(".tmp") or f.endswith(".new")]
+        ruim = [f for f in lista_arquivos(raiz) if f.endswith(".tmp") or f.endswith(".new") or f.endswith("_tmp") or f.endswith("_new")]
         e(not ruim, f"{rotulo}: sobraram temporários {ruim}")
 
     ps2 = [tsc.sintetico(rng) for _ in range(6)]
@@ -273,7 +273,7 @@ def verifica(conv, src, tmp, mutante=False):
     e(le_save(r) == antigo360 and soltos(r) == ["a.psu", "ruim.psu"], "falha no backup: mexeu no save ou moveu")
     sem_residuos(r, "falha no backup")
     r = cenario()
-    o = roda(exe, "importar", r, 0, falha="gravar:1:-:dbzsm.ico.tmp")
+    o = roda(exe, "importar", r, 0, falha="gravar:1:-:dbzsm.ico_tmp")
     e(o["rc"] == "205" and o["passo"] == "3", f"falha ao gravar o temporário: {o}")
     e(le_save(r) == antigo360, "falha de escrita no meio: o save atual mudou")
     e(soltos(r) == ["a.psu", "ruim.psu"], "falha de escrita: moveu os .psu")
@@ -282,13 +282,13 @@ def verifica(conv, src, tmp, mutante=False):
     for alvo, rot in (("icon.sys", "icon.sys"), ("dbzsm.ico", "ico"), ("BASLUS-21678DBZT3/BASLUS-21678DBZT3", "dados")):
         for k in (1, 2):  # 1 = tmp para new, 2 = new para o nome (depois de apagar o antigo)
             r = cenario()
-            o = roda(exe, "importar", r, 0, falha=f"mover:{k}:-:{alvo}.new")
+            o = roda(exe, "importar", r, 0, falha=f"mover:{k}:-:{alvo}_new")
             e(o["rc"] == "206" and o["passo"] == "4" and o["restaurado"] == "1", f"falha na troca de {rot} ({k}): {o}")
             e(le_save(r) == antigo360, f"falha na troca de {rot} ({k}): o save antigo não foi recolocado")
             e(soltos(r) == ["a.psu", "ruim.psu"], f"falha na troca de {rot} ({k}): moveu os .psu")
             sem_residuos(r, f"falha na troca de {rot} ({k})")
     r = cenario()  # a falha que não passa: a restauração também falha; o backup tem a cópia
-    o = roda(exe, "importar", r, 0, falha="mover:2:*:BASLUS-21678DBZT3/BASLUS-21678DBZT3.new")
+    o = roda(exe, "importar", r, 0, falha="mover:2:*:BASLUS-21678DBZT3/BASLUS-21678DBZT3_new")
     e(o["rc"] == "206" and o["restaurado"] == "0", f"falha permanente na troca: {o}")
     e(lp(r / "backup/001") == antigo360, "falha permanente: o backup não tem o save")
     r = cenario()  # falha ao mover o .psu depois: o save novo já está lá
@@ -297,7 +297,7 @@ def verifica(conv, src, tmp, mutante=False):
     e(le_save(r) == save_360_de(ps2[0], mapa), "falha ao mover: o save novo não está lá")
     r = novo()  # sem save atual e a troca falha: não sobra nada do save novo
     poe_psu(r, "a.psu", psus[0])
-    o = roda(exe, "importar", r, 0, falha="mover:2:-:BASLUS-21678DBZT3/BASLUS-21678DBZT3.new")
+    o = roda(exe, "importar", r, 0, falha="mover:2:-:BASLUS-21678DBZT3/BASLUS-21678DBZT3_new")
     e(o["rc"] == "206" and o["restaurado"] == "1", f"falha sem save atual: {o}")
     e(lista_arquivos(sav(r)) == [], f"falha sem save atual: sobrou {lista_arquivos(sav(r))}")
 
