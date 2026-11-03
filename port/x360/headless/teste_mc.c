@@ -18,7 +18,6 @@
 
 int func_002A1E58(int port, int slot, char *name, int mode); /* sceMcOpen */
 int func_002A1F80(int port, int slot, char *name);           /* sceMcMkdir */
-int func_002A25B8(int port, int slot, int *type, int *freeClusters, int *format); /* sceMcGetInfo */
 int func_002A1FB8(int fd);                                   /* sceMcClose */
 int func_002A2078(int fd, int offset, int origin);           /* sceMcSeek */
 int func_002A2208(int fd, void *buf, int size);              /* sceMcRead */
@@ -236,35 +235,6 @@ int main(int argc, char **argv) {
     caso("grande: fechou com 0", r == 130000 && fechar(fd) == 0);
     memset(grande + 100000, 0, 20000);
     caso("grande: 150000 bytes com o buraco zerado", conteudo("/D/F", grande, 150000));
-
-    /* 12. na primeira leitura do cartão de uma sessão: pasta de save sem save (vazia, ou só com sobras de gravação, como
-       a que a 1.0.1 deixava no FAT32) é apagada; pasta com qualquer outro arquivo fica como está. Num processo novo,
-       porque "primeira leitura" é por sessão. */
-    {
-        FILE *f;
-        pid_t p;
-        int st;
-        mkdir(hospedeiro("VAZIA"), 0755);
-        mkdir(hospedeiro("SOBRAS"), 0755);
-        f = fopen(hospedeiro("SOBRAS/icon.tmp"), "wb"); fwrite("x", 1, 1, f); fclose(f);
-        f = fopen(hospedeiro("SOBRAS/BASLUS_new"), "wb"); fwrite("x", 1, 1, f); fclose(f);
-        mkdir(hospedeiro("COMSAVE"), 0755);
-        f = fopen(hospedeiro("COMSAVE/icon.sys"), "wb"); fwrite("x", 1, 1, f); fclose(f);
-        f = fopen(hospedeiro("COMSAVE/icon.sys.tmp"), "wb"); fwrite("x", 1, 1, f); fclose(f);
-        fflush(stdout);
-        p = fork();
-        if (p == 0) {
-            int t, l, fm;
-            func_002A25B8(0, 0, &t, &l, &fm);
-            _exit(sync_() == -1 ? 0 : 1);
-        }
-        waitpid(p, &st, 0);
-        caso("limpeza: a primeira leitura do cartão respondeu", WIFEXITED(st) && WEXITSTATUS(st) == 0);
-        caso("limpeza: pasta vazia apagada", !existe("VAZIA"));
-        caso("limpeza: pasta só com sobras apagada", !existe("SOBRAS"));
-        caso("limpeza: pasta com arquivo de save intacta", existe("COMSAVE/icon.sys") && existe("COMSAVE/icon.sys.tmp"));
-        caso("limpeza: o save D continua", existe("D") && conteudo("/D/F", grande, 150000));
-    }
 
     printf("%s: %d falha(s)\n", sFalhas ? "FALHOU" : "ok", sFalhas);
     return sFalhas ? 1 : 0;

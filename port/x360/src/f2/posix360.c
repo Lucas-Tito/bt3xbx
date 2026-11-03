@@ -386,13 +386,6 @@ int mkdir(const char *caminho, int modo) {
     return CreateDirectory(c, NULL) ? 0 : -1;
 }
 
-/* Só pasta vazia (RemoveDirectory recusa a cheia): a limpeza das pastas de save sem save do port/src/plat_mc.c. */
-int rmdir(const char *caminho) {
-    char c[512];
-    caminho360(caminho, c, sizeof(c));
-    return RemoveDirectory(c) ? 0 : -1;
-}
-
 int chdir(const char *caminho) {
     (void)caminho;
     return 0; /* tudo é relativo a game:\ (caminho360) */
