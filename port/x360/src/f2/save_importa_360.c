@@ -6,9 +6,9 @@
 #include "save_importa_360.h"
 #include "diario.h"
 
-#define PASTA_IMPORT "game:\\import"
-#define PASTA_BACKUP "game:\\backup"
-#define PASTA_EXPORT "game:\\export"
+/* As pastas da importação ficam dentro da pasta de saves (pedido do Lucas, 3/11/2026), para a pasta do jogo continuar
+   só com os arquivos do jogo, a ISO e saves: <saves>\import (com done, skipped e failed), <saves>\export e
+   <saves>\backup\NNN, ao lado de <saves>\card1, onde o jogo grava. */
 
 static int codigo(void) {
     DWORD e = GetLastError();
@@ -98,9 +98,10 @@ static void fs_log(void *ctx, const char *linha) {
 
 static SaveFs sFs = {NULL, '\\', fs_ler, fs_gravar, fs_mover, fs_apagar, fs_tipo, fs_pasta, fs_listar, fs_log};
 
-/* A pasta do save: BT3_SAVES (padrão game:\saves) + card1 + BASLUS-21678DBZT3, como o plat_mc.c a monta. */
-static char sSave[SI_CAMINHO];
-static SiPastas sPastas = {PASTA_IMPORT, PASTA_BACKUP, sSave, PASTA_EXPORT};
+/* A pasta do save: BT3_SAVES (padrão game:\saves) + card1 + BASLUS-21678DBZT3, como o plat_mc.c a monta; import, backup
+   e export dentro da mesma raiz. */
+static char sSave[SI_CAMINHO], sImport[SI_CAMINHO], sBackup[SI_CAMINHO], sExport[SI_CAMINHO];
+static SiPastas sPastas = {sImport, sBackup, sSave, sExport};
 
 static void monta_pastas(void) {
     const char *raiz;
@@ -115,6 +116,12 @@ static void monta_pastas(void) {
     for (i = 0; raiz[i] != '\0' && k + 1 < 400; i++) sSave[k++] = raiz[i] == '/' ? '\\' : raiz[i];
     while (k > 0 && sSave[k - 1] == '\\') k--;
     sSave[k] = '\0';
+    strcpy(sImport, sSave);
+    strcat(sImport, "\\import");
+    strcpy(sBackup, sSave);
+    strcat(sBackup, "\\backup");
+    strcpy(sExport, sSave);
+    strcat(sExport, "\\export");
     strcat(sSave, "\\card1\\" SI_PASTA_SAVE);
 }
 

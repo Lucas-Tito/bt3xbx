@@ -120,30 +120,33 @@ PS2 save tools use. Other formats (.max, .cbs, .xps, .sps) have to be converted 
 
 Importing a PS2 save
 
-1. Create a folder named import in the game folder, next to default.xex, and copy the .psu
-   file into it. Files inside folders in import are ignored.
+1. In the game folder, open the saves folder (create it if it is not there yet) and create a
+   folder named import inside it: saves\import. Copy the .psu file into it. Files inside
+   folders in import are ignored.
 2. Start the game. When the ISO checks are done and before the game begins, a SAVE IMPORT
    screen lists the .psu files it found. Each one shows OK, or the reason it cannot be used
    (for example "not a Budokai Tenkaichi 3 USA save" or "PS2 save is damaged (checksum)").
 3. Up and down choose the file. Left and right choose IMPORT or SKIP (SKIP is selected when
    the screen opens). A confirms. B is the same as SKIP. IMPORT only works on a file marked
    OK.
-4. If you already have a save, it is copied to the backup folder first (backup\001, then
-   backup\002 and so on, in the game folder). Then the imported save replaces it.
-5. Nothing is deleted, only moved. The file you imported goes to import\done, the others go to
-   import\skipped, and the ones that were refused go to import\failed. A name that is already
-   there gets _2, _3 and so on. After this the import folder has no loose .psu left, so the
-   screen does not appear again until you copy a new file.
+4. If you already have a save, it is copied to saves\backup first (saves\backup\001, then
+   saves\backup\002 and so on). Then the imported save replaces it.
+5. Nothing is deleted, only moved. The file you imported goes to saves\import\done, the
+   others go to saves\import\skipped, and the ones that were refused go to
+   saves\import\failed. A name that is already there gets _2, _3 and so on. After this the
+   import folder has no loose .psu left, so the screen does not appear again until you copy
+   a new file.
 
 If a step fails, the screen says which one and shows the system code. Your current save is
 not changed, or is put back; if it could not be put back, the screen says where its copy is.
 
 Exporting your save
 
-Create a folder named export in the game folder. From then on, every time the game saves
-successfully, it also writes export\BASLUS-21678DBZT3.psu there, replacing the previous one.
-Without the folder nothing is written. If the export fails the game still saves normally
-(the reason goes to the log, if the log is on). The file is dated 2007-11-13 12:00:00.
+Create a folder named export inside the saves folder: saves\export. From then on, every time
+the game saves successfully, it also writes saves\export\BASLUS-21678DBZT3.psu, replacing
+the previous one. Without the folder nothing is written. If the export fails the game still
+saves normally (the reason goes to the log, if the log is on). The file is dated
+2007-11-13 12:00:00.
 
 How to get the .psu from your PS2 side, and how to put it back
 
