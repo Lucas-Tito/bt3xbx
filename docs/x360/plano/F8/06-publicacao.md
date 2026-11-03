@@ -297,3 +297,30 @@ os controles soltarem antes da caixa não resolveu (build de teste revertida, ra
 | `.map` da build | `build/x360/pacote/default-040b0fa4.map`, fora do git |
 
 Conferência: o zip baixado da página pública deu o mesmo SHA256 e os 37 arquivos do `SHA256SUMS.txt` conferiram.
+
+## 9. A publicação da 1.0.2 (3/11/2026)
+
+Publicada em https://github.com/Lucas-Tito/bt3xbx/releases/tag/bt3-x360-v1.0.2, a tag sobre ea439bb5 (carimbo
+`ea439bb5 diff:da39a3ee5e`; o código é o da build 963e690f testada no console, só com a versão trocada).
+
+- **O save em pendrive e HD externo** (issues #1 e #2): o FAT32 do 360 grava nome com dois pontos sob outro nome
+  (`icon.sys.tmp` virou `icon.tmp`), e a troca de nome seguinte falhava com "arquivo não encontrado". Os temporários
+  passaram a `NOME_tmp` e `NOME_new` (as sobras antigas `.tmp`/`.new` ainda se resolvem). Achado pela build de
+  diagnóstico (ramo `diag-save`, não publicado) e testado no console no pendrive e no HD interno.
+- **Quem tentou salvar no externo antes** fica com a pasta do save vazia e vê "Load failed" uma vez; confirma, faz o New
+  Game e salva (visto no console). Uma limpeza automática dessas pastas chegou a entrar (e2c6c5a1) e foi desfeita
+  (ea439bb5): o Lucas a achou destrutiva demais para um caso que acontece uma vez.
+- **Importação e exportação de saves do PS2 em `.psu`**, em `saves\import` (com `done`, `skipped`, `failed` e o backup
+  em `saves\backup\NNN`) e `saves\export`. Testadas no console com o save 100% do JKLX (GameFAQs): tudo liberado no
+  jogo; o `.psu` exportado bateu com o original no WSL, fora o som (0x16A4), a soma (0x0004) e o relógio do jogo
+  (0x0A0C, que o menu avança). Formato e provas em `docs/x360/formatos/psu.md`, `save-larguras.md`,
+  `save-conversao.md` e `save-importacao.md`.
+- O `.dat` e o `.swap` não mudaram desde a 1.0.0: quem atualiza troca os três arquivos e não reconverte a ISO.
+
+| Item | Valor |
+|---|---|
+| Zip | `bt3-x360-1.0.2.zip`, SHA256 `026b5f5970856505fbca7db4e90f6eaed218a1c00dda07d061647c1467bf6c25` |
+| `default.xex` | md5 `ab09e2f9971c9c69654ececda73b4343` |
+| `.map` da build | `build/x360/pacote/default-ea439bb5.map`, fora do git |
+
+Conferência: o zip baixado da página pública deu o mesmo SHA256 e os 43 arquivos do `SHA256SUMS.txt` conferiram.
