@@ -23,7 +23,7 @@
 #define PSU_E_SOBRA 6      /* "trailing data" */
 #define PSU_E_MUITOS 7     /* "too many files" */
 #define PSU_E_ESPACO 8     /* "output buffer too small" */
-#define PSU_E_BT3_PASTA 9 /* "not a Budokai Tenkaichi 3 USA save" */
+#define PSU_E_BT3_PASTA 9 /* "not a BT3 USA save" */
 #define PSU_E_BT3_FALTA 10 /* "save is missing a file" */
 #define PSU_E_BT3_TAMANHO 11 /* "save file has the wrong size" */
 #define PSU_E_BT3_EXTRA 12 /* "save has unexpected files" */

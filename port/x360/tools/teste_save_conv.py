@@ -192,7 +192,7 @@ def verifica(conv, tmp):
     falha_com("pasta na ordem do PS2", ["360-para-psu", ps2pasta, tmp / "y.psu"], "save is damaged (checksum)")
 
     (tmp / "outro.psu").write_bytes(faz_psu(arqs, pasta="BASLUS-21677DBZT3"))
-    falha_com("não é do BT3", ["psu-para-360", tmp / "outro.psu", tmp / "o1"], "not a Budokai Tenkaichi 3 USA save", tmp / "o1")
+    falha_com("não é do BT3", ["psu-para-360", tmp / "outro.psu", tmp / "o1"], "not a BT3 USA save", tmp / "o1")
     (tmp / "falta.psu").write_bytes(faz_psu(arqs, ordem=(ICONSYS, DADOS)))
     falha_com("arquivo faltando no psu", ["psu-para-360", tmp / "falta.psu", tmp / "o1"], "missing a file", tmp / "o1")
     sem = tmp / "sem"

@@ -210,7 +210,7 @@ def verifica(conv, src, tmp, mutante=False):
     tx = {i[0]: (int(i[1]), i[2]) for i in o["_itens"]}
     e(o["n"] == "7", f"inválidos: n={o.get('n')}")
     e(tx.get("1-soma.psu", (0, ""))[1] == "PS2 save is damaged (checksum)", f"texto da soma: {tx.get('1-soma.psu')}")
-    e(tx.get("2-outro.psu", (0, ""))[1] == "not a Budokai Tenkaichi 3 USA save", f"texto do outro jogo: {tx.get('2-outro.psu')}")
+    e(tx.get("2-outro.psu", (0, ""))[1] == "not a BT3 USA save", f"texto do outro jogo: {tx.get('2-outro.psu')}")
     e("missing a file" in tx.get("3-falta.psu", (0, ""))[1], f"texto do arquivo faltando: {tx.get('3-falta.psu')}")
     e(tx.get("4-lixo.psu", (0, ""))[0] != 0, "lixo foi aceito")
     e(tx.get("5-grande.psu", (0, ""))[1] == "file is too big", f"texto do arquivo grande: {tx.get('5-grande.psu')}")

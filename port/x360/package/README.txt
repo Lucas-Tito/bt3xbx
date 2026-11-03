@@ -125,7 +125,7 @@ Importing a PS2 save
    folders in import are ignored.
 2. Start the game. When the ISO checks are done and before the game begins, a SAVE IMPORT
    screen lists the .psu files it found. Each one shows OK, or the reason it cannot be used
-   (for example "not a Budokai Tenkaichi 3 USA save" or "PS2 save is damaged (checksum)").
+   (for example "not a BT3 USA save" or "PS2 save is damaged (checksum)").
 3. Up and down choose the file. Left and right choose IMPORT or SKIP (SKIP is selected when
    the screen opens). A confirms. B is the same as SKIP. IMPORT only works on a file marked
    OK.

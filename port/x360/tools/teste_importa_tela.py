@@ -46,10 +46,10 @@ MUTANTES = [
     ("a tela não é apresentada", "            telaImportar(dev, kVersaoImp, lista, arq, acao, aviso);\n            dev->Present(NULL, NULL, NULL, NULL);",
      "            telaImportar(dev, kVersaoImp, lista, arq, acao, aviso);", "apresenta"),
     ("não abre no primeiro arquivo bom", "if (lista.item[i].erro == 0) {", "if (0) {", "abre_no_primeiro_bom"),
-    ("sem tela de resultado", "impResultado(m, r, falha, false);\n        mensagem(dev, m);", "impResultado(m, r, falha, false);", "falha_importar"),
+    ("sem tela de resultado", "impResultado(m, r, falha, false, pulados, recusados);\n        mensagem(dev, m);", "impResultado(m, r, falha, false, pulados, recusados);", "falha_importar"),
     ("a lista passa do fim", "if (arq < n - 1)\n                arq++;", "arq++;", "limites"),
     ("a lista não chega ao primeiro", "if (arq > 0)\n                arq--;", "if (arq > 1)\n                arq--;", "cima_baixo"),
-    ("SKIP que falha não avisa", "                impResultado(m, r, falha, true);\n                mensagem(dev, m);\n", "", "falha_pular"),
+    ("SKIP que falha não avisa", "                impResultado(m, r, falha, true, pulados, recusados);\n                mensagem(dev, m);\n", "", "falha_pular"),
     ("o analógico para baixo não vale", "e.Gamepad.sThumbLY < -PAD_LIMIAR", "0", "analogico"),
 ]
 

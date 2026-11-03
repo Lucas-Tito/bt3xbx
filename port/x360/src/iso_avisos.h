@@ -54,7 +54,7 @@ static const char *const ISO_IMP_T_AJUDA_OK = "A: OK";
 static const char *const ISO_IMP_T_FEITO_TITULO = "SAVE IMPORTED";
 static const char *const ISO_IMP_T_FEITO = "THE SAVE WAS IMPORTED.";
 static const char *const ISO_IMP_T_FEITO_BACKUP = "YOUR PREVIOUS SAVE IS IN SAVES\\BACKUP\\%03d.";
-static const char *const ISO_IMP_T_FEITO_ARQUIVOS = "THE FILE WAS MOVED TO SAVES\\IMPORT\\DONE. THE OTHERS, TO SKIPPED OR FAILED.";
+static const char *const ISO_IMP_T_FEITO_ARQUIVOS = "THE IMPORTED FILE WENT TO SAVES\\IMPORT\\DONE.";
 static const char *const ISO_IMP_T_FALHA_TITULO = "IMPORT FAILED";
 static const char *const ISO_IMP_T_PASSO = "STEP: %s";
 static const char *const ISO_IMP_T_MOTIVO = "REASON: %s";
@@ -68,6 +68,9 @@ static const char *const ISO_IMP_T_MOVER_DE_NOVO = "THIS SCREEN MAY APPEAR AGAIN
 static const char *const ISO_IMP_T_PULAR_TITULO = "SKIPPED";
 static const char *const ISO_IMP_T_PULAR_MOVER = "%d FILE(S) COULD NOT BE MOVED OUT OF SAVES\\IMPORT,";
 static const char *const ISO_IMP_T_PULAR_DE_NOVO = "SO THIS SCREEN WILL APPEAR AGAIN NEXT TIME.";
+static const char *const ISO_IMP_T_REMOVER = "TO STOP IT, REMOVE THEM FROM SAVES\\IMPORT.";
+static const char *const ISO_IMP_T_FEITO_PULADOS = "%d FILE(S) NOT IMPORTED WENT TO SAVES\\IMPORT\\SKIPPED.";
+static const char *const ISO_IMP_T_FEITO_RECUSADOS = "%d REFUSED FILE(S) WENT TO SAVES\\IMPORT\\FAILED.";
 static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto) {
     *titulo = L"Cannot read ISO";
     /* Textos da ausente e da ilegível revistos pelo Lucas em 1/11/2026: sem citar o nome reservado da convertida,

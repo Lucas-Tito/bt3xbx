@@ -129,12 +129,19 @@ void ImportaTela_Executar(D3DDevice *dev) {
     }
     {
         ImpMsg m;
+        int pulados = 0, recusados = 0, k;
         memset(&m, 0, sizeof(m));
+        for (k = 0; k < lista.n; k++) {
+            if (lista.item[k].erro != 0)
+                recusados++;
+            else if (k != arq)
+                pulados++;
+        }
         if (acao == 1) {
             Diario_Escrever("importa: SKIP");
             r = Importa360_Pular(&lista, &falha);
             if (r > 0) {
-                impResultado(m, r, falha, true);
+                impResultado(m, r, falha, true, pulados, recusados);
                 mensagem(dev, m);
             }
             return;
@@ -148,7 +155,7 @@ void ImportaTela_Executar(D3DDevice *dev) {
         telaImportaMsg(dev, kVersaoImp, m);
         dev->Present(NULL, NULL, NULL, NULL);
         r = Importa360_Importar(&lista, arq, &falha);
-        impResultado(m, r, falha, false);
+        impResultado(m, r, falha, false, pulados, recusados);
         mensagem(dev, m);
     }
 }

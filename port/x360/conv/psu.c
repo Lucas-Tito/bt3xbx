@@ -146,7 +146,7 @@ const char *Psu_TextoErro(int c) {
     case PSU_E_SOBRA: return "trailing data";
     case PSU_E_MUITOS: return "too many files";
     case PSU_E_ESPACO: return "output buffer too small";
-    case PSU_E_BT3_PASTA: return "not a Budokai Tenkaichi 3 USA save";
+    case PSU_E_BT3_PASTA: return "not a BT3 USA save";
     case PSU_E_BT3_FALTA: return "save is missing a file";
     case PSU_E_BT3_TAMANHO: return "save file has the wrong size";
     case PSU_E_BT3_EXTRA: return "save has unexpected files";

@@ -11,7 +11,7 @@
 #define IMP_SEL 0xffffffffu  /* a linha selecionada */
 #define IMP_JANELA 8         /* arquivos visíveis ao mesmo tempo (a lista rola) */
 #define IMP_NOME 28          /* colunas do nome; o resto vira reticências */
-#define IMP_STATUS 34        /* colunas do motivo (o texto mais longo, "not a Budokai Tenkaichi 3 USA save", cabe) */
+#define IMP_STATUS 34        /* colunas do motivo (o texto mais longo, "PS2 save is damaged (checksum)", cabe) */
 #define IMP_COLUNAS 66       /* o que cabe em 1280 px a 18 px por letra com a margem de 80 */
 
 /* A janela da lista que acompanha o selecionado. */
@@ -98,8 +98,9 @@ static void impAdd(ImpMsg &m, const char *texto_) {
     }
 }
 
-/* O resultado de SaveImp_Importar (r, f) ou de SaveImp_Pular (skip = 1, r = nº de movidos mal). */
-static void impResultado(ImpMsg &m, int r, const SiFalha &f, bool skip) {
+/* O resultado de SaveImp_Importar (r, f) ou de SaveImp_Pular (skip = 1, r = nº de movidos mal). pulados e recusados:
+   os outros .psu da lista (os que podiam ser importados e não foram, e os recusados), para dizer onde foram parar. */
+static void impResultado(ImpMsg &m, int r, const SiFalha &f, bool skip, int pulados, int recusados) {
     char b[200];
     m.n = 0;
     m.ajuda = ISO_IMP_T_AJUDA_OK;
@@ -110,6 +111,7 @@ static void impResultado(ImpMsg &m, int r, const SiFalha &f, bool skip) {
         sprintf(b, ISO_IMP_T_PULAR_MOVER, r);
         impAdd(m, b);
         impAdd(m, ISO_IMP_T_PULAR_DE_NOVO);
+        impAdd(m, ISO_IMP_T_REMOVER);
         if (f.sistema) {
             sprintf(b, ISO_IMP_T_SISTEMA, f.sistema);
             impAdd(m, b);
@@ -125,6 +127,14 @@ static void impResultado(ImpMsg &m, int r, const SiFalha &f, bool skip) {
             impAdd(m, b);
         }
         impAdd(m, ISO_IMP_T_FEITO_ARQUIVOS);
+        if (pulados > 0) {
+            sprintf(b, ISO_IMP_T_FEITO_PULADOS, pulados);
+            impAdd(m, b);
+        }
+        if (recusados > 0) {
+            sprintf(b, ISO_IMP_T_FEITO_RECUSADOS, recusados);
+            impAdd(m, b);
+        }
         return;
     }
     if (f.passo == SI_P_MOVER && f.importado) {
@@ -137,6 +147,7 @@ static void impResultado(ImpMsg &m, int r, const SiFalha &f, bool skip) {
             impAdd(m, b);
         }
         impAdd(m, ISO_IMP_T_MOVER_DE_NOVO);
+        impAdd(m, ISO_IMP_T_REMOVER);
         return;
     }
     m.titulo = ISO_IMP_T_FALHA_TITULO;
