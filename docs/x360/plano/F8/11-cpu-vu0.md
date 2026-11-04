@@ -178,10 +178,14 @@ O serviço `bt3-vu0-nativo-oficial` executou `~/vu0-nativo-oficial-2.sh` de 14:2
 | C89 | Dois fontes preparados, zero falhas |
 | `SEMMAPA=1 roteiros.sh f5_duelo` | Tudo certo; referência, repetição, rastro, hashes e sete pontos de memória |
 
-O fechamento altera somente estes registros de documentação. As builds do commit de fechamento
-são reconstruídas e os objetos comparados aos da rodada aprovada, exceto `x360_passos.o` (carimbo de
-teste). O julgamento das mesmas saídas é repetido com `REUSA=1`, sem apresentar isso como nova execução
-do jogo. O relatório `~/entrega-vu0-nativo.md` registra os commits e o resultado dessa conferência.
+O fechamento altera somente a documentação. As três builds reconstruídas em `936b632b` conservaram
+os objetos sem depuração e a `.text` da rodada aprovada, exceto `x360_passos.o` (carimbo de teste):
+398 objetos x86, 399 x86r e 423 PPC iguais. O comparador recusou uma cópia com um bit estragado.
+Apesar dessa identidade, `REUSA=1` recusou os logs de `2bcd1c05`: o aceite da F5 e a medida por passo
+exigem o carimbo do HEAD também dentro dos logs. Não se alteram carimbos para contornar a guarda.
+A conferência do commit final precisa reconstruir e executar novamente os verificadores e o roteiro
+completo, depois de congelar a documentação. O relatório `~/entrega-vu0-nativo.md` registra o commit,
+o serviço e o resultado dessa rodada final; a aprovação acima continua identificada como a de `2bcd1c05`.
 
 ### Desmontagem GCC PPC antes e depois
 

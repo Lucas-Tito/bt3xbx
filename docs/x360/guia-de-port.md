@@ -3296,3 +3296,11 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   VU0, os pares `#pragma auto_inline(off/on)` preservados no `.c` preparado impedem que o cl os reintegre.
   Os núcleos compilados diretamente usam `__declspec(noinline)`. Headers de fontes diretos também precisam
   do `__inline` e dos tipos locais, pois a CRT do XDK não tem `stdint.h`; não confundir com o shim do c89.
+
+- **Commit só de documentação também invalida os logs da F5.** Depois do aceite da VU0 em `2bcd1c05`,
+  as três builds de `936b632b` tiveram objetos sem depuração e `.text` iguais, exceto o carimbo de teste.
+  Mesmo assim `REUSA=1` falhou em `roteiros.py f5` e `passos.py`: os logs guardavam `2bcd1c05`, mas
+  o HEAD era `936b632b`. A igualdade de objetos não substitui a regra de origem dos logs. Congelar os
+  registros no Git antes da rodada oficial; reconstruir e executar o roteiro completo no commit final.
+  Depois do aceite, pôr o resultado final no relatório externo, sem criar outro commit documental
+  que obrigue uma terceira execução. Nunca reescrever o carimbo dos logs para fazê-los passar.
