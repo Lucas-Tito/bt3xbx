@@ -1,3 +1,6 @@
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+extern int Port_DesfoqueOff(int efeito);
+#endif
 #include "common.h"
 #include "battle/battle.h"
 #include "battle/btl_cam.h"
@@ -509,7 +512,14 @@ void StgHaze_DrawView(s32 split, s32 view) {
 
 /* Draws the haze for whatever views are on screen. */
 void StgHaze_DrawAll(void) {
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    if (Port_DesfoqueOff(3)) {
+        return;
+    }
     if (gBtlCam == NULL) {
+#else
+    if (gBtlCam == NULL) {
+#endif
         StgHaze_DrawView(0, 0);
         return;
     }
@@ -1214,7 +1224,14 @@ void StgBlur_Draw(s32 split, s32 view, Mtx44 *viewMtx) {
 
 /* Draws the blur for whatever views are on screen. */
 void StgBlur_DrawAll(void) {
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    if (Port_DesfoqueOff(2)) {
+        return;
+    }
     if (gBtlCam == NULL) {
+#else
+    if (gBtlCam == NULL) {
+#endif
         StgBlur_Draw(0, 0, &gBtlCamView->world2view2);
         return;
     }

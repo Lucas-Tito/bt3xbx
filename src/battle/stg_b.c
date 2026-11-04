@@ -1,3 +1,6 @@
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+extern int Port_DesfoqueOff(int efeito);
+#endif
 #include "common.h"
 
 /*
@@ -1636,7 +1639,14 @@ void StgFog_Draw(void) {
     s32 srcH = 0x1C0;
     s32 h = 0xE0;
 
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    if (Port_DesfoqueOff(0)) {
+        return;
+    }
     Dma_AddData(tone->load, 0x10);
+#else
+    Dma_AddData(tone->load, 0x10);
+#endif
     Dma_AddTexFlush();
     Dma_AddFrame(!(gGfx.frame & 1) ? 0x70 : 0, 8, 0xFFFFFF);
     Dma_AddZbuf(0xE0, 1);

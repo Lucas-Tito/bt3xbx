@@ -62,13 +62,14 @@ SEM_RASTREIO = {"state", "namefont"}
 class Alvo:
     def __init__(self, nome, rastreio, chamadas=False, gpu=False, vu1=False, gravador=False, teste_som=False, fluxo=False,
                  alfa=False, lotes=False):
+        self.desfoque = os.environ.get("BT3_TESTE_DESFOQUE") == "1"
         self.nome, self.rastreio, self.chamadas, self.gpu, self.vu1, self.alfa = nome, rastreio, chamadas, gpu, vu1, alfa
         self.gravador, self.teste_som, self.fluxo = gravador, teste_som, fluxo
         self.be = nome == "ppc"  # big-endian: campos de bits na ordem do PS2 (bitfields.py)
         # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
         # diverge no quadro 2755).
         self.opt = "-O2"
-        pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
+        pasta = nome + ("b" if self.desfoque else "") + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
             ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "") + ("l" if alfa else "") + ("e" if lotes else "")
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
@@ -150,6 +151,14 @@ def jogo(args):
     alvo, f = args
     o = alvo.obj / (str(f.relative_to(ROOT / "src")).replace("/", "_")[:-2] + ".o")
     src, _, _ = portsrc.prepare(f)
+    if alvo.desfoque and "/* diagnóstico do desfoque */" in src.read_text():
+        # Só a variante de diagnóstico: abre os seis ganchos do console na cópia gerada.
+        # Não define PORT_X360 nos headers nem nos outros caminhos do jogo.
+        copia = alvo.b / "diagnostico" / f.name
+        copia.parent.mkdir(parents=True, exist_ok=True)
+        copia.write_text(src.read_text().replace("#ifdef PORT_X360 /* diagnóstico do desfoque */",
+                                                "#if 1 /* diagnóstico do desfoque */"))
+        src = copia
     # -fno-eliminate-unused-debug-types: todas as structs no DWARF (o clang só grava as que alguma variável usa), para
     # layout.py comparar todas
     cmd = alvo.cc + ["-std=gnu89", "-c", alvo.opt, "-g", "-fno-eliminate-unused-debug-types", "-fno-strict-aliasing", "-ffp-contract=off", "-fcommon", "-w",
@@ -261,7 +270,7 @@ def construir(alvo):
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
-    extras = ["sem_janela", "roteiro", "receitas", "imagens", "ponte_pow", "passos", "memoria", "som"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
+    extras = (["desfoque"] if alvo.desfoque else []) + ["sem_janela", "roteiro", "receitas", "imagens", "ponte_pow", "passos", "memoria", "som"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else []) + (["gpu_falso"] if alvo.gpu else []) + (["gravador"] if alvo.gravador else [])
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"

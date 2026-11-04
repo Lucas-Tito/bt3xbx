@@ -3272,3 +3272,13 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   devolve sempre 0: esperar uma rodada com `until ... && echo PRONTO | grep -q PRONTO`, e um marcador novo por rodada
   (o `FIM` antigo no mesmo arquivo encerra a espera na hora). A primeira compilação do `headless.py` numa árvore nova
   falhou duas vezes com "unable to rename temporary" nos objetos; repetir a compilação completa passou.
+
+### Diagnóstico do desfoque (F8, 14)
+
+- O texto inicial das etapas de escala e MSAA registra padrões históricos. Na 1.0.2, `area_init`, `msaa_init`,
+  `fxaa_init` e `afiado_init` dão escala 1,4, MSAA 2, FXAA 0 e afiado 1. Fixe esses valores nos ambientes da rodada.
+- Copiar `gen/data` de outra máquina pode trazer `.incbin` absoluto para `/home/lucas/...`. No clone de teste,
+  ajuste somente a cópia gerada ao caminho dos assets locais antes de montar `vu1_micro.data.s`; os assets
+  compartilhados continuam somente leitura. A primeira build do desfoque falhou justamente nesse arquivo.
+- `BT3_SHOT_FINAL=1` acrescenta `filtro` depois do FXAA e `tela` depois da cópia, nos mesmos números do GS da
+  captura normal. A segunda vê o filtro final, mas nenhuma captura interna vê o escalonador HDMI ou a TV.

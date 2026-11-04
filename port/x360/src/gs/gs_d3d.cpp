@@ -6930,6 +6930,60 @@ static void nat_init(void) {
                     sCorte, sCorte ? "a VU1 recortada pelo w, profundidade por pixel" : "z da VU1 preso em 0..w por vértice");
 }
 
+/* Diagnóstico da F8: a imagem de 1280x720 depois da cópia, antes do Present e da saída de vídeo.
+   Só reserva memória durante a captura; o Resolve lê a EDRAM que tela_copia acabou de preencher. */
+static void captura_tela(void) {
+    TexXg *t;
+    unsigned *linear;
+    unsigned char *ppm;
+    char pasta[40], nome[96], cab[32];
+    D3DRECT ret = {0, 0, TELA_W, TELA_H};
+    D3DPOINT destino = {0, 0};
+    RECT leitura = {0, 0, TELA_W, TELA_H};
+    HANDLE h;
+    DWORD n;
+    unsigned i, fnv = 2166136261u;
+    int k;
+    if (!captura_pasta(getenv("BT3_SHOT_PASTA"), pasta)) return;
+    t = xg_cria(TELA_W, TELA_H, D3DFMT_A8R8G8B8);
+    linear = (unsigned *)malloc(TELA_W * TELA_H * 4);
+    ppm = (unsigned char *)malloc(32 + TELA_W * TELA_H * 3);
+    if (t == NULL || linear == NULL || ppm == NULL) {
+        Diario_Escrever("gs_d3d: ERRO: sem memória para captura da tela");
+    } else if (FAILED(sDev->Resolve(D3DRESOLVE_RENDERTARGET0, &ret, &t->cab, &destino, 0, 0, NULL, 0.0f, 0, NULL))) {
+        Diario_Escrever("gs_d3d: ERRO: Resolve da captura da tela");
+    } else {
+        sDev->BlockUntilIdle();
+        XGUntileSurface(linear, TELA_W * 4, NULL, t->dados, TELA_W, TELA_H, &leitura, 4);
+        k = _snprintf(cab, sizeof(cab), "P6\n%d %d\n255\n", TELA_W, TELA_H);
+        memcpy(ppm, cab, k);
+        for (i = 0; i < TELA_W * TELA_H; i++) {
+            ppm[k + i * 3] = (unsigned char)(linear[i] >> 16);
+            ppm[k + i * 3 + 1] = (unsigned char)(linear[i] >> 8);
+            ppm[k + i * 3 + 2] = (unsigned char)linear[i];
+        }
+        k += TELA_W * TELA_H * 3;
+        for (i = 0; i < (unsigned)k; i++) fnv = (fnv ^ ppm[i]) * 16777619u;
+        _snprintf(nome, sizeof(nome), "%s\\tela_%05u.ppm", pasta, sQ->quadro);
+        h = CreateFile(nome, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h == INVALID_HANDLE_VALUE) {
+            Diario_Escrever("gs_d3d: ERRO: não abriu %s", nome);
+        } else {
+            if (!WriteFile(h, ppm, k, &n, NULL) || n != (DWORD)k)
+                Diario_Escrever("gs_d3d: ERRO: captura incompleta %s", nome);
+            else Diario_Escrever("gs_d3d: captura %s: quadro %u, fnv %08x", nome, sQ->quadro, fnv);
+            CloseHandle(h);
+        }
+    }
+    if (t != NULL) {
+        sDev->BlockUntilIdle();
+        xg_libera(&t->cab);
+    }
+    free(linear);
+    free(ppm);
+    sConta.capturas++;
+}
+
 /* A imagem mostrada na tela de 1280 x 720: o alvo `mostrado` (o buffer de vídeo do GS) no meio, em 4:3, e as barras da cor de
    fundo. Do fim do quadro e de GsD3d_Repete. */
 static void tela_copia(D3DTexture *t) {
@@ -6949,7 +7003,9 @@ static void tela_copia(D3DTexture *t) {
         int w = (int)((float)TELA_H * (float)Port_AspectMilli() / 1000.0f + 0.5f), x;
         w = w > TELA_W ? TELA_W : w;
         x = (TELA_W - w) / 2;
-        if (sAfiado & AF_TELA) {
+        if (env_num("BT3_COPIA_PONTO", 0) != 0) {
+            copia(t, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f, 512.0f / sAreaW, 448.0f / sAreaH, 0);
+        } else if (sAfiado & AF_TELA) {
             /* (BT3_AFIADO, bit 2) pelo ps_copia_af, que quer o tamanho da textura (c9); os estados do copia */
             D3DSURFACE_DESC desc;
             float c9[4] = {(float)sAlvoW, (float)sAlvoH, 1.0f / sAlvoW, 1.0f / sAlvoH};
@@ -7050,7 +7106,7 @@ static void frame_end(void) {
     double msVu, msCopiaVu;
     double msFim, msPresent;
     unsigned capturas = sConta.capturas;
-    int cur = -1, mostrado, i, msEst;
+    int cur = -1, mostrado, i, msEst, pediuCaptura = 0;
     uint32_t n;
     double ms;
     D3DTexture *mtex;
@@ -7354,14 +7410,21 @@ static void frame_end(void) {
         mtex != NULL) {
         gGsD3dEtapa = "fim do quadro: captura";
         captura(mostrado, mtex);
+        pediuCaptura = env_num("BT3_SHOT_FINAL", 0) != 0;
     }
     if (sFxaa) {
         gGsD3dEtapa = "fim do quadro: FXAA";
         mtex = fxaa_passa(mtex); /* (720p, BT3_FXAA: depois da captura, que segue sendo do alvo) */
     }
+    if (pediuCaptura && mtex != NULL) {
+        char nome[40];
+        _snprintf(nome, sizeof(nome), "filtro_%05u.ppm", q->quadro);
+        captura(mostrado, mtex, nome);
+    }
     gGsD3dEtapa = "fim do quadro: cópia para a tela";
     tempo_poe(T_TELA);
     tela_copia(mtex);
+    if (pediuCaptura) captura_tela();
     sMostradoTex = mtex;
     tempo_fecha_gpu(capturas != sConta.capturas);
     tempo_poe(T_PRESENT);
