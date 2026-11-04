@@ -30,6 +30,14 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
 - O gancho em `.claude/settings.json` recusa qualquer chamada de agente sem `model` (menos o `fork`, que herda o
   modelo de quem lança).
 
+## Passagem de chat
+
+Quando o contexto estiver grande, quando o Lucas pedir ou antes de parar por muito tempo, passar o que só está no
+contexto (detalhes no guia, seção 4, "Passagem de chat"): decisões no `decisoes.md`, aprendizados no guia (mesmo
+commit), e o estado (frentes do Codex, console, pendências com o Lucas) na memória `passagem`, um arquivo só,
+sobrescrito, escrito a partir do `port/x360/tools/status_wsl.sh` e não de lembrança. Chat novo: ler a memória `passagem`
+e rodar o `status_wsl.sh` antes de agir.
+
 ## Console
 
 Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddriver e usbsecpatch,

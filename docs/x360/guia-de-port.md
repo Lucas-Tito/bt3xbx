@@ -490,6 +490,23 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 
   Rodadas curtas de desenvolvimento (uma build, um roteiro durante a investigação) continuam dentro do agente.
 
+- **Passagem de chat (04/11/2026).** Um chat longo perde o começo quando o contexto é resumido, e um chat novo só sabe o
+  que está escrito. O que só existe no contexto (o estado das filas do Codex, o que está no console, as perguntas em
+  aberto, uma decisão dita de passagem) some se não for escrito antes. Quando o contexto estiver grande, ou o Lucas
+  pedir, ou antes de parar por muito tempo:
+  1. **Decisões** do Lucas vão para o `docs/x360/decisoes.md` (ou para a tarefa do Codex que vai escrevê-las, dito
+     na passagem). **Aprendizados** que custaram rodada vão para a seção 6 deste guia. Os dois no mesmo commit da
+     passagem, com push pelo Lucas.
+  2. **Estado** vai para a memória `passagem` (um arquivo só, sobrescrito a cada passagem, com a data no topo): as
+     frentes do Codex numa tabela (unidade, branch e tarefa, estado, o próximo passo meu), as entregas recebidas e
+     ainda não revisadas, o que está no console e o que sobrou de teste lá, as pendências e perguntas com o Lucas, e os
+     ambientes ainda não conferidos. O que vale para sempre vai para a memória própria do assunto, não para a passagem.
+  3. **Conferir antes de escrever**: rodar `port/x360/tools/status_wsl.sh` e escrever o que ele mostra, não o que eu
+     lembro. Ao começar um chat novo, ler a memória `passagem` e rodar o mesmo script antes de agir.
+  4. Dizer ao Lucas, numa lista curta, o que foi escrito e onde, e o que ficou fora (por exemplo, um teste em
+     andamento no console).
+  A passagem não substitui o relatório das tarefas: a verdade de cada frente continua no `~/entrega-*.md` dela.
+
 ---
 
 ## 5. Aprendizados de ordem de bytes (PS2 little-endian → 360 big-endian)
@@ -1566,6 +1583,36 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   sobreposto: o `disco` dos picos pode passar do quadro.
 
 ---
+
+### As filas e o console em 04/11/2026 (o dia das cinco frentes do Codex)
+
+- **O WSL desliga quando ninguém está conectado, e as filas do Codex morrem junto.** O que o mantinha ligado eram duas
+  tarefas agendadas do Windows de prazo fixo (`sleep` de 16 h e de 3 dias); expiraram em 03/11, e a fila do VU0 lançada
+  às 06:00 de 04/11 parou em 42 s sem ninguém ver. Agora a tarefa `bt3-wsl-sempre` (`sleep infinity`, no logon e a
+  cada 15 min, sem limite) faz isso; quem cria tarefa agendada no Windows é o Lucas (o modo automático recusa). Depois
+  de lançar uma fila, confira numa conexão seguinte que ela segue rodando (`status_wsl.sh`); o `uptime -s` do WSL
+  escorrega com o acerto do relógio e não serve para isso.
+- **A `fila_espera.sh` encerrava a tarefa no meio** quando a sessão do Codex batia o teto de 4 h, e desistia depois de
+  20 tentativas de cota (uma cota semanal derrubaria tudo em menos de um dia). Agora continua nos dois casos e, na cota,
+  dorme até 5 min depois da hora da mensagem ("try again at 7:31 PM", com ou sem data). Fila já rodando usa a cópia
+  antiga do script (o `bash` segue lendo o arquivo velho; troque o script com `mv`, nunca editando no lugar); para
+  acordar uma fila dormindo na cota, mate só o `sleep` filho dela.
+- **Sem `BT3_LOG=1`, nenhuma chave de diagnóstico vale** (`diagnostico360.h`): nem `BT3_SHOT*`, nem o log, nem as medidas.
+  Os ambientes da rodada do desfoque não tinham a chave, e a primeira sessão no console não gravou nada. Todo
+  `environment_*.txt` de rodada de console leva `BT3_LOG=1`, e o pedido diz como conferir que as capturas saíram.
+- **Teste visual no console: o Lucas prefere jogar a assistir o roteiro.** O modo livre é o mesmo ambiente sem
+  `BT3_ROTEIRO`, com `BT3_SHOT=300` (uma captura a cada 300 quadros do GS, uns 10 s) no lugar da lista; as capturas não
+  se alinham entre sessões, então cada variante roda no mesmo estágio, e a palavra dele vale como resultado. Foi assim
+  que o embaçado do cenário apareceu como o desfoque da distância (`StgFog_Draw`).
+- **O `link /dump /disasm /range` percorre o executável inteiro a cada faixa** (2 a 3 min por faixa no `default.exe` de
+  1,5 MB): junte as faixas numa chamada só, com tempo limite longo, ou desmonte o `.obj` da função.
+- **O `cl` do 360 com `-fp:precise` não funde `a*b + c` em `fmadds`** (testado em 04/11 com as opções da nossa build, com e
+  sem `#pragma fp_contract(off)`, que ele aceita). Separar as multiplicações numa função `noinline` para impedir a fusão
+  só acrescenta load-hit-store; confira a fusão na desmontagem, com uma guarda no build.
+- **Vez do emulador com 3 vagas (`~/vez.sh`, teste de 04/11).** Um emulador usa uns 20 MB e pouco mais de uma thread;
+  três juntos, com compilações, ficaram com o WSL respondendo em 0 a 1 s e a memória em até 5,6 GB dos 7,8 do WSL. A
+  trava antiga vira a vaga 1, então script que ainda faz `flock ~/wsl.lock` disputa só ela. Script de rodada não pode
+  ter guarda que recuse outro `qemu` rodando.
 
 ## 7. Lista de passos para um port novo
 
