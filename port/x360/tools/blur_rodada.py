@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rodada serial do desfoque. Executar sob flock ~/wsl.lock, com log persistente.
+"""Rodada serial do desfoque. Executar sob ~/vez.sh, com log persistente.
 
 Não altera fontes, referências nem serviços de outras tarefas. O término prepara
 os resultados para julgamento; não declara uma causa visual automaticamente.
@@ -13,17 +13,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
+
+from roteiros import eventos_rastro, ler_ppm, quadro_esperado
 
 RAIZ = pathlib.Path(__file__).resolve().parents[3]
 SAIDA = pathlib.Path.home() / "blur-analise"
 CHAVES = ["DISTANCIA", "PANORAMICO", "RADIAL", "BRUMA", "NEVOA", "BRILHO", "CLIMA"]
-LISTA = """menu 90 roteiro: boot.txt:20 ok tela 4
-selecao 150 roteiro: f5_duelo.txt:19 ok tela 39
-carga 1 roteiro: f5_duelo.txt:42 marca ponto carga
-combate 1 roteiro: f5_duelo.txt:59 marca ponto combate
-tecnica 1 roteiro: f5_duelo.txt:68 marca ponto tecnica
-pausa 1 roteiro: f5_duelo.txt:73 marca ponto pausa
+LISTA = """menu 100 tela 4
+selecao 100 tela 39
+carga 0 marca ponto carga
+combate 0 marca ponto combate
+tecnica 0 marca ponto tecnica
+pausa 0 marca ponto pausa
 """
 
 
@@ -70,11 +71,30 @@ def objetos():
     print("objetos:", dados, flush=True)
 
 
+def conferir_ancoras(rastro):
+    eventos = eventos_rastro(rastro)
+    for linha in LISTA.splitlines():
+        nome, n, ancora = linha.split(maxsplit=2)
+        if quadro_esperado(eventos, int(n), ancora) is None:
+            raise RuntimeError("âncora ausente: %s: %s" % (nome, ancora))
+    print("âncoras: seis momentos presentes no rastro oficial", flush=True)
+
+
+def conferir_pc(pasta, quadros, escala):
+    esperados = {"gpu_%05d.ppm" % int(q) for q in quadros}
+    if len(esperados) != 6 or {p.name for p in pasta.glob("gpu_*.ppm")} != esperados:
+        raise RuntimeError("PC: conjunto incompleto ou inesperado de capturas em " + str(pasta))
+    for nome in sorted(esperados):
+        w, h, _ = ler_ppm(pasta / nome)
+        if (w, h) != (512 * escala, 448 * escala):
+            raise RuntimeError("PC: tamanho incorreto em " + str(pasta / nome))
+    print("PC: seis PPM íntegros; alinhamento visual ainda exige julgamento", flush=True)
+
+
 def main():
     SAIDA.mkdir(exist_ok=True)
-    # Há ferramentas antigas que não usam a trava. O serviço espera sozinho.
-    while subprocess.run(["pgrep", "-x", "qemu-ppc"], stdout=subprocess.DEVNULL).returncode == 0:
-        time.sleep(60)
+    # A vaga é mantida pelo chamador durante toda a rodada. Outras vagas podem
+    # executar ciclos de outras tarefas, conforme a autorização desta coleta.
     if subprocess.check_output(["git", "status", "--porcelain"], cwd=RAIZ).strip():
         raise RuntimeError("árvore suja antes da rodada")
     for alvo, extra in (("x86", []), ("x86", ["--rastreio"]), ("ppc", [])):
@@ -84,19 +104,15 @@ def main():
     objetos()
     rodar("oficial", ["bash", "port/x360/tools/roteiros.sh", "f5_duelo"],
           {"SEMMAPA": "1", "IMG": "1", "O": str(SAIDA / "oficial"), "TP": "3600"})
+    oficial = SAIDA / "oficial/f5_duelo"
+    conferir_ancoras(oficial / "telas_a.txt")
     for alvo in ("x86", "ppc"):
         rodar("diagnostico-" + alvo, ["python3", "port/x360/tools/headless.py", "--alvo", alvo],
               {"BT3_TESTE_DESFOQUE": "1"})
-    oficial = SAIDA / "oficial/f5_duelo"
-    dados = SAIDA / "dados"
-    dados.mkdir(exist_ok=True)
-    for origem in (RAIZ / "gamedata").iterdir():
-        if not (dados / origem.name).exists():
-            (dados / origem.name).symlink_to(origem.resolve())
-    (dados / "mods").mkdir(exist_ok=True)
-    lidos = (oficial / "lidos.txt").read_text().splitlines()
-    rodar("conversao", [SAIDA / "oficial/conv_tool", "--mapa", oficial / "mapa.tsv", "--saida",
-                         dados / "mods", "gamedata", *lidos])
+    # O critério já converteu e julgou estes dados por larguras, leitores e
+    # inventário. Um segundo conv_tool isolado recusaria as larguras conhecidas
+    # sem passar pelo julgamento obrigatório de roteiros.py larguras.
+    dados = oficial / "dados"
     for caso in ["base", *[c.lower() for c in CHAVES]]:
         cortes = {"BT3_SEM_" + c: str(int(c.lower() == caso)) for c in CHAVES}
         for alvo in ("x86", "ppc"):
@@ -165,6 +181,7 @@ def main():
                 # Falha de vídeo comum a todos os casos não justifica dezesseis tentativas.
                 (SAIDA / "PC_PENDENTE").write_text("%d %s código %d\n" % (escala, caso, codigo))
                 return
+            conferir_pc(pasta, quadros, escala)
     (SAIDA / "COLETA_CONCLUIDA").write_text("Julgar pixels, alinhamento, tabelas e limites antes de entregar.\n")
 
 

@@ -132,7 +132,7 @@ e repostos ao fim: 398 objetos, ligação com 104 stubs, `.text` SHA1 `94fe2737c
 A comparação dos objetos finais, retirando depuração com `objcopy --strip-debug` e comparando byte a byte,
 fica na rodada armada; somente o objeto de teste do carimbo pode diferir.
 
-`blur_rodada.py`, sob `flock ~/wsl.lock`, compila x86, x86r e PPC do commit limpo e roda a conferência oficial
+`blur_rodada.py`, sob `~/vez.sh`, compila x86, x86r e PPC do commit limpo e roda a conferência oficial
 `SEMMAPA=1 IMG=1 roteiros.sh f5_duelo`. Depois compila as variantes de diagnóstico x86b/PPCb, coleta seis
 momentos ancorados no roteiro em oito configurações e exige igualdade x86/PPC por `roteiros.py compara_imagens`.
 O verificador é repetido contra uma cópia com um pixel estragado. Nenhum `PPC=1` é usado.
@@ -176,3 +176,83 @@ Quando chegarem capturas válidas, comparar base e repetição primeiro; depois 
 O resultado da rodada local deve ser julgado antes de marcar o restante como concluído. Se o console ainda
 não tiver resultado depois disso, o marcador solicitado é `test ! -d /home/codex/blur-resultado` em
 `~/espera/blur-analise`. Até a rodada local terminar, o marcador acompanha somente o serviço desta tarefa.
+
+
+## Retomada de 04/11: primeira rodada julgada e coleta corrigida
+
+A pista do Lucas restringe primeiro a investigação aos elementos da arena, mantendo os lutadores nítidos.
+A rodada do console deve começar pela base e repetição, distância, névoa, bruma/clima, MSAA e escala,
+com recortes separados do chão próximo, cenário distante e lutadores. Os filtros gerais continuam cobertos
+pelos controles, mas não há prova para promovê-los à explicação principal.
+
+### Mipmaps, LOD e bilinear do cenário
+
+No PS2 os estágios podem pedir mipmaps, mas **o backend atual do 360 não os implementa**.
+`texture_get`, em `port/src/gs/gs_draw.c`, cria as texturas do jogo com `texCreate(..., 1)`;
+`tex_create` do D3D ignora `levels`, `xg_cria_n` fixa um nível em `XGSetTextureHeader`, e
+`tex_upload` recusa `level != 0`. `aplica_sampler` fixa `D3DSAMP_MIPFILTER=D3DTEXF_NONE`.
+O sampler só recebe TEX1 bit 5 como escolha entre ponto e linear, igualmente para perto e longe;
+os parâmetros K, L e MXL do GS não escolhem níveis nesse caminho. O 360 também não usa pacote de
+substituição de texturas. No PC, níveis extras existem nos pacotes substitutos; as texturas originais
+também são criadas com um nível no frontend.
+
+Portanto `tex2Dgrad`, mesmo calculando derivadas em resolução 1,4, não pode selecionar um mipmap
+mais borrado do cenário: não há nível alternativo disponível. Isso descarta **essa seleção de LOD
+por código**, ainda sem prova visual do console. Não descarta o bilinear do nível base, a precisão
+perspectiva ou as cópias do quadro. Não há motivo para inventar um viés K/L como correção.
+
+A profundidade usada pela tabela merece uma separação: `z_sinc` resolve com
+`D3DRESOLVE_DEPTHSTENCIL | sZFrag`, e `sZFrag` fica zero fora do autoteste. É o fragmento 0;
+a tabela não faz média de profundidade das duas amostras. Isso pode divergir na cobertura de bordas,
+mas o código não prova erro no interior inteiro de uma arena. Os pares base/distância, base/névoa e
+base/MSAA 0 devem localizar a diferença. O teste MSAA 0 também muda as bordas de cor, então uma diferença
+isolada de silhueta não basta para culpar o z. Conferir a CLUT e o byte de profundidade em regiões
+próximas e distantes antes de propor mudança.
+
+### Resultado do serviço anterior, commit 1f8b5266
+
+| Conferência | Resultado |
+|---|---|
+| Builds x86, x86r e PPC limpas | concluídas; layout plano com 1965 structs, zero diferentes |
+| Objetos x86 sem depuração | 326 iguais; só x360_passos.o diferente, o carimbo de teste |
+| .text x86 | idêntica à base, SHA1 94fe2737c0b9f6663ca659685be77a7cd1d36659 |
+| SEMMAPA=1 IMG=1 roteiros.sh f5_duelo | código 0, tudo certo; luta, memória, save e rastros aprovados |
+| Imagens oficiais x86/PPC | 13 de 13 idênticas, 640x448 |
+| Coleta com cortes independentes e PC | não iniciada: duplicação da conversão parou antes das capturas |
+| Console | ~/blur-resultado ainda ausente na retomada |
+
+O serviço terminou com código 1, mas **depois** da aprovação oficial. A coleta duplicava a conversão e
+exigia retorno zero bruto do `conv_tool`. A rodada oficial havia aceitado o retorno 1 pelo julgamento
+de `roteiros.py larguras`, com leitor e posição conferidos: `00005.bin` 0x7AC42/0x8CF02 em `Font_ReadChar`,
+e `01432.bin` 0x18954 em `EftRays_SetKey`. A correção reaproveita `oficial/f5_duelo/dados` somente depois
+de o critério inteiro terminar com zero. Nenhuma exceção nova foi acrescentada ao conversor.
+
+A lista da coleta também repetia `roteiro: arquivo:linha`, embora `Imagens_Evento` retire esse prefixo
+antes da comparação. Foi corrigida para as mesmas seis âncoras já medidas pela rodada oficial:
+
+| Momento | Âncora e espera | GS medido |
+|---|---|---|
+| Menu | tela 4 +100 | 2969 |
+| Seleção | tela 39 +100 | 3362 |
+| Apresentação | marca ponto carga +0 | 4590 |
+| Combate | marca ponto combate +0 | 4977 |
+| Técnica/câmera | marca ponto tecnica +0 | 5357 |
+| Pausa/HUD | marca ponto pausa +0 | 5418 |
+
+Os ambientes do console agora usam os **treze GS medidos**, incluindo os seis acima, em lugar dos doze
+números estimados. O cenário, pose, HUD e tempo ainda precisam coincidir na GPU e no PC atual; números
+iguais não são, sozinhos, prova de alinhamento. Uma chamada de corte alcançada tampouco prova força
+não zero naquele quadro.
+
+O preflight novo foi visto recusando a âncora com prefixo numa cópia da lista, antes de aceitar as seis
+âncoras válidas no rastro. A conferência dos PPM do PC foi vista recusando conjunto vazio, PPM truncado,
+dimensões trocadas, escala errada e quadro extra, antes de ser usada na coleta real. Ela só prova presença,
+formato e resolução; a equivalência visual fica para o julgamento seguinte. O comparador existente
+aceitou as 13 imagens originais e recusou uma cópia com um pixel alterado em (639,447), desvio 255.
+O verificador de larguras recusou a troca intencional de 0x7AC42 para 0x7AC44 numa cópia do log.
+
+A nova rodada recompila e executa o critério com o commit limpo que contém estas correções, depois coleta
+os oito pares x86/PPC e os dezesseis casos do PC. Usa uma vaga de `~/vez.sh` durante todo o ciclo;
+a guarda global de qemu foi retirada conforme a autorização de três vagas da tarefa. Os resultados da
+primeira rodada são preservados separados. A coleta corrigida ainda exige julgamento; nenhuma causa
+visual foi declarada e nenhuma correção de imagem foi ativada por padrão.

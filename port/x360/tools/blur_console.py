@@ -18,7 +18,9 @@ CASOS = [("b00_base", {})] + [("b%02d_%s" % (i + 1, n.lower()), {"BT3_SEM_" + n:
     ("b13_sem_efeitos", {"BT3_SEM_" + n: "1" for n in CHAVES}),
     ("b14_repeticao", {}),
 ]
-QUADROS = "2900,2990,3350,3450,4600,4673,4800,4975,5335,5355,5416,5450"
+# Números do GS medidos nas treze capturas oficiais da 1.0.2 nesta tarefa.
+# Quadro do roteiro e vblank têm deslocamentos diferentes e não servem aqui.
+QUADROS = "2969,3096,3162,3362,3944,4104,4590,4640,4977,5357,5418,8330,8350"
 
 
 def preparar(destino):

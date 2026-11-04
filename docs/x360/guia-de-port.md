@@ -3288,3 +3288,15 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 - A cópia atual do PC exige API de PNG que a SDL 3.2.24 do WSL não possui. A compilação falha em `ui.cpp` e
   `mods_ui.cpp`; uma ligação que crie stubs desses leitores não é prova da build completa. Para diagnóstico
   dos alvos, uma cópia isolada pode desativar explicitamente só as cargas da interface, declarando esse limite.
+
+- Na coleta de desfoque, não duplique `conv_tool --mapa` exigindo zero bruto depois de `roteiros.sh` passar.
+  O critério aceita certas larguras somente após `roteiros.py larguras` conferir posições e leitores reais.
+  Reutilize a pasta `dados` que o critério acabou de converter e aprovar, sem ampliar exceções.
+- A âncora de `BT3_IMAGENS` não inclui `roteiro: arquivo:linha`: `Imagens_Evento` retira esse prefixo.
+  Valide as âncoras contra `eventos_rastro`/`quadro_esperado` antes de gastar a rodada. No ensaio do desfoque,
+  os GS 2969/3362/4590/4977/5357/5418 foram medidos; vblank e quadro do roteiro não são substitutos.
+- `tex2Dgrad` não implica mipmaps no 360: `tex_create` ignora levels, o cabeçalho XG tem um nível,
+  `tex_upload` recusa level diferente de zero e o sampler desliga o filtro de mip. Investigue o bilinear
+  do nível base e os efeitos do cenário antes de atribuir a maciez a K/L ou viés de LOD.
+- Na coleta autorizada com três vagas, use `~/vez.sh` e não acrescente guarda global contra outro qemu:
+  ela anula as outras vagas. Cada ciclo continua serial dentro da vaga, com dados e saídas próprios.
