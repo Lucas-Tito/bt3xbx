@@ -99,7 +99,7 @@ cai em "lento"), o Final Flash que destrói o planeta de fato e 5 s de luta depo
 `picos:` com "VU1 0 lotes, desenhos ~3.2xx".
 
 
-## A implementado no ramo vu0-nativo: prova x86, PPC em conferência (04/11/2026)
+## A implementado no ramo vu0-nativo: aceite sem console concluído (04/11/2026)
 
 Base `9c69c4ba`, a 1.0.2. A pendência continua aberta para o aceite no XDK e no console.
 Não há medida nova de tempo no Xenon nesta rodada.
@@ -132,30 +132,56 @@ etapas de produto e soma: não se afirma que sumiram todos os custos de dependê
 
 ### Prova sem console
 
-`python3 port/x360/tools/teste_vu0_nativo.py --casos 2000000 --mutantes`, sob `flock ~/wsl.lock`:
+`python3 port/x360/tools/teste_vu0_nativo.py --casos 2000000 --mutantes`, sob a vaga de emulador autorizada:
 compila os arquivos completos da base e os atuais, expõe só as instruções estáticas para o teste e compara
 bits de saída e todo o `gRefVu0`. São 2 milhões de casos por função e 16 milhões de instruções por variante,
 com todas as máscaras, vf0, ACC e resíduos aleatórios, destinos sobrepostos, bits arbitrários, ±0,
 denormais, expoente máximo, estouro e vizinhanças de 1,0 e dos limites da guarda. A matriz aceitou 1 milhão
-e recusou 1 milhão nos dois modelos x86. `Mtx_Mul` e `Vu0_SinCos` são testados como funções completas,
+e recusou 1 milhão em cada variante x86/PPC, modelos inteiro e 360. `Mtx_Mul` e `Vu0_SinCos` são testados como funções completas,
 sem reimplementar a sequência no oráculo.
 
 O mesmo comando roda o `port/tools/fastvec_check.c` existente com o núcleo novo, 2 milhões de matrizes por
-variante. Na x86, modelos inteiro e 360: zero diferenças; desistência 100% em bits arbitrários, 0% perto
+variante. Nas quatro variantes x86/PPC, modelos inteiro e 360: zero diferenças; desistência 100% em bits arbitrários, 0% perto
 de 1,0, 97,8% com extremos misturados e 0% nos casos de poucos bits. Os três mutantes foram vistos falhando
-nos dois modelos: produto ao mais próximo, soma da matriz em outra ordem e denormal aceito pela guarda.
+nas quatro variantes: produto ao mais próximo, soma da matriz em outra ordem e denormal aceito pela guarda.
 Também foram recusadas as cópias com um bit estragado na saída de cada função/instrução e do fastvec.
-A PPC big-endian com esses mesmos verificadores está armada em serviço; ainda não conta como prova passada.
+A PPC big-endian passou os mesmos verificadores, incluindo estado completo, alias e todos os controles negativos.
 
 Para a prova do jogo, `BT3_TESTE_VU0_NATIVO=1 python3 port/x360/tools/headless.py --alvo ppc` liga a mesma
 implementação, conservando a ABI soft-float do jogo: só o objeto dos núcleos usa hardware. A ponte de teste
-restaura o modo da FPU após cada núcleo, para não mudar o resto da build. O aceite armado é
-`SEMMAPA=1 roteiros.sh f5_duelo`, que já grava `BT3_HASH` e compara luta, telas e memórias. Não há roteiro
+restaura o modo da FPU após cada núcleo, para não mudar o resto da build. A rodada oficial de
+`SEMMAPA=1 roteiros.sh f5_duelo` terminou com “tudo certo”: duas repetições x86, referência, x86r
+e PPC com o caminho novo deram o mesmo rastro de 69 linhas; `BT3_HASH` e os sete pontos de memória
+foram aprovados, incluindo carga, combate, técnica, pausa e retorno. As telas aqui são transições
+e estados; imagens PPM não foram comparadas (`IMG` desligado). Não há roteiro
 da explosão do planeta nesta árvore (`port/x360/roteiros`); a reprodução dela fica para o console.
 
 Base x86 reconstruída com o `headless.py` e os dois fontes VU0 de `9c69c4ba`: 398 objetos iguais (326 de código e 72 de dados) após
 `objcopy --strip-debug` e `cmp`; só `x360_passos.o`, código de teste com carimbo, difere. SHA1 da `.text`
-das duas: `94fe2737c0b9f6663ca659685be77a7cd1d36659`. A certificação do commit final será repetida no serviço.
+das duas: `94fe2737c0b9f6663ca659685be77a7cd1d36659`. Uma cópia de objeto com um bit da `.text`
+alterado foi recusada por `cmp` (saída 1). A preparação C89 dos dois fontes terminou com zero falhas.
+
+### Resultado oficial e origem das provas
+
+O serviço `bt3-vu0-nativo-oficial` executou `~/vu0-nativo-oficial-2.sh` de 14:27:45 a 14:57:40
+(04/11, UTC-3), na segunda vaga autorizada pelo Lucas. Resultado 0, commit de implementação
+`2bcd1c05`, árvore limpa e carimbos iguais nas três builds. Logs e resultados fora do Git em
+`~/vu0-nativo-final/`; log geral `~/vu0-nativo-oficial.log`.
+
+| Conferência | Resultado |
+|---|---|
+| x86 inteiro, x86 360, PPC inteiro e PPC 360 | Cada uma: 2 milhões de casos por função, 16 milhões de instruções, estado e alias iguais |
+| `fastvec_check`, quatro variantes | Cada uma: 2 milhões de matrizes, zero diferenças |
+| Arredondamento, ordem e denormal | 12 execuções recusadas, saída 1 |
+| Bit estragado por função/instrução e no fastvec | 52 comparações e quatro fastvec recusados, saída 1 |
+| Objetos x86 e `.text` contra a base | 398 objetos iguais sem depuração; só o carimbo de teste difere; `.text` idêntica |
+| C89 | Dois fontes preparados, zero falhas |
+| `SEMMAPA=1 roteiros.sh f5_duelo` | Tudo certo; referência, repetição, rastro, hashes e sete pontos de memória |
+
+O fechamento altera somente estes registros de documentação. As builds do commit de fechamento
+são reconstruídas e os objetos comparados aos da rodada aprovada, exceto `x360_passos.o` (carimbo de
+teste). O julgamento das mesmas saídas é repetido com `REUSA=1`, sem apresentar isso como nova execução
+do jogo. O relatório `~/entrega-vu0-nativo.md` registra os commits e o resultado dessa conferência.
 
 ### Desmontagem GCC PPC antes e depois
 

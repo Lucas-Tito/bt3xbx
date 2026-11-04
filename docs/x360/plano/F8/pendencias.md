@@ -127,9 +127,11 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     comum isso é uns 11,7 ms por quadro da thread do jogo, e o conserto estimado ganharia 8 a 9 ms. Exige provar o mesmo
     resultado na x86, na PPC e no 360 pelos roteiros. Estudo em [11-cpu-vu0](11-cpu-vu0.md), item A; o item B (a projeção
     por vértice na explosão do planeta) foi feito antes da release. Implementação do item A preparada em
-    `vu0-nativo` em 04/11: prova x86 com 2 milhões de casos por função e fastvec nos dois modelos; PPC e roteiro
-    de luta em serviço, ainda sem aceite. A seção nova do estudo lista a guarda, as contagens GCC e a conferência
-    pendente no XDK e no console. Não considerar o ganho estimado como medido.
+    `vu0-nativo` em 04/11: **aceite sem console concluído**, 2 milhões de casos por função e fastvec em cada
+    variante x86/PPC, modelos inteiro/360; mutantes recusados e roteiro oficial `f5_duelo` com “tudo certo”,
+    hashes e sete pontos de memória aprovados. Objetos e `.text` x86 preservados. A seção nova do estudo
+    lista a guarda e as contagens GCC. **Continua pendente no XDK e no console**: desmontagem do cl sem
+    fusões e medida do amostrador. Não considerar o ganho estimado como medido.
 18. **A luta de tela dividida mais rápida** (31/10/2026, pedido do Lucas): roda a 25,4 quadros por segundo, com o jogo a
     85% da velocidade; a gravação do GS (39,6 ms), o jogo (33,8) e o desenho (30,1) estão todos perto do limite. Os pontos
     de melhoria, com ganho e custo, estão em [13-tela-dividida](13-tela-dividida.md). O recorte justo do estágio (C1) e o
