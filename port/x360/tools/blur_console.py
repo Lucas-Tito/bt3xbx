@@ -5,9 +5,10 @@ import shutil
 import sys
 
 RAIZ = pathlib.Path(__file__).resolve().parents[3]
-CHAVES = ["DISTANCIA", "PANORAMICO", "RADIAL", "BRUMA", "NEVOA", "BRILHO"]
+CHAVES = ["DISTANCIA", "PANORAMICO", "RADIAL", "BRUMA", "NEVOA", "BRILHO", "CLIMA"]
 CASOS = [("b00_base", {})] + [("b%02d_%s" % (i + 1, n.lower()), {"BT3_SEM_" + n: "1"})
-                              for i, n in enumerate(CHAVES)] + [
+                              for i, n in enumerate(CHAVES[:6])] + [
+    ("b15_clima", {"BT3_SEM_CLIMA": "1"}),
     ("b07_sem_msaa", {"BT3_MSAA": "0"}),
     ("b08_escala1", {"BT3_ESCALA": "1", "BT3_ALVO_AREA": "640x480"}),
     ("b09_escala133", {"BT3_ESCALA": "1.33", "BT3_ALVO_AREA": "648x456"}),

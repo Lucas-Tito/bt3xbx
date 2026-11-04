@@ -152,7 +152,7 @@ def jogo(args):
     o = alvo.obj / (str(f.relative_to(ROOT / "src")).replace("/", "_")[:-2] + ".o")
     src, _, _ = portsrc.prepare(f)
     if alvo.desfoque and "/* diagnóstico do desfoque */" in src.read_text():
-        # Só a variante de diagnóstico: abre os seis ganchos do console na cópia gerada.
+        # Só a variante de diagnóstico: abre os sete ganchos do console na cópia gerada.
         # Não define PORT_X360 nos headers nem nos outros caminhos do jogo.
         copia = alvo.b / "diagnostico" / f.name
         copia.parent.mkdir(parents=True, exist_ok=True)

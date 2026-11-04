@@ -6944,6 +6944,8 @@ static void captura_tela(void) {
     DWORD n;
     unsigned i, fnv = 2166136261u;
     int k;
+    LARGE_INTEGER t0;
+    QueryPerformanceCounter(&t0);
     if (!captura_pasta(getenv("BT3_SHOT_PASTA"), pasta)) return;
     t = xg_cria(TELA_W, TELA_H, D3DFMT_A8R8G8B8);
     linear = (unsigned *)malloc(TELA_W * TELA_H * 4);
@@ -6982,6 +6984,7 @@ static void captura_tela(void) {
     free(linear);
     free(ppm);
     sConta.capturas++;
+    sConta.msCaptura += ms_desde(&t0);
 }
 
 /* A imagem mostrada na tela de 1280 x 720: o alvo `mostrado` (o buffer de vídeo do GS) no meio, em 4:3, e as barras da cor de

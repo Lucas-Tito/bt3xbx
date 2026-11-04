@@ -456,7 +456,14 @@ void StgHaze_Draw(StgHaze *haze, s32 split, s32 view) {
     s8 *cx;
     s8 *cy;
 
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    if (Port_DesfoqueOff(3)) {
+        return;
+    }
     width = 0x200;
+#else
+    width = 0x200;
+#endif
     widthPx = 0x200;
     xOffset = 0;
     cols = haze->cols;
@@ -512,14 +519,7 @@ void StgHaze_DrawView(s32 split, s32 view) {
 
 /* Draws the haze for whatever views are on screen. */
 void StgHaze_DrawAll(void) {
-#ifdef PORT_X360 /* diagnóstico do desfoque */
-    if (Port_DesfoqueOff(3)) {
-        return;
-    }
     if (gBtlCam == NULL) {
-#else
-    if (gBtlCam == NULL) {
-#endif
         StgHaze_DrawView(0, 0);
         return;
     }

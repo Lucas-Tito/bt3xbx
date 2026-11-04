@@ -3282,3 +3282,9 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   compartilhados continuam somente leitura. A primeira build do desfoque falhou justamente nesse arquivo.
 - `BT3_SHOT_FINAL=1` acrescenta `filtro` depois do FXAA e `tela` depois da cópia, nos mesmos números do GS da
   captura normal. A segunda vê o filtro final, mas nenhuma captura interna vê o escalonador HDMI ou a TV.
+- Ao desligar uma distorção, preserve também os sorteios dela: `StgHaze_Step` consome o gerador do jogo. Cortar
+  `StgHaze_DrawAll` mudaria a luta, e a diferença deixaria de isolar o filtro. Corte só `StgHaze_Draw`, depois do
+  UpdateClut e do Step. Clima (`EftWeather`) e distorção de calor (`StgHaze`) são candidatos separados.
+- A cópia atual do PC exige API de PNG que a SDL 3.2.24 do WSL não possui. A compilação falha em `ui.cpp` e
+  `mods_ui.cpp`; uma ligação que crie stubs desses leitores não é prova da build completa. Para diagnóstico
+  dos alvos, uma cópia isolada pode desativar explicitamente só as cargas da interface, declarando esse limite.
