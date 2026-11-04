@@ -97,3 +97,92 @@ referência contra nova, com o `explosao_picos.py` de lá.
 Mesma build `0757ec25` com `BT3_LOG=1`, `BT3_PICOS=40`, `BT3_AMOSTRA=1000` e **`BT3_AMOSTRA_LIMIAR=65`** (só a explosão
 cai em "lento"), o Final Flash que destrói o planeta de fato e 5 s de luta depois para sair o despejo; conferir pelas linhas
 `picos:` com "VU1 0 lotes, desenhos ~3.2xx".
+
+
+## A implementado no ramo vu0-nativo: prova x86, PPC em conferência (04/11/2026)
+
+Base `9c69c4ba`, a 1.0.2. A pendência continua aberta para o aceite no XDK e no console.
+Não há medida nova de tempo no Xenon nesta rodada.
+
+### Implementação e domínio exato
+
+`port/x360/src/f2/vu0_nativo.c` recebe os operandos por ponteiros e inteiros. Aceita somente ±0 ou
+`2^-30 <= |x| <= 2^30`, classificados pelos bits antes de qualquer conta. Denormal, expoente 255,
+normal muito pequeno ou muito grande fazem desistir sem publicar a saída. O chamador então executa
+o caminho anterior inteiro, inclusive os limites e a aritmética próprios dele. O modelo de hardware
+atual do 360 já difere do modelo inteiro nos extremos (decisão 5); esta mudança não redefine esse modelo.
+
+Na faixa aceita, os produtos ficam entre `2^-60` e `2^60`. Depois do truncamento a float, o menor
+passo possível é `2^-83`: nem os produtos, nem cancelamentos e as três somas seguintes chegam a denormal
+ou estouro. A thread do 360 já usa `_RC_CHOP`. Não se muda o arredondamento dela.
+
+| Função | Caminho novo |
+|---|---|
+| `mtx_apply` | `Port_FastMtxApply` chama `Vn_MtxApply`: 16 produtos, depois as três somas por componente, na ordem original. |
+| `op_vmaddabc`, `op_vmaddbc` | `Vn_Bc4` multiplica quatro componentes pelo escalar e soma ACC, conservando `setFlags`, máscara e publicação originais. |
+| `Mtx_Mul` | Conserva a sequência completa do interpretador, inclusive ACC, flags e registradores finais; as instruções acima usam os núcleos novos. |
+| `Vec4_Add`, `Vec4_Scale` | `Vn_Op4`/`Vn_Bc4`, com destino temporário; recuo isolado em função sem inlining com o corpo anterior. |
+| `Vu0_SinCos` | Conserva o polinômio, os resíduos e a raiz anterior; acelera as instruções `vadd`, `vmul`, `vaddbc`, `vsubbc`, `vmulbc` e `vmulabc` que compartilha. |
+
+Tudo nos fontes upstream está em `PORT_X360`, com o original no `#else`. A build normal x86/PPC continua
+como antes. Os produtos ficam em duas funções `noinline` (`Vn_Produtos` e `Vn_ProdutosMatriz`); o chamador
+só soma depois da chamada. Essa fronteira impede a fusão. Manter `/fp:precise`, sem `/GL`/LTCG; nos testes,
+`-ffp-contract=off -frounding-math -fno-strict-aliasing`. Ainda há temporários float em memória entre as
+etapas de produto e soma: não se afirma que sumiram todos os custos de dependência da memória.
+
+### Prova sem console
+
+`python3 port/x360/tools/teste_vu0_nativo.py --casos 2000000 --mutantes`, sob `flock ~/wsl.lock`:
+compila os arquivos completos da base e os atuais, expõe só as instruções estáticas para o teste e compara
+bits de saída e todo o `gRefVu0`. São 2 milhões de casos por função e 16 milhões de instruções por variante,
+com todas as máscaras, vf0, ACC e resíduos aleatórios, destinos sobrepostos, bits arbitrários, ±0,
+denormais, expoente máximo, estouro e vizinhanças de 1,0 e dos limites da guarda. A matriz aceitou 1 milhão
+e recusou 1 milhão nos dois modelos x86. `Mtx_Mul` e `Vu0_SinCos` são testados como funções completas,
+sem reimplementar a sequência no oráculo.
+
+O mesmo comando roda o `port/tools/fastvec_check.c` existente com o núcleo novo, 2 milhões de matrizes por
+variante. Na x86, modelos inteiro e 360: zero diferenças; desistência 100% em bits arbitrários, 0% perto
+de 1,0, 97,8% com extremos misturados e 0% nos casos de poucos bits. Os três mutantes foram vistos falhando
+nos dois modelos: produto ao mais próximo, soma da matriz em outra ordem e denormal aceito pela guarda.
+Também foram recusadas as cópias com um bit estragado na saída de cada função/instrução e do fastvec.
+A PPC big-endian com esses mesmos verificadores está armada em serviço; ainda não conta como prova passada.
+
+Para a prova do jogo, `BT3_TESTE_VU0_NATIVO=1 python3 port/x360/tools/headless.py --alvo ppc` liga a mesma
+implementação, conservando a ABI soft-float do jogo: só o objeto dos núcleos usa hardware. A ponte de teste
+restaura o modo da FPU após cada núcleo, para não mudar o resto da build. O aceite armado é
+`SEMMAPA=1 roteiros.sh f5_duelo`, que já grava `BT3_HASH` e compara luta, telas e memórias. Não há roteiro
+da explosão do planeta nesta árvore (`port/x360/roteiros`); a reprodução dela fica para o console.
+
+Base x86 reconstruída com o `headless.py` e os dois fontes VU0 de `9c69c4ba`: 398 objetos iguais (326 de código e 72 de dados) após
+`objcopy --strip-debug` e `cmp`; só `x360_passos.o`, código de teste com carimbo, difere. SHA1 da `.text`
+das duas: `94fe2737c0b9f6663ca659685be77a7cd1d36659`. A certificação do commit final será repetida no serviço.
+
+### Desmontagem GCC PPC antes e depois
+
+GCC `-O2 -fno-stack-protector -ffp-contract=off`, modelo hardware do 360, big-endian. Contagens estáticas
+por símbolo, sem expandir laços nem somar funções chamadas. Pares são ocorrências de `stw` e `lfs` no mesmo
+deslocamento de r1, não uma análise temporal de dependências. Arquivos `.dis` e contagem saem do verificador.
+
+| Símbolo | Instruções antes | Depois | Pares stw/lfs antes | Depois |
+|---|---:|---:|---:|---:|
+| `mtx_apply` (inclui recuo) | 85 | 85 | 0 | 0 |
+| `op_vmaddabc` (inclui recuo) | 51 | 68 | 0 | 1 |
+| `op_vmaddbc` (inclui recuo) | 58 | 72 | 0 | 1 |
+| `Ref_Mtx_Mul` (chama instruções) | 204 | 204 | 0 | 0 |
+| `Ref_Vec4_Add` | 17 | 42 | 0 | 0 |
+| `Ref_Vec4_Scale` | 13 | 47 | 0 | 1 |
+| `Ref_Vu0_SinCos` (chama instruções) | 232 | 191 | 5 | 3 |
+
+Núcleos novos, também com zero pares stw/lfs: `Vn_MtxApply` 67 instruções e
+`Vn_ProdutosMatriz` 16; `Vn_Op4` 126, `Vn_Bc4` 14 e `Vn_Produtos` 15. Recuos isolados
+`vn_vec4_add_lento`/`vn_vec4_scale_lento`: 17/13. Nenhuma fusão nos símbolos contados.
+O GCC já conserva muitos floats em registradores no código anterior, ao contrário do `cl` medido no estudo;
+esta tabela não demonstra redução do total de instruções nem ganho de tempo. As chamadas e guardas têm custo.
+
+### Aceite que ainda cabe ao Lucas
+
+No XDK: compilar o objeto novo (o `build_f2.sh` já enumera `src/f2/*.c`), conferir `pc_vu0_a`, `pc_vu0_b`,
+`float360` e `vu0_nativo` com os dois núcleos de produto fora de linha; zero `fmadds`, `fmadd`, `fmsubs`,
+`fnmadds` ou equivalentes nas contas trocadas. Conferir o recuo e os temporários, incluindo pares `stfs/lfs`,
+e comparar as contagens com a build anterior. No console: repetir o amostrador em luta comum, quadros lentos,
+tela dividida e explosão de fato, e medir a thread do jogo. O ganho estimado do estudo continua sem confirmação.

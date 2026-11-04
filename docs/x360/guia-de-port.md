@@ -3272,3 +3272,27 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   devolve sempre 0: esperar uma rodada com `until ... && echo PRONTO | grep -q PRONTO`, e um marcador novo por rodada
   (o `FIM` antigo no mesmo arquivo encerra a espera na hora). A primeira compilação do `headless.py` numa árvore nova
   falhou duas vezes com "unable to rename temporary" nos objetos; repetir a compilação completa passou.
+
+
+### A VU0 nativa do 360 (F8, item 17, 04/11/2026)
+
+- **O recuo IEEE também precisa de prova de bits.** Acrescentar um ramo rápido ao corpo de `Vec4_Scale` mudou
+  a alocação de registradores do GCC x86 e a escolha de payload quando dois NaNs diferentes eram multiplicados
+  (caso 223680: `ffc57bb7` contra `ffd568fb`). Copiar os operandos antes do ramo não resolveu. Conservar o corpo
+  anterior inteiro em uma função `noinline` separada resolveu nos 2 milhões de casos dos modelos inteiro e 360.
+  Não normalizar NaNs no comparador para esconder a diferença. A escolha no XDK ainda exige a conferência dele.
+- **Ligar hardware na PPC não pode trocar a ABI do jogo.** A build sem janela chama a VU0 com a ABI soft-float;
+  recompilar o arquivo inteiro com hardware muda a passagem dos argumentos float. O teste
+  `BT3_TESTE_VU0_NATIVO=1` mantém os chamadores soft-float e usa núcleos de hardware com ponteiros/inteiros.
+  Só dentro desses núcleos muda e restaura o arredondamento. No 360 a thread já trunca e essa troca não entra.
+- **Mutante de denormal precisa conferir a desistência.** O header atual do 360 também usa a FPU: aceitar denormal
+  por engano pode produzir os mesmos bits nele e passar um comparador só de resultados. O teste da VU0 compara
+  também o retorno da guarda e exige saída intacta na recusa, além do oráculo inteiro.
+- **A contagem GCC não substitui a desmontagem do cl.** O GCC já elimina muitas conversões de bits do original,
+  e a guarda pode aumentar o código estático. Separar invólucros, recuos e núcleos chamados, declarar se os laços
+  foram expandidos e não somar tudo como se fosse o caminho aceito. A medida do Xenon continua no console.
+
+- **O fonte preparado não conserva `noinline` GCC.** O `c89.py` remove `__attribute__`; para os recuos da
+  VU0, os pares `#pragma auto_inline(off/on)` preservados no `.c` preparado impedem que o cl os reintegre.
+  Os núcleos compilados diretamente usam `__declspec(noinline)`. Headers de fontes diretos também precisam
+  do `__inline` e dos tipos locais, pois a CRT do XDK não tem `stdint.h`; não confundir com o shim do c89.

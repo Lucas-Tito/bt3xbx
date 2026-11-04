@@ -30,6 +30,11 @@
                  blocos pela thread de port/x360/src/som/fluxo.c       -> port/build/<alvo>tf/teste_som
 O rastro de som (port/x360/headless/som.c, F6 rede 2: BT3_SOM=arquivo) entra em todas as builds, por --wrap.
 
+Prova da VU0 nativa do 360: BT3_TESTE_VU0_NATIVO=1 com --alvo ppc liga
+PORT_X360 só nos dois arquivos da VU0 e troca o gancho da matriz. O restante
+conserva a ABI e a aritmética em software. Os núcleos nativos, em outro objeto,
+truncam só durante a conta e restauram o modo anterior. A x86 normal não muda.
+
 As duas usam a aritmética em software da build de PC (-msoft-float chama port/src/softfloat_ps2.c): uma
 diferença entre elas só pode vir da ordem dos bytes. Reaproveita portsrc e eeconst do upstream sem mudá-los;
 janela, controle e rede são trocados por port/x360/headless/sem_janela.c.
@@ -68,6 +73,9 @@ class Alvo:
         # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
         # diverge no quadro 2755).
         self.opt = "-O2"
+        # Só para a prova da VU0: o jogo conserva a ABI soft-float, e os
+        # núcleos novos recebem apenas ponteiros/inteiros em outro objeto.
+        self.vu0_nativo = nome == "ppc" and os.environ.get("BT3_TESTE_VU0_NATIVO") == "1"
         pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
             ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "") + ("l" if alfa else "") + ("e" if lotes else "")
         self.b = ROOT / "port/build" / pasta
@@ -255,11 +263,24 @@ def construir(alvo):
         ponte = f.name in ("plat_libm.c", "plat_fastvec.c")
         soft = alvo.hard if ponte else \
             alvo.soft + ["-DSF_FAST_CALLS", "-include", "math.h", "-include", "stdlib.h", "-include", "port_libm.h"]
+        if alvo.vu0_nativo and nomes:
+            nomes += ["-DPORT_X360", "-Iport/x360/include"]
+        if alvo.vu0_nativo and f.name == "plat_fastvec.c":
+            f = ROOT / "port/x360/headless/vu0_nativo_ponte.c"
+            nomes += ["-Iport/x360/include"]
         cmd = alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-ffp-contract=off",
                          "-fno-builtin", "-w", "-Iinclude", "-Iport/include", "-Iport/src", "-Iport/x360/headless"] + \
             soft + nomes + alvo.instr + \
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
+
+    if alvo.vu0_nativo:
+        f = ROOT / "port/x360/src/f2/vu0_nativo.c"
+        o = alvo.obj / "x360_vu0_nativo.o"
+        cmd = alvo.cc + ["-std=gnu89", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing",
+                        "-ffp-contract=off", "-frounding-math", "-DBT3_TESTE_VU0_NATIVO",
+                        "-Iport/x360/include"] + alvo.hard
+        junta(f, o, run(cmd + [f, "-o", o]))
 
     extras = ["sem_janela", "roteiro", "receitas", "imagens", "ponte_pow", "passos", "memoria", "som"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else []) + (["gpu_falso"] if alvo.gpu else []) + (["gravador"] if alvo.gravador else [])
