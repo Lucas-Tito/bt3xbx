@@ -26,6 +26,7 @@ Kanzenshuu, o guia de modding em vivethemodder.github.io e o LaunchBox).
 | Data | ISO | Executável | Onde testamos | Resultado |
 |---|---|---|---|---|
 | 04/11/2026 | Dragon Ball Z: Budokai Tenkaichi 3 (Dub&Leg PT-BR), 3.730.440.192 bytes | igual ao USA | WSL: conversor no PC e no caminho do console (qemu); jogo na x86 e na PPC sem conversão | **recusada**. Vozes (16.095 entradas do AFS2) e 50 das 61 entradas com conversor convertem; 3 só tinham zeros a mais no fim e passaram. As outras 8 entradas do AFS1 (o menu de Opções e 7 modelos extras de golpes) são o mesmo pacote de menu do Duelo copiado 8 vezes: defeito da ISO. A própria x86, sem conversão, cai ao abrir Opções. Não insistir nela (decisão do Lucas). |
+| 04/11/2026 | "Dragon Ball Z - Budokai Tenkaichi 3 versao brasileira (USA) (EnJa).zip", ISO de 3.020.816.384 bytes | igual ao USA | WSL: comparação byte a byte com a SLUS-21678 | **não é mod**: a ISO dentro do arquivo é idêntica byte a byte à USA original (o nome do arquivo engana). Continua faltando uma Versão Brasileira de verdade. |
 | 04/11/2026 | Budokai Tenkaichi 4 B14 Rev2 (ENG), 5.914.853.376 bytes | **outro** (`SLUS_219.78`, umas 170 funções mudadas) | análise da estrutura no WSL | fora do conversor de mods: vai pela frente do BT4 (decisão 16 revista), com a conversão pelo programa de PC em partes de até 4 GiB |
 
 Para cada ISO nova: conferir `SYSTEM.CNF` e os hashes de `SLUS_216.78` e `BIN/DBZP.BIN`, rodar o inventário dos três
