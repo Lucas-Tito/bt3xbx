@@ -3281,9 +3281,18 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   deixou passar os testes isolados, mas a reconstrução da base x86 parou com `PermissionError`
   em `gen/src/src/sys/gfx_ot.c`: `portsrc.prepare` reescreve as cópias dos fontes.
   Substituir somente o link da worktree por um diretório local, com `src/` gravável;
-  `data/` e `gs/` podem continuar como links de leitura para os dados compartilhados.
+  `gs/` pode continuar como link de leitura para os dados compartilhados.
   Não mudar permissões nem escrever no destino compartilhado. Preparar todos os fontes
   antes da rodada longa confirma essa condição sem iniciar o emulador.
+
+- **Os dados gerados também dependem do caminho da worktree.** A segunda rodada de
+  `vu0-registradores` chegou à base x86, mas o `vu1_micro.data.s` compartilhado continha
+  `.incbin "/home/lucas/bt3xbx/assets/..."`, inacessível ao usuário da tarefa. Como no Deck
+  (seção 1.2b), substituir somente o link `port/build/gen/data` por diretório local e rodar
+  `python3 port/tools/gen_data.py --asm "$PWD/asm"`. Os 72 arquivos regenerados ficaram
+  idênticos aos compartilhados, salvo esse caminho absoluto. O gerador montou os 72 objetos;
+  essa preparação deve preceder os testes longos. Não editar os insumos compartilhados nem
+  criar atalhos para a pasta privada de outro usuário.
 
 - **O recuo IEEE também precisa de prova de bits.** Acrescentar um ramo rápido ao corpo de `Vec4_Scale` mudou
   a alocação de registradores do GCC x86 e a escolha de payload quando dois NaNs diferentes eram multiplicados

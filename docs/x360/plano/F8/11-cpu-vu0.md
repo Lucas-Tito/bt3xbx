@@ -293,6 +293,13 @@ foi corrigida com `src/` local gravável e links de leitura apenas para os insum
 Nenhum fonte de produção mudou. A certificação integral será repetida depois deste registro;
 o relatório externo identifica o novo commit, os caminhos dos logs e seu julgamento.
 
+A repetição em `a6566248` também aprovou os testes isolados, mas a base x86 encontrou um
+segundo problema de preparação: o `.incbin` do `vu1_micro.data.s` compartilhado apontava para
+`/home/lucas/bt3xbx/assets/`, inacessível. O diretório `gen/data` agora é local e foi regenerado
+com `gen_data.py --asm "$PWD/asm"`: 72 arquivos iguais aos compartilhados, salvo o caminho,
+e 72 objetos montados. `gen/gs` continua sendo somente leitura. A certificação será repetida
+integralmente no commit deste registro; o relatório externo guarda o resultado final.
+
 Não há XDK ou console nesta tarefa. No Linux, conferir a execução real da guarda e seus `.dis`,
 os 16 `fmuls` e 12 `fadds` da matriz na ordem original, quatro stores no destino e a ausência dos
 16 produtos e da saída intermediária na pilha. Repetir a guarda com uma cópia compilada que funde.
