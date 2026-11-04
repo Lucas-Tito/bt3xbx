@@ -3276,6 +3276,15 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 
 ### A VU0 nativa do 360 (F8, item 17, 04/11/2026)
 
+- **O diretório de fontes gerados precisa ser local e gravável.** Na certificação de
+  `vu0-registradores`, o link de todo `port/build/gen` para `/srv/bt3/dados/port_build/gen`
+  deixou passar os testes isolados, mas a reconstrução da base x86 parou com `PermissionError`
+  em `gen/src/src/sys/gfx_ot.c`: `portsrc.prepare` reescreve as cópias dos fontes.
+  Substituir somente o link da worktree por um diretório local, com `src/` gravável;
+  `data/` e `gs/` podem continuar como links de leitura para os dados compartilhados.
+  Não mudar permissões nem escrever no destino compartilhado. Preparar todos os fontes
+  antes da rodada longa confirma essa condição sem iniciar o emulador.
+
 - **O recuo IEEE também precisa de prova de bits.** Acrescentar um ramo rápido ao corpo de `Vec4_Scale` mudou
   a alocação de registradores do GCC x86 e a escolha de payload quando dois NaNs diferentes eram multiplicados
   (caso 223680: `ffc57bb7` contra `ffd568fb`). Copiar os operandos antes do ramo não resolveu. Conservar o corpo

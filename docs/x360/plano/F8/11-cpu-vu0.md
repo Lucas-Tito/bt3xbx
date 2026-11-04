@@ -286,6 +286,13 @@ fusão com cópias estragadas, reconstrução da base x86 e comparação dos obj
 O resultado só vale depois de julgado com saída 0 e “tudo certo”. Documentação congelada antes da
 execução para que os carimbos sejam do commit final. Logs em `~/vu0-registradores/`.
 
+A primeira execução de `0f5a2249` aprovou os testes isolados e os quatro mutantes nas quatro
+variantes, mas parou ao reconstruir a base x86: `port/build/gen` inteiro apontava para os dados
+compartilhados de leitura, e `portsrc.prepare` precisa gravar `gen/src/`. A preparação da worktree
+foi corrigida com `src/` local gravável e links de leitura apenas para os insumos compartilhados.
+Nenhum fonte de produção mudou. A certificação integral será repetida depois deste registro;
+o relatório externo identifica o novo commit, os caminhos dos logs e seu julgamento.
+
 Não há XDK ou console nesta tarefa. No Linux, conferir a execução real da guarda e seus `.dis`,
 os 16 `fmuls` e 12 `fadds` da matriz na ordem original, quatro stores no destino e a ausência dos
 16 produtos e da saída intermediária na pilha. Repetir a guarda com uma cópia compilada que funde.
