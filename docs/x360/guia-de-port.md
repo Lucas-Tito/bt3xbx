@@ -3304,3 +3304,17 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   registros no Git antes da rodada oficial; reconstruir e executar o roteiro completo no commit final.
   Depois do aceite, pôr o resultado final no relatório externo, sem criar outro commit documental
   que obrigue uma terceira execução. Nunca reescrever o carimbo dos logs para fazê-los passar.
+
+- **A fronteira sem inlining pode conservar exatamente o custo que se quer tirar.** Na revisão XDK da
+  VU0 de `82ca99f7`, separar produtos e somas evitava fusão, mas forçava 16 produtos na pilha e a
+  releitura imediata deles. A revisão `vu0-registradores` reúne as contas com `fp_contract(off)` e
+  `/fp:precise`, publica escalares diretamente e verifica as quatro famílias fundidas no PE após o
+  link. A cobertura inclui todos os símbolos dos objetos receptores do inlining; não usar LTCG.
+- **Um mutante de arredondamento não pode contaminar o oráculo de hardware.** Mudar a FPU para
+  `FE_TONEAREST` sem restaurar fez o controle de 10 mil casos sobreviver no modelo 360: o oráculo
+  passou a calcular com o mesmo erro. O mutante agora muda o modo só dentro de um produto isolado,
+  conserva o arredondamento em float e restaura o modo antes de devolver. A recusa do controle
+  continua obrigatória nos dois modelos e nas duas arquiteturas.
+- **Contar só `stfs` e `lfs` esconde os laços PPC.** O auxiliar antigo da matriz usa `stfsu`, `lfsu`
+  e `lfsx`. O contador da VU0 agora mostra também as formas indexadas e com atualização; separar
+  contagem estática de operações executadas e distinguir stores no destino de temporários na pilha.

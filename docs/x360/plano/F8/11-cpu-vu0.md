@@ -216,3 +216,77 @@ No XDK: compilar o objeto novo (o `build_f2.sh` já enumera `src/f2/*.c`), confe
 `fnmadds` ou equivalentes nas contas trocadas. Conferir o recuo e os temporários, incluindo pares `stfs/lfs`,
 e comparar as contagens com a build anterior. No console: repetir o amostrador em luta comum, quadros lentos,
 tela dividida e explosão de fato, e medir a thread do jogo. O ganho estimado do estudo continua sem confirmação.
+
+## VU0 em registradores: revisão de 04/11/2026
+
+A revisão XDK da entrega `82ca99f7` aprovou os bits e a ausência de fusão, mas encontrou os 16 produtos
+na pilha entre `Vn_ProdutosMatriz` e `Vn_MtxApply`, além da saída intermediária copiada por `memcpy`.
+Essa fronteira foi retirada no branch `vu0-registradores`. As seções anteriores descrevem a entrega
+anterior; a exigência de manter os produtos fora de linha deixa de valer nesta revisão.
+
+`Vn_Op4` calcula produtos e somas na mesma função. `Vn_MtxApply` carrega os quatro componentes do
+vetor em escalares e faz, por coluna, `a = r[c]*v0 + r[4+c]*v1`, depois `a = a + r[8+c]*v2` e
+`d = a + r[12+c]*v3`. Os quatro resultados escalares são calculados antes de qualquer escrita,
+conservando inclusive alias parcial entre saída e entradas. Cada componente da matriz é lido uma
+vez como float no cálculo; a classificação anterior continua lendo os bits para decidir a guarda.
+A saída é escrita diretamente por `(float *)out`, com quatro stores, sem array de produtos,
+array de saída ou `memcpy` de float para inteiro. Isso depende de `-fno-strict-aliasing` no GCC e
+do modelo de alias do cl usado pelo projeto. A faixa, a recusa sem escrita e os recuos não mudaram.
+Os recuos excepcionais dos vetores continuam sem inlining.
+
+No cl, `#pragma fp_contract(off)` cerca os três núcleos e `on` restaura a opção depois deles;
+conservar `/fp:precise`, sem `/GL`/LTCG. No GCC permanece `-ffp-contract=off`. A guarda nova
+`guarda_vu0_fusao.py`, chamada pelo `build_f2.sh` depois do link e antes do `.xex`, lê o `.map` e
+cobre todas as funções dos objetos `vu0_nativo`, `float360`, `pc_vu0_a` e `pc_vu0_b`, inclusive
+estáticas, além de qualquer `Vn_*`. Isso inclui quem recebe os núcleos inline dentro dessas unidades.
+Sem LTCG não há inlining entre objetos. Se essa política mudar, a cobertura precisa mudar junto.
+A guarda junta faixas contíguas e chama `link.exe /dump /disasm /range:INICIO,FIM`, guardando os
+`.dis` ao lado do `.exe`. Recusa ferramenta com falha, dump sem o endereço inicial, objeto ausente,
+e opcodes das quatro famílias `fmadd`, `fmsub`, `fnmadd`, `fnmsub`, simples ou duplas, com ou sem Rc.
+A decisão usa também os bytes PPC do PE, sem depender da grafia do mnemônico no dump.
+
+`teste_guarda_vu0_fusao.py` passou o PE sintético íntegro e recusou cópias alteradas com `fmsubs`,
+`fmadds`, `fnmsubs` e `fnmadds`, uma em cada objeto, mais as quatro variantes duplas com Rc.
+Também recusou objeto ausente no mapa e dump vazio. Não há bytes do jogo nas entradas de teste.
+A ferramenta de dump é simulada nesse teste; a execução real do Wine/XDK cabe à revisão no Linux.
+
+`teste_vu0_nativo.py --casos 2000000 --mutantes` inclui agora o mutante `fusao`, que usa `fmaf`
+explicitamente na mesma conta, além dos controles de arredondamento, ordem e denormal. Toda
+substituição do mutante exige encontrar o texto alvo, para não aprovar silenciosamente uma cópia
+intacta. O driver também verifica alias parcial diretamente nos núcleos e conserva a semente da
+prova principal. Na PPC, o comando compila também `nucleo_anterior.o` de `82ca99f7` com as mesmas
+opções, sem ligá-lo, para gerar a contagem antes/depois no log da própria rodada.
+
+### Contagem PPC sem troca de arredondamento de teste
+
+GCC `-O2 -ffp-contract=off -frounding-math -fno-strict-aliasing`, sem vetorização nem protetor de pilha,
+como o teste isolado. Contagens estáticas, incluindo nops, sem expandir os laços nem somar chamadas.
+
+| Símbolo | Instruções antes/depois | stfs antes/depois | lfs antes/depois | stfsu antes/depois | lfsu antes/depois | lfsx antes/depois |
+|---|---:|---:|---:|---:|---:|---:|
+| `Vn_MtxApply` | 67 / 86 | 0 / 4 | 3 / 20 | 1 / 0 | 1 / 0 | 0 / 0 |
+| `Vn_ProdutosMatriz` | 16 / removida | 0 / 0 | 0 / 0 | 1 / 0 | 1 / 0 | 1 / 0 |
+
+O auxiliar antigo executa o seu `stfsu` 16 vezes e o chamador grava mais quatro resultados na pilha.
+Os `lfs*` do chamador antigo relêem os 16 produtos. O núcleo novo tem 16 `fmuls`, 12 `fadds`,
+20 leituras float das entradas e quatro `stfs` no destino; nenhum temporário de cálculo na pilha,
+nenhuma chamada ao auxiliar e nenhuma fusão. Há um `stfd`/`lfd` de f31 para conservar o registrador
+exigido pela ABI, separado dos produtos e das saídas. `stfsx` é zero nesses dois símbolos. A contagem estática
+maior vem da expansão dos quatro componentes, antes em laços; não é medida de tempo no Xenon.
+`Vn_Op4` passa de 126 para 108 instruções estáticas; os 12 `stfs` no novo pertencem aos três caminhos
+alternativos, com quatro escritas executadas em cada um. `Vn_Bc4` continua com 14 instruções.
+
+### Certificação e limites desta revisão
+
+A rodada final fica identificada pelo HEAD no relatório externo `~/entrega-vu0-registradores.md`.
+O serviço `bt3-vu0-registradores-oficial` executa `~/vu0-registradores-oficial.sh` sob `~/vez.sh`:
+quatro variantes de 2 milhões de casos, fastvec, quatro mutantes e controles de um bit, guarda de
+fusão com cópias estragadas, reconstrução da base x86 e comparação dos objetos sem depuração e da
+`.text`, C89 e as três builds, seguidas de `SEMMAPA=1 roteiros.sh f5_duelo` sem reuso de logs.
+O resultado só vale depois de julgado com saída 0 e “tudo certo”. Documentação congelada antes da
+execução para que os carimbos sejam do commit final. Logs em `~/vu0-registradores/`.
+
+Não há XDK ou console nesta tarefa. No Linux, conferir a execução real da guarda e seus `.dis`,
+os 16 `fmuls` e 12 `fadds` da matriz na ordem original, quatro stores no destino e a ausência dos
+16 produtos e da saída intermediária na pilha. Repetir a guarda com uma cópia compilada que funde.
+O desempenho no Xenon continua dependendo de medição no console.

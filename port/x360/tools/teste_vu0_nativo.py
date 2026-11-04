@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prova bits da VU0 nativa e conta a desmontagem PPC; sem dados do jogo.
 
-Rodar sob flock ~/wsl.lock, um emulador por vez:
+Rodar sob ~/vez.sh, numa das vagas autorizadas:
   python3 port/x360/tools/teste_vu0_nativo.py [--casos 2000000] [--mutantes]
 Compila o original de --base e o fonte atual, com os modelos inteiro e 360,
 na x86_64 SSE e na PPC big-endian. As cópias e logs ficam em ~/vu0-nativo-testes.
@@ -42,9 +42,25 @@ void Teste_Op(int op,int m,int fd,int fs,int ft,int c) {
         h=(ROOT/'port/x360/src/f2/vu0_nativo.c').read_text().replace(
             '#include "../../include/vu0_nativo.h"', '#include "vu0_nativo.h"')
         header=(ROOT/'port/x360/include/vu0_nativo.h').read_text()
-        if mutante=='ordem': h=h.replace('float a = p[c] + p[4 + c];\n        a = a + p[8 + c];','float a = p[4 + c] + p[8 + c];\n        a = p[c] + a;')
-        if mutante=='denormal': header=header.replace('return a == 0 || (a >= 0x30800000u && a <= 0x4e800000u);','return a <= 0x4e800000u;')
-        if mutante=='arredondamento': h=h.replace('p[i] = a[i] * b[i];','{ int modo = fegetround(); fesetround(FE_TONEAREST); p[i] = a[i] * b[i]; fesetround(modo); }').replace('p[i] = r[i] * v[i / 4];','{ int modo = fegetround(); fesetround(FE_TONEAREST); p[i] = r[i] * v[i / 4]; fesetround(modo); }').replace('#include "vu0_nativo.h"','#include "vu0_nativo.h"\n#include <fenv.h>')
+        def troca(texto, antigo, novo):
+            if antigo not in texto: raise RuntimeError('mutante sem alvo: '+mutante)
+            return texto.replace(antigo, novo)
+        if mutante=='ordem':
+            h=troca(h,'float a = fr[c] * v0 + fr[4 + c] * v1;','float a = fr[4 + c] * v1 + fr[8 + c] * v2;')
+            h=troca(h,'a = a + fr[8 + c] * v2;','a = fr[c] * v0 + a;')
+        if mutante=='denormal': header=troca(header,'return a == 0 || (a >= 0x30800000u && a <= 0x4e800000u);','return a <= 0x4e800000u;')
+        if mutante=='arredondamento':
+            auxiliar = '#include <fenv.h>\nstatic __attribute__((noinline, noclone)) float mut_prod(float a, float b) {\n    int modo = fegetround();\n    volatile float p;\n    fesetround(FE_TONEAREST);\n    p = a * b;\n    fesetround(modo);\n    return p;\n}\n'
+            h=troca(h,'fa[i] * fb[i]','mut_prod(fa[i], fb[i])')
+            for produto in ['fr[c] * v0', 'fr[4 + c] * v1', 'fr[8 + c] * v2', 'fr[12 + c] * v3']:
+                h=troca(h,produto,'mut_prod('+produto.replace(' * ', ', ')+')')
+            h=auxiliar+h
+        if mutante=='fusao':
+            h=troca(h,'float a = fr[c] * v0 + fr[4 + c] * v1;','float a = fmaf(fr[c], v0, fr[4 + c] * v1);')
+            h=troca(h,'a = a + fr[8 + c] * v2;','a = fmaf(fr[8 + c], v2, a);')
+            h=troca(h,'d = a + fr[12 + c] * v3;','d = fmaf(fr[12 + c], v3, a);')
+            h=troca(h,'fc[i] + p','fmaf(fa[i], fb[i], fc[i])')
+            h='#include <math.h>\n'+h
         (pasta/'vu0_nativo.h').write_text(header)
         (pasta/'vu0_nativo.c').write_text(h)
         flags.insert(0,'-I'+str(pasta))
@@ -73,6 +89,12 @@ void Teste_Op(int op,int m,int fd,int fs,int ft,int c) {
     nucleo=pasta/'nucleo.o'
     run([cc,*flags,'-c',pasta/'vu0_nativo.c' if mutante else ROOT/'port/x360/src/f2/vu0_nativo.c','-o',nucleo])
     objetos.append(nucleo)
+    if arch=='ppc' and not mutante:
+        # Mesmas opções para comparar com a fronteira de produtos da entrega anterior.
+        anterior=pasta/'nucleo_anterior.c'
+        anterior.write_text(run(['git','show','82ca99f7:port/x360/src/f2/vu0_nativo.c']).stdout.replace(
+            '#include "../../include/vu0_nativo.h"', '#include "vu0_nativo.h"'))
+        run([cc,*flags,'-c',anterior,'-o',pasta/'nucleo_anterior.o'])
     exe=pasta/'confere'
     run([cc,*flags,'-Wl,--gc-sections',*(['-static'] if arch=='ppc' else []),
          FERR/'teste_vu0_nativo.c',*objetos,'-lm','-o',exe])
@@ -114,7 +136,8 @@ def contagem(pasta):
                 loads=re.findall(r'\blfs\s+[^,]+,(-?\d+)\(r1\)',corpo)
                 pares=sum(min(stores.count(s),loads.count(s)) for s in set(stores))
                 fma=sum(bool(re.search(r'\b(?:f[ n]?madds?|fnmsubs?|fmsubs?)\b',s)) for s in ins)
-                print(f'{f.name}: {nome}: instruções {len(ins)}, pares stw/lfs {pares}, fusões {fma}',flush=True)
+                ops=[s.split()[0] for s in ins]
+                print(f'{f.name}: {nome}: instruções {len(ins)}, stfs {ops.count("stfs")}, lfs {ops.count("lfs")}, stfsu {ops.count("stfsu")}, stfsx {ops.count("stfsx")}, lfsu {ops.count("lfsu")}, lfsx {ops.count("lfsx")}, stfd {ops.count("stfd")}, lfd {ops.count("lfd")}, pares stw/lfs {pares}, fusões {fma}',flush=True)
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--casos',type=int,default=2000000)
@@ -140,7 +163,7 @@ def main():
                 print('cópia estragada',arch,modelo,nome,negativo.returncode,negativo.stdout.strip(),flush=True)
                 if negativo.returncode!=1 or 'FALHA ' not in negativo.stdout: raise RuntimeError('comparador não recusou a cópia')
             if args.mutantes:
-                for mutante in ['arredondamento','ordem','denormal']:
+                for mutante in ['arredondamento','ordem','denormal','fusao']:
                     cmd=montar(pasta/mutante,arch,modelo,args.base,mutante)
                     p=run([*cmd,10000],falha=True)
                     print('mutante',arch,modelo,mutante,'saída',p.returncode,p.stdout.strip(),flush=True)

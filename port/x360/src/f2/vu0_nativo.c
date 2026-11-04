@@ -14,34 +14,34 @@
 #define VN_RESTAURA
 #endif
 
-/* Fronteira de chamada obrigatória, inclusive no cl do XDK: esta função só
- * multiplica, o chamador só soma. Nem /fp:fast pode fundir as duas operações.
- * Os temporários passam como floats, sem stw/lfs de bits intermediários.
- * Não habilitar otimização de programa inteiro nesta fronteira.
+/* O produto arredonda antes da soma, na mesma função. Conservar /fp:precise
+ * e conferir o binário depois do link; no GCC usar -ffp-contract=off.
  */
-static VN_SEM_INLINE void Vn_Produtos(float *p, const float *a, const float *b, int n) {
-    int i;
-    for (i = 0; i < n; ++i) p[i] = a[i] * b[i];
-}
-
+#ifdef _MSC_VER
+#pragma fp_contract(off)
+#endif
 int Vn_Op4(const VnBits *a, const VnBits *b,
                          const VnBits *acc, VnBits *out, int op) {
     const float *fa = (const float *)a, *fb = (const float *)b;
     const float *fc = (const float *)acc;
-    float p[4], r[4];
-    int i;
+    float *fo = (float *)out;
+    float x, y, z, w;
     VN_DECLARA_MODO;
     if (!Vn_Entradas(a, 4) || !Vn_Entradas(b, 4) ||
         (acc && !Vn_Entradas(acc, 4))) return 0;
     VN_TRUNCA;
-    if (op) Vn_Produtos(p, fa, fb, 4);
-    for (i = 0; i < 4; ++i) {
-        if (!op) r[i] = fa[i] + fb[i];
-        else if (acc) r[i] = fc[i] + p[i];
-        else r[i] = p[i];
-    }
+    /* Todos os resultados precedem a escrita, inclusive com saída sobreposta. */
+#define VN_COMPONENTE(i, d) do { \
+    if (!op) d = fa[i] + fb[i]; \
+    else { float p = fa[i] * fb[i]; d = acc ? fc[i] + p : p; } \
+} while (0)
+    VN_COMPONENTE(0, x);
+    VN_COMPONENTE(1, y);
+    VN_COMPONENTE(2, z);
+    VN_COMPONENTE(3, w);
+#undef VN_COMPONENTE
+    fo[0] = x; fo[1] = y; fo[2] = z; fo[3] = w;
     VN_RESTAURA;
-    memcpy(out, r, 16);
     return 1;
 }
 
@@ -52,25 +52,28 @@ int Vn_Bc4(const VnBits *a, VnBits b,
     return Vn_Op4(a, bb, acc, out, op);
 }
 
-/* Carrega os operandos como floats direto da origem, sem cópia inteira na pilha. */
-static VN_SEM_INLINE void Vn_ProdutosMatriz(float *p, const float *r, const float *v) {
-    int i;
-    for (i = 0; i < 16; ++i) p[i] = r[i] * v[i / 4];
-}
-
 int Vn_MtxApply(const VnBits *r, const VnBits *v, VnBits *out) {
-    float p[16], o[4];
-    int c;
+    const float *fr = (const float *)r, *fv = (const float *)v;
+    float *fo = (float *)out;
+    float v0, v1, v2, v3, x, y, z, w;
     VN_DECLARA_MODO;
     if (!Vn_Entradas(r, 16) || !Vn_Entradas(v, 4)) return 0;
     VN_TRUNCA;
-    Vn_ProdutosMatriz(p, (const float *)r, (const float *)v);
-    for (c = 0; c < 4; ++c) {
-        float a = p[c] + p[4 + c];
-        a = a + p[8 + c];
-        o[c] = a + p[12 + c];
-    }
+    v0 = fv[0]; v1 = fv[1]; v2 = fv[2]; v3 = fv[3];
+#define VN_COLUNA(c, d) do { \
+    float a = fr[c] * v0 + fr[4 + c] * v1; \
+    a = a + fr[8 + c] * v2; \
+    d = a + fr[12 + c] * v3; \
+} while (0)
+    VN_COLUNA(0, x);
+    VN_COLUNA(1, y);
+    VN_COLUNA(2, z);
+    VN_COLUNA(3, w);
+#undef VN_COLUNA
+    fo[0] = x; fo[1] = y; fo[2] = z; fo[3] = w;
     VN_RESTAURA;
-    memcpy(out, o, 16);
     return 1;
 }
+#ifdef _MSC_VER
+#pragma fp_contract(on)
+#endif

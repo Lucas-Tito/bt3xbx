@@ -65,6 +65,26 @@ int main(int argc,char **argv) {
         if(Vn_MtxApply(r,v,out)!=esperado) { printf("FALHA desistência: %08x\n",r[0]);return 1; }
         if(!esperado) confere("desistência sem escrita",i,out,antes,16);
     }
+    /* Os núcleos publicam só depois das leituras, mesmo com alias parcial. */
+    for(i=0;i<1000;i++) {
+        uint32_t r[20], v[8], acc[8], o[4], sobreposto[20];
+        int k;
+        for(k=0;k<20;k++) r[k]=numero(1);
+        for(k=0;k<8;k++) { v[k]=numero(1); acc[k]=numero(1); }
+        if(!Vn_MtxApply(r,v,o)) return 2;
+        memcpy(sobreposto,r,sizeof(r));
+        if(!Vn_MtxApply(sobreposto,v,sobreposto+1)) return 2;
+        confere("matriz alias parcial r",i,o,sobreposto+1,16);
+        memcpy(sobreposto,v,sizeof(v));
+        if(!Vn_MtxApply(r,sobreposto,sobreposto+1)) return 2;
+        confere("matriz alias parcial v",i,o,sobreposto+1,16);
+        if(!Vn_Op4(r,v,acc,o,1)) return 2;
+        memcpy(sobreposto,acc,sizeof(acc));
+        if(!Vn_Op4(r,v,sobreposto,sobreposto+1,1)) return 2;
+        confere("op alias parcial acc",i,o,sobreposto+1,16);
+    }
+    /* A cobertura pseudoaleatória principal conserva a semente anterior. */
+    estado=0x91f3e2a5u;
     for(i=0;i<n;i++) {
         RefMtx44 a,b,an,bn,ao,bo;
         RefVec4f va,vb,x,y,xx,yy;

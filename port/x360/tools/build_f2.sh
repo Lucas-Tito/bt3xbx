@@ -113,6 +113,12 @@ if [ ! -s $OUT/default.exe ] || grep -q "error LNK" $OUT/link.txt; then
   exit 1
 fi
 
+# Sem LTCG, a VU0 só pode entrar inline nos próprios objetos. A guarda cobre
+# todos os símbolos deles e os Vn_ presentes no mapa, antes de gerar o .xex.
+python3 port/x360/tools/guarda_vu0_fusao.py $OUT/default.exe $OUT/default.map --comando-dump \
+  docker run --rm -v "$RAIZ":/app -w /app -e WINEDEBUG=-all "$IMAGEM" \
+  wine /xdk/bin/win32/link.exe
+
 # a guarda do Sprite_Unpack nomeia quem chamou pela tabela CHAMADORES (conv_jogo.c): toda chamada no binário tem de
 # cair numa função da tabela (o inlining do cl podia mudar o nome sem aviso)
 python3 port/x360/tools/chamadores_bl.py $OUT/default.exe $OUT/default.map || exit 1
