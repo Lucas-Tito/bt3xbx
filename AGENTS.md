@@ -28,8 +28,9 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
   objetos iguais sem a depuração (`objcopy --strip-debug` e `cmp` contra a base). A referência atual está no índice
   do plano ou no arquivo da última etapa.
 - **Roteiros na PPC: `SEMMAPA=1`, nunca `PPC=1`.**
-- **Um ciclo de emulador por vez** (dois `roteiros.sh` ou dois `qemu-ppc` juntos travam o WSL). Antes de rodar, confira
-  `pgrep -af "qemu|roteiros"`.
+- **Emulador só pela vez: `~/vez.sh COMANDO`, até 3 juntos.** O `vez.sh` espera uma vaga livre (a vaga 1 é a antiga
+  `~/wsl.lock`) e devolve o código do comando. Nada de `qemu-ppc` ou `roteiros.sh` solto fora dele: dois sem controle já
+  travaram o WSL. Script de rodada não pode recusar outro `qemu` rodando.
 - **Todo verificador novo tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer.
 - Todo aprendizado que custou uma rodada entra no guia, no mesmo commit da correção.
 - Processo longo: rode com `tee` para um log em `~/` (o `/tmp` do WSL some quando a distribuição para).

@@ -125,8 +125,8 @@ respostas (vibração, 16:9 pelo painel) e da caixa de tempo dos gaps. Opções,
 entrarem, somam os tamanhos do inventário.
 
 [Estimado] Ordem: 1 primeiro (destrava o resto e só pede o Lucas no console); 2, 3 e 5 depois, em paralelo, porque
-não usam emulador além das regressões; 4 quando a F5 assentar; 6 por último. Regra das máquinas: um ciclo de emulador
-por vez no WSL, e as regressões da F8 entram na fila dos lotes da F7, não ao lado deles.
+não usam emulador além das regressões; 4 quando a F5 assentar; 6 por último. Regra das máquinas: emulador no WSL só
+pelo `~/vez.sh`, até 3 juntos (era um por vez até 04/11), e as regressões da F8 entram na fila dos lotes da F7, não ao lado deles.
 
 ## 4. A release em si
 

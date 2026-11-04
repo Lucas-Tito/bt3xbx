@@ -1609,8 +1609,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **O `cl` do 360 com `-fp:precise` não funde `a*b + c` em `fmadds`** (testado em 04/11 com as opções da nossa build, com e
   sem `#pragma fp_contract(off)`, que ele aceita). Separar as multiplicações numa função `noinline` para impedir a fusão
   só acrescenta load-hit-store; confira a fusão na desmontagem, com uma guarda no build.
-- **Vez do emulador com 3 vagas (`~/vez.sh`, teste de 04/11).** Um emulador usa uns 20 MB e pouco mais de uma thread;
-  três juntos, com compilações, ficaram com o WSL respondendo em 0 a 1 s e a memória em até 5,6 GB dos 7,8 do WSL. A
+- **Vez do emulador com 3 vagas (`~/vez.sh`, testada e adotada em 04/11; substitui o "um ciclo por vez").** Um emulador
+  usa uns 20 MB e pouco mais de uma thread; três juntos, com compilações, ficaram com o WSL respondendo em 0 a 1 s e a
+  memória em até 5,6 GB dos 7,8 do WSL. O que travava antes eram dois ciclos soltos, sem vaga controlando. A
   trava antiga vira a vaga 1, então script que ainda faz `flock ~/wsl.lock` disputa só ela. Script de rodada não pode
   ter guarda que recuse outro `qemu` rodando.
 
