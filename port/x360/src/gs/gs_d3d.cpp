@@ -94,6 +94,8 @@ volatile unsigned gGsD3dQuadros;
 int Port_AspectMilli(void);  /* plat_stub.c */
 }
 #include "gs_vs.h" /* gerados pelo fxc no build (gs_d3d.hlsl): kGsVs, kGsPs, kCopiaVs, kCopiaPs */
+#include "gs_bloco_ps.h"
+#include "gs_baixo_vs.h"
 #include "gs_ps.h"
 #include "copia_vs.h"
 #include "copia_ps.h"
@@ -153,6 +155,8 @@ static unsigned sTamAlvo; /* bytes de uma textura de alvo (tam_alvo) */
 #define MB (1u << 20)
 
 static D3DDevice *sDev;
+static D3DVertexShader *sVsGsBaixo;
+static D3DPixelShader *sPsGsBloco;
 static D3DVertexShader *sVsGs, *sVsCopia;
 static D3DPixelShader *sPsGs, *sPsCopia, *sPsFilme;
 static D3DVertexDeclaration *sDeclGs, *sDeclCopia;
@@ -2165,6 +2169,9 @@ static D3DPixelShader *ps_escolhe(const GsDraw *d, int estado) {
     int z = estado >= 2 && sCorte;
     if (sPsTrivial & (estado >= 2 ? 2u : 1u)) {
         return sPsTriv[z];
+    }
+    if (!d->vu && d->mode[0] == 2 && d->orig[0] != 0.0f && sEscF > 1.0f) {
+        return sPsGsBloco;
     }
     if (afiado_usa(d, estado)) {
         sAfDes++;
@@ -5055,7 +5062,9 @@ static int d3d_init(void) {
         Diario_Escrever("gs_d3d: ERRO: Vtx %u bytes, GsDraw %u bytes", (unsigned)sizeof(Vtx), (unsigned)sizeof(GsDraw));
         return 0;
     }
-    if (FAILED(sDev->CreateVertexShader((const DWORD *)kGsVs, &sVsGs)) || FAILED(sDev->CreatePixelShader((const DWORD *)kGsPs, &sPsGs)) ||
+    if (FAILED(sDev->CreateVertexShader((const DWORD *)kGsBaixoVs, &sVsGsBaixo)) ||
+        FAILED(sDev->CreatePixelShader((const DWORD *)kGsBlocoPs, &sPsGsBloco)) ||
+        FAILED(sDev->CreateVertexShader((const DWORD *)kGsVs, &sVsGs)) || FAILED(sDev->CreatePixelShader((const DWORD *)kGsPs, &sPsGs)) ||
         FAILED(sDev->CreateVertexShader((const DWORD *)kCopiaVs, &sVsCopia)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kCopiaPs, &sPsCopia)) || FAILED(sDev->CreateVertexDeclaration(elemGs, &sDeclGs)) ||
         FAILED(sDev->CreatePixelShader((const DWORD *)kZCorPs, &sPsZCor)) ||
@@ -5363,7 +5372,8 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     float c[16];
     int x0 = d->scissor[0], y0 = d->scissor[1], x1 = d->scissor[0] + d->scissor[2], y1 = d->scissor[1] + d->scissor[3];
     int borda = 0, af = afiado_usa(d, estado), samp;
-    int chave = af ? 5 : estado; /* (BT3_AFIADO) a arte 2D afiada: o vs_gs_af e a declaração com a caixa */
+    int baixo = !d->vu && d->orig[3] != 0.0f;
+    int chave = baixo ? 6 : af ? 5 : estado; /* (BT3_AFIADO) a arte 2D afiada: o vs_gs_af e a declaração com a caixa */
 
     if (esc_prende(&x0, &y0, &x1, &y1, sAreaW, sAreaH) && d->count != 0) {
         corte_conta(d, 0);
@@ -5372,10 +5382,12 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         return 0;
     }
     /* (720p, etapa 3) a tesoura em pixels de saída: a mesma regra nas duas bordas (esc_px) */
-    x0 = esc_px(x0, sEscN, sEscD);
-    y0 = esc_px(y0, sEscN, sEscD);
-    x1 = esc_px(x1, sEscN, sEscD);
-    y1 = esc_px(y1, sEscN, sEscD);
+    if (!baixo) {
+        x0 = esc_px(x0, sEscN, sEscD);
+        y0 = esc_px(y0, sEscN, sEscD);
+        x1 = esc_px(x1, sEscN, sEscD);
+        y1 = esc_px(y1, sEscN, sEscD);
+    }
     /* (720p, etapa 2) um alvo lido como textura com a área menor que o alvo lógico: o que passar da área sai preto (a
        borda, o que antes era a parte limpa) e é contado */
     if (d->mode[0] == 2 && (sAreaW < GS_W || sAreaH < GS_H)) {
@@ -5384,7 +5396,7 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
     }
     if (sEstadoGs != chave) {
         CADEIA_CHAMADA(CA_ESTADO, sDev->SetVertexDeclaration(estado >= 2 ? sDeclVu : af ? sDeclGsAf : sDeclGs));
-        CADEIA_CHAMADA(CA_ESTADO, sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : af ? sVsGsAf : sVsGs));
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetVertexShader(estado >= 2 ? sVsVu[estado - 2] : baixo ? sVsGsBaixo : af ? sVsGsAf : sVsGs));
         /* (F5, etapa 7, segunda parte) a VU1 com o recorte pelo w: a profundidade por pixel (ps_gsz, vu_pos); (720p,
            retomada) com as chaves, a variante do desenho (ps_escolhe) */
         if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
@@ -5400,13 +5412,21 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
             CADEIA_CHAMADA(CA_ESTADO, sDev->SetIndices(sVuIbQ));
         }
         sEstadoGs = chave;
-    } else if (sPsTrivial != 0 || (sOtim & OT_PS) || (sAfiado & AF_ARTE) || sSemTex) {
+    } else { /* a variante de blocos pode mudar entre dois desenhos do mesmo estado */
         D3DPixelShader *ps = ps_escolhe(d, estado);
         if (ps != sCurPs) {
             if (sComumGpu && sTempo.quadro) sComumApi[C_PS]++;
             CADEIA_CHAMADA(CA_ESTADO, sDev->SetPixelShader(ps));
             sCurPs = ps;
         }
+    }
+    if (baixo) {
+        float vd[4] = {(float)sAreaW / sAlvoW, (float)sAreaH / sAlvoH, 0.0f, 0.0f};
+        CADEIA_CHAMADA(CA_UNIFORME, sDev->SetVertexShaderConstantF(13, vd, 1));
+    }
+    if (!d->vu && d->orig[0] != 0.0f && sEscF > 1.0f) {
+        float bc[4] = {sEscF, 0.0f, 0.0f, 0.0f};
+        CADEIA_CHAMADA(CA_UNIFORME, sDev->SetPixelShaderConstantF(10, bc, 1));
     }
     aplica_pipe(d->pipeline);
     if (d->tex != sCurTex) {
@@ -5462,6 +5482,12 @@ static int prepara(const GsDraw *d, int estado, Ret *area) {
         if (d->mode[0] == 2) {
             e[0] = (float)GS_W / sAreaW; /* (etapa 3: a textura cobre a área do GS, em qualquer escala) */
             e[1] = (float)GS_H / sAreaH;
+            if (!d->vu && d->orig[1] != 0.0f) {
+                /* A fonte nativa ocupa o canto, inclusive no retorno ao quadro.
+                   O Resolve e o DATE mantêm o tamanho físico e os retângulos reais. */
+                e[0] = (float)GS_W / sAlvoW;
+                e[1] = (float)GS_H / sAlvoH;
+            }
         }
         if (e[0] != sCurEsc[0] || e[1] != sCurEsc[1]) {
             CADEIA_CHAMADA(CA_UNIFORME, sDev->SetPixelShaderConstantF(6, e, 1)); /* (só o gs_pixel lê o c6; ninguém mais o escreve) */

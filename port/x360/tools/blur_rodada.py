@@ -159,6 +159,7 @@ def main():
     logbase = (SAIDA / "base-x86.log").read_text()
     quadros = re.findall(r"^imagem: \S+ quadro \d+ vblank \d+ gs (\d+)", logbase, re.M)
     (SAIDA / "quadros-console.txt").write_text(",".join(quadros) + "\n")
+    (pc / "port/build/shots").mkdir(parents=True, exist_ok=True)
     for escala in (1, 2):
         for caso in ["base", *[c.lower() for c in CHAVES]]:
             pasta = SAIDA / "pc" / str(escala) / caso

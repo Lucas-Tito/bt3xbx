@@ -1,5 +1,6 @@
 #ifdef PORT_X360 /* diagnóstico do desfoque */
 extern int Port_DesfoqueOff(int efeito);
+extern void Port_GsMarker(int efeito);
 #endif
 #include "common.h"
 
@@ -1643,6 +1644,7 @@ void StgFog_Draw(void) {
     if (Port_DesfoqueOff(0)) {
         return;
     }
+    Port_GsMarker(0x22);
     Dma_AddData(tone->load, 0x10);
 #else
     Dma_AddData(tone->load, 0x10);
@@ -1695,6 +1697,9 @@ void StgFog_Draw(void) {
         Dma_PutTexStrips((GsQword **)&p, 0, 0, width, srcH, 0, 0, 0, 0, half, h, 8, 8, 0x80808080, 1);
         Dma_EndDirect(p);
     }
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    Port_GsMarker(0x23);
+#endif
 }
 
 /* Takes the three control points from the stage's parameters (defaults when NULL) and rebuilds the table. */

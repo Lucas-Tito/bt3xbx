@@ -1,7 +1,8 @@
 # F8: diagnóstico da imagem macia no console
 
 Branch `blur-analise`, base 1.0.2 `9c69c4ba`. Referência de PC: `troca/ref/upstream-main`, `48d66c1f`.
-Sem console e sem XDK no WSL. A causa visual continua pendente de capturas equivalentes do console.
+Sem console e sem XDK no WSL. Estado atual na seção de fase 2 abaixo: o Lucas identificou
+o desfoque da distância em sessão livre; a medição por capturas equivalentes ainda está pendente.
 
 ## Rodada preparada
 
@@ -152,9 +153,9 @@ Os resultados e logs vão para `~/blur-analise/`; capturas e dados permanecem fo
 iniciais ganharam `environment_b15_clima.txt`, totalizando **dezesseis**, e a bruma foi movida do corte do grupo
 para o corte do desenho, para não mudar o gerador aleatório. O pedido atualizado fica em `~/blur-pedido-console.md`.
 
-## Julgamento e proposta conservadora
+## Julgamento inicial e proposta conservadora (histórico)
 
-**Não há culpado comprovado nesta entrega parcial.** A hipótese do FXAA sempre ligado é incompatível com o
+**Estado antes do retorno do console:** não havia culpado comprovado nesta entrega parcial. A hipótese do FXAA sempre ligado é incompatível com o
 padrão lido, mas ainda é preciso conferir o ambiente real do console. A hipótese de um efeito de luta explicar
 letras macias no menu pede uma diferença que comece antes da cópia final; o código dos efeitos do estágio não
 é executado pelos menus. A saída final e a TV continuam candidatas para maciez geral.
@@ -256,3 +257,112 @@ os oito pares x86/PPC e os dezesseis casos do PC. Usa uma vaga de `~/vez.sh` dur
 a guarda global de qemu foi retirada conforme a autorização de três vagas da tarefa. Os resultados da
 primeira rodada são preservados separados. A coleta corrigida ainda exige julgamento; nenhuma causa
 visual foi declarada e nenhuma correção de imagem foi ativada por padrão.
+
+
+## Fase 2: retorno do console e tratamentos do PC (04/11, segunda retomada)
+
+O `LEIA-ME.md` recebido em `~/blur-resultado/` registra o teste do Lucas com `4310e558`:
+sem `StgFog_Draw`, o incômodo desapareceu. Ele quer conservar algum desfoque e comparar o tratamento do PC.
+O log confirma o corte alcançado. Foram inspecionados os quatorze quadros `gpu` em contato visual:
+o treino é em uma arena gramada, diferente da cidade do roteiro local. Não existe captura da base
+nessa sessão, porque faltou `BT3_LOG=1`. Portanto a identificação vem da observação do Lucas;
+não existe ainda uma diferença quantitativa base/corte no mesmo estágio, pose, câmera e tempo.
+Não atribuir os interiores do cenário ao fragmento de profundidade do MSAA sem essa prova.
+
+### Rodada encerrada de 4310e558
+
+| Conferência | Resultado |
+|---|---|
+| Builds x86/x86r/PPC | concluídas; PPC com 1965 structs, zero diferentes |
+| Objetos x86 sem depuração | 326 iguais; só x360_passos.o difere pelo carimbo |
+| .text x86 | idêntica à base: SHA1 94fe2737c0b9f6663ca659685be77a7cd1d36659 |
+| SEMMAPA=1 IMG=1 roteiros.sh f5_duelo | código 0, tudo certo; 13/13 capturas idênticas |
+| Cortes independentes | 8 casos, 6 momentos cada: 48/48 pares x86/PPC idênticos |
+| Pixel adulterado em cópia | recusado, (639,447), desvio 255 |
+| PC GL atual | iniciou e terminou com 0, mas nenhum PPM; fopen falhou sem pasta shots |
+
+Pixels alterados pelo corte contra a base no rasterizador de ponto, em imagens 640x448:
+
+| Corte | Menu | Seleção | Apresentação | Combate | Técnica | Pausa |
+|---|---:|---:|---:|---:|---:|---:|
+| Distância | 0 | 0 | 4897 | 21340 | 7361 | 5917 |
+| Panorâmico | 0 | 0 | 0 | 97690 | 0 | 0 |
+| Radial | 0 | 0 | 0 | 0 | 0 | 0 |
+| Bruma/calor | 0 | 0 | 0 | 0 | 0 | 0 |
+| Névoa | 0 | 0 | 84467 | 116732 | 80106 | 72950 |
+| Brilho | 0 | 0 | 198655 | 194904 | 173896 | 159790 |
+| Clima | 0 | 0 | 142299 | 196747 | 0 | 0 |
+
+Ausência de diferença no radial ou calor não os descarta em outros quadros. A comparação de clima
+mantém a movimentação e os aleatórios; o rasterizador não reproduz o bilinear dos efeitos da GPU.
+Os números medem influência nesse roteiro, não a nitidez da imagem do console.
+
+### Implementação opcional, sem trocar o padrão
+
+| Chave, padrão 0 | O que faz |
+|---|---|
+| BT3_SHARP_BLUR | Com blocos ligados, mantém amostragem na resolução interna fora das cadeias marcadas; dentro, conserva o tratamento da cadeia. |
+| BT3_DISTANCIA_NATIVA | Delimita StgFog com marcadores 0x22/0x23; a página reduzida 0x150 recebe um texel físico por pixel do GS só durante a cadeia. |
+| BT3_DISTANCIA_MEDIA | Na redução da imagem para a página nativa, interpola quatro médias de blocos do GS; depende de DISTANCIA_NATIVA. |
+| BT3_GLOW_BLOCK | Traduz o GS_BLOCK/gswb.frag: só fontes de trabalho bilineares entre alvos de trabalho, mais a redução para alvos nativos; nunca a composição final inteira. |
+| BT3_GLOW_NATIVE | Delimita GfxPost_DrawGlow com 0x20/0x21; páginas 0x150/0x170/0x1F6/0x1F8 em resolução 1 só dentro da cadeia. |
+
+A 1.0.2 já amostra fora das cadeias na resolução interna. Por isso `SHARP_BLUR=1` sozinho não
+pode criar detalhe novo: deve ser comparado com `GLOW_BLOCK=1, SHARP_BLUR=0`, como no pedido.
+As correções de distância do PC podem **aumentar** sua suavização: corrigem a perda de força com
+a escala, não reduzem a intensidade da CLUT. Nenhuma foi apresentada como solução visual aprovada.
+
+O frontend guarda a seleção em `GsDraw.orig` (x: blocos; y: fonte nativa; w: destino nativo),
+sem mudar o layout de 128 bytes. Os bits viajam com o retrato já usado pela thread de desenho.
+O backend aplica a escala física na reprodução, porque `gsScale` do 360 é sempre 1:
+
+- `vs_gs_baixo` leva só as posições dos destinos marcados para o canto nativo; a tesoura também fica em pixels nativos.
+- Fontes nativas usam uv multiplicado por GS_W/sAlvoW e GS_H/sAlvoH. Fontes comuns mantêm GS_W/sAreaW e GS_H/sAreaH.
+  O meio pixel dos sprites e o CLAMP continuam os mesmos do frontend; nenhuma troca global de centro de pixel.
+- `ps_gs_bloco` compartilha o corpo do shader normal, inclusive DATE, teste de alfa e FBA. Só a leitura muda:
+  bilinear manual entre quatro texels do GS, cada centro preso ao CLAMP, e a média interna do bloco do PC.
+  O shader comum recebe o parâmetro constante falso, sem as leituras extras. Os shaders novos entram no build_f2.sh.
+- EDRAM, alocação, residência e Resolve mantêm seus objetos e fluxo. O retângulo sujo usa a tesoura física real;
+  nenhuma textura é lida diretamente na EDRAM. O quadro com MSAA e sua profundidade permanecem na escala normal.
+  A página temporária continua com uma amostra. Não há mudança no cálculo de profundidade ou na CLUT da distância.
+
+Custo que dá para delimitar sem console: nos blocos, quatro leituras bilineares por fragmento nas
+escalas até 2, contra uma no caminho comum; acima de 2,5, são dezesseis como no PC. Na escala 2,
+uma leitura no centro é a média exata do bloco 2x2. Nas escalas fracionárias 4/3 e 1,4, é a
+adaptação do filtro do PC ao bloco fracionário, ainda sem prova D3D. Alvos nativos reduzem o número
+de fragmentos do miolo por aproximadamente 1,78 e 1,96, respectivamente; não reduzem a memória
+alocada, pois usam o canto da textura existente. A composição final continua uma leitura por pixel.
+O GL disponível é llvmpipe, em CPU: seus tempos não medem a GPU Xenos. Custo de GPU real fica pendente.
+
+`BT3_FX_OFF` agora preserva os oito bits tanto na leitura do ambiente quanto em SetSettings, dentro
+da guarda big-endian e com o original no else. Os bits 32 e 64 entram nos cortes do panorâmico e clima;
+128 desenha metade das partículas, arredondando para cima, depois do movimento, como o PC.
+Os sete cortes independentes continuam disponíveis. Todos os padrões e FX_OFF=0 ficam como antes.
+
+### Conferência e próxima espera
+
+Os testes C89 da política passaram, incluindo cadeia encerrada, reuso da página, seleção
+de fonte nativa, separação de brilho/distância e composição final fora do caminho caro. O teste foi
+visto recusando uma cópia que aplicava Sharp também dentro da cadeia. Os 256 valores da máscara
+passaram no núcleo dos cortes, e as 128 combinações dos cortes independentes continuaram passando.
+O preparador C89 produziu os quatro fontes alterados sem falhas; isso não equivale à compilação XDK.
+A build x86bgv do frontend real também ligou com 401 objetos e 104 stubs.
+
+O novo comparador de metadados recusa flag inválida, máscara truncada e lista vazia, em cópias
+adulteradas. Ele só prova seleção de passes, não prova os shaders, DATE ou Resolve do D3D real.
+A cópia do PC foi recompilada e ligada com 104 stubs. A coleta passa a criar shots antes de executar;
+a verificação de presença/tamanho continua obrigatória e já foi vista falhando na retomada anterior.
+
+`blur_fase2.py`, sob uma vaga de `~/vez.sh`, começa pela coleta base do PC para não repetir horas
+antes de detectar a mesma falha; depois recompila o commit final, prova objetos/.text, repete o
+critério oficial e coleta as seis variantes na x86/PPC, em software e na gravação GPU. Também
+exercita FX_OFF=224 no frontend. A coleta PC usa escalas 1 e 2, as oito variantes livres e os sete
+cortes. A instrumentação só da cópia descartável permite separar os marcadores e a média na redução;
+não se alterou `troca/ref/upstream-main`. O recurso PNG indisponível na SDL local continua explicitamente
+fora dessa cópia de diagnóstico, inclusive substituições de arte, sem impedir captura dos alvos do jogo.
+
+O pedido curto está em `~/blur-pedido-console-2.md`; os oito ambientes livres em `~/blur-console-2/`.
+Todos têm `BT3_LOG=1`, `BT3_SHOT=300`, sem roteiro. O gerador da fase 1 também ganhou LOG=1.
+Resultados locais em `~/blur-analise/fase2/`. Ainda faltam a rodada oficial do novo commit,
+o julgamento do alinhamento/capturas por regiões, a compilação XDK e a escolha visual no console.
+Não marcar a tarefa concluída por a coleta acabar. O relatório registra o serviço e o marcador.

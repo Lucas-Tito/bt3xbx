@@ -1,5 +1,6 @@
 #ifdef PORT_X360 /* diagnóstico do desfoque */
 extern int Port_DesfoqueOff(int efeito);
+extern void Port_GsMarker(int efeito);
 #endif
 #include "common.h"
 #include "battle/battle.h"
@@ -647,6 +648,7 @@ void GfxPost_DrawGlow(s32 passes, u32 color, u32 glow) {
     if (Port_DesfoqueOff(5)) {
         return;
     }
+    Port_GsMarker(0x20);
     passes += passes & 1;
 #else
     passes += passes & 1;
@@ -1066,6 +1068,9 @@ void GfxPost_DrawGlow(s32 passes, u32 color, u32 glow) {
     p[1] = PS2_PKT64(GS_CLAMP_1);
     p += 2;
     Dma_EndDirect(p);
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    Port_GsMarker(0x21);
+#endif
 }
 
 /* Draws a 16-bit texture over the screen, one line up, with the given blend. */

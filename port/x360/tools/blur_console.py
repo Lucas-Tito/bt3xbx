@@ -29,7 +29,7 @@ def preparar(destino):
         shutil.copyfile(RAIZ / "port/x360/roteiros" / nome, destino / nome)
     for nome, ajustes in CASOS:
         ambiente = {
-            "BT3_ISO": "game:\\bt3-x360.iso", "BT3_ROTEIRO": "game:\\f5_duelo.txt",
+            "BT3_LOG": "1", "BT3_ISO": "game:\\bt3-x360.iso", "BT3_ROTEIRO": "game:\\f5_duelo.txt",
             "BT3_SAVES": "game:\\sv_blur_" + nome, "BT3_SETTINGS": "",
             "BT3_NOMOVIE": "1", "BT3_NOSOUND": "1", "BT3_SOUND_TICKS": "1",
             "BT3_DESBLOQUEIO": "1", "BT3_MENU_ITEM4": "0", "BT3_WIDE": "1",

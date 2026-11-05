@@ -3300,3 +3300,16 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   do nível base e os efeitos do cenário antes de atribuir a maciez a K/L ou viés de LOD.
 - Na coleta autorizada com três vagas, use `~/vez.sh` e não acrescente guarda global contra outro qemu:
   ela anula as outras vagas. Cada ciclo continua serial dentro da vaga, com dados e saídas próprios.
+
+- Sem `BT3_LOG=1`, o filtro de diagnóstico do 360 ignora `BT3_SHOT*`. Incluir LOG em todo gerador
+  de ambientes de captura e conferir a existência dos arquivos na primeira abertura. A primeira base
+  do desfoque não gravou nada, impedindo uma diferença quantitativa contra o corte da distância.
+- O GL do PC abre `port/build/shots/gpu_*.ppm` com fopen e pode terminar com código 0 sem gravar
+  se a pasta não existir. Crie a pasta antes da coleta e exija o conjunto inteiro de PPM depois.
+  Na rodada de 4310e558, as 48 capturas x86/PPC passaram, mas o PC terminou sem nenhuma imagem.
+- O `Sharp stage blur` do PC só protege os passes fora das cadeias marcadas. As correções recentes
+  de distância recuperam força perdida ao aumentar a resolução e podem borrar mais. Não prometer
+  maior nitidez só por portar esse conjunto, nem usar números GS iguais como prova de pose/câmera iguais.
+- No 360, `gsScale` fica em 1 mesmo quando a resolução física é 1,4. A redução nativa precisa viajar
+  como estado de cada desenho e ser aplicada na reprodução D3D. Não mudar a página inteira por quadro:
+  a página 0x150 também recebe sombras, calor e lente fora das cadeias. Resolver e marcar sujo em pixels físicos.

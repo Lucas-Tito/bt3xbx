@@ -1,5 +1,6 @@
 #ifdef PORT_X360 /* diagnóstico do desfoque */
 extern int Port_DesfoqueOff(int efeito);
+extern int Port_ClimaQuantidade(int quantidade);
 #endif
 #include "common.h"
 #include "battle/eft_c.h"
@@ -644,6 +645,7 @@ void EftWeatherPtcl_Draw(EftTask *task) {
         }
         if (!(gBtlStage->flags & 1)) {
 #ifdef PORT_X360 /* diagnóstico do desfoque */
+            count = Port_ClimaQuantidade(count);
             if (!Port_DesfoqueOff(6) && EftStage_IsDrawOn()) {
 #else
             if (EftStage_IsDrawOn()) {

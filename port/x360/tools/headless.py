@@ -248,6 +248,14 @@ def construir(alvo):
         if f.stem in GS_SEM_SDL or (alvo.gpu and f.stem == "gs_draw"):
             o = alvo.obj / ("gs_" + f.stem + ".o")
             sdl360 = ["-Iport/x360/src/gs/sdl"] if f.stem == "gs_draw" else []
+            fonte_gs = f
+            if alvo.desfoque and f.stem == "gs_draw":
+                fonte_gs = alvo.b / "diagnostico" / f.name
+                fonte_gs.parent.mkdir(parents=True, exist_ok=True)
+                fonte_gs.write_text(f.read_text().replace(
+                    "#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */",
+                    "#if 1 /* tratamento do desfoque */"))
+                sdl360 += ["-I" + str(f.parent)]
             # (--gpu: -DBT3_GPU_FALSO no gs_core.c, a medida dos bytes da cadeia por quadro, e no gs_draw.c, as chaves de teste
             # da divisão do degrau 2; as builds sem --gpu não a têm)
             if alvo.gravador and f.stem in GRAVA:  # (F6, rede 4: o mesmo arquivo, dentro do que o expõe ao gravador)
@@ -255,7 +263,7 @@ def construir(alvo):
                 continue
             junta(f, o, compile_ee(alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-w"] +
                                    (["-DBT3_GPU_FALSO"] if alvo.gpu and f.stem in ("gs_core", "gs_draw") else []) + alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) + sdl360 +
-                                   ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], f, o, ee=False, be=alvo.be))
+                                   ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], fonte_gs, o, ee=False, be=alvo.be))
 
     # a camada do port: aritmética do PS2 em software, menos as duas pontes com a FPU (interface só de inteiros)
     for f in [ROOT / "src/port/vu0_a.c", ROOT / "src/port/vu0_b.c"] + sorted((ROOT / "port/src").glob("*.c")):

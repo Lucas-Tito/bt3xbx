@@ -10,6 +10,10 @@ int Port_DesfoqueOff(int efeito) {
     static int iniciou, desligados, vistos;
     int i, bit = 1 << efeito;
     if (!iniciou) {
+        const char *v = getenv("BT3_FX_OFF");
+        int fx = v != NULL ? atoi(v) & 255 : 0;
+        if (fx & 32) desligados |= 1 << 1;
+        if (fx & 64) desligados |= 1 << 6;
         for (i = 0; i < 7; i++) {
             const char *v = getenv(nomes[i]);
             if (v != NULL && atoi(v) != 0) desligados |= 1 << i;
@@ -22,4 +26,10 @@ int Port_DesfoqueOff(int efeito) {
         vistos |= bit;
     }
     return (desligados & bit) != 0;
+}
+
+/* Só muda a quantidade desenhada; movimento e aleatórios continuam iguais. */
+int Port_ClimaQuantidade(int quantidade) {
+    const char *v = getenv("BT3_FX_OFF");
+    return v != NULL && (atoi(v) & 128) ? (quantidade + 1) / 2 : quantidade;
 }

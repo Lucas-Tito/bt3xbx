@@ -82,5 +82,45 @@ def preparar(pc):
     print("blur_pc: cópia instrumentada; exige BT3_PAD_PLAY da x86 e cartão inicialmente vazio")
 
 
+def preparar_fase2(pc):
+    """Abre cada tratamento na cópia de PC já instrumentada, para comparação."""
+    if pc.resolve() == RAIZ or (pc / ".git").exists():
+        raise SystemExit("use somente a cópia descartável do PC")
+    if (pc / "BLUR_FASE2").exists():
+        return
+    for nome, prefixo, chave in (
+        ("src/battle/stg_b.c", "PORT_LOWRES", "BT3_DISTANCIA_NATIVA"),
+        ("src/sys/gfxm_a.c", "PORT_GLOW", "BT3_PC_BRILHO_NATIVO"),
+    ):
+        p = pc / nome
+        s = p.read_text()
+        for ponta in ("BEGIN", "END"):
+            antes = "Port_GsMarker(%s_%s);" % (prefixo, ponta)
+            if s.count(antes) != 1:
+                raise RuntimeError("marcador ausente ou repetido: " + antes)
+            s = s.replace(antes, 'if (Port_DesfoqueNative("%s")) %s' % (chave, antes))
+        p.write_text("extern int Port_DesfoqueNative(const char *);\n" + s)
+    p = pc / "port/src/gs/gs_draw.c"
+    s = p.read_text()
+    antes = "if (block && SCALE > 1 && ((gGs.tex1[ctx] >> 5) & 1) &&\n                (shrink || ("
+    depois = """if (SCALE > 1 && ((gGs.tex1[ctx] >> 5) & 1) &&
+                ((shrink && (block || (getenv("BT3_DISTANCIA_MEDIA") != NULL && atoi(getenv("BT3_DISTANCIA_MEDIA"))))) || (block && """
+    if s.count(antes) != 1:
+        raise RuntimeError("condição da redução do PC mudou")
+    s = s.replace(antes, depois)
+    p.write_text(s)
+    (pc / "port/src/blur_teste.c").write_text(
+        (RAIZ / "port/x360/headless/desfoque.c").read_text() + """
+int Port_DesfoqueNative(const char *nome) {
+    const char *v = getenv(nome);
+    return v != NULL && atoi(v) != 0;
+}
+""")
+    (pc / "BLUR_FASE2").write_text("Cópia de diagnóstico; nenhuma mudança no upstream de referência.\n")
+
+
 if __name__ == "__main__":
-    preparar(pathlib.Path(sys.argv[1]))
+    if len(sys.argv) > 2 and sys.argv[2] == "--fase2":
+        preparar_fase2(pathlib.Path(sys.argv[1]))
+    else:
+        preparar(pathlib.Path(sys.argv[1]))
