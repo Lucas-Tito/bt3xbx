@@ -3,6 +3,10 @@
 Branch `blur-analise`, base 1.0.2 `9c69c4ba`. Referência de PC: `troca/ref/upstream-main`, `48d66c1f`.
 Sem console e sem XDK no WSL. Estado atual na seção de fase 2 abaixo: o Lucas identificou
 o desfoque da distância em sessão livre; a medição por capturas equivalentes ainda está pendente.
+A última repetição local falhou: a cópia do PC colidia marcadores de distância com
+os menus 16:9. Seus novos casos Sharp/completo estão recusados; uma nova rodada
+precisa preservar os controles nativos da coleta extensa e completar Sharp.
+O estado mais recente está na última seção.
 
 ## Rodada preparada
 
@@ -545,3 +549,68 @@ Depois da repetição local e de seu julgamento, se só faltar o console, substi
 marcador pelo comando `test ! -d /home/codex/blur-resultado-2` e encerrar a sessão.
 Compilação XDK, imagem D3D, DATE/EDRAM/Resolve reais, custo de GPU e escolha do Lucas
 continuam fora das provas locais. Não se acessou console, XDK, outra worktree ou serviço alheio.
+
+
+## Segunda retomada de 05/11: colisão no despacho da referência PC
+
+`bt3-blur-analise-cadeias.service` terminou com `Result=exit-code`, código 1.
+Resultados preservados em `~/blur-analise/fase2-cadeias/`, com `FALHA` e sem
+`COLETA_CONCLUIDA`. O critério oficial e as builds finais não chegaram a executar.
+
+| Caso repetido de ff2a094c | Resultado |
+|---|---|
+| PC base escala 2 | 6/6 idênticas à base anterior |
+| Sharp escala 1 | 6/6 idênticas ao caso anterior |
+| Sharp escala 2 | altera a luta e preserva menu/seleção, mas ainda tem o defeito de despacho abaixo; recusado |
+| Conjunto completo escala 2 | controle detectou diferença no GS 4590 e interrompeu; referência recusada |
+
+A causa foi localizada no despacho completo de `GsGpu_Native` do PC atual.
+Antes da política de cadeias, o intervalo `0x22..0x2C` altera a âncora dos menus
+16:9 e retorna. A primeira correção da coleta usou justamente `0x22/0x23` para
+separar a distância do brilho. Esses códigos nunca chegavam à política de distância.
+O teste anterior compilava somente o bloco de cadeias e não enxergava o retorno
+antecipado. O conjunto completo da repetição deixou de ter a distância nativa da coleta antiga;
+além disso, recebia a interpretação de âncora. Portanto **não se aceita apenas a
+nova imagem como atualização do controle**.
+
+No frontend do 360 não existe esse intervalo de âncoras, somente `0x10..0x14` antes
+das cadeias. Os códigos `0x22/0x23` do produto não colidem e não foram alterados.
+A correção é exclusiva da cópia descartável do PC: distância em `0x80/0x81`, brilho
+em `0x20/0x21`, com os códigos dos menus preservados. A migração aceita também a
+cópia já instrumentada, sem tocar na referência upstream congelada.
+
+O novo teste compila **a função inteira** `GsGpu_Native` extraída do PC, junto de
+`lowres_now`, em C99, o modo exigido por suas declarações após comandos. As 24
+combinações de cadeia, opções nativas e Sharp passaram, incluindo o fechamento e
+as âncoras 0x22/0x23. Foram vistos falhando a colisão real, a resolução escolhida
+pela cadeia errada e o adaptador anterior com marcadores condicionados. Os recursos
+externos são simulados: esse teste prova o despacho, não pixels ou shaders.
+Log: `~/blur-analise/teste-despacho-pc.log`.
+
+O controle da coleta também foi visto recusando ausência de contribuição da média,
+um pixel adulterado no menu e um controle diferente da base, antes de aceitar os
+controles válidos. Log: `teste-despacho-coleta.log`. Sintaxe Python e diff conferidos.
+Nenhum código de produto, shader ou padrão visual mudou nesta retomada.
+
+A repetição limitada passa a gravar em `~/blur-analise/fase2-despacho/`:
+base 2, blocos macios 2, Sharp 1/2, distância nativa 2, distância com média 2 e
+conjunto completo 1/2, total de 48 PPM. Base 2, blocos macios 2, Sharp 1 e completo 1
+precisam permanecer idênticos aos anteriores, assim como distância nativa 2,
+distância com média 2 e completo 2. Os quatro tratamentos na escala 2 precisam contribuir na luta, preservar menu/seleção, e a média precisa diferir da
+redução sem média. Depois vêm as builds x86/x86r/PPC do commit limpo, objetos sem
+depuração, `cmp` da `.text` e `SEMMAPA=1 IMG=1 roteiros.sh f5_duelo`.
+
+A coleta extensa de fcf9986a usava os marcadores originais `0x20/0x21`,
+condicionados às opções nativas. Com as opções nativas ligadas, c03/c04/c05
+reconheciam a distância e não tinham essa colisão. Seus números acima permanecem
+como controles, pendentes de confirmação byte a byte com o despacho corrigido.
+Não se exige identidade da nova c02 na escala 2: a c02 extensa é a referência
+recusada por falta de marcadores com Native=0. Os novos casos Sharp/completo de
+fase2-cadeias também estão recusados. Recalcular os mesmos recortes e inspecionar
+Sharp contra c01/base e distância contra base/corte depois da nova execução.
+Não declarar eliminação de quadrados ou qualidade aprovada a partir de contagens.
+
+O serviço, executor, commit e marcador desta rodada constam no relatório externo.
+A sessão termina conforme a regra de espera longa. Depois de julgar a rodada,
+se ainda faltar somente o console, usar `test ! -d /home/codex/blur-resultado-2`.
+O pedido livre permanece em `~/blur-pedido-console-2.md`, com LOG=1 e SHOT=300.

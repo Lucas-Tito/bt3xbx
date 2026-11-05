@@ -152,6 +152,7 @@ def preparar_cadeias(pc):
     if pc.resolve() == RAIZ or (pc / ".git").exists():
         raise SystemExit("use somente a cópia descartável do PC")
     if (pc / "BLUR_CADEIAS").exists():
+        preparar_despacho(pc)
         return
     for nome, prefixo, chave, codigos in (
         ("src/battle/stg_b.c", "PORT_LOWRES", "BT3_DISTANCIA_NATIVA", ("0x22", "0x23")),
@@ -183,6 +184,34 @@ def preparar_cadeias(pc):
         s = s.replace(antes, depois)
     p.write_text("extern int Port_DesfoqueNative(const char *);\n" + s)
     (pc / "BLUR_CADEIAS").write_text("Sharp reconhece as cadeias independentemente dos alvos nativos.\n")
+    preparar_despacho(pc)
+
+
+def preparar_despacho(pc):
+    """Migra a distância para códigos livres no PC, fora dos menus 16:9."""
+    if (pc / "BLUR_DESPACHO").exists():
+        return
+    trocas = {
+        "src/battle/stg_b.c": {
+            "Port_GsMarker(0x22);": "Port_GsMarker(0x80);",
+            "Port_GsMarker(0x23);": "Port_GsMarker(0x81);",
+        },
+        "port/src/gs/gs_draw.c": {
+            "if (effect == 0x20 || effect == 0x21 || effect == 0x22 || effect == 0x23)":
+            "if (effect == 0x20 || effect == 0x21 || effect == 0x80 || effect == 0x81)",
+            "sInGlowChain = effect == 0x20 ? 1 : effect == 0x22 ? 2 : 0;":
+            "sInGlowChain = effect == 0x20 ? 1 : effect == 0x80 ? 2 : 0;",
+        },
+    }
+    for nome, mudancas in trocas.items():
+        p = pc / nome
+        s = p.read_text()
+        for antes, depois in mudancas.items():
+            if s.count(antes) != 1:
+                raise RuntimeError("despacho da distância mudou: " + antes)
+            s = s.replace(antes, depois)
+        p.write_text(s)
+    (pc / "BLUR_DESPACHO").write_text("Distância usa 0x80/0x81; menus conservam 0x22/0x23.\n")
 
 
 if __name__ == "__main__":

@@ -3331,3 +3331,11 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   versões: no desfoque, GS 4590/vblank 5142 tinha close de Kuririn no PC e câmera atrás
   de Goku na x86. Inspecione as imagens e recuse esse par, mesmo após o preflight passar.
   Meça variantes contra a própria base, mantendo recortes e resolução iguais.
+
+- Ao portar os marcadores para uma referência PC mais nova, confira o despacho
+  inteiro de `GsGpu_Native`, inclusive os retornos anteriores. No ensaio de Sharp,
+  `0x22/0x23` colidiram com as âncoras dos menus 16:9 (`0x22..0x2C`): o teste do
+  bloco isolado passou sem executar a cadeia de distância. A cópia descartável
+  usa `0x80/0x81`; o frontend antigo do 360 não tem essa colisão. Testar a função
+  real inteira, com o caso antigo visto falhando, e repetir também distância
+  nativa/média e conjunto completo; não aceitar a mudança do controle sem causa.
