@@ -28,6 +28,23 @@ int Port_DesfoqueOff(int efeito) {
     return (desligados & bit) != 0;
 }
 
+/* BT3_DISTANCIA_FORCA: o peso do desfoque da distância (StgFog_BuildClut), em porcento de 0 a 100; padrão 100, o
+   original. Só a mistura muda: o passe é desenhado igual, e o custo na GPU não muda. */
+int Port_DistanciaForca(void) {
+    static int iniciou, forca = 100;
+    if (!iniciou) {
+        const char *v = getenv("BT3_DISTANCIA_FORCA");
+        if (v != NULL && *v != '\0') {
+            forca = atoi(v);
+            if (forca < 0) forca = 0;
+            if (forca > 100) forca = 100;
+        }
+        iniciou = 1;
+        printf("desfoque: força da distância %d%% (BT3_DISTANCIA_FORCA)\n", forca);
+    }
+    return forca;
+}
+
 /* Só muda a quantidade desenhada; movimento e aleatórios continuam iguais. */
 int Port_ClimaQuantidade(int quantidade) {
     const char *v = getenv("BT3_FX_OFF");
