@@ -4,7 +4,7 @@ Branch `blur-analise`, base 1.0.2 `9c69c4ba`. Referência de PC: `troca/ref/upst
 A sessão de console de 05/11 fechou a escolha de imagem do Lucas, registrada na
 [decisão 42](../../decisoes.md). Os seis commits recebidos até `c5b319c5` foram integrados
 sem conflitos, preservando seu conteúdo. A coleta PC de `f76049bc` terminou e foi aprovada;
-a conferência local do código integrado está armada, conforme a última seção.
+a conferência local do código integrado terminou e foi aprovada, conforme a última seção.
 As seções anteriores à última são o histórico das propostas e dos padrões de cada rodada.
 Sem console nem XDK nesta worktree; as medidas de console abaixo vêm da decisão 42.
 
@@ -696,11 +696,38 @@ falhando antes de aceitar o fonte real. Evidência em
 `~/blur-analise/negativos-decisao42/forca.log`. Os 128 cortes, 256 máscaras e 24
 combinações do despacho PC também passaram nesta integração.
 
-A prova final ficará em `~/blur-analise/decisao42-final/`, fixada no commit que contém
-esta seção. O serviço executa, numa só vaga de `~/vez.sh`, builds x86/x86r/PPC,
-objetos sem depuração e `cmp` da `.text`, builds de diagnóstico x86b/ppcb,
-`SEMMAPA=1 IMG=1 roteiros.sh f5_duelo`, preservação das 13 imagens oficiais e
-seis capturas por build de diagnóstico com a força original 100, contra a referência.
-Log, comando do serviço, marcador e instruções de retomada no relatório externo.
-Essas provas do código integrado ainda não terminaram; não se transfere o aceite
-do commit anterior para a integração. Ao terminar, julgar o resultado antes de fechar.
+A conferência final terminou em 05/11, no commit integrado `0a14c48b`, com
+`Result=success`, `ExecMainStatus=0`, `CONFERENCIA_CONCLUIDA` e sem `FALHA`.
+O serviço `bt3-blur-analise-decisao42.service` executou o ciclo inteiro numa só
+vaga de `~/vez.sh`. Resultados em `~/blur-analise/decisao42-final/`, log persistente
+em `~/blur-analise/rodada-decisao42.log`. Todos os cinco carimbos conferidos são
+`0a14c48b diff:da39a3ee5e`.
+
+| Prova do código integrado | Resultado julgado |
+|---|---|
+| Cortes, força, política, máscara e despacho PC | 128 combinações, 16 casos da força, política, 256 máscaras e 24 combinações aprovados |
+| Preparação C89 | três fontes, zero falhas |
+| Builds x86/x86r/PPC | 398/399/422 objetos, zero falhas; 1965 structs PPC iguais |
+| Objetos x86 após `objcopy --strip-debug` | 326 iguais; só `x360_passos.o` difere pelo carimbo |
+| `.text` x86 contra 1.0.2 | `cmp` idêntico; SHA1 `94fe2737c0b9f6663ca659685be77a7cd1d36659` |
+| Builds de diagnóstico x86b/ppcb | ligação aprovada; chamada nova de força exercitada a 100% nas duas arquiteturas |
+| `SEMMAPA=1 IMG=1 roteiros.sh f5_duelo` | código 0, tudo certo; memória, saves e rastros aprovados; 7282 quadros de luta iguais |
+| Imagens oficiais | 13/13 pares x86/PPC iguais; 26/26 PPM idênticos byte a byte à rodada f76049bc |
+| Diagnóstico com padrões preservados | seis PPM por arquitetura idênticos à própria referência; 6/6 pares x86b/ppcb iguais |
+
+Os testes negativos voltaram a recusar a colisão com menus e a seleção errada da
+cadeia no despacho PC. Os negativos da força estão no log citado acima. Na variante
+de diagnóstico, a comparação de layout registra 1955 structs iguais e dez presentes
+só de um lado; ela abre blocos específicos de teste e não substitui a prova dos
+1965 layouts da build plana. Não se declara igualdade de layouts inexistentes.
+
+O julgamento conferiu os logs completos, saves, carimbos e comparou novamente os
+PPM com `cmp`, além da `.text`. O fechamento altera somente documentação, sem
+mudar o código medido. Não foi necessário repetir a coleta PC nem a sessão de
+console. Nenhum serviço ou emulador desta tarefa ficou ativo; não há nova espera.
+
+As provas locais preservam o comportamento do diagnóstico, mas não medem shaders
+D3D, DATE, EDRAM ou GPU Xenos. A aprovação visual e os custos do mipmap continuam
+sendo os da sessão de console registrada na decisão 42. A geração de mipmaps na
+carga e suas sete imagens atrasadas permanecem como custo conhecido, sem impedir
+esta entrega da escolha já aprovada pelo Lucas.
