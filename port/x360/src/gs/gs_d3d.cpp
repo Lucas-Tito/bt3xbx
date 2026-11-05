@@ -506,6 +506,43 @@ static void mip_reduz(const uint32_t *a, UINT lw, UINT lh, uint32_t *b, UINT nw,
         }
     }
 }
+/* (BT3_MIPMAP_REF, 05/11) A folhagem recortada pelo teste de alfa sumia de perto: a média de 2 x 2 mistura folha e buraco e
+   o alfa cai abaixo do limite. Nas texturas recortadas (parte dos texels passa do limite e parte não), cada nível escala o
+   alfa para que a fração de texels com alfa >= ref seja a do nível 0 (a cobertura do recorte se conserva). O alfa é o byte
+   alto (o do GS: 0x80 opaco). ref 0 desliga. */
+static unsigned sMipRef = 0x40;
+static float sMipVies; /* (BT3_MIPMAP_VIES) o viés do nível no sampler */
+static unsigned mip_cobertura(const uint32_t *p, UINT n, unsigned ref, float esc) {
+    UINT i, c = 0;
+    for (i = 0; i < n; i++) {
+        c += (float)(p[i] >> 24) * esc + 0.5f >= (float)ref;
+    }
+    return c;
+}
+static void mip_conserva_alfa(uint32_t *p, UINT n, float alvo, unsigned ref) {
+    float lo = 0.25f, hi = 8.0f, esc = 1.0f, melhor = 1e9f;
+    int k;
+    UINT i;
+    for (k = 0; k < 16; k++) {
+        float m = 0.5f * (lo + hi), c = (float)mip_cobertura(p, n, ref, m) / (float)n;
+        if (fabsf(c - alvo) < melhor) {
+            melhor = fabsf(c - alvo);
+            esc = m;
+        }
+        if (c < alvo) {
+            lo = m;
+        } else {
+            hi = m;
+        }
+    }
+    if (esc == 1.0f) {
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        float a = (float)(p[i] >> 24) * esc + 0.5f;
+        p[i] = (p[i] & 0x00FFFFFFu) | ((uint32_t)(a > 255.0f ? 255.0f : a) << 24);
+    }
+}
 
 /* (F8, BT3_MSAA_VOLTA) os parques das amostras cruas do alvo com MSAA (ms_parque, ms_volta) */
 #define MS_PARQUES 2 /* o alvo do quadro e o do anterior (o jogo alterna dois) */
@@ -2135,6 +2172,14 @@ static void otim_init(void) {
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
     sMipmap = env_num("BT3_MIPMAP", 1) != 0; /* (decisão 42) ligado por padrão: o cintilado do cenário em movimento */
+    sMipRef = env_num("BT3_MIPMAP_REF", 0x40) & 0xFF;
+    {
+        /* (BT3_MIPMAP_VIES, em décimos de nível) negativo empurra a troca de nível para mais longe */
+        const char *v = getenv("BT3_MIPMAP_VIES");
+        sMipVies = v != NULL ? (float)atoi(v) / 10.0f : 0.0f;
+    }
+    Diario_Escrever("gs_d3d: mipmap: cobertura do recorte conservada com o limite 0x%02X (BT3_MIPMAP_REF, 0 desliga), viés %.1f "
+                    "nível (BT3_MIPMAP_VIES, em décimos)", sMipRef, (double)sMipVies);
     Diario_Escrever("gs_d3d: mipmap gerado nas texturas do jogo de 32 x 32 ou mais, filtro linear entre níveis %s (BT3_MIPMAP)",
                     sMipmap ? "ligado" : "desligado");
     if (sPsTrivial != 0 && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsTrivPs, &sPsTriv[0])) ||
@@ -2468,13 +2513,21 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
         UINT lw = w, lh = h, nivel;
         uint32_t *a = NULL, *b = (uint32_t *)malloc((size_t)((w + 1) / 2) * ((h + 1) / 2) * 4 * 2);
         const uint32_t *fonte = (const uint32_t *)px;
+        float cob0 = 1.0f;
         XGTileTextureLevel(w, h, 0, fmt, XGTILE_NONPACKED, t->dados, NULL, px, w * 4, NULL);
+        if (sMipRef != 0) {
+            cob0 = (float)mip_cobertura(fonte, w * h, sMipRef, 1.0f) / (float)(w * h);
+        }
         if (b != NULL) {
             a = b + ((w + 1) / 2) * ((h + 1) / 2);
             for (nivel = 1; nivel < t->niveis; nivel++) {
                 UINT nw = lw > 1 ? lw / 2 : 1, nh = lh > 1 ? lh / 2 : 1;
                 uint32_t *destino = fonte == b ? a : b;
                 mip_reduz(fonte, lw, lh, destino, nw, nh);
+                if (cob0 > 0.01f && cob0 < 0.99f) {
+                    /* (BT3_MIPMAP_REF) textura recortada: o nível conserva a cobertura do nível 0 */
+                    mip_conserva_alfa(destino, nw * nh, cob0, sMipRef);
+                }
                 XGTileTextureLevel(w, h, nivel, fmt, XGTILE_NONPACKED,
                                    (BYTE *)t->dados + t->base + XGGetMipLevelOffset(&t->cab, 0, nivel), NULL, destino, nw * 4, NULL);
                 fonte = destino;
@@ -2734,6 +2787,11 @@ static void aplica_sampler(DWORD estagio, int s) {
     CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MAGFILTER, (s & 1) ? D3DTEXF_LINEAR : D3DTEXF_POINT));
     /* (BT3_MIPMAP) entre os níveis, linear; nas texturas de um nível só (as pequenas, os alvos) não muda nada */
     CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MIPFILTER, sMipmap ? D3DTEXF_LINEAR : D3DTEXF_NONE));
+    if (sMipmap && sMipVies != 0.0f) {
+        DWORD d;
+        memcpy(&d, &sMipVies, 4);
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MIPMAPLODBIAS, d));
+    }
     CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSU, (s & 0x100) ? D3DTADDRESS_BORDER : (s & 2) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP));
     CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSV, (s & 0x100) ? D3DTADDRESS_BORDER : (s & 4) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP));
     if (s & 0x100) {
