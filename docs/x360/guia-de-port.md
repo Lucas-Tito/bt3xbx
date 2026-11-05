@@ -1567,6 +1567,15 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 
 ---
 
+- **Cintilado no cenário só com a câmera em movimento é serrilhado de textura sem mipmap** (05/11). O sintoma que separa:
+  dentro das superfícies, não nas bordas, nunca nos lutadores (textura ampliada), parado não cintila. Seis rodadas de
+  console foram gastas descartando efeitos (distância, panorâmico, nitidez, antitremulação, profundidade, 16:9) antes de
+  perguntar onde e quando ele aparecia: pergunte isso primeiro. O BT3 nunca pede mipmap (sonda no `gs_core.c`: MXL 0 em
+  toda a luta); o PS2 escondia na saída entrelaçada e analógica, e a 720p digital mostra. O `BT3_MIPMAP` gera os níveis.
+- **Uma worktree nova no WSL precisa preparar os dados antes da build sem janela**: `port/tools/gen_data.py --asm "$PWD/asm"`
+  e o `portsrc.prepare` de cada fonte, como os scripts das tarefas fazem; sem isso a x86 sai com 326 objetos e 450 stubs e
+  cai. E os links `asm`, `assets`, `disc` e `gamedata` vão no `info/exclude`, senão o carimbo tenta ler a pasta como arquivo.
+
 ## 7. Lista de passos para um port novo
 
 1. Fork da decomp (ou do port de PC dela, se existir), `upstream` como remote, merge só de
