@@ -75,9 +75,13 @@ class Alvo:
         self.opt = "-O2"
         # Só para a prova da VU0: o jogo conserva a ABI soft-float, e os
         # núcleos novos recebem apenas ponteiros/inteiros em outro objeto.
-        self.vu0_nativo = nome == "ppc" and os.environ.get("BT3_TESTE_VU0_NATIVO") == "1"
+        self.vu0_nativo = os.environ.get("BT3_TESTE_VU0_NATIVO") == "1"
+        self.vu0_conta = os.environ.get("BT3_VU0_CONTA") == "1"
+        if self.vu0_conta and not self.vu0_nativo:
+            raise ValueError("BT3_VU0_CONTA exige BT3_TESTE_VU0_NATIVO=1")
         pasta = nome + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
             ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "") + ("l" if alfa else "") + ("e" if lotes else "")
+        if self.vu0_conta: pasta += "vc"
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
         self.exe = self.b / f"bt3_{pasta}"
@@ -256,6 +260,10 @@ def construir(alvo):
                                    (["-DBT3_GPU_FALSO"] if alvo.gpu and f.stem in ("gs_core", "gs_draw") else []) + alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) + sdl360 +
                                    ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], f, o, ee=False, be=alvo.be))
 
+    conta = None
+    if alvo.vu0_conta:
+        from vu0_conta import Contador
+        conta = Contador(ROOT, alvo.b)
     # a camada do port: aritmética do PS2 em software, menos as duas pontes com a FPU (interface só de inteiros)
     for f in [ROOT / "src/port/vu0_a.c", ROOT / "src/port/vu0_b.c"] + sorted((ROOT / "port/src").glob("*.c")):
         o = alvo.obj / ("pc_" + f.stem + ".o")
@@ -272,6 +280,11 @@ def construir(alvo):
                          "-fno-builtin", "-w", "-Iinclude", "-Iport/include", "-Iport/src", "-Iport/x360/headless"] + \
             soft + nomes + alvo.instr + \
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
+        if conta and (nomes or f.name == "softfloat_ps2.c" or ponte and f.name != "plat_libm.c"):
+            grupo = "pc_" + f.stem
+            if f.name == "vu0_nativo_ponte.c": grupo = "ponte"
+            f = conta.preparar(f, grupo)
+            cmd += ["-Iport/x360/headless"]
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
 
     if alvo.vu0_nativo:
@@ -280,10 +293,16 @@ def construir(alvo):
         cmd = alvo.cc + ["-std=gnu89", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing",
                         "-ffp-contract=off", "-frounding-math", "-DBT3_TESTE_VU0_NATIVO",
                         "-Iport/x360/include"] + alvo.hard
+        if conta:
+            f = conta.preparar(f, "vu0_nativo")
+            cmd += ["-Iport/x360/headless"]
         junta(f, o, run(cmd + [f, "-o", o]))
 
     extras = ["sem_janela", "roteiro", "receitas", "imagens", "ponte_pow", "passos", "memoria", "som"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else []) + (["gpu_falso"] if alvo.gpu else []) + (["gravador"] if alvo.gravador else [])
+    if conta:
+        conta.escrever()
+        extras += ["vu0_conta"]
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
         # (o roteiro lê o save do jogo pela estrutura dele, include/sys/save.h, com os tipos do jogo: port_compat.h)
@@ -294,6 +313,8 @@ def construir(alvo):
             tipos_jogo = [f'-DBT3_CARIMBO="{carimbo().strip()}"']
         # (--gpu: o sem_janela.c sem as entradas GsGpu_* vazias, que vêm do gs_draw.c, como na build do 360)
         gpu_def = ["-DX360_GS_D3D"] if alvo.gpu and nome == "sem_janela" else []
+        if alvo.vu0_nativo and nome == "sem_janela": gpu_def += ["-DBT3_TESTE_VU0_NATIVO"]
+        if conta: gpu_def += ["-DBT3_VU0_CONTA", "-I"+str(conta.pasta)]
         # (F6, rede 4: o rastro de som com o relógio do gravador e os estragos de propósito; o gravador com a SDL de teste)
         if alvo.gravador and nome in ("som", "gravador"):
             gpu_def = ["-DBT3_GRAVADOR", "-Iport/x360/headless"]
