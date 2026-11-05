@@ -1,6 +1,7 @@
 #ifdef PORT_X360 /* diagnóstico do desfoque */
 extern int Port_DesfoqueOff(int efeito);
 extern void Port_GsMarker(int efeito);
+extern int Port_DistanciaForca(void);
 #endif
 #include "common.h"
 
@@ -1585,6 +1586,25 @@ void StgFog_BuildClut(StgFog *tone, StgFogPoint *pts, s32 clearLast, f32 scale) 
 
     memset(curve, 0, sizeof(curve));
     StgCurve_Build(pts, curve);
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    {
+        /* BT3_DISTANCIA_FORCA (0 a 100, padrão 100): o peso da cópia borrada sobre o quadro. Em 100 a conta é a do
+           original, sem a multiplicação a mais. */
+        s32 forca = Port_DistanciaForca();
+        for (i = 0; i < 256; i++) {
+            s32 idx = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
+            f32 a = curve[i] * 128.0f * scale;
+
+            if (forca != 100) {
+                a = a * (f32)forca / 100.0f;
+            }
+            clut[(idx << 2) + 0] = 0;
+            clut[(idx << 2) + 1] = 0;
+            clut[(idx << 2) + 2] = 0;
+            clut[(idx << 2) + 3] = (u32)a;
+        }
+    }
+#else
     for (i = 0; i < 256; i++) {
         s32 idx = (i & 0xE7) | ((i & 8) << 1) | ((i & 0x10) >> 1);
 
@@ -1593,6 +1613,7 @@ void StgFog_BuildClut(StgFog *tone, StgFogPoint *pts, s32 clearLast, f32 scale) 
         clut[(idx << 2) + 2] = 0;
         clut[(idx << 2) + 3] = (u32)(curve[i] * 128.0f * scale);
     }
+#endif
     if (clearLast) {
         clut[0x3FC] = 0;
         clut[0x3FD] = 0;

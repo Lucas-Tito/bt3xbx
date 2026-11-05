@@ -187,11 +187,20 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool 
                 uv = (floor(uv * alvo.zw + 1.0f / 64.0f) + 0.5f) / alvo.zw;
             }
         }
+        float2 gx = dx, gy = dy;
         if (modo.x == 2.0f) {
             uv = clamp(uv, rect.xy, rect.zw);
+            // (BT3_MIPMAP) na região presa, só o nível 0: um nível reduzido misturaria a borda com o vizinho na textura
+            gx = float2(0.0f, 0.0f);
+            gy = float2(0.0f, 0.0f);
         }
         // (semTex: sem a leitura)
-        t = blocos ? desfoque_bilinear(uv) : semTex ? float4(0.0f, 0.0f, 0.0f, 0.0f) : tex2Dgrad(tex, uv * esc.xy, dx * esc.xy, dy * esc.xy);
+        t = blocos ? desfoque_bilinear(uv) : semTex ? float4(0.0f, 0.0f, 0.0f, 0.0f) : tex2Dgrad(tex, uv * esc.xy, gx * esc.xy, gy * esc.xy);
+        if (modo.w != 0.0f && !blocos && !semTex) {
+            // (BT3_MIPMAP) com teste de alfa (a folhagem recortada), o alfa do nível 0: o recorte é o do PS2 a qualquer
+            // distância; a média dos níveis menores misturava folha e buraco e a planta sumia. A cor segue filtrada.
+            t.a = tex2Dlod(tex, float4(uv * esc.xy, 0.0f, 0.0f)).a;
+        }
     }
     if (modo.x != 0.0f) {
         if (modo.x != 2.0f) {
@@ -353,11 +362,19 @@ float afiado_copia_eixo(float t, float p) {
     float r = max(0.5f - 0.5f * p, 0.0f);
     return i + 0.5f + (c - clamp(c, -r, r)) / clamp(p, 1.0f / 4096.0f, 1.0f);
 }
+// (BT3_FILTRO_PS2) O filtro antitremulação do PS2: o jogo mostra os dois circuitos de leitura com a mesma imagem, o
+// circuito 1 uma linha abaixo, misturados meio a meio (PMODE 0x7F23; Gfx_SetDisplayRegs, src/sys/gfx.c). Cada linha da
+// tela é a média da linha do GS com a de cima. x: 1 ligado; y: uma linha do GS em uv (1 / altura da área).
+float4 copiaFiltro : register(c11);
 float4 ps_copia_af(float2 uv : TEXCOORD0) : COLOR0 {
     float2 t = uv * copiaTam.xy;
     float2 p = float2(abs(ddx(t.x)) + abs(ddy(t.x)), abs(ddx(t.y)) + abs(ddy(t.y)));
     float2 q = float2(afiado_copia_eixo(t.x, p.x), afiado_copia_eixo(t.y, p.y)) * copiaTam.zw;
-    return tex2Dlod(tex, float4(q, 0.0f, 0.0f));
+    float4 c = tex2Dlod(tex, float4(q, 0.0f, 0.0f));
+    if (copiaFiltro.x > 0.5f) {
+        c = 0.5f * (c + tex2Dlod(tex, float4(q.x, q.y - copiaFiltro.y, 0.0f, 0.0f)));
+    }
+    return c;
 }
 
 // (720p, BT3_FXAA; docs/x360/plano/F5/08-720p.md, seção 12) O FXAA de console numa passada, na resolução interna: a parte

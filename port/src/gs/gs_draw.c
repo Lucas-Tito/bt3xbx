@@ -49,12 +49,23 @@ static GsBackend *sBackend;
 #ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
 #include "../../x360/include/desfoque_pc.h"
 static DesfoquePc sDesfoque;
+/* (decisão 42, 05/11/2026) No 360 os cinco tratamentos ficam ligados por padrão (=0 desliga cada um); nas builds de teste
+   sem janela continuam desligados, como as provas do desfoque esperam. */
+#ifdef PORT_X360
+#define DESFOQUE_PC_PADRAO 1
+#else
+#define DESFOQUE_PC_PADRAO 0
+#endif
+static int desfoque_pc_chave(const char *nome) {
+    const char *v = getenv(nome);
+    return v != NULL ? atoi(v) != 0 : DESFOQUE_PC_PADRAO;
+}
 static void desfoque_pc_init(void) {
-    sDesfoque.sharp = getenv("BT3_SHARP_BLUR") != NULL && atoi(getenv("BT3_SHARP_BLUR")) != 0;
-    sDesfoque.distancia = getenv("BT3_DISTANCIA_NATIVA") != NULL && atoi(getenv("BT3_DISTANCIA_NATIVA")) != 0;
-    sDesfoque.media = getenv("BT3_DISTANCIA_MEDIA") != NULL && atoi(getenv("BT3_DISTANCIA_MEDIA")) != 0;
-    sDesfoque.blocos = getenv("BT3_GLOW_BLOCK") != NULL && atoi(getenv("BT3_GLOW_BLOCK")) != 0;
-    sDesfoque.brilho = getenv("BT3_GLOW_NATIVE") != NULL && atoi(getenv("BT3_GLOW_NATIVE")) != 0;
+    sDesfoque.sharp = desfoque_pc_chave("BT3_SHARP_BLUR");
+    sDesfoque.distancia = desfoque_pc_chave("BT3_DISTANCIA_NATIVA");
+    sDesfoque.media = desfoque_pc_chave("BT3_DISTANCIA_MEDIA");
+    sDesfoque.blocos = desfoque_pc_chave("BT3_GLOW_BLOCK");
+    sDesfoque.brilho = desfoque_pc_chave("BT3_GLOW_NATIVE");
     sDesfoque.cadeia = 0;
     fprintf(stderr, "desfoque PC: sharp %d distancia %d media %d blocos %d brilho %d\n",
             sDesfoque.sharp, sDesfoque.distancia, sDesfoque.media, sDesfoque.blocos, sDesfoque.brilho);

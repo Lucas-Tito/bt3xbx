@@ -417,6 +417,8 @@ typedef struct TexXg {
     unsigned bytes; /* os bytes reservados, os mesmos do tam_real */
     unsigned pitch; /* bytes por linha do nível 0, o do XG */
     int prof;       /* 1: é um ProfXg (o cabeçalho que lê a profundidade como cor vem junto, com a cerca dele) */
+    unsigned base;  /* (BT3_MIPMAP) os bytes do nível 0: os outros níveis começam em dados + base */
+    unsigned niveis; /* (BT3_MIPMAP) os níveis da textura; 0 ou 1: só o nível 0 */
 } TexXg;
 typedef struct ProfXg {
     TexXg x;
@@ -449,6 +451,101 @@ static TexXg *xg_cria_n(UINT w, UINT h, D3DFORMAT f, size_t tam) {
     return x;
 }
 static TexXg *xg_cria(UINT w, UINT h, D3DFORMAT f) { return xg_cria_n(w, h, f, sizeof(TexXg)); }
+
+/* (BT3_MIPMAP=1, diagnóstico do cintilado do cenário, 05/11/2026) uma textura do jogo tiled com a cadeia inteira de níveis,
+   não compactados (XGHEADEREX_NONPACKED: cada nível no seu lugar, sem a cauda compartilhada), contígua depois do nível 0.
+   O jogo nunca pede mipmap (MXL 0 em toda a luta do f5_duelo): os níveis são gerados aqui, pela média de 2 x 2. */
+static int sMipmap;
+static TexXg *xg_cria_mip(UINT w, UINT h, UINT niveis) {
+    TexXg *x = (TexXg *)calloc(1, sizeof(TexXg));
+    XGTEXTURE_DESC d;
+    UINT base = 0, mip = 0, t;
+    if (x == NULL) {
+        return NULL;
+    }
+    t = XGSetTextureHeaderEx(w, h, niveis, 0, D3DFMT_A8B8G8R8, 0, XGHEADEREX_NONPACKED, 0, XGHEADER_CONTIGUOUS_MIP_OFFSET, 0,
+                             &x->cab, &base, &mip);
+    x->bytes = (t + 4095u) & ~4095u;
+    x->dados = XPhysicalAlloc(x->bytes, MAXULONG_PTR, 0, PAGE_READWRITE | PAGE_WRITECOMBINE);
+    if (x->dados == NULL) {
+        free(x);
+        return NULL;
+    }
+    sPicoXgN[0]++;
+    sPicoXgKb += x->bytes >> 10;
+    XGOffsetResourceAddress(&x->cab, x->dados);
+    XGGetTextureDesc(&x->cab, 0, &d);
+    x->pitch = d.RowPitch;
+    x->base = base;
+    x->niveis = niveis;
+    return x;
+}
+/* os níveis de uma textura de w x h até 1 x 1 */
+/* (05/11) A cadeia para em 32 x 32: na forma não compactada cada nível menor ocupa um bloco de 32 x 32 (4 KB) e os níveis
+   pequenos custavam mais que a textura (51% a mais de memória na luta). Além de 32 x 32 a GPU fica no último nível. */
+static UINT mip_niveis(UINT w, UINT h) {
+    UINT n = 1;
+    while (w / 2 >= 32 && h / 2 >= 32) {
+        w /= 2;
+        h /= 2;
+        n++;
+    }
+    return n;
+}
+/* um nível da média de 2 x 2 do anterior (RGBA8, cada canal arredondado); de lado 1, a média de 2 */
+static void mip_reduz(const uint32_t *a, UINT lw, UINT lh, uint32_t *b, UINT nw, UINT nh) {
+    UINT x, y;
+    for (y = 0; y < nh; y++) {
+        UINT y0 = lh > 1 ? y * 2 : 0, y1 = lh > 1 ? y * 2 + 1 : 0;
+        for (x = 0; x < nw; x++) {
+            UINT x0 = lw > 1 ? x * 2 : 0, x1 = lw > 1 ? x * 2 + 1 : 0;
+            uint32_t p0 = a[y0 * lw + x0], p1 = a[y0 * lw + x1], p2 = a[y1 * lw + x0], p3 = a[y1 * lw + x1], r = 0;
+            int c;
+            for (c = 0; c < 32; c += 8) {
+                uint32_t s = ((p0 >> c) & 0xFF) + ((p1 >> c) & 0xFF) + ((p2 >> c) & 0xFF) + ((p3 >> c) & 0xFF) + 2;
+                r |= ((s >> 2) & 0xFF) << c;
+            }
+            b[y * nw + x] = r;
+        }
+    }
+}
+/* (BT3_MIPMAP_REF, 05/11) A folhagem recortada pelo teste de alfa sumia de perto: a média de 2 x 2 mistura folha e buraco e
+   o alfa cai abaixo do limite. Nas texturas recortadas (parte dos texels passa do limite e parte não), cada nível escala o
+   alfa para que a fração de texels com alfa >= ref seja a do nível 0 (a cobertura do recorte se conserva). O alfa é o byte
+   alto (o do GS: 0x80 opaco). ref 0 desliga. */
+static unsigned sMipRef = 0x40;
+static float sMipVies; /* (BT3_MIPMAP_VIES) o viés do nível no sampler */
+static unsigned mip_cobertura(const uint32_t *p, UINT n, unsigned ref, float esc) {
+    UINT i, c = 0;
+    for (i = 0; i < n; i++) {
+        c += (float)(p[i] >> 24) * esc + 0.5f >= (float)ref;
+    }
+    return c;
+}
+static void mip_conserva_alfa(uint32_t *p, UINT n, float alvo, unsigned ref) {
+    float lo = 0.25f, hi = 8.0f, esc = 1.0f, melhor = 1e9f;
+    int k;
+    UINT i;
+    for (k = 0; k < 16; k++) {
+        float m = 0.5f * (lo + hi), c = (float)mip_cobertura(p, n, ref, m) / (float)n;
+        if (fabsf(c - alvo) < melhor) {
+            melhor = fabsf(c - alvo);
+            esc = m;
+        }
+        if (c < alvo) {
+            lo = m;
+        } else {
+            hi = m;
+        }
+    }
+    if (esc == 1.0f) {
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        float a = (float)(p[i] >> 24) * esc + 0.5f;
+        p[i] = (p[i] & 0x00FFFFFFu) | ((uint32_t)(a > 255.0f ? 255.0f : a) << 24);
+    }
+}
 
 /* (F8, BT3_MSAA_VOLTA) os parques das amostras cruas do alvo com MSAA (ms_parque, ms_volta) */
 #define MS_PARQUES 2 /* o alvo do quadro e o do anterior (o jogo alterna dois) */
@@ -2077,6 +2174,17 @@ static void otim_init(void) {
 #endif
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
+    sMipmap = env_num("BT3_MIPMAP", 1) != 0; /* (decisão 42) ligado por padrão: o cintilado do cenário em movimento */
+    sMipRef = env_num("BT3_MIPMAP_REF", 0) & 0xFF; /* (desligada: com o limite errado a folhagem sumia mais) */
+    {
+        /* (BT3_MIPMAP_VIES, em décimos de nível) negativo empurra a troca de nível para mais longe */
+        const char *v = getenv("BT3_MIPMAP_VIES");
+        sMipVies = v != NULL ? (float)atoi(v) / 10.0f : 0.0f;
+    }
+    Diario_Escrever("gs_d3d: mipmap: cobertura do recorte conservada com o limite 0x%02X (BT3_MIPMAP_REF, 0 desliga), viés %.1f "
+                    "nível (BT3_MIPMAP_VIES, em décimos)", sMipRef, (double)sMipVies);
+    Diario_Escrever("gs_d3d: mipmap gerado nas texturas do jogo de 64 x 64 ou mais (até 32 x 32), filtro linear entre níveis %s (BT3_MIPMAP)",
+                    sMipmap ? "ligado" : "desligado");
     if (sPsTrivial != 0 && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsTrivPs, &sPsTriv[0])) ||
                             FAILED(sDev->CreatePixelShader((const DWORD *)kGsZTrivPs, &sPsTriv[1])))) {
         Diario_Escrever("gs_d3d: ERRO: os shaders triviais não foram criados; BT3_PS_TRIVIAL desligada");
@@ -2356,11 +2464,14 @@ static GsTex tex_create(uint32_t w, uint32_t h, int format, int levels) {
         branca(BR_FORMATO, w, h);
         return 0;
     }
+    if (sMipmap && mip_niveis(w, h) > 1) {
+        bytes = bytes + bytes / 3 + 4096; /* (a cadeia até 32 x 32: um terço a mais) */
+    }
     if (mem_livres(bytes) < sMem.pisoMb * MB + bytes) {
         sG.semTextura++;
         return 0; /* (quem chamou conta o motivo) */
     }
-    t = xg_cria(w, h, tex_fmt(w, h));
+    t = sMipmap && mip_niveis(w, h) > 1 ? xg_cria_mip(w, h, mip_niveis(w, h)) : xg_cria(w, h, tex_fmt(w, h));
     if (t == NULL) {
         sG.semTextura++;
         return 0;
@@ -2399,7 +2510,46 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
             }
         }
     }
-    if (tex_fmt(w, h) != D3DFMT_LIN_A8B8G8R8) {
+    if (t->niveis > 1) {
+        /* (BT3_MIPMAP) o nível 0 tiled e os outros pela média de 2 x 2, cada um no seu lugar depois do nível 0 */
+        DWORD fmt = XGGetGpuFormat(D3DFMT_A8B8G8R8);
+        UINT lw = w, lh = h, nivel;
+        uint32_t *a = NULL, *b = (uint32_t *)malloc((size_t)((w + 1) / 2) * ((h + 1) / 2) * 4 * 2);
+        const uint32_t *fonte = (const uint32_t *)px;
+        float cob0 = 1.0f;
+        XGTileTextureLevel(w, h, 0, fmt, XGTILE_NONPACKED, t->dados, NULL, px, w * 4, NULL);
+        if (sMipRef != 0) {
+            cob0 = (float)mip_cobertura(fonte, w * h, sMipRef, 1.0f) / (float)(w * h);
+        }
+        if (b != NULL) {
+            a = b + ((w + 1) / 2) * ((h + 1) / 2);
+            for (nivel = 1; nivel < t->niveis; nivel++) {
+                UINT nw = lw > 1 ? lw / 2 : 1, nh = lh > 1 ? lh / 2 : 1;
+                uint32_t *destino = fonte == b ? a : b;
+                mip_reduz(fonte, lw, lh, destino, nw, nh);
+                if (cob0 > 0.01f && cob0 < 0.99f) {
+                    /* (BT3_MIPMAP_REF) textura recortada: o nível conserva a cobertura do nível 0 */
+                    mip_conserva_alfa(destino, nw * nh, cob0, sMipRef);
+                }
+                XGTileTextureLevel(w, h, nivel, fmt, XGTILE_NONPACKED,
+                                   (BYTE *)t->dados + t->base + XGGetMipLevelOffset(&t->cab, 0, nivel), NULL, destino, nw * 4, NULL);
+                fonte = destino;
+                lw = nw;
+                lh = nh;
+            }
+            free(b);
+        } else {
+            /* sem memória para as médias: cada nível recebe um recorte do nível 0 (errado, mas texels de verdade, não lixo) */
+            for (nivel = 1; nivel < t->niveis; nivel++) {
+                RECT r;
+                lw = lw > 1 ? lw / 2 : 1;
+                lh = lh > 1 ? lh / 2 : 1;
+                r.left = 0; r.top = 0; r.right = (LONG)lw; r.bottom = (LONG)lh;
+                XGTileTextureLevel(w, h, nivel, fmt, XGTILE_NONPACKED,
+                                   (BYTE *)t->dados + t->base + XGGetMipLevelOffset(&t->cab, 0, nivel), NULL, px, w * 4, &r);
+            }
+        }
+    } else if (tex_fmt(w, h) != D3DFMT_LIN_A8B8G8R8) {
         /* (BT3_TEX_TILED) os mesmos texels, na ordem dos tiles: o formato tiled é o mesmo A8B8G8R8, sem troca de bytes */
         XGTileTextureLevel(w, h, 0, XGGetGpuFormat(D3DFMT_A8B8G8R8), 0, t->dados, NULL, px, w * 4, NULL);
     } else {
@@ -2638,7 +2788,13 @@ static void aplica_sampler(DWORD estagio, int s) {
     CadeiaEscopo ca(-1, CA_SAMPLER);
     CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MINFILTER, (s & 1) ? D3DTEXF_LINEAR : D3DTEXF_POINT));
     CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MAGFILTER, (s & 1) ? D3DTEXF_LINEAR : D3DTEXF_POINT));
-    CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MIPFILTER, D3DTEXF_NONE));
+    /* (BT3_MIPMAP) entre os níveis, linear; nas texturas de um nível só (as pequenas, os alvos) não muda nada */
+    CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MIPFILTER, sMipmap ? D3DTEXF_LINEAR : D3DTEXF_NONE));
+    if (sMipmap && sMipVies != 0.0f) {
+        DWORD d;
+        memcpy(&d, &sMipVies, 4);
+        CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_MIPMAPLODBIAS, d));
+    }
     CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSU, (s & 0x100) ? D3DTADDRESS_BORDER : (s & 2) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP));
     CADEIA_CHAMADA(CA_ESTADO, sDev->SetSamplerState(estagio, D3DSAMP_ADDRESSV, (s & 0x100) ? D3DTADDRESS_BORDER : (s & 4) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP));
     if (s & 0x100) {
@@ -7038,10 +7194,21 @@ static void tela_copia(D3DTexture *t) {
             /* (BT3_AFIADO, bit 2) pelo ps_copia_af, que quer o tamanho da textura (c9); os estados do copia */
             D3DSURFACE_DESC desc;
             float c9[4] = {(float)sAlvoW, (float)sAlvoH, 1.0f / sAlvoW, 1.0f / sAlvoH};
+            static int sFiltroPs2 = -1;
+            float c11[4] = {0.0f, 1.0f / sAreaH, 0.0f, 0.0f};
             if (SUCCEEDED(t->GetLevelDesc(0, &desc))) {
                 c9[0] = (float)desc.Width; c9[1] = (float)desc.Height; c9[2] = 1.0f / desc.Width; c9[3] = 1.0f / desc.Height;
             }
             sDev->SetPixelShaderConstantF(9, c9, 1);
+            /* (BT3_FILTRO_PS2=1) o filtro antitremulação do PS2 na cópia para a tela: a média de cada linha do GS com a de
+               cima (ps_copia_af, c11). Uma leitura a mais por pixel da tela, só nesta passada. */
+            if (sFiltroPs2 < 0) {
+                sFiltroPs2 = env_num("BT3_FILTRO_PS2", 0) != 0;
+                Diario_Escrever("gs_d3d: filtro antitremulação do PS2 na cópia para a tela %s (BT3_FILTRO_PS2)",
+                                sFiltroPs2 ? "ligado" : "desligado");
+            }
+            c11[0] = (float)sFiltroPs2;
+            sDev->SetPixelShaderConstantF(11, c11, 1);
             sDev->SetRenderState(D3DRS_ZENABLE, FALSE);
             sDev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
             quad(t, sPsCopiaAf, TELA_W, TELA_H, (float)x, 0.0f, (float)(x + w), (float)TELA_H, 0.0f, 0.0f, 512.0f / sAreaW,
