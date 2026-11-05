@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 import sys
 
-from blur_pc import preparar_fase2, RAIZ
+from blur_pc import preparar_fase2, preparar_alinhamento, RAIZ
 
 
 def construir(pc):
@@ -13,6 +13,7 @@ def construir(pc):
     if pc == RAIZ or (pc / ".git").exists() or not (pc / "port/src/blur_teste.c").exists():
         raise RuntimeError("exige a cópia isolada e instrumentada do PC")
     preparar_fase2(pc)
+    preparar_alinhamento(pc)
     os.environ["BT3_CC"] = "clang64"
     os.chdir(pc)
     sys.path.insert(0, str(pc / "port/tools"))

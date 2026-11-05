@@ -18,6 +18,37 @@ RAIZ = rodada.RAIZ
 SAIDA = pathlib.Path.home() / "blur-analise/fase2"
 PC = RAIZ / "port/build/blur/pc-atual"
 PADRAO = re.compile(r"^desfoque_lista: quadro (\d+) blocos (\d+) fontes (\d+) baixos (\d+) invalidos (\d+) fx (\d+)$", re.M)
+# Medidos na referência x86, nas seis âncoras de rodada.LISTA.
+VBLANKS_PC = [2974, 3367, 5142, 5916, 6676, 6798]
+
+
+def conferir_cenas_pc(texto, quadros):
+    linhas = re.findall(r"^blur_pc: captura gs (\d+) vblank (\d+) modo (-?\d+) seq (-?\d+)$", texto, re.M)
+    if [x[0] for x in linhas] != quadros:
+        raise RuntimeError("PC: estados ausentes, repetidos ou fora de ordem nas capturas")
+    if [int(x[1]) for x in linhas] != VBLANKS_PC:
+        raise RuntimeError("PC: capturas em vblanks diferentes da referência")
+    if int(linhas[0][2]) != 4 or int(linhas[1][2]) != 39:
+        raise RuntimeError("PC: a gravação não repetiu menu principal e seleção do Duelo")
+    if [int(x[3]) for x in linhas[2:]] != [2, 3, 3, 3]:
+        raise RuntimeError("PC: apresentação ou combate fora do estado esperado")
+    print("PC: telas e sequência compatíveis; pose/câmera/HUD ainda exigem julgamento", flush=True)
+
+
+def negativo_cenas_pc():
+    quadros = ["2969", "3362", "4590", "4977", "5357", "5418"]
+    texto = "\n".join("blur_pc: captura gs %s vblank %d modo %d seq %d" % (q, vb, modo, seq)
+                      for q, vb, modo, seq in zip(quadros, VBLANKS_PC, [4, 39, 39, 39, 39, 39], [-1, -1, 2, 3, 3, 3]))
+    conferir_cenas_pc(texto, quadros)
+    for adulterado in (texto.replace("modo 4 seq", "modo 6 seq", 1),
+                       texto.replace("seq 2", "seq 3", 1), texto.replace("vblank 2974", "vblank 2975", 1),
+                       texto + "\n" + texto, ""):
+        try:
+            conferir_cenas_pc(adulterado, quadros)
+        except RuntimeError as e:
+            print("negativo das cenas recusado:", e, flush=True)
+        else:
+            raise RuntimeError("verificador aceitou cena adulterada")
 
 
 def conferir_lista(texto, caso, fx=0):
@@ -65,6 +96,11 @@ def pc_caso(escala, nome, ajustes, controle, quadros):
     pasta.mkdir(parents=True)
     env = ambiente(pasta, ajustes)
     env.pop("BT3_ROTEIRO")
+    # O PC atual acelera o cartão por padrão. Isso consome a gravação do boot
+    # em telas diferentes e abre História antes de a referência chegar ao menu.
+    ajustes_pc = pasta / "settings.txt"
+    ajustes_pc.write_text("save_quick=0\n")
+    env["BT3_SETTINGS"] = str(ajustes_pc)
     # As duas cadeias têm o mesmo marcador no PC. O adaptador isola suas origens;
     # a chave global de resolução é ligada se qualquer uma delas precisar.
     env.update(BT3_PC_BRILHO_NATIVO=env["BT3_GLOW_NATIVE"],
@@ -72,10 +108,12 @@ def pc_caso(escala, nome, ajustes, controle, quadros):
                BT3_GS="gpu", BT3_GPU_API="gl", BT3_GS_THREAD="0", BT3_SCALE=str(escala), BT3_GS_FROM="0",
                BT3_INTERP="0", BT3_FRAME_SKIP="0", BT3_SHOT="1", BT3_SHOT_LISTA=",".join(quadros),
                BT3_GLOW="60", BT3_GLARE="60", BT3_PAD_PLAY=str(controle), SDL_VIDEODRIVER="offscreen")
-    rodada.rodar("pc-%d-%s" % (escala, nome), [PC / "port/build/bt3_64"], env, cwd=PC, limite=1200)
+    # llvmpipe desenha na CPU: o trabalho cresce com a área, não só com a escala.
+    rodada.rodar("pc-%d-%s" % (escala, nome), [PC / "port/build/bt3_64"], env, cwd=PC, limite=1200 * escala * escala)
     for imagem in (PC / "port/build/shots").glob("gpu_*.ppm"):
         shutil.move(str(imagem), pasta / imagem.name)
     rodada.conferir_pc(pasta, quadros, escala)
+    conferir_cenas_pc((SAIDA / ("pc-%d-%s.log" % (escala, nome))).read_text(), quadros)
 
 
 def main():
@@ -88,6 +126,7 @@ def main():
     rodada.SAIDA = SAIDA
     (SAIDA / "base-102").symlink_to(SAIDA.parent / "base-102", target_is_directory=True)
     negativo_lista()
+    negativo_cenas_pc()
     rodada.rodar("pc-build", ["python3", "port/x360/tools/blur_pc_build.py", PC])
     quadros = (SAIDA.parent / "quadros-console.txt").read_text().strip().split(",")
     # Primeiro resolve a falha que interrompeu a coleta anterior, antes das horas
@@ -97,17 +136,20 @@ def main():
     for alvo, extra in (("x86", []), ("x86", ["--rastreio"]), ("ppc", [])):
         rodada.rodar("final-" + alvo + ("r" if extra else ""),
                      ["python3", "port/x360/tools/headless.py", "--alvo", alvo, *extra], {"BT3_TESTE_DESFOQUE": "0"})
+    # Conferir todos os executáveis antes da rodada longa. A PPC usa a VU1
+    # otimizada por PORT_BIG_ENDIAN; só a x86 aceita --vu1 e leva o sufixo v.
+    for alvo in ("x86", "ppc"):
+        for gpu in (False, True):
+            rodada.rodar("build-" + alvo + ("-gpu" if gpu else "-software"),
+                         ["python3", "port/x360/tools/headless.py", "--alvo", alvo,
+                          *(["--gpu"] + (["--vu1"] if alvo == "x86" else []) if gpu else [])],
+                         {"BT3_TESTE_DESFOQUE": "1"})
     rodada.objetos()
     rodada.rodar("oficial", ["bash", "port/x360/tools/roteiros.sh", "f5_duelo"],
                  {"SEMMAPA": "1", "IMG": "1", "O": str(SAIDA / "oficial"), "TP": "3600"})
     oficial = SAIDA / "oficial/f5_duelo"
     rodada.conferir_ancoras(oficial / "telas_a.txt")
     dados = oficial / "dados"
-    for alvo in ("x86", "ppc"):
-        for gpu in (False, True):
-            rodada.rodar("build-" + alvo + ("-gpu" if gpu else "-software"),
-                         ["python3", "port/x360/tools/headless.py", "--alvo", alvo, *(["--gpu", "--vu1"] if gpu else [])],
-                         {"BT3_TESTE_DESFOQUE": "1"})
     provas = {}
     for nome, ajustes in CASOS[:6] + [("fx224", {"BT3_FX_OFF": "224"})]:
         for gpu in (False, True):
@@ -118,7 +160,7 @@ def main():
                 pasta = SAIDA / ("gpu" if gpu else "imagens") / nome / alvo
                 pasta.mkdir(parents=True)
                 env = ambiente(pasta, ajustes)
-                sufixo = "bgv" if gpu else "b"
+                sufixo = ("bgv" if alvo == "x86" else "bg") if gpu else "b"
                 if gpu:
                     env.update(BT3_GS="gpu", BT3_GS_FROM="0", BT3_GPU_LISTA="1", BT3_DESFOQUE_CONTA="1")
                 else:

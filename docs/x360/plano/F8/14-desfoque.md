@@ -366,3 +366,51 @@ Todos têm `BT3_LOG=1`, `BT3_SHOT=300`, sem roteiro. O gerador da fase 1 também
 Resultados locais em `~/blur-analise/fase2/`. Ainda faltam a rodada oficial do novo commit,
 o julgamento do alinhamento/capturas por regiões, a compilação XDK e a escolha visual no console.
 Não marcar a tarefa concluída por a coleta acabar. O relatório registra o serviço e o marcador.
+
+## Retomada de 05/11: critério aprovado e duas falhas da coleta
+
+A rodada de `f2a1a7c5` terminou com código 1, depois da aprovação oficial.
+Os resultados foram preservados em `~/blur-analise/fase2-f2a1a7c5/` antes da nova execução.
+
+| Conferência do commit f2a1a7c5 | Resultado |
+|---|---|
+| Builds x86/x86r/PPC | 398/399/422 objetos, zero falhas; 1965 structs PPC, zero diferentes |
+| Objetos x86 sem depuração | 326 iguais; somente x360_passos.o diferente pelo carimbo |
+| .text x86 e base | idênticas, SHA1 94fe2737c0b9f6663ca659685be77a7cd1d36659 |
+| SEMMAPA=1 IMG=1 roteiros.sh f5_duelo | código 0, tudo certo; memória, luta e saves aprovados |
+| Imagens oficiais | 13/13 pares idênticos |
+| PC GL base, escala 1 | seis PPM íntegros, mas cenas incompatíveis; recusados para comparação visual |
+| Variantes locais da fase 2 | não iniciadas; build PPC GPU recebeu --vu1 indevidamente |
+
+O coletor agora usa `--gpu --vu1` na x86 e apenas `--gpu` na PPC, com os caminhos
+`x86bgv/bt3_x86bgv` e `ppcbg/bt3_ppcbg`, respectivamente. As quatro builds de diagnóstico
+foram movidas para antes do roteiro oficial. A chamada PPC corrigida compilou 425 objetos e
+ligou sem erro; nessa árvore ainda suja, parou depois pela guarda de origem da referência x86.
+A rodada limpa continua obrigada a conferir tabelas/layout antes de executar esse binário.
+
+O contato `fase2-f2a1a7c5/alinhamento-base.png` revelou que o PC estava na História,
+enquanto a referência x86 mostrava Duelo na cidade. O rastro adicional em
+`alinhamento/pc-1-diagnostico.log` confirmou menu no vblank 2210 e História no 2299,
+contra menu no 2873 e Duelo no 3000 da x86. O PC atual acelera o cartão por padrão:
+`McFlow_Start` consulta `save_quick`, cujo padrão é 1. A coleta agora escreve
+`save_quick=0` em um arquivo de ajustes exclusivo por caso.
+
+O ensaio real com esse ajuste terminou com código 0, seis PPM íntegros e os seis
+vblanks da referência: 2974, 3367, 5142, 5916, 6676 e 6798. Menu e seleção são modos
+4 e 39; as quatro imagens da luta têm sequência 2, 3, 3 e 3. A inspeção de
+`alinhamento/save-lento-contato.png` recuperou o Duelo no cenário esperado. O contato
+usa imagens inteiras de 640x448 da x86 e 512x448 do GL, portanto não serve para
+subtrair pixels sem antes recortar a área visível e conferir câmera/pose.
+
+A instrumentação só da cópia descartável registra GS, vblank, modo de menu e sequência
+de luta no instante de cada captura. O novo verificador exige menu principal, seleção do
+Duelo, apresentação e combate nas seis posições, além dos vblanks medidos. Foi visto
+recusando cópias com História no lugar do menu, apresentação trocada por combate,
+vblank deslocado em um quadro, capturas duplicadas e lista vazia.
+Isso impede aceitar as seis imagens erradas da rodada anterior, mas ainda não prova
+mesma pose/câmera nem a nitidez das regiões. A nova rodada fica registrada no relatório
+de entrega, com seus resultados e limites. O prazo do PC passa a crescer com a área
+da escala: 20 minutos em 1 e 80 em 2; llvmpipe é CPU, sem medida transferível ao Xenos.
+
+Nenhum código do produto mudou nesta retomada. Os tratamentos opcionais continuam
+desligados por padrão, e o pedido livre para o console continua em `~/blur-pedido-console-2.md`.

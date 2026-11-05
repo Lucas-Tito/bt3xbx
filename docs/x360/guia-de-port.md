@@ -3313,3 +3313,12 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 - No 360, `gsScale` fica em 1 mesmo quando a resolução física é 1,4. A redução nativa precisa viajar
   como estado de cada desenho e ser aplicada na reprodução D3D. Não mudar a página inteira por quadro:
   a página 0x150 também recebe sombras, calor e lente fora das cadeias. Resolver e marcar sujo em pixels físicos.
+- Na build sem janela com backend falso, `--vu1` só vale na x86. A PPC já usa a otimização pelo
+  `PORT_BIG_ENDIAN`, e seus executáveis de diagnóstico são `ppcbg`, contra `x86bgv` na x86.
+  Compile todas as variantes antes do critério longo: a coleta de f2a1a7c5 passou no oficial e só
+  depois parou ao passar a opção incompatível para a PPC.
+- O PC atual usa `save_quick=1` por padrão. Reproduzir nele a gravação de um boot da 1.0.2 com cartão
+  vazio sem fixar `save_quick=0` abre outras telas: no ensaio, História substituiu Duelo.
+  Esse ajuste vem de `Port_Setting`, portanto use um `BT3_SETTINGS` exclusivo com `save_quick=0`.
+  Além de presença e tamanho dos PPM, registre modo e sequência da luta em cada captura e recuse
+  cenas incompatíveis antes de multiplicar as variantes. Isso ainda não prova pose, câmera ou HUD iguais.

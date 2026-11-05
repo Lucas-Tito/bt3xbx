@@ -119,6 +119,34 @@ int Port_DesfoqueNative(const char *nome) {
     (pc / "BLUR_FASE2").write_text("Cópia de diagnóstico; nenhuma mudança no upstream de referência.\n")
 
 
+def preparar_alinhamento(pc):
+    """Registra o estado real nas capturas; números do GS sozinhos não o provam."""
+    if (pc / "BLUR_ALINHAMENTO").exists():
+        return
+    p = pc / "port/src/gs/gs_gl.c"
+    s = p.read_text()
+    antes = "            GLsizei w = 512 * SCALE, h = 448 * SCALE;"
+    if s.count(antes) != 1:
+        raise RuntimeError("ponto de captura do PC mudou")
+    s = s.replace(antes, "            extern void Port_BlurQuadro(unsigned);\n"
+                  "            Port_BlurQuadro(gGsFrame);\n" + antes)
+    p.write_text(s)
+    p = pc / "port/src/blur_teste.c"
+    with p.open("a") as f:
+        f.write('''
+#include <stdint.h>
+/* Visões locais de diagnóstico: mode em MenuProgress+0x18 e state em BtlSeq+0. */
+void Port_BlurQuadro(unsigned quadro) {
+    extern uint32_t gProgress, gBtlSeq;
+    extern unsigned gPortVBlanks;
+    int modo = gProgress ? *(int *)((uintptr_t)gProgress + 0x18) : -1;
+    int seq = gBtlSeq ? *(int *)(uintptr_t)gBtlSeq : -1;
+    printf("blur_pc: captura gs %u vblank %u modo %d seq %d\\n", quadro, gPortVBlanks, modo, seq);
+}
+''')
+    (pc / "BLUR_ALINHAMENTO").write_text("Estado registrado junto de cada captura.\n")
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[2] == "--fase2":
         preparar_fase2(pathlib.Path(sys.argv[1]))
