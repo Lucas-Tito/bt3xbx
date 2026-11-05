@@ -33,7 +33,11 @@ def main():
         (d/'default.map').write_text(mapa)
         # Substitui só a ferramenta de dump, mantendo a leitura real do PE.
         dump = d/'dump.py'
-        dump.write_text('import sys\na=sys.argv[-2].split(":")[1].split(",")[0]\nprint(a+": 60000000 nop")\n')
+        # Como o link.exe do XDK: sem o 0x nos dois endereços, LNK1147 e saída 1 (custou uma build em 05/11).
+        dump.write_text('import sys\na, b = sys.argv[-2].split(":", 1)[1].split(",")\n'
+                        'if not (a.startswith("0x") and b.startswith("0x")):\n'
+                        '    print("LINK : fatal error LNK1147: invalid number"); sys.exit(1)\n'
+                        'print(a[2:]+": 60000000 nop")\n')
         def roda(copia, esperado):
             (d/'default.exe').write_bytes(copia)
             p = subprocess.run([sys.executable, str(pathlib.Path(__file__).with_name('guarda_vu0_fusao.py')),

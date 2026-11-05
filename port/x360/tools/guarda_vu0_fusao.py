@@ -2,7 +2,7 @@
 """Recusa fusões na VU0 ligada e desmonta suas faixas pelo mapa do XDK.
 
 Uso: guarda_vu0_fusao.py default.exe default.map --comando-dump wine /xdk/bin/win32/link.exe
-O comando recebe /dump /disasm /range:INICIO,FIM EXE. Os .dis ficam ao lado do EXE.
+O comando recebe /dump /disasm /range:0xINICIO,0xFIM EXE (sem o 0x, o link.exe do XDK recusa com LNK1147). Os .dis ficam ao lado do EXE.
 Sem LTCG, inlining só chega às funções do mesmo objeto: conferimos todos os
 símbolos de vu0_nativo, float360, pc_vu0_a e pc_vu0_b, inclusive os estáticos.
 A inspeção dos opcodes do PE independe da grafia dos mnemônicos do link.exe.
@@ -87,7 +87,7 @@ def main():
                 grupos.append((a, b))
         for a, b in grupos:
             p = subprocess.run([*args.comando_dump, '/dump', '/disasm',
-                                f'/range:{a:08X},{b-4:08X}', str(args.exe)],
+                                f'/range:0x{a:08X},0x{b-4:08X}', str(args.exe)],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             log = args.exe.with_name(f'vu0-{a:08x}-{b:08x}.dis')
             log.write_text(p.stdout)

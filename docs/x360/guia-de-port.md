@@ -1945,8 +1945,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Antes de cortar uma cópia, divida o tempo pelas vezes, não pelos bytes.** O `Unpack` parecia "2 MB a 0,6 GB/s, preso à
   banda"; dividido pelas chamadas (uns 9 mil por quadro, 264 bytes cada) dá uns 440 ns por chamada, perto de uma falta de memória
   com página de 4 KB (345 ns): o custo é a primeira linha de cada cópia, e o remédio é pedir adiante, não copiar menos.
+- **O `/range` do `link /dump` do XDK só aceita endereço com `0x`** (`/range:0x822468A8,0x82255154`); sem ele, `LNK1147:
+  invalid number` e saída 1. A guarda de fusão da VU0 (`guarda_vu0_fusao.py`) nasceu sem o `0x`, com o dump simulado no
+  autoteste, e reprovou a primeira build no XDK em 05/11; o dump simulado agora recusa endereço sem `0x`, como o real.
+  Ferramenta que chama o XDK e foi testada sem ele: o simulado tem de copiar as recusas do real.
 - **O código que o `cl` gerou se lê sem console:** monte o `bin/win32` do XDK no contêiner (`-v $XDK/bin/win32:/xbin:ro`) e rode
-  `wine /xbin/dumpbin.exe /disasm /range:INICIO,FIM build/x360/f2/default.exe`, com os endereços do `default.map` da mesma build
+  `wine /xbin/dumpbin.exe /disasm /range:0xINICIO,0xFIM build/x360/f2/default.exe`, com os endereços do `default.map` da mesma build
   (os de outra build não servem). Assim se viu que o `memcpy` do CRT escolhe o caminho pelo alinhamento (8 bytes, 4 bytes ou
   byte a byte), já faz `dcbt` até 8 linhas adiante só dentro da própria cópia, e que a `vu.mem` está em 4 módulo 8 (o endereço
   da estrutura sai do `lis`/`addi` do começo da função; variáveis `static` não aparecem no `.map`).
