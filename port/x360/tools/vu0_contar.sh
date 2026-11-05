@@ -11,8 +11,10 @@ exec > >(tee "$D/contar.log") 2>&1
 trap 'rc=$?; echo "$rc" > "$D/resultado.rc"; exit "$rc"' EXIT
 pgrep -af 'qemu|roteiros' > "$D/processos-iniciais.txt" || true
 export DEBUGINFOD_URLS= BT3_TESTE_VU0_NATIVO=1 BT3_VU0_CONTA=1 BT3_WIDE=1
-python3 port/x360/tools/headless.py --alvo x86 > "$D/build-x86vc.log" 2>&1
-python3 port/x360/tools/headless.py --alvo ppc > "$D/build-ppcvc.log" 2>&1
+# A PPC gera o mapa das tabelas pelos .i da x86 normal, não pelos da x86vc.
+env -u BT3_VU0_CONTA -u BT3_TESTE_VU0_NATIVO python3 port/x360/tools/headless.py --alvo x86 2>&1 | tee "$D/build-x86.log"
+python3 port/x360/tools/headless.py --alvo x86 2>&1 | tee "$D/build-x86vc.log"
+python3 port/x360/tools/headless.py --alvo ppc 2>&1 | tee "$D/build-ppcvc.log"
 cp "$LISTA" "$D/lidos.txt"
 mkdir -p "$D/dados/mods"
 for d in "$RAIZ"/gamedata/*; do ln -s "$d" "$D/dados/$(basename "$d")"; done

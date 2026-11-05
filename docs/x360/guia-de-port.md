@@ -3358,3 +3358,11 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 - Testar isoladamente `float360.c` exige descartar seções não usadas ou ligar
   também `Port_atan2f`. `teste_vu0_chave.py` usa `--gc-sections`, mantendo o gancho
   real da matriz e sem substituir o código testado por uma reimplementação.
+
+- A PPC com contadores também precisa da build x86 normal antes dela. A primeira
+  rodada de `vu0-amostra` ligou x86vc e ppcvc, mas parou ao gerar o mapa das
+  tabelas: `elftipos.py` procura `port/build/x86/obj/*.i`, não os de x86vc.
+  `vu0_contar.sh` agora constrói primeiro a x86 sem as duas opções de teste,
+  depois x86vc e ppcvc. Os logs das builds também passam pelo log geral com
+  `tee`, para que a falha não deixe `contar.log` vazio. Nenhuma luta foi
+  executada na tentativa que revelou essa dependência.
