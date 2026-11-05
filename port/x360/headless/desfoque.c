@@ -28,10 +28,16 @@ int Port_DesfoqueOff(int efeito) {
     return (desligados & bit) != 0;
 }
 
-/* BT3_DISTANCIA_FORCA: o peso do desfoque da distância (StgFog_BuildClut), em porcento de 0 a 100; padrão 100, o
-   original. Só a mistura muda: o passe é desenhado igual, e o custo na GPU não muda. */
+/* BT3_DISTANCIA_FORCA: o peso do desfoque da distância (StgFog_BuildClut), em porcento de 0 a 100. Padrão no 360: 25
+   (decisão 42, escolhida pelo Lucas no console); nas builds de teste, 100, o original. Só a mistura muda: o passe é
+   desenhado igual, e o custo na GPU não muda. */
+#ifdef PORT_X360
+#define FORCA_PADRAO 25
+#else
+#define FORCA_PADRAO 100
+#endif
 int Port_DistanciaForca(void) {
-    static int iniciou, forca = 100;
+    static int iniciou, forca = FORCA_PADRAO;
     if (!iniciou) {
         const char *v = getenv("BT3_DISTANCIA_FORCA");
         if (v != NULL && *v != '\0') {

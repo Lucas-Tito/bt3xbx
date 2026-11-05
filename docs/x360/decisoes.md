@@ -922,3 +922,31 @@ jogador (`f5_duelo.txt`, `dh5duelo` contra a `i1` do mesmo dia) ficou igual: com
    no pior caso da janela fria (p99 34,6 contra 48,1 ms).
 3. **A cópia do XDK (D2, `BT3_COPIA_XMEM`) fica de fora**: a gravação piorou de 33,2 para 35,9 ms.
 4. A luta dividida jogada à mão se confere na sessão final da release; a regra da decisão 38 vale para ela.
+
+## 42. F8: a imagem da luta com os tratamentos de desfoque do PC, a distância a 25% e mipmap gerado (05/11/2026)
+
+(Os números 40 e 41 são o BT4 com o Tag Team, do `bt4-base`, e as modificadas do `conversor-dublagens`, que entram por merge.)
+
+O Lucas achou a imagem do cenário macia demais e, jogando, apontou dois incômodos: o desfoque da distância (`StgFog_Draw`,
+confirmado em 04/11 com o corte) e um cintilado no cenário. Sessão de console de 05/11, à mão, com o estágio que ele usa:
+
+1. **Os cinco tratamentos de desfoque do port de PC ficam ligados por padrão no 360** (`BT3_SHARP_BLUR`,
+   `BT3_DISTANCIA_NATIVA`, `BT3_DISTANCIA_MEDIA`, `BT3_GLOW_BLOCK`, `BT3_GLOW_NATIVE`; `=0` desliga cada um). Ficaram
+   melhores que a base, e a GPU não piorou: folga mediana 9,6 ms contra 8,8 e nenhuma imagem fora do prazo, contra 2 na
+   base (partidas diferentes, sem medida exata).
+2. **A força do desfoque da distância passa a 25%** (`BT3_DISTANCIA_FORCA`, nova, de 0 a 100): a tabela de alfas por
+   profundidade do `StgFog_BuildClut` multiplicada pela força. O passe é desenhado igual, sem custo na GPU. Com 100% o
+   desfoque ainda parecia agressivo; ele testou 55% e escolheu 25%.
+3. **As texturas do jogo de 32 x 32 ou mais ganham mipmap gerado** (`BT3_MIPMAP`, nova, ligada por padrão): a cadeia
+   inteira de níveis pela média de 2 x 2, tiled e sem cauda compartilhada, e o filtro linear entre níveis; nas regiões
+   presas (`CLAMP` 2) só o nível 0. O cintilado era o do cenário com a câmera em movimento, nunca nos lutadores nem só
+   nas bordas; com o mipmap "praticamente sumiu", sobrando um pouco nas árvores (folhagem com teste de alfa). O jogo nunca
+   pede mipmap (sonda na luta do `f5_duelo`: MXL 0 em 97 milhões de primitivas com textura, nenhuma escrita em MIPTBP), então
+   é melhoria sobre o PS2, que escondia o serrilhado na saída entrelaçada e analógica.
+4. Ficam opcionais e desligados: o alfa para cobertura (`BT3_MSAA_A2C`, não ajudou as árvores o bastante) e o filtro
+   antitremulação do PS2 na cópia para a tela (`BT3_FILTRO_PS2`, nova; o PS2 mistura os dois circuitos de leitura meio a
+   meio, `Gfx_SetDisplayRegs`; não mudou o cintilado).
+
+Descartados no console como causa do cintilado: o desfoque da distância, o panorâmico, o filtro de nitidez, o filtro
+antitremulação, a profundidade da VU1 (`BT3_CORTE=0`) e o 16:9. Falta medir no console o custo de memória e de GPU do
+mipmap (uma rodada com a pausa de 3 s, para o log fechar a janela).

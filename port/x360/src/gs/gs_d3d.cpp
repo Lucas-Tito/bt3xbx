@@ -2134,7 +2134,7 @@ static void otim_init(void) {
 #endif
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
-    sMipmap = env_num("BT3_MIPMAP", 0) != 0;
+    sMipmap = env_num("BT3_MIPMAP", 1) != 0; /* (decisão 42) ligado por padrão: o cintilado do cenário em movimento */
     Diario_Escrever("gs_d3d: mipmap gerado nas texturas do jogo de 32 x 32 ou mais, filtro linear entre níveis %s (BT3_MIPMAP)",
                     sMipmap ? "ligado" : "desligado");
     if (sPsTrivial != 0 && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsTrivPs, &sPsTriv[0])) ||
