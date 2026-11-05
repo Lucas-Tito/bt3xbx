@@ -943,10 +943,15 @@ confirmado em 04/11 com o corte) e um cintilado no cenário. Sessão de console 
    nas bordas; com o mipmap "praticamente sumiu", sobrando um pouco nas árvores (folhagem com teste de alfa). O jogo nunca
    pede mipmap (sonda na luta do `f5_duelo`: MXL 0 em 97 milhões de primitivas com textura, nenhuma escrita em MIPTBP), então
    é melhoria sobre o PS2, que escondia o serrilhado na saída entrelaçada e analógica.
+   Na mesma sessão: a cadeia para em 32 x 32 (na forma não compactada os níveis menores custavam um bloco de 4 KB cada e a
+   memória das texturas tinha subido 51%) e, nos desenhos com teste de alfa, o alfa vem do nível 0 (com a média a folhagem
+   sumia de perto; uma conservação da cobertura com limite chutado desmatou o cenário e ficou desligada, `BT3_MIPMAP_REF`).
+   O Lucas aprovou: plantas "ótimas" e o cintilado resolvido. No roteiro do Duelo (mesma luta): texturas 107,2 MB contra
+   81,9 sem mipmap (teto 128, 111 MB livres), folga da GPU no combate mediana 8,4 ms contra 8,6 e p1 2,6 contra 2,8, e 7
+   imagens atrasadas no começo da luta contra nenhuma (a geração dos níveis na carga; a tirar do caminho crítico).
 4. Ficam opcionais e desligados: o alfa para cobertura (`BT3_MSAA_A2C`, não ajudou as árvores o bastante) e o filtro
    antitremulação do PS2 na cópia para a tela (`BT3_FILTRO_PS2`, nova; o PS2 mistura os dois circuitos de leitura meio a
    meio, `Gfx_SetDisplayRegs`; não mudou o cintilado).
 
 Descartados no console como causa do cintilado: o desfoque da distância, o panorâmico, o filtro de nitidez, o filtro
-antitremulação, a profundidade da VU1 (`BT3_CORTE=0`) e o 16:9. Falta medir no console o custo de memória e de GPU do
-mipmap (uma rodada com a pausa de 3 s, para o log fechar a janela).
+antitremulação, a profundidade da VU1 (`BT3_CORTE=0`) e o 16:9. 
