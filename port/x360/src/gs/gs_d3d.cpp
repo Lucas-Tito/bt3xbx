@@ -73,6 +73,7 @@
  */
 #include <xtl.h>
 #include <xgraphics.h>
+#include <vectorintrinsics.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -509,12 +510,42 @@ static void mip_reduz(const uint32_t *a, UINT lw, UINT lh, uint32_t *b, UINT nw,
         }
     }
 }
+/* (05/11) a média de 2 x 2 pelo VMX128: oito texels de cada uma das duas linhas por vez; __vavgub faz a média das duas
+   linhas e depois a dos pares (os pares e os ímpares separados por __vperm), quatro texels de saída por volta. Cada média
+   arredonda para cima (até meio degrau a mais que a da mip_reduz). Só com as linhas alinhadas em 16 bytes e a largura de
+   saída múltipla de 4; senão, a mip_reduz. */
+static __declspec(align(16)) const unsigned char kMipPares[16] = {0, 1, 2, 3, 8, 9, 10, 11, 16, 17, 18, 19, 24, 25, 26, 27};
+static __declspec(align(16)) const unsigned char kMipImpares[16] = {4, 5, 6, 7, 12, 13, 14, 15, 20, 21, 22, 23, 28, 29, 30, 31};
+static void mip_reduz_vmx(const uint32_t *a, UINT lw, UINT lh, uint32_t *b, UINT nw, UINT nh) {
+    UINT x, y;
+    __vector4 pares, impares;
+    if (lw < 8 || lh < 2 || (nw & 3) != 0 || nw * 2 != lw || nh * 2 != lh || ((UINT_PTR)a & 15) != 0 || ((UINT_PTR)b & 15) != 0) {
+        mip_reduz(a, lw, lh, b, nw, nh);
+        return;
+    }
+    pares = __lvx(kMipPares, 0);
+    impares = __lvx(kMipImpares, 0);
+    for (y = 0; y < nh; y++) {
+        const uint32_t *l0 = a + (y * 2) * lw, *l1 = l0 + lw;
+        uint32_t *s = b + y * nw;
+        for (x = 0; x < nw; x += 4) {
+            __vector4 v0 = __vavgub(__lvx(l0 + x * 2, 0), __lvx(l1 + x * 2, 0));
+            __vector4 v1 = __vavgub(__lvx(l0 + x * 2 + 4, 0), __lvx(l1 + x * 2 + 4, 0));
+            __stvx(__vavgub(__vperm(v0, v1, pares), __vperm(v0, v1, impares)), s + x, 0);
+        }
+    }
+}
+/* (05/11) o custo da geração dos níveis, para o relatório de cada trecho */
+static volatile unsigned __int64 sMipTiques, sMipPiorTiques;
+static volatile unsigned sMipTex;
+
 /* (BT3_MIPMAP_REF, 05/11) A folhagem recortada pelo teste de alfa sumia de perto: a média de 2 x 2 mistura folha e buraco e
    o alfa cai abaixo do limite. Nas texturas recortadas (parte dos texels passa do limite e parte não), cada nível escala o
    alfa para que a fração de texels com alfa >= ref seja a do nível 0 (a cobertura do recorte se conserva). O alfa é o byte
    alto (o do GS: 0x80 opaco). ref 0 desliga. */
 static unsigned sMipRef = 0x40;
 static float sMipVies; /* (BT3_MIPMAP_VIES) o viés do nível no sampler */
+static float sMipAlfa; /* (BT3_MIPMAP_ALFA) a fração dos gradientes da cor no alfa da folhagem (c12.x) */
 static unsigned mip_cobertura(const uint32_t *p, UINT n, unsigned ref, float esc) {
     UINT i, c = 0;
     for (i = 0; i < n; i++) {
@@ -2176,6 +2207,10 @@ static void otim_init(void) {
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
     sMipmap = env_num("BT3_MIPMAP", 1) != 0; /* (decisão 42) ligado por padrão: o cintilado do cenário em movimento */
     sMipRef = env_num("BT3_MIPMAP_REF", 0) & 0xFF; /* (desligada: com o limite errado a folhagem sumia mais) */
+    sMipAlfa = (float)env_num("BT3_MIPMAP_ALFA", 0) / 100.0f;
+    if (sMipAlfa > 1.0f) sMipAlfa = 1.0f;
+    Diario_Escrever("gs_d3d: mipmap: o alfa da folhagem com os gradientes a %.0f%% dos da cor (BT3_MIPMAP_ALFA; 0 o nível 0, 50 um "
+                    "nível mais nítido que a cor, 100 o nível da cor)", (double)(sMipAlfa * 100.0f));
     {
         /* (BT3_MIPMAP_VIES, em décimos de nível) negativo empurra a troca de nível para mais longe */
         const char *v = getenv("BT3_MIPMAP_VIES");
@@ -2517,6 +2552,7 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
         uint32_t *a = NULL, *b = (uint32_t *)malloc((size_t)((w + 1) / 2) * ((h + 1) / 2) * 4 * 2);
         const uint32_t *fonte = (const uint32_t *)px;
         float cob0 = 1.0f;
+        unsigned __int64 tm0 = __mftb();
         XGTileTextureLevel(w, h, 0, fmt, XGTILE_NONPACKED, t->dados, NULL, px, w * 4, NULL);
         if (sMipRef != 0) {
             cob0 = (float)mip_cobertura(fonte, w * h, sMipRef, 1.0f) / (float)(w * h);
@@ -2526,7 +2562,7 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
             for (nivel = 1; nivel < t->niveis; nivel++) {
                 UINT nw = lw > 1 ? lw / 2 : 1, nh = lh > 1 ? lh / 2 : 1;
                 uint32_t *destino = fonte == b ? a : b;
-                mip_reduz(fonte, lw, lh, destino, nw, nh);
+                mip_reduz_vmx(fonte, lw, lh, destino, nw, nh);
                 if (cob0 > 0.01f && cob0 < 0.99f) {
                     /* (BT3_MIPMAP_REF) textura recortada: o nível conserva a cobertura do nível 0 */
                     mip_conserva_alfa(destino, nw * nh, cob0, sMipRef);
@@ -2538,6 +2574,12 @@ static int tex_upload(GsTex handle, int level, uint32_t w, uint32_t h, int forma
                 lh = nh;
             }
             free(b);
+            {
+                unsigned __int64 d = __mftb() - tm0;
+                sMipTiques += d;
+                if (d > sMipPiorTiques) sMipPiorTiques = d;
+                sMipTex++;
+            }
         } else {
             /* sem memória para as médias: cada nível recebe um recorte do nível 0 (errado, mas texels de verdade, não lixo) */
             for (nivel = 1; nivel < t->niveis; nivel++) {
@@ -6143,6 +6185,13 @@ static void log_quadros(void) {
                     "%u MB livres", sConta.texNovas, sMem.vivos[CL_TEX] >> 10, sQ->texCount, sQ->targetCount, sPipeCount, sConta.semVu,
                     sConta.semNativo[1], sConta.semNativo[2], sConta.semNativo[3], sConta.semNativo[4], sConta.semFb,
                     sConta.semTextura, mb_livres());
+    if (sMipmap) {
+        Diario_Escrever("gs_d3d:   mipmap: %u texturas com níveis no trecho, %.2f ms ao todo, a pior %.2f ms (o nível 0 e os outros, "
+                        "tiled, na thread que envia)", sMipTex, picos_ms(sMipTiques), picos_ms(sMipPiorTiques));
+        sMipTex = 0;
+        sMipTiques = 0;
+        sMipPiorTiques = 0;
+    }
     log_vu1(t);
     log_vu1_zera();
     log_prof(t);
@@ -7178,6 +7227,11 @@ static void tela_copia(D3DTexture *t) {
     sDev->SetRenderTarget(0, sTela);
     sDev->SetDepthStencilSurface(NULL);
     sDev->SetViewport(&vp);
+    {
+        /* (BT3_MIPMAP_ALFA) c12 do gs_pixel; uma vez por quadro: ninguém mais usa o c12 */
+        float c12[4] = {sMipAlfa, 0.0f, 0.0f, 0.0f};
+        sDev->SetPixelShaderConstantF(12, c12, 1);
+    }
     sDev->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
     sDev->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_ALL);
     if (sComumGpu && sTempo.quadro) sComumApi[C_LIMPA]++;

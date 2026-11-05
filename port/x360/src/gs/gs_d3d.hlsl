@@ -152,6 +152,7 @@ float4 desfoque_bilinear(float2 uv) {
 // sem ele, o fxc junta o cor.a * k com o * 128 do teste de alfa num mad só (cor.a * 255 + 0,5), outra ordem de contas;
 // com ele, a listagem tem o mul e o mad do geral. O DATE, o teste de alfa e o FBA são o mesmo texto. Falso nos outros,
 // cujo microcódigo sai igual ao de antes.
+float4 mipAlfa : register(c12); // (BT3_MIPMAP_ALFA) x: a fração dos gradientes da cor no alfa da folhagem
 float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool afiado, uniform bool semTex, uniform bool blocos) {
     float k = 255.0f / 128.0f;
     // o centro do pixel em qualquer convenção do VPOS (inteiro ou com o meio pixel): o gl_FragCoord do GL
@@ -199,7 +200,8 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool 
         if (modo.w != 0.0f && !blocos && !semTex) {
             // (BT3_MIPMAP) com teste de alfa (a folhagem recortada), o alfa do nível 0: o recorte é o do PS2 a qualquer
             // distância; a média dos níveis menores misturava folha e buraco e a planta sumia. A cor segue filtrada.
-            t.a = tex2Dlod(tex, float4(uv * esc.xy, 0.0f, 0.0f)).a;
+            // (BT3_MIPMAP_ALFA, c12.x) os gradientes a uma fração dos da cor: 0 o nível 0, 0,5 um nível mais nítido que a cor
+            t.a = tex2Dgrad(tex, uv * esc.xy, gx * esc.xy * mipAlfa.x, gy * esc.xy * mipAlfa.x).a;
         }
     }
     if (modo.x != 0.0f) {
