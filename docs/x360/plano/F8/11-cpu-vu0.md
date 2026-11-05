@@ -304,3 +304,100 @@ Não há XDK ou console nesta tarefa. No Linux, conferir a execução real da gu
 os 16 `fmuls` e 12 `fadds` da matriz na ordem original, quatro stores no destino e a ausência dos
 16 produtos e da saída intermediária na pilha. Repetir a guarda com uma cópia compilada que funde.
 O desempenho no Xenon continua dependendo de medição no console.
+
+## Console de 05/11/2026 e investigação no branch vu0-amostra
+
+A build `de4e5c94` passou a guarda XDK (161 funções, nenhuma fusão). No
+`Vn_MtxApply`, o cl produziu 16 `fmuls`, 12 `fadds`, 20 `lfs` e quatro `stfs`
+no destino, na ordem das somas original. O gancho chama esse núcleo.
+
+| Duelo fixo, 2.334 passos, BT3_TEMPOS=0 | 1.0.2, 963e690f | VU0, de4e5c94 |
+|---|---:|---:|
+| trabalho p50 | 25,53 ms | 25,66 ms |
+| p95 / p99 / máximo | 30,35 / 31,23 / 33,32 ms | 30,51 / 31,42 / 33,33 ms |
+| passos acima de 30 ms | 146 | 191 |
+
+Vencedor, vida 27160 e quadro final 8378 iguais no console: a correção passou,
+mas o ganho estimado de 8 a 9 ms não apareceu. Os tempos foram fornecidos pelo
+Lucas; não há execução nova de console no WSL.
+
+### Releitura dos dados preservados
+
+`vu0_reler_perfil.py ~/vu0-amostra/sessao_amostra` usa o resolvedor original de
+`troca/claude/f8-amostra`. O mapa fornecido é de `0757ec25`: as âncoras e o
+carimbo do ligador conferem para a `coleta2`. A `coleta` é de `6b09afe1` e é
+recusada: três âncoras diferem em 0xA0 e o ligador também difere. Falta o mapa
+correspondente para atribuir suas amostras com a mesma garantia. Não se deslocam
+endereços nem se ignoram essas guardas para aproveitar o mapa errado.
+
+A diferença d6 a d10 reproduz 3.520 quadros normais (29,334 ms/quadro,
+50.093 amostras úteis) e 83 lentos (53,417 ms/quadro, 1.891 úteis).
+Há 19.930 amostras VU0 visíveis na união das tabelas normais e 640 nas lentas.
+A soma antiga de 19.931 ignorava uma entrada que desapareceu do topo entre os
+despejos. A porcentagem arredondada continua 39,8%/33,8%.
+
+| Função, tempo próprio estimado no normal | Amostras | % úteis | ms/quadro |
+|---|---:|---:|---:|
+| mtx_apply | 4417 | 8,818 | 2,587 |
+| op_vmaddabc | 2937 | 5,863 | 1,720 |
+| op_vmaddbc | 1458 | 2,911 | 0,854 |
+| dot3 | 1082 | 2,160 | 0,634 |
+| op_vmulabc | 964 | 1,924 | 0,565 |
+| Vec4_Add | 887 | 1,771 | 0,519 |
+| setFlags | 798 | 1,593 | 0,467 |
+| Vu0_SinCos | 763 | 1,523 | 0,447 |
+| Vec4_Scale | 750 | 1,497 | 0,439 |
+| Mtx_Mul | 578 | 1,154 | 0,338 |
+
+O script lista todas as funções visíveis, inclusive as restantes de float360,
+e separa alteração direta, indireta e nenhuma. As funções diretamente alteradas
+somam 11.616 amostras, 6,802 ms no normal e 10,565 ms no lento. Isso é um teto
+ideal sobre esses baldes visíveis, antes de descontar recuos, guardas, chamadas,
+publicação, flags e o custo da conta nova. `Mtx_Mul` e `Vu0_SinCos` conservam
+as sequências e somam mais 0,785 ms próprios no normal; não se pode tratar todo
+esse custo como eliminado. O restante visível soma 4,083 ms.
+
+O topo é truncado: faltam 61 e 4.455 amostras úteis nas folhas normais de d6/d10,
+e 0 e 72 nas lentas. Sem atribuir arbitrariamente essas amostras, a fração VU0
+normal pode ficar entre 39,66% e 48,68%, e a lenta entre 33,84% e 37,65%.
+A diferença de histogramas truncados não fornece cada função exata no trecho.
+O cabeçalho d10 mede suspensão média de 57,8 us e máxima de 531,6 us; o intervalo
+pedido de 1.000 us não garante coleta sem interferência ou sem viés.
+Esses quadros históricos também não são uma identificação do Duelo fixo atual.
+A hipótese de viés continua sem resposta até comparar os quatro ambientes.
+
+### Contagem e prova em andamento
+
+A contagem usa cópias geradas dos fontes, incluindo funções inline e funções que
+retornam estruturas. `BT3_VU0_CONTA=1 BT3_TESTE_VU0_NATIVO=1 headless.py --alvo
+x86|ppc` produz `x86vc` e `ppcvc`. A build normal não contém esses incrementos.
+`vu0_contar.sh PASTA LIDOS` executa os dois lados da chave nas duas arquiteturas,
+um emulador por vez sob `~/vez.sh`. `vu0_conta_resumo.py` conserva os números
+por passo e exige que chamadas, retornos nativos e motivos de recuo fechem.
+As linhas contam o intervalo anterior entre leituras do controle, só quando
+aquele intervalo começou no combate ativo, com a mesma regra de `passos.c`.
+Não são tempos nem custos exclusivos: `Vn_Bc4` delega a `Vn_Op4` e não se somam
+as duas como operações independentes. O primeiro operando recusado define o
+motivo, na ordem das entradas: desligado, NaN/Inf, denormal, normal pequeno ou grande.
+
+`teste_vu0_conta.py` verifica retornos reais e motivos conhecidos e recusa cópias
+com passo ausente, retorno a menos, duplicata, linha truncada e sem dados.
+`teste_vu0_chave.py` prova as duas posições no mesmo binário, com o gancho real
+de `float360.c`, e recusa núcleos que ignoram a chave e configuração que ignora zero.
+Os resultados da luta e a certificação do commit final serão julgados no relatório
+externo; esta seção não declara aceite de uma execução ainda em andamento.
+
+### Preparação da nova sessão de console
+
+O amostrador foi trazido pelos sete arquivos próprios de `troca/claude/f8-amostra`,
+sem restaurar o restante daquela base antiga. A main atual só recebe as chamadas
+de ciclo de vida e a configuração do nativo antes da thread do jogo. A coleta
+continua desligada por ausência da chave. `BT3_AMOSTRA=0` liga a 100 us no código
+herdado; os ambientes sem coleta usam `-BT3_AMOSTRA`.
+
+Os quatro modelos em `port/x360/ambientes/vu0/` mantêm `BT3_TEMPOS=0` e o resto
+nos padrões da 1.0.2, com a permissão de desbloqueio exigida pelo boot do roteiro.
+Cada execução exige pasta de save vazia. O LEIA-ME descreve a ordem dos pares,
+os logs, o mapa, o que conferir no XDK e as limitações da instrumentação sem janela.
+`BT3_VU0_NATIVO=0` recusa todos os núcleos, não só a matriz. Seu desvio tem custo
+residual nas duas posições; não se afirma identidade temporal com o binário 1.0.2.

@@ -3340,3 +3340,21 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 - **Contar só `stfs` e `lfs` esconde os laços PPC.** O auxiliar antigo da matriz usa `stfsu`, `lfsu`
   e `lfsx`. O contador da VU0 agora mostra também as formas indexadas e com atualização; separar
   contagem estática de operações executadas e distinguir stores no destino de temporários na pilha.
+
+### Relendo a coleta da VU0 (05/11/2026)
+
+- Um mapa preservado ao lado de duas coletas pode corresponder só a uma delas.
+  Nas entradas de `vu0-amostra`, o mapa de `0757ec25` confere para `coleta2` e
+  recusa `coleta` de `6b09afe1`. Não corrigir âncoras por deslocamento presumido.
+- Despejos cumulativos limitados ao topo não dão uma subtração exata por função.
+  Usar a união das entradas dos dois despejos, registrar o que ficou omitido e
+  não transformar soma de tempo próprio das funções alteradas em ganho garantido.
+- O amostrador antigo verifica a presença de `BT3_AMOSTRA`: valor `0` vira 100 us.
+  Remover a chave com `-BT3_AMOSTRA` para medir sem coleta. O boot do `f5_duelo`
+  também exige `BT3_DESBLOQUEIO=1`, mesmo usando as demais opções padrão do console.
+- Instrumentar só tipos escalares perde `mtx_apply`, que devolve `RefVec4f`.
+  O contador de teste precisa cobrir retorno de estrutura e funções inline;
+  conferir motivos pelo retorno efetivo e não apenas prever a guarda na entrada.
+- Testar isoladamente `float360.c` exige descartar seções não usadas ou ligar
+  também `Port_atan2f`. `teste_vu0_chave.py` usa `--gc-sections`, mantendo o gancho
+  real da matriz e sem substituir o código testado por uma reimplementação.
