@@ -414,3 +414,134 @@ da escala: 20 minutos em 1 e 80 em 2; llvmpipe é CPU, sem medida transferível 
 
 Nenhum código do produto mudou nesta retomada. Os tratamentos opcionais continuam
 desligados por padrão, e o pedido livre para o console continua em `~/blur-pedido-console-2.md`.
+
+## Julgamento de 05/11: coleta extensa concluída, referência Sharp corrigida
+
+O serviço `bt3-blur-analise-fase2-r1.service` encerrou com `Result=success` e código 0.
+Resultados de `fcf9986a` em `~/blur-analise/fase2/`, sem `FALHA` e com `COLETA_CONCLUIDA`.
+O término foi julgado pelas provas abaixo; não aprova o D3D do 360.
+
+| Conferência | Resultado |
+|---|---|
+| Builds x86/x86r/PPC | 398/399/422 objetos, zero falhas; PPC: 1965 structs, zero diferentes |
+| Objetos x86 sem depuração | 326 iguais; somente x360_passos.o diferente pelo carimbo |
+| `.text` x86 contra 1.0.2 | `cmp` idêntico; SHA1 94fe2737c0b9f6663ca659685be77a7cd1d36659 |
+| `SEMMAPA=1 IMG=1 roteiros.sh f5_duelo` | código 0, `tudo certo`; memória, luta, saves e rastros aprovados |
+| Capturas oficiais | 13/13 pares x86/PPC idênticos |
+| Seis variantes em software | 36/36 pares x86/PPC idênticos; todos também iguais à própria base |
+| Listas de desenho | sete casos incluindo FX_OFF=224, 8380 quadros cada; x86/PPC iguais, zero flags inválidas |
+| PC GL | 180 PPM íntegros: quinze casos, seis momentos, escalas 1 e 2; cenas/vblanks conferidos |
+| Repetição PC | 6/6 idênticas à base em cada escala, byte a byte |
+
+A igualdade em software é esperada: o rasterizador de referência não executa os shaders novos.
+As listas do backend falso provam a seleção e o transporte do estado. A base não armou nenhuma
+flag; c03 marcou 4093 fontes e 4094 destinos nativos; c04 acrescentou 4094 desenhos com blocos;
+c05 marcou 12108 blocos, 124275 fontes e 132318 destinos nativos. Isso não é prova de pixels D3D.
+
+### Alinhamento visual e limites
+
+Foi inspecionado `fase2/alinhamento-final.png`: colunas x86 recortada em x=0..511,
+PC escala 1 e PC escala 2 reduzida só para contato; linhas menu, seleção, apresentação,
+combate, técnica e pausa. Os PPM originais permanecem intactos.
+
+Menu e seleção correspondem às mesmas telas, mas o upstream atual reposiciona elementos
+em 16:9. No combate, a cidade, os dois lutadores na mesma pose de impacto, a câmera, o
+cronômetro 230 e o dano 590 são compatíveis. Técnica e pausa mostram Kamehameha no tempo
+218, mesma pose/câmera e mesma janela de pausa; há diferenças de composição e de renderização.
+Não se exige igualdade de pixels entre versões nem se usa essa diferença como nitidez.
+
+**A apresentação no GS 4590 foi recusada para comparar versões:** a x86 já mostra a câmera
+atrás de Goku com a imagem escurecida; o PC ainda mostra o close de Kuririn com transição.
+Ambos registram sequência 2 e vblank 5142. Portanto, mesmo estado, GS e vblank não bastam
+para certificar câmera/pose. As comparações de variantes do PC são contra a própria base
+na mesma escala e versão; a apresentação não é usada para validar imagem equivalente à x86.
+
+### Regiões medidas no combate, GS 4977
+
+Medição sem redimensionar, em RGB de 8 bits. Retângulos na coordenada lógica, com limite
+superior exclusivo; na escala 2 multiplicam-se as quatro coordenadas por 2:
+
+| Região | Retângulo x0,y0,x1,y1 | Pixels físicos na escala 2 |
+|---|---|---:|
+| Chão próximo | 16,330,108,430 | 36800 |
+| Árvore distante | 275,135,309,201 | 8976 |
+| Interior de Kuririn | 148,214,159,234 | 880 |
+| Interior de Goku | 240,240,248,250 | 320 |
+| Trecho da barra da HUD | 68,17,150,23 | 1968 |
+
+As duas amostras internas não cobrem a silhueta inteira dos lutadores. O trecho da HUD
+não permite afirmar que a interface inteira ficou igual. Contagem de pixels alterados
+não é uma medida isolada de nitidez nem determina a preferência visual.
+
+| PC escala 2, contra c00 | Chão próximo | Árvore distante | Kuririn | Goku | Barra HUD |
+|---|---:|---:|---:|---:|---:|
+| c01 blocos macios | 11692 | 8734 | 0 | 0 | 127 |
+| c03 distância nativa | 0 | 2746 | 0 | 0 | 0 |
+| c04 distância nativa e média | 0 | 2235 | 0 | 0 | 0 |
+| c05 conjunto completo | 2335 | 8774 | 0 | 0 | 116 |
+| c06 sem distância | 0 | 3986 | 0 | 0 | 0 |
+| Sem panorâmico | 31682 | 6172 | 0 | 0 | 0 |
+| Sem névoa | 0 | 8894 | 0 | 0 | 684 |
+| Sem brilho | 36800 | 8976 | 0 | 0 | 653 |
+| Sem clima | 36800 | 8976 | 0 | 0 | 702 |
+
+Na árvore, erro absoluto médio RGB contra a base: c03 0,3020; c04 0,1860;
+c06 0,5625. As correções de distância atuam na região distante, sem trocar o chão
+próximo nesses recortes. Inspeção ampliada em `longe-base-nativa-media-corte.png`,
+colunas base, nativa, média, corte. A diferença é pequena neste estágio, não prova
+eliminação de quadrados em todo cenário nem melhora aprovada na arena do Lucas.
+O conjunto completo também muda o brilho e não isola a distância.
+
+Na escala 1, c01 a c05 são idênticas à base nos seis quadros, como esperado para
+tratamentos da escala alta. Cortar a distância altera 22440 pixels no combate:
+954 na árvore, zero nos outros quatro recortes; erro médio da árvore 0,5501.
+O radial e o calor/bruma não alteram nenhum dos seis momentos nas duas escalas;
+isso só demonstra ausência de contribuição nesses momentos, não descarte geral.
+Menu e seleção não mudam com nenhum dos sete cortes no PC.
+
+Dados completos em `medidas-regioes.json`, cálculo em `~/blur-analise/medir-final.py`,
+log em `medidas-regioes.log`. O controle de repetição foi visto recusando uma cópia
+com um pixel adulterado antes de aceitar as doze repetições reais.
+
+### Falha descoberta no julgamento e repetição limitada
+
+A referência c02 Sharp na escala 2 ficou idêntica à base nos seis quadros. Isso foi
+**recusado como prova do tratamento**: o adaptador da cópia descartável condicionava
+os próprios marcadores a `DISTANCIA_NATIVA`/`GLOW_NATIVE`. Com ambos em zero, Sharp
+não enxergava nenhuma cadeia e cortava também os blocos de dentro dela. O frontend
+do 360 conserva os marcadores, portanto as variantes não eram equivalentes.
+
+`preparar_cadeias` agora conserva os quatro marcadores, distingue brilho (0x20/0x21)
+de distância (0x22/0x23) e consulta a opção nativa somente em `lowres_now`.
+A condição de Sharp continua usando a presença da cadeia. Só a cópia descartável
+é instrumentada; nenhum código de produto, padrão ou referência upstream mudou.
+A cópia real foi recompilada com 104 stubs e zero linhas de erro.
+
+`teste_blur_pc.py` aplica a instrumentação aos fontes da referência congelada e
+compila a política resultante em C89. Passaram 24 combinações de cadeia, opções
+nativas e Sharp, incluindo fechamento e alvo inválido. O verificador recusou o
+adaptador anterior e uma cópia que selecionava a resolução pela cadeia errada.
+O controle da coleta também recusou a referência c02 anterior sem contribuição e
+um controle com pixel adulterado, antes de aceitar controles válidos.
+
+`blur_fase2_cadeias.py` repete somente quatro casos PC: base 2, Sharp 1 e 2 e conjunto
+completo 2, mais builds, objetos/.text e critério oficial do novo commit. Exige base,
+Sharp 1 e conjunto completo idênticos aos anteriores; Sharp 2 precisa exercer a luta
+sem alterar menu/seleção. Os demais 156 PPM da coleta anterior ficam preservados;
+c02 na escala 2 permanece fora das conclusões até julgar a repetição.
+O serviço e o marcador estão no relatório; não repetir as doze horas inteiras sem necessidade.
+
+### Decisão e próximo resultado
+
+O culpado continua sendo a distância conforme a observação do Lucas, apoiada pelo
+log do corte. Os recortes do PC mostram a atuação seletiva esperada, mas o console
+anterior não tem base capturada e não permite atribuir um erro à profundidade ou ao MSAA.
+As correções opcionais continuam propostas de comparação. Nenhuma delas foi promovida
+a padrão, nem se alteraram CLUT, intensidade ou meio pixel global.
+
+O pedido livre permanece em `~/blur-pedido-console-2.md`, com oito ambientes em
+`~/blur-console-2/`, todos LOG=1 e SHOT=300. `~/blur-resultado-2/` ainda está ausente.
+Depois da repetição local e de seu julgamento, se só faltar o console, substituir o
+marcador pelo comando `test ! -d /home/codex/blur-resultado-2` e encerrar a sessão.
+Compilação XDK, imagem D3D, DATE/EDRAM/Resolve reais, custo de GPU e escolha do Lucas
+continuam fora das provas locais. Não se acessou console, XDK, outra worktree ou serviço alheio.

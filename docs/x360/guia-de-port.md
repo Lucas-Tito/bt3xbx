@@ -3322,3 +3322,12 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   Esse ajuste vem de `Port_Setting`, portanto use um `BT3_SETTINGS` exclusivo com `save_quick=0`.
   Além de presença e tamanho dos PPM, registre modo e sequência da luta em cada captura e recuse
   cenas incompatíveis antes de multiplicar as variantes. Isso ainda não prova pose, câmera ou HUD iguais.
+- Ao separar as opções de uma cadeia na cópia do PC, não condicione seus marcadores
+  à opção de resolução nativa: Sharp também consulta a presença da cadeia. A coleta
+  de fcf9986a deu c02 idêntica à base por retirar esses marcadores. Preserve-os sempre,
+  distinga brilho/distância e condicione somente `lowres_now`; teste as combinações
+  Sharp ligado com ambos os alvos nativos desligados antes de rodar a referência.
+- Sequência, GS e vblank iguais não garantem a mesma câmera na apresentação entre
+  versões: no desfoque, GS 4590/vblank 5142 tinha close de Kuririn no PC e câmera atrás
+  de Goku na x86. Inspecione as imagens e recuse esse par, mesmo após o preflight passar.
+  Meça variantes contra a própria base, mantendo recortes e resolução iguais.

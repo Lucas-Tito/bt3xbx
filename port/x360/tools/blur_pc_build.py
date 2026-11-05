@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 import sys
 
-from blur_pc import preparar_fase2, preparar_alinhamento, RAIZ
+from blur_pc import preparar_fase2, preparar_alinhamento, preparar_cadeias, RAIZ
 
 
 def construir(pc):
@@ -14,6 +14,7 @@ def construir(pc):
         raise RuntimeError("exige a cópia isolada e instrumentada do PC")
     preparar_fase2(pc)
     preparar_alinhamento(pc)
+    preparar_cadeias(pc)
     os.environ["BT3_CC"] = "clang64"
     os.chdir(pc)
     sys.path.insert(0, str(pc / "port/tools"))

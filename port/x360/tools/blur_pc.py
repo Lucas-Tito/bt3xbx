@@ -147,6 +147,44 @@ void Port_BlurQuadro(unsigned quadro) {
     (pc / "BLUR_ALINHAMENTO").write_text("Estado registrado junto de cada captura.\n")
 
 
+def preparar_cadeias(pc):
+    """Conserva os marcadores de Sharp mesmo com os alvos nativos desligados."""
+    if pc.resolve() == RAIZ or (pc / ".git").exists():
+        raise SystemExit("use somente a cópia descartável do PC")
+    if (pc / "BLUR_CADEIAS").exists():
+        return
+    for nome, prefixo, chave, codigos in (
+        ("src/battle/stg_b.c", "PORT_LOWRES", "BT3_DISTANCIA_NATIVA", ("0x22", "0x23")),
+        ("src/sys/gfxm_a.c", "PORT_GLOW", "BT3_PC_BRILHO_NATIVO", ("0x20", "0x21")),
+    ):
+        p = pc / nome
+        s = p.read_text()
+        for ponta, codigo in zip(("BEGIN", "END"), codigos):
+            antes = 'if (Port_DesfoqueNative("%s")) Port_GsMarker(%s_%s);' % (chave, prefixo, ponta)
+            if s.count(antes) != 1:
+                raise RuntimeError("marcador condicionado ausente ou repetido: " + antes)
+            s = s.replace(antes, "Port_GsMarker(%s);" % codigo)
+        p.write_text(s)
+    p = pc / "port/src/gs/gs_draw.c"
+    s = p.read_text()
+    trocas = {
+        "return sInGlowChain && t >= 0 && target_lowres(gsTargets[t].fbp);":
+        '''return ((sInGlowChain == 1 && Port_DesfoqueNative("BT3_PC_BRILHO_NATIVO")) ||
+            (sInGlowChain == 2 && Port_DesfoqueNative("BT3_DISTANCIA_NATIVA"))) &&
+           t >= 0 && target_lowres(gsTargets[t].fbp);''',
+        "if (effect == 0x20 || effect == 0x21)":
+        "if (effect == 0x20 || effect == 0x21 || effect == 0x22 || effect == 0x23)",
+        "sInGlowChain = effect == 0x20;":
+        "sInGlowChain = effect == 0x20 ? 1 : effect == 0x22 ? 2 : 0;",
+    }
+    for antes, depois in trocas.items():
+        if s.count(antes) != 1:
+            raise RuntimeError("política da cadeia mudou: " + antes)
+        s = s.replace(antes, depois)
+    p.write_text("extern int Port_DesfoqueNative(const char *);\n" + s)
+    (pc / "BLUR_CADEIAS").write_text("Sharp reconhece as cadeias independentemente dos alvos nativos.\n")
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 2 and sys.argv[2] == "--fase2":
         preparar_fase2(pathlib.Path(sys.argv[1]))
