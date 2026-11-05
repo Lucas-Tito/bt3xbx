@@ -31,6 +31,8 @@
 #include "som/som360.h"
 #include "queda360.h"
 #include "queda_teste360.h"
+#include "f2/amostra360.h"
+extern "C" void Vn_Configurar(const char *valor);
 
 extern "C" {
 void Port_MapMemory(void);              /* port/src/plat_mem.c, ramo PORT_X360 */
@@ -150,6 +152,7 @@ extern "C" void Port_GsDesenhoPartida(void) {
 /* exit() e abort() do jogo e do port (c89.py os renomeia): grava o que falta e encerra só a thread do jogo. */
 extern "C" void Port_Sair(int codigo) {
     Diario_Escrever("saída do jogo com código %d (%s)", codigo, gPortStage);
+    Amostra_Parar();
     Estado_Resumo();
     gPortStage = "game shutdown";
     /* A main usa a mesma desmontagem com teto para a saída normal e para a queda. */
@@ -424,13 +427,18 @@ void __cdecl main() {
     /* o jogo no núcleo 1 (thread de hardware 2), sozinho; pilha de 16 MB como a build de PC de 64 bits */
     if (!gTerminou) {
         Som360_Iniciar(); /* (F6, etapa 3) com BT3_SOM=1 ou BT3_SOM_TESTE=1: o XAudio2 nas threads 4 e 5 e o vigia na 1 */
+        Vn_Configurar(getenv("BT3_VU0_NATIVO"));
+        Diario_Escrever("vu0: nativo %s", getenv("BT3_VU0_NATIVO") && strcmp(getenv("BT3_VU0_NATIVO"), "0") == 0 ? "desligado" : "ligado");
+        Amostra_Preparar();
         t = CreateThread(NULL, 16 * 1024 * 1024, Jogo, NULL, CREATE_SUSPENDED, &gThreadJogo);
         XSetThreadProcessor(t, 2);
         ResumeThread(t);
+        Amostra_Comecar(t, gThreadJogo);
     }
 
     for (;;) {
         if (gTerminou && !desmontado) {
+            Amostra_Parar();
             gPortStage = "shutdown threads";
             auxiliar = CreateThread(NULL, 256 * 1024, sQuedaTomada ? Saida_Graficos : Saida_Threads, t, 0, NULL);
             bool acabou = Saida_Aguardar(auxiliar, 15000, Saida_Apresentar) != 0;

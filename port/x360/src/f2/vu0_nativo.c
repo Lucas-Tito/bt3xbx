@@ -3,6 +3,11 @@
  * arredondamento do restante da build PPC, que usa float por software.
  */
 #include "../../include/vu0_nativo.h"
+/* Configuração antes de iniciar a thread do jogo, sem getenv nas contas. */
+int gVnAtivo = 1;
+void Vn_Configurar(const char *valor) {
+    gVnAtivo = !(valor && valor[0] == '0' && valor[1] == 0);
+}
 #ifdef BT3_TESTE_VU0_NATIVO
 #include <fenv.h>
 #define VN_DECLARA_MODO int vn_modo
@@ -27,6 +32,7 @@ int Vn_Op4(const VnBits *a, const VnBits *b,
     float *fo = (float *)out;
     float x, y, z, w;
     VN_DECLARA_MODO;
+    if (!gVnAtivo) return 0;
     if (!Vn_Entradas(a, 4) || !Vn_Entradas(b, 4) ||
         (acc && !Vn_Entradas(acc, 4))) return 0;
     VN_TRUNCA;
@@ -57,6 +63,7 @@ int Vn_MtxApply(const VnBits *r, const VnBits *v, VnBits *out) {
     float *fo = (float *)out;
     float v0, v1, v2, v3, x, y, z, w;
     VN_DECLARA_MODO;
+    if (!gVnAtivo) return 0;
     if (!Vn_Entradas(r, 16) || !Vn_Entradas(v, 4)) return 0;
     VN_TRUNCA;
     v0 = fv[0]; v1 = fv[1]; v2 = fv[2]; v3 = fv[3];

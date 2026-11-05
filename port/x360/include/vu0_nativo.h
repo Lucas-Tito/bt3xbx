@@ -36,6 +36,8 @@ static VN_INLINE int Vn_Entradas(const VnBits *u, int n) {
 
 /* A implementação só recebe ponteiros e inteiros, inclusive na build de teste
  * PPC que chama estes núcleos de hardware a partir da ABI soft-float. */
+void Vn_Configurar(const char *valor);
+extern int gVnAtivo;
 int Vn_Op4(const VnBits *a, const VnBits *b, const VnBits *acc, VnBits *out, int op);
 int Vn_Bc4(const VnBits *a, VnBits b, const VnBits *acc, VnBits *out, int op);
 int Vn_MtxApply(const VnBits *r, const VnBits *v, VnBits *out);
