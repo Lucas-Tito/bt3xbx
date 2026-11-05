@@ -10,10 +10,13 @@ import argparse, collections, json, re
 def ler(caminho):
     nomes, totais, quadros = {}, {}, []
     vistos, atual = set(), None
+    fechadas = []
     def fechar():
         if atual is not None: quadros.append(atual)
     with open(caminho) as f:
         for linha in f:
+            janela = re.match(r'roteiro: janela (\d+) passos (\d+).* vblank (\d+)$', linha.strip())
+            if janela: fechadas.append(tuple(map(int, janela.groups())))
             if not linha.startswith('vu0conta: '): continue
             s=linha.strip().split()
             if s[1]=='motivos': continue
@@ -39,14 +42,26 @@ def ler(caminho):
             else: raise ValueError('linha desconhecida: '+linha)
     fechar()
     if not nomes or not quadros: raise ValueError('inventário ou passos ausentes')
-    return {'passos':len(quadros),'totais':totais,'quadros':quadros,
+    janelas, inicio = [], 0
+    for numero, n, vb in fechadas:
+        trecho = quadros[inicio:inicio+n]
+        if not trecho or len(trecho)!=n or trecho[-1]['vb']!=vb:
+            raise ValueError('janela do rastro não fecha com os passos contados')
+        soma = {nome:[sum(q['contas'].get(nome,[0]*8)[i] for q in trecho) for i in range(8)] for nome in totais}
+        janelas.append({'janela':numero,'passos':n,'vb_fim':vb,'totais':soma})
+        inicio += n
+    if fechadas and inicio != len(quadros): raise ValueError('passos fora das janelas do rastro')
+    return {'janelas':janelas,'passos':len(quadros),'totais':totais,'quadros':quadros,
             'colunas':['chamadas','nativo','sem-motivo','desligado','nan-inf','denormal','pequeno','grande']}
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('log');p.add_argument('--json')
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('log');p.add_argument('--json');p.add_argument('--janela',type=int)
     a=p.parse_args();r=ler(a.log)
     if a.json:
         with open(a.json,'w') as f:json.dump(r,f,indent=1)
+    if a.janela is not None:
+        r=next(j for j in r['janelas'] if j['janela']==a.janela)
+        print('Janela:',a.janela)
     print('Passos de combate:',r['passos'])
     print('função | chamadas | por passo | nativo | recuos (desligado, nan-inf, denormal, pequeno, grande)')
     for nome,v in r['totais'].items():

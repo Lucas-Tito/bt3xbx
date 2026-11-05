@@ -16,7 +16,7 @@ Não muda o combate nem injeta dano.
 A pasta de `BT3_SAVES` precisa estar vazia em **cada execução**. Para repetir, usar
 um nome novo e curto no FATX. Guardar `bt3xbx.log`, `output.txt` e o mapa por rodada.
 Repetir os pares em ordem invertida para separar aquecimento de diferença real.
-Conferir vencedor, vida, fim do roteiro e os 2.334 passos de combate antes de
+Conferir vencedor, vida, fim do roteiro e a janela 2 com 2.334 passos de combate (há 684 antes da pausa) antes de
 comparar p50, p95, p99, máximo e passos acima de 30 ms. Não comparar o tempo de
 uma coleta com o de uma rodada sem coleta como se a coleta fosse gratuita.
 

@@ -3366,3 +3366,18 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   depois x86vc e ppcvc. Os logs das builds também passam pelo log geral com
   `tee`, para que a falha não deixe `contar.log` vazio. Nenhuma luta foi
   executada na tentativa que revelou essa dependência.
+
+- Comparar todos os contadores x86/PPC por igualdade recusou a rodada `previa2`
+  só depois das quatro lutas. Os auxiliares escalares têm chamadas dependentes
+  do compilador/ABI, e os motivos de recuo excepcional também diferem. Exigir
+  as chamadas comuns por passo, as fronteiras e a passagem da matriz pelo gancho;
+  conservar todas as diferenças no JSON, sem substituir a prova de memória.
+  O hash bruto de todas as globais também difere entre as duas posições;
+  comparar vblank e resumo da luta, e exigir o normalizador de memória oficial.
+  Separar as janelas do rastro: o Duelo tem 684 passos antes da pausa e 2.334
+  depois; usar 3.018 como denominador da segunda janela mistura as medições.
+- `~/vez.sh` dá prioridade ao arquivo `~/vagas` sobre `BT3_VAGAS`. Se a tarefa
+  limita a três e o arquivo permite quatro, só definir a variável não basta.
+  Sem alterar o escalonador compartilhado, o lançador próprio deve recusar uma
+  vaga superior a três antes de executar qualquer build/emulador e tentar de novo
+  como serviço. Nunca acumular lançadores em segundo plano.

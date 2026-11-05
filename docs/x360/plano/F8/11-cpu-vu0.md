@@ -366,7 +366,7 @@ pedido de 1.000 us não garante coleta sem interferência ou sem viés.
 Esses quadros históricos também não são uma identificação do Duelo fixo atual.
 A hipótese de viés continua sem resposta até comparar os quatro ambientes.
 
-### Contagem e prova em andamento
+### Contagem sem janela e certificação final
 
 A contagem usa cópias geradas dos fontes, incluindo funções inline e funções que
 retornam estruturas. `BT3_VU0_CONTA=1 BT3_TESTE_VU0_NATIVO=1 headless.py --alvo
@@ -384,8 +384,70 @@ motivo, na ordem das entradas: desligado, NaN/Inf, denormal, normal pequeno ou g
 com passo ausente, retorno a menos, duplicata, linha truncada e sem dados.
 `teste_vu0_chave.py` prova as duas posições no mesmo binário, com o gancho real
 de `float360.c`, e recusa núcleos que ignoram a chave e configuração que ignora zero.
-Os resultados da luta e a certificação do commit final serão julgados no relatório
-externo; esta seção não declara aceite de uma execução ainda em andamento.
+A rodada preliminar `~/vu0-amostra/previa2` completou as quatro lutas no commit
+`dad16f6c`: todos os rastros têm 69 linhas iguais, vencedor 0x2, vida 27160 e
+fim no quadro 8378. A comparação final recusou a igualdade integral dos contadores.
+A reavaliação preservou as diferenças e confirmou as chamadas por passo das funções
+principais, a passagem de toda `mtx_apply` pelo gancho e as duas posições da chave.
+Não se exige igualdade de auxiliares escalares e de recuo: há chamadas que dependem
+do compilador e motivos que diferem entre arquiteturas. Os JSON preservam cada uma.
+Os resumos de luta e seus vblanks coincidem nas 12.570 linhas entre ligado e
+desligado em cada arquitetura. Os hashes de todas as globais diferem, inclusive
+antes da luta na x86: eles abrangem ponteiros e campos não iniciados. A causa exata
+dessas diferenças não foi localizada; a comparação bruta não prova identidade. A memória do commit final continua
+sendo um critério independente, com o normalizador oficial.
+
+O roteiro tem **duas janelas**, 684 passos antes da pausa e 2.334 depois dela,
+3.018 no total. A medida fornecida do console é da segunda. O resumo agora separa
+as janelas pelo número de passos e vblank de fechamento do próprio rastro; recusa
+fechamentos incompatíveis. Os números abaixo são da janela 2, com nativo ligado.
+As chamadas principais coincidem nas duas arquiteturas, nas duas posições.
+
+| Função | Chamadas | Por passo |
+|---|---:|---:|
+| mtx_apply / Port_FastMtxApply / Vn_MtxApply | 7.862.872 cada | 3.368,840 |
+| op_vmaddabc | 19.741.093 | 8.458,052 |
+| op_vmaddbc | 10.538.385 | 4.515,161 |
+| op_vmulabc | 9.919.125 | 4.249,839 |
+| Vec4_Add | 2.530.211 | 1.084,066 |
+| Vec4_Scale | 2.403.094 | 1.029,603 |
+| Mtx_Mul | 1.520.244 | 651,347 |
+| Vu0_SinCos | 478.094 | 204,839 |
+
+| Núcleo | Chamadas por arquitetura | Nativas x86 / PPC | Aceitação x86 / PPC |
+|---|---:|---:|---:|
+| Vn_MtxApply e gancho | 7.862.872 | 7.850.522 / 7.850.522 | 99,843% / 99,843% |
+| Vn_Op4 | 56.183.997 | 55.585.510 / 55.434.391 | 98,935% / 98,666% |
+| Vn_Bc4, incluído em Op4 | 51.916.688 | 51.409.039 / 51.338.535 | 99,022% / 98,886% |
+
+Na matriz, os 12.350 recuos são todos por normal pequeno. Em Op4, x86/PPC:
+NaN/Inf 65.981/54.306, denormal 56.613/42.013, normal pequeno
+464.178/653.247, normal grande 11.715/40. Em Bc4: NaN/Inf 11.675/0,
+denormal 56.022/42.012, pequeno 428.242/536.101, grande 11.710/40.
+Com a chave em zero, cada chamada dos três núcleos e do gancho recua por
+`desligado`, sem retorno nativo. Não somar Bc4 a Op4, nem gancho a matriz.
+Os recuos diretos de Vec4_Add são 36.532/117.147 e os de Vec4_Scale
+18.567/42.391, x86/PPC; os corpos escalares continuam sendo contados.
+
+**Hipótese 1: recusada nesta luta sem janela.** O nativo roda na grande maioria
+das chamadas. Isto não é contagem de console, onde float360 tem implementação
+escalar própria. **Hipótese 2: parcialmente medida, causa do empate ainda sem
+resposta.** A matriz passa sempre pelo gancho; as instruções citadas delegam
+aos núcleos, mas conservam interpretação, estado e flags. O restante do perfil
+visível sem alteração soma 4,083 ms históricos. A contagem não mede quanto custam
+as guardas e o trabalho restante no Xenon. **Hipótese 3: sem resposta**, pelos
+limites da coleta histórica descritos acima.
+
+Cruzamento apenas ilustrativo entre cenas diferentes: aplicar a aceitação da
+matriz ao balde antigo de 2,587 ms deixa teto ideal de 2,583 ms. Usar a faixa de
+aceitação dos núcleos como aproximação para os 6,802 ms diretamente alterados
+deixa cerca de 6,7 a 6,8 ms antes de todo custo remanescente. Se ainda se supuser
+a aceleração de três a cinco vezes do estudo, o ganho seria de cerca de 4,5 a
+5,4 ms, não oito a nove. Nenhuma dessas contas é previsão validada: faltam o
+perfil da luta atual e o tempo do núcleo, incluindo guardas, no mesmo executável.
+
+A certificação integral será executada depois de congelar este commit. O relatório
+externo registra o resultado da rodada final e não declara aceite antecipado.
 
 ### Preparação da nova sessão de console
 

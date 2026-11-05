@@ -41,7 +41,11 @@ int main(void) {
           'retorno a menos':log.replace('14 2 0 2 4 2 2 2','14 1 0 2 4 2 2 2'),
           'conta duplicada':log+next(l for l in linhas if l.startswith('vu0conta: conta ')),
           'conta truncada':log+'vu0conta: conta 0 1\n',
-          'sem dados':''}
+          'sem dados':'',
+          'janela não fecha':log+'roteiro: janela 1 passos 1 vblank 3\n',
+          'janela incompleta':log+'roteiro: janela 1 passos 2 vblank 2\n'}
+        p.write_text(log+'roteiro: janela 1 passos 1 vblank 2\n')
+        assert ler(p)['janelas'][0]['totais']==r['totais']
         for nome,estragado in casos.items():
             assert estragado!=log,nome
             p.write_text(estragado)

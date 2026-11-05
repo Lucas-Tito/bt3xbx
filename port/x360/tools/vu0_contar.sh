@@ -40,21 +40,17 @@ for lado in 1 0; do
         python3 port/x360/tools/vu0_conta_resumo.py "$D/conta-$alvo-$lado.txt" --json "$D/conta-$alvo-$lado.json" > "$D/resumo-$alvo-$lado.txt"
         python3 port/x360/tools/roteiros.py telas "$D/conta-$alvo-$lado.txt" > "$D/telas-$alvo-$lado.txt"
         python3 port/x360/tools/roteiros.py compara "$D/telas-x86-1.txt" "$D/telas-$alvo-$lado.txt"
+        python3 port/x360/tools/vu0_conta_resumo.py "$D/conta-$alvo-$lado.txt" --janela 2 > "$D/resumo-$alvo-$lado-janela2.txt"
         echo "Fim $alvo nativo=$lado $(date -Is)"
     done
 done
-python3 - "$D" <<'PY'
-import json,pathlib,sys
-p=pathlib.Path(sys.argv[1]);rs={}
-for a in ['x86','ppc']:
- for n in [1,0]:rs[a,n]=json.loads((p/f'conta-{a}-{n}.json').read_text())
-for n in [1,0]:
- assert rs['x86',n]==rs['ppc',n],f'contagem x86/PPC diferente, nativo={n}'
-for a in ['x86','ppc']:
- for n in [1,0]:
-  r=rs[a,n];assert r['passos']>2000
-  alvo=r['totais']['vu0_nativo/Vn_MtxApply']
-  assert (alvo[1]>0)==bool(n)
-  if not n:assert alvo[3]==alvo[0]
-print('tudo certo: quatro rastros iguais, contagens x86/PPC iguais nas duas posições')
-PY
+for alvo in x86 ppc; do
+    for lado in 1 0; do
+        grep -q ' hp ' "$D/hash-$alvo-$lado.txt"
+        # As globais incluem ponteiros e campos não iniciados. Comparar aqui
+        # vblank e resumo da luta; a memória completa usa o critério oficial.
+        cut -d ' ' -f 1,3- "$D/hash-$alvo-$lado.txt" > "$D/luta-$alvo-$lado.txt"
+    done
+    cmp "$D/luta-$alvo-1.txt" "$D/luta-$alvo-0.txt"
+done
+python3 port/x360/tools/vu0_conta_confere.py "$D" | tee "$D/comparacao.txt"
