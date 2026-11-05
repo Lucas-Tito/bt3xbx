@@ -1,12 +1,12 @@
 # F8: diagnóstico da imagem macia no console
 
 Branch `blur-analise`, base 1.0.2 `9c69c4ba`. Referência de PC: `troca/ref/upstream-main`, `48d66c1f`.
-Sem console e sem XDK no WSL. Estado atual na seção de fase 2 abaixo: o Lucas identificou
-o desfoque da distância em sessão livre; a medição por capturas equivalentes ainda está pendente.
-A última repetição local falhou: a cópia do PC colidia marcadores de distância com
-os menus 16:9. Seus novos casos Sharp/completo estão recusados; uma nova rodada
-precisa preservar os controles nativos da coleta extensa e completar Sharp.
-O estado mais recente está na última seção.
+A sessão de console de 05/11 fechou a escolha de imagem do Lucas, registrada na
+[decisão 42](../../decisoes.md). Os seis commits recebidos até `c5b319c5` foram integrados
+sem conflitos, preservando seu conteúdo. A coleta PC de `f76049bc` terminou e foi aprovada;
+a conferência local do código integrado está armada, conforme a última seção.
+As seções anteriores à última são o histórico das propostas e dos padrões de cada rodada.
+Sem console nem XDK nesta worktree; as medidas de console abaixo vêm da decisão 42.
 
 ## Rodada preparada
 
@@ -614,3 +614,93 @@ O serviço, executor, commit e marcador desta rodada constam no relatório exter
 A sessão termina conforme a regra de espera longa. Depois de julgar a rodada,
 se ainda faltar somente o console, usar `test ! -d /home/codex/blur-resultado-2`.
 O pedido livre permanece em `~/blur-pedido-console-2.md`, com LOG=1 e SHOT=300.
+
+
+## Integração da decisão 42 e julgamento da coleta PC (05/11)
+
+O serviço `bt3-blur-analise-despacho.service` terminou com `Result=success`, código 0,
+`COLETA_CONCLUIDA` e sem `FALHA`, em `~/blur-analise/fase2-despacho/`.
+A referência PC terminou por completo antes desta retomada; não ficou coleta em execução.
+
+| Prova do commit f76049bc | Resultado julgado |
+|---|---|
+| PC, oito casos e 48 PPM | íntegros, cenas/vblanks conferidos |
+| Sete controles da coleta extensa | 42/42 PPM idênticos byte a byte |
+| Sharp escala 2 corrigido | atua na luta, preserva menu/seleção |
+| Distância com média | difere da redução sem média |
+| Builds x86/x86r/PPC | 398/399/422 objetos, zero falhas; 1965 structs PPC iguais |
+| Objetos x86 sem depuração | 326 iguais; só x360_passos.o difere pelo carimbo |
+| `.text` x86 | igual à 1.0.2, SHA1 94fe2737c0b9f6663ca659685be77a7cd1d36659 |
+| `SEMMAPA=1 IMG=1 roteiros.sh f5_duelo` | código 0, tudo certo |
+| Imagens oficiais | 13/13 pares iguais, 26/26 PPM iguais aos da coleta extensa |
+
+Os controles confirmam os números de distância nativa, média e conjunto completo da
+tabela anterior. A c02 antiga continua recusada; a válida é a desta repetição. No
+combate GS 4977, a nova Sharp muda 2335/36800 pixels do chão, 8731/8976 da árvore,
+0/880 de Kuririn, 0/320 de Goku e 127/1968 da barra. Contra os blocos macios, preserva
+mais do chão próximo; os dois interiores dos lutadores continuam iguais. A árvore
+continua recebendo os passes da cadeia. Esses números não medem preferência visual.
+
+Foram inspecionados `sharp-combate.png` e `sharp-longe.png`, colunas base, blocos
+macios, Sharp e conjunto completo. Cidade, câmera, pose de impacto e cronômetro 230
+coincidem. O recorte distante ampliado por ponto mostra diferenças discretas na árvore;
+não prova eliminação geral de quadrados. Os PPM originais não foram redimensionados.
+Cálculo e contatos reproduzíveis em `~/blur-analise/julgar-despacho.py`, medidas em
+`fase2-despacho/medidas-regioes.json`. Continua recusado o alinhamento entre versões
+na apresentação GS 4590; as variantes PC são comparadas contra a própria base.
+
+### Escolha do Lucas e padrões integrados
+
+O culpado da maciez era `StgFog_Draw`, confirmado pelo corte jogado em 04/11. Na
+sessão livre de 05/11, o Lucas aprovou os cinco tratamentos do PC e escolheu distância
+a 25%, depois de experimentar 100% e 55%. A alteração multiplica somente os alfas da
+CLUT em `StgFog_BuildClut`; com 100%, conserva a conta original. Não houve prova de
+um defeito de profundidade ou Resolve que justificasse alterar esses caminhos.
+
+| Controle | Padrão no 360 após a decisão 42 |
+|---|---|
+| SHARP_BLUR, DISTANCIA_NATIVA, DISTANCIA_MEDIA, GLOW_BLOCK, GLOW_NATIVE, todos com prefixo BT3_ | 1; cada chave aceita 0 para desligar |
+| BT3_DISTANCIA_FORCA | 25; intervalo 0 a 100 |
+| BT3_MIPMAP | 1; geração nas texturas elegíveis, cadeia até 32x32 |
+| BT3_MIPMAP_REF | 0; conservação de cobertura recusada no console |
+| BT3_MSAA_A2C e BT3_FILTRO_PS2 | 0; não resolveram o cintilado |
+
+O cintilado era outro sintoma: serrilhado dentro das texturas do cenário em movimento.
+O mipmap praticamente o eliminou; com alfa do nível 0 nos desenhos com teste de alfa,
+o Lucas aprovou também a folhagem. O jogo não pede níveis de mipmap, portanto esta é
+uma melhoria adicional ao tratamento do PC. A cadeia para em 32x32 para evitar os
+blocos de 4 KB dos níveis menores. Não confundir essa decisão com a análise da 1.0.2,
+que tinha somente nível zero e não podia selecionar mipmap excessivamente borrado.
+
+Medidas comunicadas na decisão 42: texturas 107,2 MB contra 81,9 MB, teto de 128 MB e
+111 MB livres; no mesmo roteiro, folga GPU mediana 8,4 contra 8,6 ms, p1 2,6 contra
+2,8 ms. Houve sete imagens atrasadas no começo da luta contra nenhuma sem mipmap,
+atribuídas à geração na carga. Tirar essa geração do caminho crítico fica como custo
+conhecido, sem alterar o conteúdo aprovado nesta integração. A primeira comparação dos
+cinco tratamentos usou partidas diferentes e não constitui medida exata de desempenho.
+
+Integração sem conflitos dos commits `30b119f6`, `f5c9ee20`, `9f879995`, `ce155370`,
+`ea839052` e `c5b319c5`, sobre `f76049bc`, pelo merge `8a1d2d51`.
+Nenhuma nova sessão de console é necessária para decidir os padrões. Os pedidos em
+`~/blur-pedido-console.md` e `~/blur-pedido-console-2.md` ficam como registro histórico.
+Nas builds sem janela, os cinco tratamentos continuam desligados e a força é 100;
+só `PORT_X360` adota os novos padrões. `BT3_TESTE_DESFOQUE=1` abre também a chamada
+nova a `Port_DistanciaForca`, sem definir `PORT_X360` globalmente.
+
+### Conferência do código integrado
+
+`teste_desfoque.py` agora confere 16 casos da força: os dois padrões, valor vazio,
+0/25/55/100 e os limites -1/101, compilando com e sem `PORT_X360` em C89 estrito.
+Cópias com padrão do console trocado para 100 e teto trocado para 101 foram vistas
+falhando antes de aceitar o fonte real. Evidência em
+`~/blur-analise/negativos-decisao42/forca.log`. Os 128 cortes, 256 máscaras e 24
+combinações do despacho PC também passaram nesta integração.
+
+A prova final ficará em `~/blur-analise/decisao42-final/`, fixada no commit que contém
+esta seção. O serviço executa, numa só vaga de `~/vez.sh`, builds x86/x86r/PPC,
+objetos sem depuração e `cmp` da `.text`, builds de diagnóstico x86b/ppcb,
+`SEMMAPA=1 IMG=1 roteiros.sh f5_duelo`, preservação das 13 imagens oficiais e
+seis capturas por build de diagnóstico com a força original 100, contra a referência.
+Log, comando do serviço, marcador e instruções de retomada no relatório externo.
+Essas provas do código integrado ainda não terminaram; não se transfere o aceite
+do commit anterior para a integração. Ao terminar, julgar o resultado antes de fechar.

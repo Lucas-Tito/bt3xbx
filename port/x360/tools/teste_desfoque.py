@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Confere o isolamento dos sete cortes; aceita uma cópia mutante do núcleo."""
+"""Confere os cortes e a força da distância; aceita cópia mutante do núcleo."""
 import os
 import pathlib
 import subprocess
@@ -33,5 +33,34 @@ int main(void) {
     print("teste_desfoque: 128 combinações, tudo certo")
 
 
+def conferir_forca(fonte):
+    with tempfile.TemporaryDirectory() as pasta:
+        pasta = pathlib.Path(pasta)
+        (pasta / 'forca.c').write_text('''#include <stdio.h>
+int Port_DistanciaForca(void);
+int main(void) {
+    int forca = Port_DistanciaForca();
+    printf("forca=%d\\n", forca);
+    return 0;
+}
+''')
+        for console in (False, True):
+            subprocess.run(['gcc', '-std=c89', '-pedantic', '-Wall', '-Wextra', '-Werror',
+                            *(['-DPORT_X360'] if console else []), str(fonte), str(pasta / 'forca.c'),
+                            '-o', str(pasta / 'forca')], check=True)
+            padrao = 25 if console else 100
+            for valor, esperado in ((None, padrao), ('', padrao), ('-1', 0), ('0', 0),
+                                    ('25', 25), ('55', 55), ('100', 100), ('101', 100)):
+                env = {k: v for k, v in os.environ.items() if k != 'BT3_DISTANCIA_FORCA'}
+                if valor is not None:
+                    env['BT3_DISTANCIA_FORCA'] = valor
+                saida = subprocess.check_output([str(pasta / 'forca')], env=env, text=True).splitlines()[-1]
+                if saida != 'forca=' + str(esperado):
+                    raise AssertionError('força incorreta: console=%s valor=%r saída=%s' % (console, valor, saida))
+    print('teste_desfoque: força, 16 casos incluindo padrões e limites, tudo certo')
+
+
 if __name__ == "__main__":
-    conferir(pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else RAIZ / "port/x360/headless/desfoque.c")
+    fonte = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else RAIZ / "port/x360/headless/desfoque.c"
+    conferir(fonte)
+    conferir_forca(fonte)

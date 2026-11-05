@@ -3304,7 +3304,7 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 - A âncora de `BT3_IMAGENS` não inclui `roteiro: arquivo:linha`: `Imagens_Evento` retira esse prefixo.
   Valide as âncoras contra `eventos_rastro`/`quadro_esperado` antes de gastar a rodada. No ensaio do desfoque,
   os GS 2969/3362/4590/4977/5357/5418 foram medidos; vblank e quadro do roteiro não são substitutos.
-- `tex2Dgrad` não implica mipmaps no 360: `tex_create` ignora levels, o cabeçalho XG tem um nível,
+- Na 1.0.2, `tex2Dgrad` não implica mipmaps no 360: `tex_create` ignora levels, o cabeçalho XG tem um nível,
   `tex_upload` recusa level diferente de zero e o sampler desliga o filtro de mip. Investigue o bilinear
   do nível base e os efeitos do cenário antes de atribuir a maciez a K/L ou viés de LOD.
 - Na coleta autorizada com três vagas, use `~/vez.sh` e não acrescente guarda global contra outro qemu:
@@ -3348,3 +3348,10 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   usa `0x80/0x81`; o frontend antigo do 360 não tem essa colisão. Testar a função
   real inteira, com o caso antigo visto falhando, e repetir também distância
   nativa/média e conjunto completo; não aceitar a mudança do controle sem causa.
+
+- Na integração da decisão 42, os padrões aprovados no console são exclusivos de
+  `PORT_X360`. O diagnóstico `BT3_TESTE_DESFOQUE=1` abre também a chamada da força
+  em `StgFog_BuildClut`, mas mantém 100% e os tratamentos desligados por padrão.
+  Repetir a build e as capturas dessa variante, além da build plana: só a igualdade
+  da `.text` plana não exercita a chamada nova. O mipmap gerado após essa decisão
+  não existia na 1.0.2 analisada nos itens anteriores.
