@@ -196,6 +196,11 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool 
         }
         // (semTex: sem a leitura)
         t = blocos ? desfoque_bilinear(uv) : semTex ? float4(0.0f, 0.0f, 0.0f, 0.0f) : tex2Dgrad(tex, uv * esc.xy, gx * esc.xy, gy * esc.xy);
+        if (modo.w != 0.0f && !blocos && !semTex) {
+            // (BT3_MIPMAP) com teste de alfa (a folhagem recortada), o alfa do nível 0: o recorte é o do PS2 a qualquer
+            // distância; a média dos níveis menores misturava folha e buraco e a planta sumia. A cor segue filtrada.
+            t.a = tex2Dlod(tex, float4(uv * esc.xy, 0.0f, 0.0f)).a;
+        }
     }
     if (modo.x != 0.0f) {
         if (modo.x != 2.0f) {

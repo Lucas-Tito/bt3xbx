@@ -481,10 +481,13 @@ static TexXg *xg_cria_mip(UINT w, UINT h, UINT niveis) {
     return x;
 }
 /* os níveis de uma textura de w x h até 1 x 1 */
+/* (05/11) A cadeia para em 32 x 32: na forma não compactada cada nível menor ocupa um bloco de 32 x 32 (4 KB) e os níveis
+   pequenos custavam mais que a textura (51% a mais de memória na luta). Além de 32 x 32 a GPU fica no último nível. */
 static UINT mip_niveis(UINT w, UINT h) {
-    UINT n = 1, m = w > h ? w : h;
-    while (m > 1) {
-        m >>= 1;
+    UINT n = 1;
+    while (w / 2 >= 32 && h / 2 >= 32) {
+        w /= 2;
+        h /= 2;
         n++;
     }
     return n;
@@ -2172,7 +2175,7 @@ static void otim_init(void) {
     sPsTrivial = env_num("BT3_PS_TRIVIAL", 0) & 3;
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
     sMipmap = env_num("BT3_MIPMAP", 1) != 0; /* (decisão 42) ligado por padrão: o cintilado do cenário em movimento */
-    sMipRef = env_num("BT3_MIPMAP_REF", 0x40) & 0xFF;
+    sMipRef = env_num("BT3_MIPMAP_REF", 0) & 0xFF; /* (desligada: com o limite errado a folhagem sumia mais) */
     {
         /* (BT3_MIPMAP_VIES, em décimos de nível) negativo empurra a troca de nível para mais longe */
         const char *v = getenv("BT3_MIPMAP_VIES");
@@ -2180,7 +2183,7 @@ static void otim_init(void) {
     }
     Diario_Escrever("gs_d3d: mipmap: cobertura do recorte conservada com o limite 0x%02X (BT3_MIPMAP_REF, 0 desliga), viés %.1f "
                     "nível (BT3_MIPMAP_VIES, em décimos)", sMipRef, (double)sMipVies);
-    Diario_Escrever("gs_d3d: mipmap gerado nas texturas do jogo de 32 x 32 ou mais, filtro linear entre níveis %s (BT3_MIPMAP)",
+    Diario_Escrever("gs_d3d: mipmap gerado nas texturas do jogo de 64 x 64 ou mais (até 32 x 32), filtro linear entre níveis %s (BT3_MIPMAP)",
                     sMipmap ? "ligado" : "desligado");
     if (sPsTrivial != 0 && (FAILED(sDev->CreatePixelShader((const DWORD *)kGsTrivPs, &sPsTriv[0])) ||
                             FAILED(sDev->CreatePixelShader((const DWORD *)kGsZTrivPs, &sPsTriv[1])))) {
@@ -2461,14 +2464,14 @@ static GsTex tex_create(uint32_t w, uint32_t h, int format, int levels) {
         branca(BR_FORMATO, w, h);
         return 0;
     }
-    if (sMipmap && w >= 32 && h >= 32) {
-        bytes = bytes + bytes / 2 + 4096; /* (a cadeia sem a cauda compartilhada passa um pouco do terço a mais) */
+    if (sMipmap && mip_niveis(w, h) > 1) {
+        bytes = bytes + bytes / 3 + 4096; /* (a cadeia até 32 x 32: um terço a mais) */
     }
     if (mem_livres(bytes) < sMem.pisoMb * MB + bytes) {
         sG.semTextura++;
         return 0; /* (quem chamou conta o motivo) */
     }
-    t = sMipmap && w >= 32 && h >= 32 ? xg_cria_mip(w, h, mip_niveis(w, h)) : xg_cria(w, h, tex_fmt(w, h));
+    t = sMipmap && mip_niveis(w, h) > 1 ? xg_cria_mip(w, h, mip_niveis(w, h)) : xg_cria(w, h, tex_fmt(w, h));
     if (t == NULL) {
         sG.semTextura++;
         return 0;
