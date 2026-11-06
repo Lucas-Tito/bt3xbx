@@ -32,6 +32,7 @@ uma caixa do sistema: o único recuo disponível é sair diretamente ao dashboar
 Se o sistema recusar a caixa por 10 s, a build pública também sai. Conferir esse limite
 separadamente da recusa do renderer, que conserva o dispositivo da main.
 
-Aprovar os textos de `docs/x360/release-1.1.0.md`, comparar as listras da sombra com o
-PS2 e só então preparar o pacote real com as três saídas da mesma build pública e
+Aprovar os textos de `docs/x360/release-1.1.0.md`, reconferir os padrões escolhidos
+no console (`BT3_MIPMAP_LUTADOR=1`, `BT3_MIPMAP_ALFA=0`, decisão 42 item 6) e só
+então preparar o pacote real com as três saídas da mesma build pública e
 `pacote.py --estrito`. Nenhuma publicação está autorizada nesta tarefa.

@@ -8,7 +8,10 @@ publicação ou envio a main nesta tarefa. Relatório de execução fora do Git 
 
 - Nitidez: merge de `troca/blur-analise` em `1e959c63`, preservando o fechamento da decisão 42.
 - Mipmap: cherry-picks de `3c2dd577` e `6038dd30` do pacote, preservando os autores.
-  O VMX128 faz a média por bytes com arredondamento para cima; alfa da folhagem a 50%.
+  O VMX128 faz a média por bytes com arredondamento para cima. Os cherry-picks de
+  `3782f8fd` e `7a6a8f6e` incorporam o veredito da decisão 42, item 6:
+  `BT3_MIPMAP_LUTADOR=1` mantém os níveis nos materiais, mas não na rampa e no fade;
+  `BT3_MIPMAP_ALFA=0` conserva a folhagem cheia no Duelo, substituindo o padrão 50%.
 - VU0: merge de `troca/vu0-amostra` em `07bdf95b`. Nativa ligada por padrão;
   `BT3_VU0_NATIVO=0` desliga. Amostrador desligado. Mantêm-se guardas e recuos.
 - De `fd39f36c`: gancho em gs_on, saída 7, descarga do diário e ensaio com API simulada.
@@ -87,8 +90,8 @@ substitui os roteiros oficiais. Os verificadores novos exigem cópias sabotadas.
 Título: **BT3 Xbox 360 1.1.0**
 
 > Version 1.1.0 improves the picture and performance. Generated mipmaps reduce
-> shimmering on scenery, distance blur is reduced, and foliage uses a sharper
-> alpha level. Native VU0 arithmetic is enabled in safe ranges, with the original
+> shimmering on scenery, distance blur is reduced, and character shading tables
+> keep their original texture level. Native VU0 arithmetic is enabled in safe ranges, with the original
 > calculation used for other inputs. Fatal errors display a system message and
 > return to the dashboard after OK whenever the graphics device is available.
 > Logs, self tests and profiling remain off during normal play.
@@ -99,15 +102,12 @@ Título: **BT3 Xbox 360 1.1.0**
 > System message boxes may close immediately on consoles running Bad Avatar.
 > Not every character, transformation or story battle has been played on this version.
 
-Pendente com Lucas: listras nas sombras dos lutadores com mipmap. Comparar ao jogo
-original antes de incluir como problema confirmado. Não introduzir a hipótese
-como known issue definitivo no README do pacote.
-
-Atualização de 06/11: o mipmap dos personagens também está sob investigação
-separada. A integração conserva o comportamento atual, mas as comparações de
-software não aprovam imagens de personagens com mipmap no console. Conservar a
-receita da regressão para repeti-la depois do veredito, sem regravar referências
-visuais como aprovadas enquanto essa análise estiver pendente.
+Veredito de 06/11 incorporado: as listras e o aspecto estranho dos personagens
+sumiram no console com a rampa e o fade sem níveis. O registro e as medidas
+estão na decisão 42, item 6. A aprovação visual anterior foi substituída por
+esse aceite do Lucas; a conferência de software não mede o D3D nem o VMX128.
+A receita de imagem será repetida no commit final sem regravar as referências
+compartilhadas. Não há problema de sombra confirmado a acrescentar ao README.
 
 O README raiz e o do pacote são rascunhos desta versão. O título e a versão vêm
 dos arquivos env. A montagem real, depois de conferir XDK/console e aprovar os

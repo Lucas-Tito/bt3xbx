@@ -16,7 +16,7 @@ The 1.1.0 draft adds mipmaps to reduce shimmer on scenery, adjusts distance blur
 and uses native VU0 arithmetic in safe ranges. Fatal errors show a system message
 before returning to the dashboard. Generating mipmaps can delay a few pictures
 when a battle starts, and split screen can still slow down. Stripes in fighter
-shadows remain under comparison with the original game and are not yet a confirmed issue.
+shadows were corrected by keeping the shading and fade tables at their original texture level.
 
 This repository contains **no game data**, and neither does the release. You need your own disc
 image of the USA release. The game converts it once, on the console or on a PC, into a copy laid out for the
