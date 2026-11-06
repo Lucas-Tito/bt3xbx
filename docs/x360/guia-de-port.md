@@ -3521,6 +3521,16 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 
 ### Integração da 1.1.0: política de falha e limites da base
 
+- A segunda rodada parou em História: o mapa acusou 00460 s2, 0xA95E2, como
+  leitura de quatro bytes sobre byte. Era FlashDraw_PutSprite lendo um FlashQuad
+  local na pilha. O anel do rastreio adiava o uso e consultava a origem só ao
+  retirar a leitura; nesse intervalo outra função já reutilizara o endereço.
+  O diagnóstico mostrou origem 0xC82F0 de outro conteúdo no instante da leitura
+  e 00460 s2 na retirada. Guardar a origem junto da leitura corrige a atribuição
+  na retirada, reescrita e descarga final. Não alargar a exceção de deslocamentos
+  ímpares nem trocar bytes do arquivo para acomodar esse falso positivo.
+  teste_rastreio_origem.py simula a reutilização com dados sintéticos e recusa
+  nas três saídas uma cópia que volta a consultar a origem tardia.
 - Preparar todos os fontes com c89.py não prova que o C gerado compila. A primeira
   rodada parou no confere_limites_xdk: btl_act_h_b.c e hud_d_b.c declaravam memset
   com tamanho s32, incompatível com unsigned int do prelúdio e da CRT do XDK.
