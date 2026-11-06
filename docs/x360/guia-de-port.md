@@ -3512,3 +3512,24 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   Sem alterar o escalonador compartilhado, o lançador próprio deve recusar uma
   vaga superior a três antes de executar qualquer build/emulador e tentar de novo
   como serviço. Nunca acumular lançadores em segundo plano.
+
+### Integração da 1.1.0: política de falha e limites da base
+
+- GsDraw desta base tem 128 bytes. Os 132 do Tag Team incluem um campo que não
+  entra nesta release. Ao trazer confere_limites_xdk.py, adaptar também os negativos
+  ao tipo Vtx que existe nesta base; não aceitar uma falha por tipo desconhecido
+  como prova de inicializador C89 recusado.
+- A base usa Port_powf pela newlib e pow duplo pela CRT no 360, sem Port_pow.
+  O negativo desta integração retira Port_FastMtxApply e depois Vn_MtxApply;
+  a conferência combina float360 e o núcleo nativo, nunca plat_libm como provedor.
+- Os ensaios da main precisam das APIs do amostrador, Vn_Configurar e ImportaTela_Executar
+  mesmo com esses recursos desarmados. Adaptadores de fases anteriores estavam
+  incompletos depois dos merges e não ligavam; esses stubs simulam apenas a plataforma.
+- BT3_LOG é uma chave de execução, não identifica build de teste. Usar só ela para
+  escolher vermelho permite cor ao público que ligou um log. BT3_TESTE_FALHAS é uma
+  opção de compilação, pública em 0. teste_falha_publica.py executa a main real nas
+  duas variantes, exige caixa com Present na pública e vermelho na de teste,
+  e recusa cópias sem cor, sem aviso, sem motivo e sem apresentação.
+- Não confundir GsGpu_Init recusado com CreateDevice recusado. No primeiro ainda
+  existe o dispositivo da main para apresentar o aviso. No segundo não há como
+  tornar visível uma caixa do sistema; sair diretamente evita o laço sem Present.

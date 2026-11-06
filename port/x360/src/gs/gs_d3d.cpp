@@ -5256,7 +5256,7 @@ static int d3d_init(void) {
     }
     gsScale = 1;
     area_init(); /* (720p, etapa 2) */
-    if (sizeof(Vtx) != 28 || sizeof(GsDraw) != 128) { /* o mesmo layout dos dois lados (cl/stdint.h) */
+    if ((getenv("BT3_TESTE_VIDEO") && atoi(getenv("BT3_TESTE_VIDEO"))) || sizeof(Vtx) != 28 || sizeof(GsDraw) != 128) { /* o mesmo layout dos dois lados (cl/stdint.h) */
         Diario_Escrever("gs_d3d: ERRO: Vtx %u bytes, GsDraw %u bytes", (unsigned)sizeof(Vtx), (unsigned)sizeof(GsDraw));
         return 0;
     }

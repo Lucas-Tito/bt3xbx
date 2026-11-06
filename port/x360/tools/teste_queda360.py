@@ -12,7 +12,7 @@ CASOS = ('jogo', 'desenho', 'audio', 'log-ligado', 'caixa-ocupada', 'caixa-negad
 
 def compilar(pasta):
     subprocess.run(['g++', '-std=c++11', '-O2', '-Wall', '-Wextra', '-Werror',
-                    '-Wno-unknown-pragmas', '-Wno-unused-parameter', '-Wno-int-to-pointer-cast',
+                    '-DBT3_TESTE_FALHAS=1', '-Wno-unknown-pragmas', '-Wno-unused-parameter', '-Wno-int-to-pointer-cast',
                     '-I'+str(pasta), '-I'+str(RAIZ/'port/x360/tools/teste_queda'),
                     '-I'+str(RAIZ/'port/x360/src'), '-I'+str(RAIZ/'port/x360/src/f2'),
                     str(RAIZ/'port/x360/tools/teste_queda/teste.cpp'), '-o', str(pasta/'teste')], check=True)

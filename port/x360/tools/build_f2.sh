@@ -50,7 +50,7 @@ CLFLAGS="-c -Ox -Oi -fp:precise -fp:except- -GS- -Gy -GF -MT -W3 -Zi"
 # (F5, seção 35) BT3_PERFIL_CADEIA=1: a build de perfil, com as marcas do diagnóstico da CPU (gs/cadeia_cpu.h) e, desde a
 # seção 38, o relógio da gravação por desenho (gs_draw.c pelo c89.py); a normal fica sem elas, porque mesmo desligadas
 # custavam tempo no fim do quadro
-PERFIL=""; [ "${BT3_PERFIL_CADEIA:-0}" = 1 ] && PERFIL="-D BT3_PERFIL_CADEIA" && echo "   build de perfil: BT3_PERFIL_CADEIA"
+PERFIL="-D BT3_TESTE_FALHAS=${BT3_TESTE_FALHAS:-0}"; [ "${BT3_PERFIL_CADEIA:-0}" = 1 ] && PERFIL="$PERFIL -D BT3_PERFIL_CADEIA" && echo "   build de perfil: BT3_PERFIL_CADEIA"
 port/x360/tools/cl_jogo.sh $OUT/c89 $OUT/obj $CLFLAGS -Fd$OUT/obj/ >/dev/null
 python3 port/x360/tools/cl_resumo.py $OUT/obj | head -1
 python3 port/x360/tools/cl_resumo.py $OUT/obj | grep -q "^$(ls $OUT/c89/*.c | wc -l) de" || { python3 port/x360/tools/cl_resumo.py $OUT/obj --arquivos | tail -20; exit 1; }

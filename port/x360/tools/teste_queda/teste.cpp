@@ -51,7 +51,7 @@ int WriteFile(HANDLE h, const void *p, DWORD n, DWORD *escritos, void *) {
 }
 int FlushFileBuffers(HANDLE h) { Evento("flush relatório"); fflush(h->arquivo); return caso!="flush-falhou"; }
 void D3DDevice::Clear(unsigned, void *, unsigned, DWORD cor, float, unsigned) {
-    if(!gX360Log) Exigir(cor==0xFF010101 || cor==0xFF000000,"cor de fase no release");
+    if(!BT3_TESTE_FALHAS) Exigir(cor==0xFF010101 || cor==0xFF000000,"cor de fase no release");
 }
 void D3DDevice::Present(void *, void *, void *, void *) { ++presents; ++agora; }
 int IDirect3D9::CreateDevice(unsigned,unsigned,void *,unsigned,D3DPRESENT_PARAMETERS *,D3DDevice **d) { *d=new D3DDevice; return 0; }
@@ -72,6 +72,7 @@ DWORD XGetOverlappedResult(XOVERLAPPED *,DWORD *,int) { return caso=="resultado-
 #define main TituloMain
 #include "main360.cpp"
 #undef main
+void ImportaTela_Executar(D3DDevice *) {}
 extern "C" {
 int gX360Log;
 void Diario_Abrir(const char *) { Evento("diário aberto"); }
@@ -88,6 +89,10 @@ void Ambiente_Carregar(const char *caminho) {
     gX360Log=caso=="log-ligado";
 }
 void Estado_Resumo() {}
+void Vn_Configurar(const char *) {}
+void Amostra_Preparar() {}
+void Amostra_Comecar(HANDLE, DWORD) {}
+void Amostra_Parar() {}
 const char *volatile gPortStage="starting";
 void GsD3d_Soltar() {}
 void Port_GsPararJa() { Evento("parar gravação"); }
