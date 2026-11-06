@@ -922,3 +922,19 @@ jogador (`f5_duelo.txt`, `dh5duelo` contra a `i1` do mesmo dia) ficou igual: com
    no pior caso da janela fria (p99 34,6 contra 48,1 ms).
 3. **A cópia do XDK (D2, `BT3_COPIA_XMEM`) fica de fora**: a gravação piorou de 33,2 para 35,9 ms.
 4. A luta dividida jogada à mão se confere na sessão final da release; a regra da decisão 38 vale para ela.
+
+## 43. A tela vermelha de falha é só dos testes; o público não a vê (06/11/2026)
+
+(Os números 40, 41 e 42 estão nos ramos em revisão: 40 na `bt4-base`, 41 na `conversor-dublagens`, 42 na
+`blur-analise`.)
+
+A tela vermelha do `main360.cpp` (laço com a cor da fase depois de uma falha, o motivo só no `bt3xbx.log` e no
+`output.txt`) serve às nossas rodadas: diz que falhou e onde procurar. Em 06/11 ela apareceu no console por um
+caminho de roteiro errado no `environment.txt`, e o Lucas reafirmou o que já valia desde a preparação da 1.0.x,
+junto com o log e os diagnósticos desligados na versão pública:
+
+1. **Na versão pública o usuário final não vê a tela vermelha.** Ela continua nas builds de teste.
+2. O que o público vê numa falha se decide ao fechar a próxima release (o Lucas lembrou o padrão de uma janela com o
+   motivo). Até lá não se abre tarefa sobre isso.
+3. Falha no início do vídeo (sem dispositivo, nem a tela vermelha aparece e a Guide fica invisível): o jogo grava o
+   motivo no log e volta ao dashboard na hora (pedido à `bt4-tagteam` em 06/11).
