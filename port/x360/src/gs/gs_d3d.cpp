@@ -502,7 +502,8 @@ static UINT mip_niveis(UINT w, UINT h) {
    Os materiais dos lutadores aparecem ampliados (o cintilado nunca foi neles, decisão 42), e a paleta deles muda na luta
    (golpe, escurecer, fade pela distância, olhos e boca): cada paleta nova é uma textura nova e a geração dos níveis de novo.
    Os objetos animados do cenário também usam 0x3480, mas com a paleta em 0x3700: ficam com os níveis.
-   0: nenhuma textura dos lutadores com níveis, como no PS2; 1: só as tabelas (rampa e fade) sem níveis; 2: como antes. */
+   0: nenhuma textura dos lutadores com níveis, como no PS2; 1 (padrão, decisão 42 item 6): só as tabelas (rampa e fade)
+   sem níveis, os materiais com eles (de longe guardam o detalhe); 2: como antes. */
 static int sMipLutador;
 static volatile unsigned sMipLutSem; /* texturas de lutador de 64 x 64 ou mais que ficaram sem níveis, no trecho */
 #define MIPLUT_FALAS 48
@@ -2250,8 +2251,8 @@ static void otim_init(void) {
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
     sMipmap = env_num("BT3_MIPMAP", 1) != 0; /* (decisão 42) ligado por padrão: o cintilado do cenário em movimento */
     sMipRef = env_num("BT3_MIPMAP_REF", 0) & 0xFF; /* (desligada: com o limite errado a folhagem sumia mais) */
-    sMipAlfa = (float)env_num("BT3_MIPMAP_ALFA", 50) / 100.0f; /* (decisão 42, item 5) 50: escolha do Lucas no console */
-    sMipLutador = env_num("BT3_MIPMAP_LUTADOR", 0);
+    sMipAlfa = (float)env_num("BT3_MIPMAP_ALFA", 0) / 100.0f; /* (decisão 42, item 6) 0: no cenário do Duelo o 50 rareava as árvores */
+    sMipLutador = env_num("BT3_MIPMAP_LUTADOR", 1); /* (decisão 42, item 6) */
     sMipLutador = sMipLutador < 0 ? 0 : sMipLutador > 2 ? 2 : sMipLutador;
     Diario_Escrever("gs_d3d: mipmap nos lutadores (BT3_MIPMAP_LUTADOR=%d): %s", sMipLutador,
                     sMipLutador == 0 ? "nenhum (materiais, rampa e fade só com o nível 0)" :

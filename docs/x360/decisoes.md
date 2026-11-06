@@ -1037,6 +1037,16 @@ confirmado em 04/11 com o corte) e um cintilado no cenário. Sessão de console 
    Efeito conhecido do mipmap, aceito por enquanto: **listras na sombra dos lutadores** em alguns ângulos (somem com
    `BT3_MIPMAP=0`; provavelmente a textura em degraus do sombreado lida num nível reduzido). O Lucas confere no jogo
    original se algo parecido existe; se for preciso, tira-se o mipmap só dessas texturas.
+6. **Sessão de 06/11 à tarde (build 3782f8fd): lutadores e folhagem.** No jogo livre o Lucas achou o lutador estranho.
+   A causa: a segunda passada do lutador (programa 0 da VU1) lê a rampa do sombreado como tabela, em (0,5 + 0,5 N.L, 0),
+   e a subtrai da cor; o jogo a declara com 256 x 256 (PSMT8, bloco 0x3D40) para 2 linhas reais, e os níveis gerados
+   misturavam faixas e o que vinha depois na memória do GS. **Padrão novo `BT3_MIPMAP_LUTADOR=1`:** a rampa e o fade
+   (0x3D40..0x3E80) só com o nível 0; os materiais do lutador (0x3480 com paleta em 0x3C00) com níveis, porque de longe
+   guardam o detalhe que o Lucas viu sumir sem eles (0 tira de tudo do lutador; 2 é o antigo). Listras e o aspecto
+   estranho sumiram. No roteiro do Duelo o combate ficou igual com e sem níveis nos materiais (p50 25,61 e 25,60 ms,
+   0,13% de imagens de três vblanks); no começo da luta, 2 imagens de três vblanks com eles e 0 sem, pelas ~160 texturas
+   a mais na carga. **O alfa da folhagem volta a 0** (`BT3_MIPMAP_ALFA`): no cenário do Duelo o 50 deixava as árvores
+   ralas ("desmatadas"); o 25 melhorou e o 0 foi o escolhido. Combate igual nos três (p50 25,61 a 25,62 ms).
 
 Descartados no console como causa do cintilado: o desfoque da distância, o panorâmico, o filtro de nitidez, o filtro
 antitremulação, a profundidade da VU1 (`BT3_CORTE=0`) e o 16:9. 
