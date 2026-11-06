@@ -19,7 +19,7 @@ for f in /home/codex/espera/*; do
 done
 echo "== sessões do Codex vivas"; pgrep -fa 'codex exec' | grep -o 'tarefas/[a-z0-9-]*' | sort | uniq -c | sed 's/^/  /' || true
 echo "== vagas do emulador"
-for l in /home/codex/wsl.lock /home/codex/wsl.lock.2 /home/codex/wsl.lock.3; do
+for l in /home/codex/wsl.lock /home/codex/wsl.lock.2 /home/codex/wsl.lock.3 /home/codex/wsl.lock.4; do
   [ -e "$l" ] && echo "  $(basename "$l"): $(fuser "$l" 2>/dev/null | wc -w) processos"
 done
 echo "== fim do log das filas"; tail -8 /home/codex/fila-2710.log | sed 's/^/  /'

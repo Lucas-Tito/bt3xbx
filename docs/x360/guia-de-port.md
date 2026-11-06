@@ -1614,6 +1614,11 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   memória em até 5,6 GB dos 7,8 do WSL. O que travava antes eram dois ciclos soltos, sem vaga controlando. A
   trava antiga vira a vaga 1, então script que ainda faz `flock ~/wsl.lock` disputa só ela. Script de rodada não pode
   ter guarda que recuse outro `qemu` rodando.
+- **Quatro vagas (testadas em 05/11, adotadas em 06/11).** O `vez.sh` lê o número de `~/vagas` a cada volta. Com quatro
+  juntas a PPC ficou 25 a 38% mais lenta por rodada (com rodadas no PC ao mesmo tempo), mas a vazão total sobe quando há
+  várias filas. Uma regra escrita com o número antigo prendeu a vaga nova por um dia: as rodadas do Codex recusavam a
+  vaga 4 (`BT3_VAGAS=3`, `vaga-ate3.sh`) porque o `AGENTS.md` ainda dizia 3. Ao mudar a capacidade, mude a regra junto,
+  e script de rodada não fixa o número: aceita a vaga que o `vez.sh` der.
 
 ## 7. Lista de passos para um port novo
 

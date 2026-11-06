@@ -93,7 +93,8 @@ Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddr
 - **Roteiros na PPC: `SEMMAPA=1`, nunca `PPC=1`.** A PPC com o mapa passa do menu principal e trava no Flash da tela
   seguinte, que o mapa por posição não inverte: uma hora por roteiro sem resultado (a etapa 5a da F4 perdeu quatro).
   A PPC sem mapa para na guarda em minutos. Detalhes no guia, "Roteiros na etapa 5a da F4".
-- **Emulador no WSL só pela vez: `~/vez.sh COMANDO`, até 3 juntos** (adotado em 04/11 depois do teste com 3 vagas).
+- **Emulador no WSL só pela vez: `~/vez.sh COMANDO`, até 4 juntos** (3 adotado em 04/11; 4 testado em 05/11 e adotado
+  em 06/11; o número vale de `/home/codex/vagas`, e `echo 3` nele volta a 3 se a memória do WSL passar de ~7 GB).
   Nada de `qemu` ou `roteiros.sh` solto fora da vez: dois juntos sem controle já travaram o WSL. Nada de
   `wsl.sh enviar` com um `roteiros.sh` rodando.
 - **Todo verificador tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer: na F4
