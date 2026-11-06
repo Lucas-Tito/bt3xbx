@@ -39,7 +39,8 @@ const casos = [
   ['rótulo piracy fecha e tranca', ctx('issues', { action: 'labeled', label: { name: 'piracy' }, issue: issue(['bug', 'piracy'], 'x') }), 'resposta piracy', (f) => f.some((x) => x[0] === 'tranca')],
   ['rótulo needs-info comenta sem fechar', ctx('issues', { action: 'labeled', label: { name: 'needs-info' }, issue: issue(['bug', 'needs-info'], 'x') }),
     'resposta needs-info', (f) => f.some((x) => x[0] === 'comenta') && !f.some((x) => x[0] === 'estado')],
-  ['rótulo feature-request comenta e fecha', ctx('issues', { action: 'labeled', label: { name: 'feature-request' }, issue: issue(['bug', 'feature-request'], 'x') }), 'resposta feature-request', null],
+  ['rótulo feature-request comenta e fecha', ctx('issues', { action: 'labeled', label: { name: 'feature-request' }, issue: issue(['bug', 'feature-request'], 'x') }), 'resposta feature-request',
+    (f) => f.some((x) => x[0] === 'comenta' && x[1].includes('only for bugs and crashes')) && f.some((x) => x[1] === 'closed')],
   ['issue com palavrão fecha, rotula e tranca', ctx('issues', { action: 'opened', issue: issue(['bug'], 'this port is sh1t, you f*ck') }), 'moderada (ofensa)',
     (f) => f.some((x) => x[1] === 'spam') && f.some((x) => x[1] === 'closed') && f.some((x) => x[0] === 'tranca')],
   ['issue com palavrão em português e acento', ctx('issues', { action: 'opened', issue: issue(['bug'], 'que PÔRRA é essa') }), 'moderada (ofensa)', null],
@@ -67,6 +68,23 @@ const casos = [
     const ok = r === esperado && (!conferir || conferir(feito));
     if (!ok) falhas++;
     console.log(`${ok ? 'ok  ' : 'FALHA'} | ${nome}: ${r}${ok ? '' : ` (esperado ${esperado}; ${JSON.stringify(feito)})`}`);
+  }
+  // Toda resposta automática (por rótulo, a queda sem crash.txt e a reabertura) termina dizendo que é automática.
+  const rodape = '<sub>This is an automated reply.</sub>';
+  const comRodape = [
+    ...Object.keys(triagem.RESPOSTAS).map((n) => ctx('issues', { action: 'labeled', label: { name: n }, issue: issue(['bug', n], 'x') })),
+    ctx('issues', { action: 'opened', issue: issue(['crash'], 'it crashed') }),
+    ctx('issues', { action: 'edited', issue: issue(['crash', 'needs-crash-txt'], ANEXO, 'closed') }),
+    ctx('issue_comment', { action: 'created', comment: { body: CRASH, user: { login: 'autor' } }, issue: issue(['crash', 'needs-crash-txt'], 'x', 'closed') }),
+  ];
+  for (const c of comRodape) {
+    const { feito, github } = falso();
+    await triagem({ github, context: c });
+    const coms = feito.filter((x) => x[0] === 'comenta');
+    const ok = coms.length === 1 && coms[0][1].endsWith(rodape);
+    if (!ok) falhas++;
+    const quem = (c.payload.label && c.payload.label.name) || `${c.eventName} ${c.payload.action}`;
+    console.log(`${ok ? 'ok  ' : 'FALHA'} | rodapé automático em ${quem}${ok ? '' : `: ${JSON.stringify(coms)}`}`);
   }
   // A mesma resposta não sai duas vezes.
   const coms = [];

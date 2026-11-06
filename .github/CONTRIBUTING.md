@@ -54,13 +54,14 @@ These issues are closed (or deleted) without an answer:
   the known issues of README.txt.
 * **Problems of the PC version.** They belong to
   [Tenkaichi3Decomp](https://github.com/z3xox/Tenkaichi3Decomp/issues).
-* **Requests for new features.** This first version keeps the game as it is; requests are not
-  tracked as issues for now.
+* **Requests for new features.** Issues are only for bugs and crashes of this port. This first
+  version keeps the game as it is; requests are not tracked for now.
 
 ## What happens to those who break the rules
 
 1. The issue gets a label saying why (`duplicate`, `not-supported`, `off-topic`, `known-issue`,
-   `feature-request`); a short reply explaining it is posted automatically and the issue is closed.
+   `feature-request`); a short automated reply explaining it is posted, marked as automated, and
+   the issue is closed.
 2. Repeating it after being pointed to these rules, or being rude, gets the conversation locked.
 3. Anything about getting the game (`piracy`), spam or abuse is deleted, and the account is
    blocked from the repository.

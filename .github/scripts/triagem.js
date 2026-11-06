@@ -11,6 +11,8 @@
 // Teste: node .github/scripts/teste_triagem.js
 
 const MARCA = (nome) => `<!-- bt3-triagem:${nome} -->`;
+// Toda resposta da triagem diz que é automática (Lucas, 06/11/2026).
+const RODAPE = '\n\n<sub>This is an automated reply.</sub>';
 const README = 'https://github.com/Lucas-Tito/bt3xbx/blob/main/port/x360/package/README.txt';
 const REGRAS = 'https://github.com/Lucas-Tito/bt3xbx/blob/main/.github/CONTRIBUTING.md';
 
@@ -38,7 +40,7 @@ const RESPOSTAS = {
   'not-supported': { fecha: 'not_planned', texto: `This port supports only the unmodified USA release (SLUS-21678) on an Xbox 360 with RGH or JTAG. Other versions of the game, modified ISOs, mods and emulators are not supported. See the [README](${README}).` },
   'off-topic': { fecha: 'not_planned', texto: 'This is not about the Xbox 360 port. Problems of the PC version belong to [Tenkaichi3Decomp](https://github.com/z3xox/Tenkaichi3Decomp/issues).' },
   'known-issue': { fecha: 'not_planned', texto: `This is already listed in the known issues of the [README](${README}).` },
-  'feature-request': { fecha: 'not_planned', texto: 'Thanks for the idea. This first version keeps the game as it is, so feature requests are not tracked as issues for now.' },
+  'feature-request': { fecha: 'not_planned', texto: `Thanks for the idea. Issues here are only for bugs and crashes of the Xbox 360 port. This first version keeps the game as it is, so feature requests are not tracked for now. See the [rules](${REGRAS}).` },
   'wontfix': { fecha: 'not_planned', texto: 'This will not be changed.' },
   'piracy': { fecha: 'not_planned', tranca: true, texto: 'This project never provides the game, ISOs or game files, and does not allow links to them here.' },
   'needs-crash-txt': { texto: 'Please attach crash.txt from the game folder (drag it into a comment) or paste its whole content.' },
@@ -112,7 +114,7 @@ async function jaComentou(github, alvo, nome) {
 
 async function comentar(github, alvo, nome, texto) {
   if (await jaComentou(github, alvo, nome)) return false;
-  await github.rest.issues.createComment({ ...alvo, body: texto.includes(MARCA(nome)) ? texto : `${MARCA(nome)}\n${texto}` });
+  await github.rest.issues.createComment({ ...alvo, body: (texto.includes(MARCA(nome)) ? texto : `${MARCA(nome)}\n${texto}`) + RODAPE });
   return true;
 }
 
@@ -146,7 +148,7 @@ module.exports = async function triagem({ github, context }) {
       if (issue.state === 'closed' && rotulos.includes('needs-crash-txt')) {
         await github.rest.issues.removeLabel({ ...alvo, name: 'needs-crash-txt' });
         await github.rest.issues.update({ ...alvo, state: 'open' });
-        await github.rest.issues.createComment({ ...alvo, body: REABERTA });
+        await github.rest.issues.createComment({ ...alvo, body: REABERTA + RODAPE });
         return 'reaberta';
       }
       return 'com crash.txt';
@@ -165,7 +167,7 @@ module.exports = async function triagem({ github, context }) {
     if (doAutor && issue.state === 'closed' && rotulos.includes('needs-crash-txt') && temCrashTxt(payload.comment.body)) {
       await github.rest.issues.removeLabel({ ...alvo, name: 'needs-crash-txt' });
       await github.rest.issues.update({ ...alvo, state: 'open' });
-      await github.rest.issues.createComment({ ...alvo, body: REABERTA });
+      await github.rest.issues.createComment({ ...alvo, body: REABERTA + RODAPE });
       return 'reaberta';
     }
     return 'comentário sem efeito';
@@ -175,4 +177,5 @@ module.exports = async function triagem({ github, context }) {
 
 module.exports.temCrashTxt = temCrashTxt;
 module.exports.RESPOSTAS = RESPOSTAS;
+module.exports.RODAPE = RODAPE;
 module.exports.motivoModeracao = motivoModeracao;
