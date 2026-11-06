@@ -103,6 +103,12 @@ Pendente com Lucas: listras nas sombras dos lutadores com mipmap. Comparar ao jo
 original antes de incluir como problema confirmado. Não introduzir a hipótese
 como known issue definitivo no README do pacote.
 
+Atualização de 06/11: o mipmap dos personagens também está sob investigação
+separada. A integração conserva o comportamento atual, mas as comparações de
+software não aprovam imagens de personagens com mipmap no console. Conservar a
+receita da regressão para repeti-la depois do veredito, sem regravar referências
+visuais como aprovadas enquanto essa análise estiver pendente.
+
 O README raiz e o do pacote são rascunhos desta versão. O título e a versão vêm
 dos arquivos env. A montagem real, depois de conferir XDK/console e aprovar os
 textos, usa `pacote.py --estrito` com default.xex/dat/swap da mesma build pública.

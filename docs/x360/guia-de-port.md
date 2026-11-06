@@ -3515,6 +3515,12 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 
 ### Integração da 1.1.0: política de falha e limites da base
 
+- Preparar todos os fontes com c89.py não prova que o C gerado compila. A primeira
+  rodada parou no confere_limites_xdk: btl_act_h_b.c e hud_d_b.c declaravam memset
+  com tamanho s32, incompatível com unsigned int do prelúdio e da CRT do XDK.
+  Nas duas declarações, PORT_X360 usa o protótipo da CRT; o #else conserva o
+  original. Conferir a pasta inteira com o verificador, além de preparar os fontes,
+  antes de armar os roteiros. Não ignorar o conflito nem retirar o protótipo do prelúdio.
 - GsDraw desta base tem 128 bytes. Os 132 do Tag Team incluem um campo que não
   entra nesta release. Ao trazer confere_limites_xdk.py, adaptar também os negativos
   ao tipo Vtx que existe nesta base; não aceitar uma falha por tipo desconhecido
