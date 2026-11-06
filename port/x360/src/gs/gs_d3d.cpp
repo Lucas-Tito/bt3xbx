@@ -2207,7 +2207,7 @@ static void otim_init(void) {
     sTexTiled = env_num("BT3_TEX_TILED", 0) != 0;
     sMipmap = env_num("BT3_MIPMAP", 1) != 0; /* (decisão 42) ligado por padrão: o cintilado do cenário em movimento */
     sMipRef = env_num("BT3_MIPMAP_REF", 0) & 0xFF; /* (desligada: com o limite errado a folhagem sumia mais) */
-    sMipAlfa = (float)env_num("BT3_MIPMAP_ALFA", 0) / 100.0f;
+    sMipAlfa = (float)env_num("BT3_MIPMAP_ALFA", 50) / 100.0f; /* (decisão 42, item 5) 50: escolha do Lucas no console */
     if (sMipAlfa > 1.0f) sMipAlfa = 1.0f;
     Diario_Escrever("gs_d3d: mipmap: o alfa da folhagem com os gradientes a %.0f%% dos da cor (BT3_MIPMAP_ALFA; 0 o nível 0, 50 um "
                     "nível mais nítido que a cor, 100 o nível da cor)", (double)(sMipAlfa * 100.0f));

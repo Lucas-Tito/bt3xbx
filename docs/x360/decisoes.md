@@ -953,6 +953,18 @@ confirmado em 04/11 com o corte) e um cintilado no cenário. Sessão de console 
    antitremulação do PS2 na cópia para a tela (`BT3_FILTRO_PS2`, nova; o PS2 mistura os dois circuitos de leitura meio a
    meio, `Gfx_SetDisplayRegs`; não mudou o cintilado).
 
+5. **Sessão de 06/11 (build 3c2dd577 e seguinte).** A média de 2 x 2 dos níveis passou para o VMX128, e o log ganhou o
+   custo do mipmap por trecho. No roteiro do Duelo o combate voltou ao de sem mipmap (p50 25,67 ms e 196 passos acima
+   de 30 ms, contra 25,97 e 334 com a média escalar); no começo da luta, 54 passos acima de 30 ms (103 antes, 47 sem
+   mipmap) e 2 imagens de três vblanks, essas pela GPU acabando ~5 ms depois do prazo, não pela geração. O mipmap custou
+   390 ms na partida inteira (608 texturas), 86 ms no pior trecho (a carga da luta), 7,4 ms na pior textura.
+   **O alfa da folhagem passa a 50%** (`BT3_MIPMAP_ALFA`, nova, de 0 a 100): nos desenhos com teste de alfa, o alfa usa
+   metade dos gradientes da cor, um nível mais nítido que ela. Com 0 (só o nível 0) as plantas ficavam nítidas em
+   qualquer distância; com 50 "mais naturais"; 25 não teve diferença visível de 50.
+   Efeito conhecido do mipmap, aceito por enquanto: **listras na sombra dos lutadores** em alguns ângulos (somem com
+   `BT3_MIPMAP=0`; provavelmente a textura em degraus do sombreado lida num nível reduzido). O Lucas confere no jogo
+   original se algo parecido existe; se for preciso, tira-se o mipmap só dessas texturas.
+
 Descartados no console como causa do cintilado: o desfoque da distância, o panorâmico, o filtro de nitidez, o filtro
 antitremulação, a profundidade da VU1 (`BT3_CORTE=0`) e o 16:9. 
 
