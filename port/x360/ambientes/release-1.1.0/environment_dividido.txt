@@ -1,0 +1,11 @@
+# Conferência da release 1.1.0. Copiar como environment.txt.
+BT3_GS=gpu
+BT3_GS_THREAD=1
+BT3_GS_DESENHO=1
+BT3_SOM=1
+BT3_FILME=1
+BT3_LOG=0
+BT3_AUTOTESTES=0
+BT3_NOMOVIE=1
+BT3_DESBLOQUEIO=1
+BT3_ROTEIRO=game:\f7_dividido.txt

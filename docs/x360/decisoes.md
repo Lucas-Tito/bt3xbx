@@ -923,6 +923,79 @@ jogador (`f5_duelo.txt`, `dh5duelo` contra a `i1` do mesmo dia) ficou igual: com
 3. **A cópia do XDK (D2, `BT3_COPIA_XMEM`) fica de fora**: a gravação piorou de 33,2 para 35,9 ms.
 4. A luta dividida jogada à mão se confere na sessão final da release; a regra da decisão 38 vale para ela.
 
+## 40. F9: BT4 e tela dividida pela base do Tag Team, com licença AGPL-3.0 (04/11/2026)
+
+O Lucas aprovou incorporar deliberadamente a v0.1.37 do Tenkaichi3Decomp e aceitar
+sua licença AGPL-3.0. O LICENSE passa a ser o do upstream, conservando LICENSE-MIT.
+As menções públicas de licença do fork e do pacote ficam para a auditoria do Lucas;
+a lista de propostas acompanha a entrega da etapa 1.
+
+A frente passa a abranger o Budokai Tenkaichi 4 B14 Rev2 e a tela dividida local
+para dois a quatro jogadores. A fonte principal será o Tag Team nativo,
+`troca/ref/tagteam-nativo`, base v0.1.37, AGPL-3.0, que já tem BT3 e BT4 no mesmo
+executável por perfil (`PortGame_IsBT4()`). As lacunas do BT4 e a leitura dos
+quatro pacotes virão do BT4decomp, `troca/ref/bt4decomp`, base v0.1.39.5,
+AGPL-3.0. Isso substitui a orientação da decisão 16 de reescrever a tela dividida.
+Online e voz de rede ficam fora do 360. A etapa 1 incorpora só a v0.1.37,
+sem código dessas duas referências.
+
+Haverá um único `default.xex`, que escolhe BT3 ou BT4 pelos dados da pasta,
+com saves e tabelas do executável separados por jogo. O conversor de PC entrega
+os dados BT4 em partes de até 4 GiB. A implementação fica nas etapas seguintes.
+
+O desempenho será medido no console com uma, duas, três e quatro vistas. Para
+três e quatro, a prioridade dos cortes é: reusar ossos e matrizes calculados uma
+vez por quadro; limitar efeitos por número de vistas; simplificar cenário;
+simplificar lutadores distantes; por último alternar a atualização das vistas.
+Nenhum corte pode mudar a luta. Efeitos que usam `rand()` têm de consumir os
+mesmos sorteios sem desenhar ou usar gerador próprio, com a luta comparada pelos
+roteiros. As cinco etapas e os limites desta integração estão em
+[plano/F9/01-base.md](plano/F9/01-base.md).
+
+
+## 41. F8: modificadas pelo executável USA, partes fora dos AFS e recusa de formatos incompatíveis (4/11/2026)
+
+Aplicação da tarefa `conversor-mods`, com a opção conservadora nela autorizada:
+
+1. A identidade de uma modificada depende de `SLUS_216.78`, `BIN/DBZP.BIN` e da estrutura dos três AFS, com limites
+   conferidos. O hash da ISO inteira classifica a USA exata, sem ser uma lista de mods permitidos. Entradas com
+   conversor têm tamanho e SHA256 da USA numa tabela numérica; diferentes passam pelo conversor do formato, e
+   arquivos sem conversor continuam copiados crus. Cobertura incompleta ou formato desconhecido é recusa fatal.
+2. A USA exata conserva todos os bytes da receita v4 anterior, incluindo o selo histórico. Modificadas usam v5
+   no offset 80 do arquivo, após conferir que o setor de sistema está livre, com tamanho de 64 bits, SHA256 da
+   origem efetiva e procedência `modificada`. Uma leitura integral prévia permite distinguir mods do mesmo tamanho;
+   a passagem precisa reproduzir seu hash antes da publicação.
+3. O arquivo lógico usa partes de até 4 GiB menos 1 MiB e manifesto separado, com nomes curtos para FATX. O índice
+   de conversão fica fora do cabeçalho AFS. O programa C de PC e o console usam o mesmo núcleo; a biblioteca de E/S
+   permite posições maiores que 4 GiB. Isso prepara a E/S do BT4, sem declarar seus formatos ou executável aceitos.
+4. Na PT-BR fornecida, só as três caudas zeradas ganharam tolerância. O pacote de Opções com 27 seções e os sete
+   file[0] com duas entradas não atendem aos leitores da USA e recebem recusa explícita, sem publicação. Não se
+   inventa uma conversão nem se embutem dados originais para repará-los. A prova positiva com essa PT-BR fica
+   pendente. Um controle privado com oito entradas restauradas da ISO do usuário não conta como essa prova.
+5. Por decisão do Lucas em 4/11, a sonda e o leitor exFAT saem do escopo. Os commits da sonda são revertidos
+   com `git revert`. Não há transferência da ISO pela rede. Origens acima de 4 GiB são convertidas somente
+   no PC e levadas ao 360 em partes; o BT3 que cabe no armazenamento continua convertendo no console.
+6. Haverá um `default.xex` único para BT3 e BT4, escolhido pelos dados. As assinaturas `BT3X360-ISO` e
+   `BT3X360-PARTES` identificam BT3, inclusive numa modificada. O BT4 futuro terá identidade própria nos dados.
+   A E/S com 64 bits e o inventário separado do cabeçalho AFS permitem ampliar pacotes e formatos nessa outra tarefa.
+
+Detalhes e critérios em [F8/03](plano/F8/03-conversao-console.md). Os novos textos ingleses em `iso_avisos.h` são
+propostas em uso, a revisar pelo Lucas; não bloqueiam o desenvolvimento. A rodada WSL foi aprovada e a compilação
+cruzada Windows passou; execução Windows, XDK e console continuam provas separadas da simulação Linux.
+
+Atualização pela tarefa `conversor-ptbr` (4/11/2026): Lucas pediu superar as oito recusas mediante prova da PT-BR
+intacta, substituindo o encerramento conservador da tarefa anterior. A investigação encontrou queda na x86 crua
+antes da conversão, durante `Option_Init`, e corrigiu a identificação dos sete arquivos finais: são modelos extras,
+não vagas do elenco. O leitor real devolve um ponteiro ao fim de cada um ao pedir o modelo. Isso ainda não explica
+o comportamento do PS2 nem cumpre o pedido de aceitação. A recusa continua no código enquanto essa divergência
+estiver sem solução; não constitui aprovação de novo escopo pelo Lucas. Evidências e limites em
+[F8/03, investigação da PT-BR intacta](plano/F8/03-conversao-console.md#investigação-da-pt-br-intacta-tarefa-conversor-ptbr-4112026).
+
+Julgamento da rodada final: Opções reprovada na x86 crua; instaladores host e PPC recusam 00453 com saída 4.
+O Duelo passa, com nove imagens iguais, sem ler as oito entradas em questão. Isso fecha a investigação registrada,
+mas mantém pendente o aceite pedido; o resultado global do serviço não aprova a PT-BR.
+
+
 ## 42. F8: a imagem da luta com os tratamentos de desfoque do PC, a distância a 25% e mipmap gerado (05/11/2026)
 
 (Os números 40 e 41 são o BT4 com o Tag Team, do `bt4-base`, e as modificadas do `conversor-dublagens`, que entram por merge.)
@@ -970,8 +1043,7 @@ antitremulação, a profundidade da VU1 (`BT3_CORTE=0`) e o 16:9.
 
 ## 43. A tela vermelha de falha é só dos testes; o público não a vê (06/11/2026)
 
-(Os números 40, 41 e 42 estão nos ramos em revisão: 40 na `bt4-base`, 41 na `conversor-dublagens`, 42 na
-`blur-analise`.)
+As decisões 40 e 41 registram os ramos próprios, cujas implementações ficam fora da 1.1.0.
 
 A tela vermelha do `main360.cpp` (laço com a cor da fase depois de uma falha, o motivo só no `bt3xbx.log` e no
 `output.txt`) serve às nossas rodadas: diz que falhou e onde procurar. Em 06/11 ela apareceu no console por um
@@ -979,7 +1051,9 @@ caminho de roteiro errado no `environment.txt`, e o Lucas reafirmou o que já va
 junto com o log e os diagnósticos desligados na versão pública:
 
 1. **Na versão pública o usuário final não vê a tela vermelha.** Ela continua nas builds de teste.
-2. O que o público vê numa falha se decide ao fechar a próxima release (o Lucas lembrou o padrão de uma janela com o
-   motivo). Até lá não se abre tarefa sobre isso.
-3. Falha no início do vídeo (sem dispositivo, nem a tela vermelha aparece e a Guide fica invisível): o jogo grava o
-   motivo no log e volta ao dashboard na hora (pedido à `bt4-tagteam` em 06/11).
+2. Fechamento na preparação da 1.1.0: caixa do sistema com motivo em inglês, apresentações vivas até o OK e
+   volta ao dashboard. Textos novos são propostas para auditoria do Lucas em [release-1.1.0](release-1.1.0.md).
+   A cor exige compilação BT3_TESTE_FALHAS=1; log ligado não habilita cor na build pública.
+3. Falha no início do renderer conserva o dispositivo da main para o aviso e sai pelo caminho comum. Sem
+   dispositivo, não há Present para a caixa ou Guide: volta diretamente ao dashboard. Também sai diretamente se
+   a UI recusar o aviso ou se produtores pendentes impedirem a recuperação segura do dispositivo.
