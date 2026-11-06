@@ -24,17 +24,26 @@ def fonte_teste():
 #else
     Exigir(cor==0xFF010101 || cor==0xFF000000,"cor de fase no release");
 #endif''')
+    s = s.replace('*d=new D3DDevice; return 0;', '*d=new D3DDevice; return caso=="device-falhou";')
+    s = s.replace('return new IDirect3D9;', 'return caso=="d3d-falhou" ? NULL : new IDirect3D9;')
     s = s.replace('void Port_MapMemory() {}', 'void Port_MapMemory() { if(caso=="memoria") Port_Sair(2); }')
+    s = s.replace('if(caso=="disco-falhou")return NULL;', 'if(caso=="disco-falhou" || caso=="excecao-sem-relatorio")return NULL;')
     a = s.index('    CONTEXT c={};', s.index('int __real_main'))
     b = s.index('\n}\n}', a)
-    s = s[:a] + '''    gPortStage="battle";
+    excecao = s[a:b]
+    s = s[:a] + '    if(caso=="excecao-sem-relatorio") {\n' + excecao + '\n    }\n' + '''    gPortStage="battle";
     if(caso=="video") Port_FalhaVideo360();
     if(caso=="abortar") Port_Abortar();
     Port_Sair(caso=="dados" ? 2 : 9);
     return 0;''' + s[b:]
     a = s.index('        Exigir(Pos("criou relatório")')
     b = s.index('        printf(', a)
-    s = s[:a] + '''        Exigir(Pos("cargas")<Pos("dashboard") && Pos("som")<Pos("dashboard"),"saída sem desmontagem");
+    s = s[:a] + '''        if(caso=="device-falhou" || caso=="d3d-falhou") {
+            Exigir(caixas==0 && presents==0,"caixa tentada sem dispositivo");
+            Pos("dashboard");
+            return 0;
+        }
+        Exigir(Pos("cargas")<Pos("dashboard") && Pos("som")<Pos("dashboard"),"saída sem desmontagem");
 #if BT3_TESTE_FALHAS
         Exigir(caixas==0 && Pos("vermelha")<Pos("dashboard"),"teste sem tela vermelha");
 #else
@@ -74,7 +83,7 @@ def main():
                        '-I'+str(RAIZ/'port/x360/tools/teste_queda'), '-I'+str(RAIZ/'port/x360/src'),
                        '-I'+str(RAIZ/'port/x360/src/f2'), str(p/'teste.cpp'), '-o', str(p/'teste')]
                 subprocess.run(cmd, check=True)
-                for caso in ('memoria','video','abortar','dados','outro','log-ligado','caixa-ocupada','caixa-negada','caixa-falhou','resultado-falhou'):
+                for caso in ('memoria','video','abortar','dados','outro','log-ligado','caixa-ocupada','caixa-negada','caixa-falhou','resultado-falhou','device-falhou','d3d-falhou','excecao-sem-relatorio'):
                     try:
                         r = subprocess.run([p/'teste',caso],cwd=p,capture_output=True,text=True,timeout=3)
                         resultados.append(r.returncode)
@@ -83,7 +92,7 @@ def main():
                     except subprocess.TimeoutExpired:
                         resultados.append(124)
             assert any(resultados)==(nome!='íntegro'), (nome,resultados)
-            print(nome+(': 20 caminhos aprovados' if nome=='íntegro' else ': cópia recusada'),flush=True)
+            print(nome+(': 26 caminhos aprovados' if nome=='íntegro' else ': cópia recusada'),flush=True)
     print('Falhas públicas e de teste: tudo certo')
 
 
