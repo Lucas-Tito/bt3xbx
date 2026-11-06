@@ -493,6 +493,49 @@ static UINT mip_niveis(UINT w, UINT h) {
     }
     return n;
 }
+/* (BT3_MIPMAP_LUTADOR, 06/11/2026) As texturas dos lutadores, reconhecidas pelo bloco onde o jogo as põe na memória do GS
+   (BtlObjMdl_BindFiles, src/sys/gfxm_e_b.c): os materiais em 0x3480, com as paletas em 0x3C00; a segunda TEX0 (a rampa do
+   sombreado do programa 0 da VU1) e a textura do fade (programa 1) em 0x3D40, com as paletas em 0x3D00 e 0x3E40.
+   A rampa é uma tabela, não uma imagem: o programa 0 a lê em (0,5 + 0,5 N.L, 0), presa (CLAMP_2 5), e a subtrai da cor
+   (ALPHA_2 0x62, Cd - Cs). O nível que a GPU escolhe sai da variação de N.L na tela, não da distância, e muda de um triângulo
+   para outro: faixas na sombra do lutador que mudam com o ângulo. A do fade é lida pela direção da normal, do mesmo jeito.
+   Os materiais dos lutadores aparecem ampliados (o cintilado nunca foi neles, decisão 42), e a paleta deles muda na luta
+   (golpe, escurecer, fade pela distância, olhos e boca): cada paleta nova é uma textura nova e a geração dos níveis de novo.
+   Os objetos animados do cenário também usam 0x3480, mas com a paleta em 0x3700: ficam com os níveis.
+   0: nenhuma textura dos lutadores com níveis, como no PS2; 1: só as tabelas (rampa e fade) sem níveis; 2: como antes. */
+static int sMipLutador;
+static volatile unsigned sMipLutSem; /* texturas de lutador de 64 x 64 ou mais que ficaram sem níveis, no trecho */
+#define MIPLUT_FALAS 48
+static uint32_t sMipLutVistas[MIPLUT_FALAS]; /* as texturas de objeto já ditas no log (bloco, formato, tamanho, contexto) */
+static unsigned sMipLutNVistas;
+static UINT mip_niveis(UINT w, UINT h);
+extern "C" int GsD3d_TexNiveis(uint32_t tbp, uint32_t cbp, uint32_t psm, uint32_t bits, uint32_t tw, uint32_t th, int ctx) {
+    int tabela = tbp >= 0x3D40 && tbp < 0x3E80;
+    int material = tbp >= 0x3480 && tbp < 0x3C00 && bits <= 8 && cbp >= 0x3C00 && cbp < 0x3D00;
+    int pode = !(tabela && sMipLutador < 2) && !(material && sMipLutador == 0);
+    int grande = mip_niveis(tw, th) > 1;
+    if (!pode && grande) {
+        sMipLutSem++;
+    }
+    if (tbp >= 0x3480 && tbp < 0x3E80 && sMipLutNVistas < MIPLUT_FALAS) {
+        /* (diagnóstico) a primeira vez de cada textura da área dos objetos: o tamanho que o TEX0 dá e o que ela recebeu */
+        uint32_t lw = 0, lh = 0, chave, i;
+        while ((1u << lw) < tw) lw++;
+        while ((1u << lh) < th) lh++;
+        chave = tbp | (psm & 0x3F) << 14 | lw << 20 | lh << 24 | (uint32_t)(ctx & 1) << 28 | (cbp >= 0x3C00) << 29;
+        for (i = 0; i < sMipLutNVistas && sMipLutVistas[i] != chave; i++) {
+        }
+        if (i == sMipLutNVistas) {
+            sMipLutVistas[sMipLutNVistas++] = chave;
+            Diario_Escrever("gs_d3d: mipmap, textura de objeto no quadro %u: bloco 0x%04X, formato 0x%02X, %u x %u, paleta 0x%04X, "
+                            "contexto %d: %s; %s", gGsFrame, tbp, psm, tw, th, cbp, ctx + 1,
+                            tabela ? "tabela (rampa ou fade)" : material ? "material de lutador" : "outro objeto",
+                            !grande ? "um nível só (menor que 64 x 64)" : pode && sMipmap ? "COM níveis" : "sem níveis");
+        }
+    }
+    return pode ? 1 : 0;
+}
+
 /* um nível da média de 2 x 2 do anterior (RGBA8, cada canal arredondado); de lado 1, a média de 2 */
 static void mip_reduz(const uint32_t *a, UINT lw, UINT lh, uint32_t *b, UINT nw, UINT nh) {
     UINT x, y;
@@ -2208,6 +2251,12 @@ static void otim_init(void) {
     sMipmap = env_num("BT3_MIPMAP", 1) != 0; /* (decisão 42) ligado por padrão: o cintilado do cenário em movimento */
     sMipRef = env_num("BT3_MIPMAP_REF", 0) & 0xFF; /* (desligada: com o limite errado a folhagem sumia mais) */
     sMipAlfa = (float)env_num("BT3_MIPMAP_ALFA", 50) / 100.0f; /* (decisão 42, item 5) 50: escolha do Lucas no console */
+    sMipLutador = env_num("BT3_MIPMAP_LUTADOR", 0);
+    sMipLutador = sMipLutador < 0 ? 0 : sMipLutador > 2 ? 2 : sMipLutador;
+    Diario_Escrever("gs_d3d: mipmap nos lutadores (BT3_MIPMAP_LUTADOR=%d): %s", sMipLutador,
+                    sMipLutador == 0 ? "nenhum (materiais, rampa e fade só com o nível 0)" :
+                    sMipLutador == 1 ? "só nos materiais (a rampa do sombreado e o fade só com o nível 0)" :
+                    "em tudo, como antes (materiais, rampa e fade)");
     if (sMipAlfa > 1.0f) sMipAlfa = 1.0f;
     Diario_Escrever("gs_d3d: mipmap: o alfa da folhagem com os gradientes a %.0f%% dos da cor (BT3_MIPMAP_ALFA; 0 o nível 0, 50 um "
                     "nível mais nítido que a cor, 100 o nível da cor)", (double)(sMipAlfa * 100.0f));
@@ -2493,20 +2542,22 @@ static void otim_log(unsigned t) {
 static GsTex tex_create(uint32_t w, uint32_t h, int format, int levels) {
     TexXg *t;
     unsigned bytes = tam_tex(w, h);
-    (void)levels;
+    int mip;
     if (format != GS_TEXFMT_RGBA8) {
         sG.semTextura++;
         branca(BR_FORMATO, w, h);
         return 0;
     }
-    if (sMipmap && mip_niveis(w, h) > 1) {
+    /* (BT3_MIPMAP_LUTADOR) levels 0: só o nível 0 (GsD3d_TexNiveis); 1: os níveis pelo tamanho */
+    mip = sMipmap && levels != 0 && mip_niveis(w, h) > 1;
+    if (mip) {
         bytes = bytes + bytes / 3 + 4096; /* (a cadeia até 32 x 32: um terço a mais) */
     }
     if (mem_livres(bytes) < sMem.pisoMb * MB + bytes) {
         sG.semTextura++;
         return 0; /* (quem chamou conta o motivo) */
     }
-    t = sMipmap && mip_niveis(w, h) > 1 ? xg_cria_mip(w, h, mip_niveis(w, h)) : xg_cria(w, h, tex_fmt(w, h));
+    t = mip ? xg_cria_mip(w, h, mip_niveis(w, h)) : xg_cria(w, h, tex_fmt(w, h));
     if (t == NULL) {
         sG.semTextura++;
         return 0;
@@ -6187,7 +6238,9 @@ static void log_quadros(void) {
                     sConta.semTextura, mb_livres());
     if (sMipmap) {
         Diario_Escrever("gs_d3d:   mipmap: %u texturas com níveis no trecho, %.2f ms ao todo, a pior %.2f ms (o nível 0 e os outros, "
-                        "tiled, na thread que envia)", sMipTex, picos_ms(sMipTiques), picos_ms(sMipPiorTiques));
+                        "tiled, na thread que envia); %u de lutador sem níveis (BT3_MIPMAP_LUTADOR)", sMipTex, picos_ms(sMipTiques),
+                        picos_ms(sMipPiorTiques), sMipLutSem);
+        sMipLutSem = 0;
         sMipTex = 0;
         sMipTiques = 0;
         sMipPiorTiques = 0;

@@ -1620,6 +1620,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   console foram gastas descartando efeitos (distância, panorâmico, nitidez, antitremulação, profundidade, 16:9) antes de
   perguntar onde e quando ele aparecia: pergunte isso primeiro. O BT3 nunca pede mipmap (sonda no `gs_core.c`: MXL 0 em
   toda a luta); o PS2 escondia na saída entrelaçada e analógica, e a 720p digital mostra. O `BT3_MIPMAP` gera os níveis.
+- **Mipmap gerado só em textura que é imagem, nunca em tabela** (06/11). O lutador do BT3 é desenhado duas vezes: o
+  material e, por cima, a rampa do sombreado lida em (0,5 + 0,5 N.L, 0) e subtraída da cor (programa 0 da VU1,
+  `ALPHA_2 0x62`). Numa tabela o nível sai da variação de N.L na tela e muda por triângulo: listras na sombra que mudam com
+  o ângulo. Antes de gerar níveis para todas, separar as texturas pelo uso (no BT3, pelo bloco: `BtlObjMdl_BindFiles` fixa
+  os lutadores em 0x3480, paletas em 0x3C00, rampa e fade em 0x3D40) e lembrar que textura com paleta que muda na luta é
+  textura nova a cada troca, com a geração dos níveis junto.
 - **Uma worktree nova no WSL precisa preparar os dados antes da build sem janela**: `port/tools/gen_data.py --asm "$PWD/asm"`
   e o `portsrc.prepare` de cada fonte, como os scripts das tarefas fazem; sem isso a x86 sai com 326 objetos e 450 stubs e
   cai. E os links `asm`, `assets`, `disc` e `gamedata` vão no `info/exclude`, senão o carimbo tenta ler a pasta como arquivo.

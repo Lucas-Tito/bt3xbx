@@ -439,6 +439,7 @@ uint32_t GsD3d_Falta(uint32_t w, uint32_t h, int modo);
 uint32_t GsD3d_TexBytes(GsTex tex);
 int GsD3d_Descartou(uint32_t w, uint32_t h, int modo, unsigned n, uint32_t bytes, unsigned idade, unsigned emUso);
 void GsD3d_Branca(int motivo, uint32_t w, uint32_t h);
+int GsD3d_TexNiveis(uint32_t tbp, uint32_t cbp, uint32_t psm, uint32_t bits, uint32_t tw, uint32_t th, int ctx);
 static uint16_t sX360Ordem[MAX_TEX];
 static unsigned char sX360Sai[MAX_TEX];
 
@@ -863,10 +864,12 @@ static GsTex texture_get(int ctx) {
 #ifdef PORT_X360
     {
         /* o D3D recusou com o piso cumprido: descarta mais e tenta uma vez de novo (o descarte muda sTex: só depois
-           pega a vaga) */
-        GsTex nova = replaced ? sBackend->texCreate(rw, rh, packFormat, pack.levels) : sBackend->texCreate(tw, th, GS_TEXFMT_RGBA8, 1);
+           pega a vaga). (BT3_MIPMAP_LUTADOR, 06/11) O backend diz se a textura pode ganhar o mipmap gerado: 1 pode
+           (pelo tamanho), 0 só o nível 0 (as dos lutadores, pelo bloco onde o jogo as põe). */
+        int niveis = replaced ? 1 : GsD3d_TexNiveis(tbp, cbp, psm, bits, tw, th, ctx);
+        GsTex nova = replaced ? sBackend->texCreate(rw, rh, packFormat, pack.levels) : sBackend->texCreate(tw, th, GS_TEXFMT_RGBA8, niveis);
         if (nova == 0 && !replaced && GsDraw_X360Abre(tw, th, 2)) {
-            nova = sBackend->texCreate(tw, th, GS_TEXFMT_RGBA8, 1);
+            nova = sBackend->texCreate(tw, th, GS_TEXFMT_RGBA8, niveis);
         }
         if (nova == 0) {
             GsD3d_Branca(3, tw, th);
