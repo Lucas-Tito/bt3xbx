@@ -42,6 +42,11 @@ extern void Passos_Leitura(void); /* (F5, etapa 3) a fronteira de passo da medid
 extern void Roteiro_SomEstado(void); /* (F6, etapa 1) BT3_SOM_ESTADO: o estado do som no log (roteiro.c) */
 int Port_PadRead(int socket, unsigned char *data) {
     if (socket == 0) {
+#ifdef BT3_TESTE_VU0_NATIVO
+        static int configurado;
+        extern void Vn_Configurar(const char *valor);
+        if (!configurado) { Vn_Configurar(getenv("BT3_VU0_NATIVO")); configurado=1; }
+#endif
         Passos_Leitura();
         Roteiro_SomEstado();
     }

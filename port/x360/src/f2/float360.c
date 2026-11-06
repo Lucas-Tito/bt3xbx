@@ -3,13 +3,14 @@
  * que no PC vem do float por software (port/src/softfloat_ps2.c, plat_fastvec.c, plat_libm.c), na mesma
  * interface, pela FPU:
  *   - RefVu0_AddBits / MulBits / DivBits: a aritmética do código vetorial, em padrões de bits;
- *   - Port_FastAdd / Mul / MtxApply: os caminhos rápidos do PC (o de matriz diz "não tratado": vai pelo comum);
+ *   - Port_FastAdd / Mul / MtxApply: as operações da FPU e a matriz nativa na faixa segura;
  *   - Port_ceilf, expf, logf, fmodf: as funções que a biblioteca do PS2 não fornece (o resto vem da newlib).
  * O que difere do PS2 (bit de guarda da soma, denormais, estouro, divisão ao mais próximo) fica medido na decisão
  * 5; para jogar sozinho basta, e a F2 mede o efeito comparando com a build de referência.
  */
 #include <math.h>
 #include <string.h>
+#include "../../include/vu0_nativo.h"
 
 typedef unsigned int u32;
 
@@ -39,10 +40,7 @@ u32 Port_FastAdd(u32 x, u32 y) { return RefVu0_AddBits(x, y); }
 u32 Port_FastMul(u32 x, u32 y) { return RefVu0_MulBits(x, y); }
 
 int Port_FastMtxApply(const u32 *r, const u32 *v, u32 *out) {
-    (void)r;
-    (void)v;
-    (void)out;
-    return 0;
+    return Vn_MtxApply(r, v, out);
 }
 
 #undef ceilf

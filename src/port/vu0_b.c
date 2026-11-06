@@ -41,6 +41,10 @@
 #define memcpy(d, s, n) __builtin_memcpy(d, s, n)
 #endif
 
+#ifdef PORT_X360
+#include "vu0_nativo.h"
+#endif
+
 /* ------------------------------------------------------------------------------------------------------------------
  * VU0 state and imports: shared with the first half (default) or local (REF_VU0_B_STANDALONE). See vu0_b.h.
  * ---------------------------------------------------------------------------------------------------------------- */
@@ -1121,6 +1125,32 @@ void Ref_Vec4_Swap(RefVec4f *a, RefVec4f *b) {
 }
 
 /* 0x121EA8 Vec4_Add: lqc2 vf4, a / lqc2 vf5, b / vadd.xyzw vf4, vf4, vf5 / sqc2 vf4. Four components. */
+#ifdef PORT_X360
+/* O recuo conserva o corpo isolado: inclusive a escolha de payload de NaN
+ * pelo compilador do caminho anterior, sem compartilhar temporários do rápido. */
+/* O c89.py remove atributos GCC; o pragma conserva a fronteira no cl. */
+#pragma auto_inline(off)
+static VN_SEM_INLINE void vn_vec4_add_lento(RefVec4f *out, const RefVec4f *a, const RefVec4f *b) {
+    RefVec4f va = *a;
+    RefVec4f vb = *b;
+
+    va.x = f_add(va.x, vb.x);
+    va.y = f_add(va.y, vb.y);
+    va.z = f_add(va.z, vb.z);
+    va.w = f_add(va.w, vb.w);
+    *out = va;
+}
+
+#pragma auto_inline(on)
+void Ref_Vec4_Add(RefVec4f *out, const RefVec4f *a, const RefVec4f *b) {
+    RefVec4f vn;
+    if (Vn_Op4((const uint32_t *)a, (const uint32_t *)b, 0, (uint32_t *)&vn, 0)) {
+        *out = vn;
+    } else {
+        vn_vec4_add_lento(out, a, b);
+    }
+}
+#else
 void Ref_Vec4_Add(RefVec4f *out, const RefVec4f *a, const RefVec4f *b) {
     RefVec4f va = *a;
     RefVec4f vb = *b;
@@ -1131,6 +1161,7 @@ void Ref_Vec4_Add(RefVec4f *out, const RefVec4f *a, const RefVec4f *b) {
     va.w = f_add(va.w, vb.w);
     *out = va;
 }
+#endif
 
 /* 0x121EC0 Vec3_Add: vadd.xyz vf4, vf4, vf5. out.w = a.w. */
 void Ref_Vec3_Add(RefVec4f *out, const RefVec4f *a, const RefVec4f *b) {
@@ -1190,6 +1221,31 @@ void Ref_Vec3_Mul(RefVec4f *out, const RefVec4f *a, const RefVec4f *b) {
 }
 
 /* 0x121F38 Vec4_Scale: lqc2 vf4, v / vf5.x = s / vmulx.xyzw vf4, vf4, vf5x. Four components: w is scaled too. */
+#ifdef PORT_X360
+/* O recuo conserva o corpo isolado: inclusive a escolha de payload de NaN
+ * pelo compilador do caminho anterior, sem compartilhar temporários do rápido. */
+/* O c89.py remove atributos GCC; o pragma conserva a fronteira no cl. */
+#pragma auto_inline(off)
+static VN_SEM_INLINE void vn_vec4_scale_lento(RefVec4f *out, const RefVec4f *v, float s) {
+    RefVec4f va = *v;
+
+    va.x = f_mul(va.x, s);
+    va.y = f_mul(va.y, s);
+    va.z = f_mul(va.z, s);
+    va.w = f_mul(va.w, s);
+    *out = va;
+}
+
+#pragma auto_inline(on)
+void Ref_Vec4_Scale(RefVec4f *out, const RefVec4f *v, float s) {
+    RefVec4f vn;
+    if (Vn_Bc4((const uint32_t *)v, f_bits(s), 0, (uint32_t *)&vn, 1)) {
+        *out = vn;
+    } else {
+        vn_vec4_scale_lento(out, v, s);
+    }
+}
+#else
 void Ref_Vec4_Scale(RefVec4f *out, const RefVec4f *v, float s) {
     RefVec4f va = *v;
 
@@ -1199,6 +1255,7 @@ void Ref_Vec4_Scale(RefVec4f *out, const RefVec4f *v, float s) {
     va.w = f_mul(va.w, s);
     *out = va;
 }
+#endif
 
 /* 0x121F50 Vec3_Scale: vmulx.xyz vf4, vf4, vf5x. out.w = v.w. */
 void Ref_Vec3_Scale(RefVec4f *out, const RefVec4f *v, float s) {

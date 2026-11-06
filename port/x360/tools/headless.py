@@ -30,6 +30,11 @@
                  blocos pela thread de port/x360/src/som/fluxo.c       -> port/build/<alvo>tf/teste_som
 O rastro de som (port/x360/headless/som.c, F6 rede 2: BT3_SOM=arquivo) entra em todas as builds, por --wrap.
 
+Prova da VU0 nativa do 360: BT3_TESTE_VU0_NATIVO=1 com --alvo ppc liga
+PORT_X360 só nos dois arquivos da VU0 e troca o gancho da matriz. O restante
+conserva a ABI e a aritmética em software. Os núcleos nativos, em outro objeto,
+truncam só durante a conta e restauram o modo anterior. A x86 normal não muda.
+
 As duas usam a aritmética em software da build de PC (-msoft-float chama port/src/softfloat_ps2.c): uma
 diferença entre elas só pode vir da ordem dos bytes. Reaproveita portsrc e eeconst do upstream sem mudá-los;
 janela, controle e rede são trocados por port/x360/headless/sem_janela.c.
@@ -69,8 +74,15 @@ class Alvo:
         # -O2 nas duas (em -O0 o jogo se comporta diferente: há comportamento indefinido no código e a luta
         # diverge no quadro 2755).
         self.opt = "-O2"
+        # Só para a prova da VU0: o jogo conserva a ABI soft-float, e os
+        # núcleos novos recebem apenas ponteiros/inteiros em outro objeto.
+        self.vu0_nativo = os.environ.get("BT3_TESTE_VU0_NATIVO") == "1"
+        self.vu0_conta = os.environ.get("BT3_VU0_CONTA") == "1"
+        if self.vu0_conta and not self.vu0_nativo:
+            raise ValueError("BT3_VU0_CONTA exige BT3_TESTE_VU0_NATIVO=1")
         pasta = nome + ("b" if self.desfoque else "") + ("r" if rastreio else "") + ("c" if chamadas else "") + ("g" if gpu else "") + ("v" if vu1 else "") + \
             ("a" if gravador else "") + ("t" if teste_som else "") + ("f" if fluxo else "") + ("l" if alfa else "") + ("e" if lotes else "")
+        if self.vu0_conta: pasta += "vc"
         self.b = ROOT / "port/build" / pasta
         self.obj = self.b / "obj"
         self.exe = self.b / f"bt3_{pasta}"
@@ -265,6 +277,10 @@ def construir(alvo):
                                    (["-DBT3_GPU_FALSO"] if alvo.gpu and f.stem in ("gs_core", "gs_draw") else []) + alvo.hard + fma + (alvo.instr if f.stem not in SEM_RASTREIO else []) + sdl360 +
                                    ["-Iport/x360/headless", f"-I{ROOT / 'port/build/gen/gs'}"], fonte_gs, o, ee=False, be=alvo.be))
 
+    conta = None
+    if alvo.vu0_conta:
+        from vu0_conta import Contador
+        conta = Contador(ROOT, alvo.b)
     # a camada do port: aritmética do PS2 em software, menos as duas pontes com a FPU (interface só de inteiros)
     for f in [ROOT / "src/port/vu0_a.c", ROOT / "src/port/vu0_b.c"] + sorted((ROOT / "port/src").glob("*.c")):
         o = alvo.obj / ("pc_" + f.stem + ".o")
@@ -272,14 +288,38 @@ def construir(alvo):
         ponte = f.name in ("plat_libm.c", "plat_fastvec.c")
         soft = alvo.hard if ponte else \
             alvo.soft + ["-DSF_FAST_CALLS", "-include", "math.h", "-include", "stdlib.h", "-include", "port_libm.h"]
+        if alvo.vu0_nativo and nomes:
+            nomes += ["-DPORT_X360", "-Iport/x360/include"]
+        if alvo.vu0_nativo and f.name == "plat_fastvec.c":
+            f = ROOT / "port/x360/headless/vu0_nativo_ponte.c"
+            nomes += ["-Iport/x360/include"]
         cmd = alvo.cc + ["-std=gnu99", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing", "-ffp-contract=off",
                          "-fno-builtin", "-w", "-Iinclude", "-Iport/include", "-Iport/src", "-Iport/x360/headless"] + \
             soft + nomes + alvo.instr + \
             (["-finstrument-functions"] if alvo.chamadas and f.stem == "plat_sys" else [])  # rand/srand do jogo
+        if conta and (nomes or f.name == "softfloat_ps2.c" or ponte and f.name != "plat_libm.c"):
+            grupo = "pc_" + f.stem
+            if f.name == "vu0_nativo_ponte.c": grupo = "ponte"
+            f = conta.preparar(f, grupo)
+            cmd += ["-Iport/x360/headless"]
         junta(f, o, compile_ee(cmd, f, o, ee=not ponte and not nomes, be=alvo.be))
+
+    if alvo.vu0_nativo:
+        f = ROOT / "port/x360/src/f2/vu0_nativo.c"
+        o = alvo.obj / "x360_vu0_nativo.o"
+        cmd = alvo.cc + ["-std=gnu89", "-c", alvo.opt, "-g", "-fno-pic", "-fno-strict-aliasing",
+                        "-ffp-contract=off", "-frounding-math", "-DBT3_TESTE_VU0_NATIVO",
+                        "-Iport/x360/include"] + alvo.hard
+        if conta:
+            f = conta.preparar(f, "vu0_nativo")
+            cmd += ["-Iport/x360/headless"]
+        junta(f, o, run(cmd + [f, "-o", o]))
 
     extras = (["desfoque"] if alvo.desfoque else []) + ["sem_janela", "roteiro", "receitas", "imagens", "ponte_pow", "passos", "memoria", "som"] + (["rastreio"] if alvo.rastreio else []) + (["inverter"] if alvo.nome == "ppc" else []) + \
         (["chamadas"] if alvo.chamadas else []) + (["gpu_falso"] if alvo.gpu else []) + (["gravador"] if alvo.gravador else [])
+    if conta:
+        conta.escrever()
+        extras += ["vu0_conta"]
     for nome in extras:
         o = alvo.obj / f"x360_{nome}.o"
         # (o roteiro lê o save do jogo pela estrutura dele, include/sys/save.h, com os tipos do jogo: port_compat.h)
@@ -290,6 +330,8 @@ def construir(alvo):
             tipos_jogo = [f'-DBT3_CARIMBO="{carimbo().strip()}"']
         # (--gpu: o sem_janela.c sem as entradas GsGpu_* vazias, que vêm do gs_draw.c, como na build do 360)
         gpu_def = ["-DX360_GS_D3D"] if alvo.gpu and nome == "sem_janela" else []
+        if alvo.vu0_nativo and nome == "sem_janela": gpu_def += ["-DBT3_TESTE_VU0_NATIVO"]
+        if conta: gpu_def += ["-DBT3_VU0_CONTA", "-I"+str(conta.pasta)]
         # (F6, rede 4: o rastro de som com o relógio do gravador e os estragos de propósito; o gravador com a SDL de teste)
         if alvo.gravador and nome in ("som", "gravador"):
             gpu_def = ["-DBT3_GRAVADOR", "-Iport/x360/headless"]

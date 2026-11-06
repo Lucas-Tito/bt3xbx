@@ -323,6 +323,9 @@ void Passos_Leitura(void) {
     sPresentUs = 0;
     sImagens = 0;
     luta = combate(&pausa);
+#ifdef BT3_VU0_CONTA
+    { extern void Vc_Passo(int combate, unsigned vb); Vc_Passo(luta, vb); }
+#endif
     if (sAberta && (!luta || sN == PASSOS_MAX)) {
         fecha(sN == PASSOS_MAX && luta ? "cheia" : pausa ? "pausa" : gPortMenuMode || gBtlSeq == NULL ? "menus" : "combate");
     }

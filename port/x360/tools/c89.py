@@ -74,7 +74,7 @@ def grupos():
         elif f.stem in GS_D3D:
             out.append(("gs_", f, ["-std=gnu99", I("port/x360/src/gs/sdl"), I("port/x360/headless"), I("port/src/gs")],
                         False))
-    vu0 = ["-include", "vu0_names.h", "-DREF_VU0_EXTERN_ARITH"]
+    vu0 = ["-include", "vu0_names.h", "-DREF_VU0_EXTERN_ARITH", I("port/x360/include")]
     for f in [ROOT / "src/port/vu0_a.c", ROOT / "src/port/vu0_b.c"] + sorted((ROOT / "port/src").glob("*.c")):
         if f.stem in SUBSTITUIDOS:
             continue

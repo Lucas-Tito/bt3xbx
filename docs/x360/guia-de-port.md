@@ -2002,8 +2002,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Antes de cortar uma cópia, divida o tempo pelas vezes, não pelos bytes.** O `Unpack` parecia "2 MB a 0,6 GB/s, preso à
   banda"; dividido pelas chamadas (uns 9 mil por quadro, 264 bytes cada) dá uns 440 ns por chamada, perto de uma falta de memória
   com página de 4 KB (345 ns): o custo é a primeira linha de cada cópia, e o remédio é pedir adiante, não copiar menos.
+- **O `/range` do `link /dump` do XDK só aceita endereço com `0x`** (`/range:0x822468A8,0x82255154`); sem ele, `LNK1147:
+  invalid number` e saída 1. A guarda de fusão da VU0 (`guarda_vu0_fusao.py`) nasceu sem o `0x`, com o dump simulado no
+  autoteste, e reprovou a primeira build no XDK em 05/11; o dump simulado agora recusa endereço sem `0x`, como o real.
+  Ferramenta que chama o XDK e foi testada sem ele: o simulado tem de copiar as recusas do real.
 - **O código que o `cl` gerou se lê sem console:** monte o `bin/win32` do XDK no contêiner (`-v $XDK/bin/win32:/xbin:ro`) e rode
-  `wine /xbin/dumpbin.exe /disasm /range:INICIO,FIM build/x360/f2/default.exe`, com os endereços do `default.map` da mesma build
+  `wine /xbin/dumpbin.exe /disasm /range:0xINICIO,0xFIM build/x360/f2/default.exe`, com os endereços do `default.map` da mesma build
   (os de outra build não servem). Assim se viu que o `memcpy` do CRT escolhe o caminho pelo alinhamento (8 bytes, 4 bytes ou
   byte a byte), já faz `dcbt` até 8 linhas adiante só dentro da própria cópia, e que a `vu.mem` está em 4 módulo 8 (o endereço
   da estrutura sai do `lis`/`addi` do começo da função; variáveis `static` não aparecem no `.map`).
@@ -3403,3 +3407,108 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   Repetir a build e as capturas dessa variante, além da build plana: só a igualdade
   da `.text` plana não exercita a chamada nova. O mipmap gerado após essa decisão
   não existia na 1.0.2 analisada nos itens anteriores.
+
+
+### A VU0 nativa do 360 (F8, item 17, 04/11/2026)
+
+- **O diretório de fontes gerados precisa ser local e gravável.** Na certificação de
+  `vu0-registradores`, o link de todo `port/build/gen` para `/srv/bt3/dados/port_build/gen`
+  deixou passar os testes isolados, mas a reconstrução da base x86 parou com `PermissionError`
+  em `gen/src/src/sys/gfx_ot.c`: `portsrc.prepare` reescreve as cópias dos fontes.
+  Substituir somente o link da worktree por um diretório local, com `src/` gravável;
+  `gs/` pode continuar como link de leitura para os dados compartilhados.
+  Não mudar permissões nem escrever no destino compartilhado. Preparar todos os fontes
+  antes da rodada longa confirma essa condição sem iniciar o emulador.
+
+- **Os dados gerados também dependem do caminho da worktree.** A segunda rodada de
+  `vu0-registradores` chegou à base x86, mas o `vu1_micro.data.s` compartilhado continha
+  `.incbin "/home/lucas/bt3xbx/assets/..."`, inacessível ao usuário da tarefa. Como no Deck
+  (seção 1.2b), substituir somente o link `port/build/gen/data` por diretório local e rodar
+  `python3 port/tools/gen_data.py --asm "$PWD/asm"`. Os 72 arquivos regenerados ficaram
+  idênticos aos compartilhados, salvo esse caminho absoluto. O gerador montou os 72 objetos;
+  essa preparação deve preceder os testes longos. Não editar os insumos compartilhados nem
+  criar atalhos para a pasta privada de outro usuário.
+
+- **O recuo IEEE também precisa de prova de bits.** Acrescentar um ramo rápido ao corpo de `Vec4_Scale` mudou
+  a alocação de registradores do GCC x86 e a escolha de payload quando dois NaNs diferentes eram multiplicados
+  (caso 223680: `ffc57bb7` contra `ffd568fb`). Copiar os operandos antes do ramo não resolveu. Conservar o corpo
+  anterior inteiro em uma função `noinline` separada resolveu nos 2 milhões de casos dos modelos inteiro e 360.
+  Não normalizar NaNs no comparador para esconder a diferença. A escolha no XDK ainda exige a conferência dele.
+- **Ligar hardware na PPC não pode trocar a ABI do jogo.** A build sem janela chama a VU0 com a ABI soft-float;
+  recompilar o arquivo inteiro com hardware muda a passagem dos argumentos float. O teste
+  `BT3_TESTE_VU0_NATIVO=1` mantém os chamadores soft-float e usa núcleos de hardware com ponteiros/inteiros.
+  Só dentro desses núcleos muda e restaura o arredondamento. No 360 a thread já trunca e essa troca não entra.
+- **Mutante de denormal precisa conferir a desistência.** O header atual do 360 também usa a FPU: aceitar denormal
+  por engano pode produzir os mesmos bits nele e passar um comparador só de resultados. O teste da VU0 compara
+  também o retorno da guarda e exige saída intacta na recusa, além do oráculo inteiro.
+- **A contagem GCC não substitui a desmontagem do cl.** O GCC já elimina muitas conversões de bits do original,
+  e a guarda pode aumentar o código estático. Separar invólucros, recuos e núcleos chamados, declarar se os laços
+  foram expandidos e não somar tudo como se fosse o caminho aceito. A medida do Xenon continua no console.
+
+- **O fonte preparado não conserva `noinline` GCC.** O `c89.py` remove `__attribute__`; para os recuos da
+  VU0, os pares `#pragma auto_inline(off/on)` preservados no `.c` preparado impedem que o cl os reintegre.
+  Os núcleos compilados diretamente usam `__declspec(noinline)`. Headers de fontes diretos também precisam
+  do `__inline` e dos tipos locais, pois a CRT do XDK não tem `stdint.h`; não confundir com o shim do c89.
+
+- **Commit só de documentação também invalida os logs da F5.** Depois do aceite da VU0 em `2bcd1c05`,
+  as três builds de `936b632b` tiveram objetos sem depuração e `.text` iguais, exceto o carimbo de teste.
+  Mesmo assim `REUSA=1` falhou em `roteiros.py f5` e `passos.py`: os logs guardavam `2bcd1c05`, mas
+  o HEAD era `936b632b`. A igualdade de objetos não substitui a regra de origem dos logs. Congelar os
+  registros no Git antes da rodada oficial; reconstruir e executar o roteiro completo no commit final.
+  Depois do aceite, pôr o resultado final no relatório externo, sem criar outro commit documental
+  que obrigue uma terceira execução. Nunca reescrever o carimbo dos logs para fazê-los passar.
+
+- **A fronteira sem inlining pode conservar exatamente o custo que se quer tirar.** Na revisão XDK da
+  VU0 de `82ca99f7`, separar produtos e somas evitava fusão, mas forçava 16 produtos na pilha e a
+  releitura imediata deles. A revisão `vu0-registradores` reúne as contas com `fp_contract(off)` e
+  `/fp:precise`, publica escalares diretamente e verifica as quatro famílias fundidas no PE após o
+  link. A cobertura inclui todos os símbolos dos objetos receptores do inlining; não usar LTCG.
+- **Um mutante de arredondamento não pode contaminar o oráculo de hardware.** Mudar a FPU para
+  `FE_TONEAREST` sem restaurar fez o controle de 10 mil casos sobreviver no modelo 360: o oráculo
+  passou a calcular com o mesmo erro. O mutante agora muda o modo só dentro de um produto isolado,
+  conserva o arredondamento em float e restaura o modo antes de devolver. A recusa do controle
+  continua obrigatória nos dois modelos e nas duas arquiteturas.
+- **Contar só `stfs` e `lfs` esconde os laços PPC.** O auxiliar antigo da matriz usa `stfsu`, `lfsu`
+  e `lfsx`. O contador da VU0 agora mostra também as formas indexadas e com atualização; separar
+  contagem estática de operações executadas e distinguir stores no destino de temporários na pilha.
+
+### Relendo a coleta da VU0 (05/11/2026)
+
+- Um mapa preservado ao lado de duas coletas pode corresponder só a uma delas.
+  Nas entradas de `vu0-amostra`, o mapa de `0757ec25` confere para `coleta2` e
+  recusa `coleta` de `6b09afe1`. Não corrigir âncoras por deslocamento presumido.
+- Despejos cumulativos limitados ao topo não dão uma subtração exata por função.
+  Usar a união das entradas dos dois despejos, registrar o que ficou omitido e
+  não transformar soma de tempo próprio das funções alteradas em ganho garantido.
+- O amostrador antigo verifica a presença de `BT3_AMOSTRA`: valor `0` vira 100 us.
+  Remover a chave com `-BT3_AMOSTRA` para medir sem coleta. O boot do `f5_duelo`
+  também exige `BT3_DESBLOQUEIO=1`, mesmo usando as demais opções padrão do console.
+- Instrumentar só tipos escalares perde `mtx_apply`, que devolve `RefVec4f`.
+  O contador de teste precisa cobrir retorno de estrutura e funções inline;
+  conferir motivos pelo retorno efetivo e não apenas prever a guarda na entrada.
+- Testar isoladamente `float360.c` exige descartar seções não usadas ou ligar
+  também `Port_atan2f`. `teste_vu0_chave.py` usa `--gc-sections`, mantendo o gancho
+  real da matriz e sem substituir o código testado por uma reimplementação.
+
+- A PPC com contadores também precisa da build x86 normal antes dela. A primeira
+  rodada de `vu0-amostra` ligou x86vc e ppcvc, mas parou ao gerar o mapa das
+  tabelas: `elftipos.py` procura `port/build/x86/obj/*.i`, não os de x86vc.
+  `vu0_contar.sh` agora constrói primeiro a x86 sem as duas opções de teste,
+  depois x86vc e ppcvc. Os logs das builds também passam pelo log geral com
+  `tee`, para que a falha não deixe `contar.log` vazio. Nenhuma luta foi
+  executada na tentativa que revelou essa dependência.
+
+- Comparar todos os contadores x86/PPC por igualdade recusou a rodada `previa2`
+  só depois das quatro lutas. Os auxiliares escalares têm chamadas dependentes
+  do compilador/ABI, e os motivos de recuo excepcional também diferem. Exigir
+  as chamadas comuns por passo, as fronteiras e a passagem da matriz pelo gancho;
+  conservar todas as diferenças no JSON, sem substituir a prova de memória.
+  O hash bruto de todas as globais também difere entre as duas posições;
+  comparar vblank e resumo da luta, e exigir o normalizador de memória oficial.
+  Separar as janelas do rastro: o Duelo tem 684 passos antes da pausa e 2.334
+  depois; usar 3.018 como denominador da segunda janela mistura as medições.
+- `~/vez.sh` dá prioridade ao arquivo `~/vagas` sobre `BT3_VAGAS`. Se a tarefa
+  limita a três e o arquivo permite quatro, só definir a variável não basta.
+  Sem alterar o escalonador compartilhado, o lançador próprio deve recusar uma
+  vaga superior a três antes de executar qualquer build/emulador e tentar de novo
+  como serviço. Nunca acumular lançadores em segundo plano.

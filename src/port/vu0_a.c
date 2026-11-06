@@ -56,6 +56,10 @@
 #define memcpy(d, s, n) __builtin_memcpy(d, s, n)
 #endif
 
+#ifdef PORT_X360
+#include "vu0_nativo.h"
+#endif
+
 #ifndef REF_VU0_NATIVE_FLOAT
 #define REF_VU0_NATIVE_FLOAT 0
 #endif
@@ -425,9 +429,17 @@ static void op_vadd(int m, int fd, int fs, int ft) {
     uint32_t r[4];
     int i;
 
+#ifdef PORT_X360
+    if (!Vn_Op4(VF(fs).u, VF(ft).u, 0, r, 0)) {
+        for (i = 0; i < 4; i++) {
+            r[i] = RefVu0_AddBits(VF(fs).u[i], VF(ft).u[i]);
+        }
+    }
+#else
     for (i = 0; i < 4; i++) {
         r[i] = RefVu0_AddBits(VF(fs).u[i], VF(ft).u[i]);
     }
+#endif
     setFlags(r, m);
     put(fd, r, m);
 }
@@ -447,9 +459,17 @@ static void op_vmul(int m, int fd, int fs, int ft) {
     uint32_t r[4];
     int i;
 
+#ifdef PORT_X360
+    if (!Vn_Op4(VF(fs).u, VF(ft).u, 0, r, 1)) {
+        for (i = 0; i < 4; i++) {
+            r[i] = RefVu0_MulBits(VF(fs).u[i], VF(ft).u[i]);
+        }
+    }
+#else
     for (i = 0; i < 4; i++) {
         r[i] = RefVu0_MulBits(VF(fs).u[i], VF(ft).u[i]);
     }
+#endif
     setFlags(r, m);
     put(fd, r, m);
 }
@@ -459,9 +479,17 @@ static void op_vaddbc(int m, int fd, int fs, int ft, int c) {
     uint32_t r[4], b = VF(ft).u[c];
     int i;
 
+#ifdef PORT_X360
+    if (!Vn_Bc4(VF(fs).u, b, 0, r, 0)) {
+        for (i = 0; i < 4; i++) {
+            r[i] = RefVu0_AddBits(VF(fs).u[i], b);
+        }
+    }
+#else
     for (i = 0; i < 4; i++) {
         r[i] = RefVu0_AddBits(VF(fs).u[i], b);
     }
+#endif
     setFlags(r, m);
     put(fd, r, m);
 }
@@ -470,9 +498,17 @@ static void op_vsubbc(int m, int fd, int fs, int ft, int c) {
     uint32_t r[4], b = VF(ft).u[c];
     int i;
 
+#ifdef PORT_X360
+    if (!Vn_Bc4(VF(fs).u, b ^ SIGN, 0, r, 0)) {
+        for (i = 0; i < 4; i++) {
+            r[i] = RefVu0_SubBits(VF(fs).u[i], b);
+        }
+    }
+#else
     for (i = 0; i < 4; i++) {
         r[i] = RefVu0_SubBits(VF(fs).u[i], b);
     }
+#endif
     setFlags(r, m);
     put(fd, r, m);
 }
@@ -481,9 +517,17 @@ static void op_vmulbc(int m, int fd, int fs, int ft, int c) {
     uint32_t r[4], b = VF(ft).u[c];
     int i;
 
+#ifdef PORT_X360
+    if (!Vn_Bc4(VF(fs).u, b, 0, r, 1)) {
+        for (i = 0; i < 4; i++) {
+            r[i] = RefVu0_MulBits(VF(fs).u[i], b);
+        }
+    }
+#else
     for (i = 0; i < 4; i++) {
         r[i] = RefVu0_MulBits(VF(fs).u[i], b);
     }
+#endif
     setFlags(r, m);
     put(fd, r, m);
 }
@@ -505,9 +549,17 @@ static void op_vmulabc(int m, int fs, int ft, int c) {
     uint32_t r[4], b = VF(ft).u[c];
     int i;
 
+#ifdef PORT_X360
+    if (!Vn_Bc4(VF(fs).u, b, 0, r, 1)) {
+        for (i = 0; i < 4; i++) {
+            r[i] = RefVu0_MulBits(VF(fs).u[i], b);
+        }
+    }
+#else
     for (i = 0; i < 4; i++) {
         r[i] = RefVu0_MulBits(VF(fs).u[i], b);
     }
+#endif
     setFlags(r, m);
     putAcc(r, m);
 }
@@ -517,9 +569,17 @@ static void op_vmaddabc(int m, int fs, int ft, int c) {
     uint32_t r[4], b = VF(ft).u[c];
     int i;
 
+#ifdef PORT_X360
+    if (!Vn_Bc4(VF(fs).u, b, gRefVu0.acc.u, r, 1)) {
+        for (i = 0; i < 4; i++) {
+            r[i] = RefVu0_AddBits(gRefVu0.acc.u[i], RefVu0_MulBits(VF(fs).u[i], b));
+        }
+    }
+#else
     for (i = 0; i < 4; i++) {
         r[i] = RefVu0_AddBits(gRefVu0.acc.u[i], RefVu0_MulBits(VF(fs).u[i], b));
     }
+#endif
     setFlags(r, m);
     putAcc(r, m);
 }
@@ -529,9 +589,17 @@ static void op_vmaddbc(int m, int fd, int fs, int ft, int c) {
     uint32_t r[4], b = VF(ft).u[c];
     int i;
 
+#ifdef PORT_X360
+    if (!Vn_Bc4(VF(fs).u, b, gRefVu0.acc.u, r, 1)) {
+        for (i = 0; i < 4; i++) {
+            r[i] = RefVu0_AddBits(gRefVu0.acc.u[i], RefVu0_MulBits(VF(fs).u[i], b));
+        }
+    }
+#else
     for (i = 0; i < 4; i++) {
         r[i] = RefVu0_AddBits(gRefVu0.acc.u[i], RefVu0_MulBits(VF(fs).u[i], b));
     }
+#endif
     setFlags(r, m);
     put(fd, r, m);
 }
