@@ -1615,6 +1615,15 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   trava antiga vira a vaga 1, então script que ainda faz `flock ~/wsl.lock` disputa só ela. Script de rodada não pode
   ter guarda que recuse outro `qemu` rodando.
 
+- **Cintilado no cenário só com a câmera em movimento é serrilhado de textura sem mipmap** (05/11). O sintoma que separa:
+  dentro das superfícies, não nas bordas, nunca nos lutadores (textura ampliada), parado não cintila. Seis rodadas de
+  console foram gastas descartando efeitos (distância, panorâmico, nitidez, antitremulação, profundidade, 16:9) antes de
+  perguntar onde e quando ele aparecia: pergunte isso primeiro. O BT3 nunca pede mipmap (sonda no `gs_core.c`: MXL 0 em
+  toda a luta); o PS2 escondia na saída entrelaçada e analógica, e a 720p digital mostra. O `BT3_MIPMAP` gera os níveis.
+- **Uma worktree nova no WSL precisa preparar os dados antes da build sem janela**: `port/tools/gen_data.py --asm "$PWD/asm"`
+  e o `portsrc.prepare` de cada fonte, como os scripts das tarefas fazem; sem isso a x86 sai com 326 objetos e 450 stubs e
+  cai. E os links `asm`, `assets`, `disc` e `gamedata` vão no `info/exclude`, senão o carimbo tenta ler a pasta como arquivo.
+
 ## 7. Lista de passos para um port novo
 
 1. Fork da decomp (ou do port de PC dela, se existir), `upstream` como remote, merge só de
@@ -3320,3 +3329,77 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   devolve sempre 0: esperar uma rodada com `until ... && echo PRONTO | grep -q PRONTO`, e um marcador novo por rodada
   (o `FIM` antigo no mesmo arquivo encerra a espera na hora). A primeira compilação do `headless.py` numa árvore nova
   falhou duas vezes com "unable to rename temporary" nos objetos; repetir a compilação completa passou.
+
+### Diagnóstico do desfoque (F8, 14)
+
+- O texto inicial das etapas de escala e MSAA registra padrões históricos. Na 1.0.2, `area_init`, `msaa_init`,
+  `fxaa_init` e `afiado_init` dão escala 1,4, MSAA 2, FXAA 0 e afiado 1. Fixe esses valores nos ambientes da rodada.
+- Copiar `gen/data` de outra máquina pode trazer `.incbin` absoluto para `/home/lucas/...`. No clone de teste,
+  ajuste somente a cópia gerada ao caminho dos assets locais antes de montar `vu1_micro.data.s`; os assets
+  compartilhados continuam somente leitura. A primeira build do desfoque falhou justamente nesse arquivo.
+- `BT3_SHOT_FINAL=1` acrescenta `filtro` depois do FXAA e `tela` depois da cópia, nos mesmos números do GS da
+  captura normal. A segunda vê o filtro final, mas nenhuma captura interna vê o escalonador HDMI ou a TV.
+- Ao desligar uma distorção, preserve também os sorteios dela: `StgHaze_Step` consome o gerador do jogo. Cortar
+  `StgHaze_DrawAll` mudaria a luta, e a diferença deixaria de isolar o filtro. Corte só `StgHaze_Draw`, depois do
+  UpdateClut e do Step. Clima (`EftWeather`) e distorção de calor (`StgHaze`) são candidatos separados.
+- A cópia atual do PC exige API de PNG que a SDL 3.2.24 do WSL não possui. A compilação falha em `ui.cpp` e
+  `mods_ui.cpp`; uma ligação que crie stubs desses leitores não é prova da build completa. Para diagnóstico
+  dos alvos, uma cópia isolada pode desativar explicitamente só as cargas da interface, declarando esse limite.
+
+- Na coleta de desfoque, não duplique `conv_tool --mapa` exigindo zero bruto depois de `roteiros.sh` passar.
+  O critério aceita certas larguras somente após `roteiros.py larguras` conferir posições e leitores reais.
+  Reutilize a pasta `dados` que o critério acabou de converter e aprovar, sem ampliar exceções.
+- A âncora de `BT3_IMAGENS` não inclui `roteiro: arquivo:linha`: `Imagens_Evento` retira esse prefixo.
+  Valide as âncoras contra `eventos_rastro`/`quadro_esperado` antes de gastar a rodada. No ensaio do desfoque,
+  os GS 2969/3362/4590/4977/5357/5418 foram medidos; vblank e quadro do roteiro não são substitutos.
+- Na 1.0.2, `tex2Dgrad` não implica mipmaps no 360: `tex_create` ignora levels, o cabeçalho XG tem um nível,
+  `tex_upload` recusa level diferente de zero e o sampler desliga o filtro de mip. Investigue o bilinear
+  do nível base e os efeitos do cenário antes de atribuir a maciez a K/L ou viés de LOD.
+- Na coleta autorizada com três vagas, use `~/vez.sh` e não acrescente guarda global contra outro qemu:
+  ela anula as outras vagas. Cada ciclo continua serial dentro da vaga, com dados e saídas próprios.
+
+- Sem `BT3_LOG=1`, o filtro de diagnóstico do 360 ignora `BT3_SHOT*`. Incluir LOG em todo gerador
+  de ambientes de captura e conferir a existência dos arquivos na primeira abertura. A primeira base
+  do desfoque não gravou nada, impedindo uma diferença quantitativa contra o corte da distância.
+- O GL do PC abre `port/build/shots/gpu_*.ppm` com fopen e pode terminar com código 0 sem gravar
+  se a pasta não existir. Crie a pasta antes da coleta e exija o conjunto inteiro de PPM depois.
+  Na rodada de 4310e558, as 48 capturas x86/PPC passaram, mas o PC terminou sem nenhuma imagem.
+- O `Sharp stage blur` do PC só protege os passes fora das cadeias marcadas. As correções recentes
+  de distância recuperam força perdida ao aumentar a resolução e podem borrar mais. Não prometer
+  maior nitidez só por portar esse conjunto, nem usar números GS iguais como prova de pose/câmera iguais.
+- No 360, `gsScale` fica em 1 mesmo quando a resolução física é 1,4. A redução nativa precisa viajar
+  como estado de cada desenho e ser aplicada na reprodução D3D. Não mudar a página inteira por quadro:
+  a página 0x150 também recebe sombras, calor e lente fora das cadeias. Resolver e marcar sujo em pixels físicos.
+- Na build sem janela com backend falso, `--vu1` só vale na x86. A PPC já usa a otimização pelo
+  `PORT_BIG_ENDIAN`, e seus executáveis de diagnóstico são `ppcbg`, contra `x86bgv` na x86.
+  Compile todas as variantes antes do critério longo: a coleta de f2a1a7c5 passou no oficial e só
+  depois parou ao passar a opção incompatível para a PPC.
+- O PC atual usa `save_quick=1` por padrão. Reproduzir nele a gravação de um boot da 1.0.2 com cartão
+  vazio sem fixar `save_quick=0` abre outras telas: no ensaio, História substituiu Duelo.
+  Esse ajuste vem de `Port_Setting`, portanto use um `BT3_SETTINGS` exclusivo com `save_quick=0`.
+  Além de presença e tamanho dos PPM, registre modo e sequência da luta em cada captura e recuse
+  cenas incompatíveis antes de multiplicar as variantes. Isso ainda não prova pose, câmera ou HUD iguais.
+- Ao separar as opções de uma cadeia na cópia do PC, não condicione seus marcadores
+  à opção de resolução nativa: Sharp também consulta a presença da cadeia. A coleta
+  de fcf9986a deu c02 idêntica à base por retirar esses marcadores. Preserve-os sempre,
+  distinga brilho/distância e condicione somente `lowres_now`; teste as combinações
+  Sharp ligado com ambos os alvos nativos desligados antes de rodar a referência.
+- Sequência, GS e vblank iguais não garantem a mesma câmera na apresentação entre
+  versões: no desfoque, GS 4590/vblank 5142 tinha close de Kuririn no PC e câmera atrás
+  de Goku na x86. Inspecione as imagens e recuse esse par, mesmo após o preflight passar.
+  Meça variantes contra a própria base, mantendo recortes e resolução iguais.
+
+- Ao portar os marcadores para uma referência PC mais nova, confira o despacho
+  inteiro de `GsGpu_Native`, inclusive os retornos anteriores. No ensaio de Sharp,
+  `0x22/0x23` colidiram com as âncoras dos menus 16:9 (`0x22..0x2C`): o teste do
+  bloco isolado passou sem executar a cadeia de distância. A cópia descartável
+  usa `0x80/0x81`; o frontend antigo do 360 não tem essa colisão. Testar a função
+  real inteira, com o caso antigo visto falhando, e repetir também distância
+  nativa/média e conjunto completo; não aceitar a mudança do controle sem causa.
+
+- Na integração da decisão 42, os padrões aprovados no console são exclusivos de
+  `PORT_X360`. O diagnóstico `BT3_TESTE_DESFOQUE=1` abre também a chamada da força
+  em `StgFog_BuildClut`, mas mantém 100% e os tratamentos desligados por padrão.
+  Repetir a build e as capturas dessa variante, além da build plana: só a igualdade
+  da `.text` plana não exercita a chamada nova. O mipmap gerado após essa decisão
+  não existia na 1.0.2 analisada nos itens anteriores.

@@ -46,6 +46,31 @@ extern int gPortMenuMode;       /* headless.c: the menus are running */
 extern int gPortMusicPercent, gPortSePercent;
 
 static GsBackend *sBackend;
+#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
+#include "../../x360/include/desfoque_pc.h"
+static DesfoquePc sDesfoque;
+/* (decisão 42, 05/11/2026) No 360 os cinco tratamentos ficam ligados por padrão (=0 desliga cada um); nas builds de teste
+   sem janela continuam desligados, como as provas do desfoque esperam. */
+#ifdef PORT_X360
+#define DESFOQUE_PC_PADRAO 1
+#else
+#define DESFOQUE_PC_PADRAO 0
+#endif
+static int desfoque_pc_chave(const char *nome) {
+    const char *v = getenv(nome);
+    return v != NULL ? atoi(v) != 0 : DESFOQUE_PC_PADRAO;
+}
+static void desfoque_pc_init(void) {
+    sDesfoque.sharp = desfoque_pc_chave("BT3_SHARP_BLUR");
+    sDesfoque.distancia = desfoque_pc_chave("BT3_DISTANCIA_NATIVA");
+    sDesfoque.media = desfoque_pc_chave("BT3_DISTANCIA_MEDIA");
+    sDesfoque.blocos = desfoque_pc_chave("BT3_GLOW_BLOCK");
+    sDesfoque.brilho = desfoque_pc_chave("BT3_GLOW_NATIVE");
+    sDesfoque.cadeia = 0;
+    fprintf(stderr, "desfoque PC: sharp %d distancia %d media %d blocos %d brilho %d\n",
+            sDesfoque.sharp, sDesfoque.distancia, sDesfoque.media, sDesfoque.blocos, sDesfoque.brilho);
+}
+#endif
 #if defined(PORT_BIG_ENDIAN) || defined(BT3_GPU_FALSO)
 #ifdef GS_LOTES
 static void gs_lotes_passo(void);
@@ -1227,6 +1252,11 @@ static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *u
     if (d->target < 0) {
         return 0;
     }
+#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
+    /* orig só guarda estes bits nos alvos e preenchimentos das cadeias. O D3D
+       aplica a escala física na reprodução, sem mudar GsDraw ou os vértices. */
+    if (!vu) d->orig[3] = (float)desfoque_pc_baixo(&sDesfoque, gsTargets[d->target].fbp);
+#endif
     d->tex = gsWhite;
     if (!tme && sprite) {
         gsTargets[d->target].stale = 0; /* cleared by the game: what is drawn into it from here on is real */
@@ -1264,6 +1294,15 @@ static int draw_state(int ctx, int topo, int sprite, int vu, GsDraw *d, float *u
             }
             d->tex = sBackend->targetColor(src);
             d->tex_is_target = 1;
+#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
+            if (!vu) {
+                d->orig[1] = (float)desfoque_pc_baixo(&sDesfoque, gsTargets[src].fbp);
+                d->orig[0] = (float)desfoque_pc_bloco(&sDesfoque, (int)((gGs.tex1[ctx] >> 5) & 1),
+                    gsTargets[src].fbp == (uint32_t)GS_FBP_QUADRO,
+                    gsTargets[d->target].fbp == (uint32_t)GS_FBP_QUADRO,
+                    d->orig[1] != 0.0f, d->orig[3] != 0.0f);
+            }
+#endif
             {
                 /* The buffer is a corner of a larger texture here, so the GS's own edge handling has to be done
                    by hand: CLAMP gives the texel range per axis (0 repeat and 1 clamp: the texture's size; 2 and
@@ -2587,6 +2626,12 @@ void GsGpu_Native(int effect) {
         gsAnchor = effect == 0x13 ? 0 : effect == 0x14 ? 4 : effect - 0x0F; /* 1 left, 2 right, 3 centre, 4 by position */
         return;
     }
+#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
+    if (effect == 0x20 || effect == 0x21 || effect == 0x22 || effect == 0x23) {
+        sDesfoque.cadeia = effect == 0x20 ? 1 : effect == 0x22 ? 2 : 0;
+        return;
+    }
+#endif
     if (effect != 1 || gsDrawCount == CAP_DRAWS || (gsFxOff & 1)) {
         return;
     }
@@ -2746,7 +2791,11 @@ void GsGpu_SetSettings(const PortVideo *v) {
     if (v->fullscreen != now.fullscreen) {
         GsDraw_FullscreenSet(v->fullscreen);
     }
+#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
+    gsFxOff = (unsigned)v->fxOff & 255;
+#else
     gsFxOff = (unsigned)v->fxOff & 31;
+#endif
     gsGlowPercent = v->glow;
     gPortSePercent = v->effects;
     if (v->music != now.music) {
@@ -2848,7 +2897,14 @@ int GsGpu_Init(void) {
     }
 #endif
     gsWhite = sb->whiteTex();
+#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
+    desfoque_pc_init();
+#endif
+#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
+    gsFxOff = (unsigned)(getenv("BT3_FX_OFF") != NULL ? atoi(getenv("BT3_FX_OFF")) : Port_Setting("fx_off", 0)) & 255;
+#else
     gsFxOff = (unsigned)(getenv("BT3_FX_OFF") != NULL ? atoi(getenv("BT3_FX_OFF")) : Port_Setting("fx_off", 0)) & 31;
+#endif
     gsGlowPercent = getenv("BT3_GLOW") != NULL ? atoi(getenv("BT3_GLOW")) : Port_Setting("glow", GLOW_DEFAULT);
     sTexPackOn = Port_Setting("texture_pack", 1) != 0;
     gPortMusicPercent = Port_Setting("music", 100);
@@ -5628,6 +5684,9 @@ static void vu_faixa_confere(void) {
 #endif
 
 void GsGpu_FrameEnd(void) {
+#ifdef PORT_BIG_ENDIAN /* tratamento do desfoque */
+    sDesfoque.cadeia = 0;
+#endif
     if (gPortResim) { /* a frame that is only being re-run: nothing was recorded, nothing is shown */
         return;
     }

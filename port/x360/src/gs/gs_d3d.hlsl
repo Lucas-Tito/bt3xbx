@@ -26,6 +26,16 @@ GsSaida vs_gs(GsEntrada e) {
     return s;
 }
 
+// F8/14: destino nativo só no miolo marcado. Mantém a viewport e a EDRAM;
+// o canto da textura guarda um texel físico por pixel do GS.
+float4 desfoqueDestino : register(c13); // xy: área lógica / tamanho físico
+GsSaida vs_gs_baixo(GsEntrada e) {
+    GsSaida s = vs_gs(e);
+    s.pos.xy = float2(e.pos.x * recorte.x * desfoqueDestino.x - 1.0f,
+                     1.0f - e.pos.y * recorte.y * desfoqueDestino.y);
+    return s;
+}
+
 // (720p, BT3_AFIADO, bit 1) O vs_gs da arte 2D afiada: o mesmo, mais a caixa da peça (TEXCOORD1: o menor e o maior uv dos
 // vértices da primitiva, que o gs_d3d.cpp põe em cada um; ver chamadas_af). Igual nos três vértices, a interpolação a
 // entrega igual em todos os pixels.
@@ -113,6 +123,27 @@ float4 afiado_le(float2 uv0, float2 dx, float2 dy, float4 caixa) {
     return lerp(lerp(t00, t10, w.x), lerp(t01, t11, w.x), w.y);
 }
 
+// F8/14: tradução do GS_BLOCK do PC, em uv lógico do GS. Cada vizinho
+// é preso ao centro extremo do CLAMP antes das leituras internas do bloco.
+// Só ps_gs_bloco inclui estas leituras. DATE continua no gs_pixel comum.
+float4 desfoqueBloco : register(c10); // x: texels físicos por pixel do GS
+float4 desfoque_bloco(float2 c) {
+    c = clamp(c, rect.xy, rect.zw);
+    if (desfoqueBloco.x < 2.5f) return tex2Dlod(tex, float4(c * esc.xy, 0.0f, 0.0f));
+    float2 q = 0.25f / float2(1024.0f, 1024.0f);
+    return 0.25f * (tex2Dlod(tex, float4((c + float2(-q.x, -q.y)) * esc.xy, 0.0f, 0.0f)) +
+                    tex2Dlod(tex, float4((c + float2(q.x, -q.y)) * esc.xy, 0.0f, 0.0f)) +
+                    tex2Dlod(tex, float4((c + float2(-q.x, q.y)) * esc.xy, 0.0f, 0.0f)) +
+                    tex2Dlod(tex, float4((c + q) * esc.xy, 0.0f, 0.0f)));
+}
+float4 desfoque_bilinear(float2 uv) {
+    float2 g = float2(1024.0f, 1024.0f);
+    float2 at = uv * g - 0.5f, i = floor(at), f = at - i;
+    float2 c = (i + 0.5f) / g, d = 1.0f / g;
+    return lerp(lerp(desfoque_bloco(c), desfoque_bloco(c + float2(d.x, 0.0f)), f.x),
+                lerp(desfoque_bloco(c + float2(0.0f, d.y)), desfoque_bloco(c + d), f.x), f.y);
+}
+
 // O corpo do pixel shader das primitivas do GS e dos programas da VU1 (ps_gs e ps_gsz abaixo). (BT3_AFIADO) afiado, só no
 // ps_gs_af: a leitura da arte 2D pelo afiado_le, com a caixa da peça; falso nos outros, que saem como antes (a caixa
 // não é lida). (F8, BT3_OTIM_SEMTEX; docs/x360/plano/F8/09-escala.md) semTex, só no ps_gs_semt e no ps_gsz_semt, que o
@@ -121,7 +152,7 @@ float4 afiado_le(float2 uv0, float2 dx, float2 dy, float4 caixa) {
 // sem ele, o fxc junta o cor.a * k com o * 128 do teste de alfa num mad só (cor.a * 255 + 0,5), outra ordem de contas;
 // com ele, a listagem tem o mul e o mad do geral. O DATE, o teste de alfa e o FBA são o mesmo texto. Falso nos outros,
 // cujo microcódigo sai igual ao de antes.
-float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool afiado, uniform bool semTex) {
+float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool afiado, uniform bool semTex, uniform bool blocos) {
     float k = 255.0f / 128.0f;
     // o centro do pixel em qualquer convenção do VPOS (inteiro ou com o meio pixel): o gl_FragCoord do GL
     float2 f = floor(vpos) + 0.5f;
@@ -156,11 +187,20 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool 
                 uv = (floor(uv * alvo.zw + 1.0f / 64.0f) + 0.5f) / alvo.zw;
             }
         }
+        float2 gx = dx, gy = dy;
         if (modo.x == 2.0f) {
             uv = clamp(uv, rect.xy, rect.zw);
+            // (BT3_MIPMAP) na região presa, só o nível 0: um nível reduzido misturaria a borda com o vizinho na textura
+            gx = float2(0.0f, 0.0f);
+            gy = float2(0.0f, 0.0f);
         }
         // (semTex: sem a leitura)
-        t = semTex ? float4(0.0f, 0.0f, 0.0f, 0.0f) : tex2Dgrad(tex, uv * esc.xy, dx * esc.xy, dy * esc.xy);
+        t = blocos ? desfoque_bilinear(uv) : semTex ? float4(0.0f, 0.0f, 0.0f, 0.0f) : tex2Dgrad(tex, uv * esc.xy, gx * esc.xy, gy * esc.xy);
+        if (modo.w != 0.0f && !blocos && !semTex) {
+            // (BT3_MIPMAP) com teste de alfa (a folhagem recortada), o alfa do nível 0: o recorte é o do PS2 a qualquer
+            // distância; a média dos níveis menores misturava folha e buraco e a planta sumia. A cor segue filtrada.
+            t.a = tex2Dlod(tex, float4(uv * esc.xy, 0.0f, 0.0f)).a;
+        }
     }
     if (modo.x != 0.0f) {
         if (modo.x != 2.0f) {
@@ -193,11 +233,15 @@ float4 gs_pixel(float4 cor, float3 stq, float2 vpos, float4 caixa, uniform bool 
 }
 
 float4 ps_gs(GsPixel e) : COLOR0 {
-    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, false);
+    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, false, false);
 }
 struct GsPixelAf { float4 cor : COLOR0; float3 stq : TEXCOORD0; float4 caixa : TEXCOORD1; float2 vpos : VPOS; };
+float4 ps_gs_bloco(GsPixel e) : COLOR0 {
+    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, false, true);
+}
+
 float4 ps_gs_af(GsPixelAf e) : COLOR0 {
-    return gs_pixel(e.cor, e.stq, e.vpos, e.caixa, true, false);
+    return gs_pixel(e.cor, e.stq, e.vpos, e.caixa, true, false, false);
 }
 
 // F5, etapa 7 (segunda parte): o pixel shader dos programas da VU1 com o recorte pelo w (ver vu_pos abaixo). A
@@ -207,7 +251,7 @@ struct GsPixelZ { float4 cor : COLOR0; float3 stq : TEXCOORD0; float2 zw : TEXCO
 struct GsSaidaZ { float4 cor : COLOR0; float z : DEPTH; };
 GsSaidaZ ps_gsz(GsPixelZ e) {
     GsSaidaZ s;
-    s.cor = gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, false);
+    s.cor = gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, false, false);
     s.z = saturate(e.zw.x / e.zw.y);
     return s;
 }
@@ -217,11 +261,11 @@ GsSaidaZ ps_gsz(GsPixelZ e) {
 // a leitura da branca (com os gradientes do tex2Dgrad) era feita e jogada fora. As entradas são as do ps_gs e do ps_gsz (o
 // stq chega e não é lido), para os vertex shaders de sempre.
 float4 ps_gs_semt(GsPixel e) : COLOR0 {
-    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, true);
+    return gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, true, false);
 }
 GsSaidaZ ps_gsz_semt(GsPixelZ e) {
     GsSaidaZ s;
-    s.cor = gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, true);
+    s.cor = gs_pixel(e.cor, e.stq, e.vpos, float4(0.0f, 0.0f, 0.0f, 0.0f), false, true, false);
     s.z = saturate(e.zw.x / e.zw.y);
     return s;
 }
@@ -318,11 +362,19 @@ float afiado_copia_eixo(float t, float p) {
     float r = max(0.5f - 0.5f * p, 0.0f);
     return i + 0.5f + (c - clamp(c, -r, r)) / clamp(p, 1.0f / 4096.0f, 1.0f);
 }
+// (BT3_FILTRO_PS2) O filtro antitremulação do PS2: o jogo mostra os dois circuitos de leitura com a mesma imagem, o
+// circuito 1 uma linha abaixo, misturados meio a meio (PMODE 0x7F23; Gfx_SetDisplayRegs, src/sys/gfx.c). Cada linha da
+// tela é a média da linha do GS com a de cima. x: 1 ligado; y: uma linha do GS em uv (1 / altura da área).
+float4 copiaFiltro : register(c11);
 float4 ps_copia_af(float2 uv : TEXCOORD0) : COLOR0 {
     float2 t = uv * copiaTam.xy;
     float2 p = float2(abs(ddx(t.x)) + abs(ddy(t.x)), abs(ddx(t.y)) + abs(ddy(t.y)));
     float2 q = float2(afiado_copia_eixo(t.x, p.x), afiado_copia_eixo(t.y, p.y)) * copiaTam.zw;
-    return tex2Dlod(tex, float4(q, 0.0f, 0.0f));
+    float4 c = tex2Dlod(tex, float4(q, 0.0f, 0.0f));
+    if (copiaFiltro.x > 0.5f) {
+        c = 0.5f * (c + tex2Dlod(tex, float4(q.x, q.y - copiaFiltro.y, 0.0f, 0.0f)));
+    }
+    return c;
 }
 
 // (720p, BT3_FXAA; docs/x360/plano/F5/08-720p.md, seção 12) O FXAA de console numa passada, na resolução interna: a parte

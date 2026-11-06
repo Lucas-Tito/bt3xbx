@@ -1,3 +1,7 @@
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+extern int Port_DesfoqueOff(int efeito);
+extern void Port_GsMarker(int efeito);
+#endif
 #include "common.h"
 #include "battle/battle.h"
 #include "battle/btl_cam.h"
@@ -141,7 +145,18 @@ void StgPanBlur_Draw(void) {
     s32 on0 = 1;
     s32 on1 = 1;
 
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    if (Port_DesfoqueOff(1)) {
+        if (!(Battle_GetWork()->flags & BATTLE_FLAG_PAUSE)) {
+            StgPanBlur_UpdateView(&gStgPanBlur->view[0]);
+            if (Battle_IsSplitScreen()) StgPanBlur_UpdateView(&gStgPanBlur->view[1]);
+        }
+        return;
+    }
     Gfx_AddDefaultEnv();
+#else
+    Gfx_AddDefaultEnv();
+#endif
     Dma_AddZbuf(0xE0, 1);
     if (Battle_IsSplitScreen()) {
         if (!(Battle_GetWork()->flags & BATTLE_FLAG_PAUSE)) {
@@ -629,7 +644,15 @@ void GfxPost_DrawGlow(s32 passes, u32 color, u32 glow) {
     s32 i;
     s32 x;
 
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    if (Port_DesfoqueOff(5)) {
+        return;
+    }
+    Port_GsMarker(0x20);
     passes += passes & 1;
+#else
+    passes += passes & 1;
+#endif
     Gfx_AddDefaultEnv();
     p = Dma_BeginDirect();
     p[0] = PS2_PKT64(GIF_TAG(13, 0, 1));
@@ -1045,6 +1068,9 @@ void GfxPost_DrawGlow(s32 passes, u32 color, u32 glow) {
     p[1] = PS2_PKT64(GS_CLAMP_1);
     p += 2;
     Dma_EndDirect(p);
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    Port_GsMarker(0x21);
+#endif
 }
 
 /* Draws a 16-bit texture over the screen, one line up, with the given blend. */
@@ -1701,7 +1727,14 @@ void StgDepthTint_Draw(void) {
     s32 medium = 0;
     s32 idx;
 
+#ifdef PORT_X360 /* diagnóstico do desfoque */
+    if (Port_DesfoqueOff(4)) {
+        return;
+    }
     if (!Battle_IsSplitScreen()) {
+#else
+    if (!Battle_IsSplitScreen()) {
+#endif
         if (BtlStage_GetWaterLevel(&level)) {
             Mtx_InverseRT(&m, &view->world2view2);
             medium = 0;

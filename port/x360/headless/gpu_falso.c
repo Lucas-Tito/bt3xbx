@@ -574,6 +574,24 @@ static void fake_frame_end(void) {
         fprintf(stderr, "gpu_falso: bytes quadro %u tags %u lista %u externa %u ref %u refunico %u imagem %u vu %u/%u/%u\n", q.quadro,
                 bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], q.vuVertCount, q.vuIdxCount, q.vuUniCount);
     }
+    if (getenv("BT3_DESFOQUE_CONTA") != NULL) {
+        unsigned blocos = 0, fontes = 0, baixos = 0, invalidos = 0;
+        for (i = 0; i < q.drawCount; i++) {
+            const GsDraw *d = &q.draws[i];
+            int baixo = d->orig[3] != 0.0f;
+            int bloco = d->mode[0] == 2 && d->orig[0] != 0.0f;
+            int fonte = d->mode[0] == 2 && d->orig[1] != 0.0f;
+            if (baixo || bloco || fonte) {
+                unsigned pagina = q.targets[d->target].fbp;
+                invalidos += d->vu != 0 || d->native != 0;
+                invalidos += baixo && pagina != 0x150 && pagina != 0x170 && pagina != 0x1F6 && pagina != 0x1F8;
+                invalidos += bloco && fonte;
+            }
+            blocos += bloco; fontes += fonte; baixos += baixo;
+        }
+        fprintf(stderr, "desfoque_lista: quadro %u blocos %u fontes %u baixos %u invalidos %u fx %u\n",
+                q.quadro, blocos, fontes, baixos, invalidos, gsFxOff);
+    }
     if (getenv("BT3_GPU_PIVOS") != NULL) { /* (F8, 16:9, etapa 1) a arte 2D estreitada por pivô (gs_draw.c, gGsPivos) */
         fprintf(stderr, "gpu_falso: pivos quadro %u tela %u largo %u esquerda %u direita %u meio %u posicao %u centro %u\n", q.quadro,
                 gGsPivos[0], gGsPivos[1], gGsPivos[2], gGsPivos[3], gGsPivos[4], gGsPivos[5], gGsPivos[6]);
