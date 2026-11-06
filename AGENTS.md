@@ -52,6 +52,13 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 - Não mexa no console (FTP) sem a tarefa pedir.
 - Arquivos de diagnóstico do projeto: `environment.txt` (entrada), `output.txt` (saída) e `bt3xbx.log`.
   Modelos para copiar ao console usam `environment_*.txt`; não há leitura alternativa dos nomes anteriores.
+- **Modelos de ambiente para o console** (erros que já custaram rodadas no console, o último em 06/11):
+  - A ISO convertida no console é `game:\bt3-x360.iso`. O nome `bt3_convertida.iso` dos modelos antigos (F5, F6, F8)
+    não existe mais: não copie a linha `BT3_ISO` deles (sem ela, o título acha a ISO sozinho).
+  - Os roteiros ficam na raiz da pasta do jogo: `BT3_ROTEIRO=game:\f5_duelo.txt`, não `game:\roteiros\...` (essa
+    pasta não existe no console). Os incluídos (`boot.txt`, `f7_dois_inicio.txt`...) vão junto, na raiz; liste-os.
+  - **Roteiro que não mede a abertura não espera por ela**: `BT3_NOMOVIE=1` em todo ambiente de roteiro (nunca
+    `-BT3_NOMOVIE`), salvo quando a pergunta é o próprio vídeo de abertura.
 
 ## Como entregar
 

@@ -86,6 +86,9 @@ Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddr
 - Diagnóstico do projeto: `environment.txt` configura o título, `output.txt` recebe stdout/stderr e
   `bt3xbx.log` mantém o diário. Modelos para copiar ao console usam `environment_*.txt`.
   Conteúdo e chaves continuam em português. O título só lê o nome atual da configuração.
+- Ambientes de console (regra no `AGENTS.md`): ISO `game:\bt3-x360.iso` (nunca `bt3_convertida.iso`), roteiro na raiz
+  (`game:\f5_duelo.txt`) e `BT3_NOMOVIE=1` em roteiro que não mede a abertura. Conferir isso antes de subir ambiente
+  feito pelo Codex.
 
 - **Roteiros na PPC: `SEMMAPA=1`, nunca `PPC=1`.** A PPC com o mapa passa do menu principal e trava no Flash da tela
   seguinte, que o mapa por posição não inverte: uma hora por roteiro sem resultado (a etapa 5a da F4 perdeu quatro).
