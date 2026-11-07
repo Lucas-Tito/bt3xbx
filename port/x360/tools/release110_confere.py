@@ -35,6 +35,23 @@ def estado(a, b):
     print(f'Estado e ações: {len(aa)} linhas determinísticas idênticas a {a}')
 
 
+def referencia_dividido(antiga, base):
+    # A referência antiga não ligava BT3_DOIS. Só a base aprovada pode ampliá-la;
+    # o roteiro oficial compara depois todas as linhas, inclusive observadores.
+    aa = antiga.read_text().splitlines()
+    bb = base.read_text().splitlines()
+    observadores = ('roteiro: pads ', 'roteiro: selecao ')
+    exige(aa and any(' fim ' in l for l in aa), 'referência antiga sem fim')
+    exige(not any(l.startswith(observadores) for l in aa),
+          'referência antiga já contém observadores')
+    for prefixo in observadores:
+        exige(any(l.startswith(prefixo) for l in bb), 'base sem '+prefixo)
+    exige(aa == [l for l in bb if not l.startswith(observadores)],
+          'eventos da base diferentes da referência antiga')
+    print(f'Referência dividida: {len(aa)} eventos preservados; '
+          f'{len(bb)-len(aa)} observações adicionais da base aprovada')
+
+
 def objetos(base, novo):
     def lista(p):
         return {str(q.relative_to(p)): q for sub in ('obj','obj_data','ligar')
@@ -89,17 +106,40 @@ def negativos():
             print('Cópia de estado recusada: vblank alterado')
         else:
             raise ValueError('estado adulterado aceito')
+        (a/'antiga.telas').write_text('tela inicio vblank 3 quadro 0\n'
+                                    'roteiro: teste.txt:1 fim vblank 20 quadro 18\n')
+        antiga = (a/'antiga.telas').read_text()
+        ampliada = ('roteiro: pads 0000 0000 analogicos 128 128 128 128 vblank 3 quadro 0\n'
+                    'roteiro: selecao jogadores 1 estados 0 0 personagens 0 13 vblank 3 quadro 0\n'
+                    + antiga)
+        (b/'base.telas').write_text(ampliada)
+        referencia_dividido(a/'antiga.telas', b/'base.telas')
+        for nome, texto in (
+                ('vblank', ampliada.replace('fim vblank 20', 'fim vblank 21')),
+                ('evento ausente', ampliada.replace('tela inicio vblank 3 quadro 0\n', '')),
+                ('evento extra', ampliada+'roteiro: resultado alterado\n'),
+                ('sem pares', ''.join(l+'\n' for l in ampliada.splitlines()
+                                     if not l.startswith('roteiro: pads '))),
+                ('sem seletores', ''.join(l+'\n' for l in ampliada.splitlines()
+                                         if not l.startswith('roteiro: selecao ')))):
+            (b/'base.telas').write_text(texto)
+            try:
+                referencia_dividido(a/'antiga.telas', b/'base.telas')
+            except ValueError:
+                print('Cópia de referência dividida recusada: '+nome)
+            else:
+                raise ValueError('referência adulterada aceita: '+nome)
     print('Comparações da release e negativos: tudo certo')
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument('modo',choices=('imagens','estado','objetos','negativos'))
+    ap.add_argument('modo',choices=('imagens','estado','objetos','negativos','referencia-dividido'))
     ap.add_argument('pastas',nargs='*',type=Path)
     a = ap.parse_args()
     try:
         if a.modo=='negativos': negativos()
-        else: globals()[a.modo](*a.pastas)
+        else: globals()[a.modo.replace('-', '_')](*a.pastas)
     except (OSError,ValueError,subprocess.CalledProcessError) as e:
         ap.exit(1,'FALHA: '+str(e)+'\n')
 

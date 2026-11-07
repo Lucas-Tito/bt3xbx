@@ -3521,6 +3521,17 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 
 ### Integração da 1.1.0: política de falha e limites da base
 
+- A terceira rodada passou por memória, som e 16 imagens da tela dividida, mas
+  recusou a referência de telas copiada de gravacao-atalhos: ela tinha sido feita
+  sem BT3_DOIS=1. A base aprovada 07bdf95b, reconstruída com os mesmos dados e
+  executada com a opção ligada, reproduziu as 193 linhas da integração. As 77
+  antigas continuam idênticas, na mesma ordem e com os mesmos vblanks; só entram
+  106 observações de pares e 10 de seletores. Antes de gastar outra rodada, gerar
+  a referência privada dessa base, nunca da candidata, e conferir a ampliação
+  com release110_confere.py referencia-dividido. Os negativos recusam vblank
+  alterado, evento ausente ou extra e falta de cada classe de observação.
+  O roteiro oficial continua comparando as 193 linhas integralmente; não filtrar
+  observadores para obter aprovação nem regravar a referência compartilhada.
 - A segunda rodada parou em História: o mapa acusou 00460 s2, 0xA95E2, como
   leitura de quatro bytes sobre byte. Era FlashDraw_PutSprite lendo um FlashQuad
   local na pilha. O anel do rastreio adiava o uso e consultava a origem só ao
