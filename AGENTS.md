@@ -35,6 +35,15 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 - **Todo verificador novo tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer.
 - Todo aprendizado que custou uma rodada entra no guia, no mesmo commit da correção.
 - Processo longo: rode com `tee` para um log em `~/` (o `/tmp` do WSL some quando a distribuição para).
+- **Disco: limpe as suas rodadas sem esperar ninguém** (Lucas, 06/11). O disco do WSL mora no C: do Windows; as filas
+  param abaixo de 40 GB livres no C:. Ao armar uma rodada nova, e sempre que o C: passar abaixo de 60 GB:
+  - **pode apagar** as saídas das **suas** rodadas já julgadas e superadas por uma posterior, guardando antes os
+    pequenos (logs, tabelas, resumos, carimbos) e apagando os pesados (ISOs, imagens, bancos, dumps, builds);
+  - **mantém sempre** a última rodada, as referências aprovadas e toda rodada citada como pendência aberta no
+    relatório ou numa decisão;
+  - **nunca toca** em `/srv/bt3/dados`, nas saídas e worktrees de outra frente, nem no Windows;
+  - mede o C: antes e depois e lista no relatório o que apagou e quanto liberou.
+  Compactar o `ext4.vhdx` exige desligar o WSL: não é com você.
 - **Esperar é com o shell, não com você** (para esperas curtas; as longas, veja o item seguinte). Para esperar a trava, um serviço ou um processo, rode **um único
   comando bloqueante** em primeiro plano, com o maior tempo limite que a ferramenta aceitar, que só devolve quando
   acabar e imprime só o fim: o próprio `flock ~/wsl.lock <comando>`, ou um laço como

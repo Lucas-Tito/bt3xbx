@@ -86,6 +86,11 @@ própria só para isso). Para cá só volta texto.
   `attach vdisk readonly`, `compact vdisk`, `detach vdisk`, numa sessão de administrador; o vhdx não pode estar
   esparso: `wsl --manage <distro> --set-sparse false` antes). Devolveu 77 GB. Apague as saídas de uma rodada depois
   de conferida e confira o espaço do C: antes de rodadas longas.
+  Em 06/11 o C: caiu para 31 GB com ~200 GB de rodadas julgadas dentro do WSL (convdub r3..r18), duas filas pararam
+  na guarda de 40 GB e a limpeza esperava o aceite humano, o que parava a madrugada. Desde então a limpeza das
+  próprias rodadas é do agente de cada frente, sem pedir, pela regra do `AGENTS.md`; só a compactação (que desliga o
+  WSL) fica com quem orquestra. Apagar dentro do WSL não devolve o C: com o vhdx não esparso, mas as rodadas seguintes
+  reusam boa parte dos blocos liberados em vez de crescer o arquivo.
 
 ### 1.2b Steam Deck: a segunda fila de emulador (16/10/2026)
 

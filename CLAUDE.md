@@ -97,5 +97,8 @@ Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddr
   em 06/11; o número vale de `/home/codex/vagas`, e `echo 3` nele volta a 3 se a memória do WSL passar de ~7 GB).
   Nada de `qemu` ou `roteiros.sh` solto fora da vez: dois juntos sem controle já travaram o WSL. Nada de
   `wsl.sh enviar` com um `roteiros.sh` rodando.
+- **Disco do WSL: cada agente limpa as próprias rodadas julgadas sem pedir** (regra no `AGENTS.md`, Lucas 06/11);
+  a compactação do `ext4.vhdx` (desliga o WSL) é de quem orquestra, num intervalo sem rodada. No Windows, nada se
+  apaga sem listar e o Lucas aprovar.
 - **Todo verificador tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer: na F4
   o `roteiros.sh` dava "ok" com erro de conversor e nunca saía com 1.
