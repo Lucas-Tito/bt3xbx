@@ -3521,6 +3521,22 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 
 ### Integração da 1.1.0: política de falha e limites da base
 
+- A quarta rodada passou pelos quatro roteiros e parou no despacho de
+  `release110_confere.py imagens`: a função ainda se chamava `arquivos`.
+  Os negativos chamavam a função diretamente e não enxergavam esse erro.
+  Positivos e negativos de imagens, estado e referência dividida passam agora
+  pela linha de comando usada no serviço. Exigir código 1 com `FALHA:` nas
+  entradas estragadas; um traceback de despacho não prova que o comparador
+  examinou os dados. Ensaiar também os passos posteriores antes de repetir
+  os roteiros, sem reaproveitar seus carimbos na rodada do novo commit.
+- As imagens oficiais da blur-analise em decisao42-final foram capturadas em
+  4:3, enquanto seu diagnóstico usa BT3_WIDE=1. Na integração em 16:9, cinco
+  imagens do combate diferiram, com as mesmas âncoras e ações. Repetir a captura
+  da x86 com BT3_WIDE=0 reproduziu integralmente as 13 imagens aprovadas, sem
+  mudar fontes ou referências. Manter a regressão principal em 16:9 e comparar
+  capturas adicionais em 4:3 com aquela base. O diagnóstico precisa de BT3_GS=1,
+  BT3_GS_FROM=1000000000 e janela 8 como a referência, além de BT3_WIDE=1;
+  BT3_GS=none no lançador não exercita a imagem pelo rasterizador.
 - A terceira rodada passou por memória, som e 16 imagens da tela dividida, mas
   recusou a referência de telas copiada de gravacao-atalhos: ela tinha sido feita
   sem BT3_DOIS=1. A base aprovada 07bdf95b, reconstruída com os mesmos dados e

@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import re
 import subprocess
+import sys
 import tempfile
 
 TEXT = '94fe2737c0b9f6663ca659685be77a7cd1d36659'
@@ -15,7 +16,7 @@ def exige(condicao, motivo):
         raise ValueError(motivo)
 
 
-def arquivos(a, b):
+def imagens(a, b):
     aa = {p.name: p for p in a.glob('*.ppm')}
     bb = {p.name: p for p in b.glob('*.ppm')}
     exige(aa and aa.keys() == bb.keys(), 'conjunto de imagens ausente ou diferente')
@@ -79,33 +80,35 @@ def objetos(base, novo):
 
 
 def negativos():
+    def comando(modo, *caminhos, recusado=False):
+        # Exercitar a mesma entrada usada pela rodada, inclusive o despacho.
+        r = subprocess.run([sys.executable, __file__, modo, *map(str, caminhos)],
+                           capture_output=True, text=True)
+        exige(r.returncode == (1 if recusado else 0), r.stdout+r.stderr)
+        exige(not recusado or r.stderr.startswith('FALHA: '),
+              'entrada recusada sem diagnóstico do comparador: '+r.stderr)
+        if not recusado:
+            print(r.stdout, end='')
+
     with tempfile.TemporaryDirectory(dir=Path.home()) as d:
         p = Path(d)
         a, b = p/'a', p/'b'
         a.mkdir(); b.mkdir()
         for pasta in (a,b): (pasta/'quadro.ppm').write_bytes(b'P6\n1 1\n255\n\x01\x02\x03')
-        arquivos(a,b)
+        comando('imagens',a,b)
         for nome in ('pixel','ausente','extra'):
             (b/'quadro.ppm').write_bytes((a/'quadro.ppm').read_bytes())
             if nome=='pixel': (b/'quadro.ppm').write_bytes(b'P6\n1 1\n255\n\x01\x02\x04')
             if nome=='ausente': (b/'quadro.ppm').unlink()
             if nome=='extra': (b/'extra.ppm').write_bytes(b'x')
-            try:
-                arquivos(a,b)
-            except ValueError:
-                print('Cópia de imagens recusada: '+nome)
-            else:
-                raise ValueError('negativo aceito: '+nome)
+            comando('imagens',a,b,recusado=True)
+            print('Cópia de imagens recusada: '+nome)
         (a/'estado.txt').write_text('roteiro: teste.txt:1 fim vblank 20 quadro 18\n')
         (b/'estado.txt').write_text((a/'estado.txt').read_text())
-        estado(a/'estado.txt',b/'estado.txt')
+        comando('estado',a/'estado.txt',b/'estado.txt')
         (b/'estado.txt').write_text('roteiro: teste.txt:1 fim vblank 21 quadro 18\n')
-        try:
-            estado(a/'estado.txt',b/'estado.txt')
-        except ValueError:
-            print('Cópia de estado recusada: vblank alterado')
-        else:
-            raise ValueError('estado adulterado aceito')
+        comando('estado',a/'estado.txt',b/'estado.txt',recusado=True)
+        print('Cópia de estado recusada: vblank alterado')
         (a/'antiga.telas').write_text('tela inicio vblank 3 quadro 0\n'
                                     'roteiro: teste.txt:1 fim vblank 20 quadro 18\n')
         antiga = (a/'antiga.telas').read_text()
@@ -113,7 +116,7 @@ def negativos():
                     'roteiro: selecao jogadores 1 estados 0 0 personagens 0 13 vblank 3 quadro 0\n'
                     + antiga)
         (b/'base.telas').write_text(ampliada)
-        referencia_dividido(a/'antiga.telas', b/'base.telas')
+        comando('referencia-dividido',a/'antiga.telas',b/'base.telas')
         for nome, texto in (
                 ('vblank', ampliada.replace('fim vblank 20', 'fim vblank 21')),
                 ('evento ausente', ampliada.replace('tela inicio vblank 3 quadro 0\n', '')),
@@ -123,12 +126,8 @@ def negativos():
                 ('sem seletores', ''.join(l+'\n' for l in ampliada.splitlines()
                                          if not l.startswith('roteiro: selecao ')))):
             (b/'base.telas').write_text(texto)
-            try:
-                referencia_dividido(a/'antiga.telas', b/'base.telas')
-            except ValueError:
-                print('Cópia de referência dividida recusada: '+nome)
-            else:
-                raise ValueError('referência adulterada aceita: '+nome)
+            comando('referencia-dividido',a/'antiga.telas',b/'base.telas',recusado=True)
+            print('Cópia de referência dividida recusada: '+nome)
     print('Comparações da release e negativos: tudo certo')
 
 

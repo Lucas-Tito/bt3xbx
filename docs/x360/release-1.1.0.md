@@ -81,7 +81,10 @@ A imagem D3D, mipmap, custo VMX e ganho da VU0 continuam sustentados pelas sess�
 já aprovadas no console e exigem a build XDK do revisor. O rasterizador de software
 não reproduz os shaders nem o VMX do 360. Som e estado são comparados com uma
 reconstrução isolada do código aprovado da vu0-amostra; imagens do Duelo também
-contra a blur-analise aprovada. A igualdade da .text plana com as duas bases é
+contra a blur-analise aprovada. A regressão principal usa 16:9; como as 13 imagens
+oficiais daquela base usavam 4:3, capturas adicionais repetem esse aspecto nas
+duas arquiteturas. O diagnóstico da distância conserva o 16:9 de sua referência.
+A igualdade da .text plana com as duas bases é
 conferida junto dos objetos sem depuração; uma igualdade de hash sozinha não
 substitui os roteiros oficiais. Os verificadores novos exigem cópias sabotadas.
 
