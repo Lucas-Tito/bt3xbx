@@ -1624,6 +1624,15 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   várias filas. Uma regra escrita com o número antigo prendeu a vaga nova por um dia: as rodadas do Codex recusavam a
   vaga 4 (`BT3_VAGAS=3`, `vaga-ate3.sh`) porque o `AGENTS.md` ainda dizia 3. Ao mudar a capacidade, mude a regra junto,
   e script de rodada não fixa o número: aceita a vaga que o `vez.sh` der.
+- **Rodada do tamanho da mudança (07/11).** A regressão final do Tag Team (e0cc340c) refez 19 roteiros, saves, equipes e
+  boot numa chamada só do `vez.sh`: uma vaga ocupada por umas 14 horas (estimativa no 8º roteiro, 6 horas depois do início), com duas livres, quando o produto tinha mudado
+  6 linhas de `battle_load.c` só na PPC (o banco da arena 34) e os objetos x86 eram idênticos aos da rodada aprovada,
+  provado pela própria rodada nos primeiros minutos. A banca de verificação estava certa; o tamanho, não. Desde então
+  (regra no `AGENTS.md`): roteiros repartidos entre as vagas, o lado provado igual reaproveitado (`REUSA=x86` numa cópia)
+  e correção localizada com rodada localizada, mais controles.
+- **O `ext4.vhdx` cresce mais do que se grava (07/11).** Com o C: em 76 GB livres, duas horas de três rodadas gravaram
+  uns 19 GB e o arquivo cresceu 36 GB (a hipótese é o ext4 ocupar blocos novos antes de reusar os liberados; não medida). Apagar 193 GB de rodadas
+  superadas devolveu na hora só uns 24 GB ao C:; o resto pede a compactação. Meça o C:, não o `df` de dentro.
 
 ## 7. Lista de passos para um port novo
 

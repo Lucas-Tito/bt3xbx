@@ -32,6 +32,16 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
   espera uma vaga livre (a vaga 1 é a antiga `~/wsl.lock`) e devolve o código do comando. Nada de `qemu-ppc` ou
   `roteiros.sh` solto fora dele: dois sem controle já travaram o WSL. Script de rodada não pode recusar outro `qemu`
   rodando nem recusar uma vaga que o `vez.sh` deu (nada de `BT3_VAGAS=3` ou guarda "só vagas 1 a 3").
+- **Rodada do tamanho da mudança, repartida entre as vagas** (Lucas, 07/11):
+  - **reparta:** roteiros independentes vão em grupos, uma chamada do `~/vez.sh` por grupo, em paralelo (cada grupo
+    com a sua pasta de saída). Nada de uma fila única de horas numa vaga com as outras livres;
+  - **não refaça o lado provado igual:** se a comparação dos objetos sem depuração mostrar a x86 idêntica à da última
+    rodada aprovada (do mesmo roteiro e da mesma referência), rode só a PPC (`REUSA=x86` sobre uma cópia das saídas
+    aprovadas, numa pasta nova; veja no guia as armadilhas do `REUSA=x86`) e cite a rodada de onde veio a x86;
+  - **correção localizada, rodada localizada:** mudança em um arquivo de produto pede os roteiros que passam por ele
+    mais dois ou três de controle, não os 19. A regressão completa fica para quando o produto mudou em vários pontos
+    desde a última completa aprovada, e mesmo assim repartida;
+  - se a ferramenta não permitir algum desses cortes, diga no relatório o que faltou nela em vez de rodar tudo.
 - **Todo verificador novo tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer.
 - Todo aprendizado que custou uma rodada entra no guia, no mesmo commit da correção.
 - Processo longo: rode com `tee` para um log em `~/` (o `/tmp` do WSL some quando a distribuição para).
