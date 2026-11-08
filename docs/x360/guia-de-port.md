@@ -91,6 +91,10 @@ própria só para isso). Para cá só volta texto.
   próprias rodadas é do agente de cada frente, sem pedir, pela regra do `AGENTS.md`; só a compactação (que desliga o
   WSL) fica com quem orquestra. Apagar dentro do WSL não devolve o C: com o vhdx não esparso, mas as rodadas seguintes
   reusam boa parte dos blocos liberados em vez de crescer o arquivo.
+  Compactação de 08/11 (num intervalo entre duas filas, ~22 min): `fstrim -v /` dentro do WSL, desabilitar e parar a
+  tarefa `bt3-wsl-sempre` (senão ela religa o WSL em até 15 min), `wsl --shutdown`, `diskpart /s` com as quatro linhas
+  acima, reabilitar e iniciar a tarefa, conferir `wsl -l -v` e `/home/codex/vagas`. O vhdx foi de 502 para 394 GB
+  (405 GB usados por dentro) e o C: de 63 para 173 GB livres. A sessão ssh do Windows já é de administrador.
 
 ### 1.2b Steam Deck: a segunda fila de emulador (16/10/2026)
 
