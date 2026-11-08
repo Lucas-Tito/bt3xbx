@@ -113,3 +113,31 @@ passos, `BT3_PICOS=34`; coletas em `build/sessao_dividida/coleta/` (fora do git)
 A velocidade no roteiro (92,5% na base) é maior que na luta à mão (85%): só defesa tem menos efeito na tela. O som nas
 duas do núcleo do áudio: faltas 0, BuffersQueued mínimo 3, pior bloco 0. O duelo de um jogador com o desenho na hw5
 (`dh5duelo`) ficou igual ao da build anterior (`i1`). O C1 e a hw5 viraram o padrão (decisão 39); o D2 ficou de fora.
+
+## 7. Quatro vistas: cortes a retomar depois do Tag Team [estimado, 08/11/2026]
+
+Conversa com o Lucas para reabrir nas otimizações, depois de medir no console os custos do BT4 e do Tag Team (as
+otimizações D3, H e D5 ficaram adiadas até essa medida).
+
+**Onde cortar.** Com 2 vistas a gravação (cerca de 40 ms) é a thread mais lenta, e cresce com cada lote de estágio e
+de efeito desenhado em cada vista (estágio 2,9 vezes e lutadores 2,2 vezes os lotes do duelo). Tirar elemento visual
+corta direto o gargalo; com 4 vistas o peso deve crescer de novo. Alavancas, na ordem da decisão 40:
+
+1. Reaproveitar ossos e matrizes entre as vistas.
+2. Limitar efeitos pelo número de vistas.
+3. Simplificar o estágio: com 4 vistas, esconder por vista os objetos decorativos, a névoa, o brilho e as camadas
+   distantes, além do `BTL_FILE_STAGE_SPLIT` que o jogo já usa na dividida (seção 4). O recorte justo por vista (C1)
+   deve render mais com 4, porque cada vista é um quarto da tela e o jogo recorta com a largura da tela cheia.
+4. Simplificar os lutadores distantes por vista.
+5. Alternar a atualização das vistas (por último).
+
+**O limite.** Nenhum corte pode mudar a luta (decisão 40). Pode sair o que é só visual; não podem sair colisão nem
+objeto destrutível do estágio, e efeito que consome `rand()` continua sorteando os mesmos números mesmo sem desenhar.
+Baixar a resolução não ajuda: a GPU não é o limite (seção 3, recusados). Estágio mais leve e recorte por vista são as
+apostas de melhor relação entre ganho e risco, mas só a medida de 4 vistas no console diz quanto cada corte rende.
+
+**O 1 contra 1 original.** A etapa 2 do Tag Team só foi aceita com os roteiros do BT3 dando as mesmas saídas de antes,
+o duelo `f5_duelo` e a Referência inclusive: a luta, o save e o comportamento do duelo são os do jogo original e o modo
+de equipe é acréscimo. Falta provar a escolha pelo menu entre o duelo normal e as equipes: hoje as equipes de 2 e 4
+jogadores entram por roteiros direto na luta (`f9_equipe1`, `f9_equipe2`, `f9_equipe4`); a seleção pelo menu e o HUD
+das equipes são da parte B do BT4.
