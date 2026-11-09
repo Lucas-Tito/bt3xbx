@@ -1,0 +1,9 @@
+# Copiar como game:\environment.txt. Demais opções: padrões da 1.0.2.
+BT3_LOG=1
+BT3_TEMPOS=0
+BT3_DESBLOQUEIO=1
+BT3_ROTEIRO=game:\roteiros\f5_duelo.txt
+BT3_SAVES=game:\saves_vu0_n0_a0
+BT3_VU0_NATIVO=0
+-BT3_AMOSTRA
+BT3_AMOSTRA_LIMIAR=40

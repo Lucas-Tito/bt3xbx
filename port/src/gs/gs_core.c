@@ -2002,6 +2002,13 @@ static int gs_on(void) {
             } else {
                 sGpu = GsGpu_Init();
             }
+#ifdef PORT_X360
+            /* A chamada volta à thread do jogo mesmo quando a GPU inicia em outra thread. */
+            if (!sGpu) {
+                extern void Port_FalhaVideo360(void);
+                Port_FalhaVideo360();
+            }
+#endif
         }
     }
     return on;

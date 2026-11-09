@@ -1331,7 +1331,12 @@ s32 BtlAct_SwitchLeave(BtlActHChr *chr, s32 phase) {
 
 /* Not the libc prototype on purpose: with the real one the compiler expands the 8-byte clears inline, and the
  * original calls memset. */
+#ifdef PORT_X360
+/* A CRT do XDK recebe o tamanho sem sinal, como o prelúdio C89. */
+extern void *memset(void *dst, int c, unsigned int n);
+#else
 extern void *memset(void *dst, s32 c, s32 n);
+#endif
 
 extern BtlActIRoster *gBtlChars;
 

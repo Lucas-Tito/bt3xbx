@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Comparações da 1.1.0 contra bases aprovadas, com negativos em cópias privadas."""
+from pathlib import Path
+import argparse
+import hashlib
+import re
+import subprocess
+import sys
+import tempfile
+
+TEXT = '94fe2737c0b9f6663ca659685be77a7cd1d36659'
+
+
+def exige(condicao, motivo):
+    if not condicao:
+        raise ValueError(motivo)
+
+
+def imagens(a, b):
+    aa = {p.name: p for p in a.glob('*.ppm')}
+    bb = {p.name: p for p in b.glob('*.ppm')}
+    exige(aa and aa.keys() == bb.keys(), 'conjunto de imagens ausente ou diferente')
+    for n in aa:
+        exige(aa[n].read_bytes() == bb[n].read_bytes(), 'imagem diferente: '+n)
+    print(f'Imagens: {len(aa)} arquivos idênticos a {a}')
+
+
+def estado(a, b):
+    # Só eventos determinísticos, sem tempos de host nem origem do executável.
+    def linhas(p):
+        return [l for l in p.read_text(errors='replace').splitlines()
+                if re.match(r'^roteiro: (?:\S+:\d+ |janela |resultado )', l)]
+    aa, bb = linhas(a), linhas(b)
+    exige(aa and any(' fim ' in l for l in aa), 'estado sem fim de roteiro')
+    exige(aa == bb, 'estado ou ações da luta diferentes')
+    print(f'Estado e ações: {len(aa)} linhas determinísticas idênticas a {a}')
+
+
+def referencia_dividido(antiga, base):
+    # A referência antiga não ligava BT3_DOIS. Só a base aprovada pode ampliá-la;
+    # o roteiro oficial compara depois todas as linhas, inclusive observadores.
+    aa = antiga.read_text().splitlines()
+    bb = base.read_text().splitlines()
+    observadores = ('roteiro: pads ', 'roteiro: selecao ')
+    exige(aa and any(' fim ' in l for l in aa), 'referência antiga sem fim')
+    exige(not any(l.startswith(observadores) for l in aa),
+          'referência antiga já contém observadores')
+    for prefixo in observadores:
+        exige(any(l.startswith(prefixo) for l in bb), 'base sem '+prefixo)
+    exige(aa == [l for l in bb if not l.startswith(observadores)],
+          'eventos da base diferentes da referência antiga')
+    print(f'Referência dividida: {len(aa)} eventos preservados; '
+          f'{len(bb)-len(aa)} observações adicionais da base aprovada')
+
+
+def objetos(base, novo):
+    def lista(p):
+        return {str(q.relative_to(p)): q for sub in ('obj','obj_data','ligar')
+                for q in (p/sub).glob('*.o')}
+    aa, bb = lista(base), lista(novo)
+    exige(len(aa)>=398 and aa.keys()==bb.keys(), 'lista de objetos diferente ou incompleta')
+    iguais, dif = 0, []
+    with tempfile.TemporaryDirectory(dir=Path.home()) as d:
+        d = Path(d)
+        for n in sorted(aa):
+            for src, dest in ((aa[n],d/'a'),(bb[n],d/'b')):
+                subprocess.run(['objcopy','--strip-debug',src,dest],check=True)
+            if subprocess.run(['cmp','-s',d/'a',d/'b']).returncode:
+                dif.append(n)
+            else:
+                iguais += 1
+        exige(set(dif) <= {'obj/x360_passos.o'}, 'objetos fora do teste alterados: '+str(dif))
+        for nome, pasta in [('base',base),('final',novo)]:
+            subprocess.run(['objcopy','-O','binary','--only-section=.text',pasta/'bt3_x86',d/nome],check=True)
+            sha = hashlib.sha1((d/nome).read_bytes()).hexdigest()
+            exige(sha==TEXT, '.text '+nome+' diferente: '+sha)
+            print('.text '+nome+': '+sha)
+        subprocess.run(['cmp',d/'base',d/'final'],check=True)
+    print(f'Objetos sem depuração: {iguais} iguais; diferentes {dif}; .text idêntica')
+
+
+def negativos():
+    def comando(modo, *caminhos, recusado=False):
+        # Exercitar a mesma entrada usada pela rodada, inclusive o despacho.
+        r = subprocess.run([sys.executable, __file__, modo, *map(str, caminhos)],
+                           capture_output=True, text=True)
+        exige(r.returncode == (1 if recusado else 0), r.stdout+r.stderr)
+        exige(not recusado or r.stderr.startswith('FALHA: '),
+              'entrada recusada sem diagnóstico do comparador: '+r.stderr)
+        if not recusado:
+            print(r.stdout, end='')
+
+    with tempfile.TemporaryDirectory(dir=Path.home()) as d:
+        p = Path(d)
+        a, b = p/'a', p/'b'
+        a.mkdir(); b.mkdir()
+        for pasta in (a,b): (pasta/'quadro.ppm').write_bytes(b'P6\n1 1\n255\n\x01\x02\x03')
+        comando('imagens',a,b)
+        for nome in ('pixel','ausente','extra'):
+            (b/'quadro.ppm').write_bytes((a/'quadro.ppm').read_bytes())
+            if nome=='pixel': (b/'quadro.ppm').write_bytes(b'P6\n1 1\n255\n\x01\x02\x04')
+            if nome=='ausente': (b/'quadro.ppm').unlink()
+            if nome=='extra': (b/'extra.ppm').write_bytes(b'x')
+            comando('imagens',a,b,recusado=True)
+            print('Cópia de imagens recusada: '+nome)
+        (a/'estado.txt').write_text('roteiro: teste.txt:1 fim vblank 20 quadro 18\n')
+        (b/'estado.txt').write_text((a/'estado.txt').read_text())
+        comando('estado',a/'estado.txt',b/'estado.txt')
+        (b/'estado.txt').write_text('roteiro: teste.txt:1 fim vblank 21 quadro 18\n')
+        comando('estado',a/'estado.txt',b/'estado.txt',recusado=True)
+        print('Cópia de estado recusada: vblank alterado')
+        (a/'antiga.telas').write_text('tela inicio vblank 3 quadro 0\n'
+                                    'roteiro: teste.txt:1 fim vblank 20 quadro 18\n')
+        antiga = (a/'antiga.telas').read_text()
+        ampliada = ('roteiro: pads 0000 0000 analogicos 128 128 128 128 vblank 3 quadro 0\n'
+                    'roteiro: selecao jogadores 1 estados 0 0 personagens 0 13 vblank 3 quadro 0\n'
+                    + antiga)
+        (b/'base.telas').write_text(ampliada)
+        comando('referencia-dividido',a/'antiga.telas',b/'base.telas')
+        for nome, texto in (
+                ('vblank', ampliada.replace('fim vblank 20', 'fim vblank 21')),
+                ('evento ausente', ampliada.replace('tela inicio vblank 3 quadro 0\n', '')),
+                ('evento extra', ampliada+'roteiro: resultado alterado\n'),
+                ('sem pares', ''.join(l+'\n' for l in ampliada.splitlines()
+                                     if not l.startswith('roteiro: pads '))),
+                ('sem seletores', ''.join(l+'\n' for l in ampliada.splitlines()
+                                         if not l.startswith('roteiro: selecao ')))):
+            (b/'base.telas').write_text(texto)
+            comando('referencia-dividido',a/'antiga.telas',b/'base.telas',recusado=True)
+            print('Cópia de referência dividida recusada: '+nome)
+    print('Comparações da release e negativos: tudo certo')
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('modo',choices=('imagens','estado','objetos','negativos','referencia-dividido'))
+    ap.add_argument('pastas',nargs='*',type=Path)
+    a = ap.parse_args()
+    try:
+        if a.modo=='negativos': negativos()
+        else: globals()[a.modo.replace('-', '_')](*a.pastas)
+    except (OSError,ValueError,subprocess.CalledProcessError) as e:
+        ap.exit(1,'FALHA: '+str(e)+'\n')
+
+
+if __name__=='__main__':
+    main()

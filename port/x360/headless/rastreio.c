@@ -356,7 +356,12 @@ NAO_RASTREAR static void neutro(uint32_t dst, size_t n) {
    A escrita ainda não aconteceu quando o callback roda; a conferência do valor fica para o callback
    seguinte (pendente). Valor diferente: era uma conta, e a leitura é uso de verdade. */
 #define ANEL 32
-static struct { uint32_t addr, size, pc; int vivo, sus; Visao v; } sAnel[ANEL];
+static struct {
+    uint32_t addr, size, pc;
+    int vivo, sus;
+    Visao v;
+    uint64_t original; /* origem no instante da leitura, antes de reutilizar a memória */
+} sAnel[ANEL];
 static int sAnelPos;
 static struct { uint32_t dst, size, pc; int vivo; } sPend;
 
@@ -381,8 +386,7 @@ static void anotar_pc(Uso *u, uint32_t pc) {
     anotar_em(u->pcs, pc);
 }
 
-static void anotar_uso(uint32_t addr, uint32_t size, uint32_t pc) {
-    uint64_t o = origem(addr);
+static void anotar_uso(uint64_t o, uint32_t addr, uint32_t size, uint32_t pc) {
     Uso *u;
     if (o == 0) {
         return;
@@ -476,15 +480,18 @@ NAO_RASTREAR static void ler(uint32_t addr, uint32_t size, uint32_t pc) {
     if ((!sAtivo || origem(addr) == 0) && !sus && !sVisoes) {
         return;
     }
+    /* A origem pertence ao instante da leitura. Até sair do anel, a pilha pode ter sido
+       reutilizada por outra função e o mesmo endereço já pertencer a outro arquivo. */
     /* a leitura mais velha do anel que não virou cópia é uso de verdade */
     i = sAnelPos;
     if (sAnel[i].vivo) {
-        anotar_uso(sAnel[i].addr, sAnel[i].size, sAnel[i].pc);
+        anotar_uso(sAnel[i].original, sAnel[i].addr, sAnel[i].size, sAnel[i].pc);
         if (sAnel[i].sus) {
             anotar_visao(&sAnel[i].v);
         }
     }
     sAnel[i].addr = addr;
+    sAnel[i].original = origem(addr);
     sAnel[i].size = size;
     sAnel[i].pc = pc;
     sAnel[i].vivo = 1;
@@ -504,7 +511,7 @@ NAO_RASTREAR static void gravar(uint32_t addr, uint32_t size, uint32_t pc) {
     /* no mesmo lugar: o jogo reescrevendo o campo (deslocamento do arquivo virando ponteiro) */
     for (k = 0; k < ANEL; k++) {
         if (sAnel[k].vivo && sAnel[k].addr == addr) {
-            anotar_uso(sAnel[k].addr, sAnel[k].size, sAnel[k].pc);
+            anotar_uso(sAnel[k].original, sAnel[k].addr, sAnel[k].size, sAnel[k].pc);
             if (sAnel[k].sus) {
                 anotar_visao(&sAnel[k].v);
             }
@@ -642,7 +649,7 @@ NAO_RASTREAR static void despejar(void) {
     sAtivo = 0;
     for (k = 0; k < ANEL; k++) {
         if (sAnel[k].vivo) {
-            anotar_uso(sAnel[k].addr, sAnel[k].size, sAnel[k].pc);
+            anotar_uso(sAnel[k].original, sAnel[k].addr, sAnel[k].size, sAnel[k].pc);
         }
     }
     fp = fopen(caminho, "w");

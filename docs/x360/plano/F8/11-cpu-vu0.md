@@ -97,3 +97,369 @@ referência contra nova, com o `explosao_picos.py` de lá.
 Mesma build `0757ec25` com `BT3_LOG=1`, `BT3_PICOS=40`, `BT3_AMOSTRA=1000` e **`BT3_AMOSTRA_LIMIAR=65`** (só a explosão
 cai em "lento"), o Final Flash que destrói o planeta de fato e 5 s de luta depois para sair o despejo; conferir pelas linhas
 `picos:` com "VU1 0 lotes, desenhos ~3.2xx".
+
+
+## A implementado no ramo vu0-nativo: aceite sem console concluído (04/11/2026)
+
+Base `9c69c4ba`, a 1.0.2. A pendência continua aberta para o aceite no XDK e no console.
+Não há medida nova de tempo no Xenon nesta rodada.
+
+### Implementação e domínio exato
+
+`port/x360/src/f2/vu0_nativo.c` recebe os operandos por ponteiros e inteiros. Aceita somente ±0 ou
+`2^-30 <= |x| <= 2^30`, classificados pelos bits antes de qualquer conta. Denormal, expoente 255,
+normal muito pequeno ou muito grande fazem desistir sem publicar a saída. O chamador então executa
+o caminho anterior inteiro, inclusive os limites e a aritmética próprios dele. O modelo de hardware
+atual do 360 já difere do modelo inteiro nos extremos (decisão 5); esta mudança não redefine esse modelo.
+
+Na faixa aceita, os produtos ficam entre `2^-60` e `2^60`. Depois do truncamento a float, o menor
+passo possível é `2^-83`: nem os produtos, nem cancelamentos e as três somas seguintes chegam a denormal
+ou estouro. A thread do 360 já usa `_RC_CHOP`. Não se muda o arredondamento dela.
+
+| Função | Caminho novo |
+|---|---|
+| `mtx_apply` | `Port_FastMtxApply` chama `Vn_MtxApply`: 16 produtos, depois as três somas por componente, na ordem original. |
+| `op_vmaddabc`, `op_vmaddbc` | `Vn_Bc4` multiplica quatro componentes pelo escalar e soma ACC, conservando `setFlags`, máscara e publicação originais. |
+| `Mtx_Mul` | Conserva a sequência completa do interpretador, inclusive ACC, flags e registradores finais; as instruções acima usam os núcleos novos. |
+| `Vec4_Add`, `Vec4_Scale` | `Vn_Op4`/`Vn_Bc4`, com destino temporário; recuo isolado em função sem inlining com o corpo anterior. |
+| `Vu0_SinCos` | Conserva o polinômio, os resíduos e a raiz anterior; acelera as instruções `vadd`, `vmul`, `vaddbc`, `vsubbc`, `vmulbc` e `vmulabc` que compartilha. |
+
+Tudo nos fontes upstream está em `PORT_X360`, com o original no `#else`. A build normal x86/PPC continua
+como antes. Os produtos ficam em duas funções `noinline` (`Vn_Produtos` e `Vn_ProdutosMatriz`); o chamador
+só soma depois da chamada. Essa fronteira impede a fusão. Manter `/fp:precise`, sem `/GL`/LTCG; nos testes,
+`-ffp-contract=off -frounding-math -fno-strict-aliasing`. Ainda há temporários float em memória entre as
+etapas de produto e soma: não se afirma que sumiram todos os custos de dependência da memória.
+
+### Prova sem console
+
+`python3 port/x360/tools/teste_vu0_nativo.py --casos 2000000 --mutantes`, sob a vaga de emulador autorizada:
+compila os arquivos completos da base e os atuais, expõe só as instruções estáticas para o teste e compara
+bits de saída e todo o `gRefVu0`. São 2 milhões de casos por função e 16 milhões de instruções por variante,
+com todas as máscaras, vf0, ACC e resíduos aleatórios, destinos sobrepostos, bits arbitrários, ±0,
+denormais, expoente máximo, estouro e vizinhanças de 1,0 e dos limites da guarda. A matriz aceitou 1 milhão
+e recusou 1 milhão em cada variante x86/PPC, modelos inteiro e 360. `Mtx_Mul` e `Vu0_SinCos` são testados como funções completas,
+sem reimplementar a sequência no oráculo.
+
+O mesmo comando roda o `port/tools/fastvec_check.c` existente com o núcleo novo, 2 milhões de matrizes por
+variante. Nas quatro variantes x86/PPC, modelos inteiro e 360: zero diferenças; desistência 100% em bits arbitrários, 0% perto
+de 1,0, 97,8% com extremos misturados e 0% nos casos de poucos bits. Os três mutantes foram vistos falhando
+nas quatro variantes: produto ao mais próximo, soma da matriz em outra ordem e denormal aceito pela guarda.
+Também foram recusadas as cópias com um bit estragado na saída de cada função/instrução e do fastvec.
+A PPC big-endian passou os mesmos verificadores, incluindo estado completo, alias e todos os controles negativos.
+
+Para a prova do jogo, `BT3_TESTE_VU0_NATIVO=1 python3 port/x360/tools/headless.py --alvo ppc` liga a mesma
+implementação, conservando a ABI soft-float do jogo: só o objeto dos núcleos usa hardware. A ponte de teste
+restaura o modo da FPU após cada núcleo, para não mudar o resto da build. A rodada oficial de
+`SEMMAPA=1 roteiros.sh f5_duelo` terminou com “tudo certo”: duas repetições x86, referência, x86r
+e PPC com o caminho novo deram o mesmo rastro de 69 linhas; `BT3_HASH` e os sete pontos de memória
+foram aprovados, incluindo carga, combate, técnica, pausa e retorno. As telas aqui são transições
+e estados; imagens PPM não foram comparadas (`IMG` desligado). Não há roteiro
+da explosão do planeta nesta árvore (`port/x360/roteiros`); a reprodução dela fica para o console.
+
+Base x86 reconstruída com o `headless.py` e os dois fontes VU0 de `9c69c4ba`: 398 objetos iguais (326 de código e 72 de dados) após
+`objcopy --strip-debug` e `cmp`; só `x360_passos.o`, código de teste com carimbo, difere. SHA1 da `.text`
+das duas: `94fe2737c0b9f6663ca659685be77a7cd1d36659`. Uma cópia de objeto com um bit da `.text`
+alterado foi recusada por `cmp` (saída 1). A preparação C89 dos dois fontes terminou com zero falhas.
+
+### Resultado oficial e origem das provas
+
+O serviço `bt3-vu0-nativo-oficial` executou `~/vu0-nativo-oficial-2.sh` de 14:27:45 a 14:57:40
+(04/11, UTC-3), na segunda vaga autorizada pelo Lucas. Resultado 0, commit de implementação
+`2bcd1c05`, árvore limpa e carimbos iguais nas três builds. Logs e resultados fora do Git em
+`~/vu0-nativo-final/`; log geral `~/vu0-nativo-oficial.log`.
+
+| Conferência | Resultado |
+|---|---|
+| x86 inteiro, x86 360, PPC inteiro e PPC 360 | Cada uma: 2 milhões de casos por função, 16 milhões de instruções, estado e alias iguais |
+| `fastvec_check`, quatro variantes | Cada uma: 2 milhões de matrizes, zero diferenças |
+| Arredondamento, ordem e denormal | 12 execuções recusadas, saída 1 |
+| Bit estragado por função/instrução e no fastvec | 52 comparações e quatro fastvec recusados, saída 1 |
+| Objetos x86 e `.text` contra a base | 398 objetos iguais sem depuração; só o carimbo de teste difere; `.text` idêntica |
+| C89 | Dois fontes preparados, zero falhas |
+| `SEMMAPA=1 roteiros.sh f5_duelo` | Tudo certo; referência, repetição, rastro, hashes e sete pontos de memória |
+
+O fechamento altera somente a documentação. As três builds reconstruídas em `936b632b` conservaram
+os objetos sem depuração e a `.text` da rodada aprovada, exceto `x360_passos.o` (carimbo de teste):
+398 objetos x86, 399 x86r e 423 PPC iguais. O comparador recusou uma cópia com um bit estragado.
+Apesar dessa identidade, `REUSA=1` recusou os logs de `2bcd1c05`: o aceite da F5 e a medida por passo
+exigem o carimbo do HEAD também dentro dos logs. Não se alteram carimbos para contornar a guarda.
+A conferência do commit final precisa reconstruir e executar novamente os verificadores e o roteiro
+completo, depois de congelar a documentação. O relatório `~/entrega-vu0-nativo.md` registra o commit,
+o serviço e o resultado dessa rodada final; a aprovação acima continua identificada como a de `2bcd1c05`.
+
+### Desmontagem GCC PPC antes e depois
+
+GCC `-O2 -fno-stack-protector -ffp-contract=off`, modelo hardware do 360, big-endian. Contagens estáticas
+por símbolo, sem expandir laços nem somar funções chamadas. Pares são ocorrências de `stw` e `lfs` no mesmo
+deslocamento de r1, não uma análise temporal de dependências. Arquivos `.dis` e contagem saem do verificador.
+
+| Símbolo | Instruções antes | Depois | Pares stw/lfs antes | Depois |
+|---|---:|---:|---:|---:|
+| `mtx_apply` (inclui recuo) | 85 | 85 | 0 | 0 |
+| `op_vmaddabc` (inclui recuo) | 51 | 68 | 0 | 1 |
+| `op_vmaddbc` (inclui recuo) | 58 | 72 | 0 | 1 |
+| `Ref_Mtx_Mul` (chama instruções) | 204 | 204 | 0 | 0 |
+| `Ref_Vec4_Add` | 17 | 42 | 0 | 0 |
+| `Ref_Vec4_Scale` | 13 | 47 | 0 | 1 |
+| `Ref_Vu0_SinCos` (chama instruções) | 232 | 191 | 5 | 3 |
+
+Núcleos novos, também com zero pares stw/lfs: `Vn_MtxApply` 67 instruções e
+`Vn_ProdutosMatriz` 16; `Vn_Op4` 126, `Vn_Bc4` 14 e `Vn_Produtos` 15. Recuos isolados
+`vn_vec4_add_lento`/`vn_vec4_scale_lento`: 17/13. Nenhuma fusão nos símbolos contados.
+O GCC já conserva muitos floats em registradores no código anterior, ao contrário do `cl` medido no estudo;
+esta tabela não demonstra redução do total de instruções nem ganho de tempo. As chamadas e guardas têm custo.
+
+### Aceite que ainda cabe ao Lucas
+
+No XDK: compilar o objeto novo (o `build_f2.sh` já enumera `src/f2/*.c`), conferir `pc_vu0_a`, `pc_vu0_b`,
+`float360` e `vu0_nativo` com os dois núcleos de produto fora de linha; zero `fmadds`, `fmadd`, `fmsubs`,
+`fnmadds` ou equivalentes nas contas trocadas. Conferir o recuo e os temporários, incluindo pares `stfs/lfs`,
+e comparar as contagens com a build anterior. No console: repetir o amostrador em luta comum, quadros lentos,
+tela dividida e explosão de fato, e medir a thread do jogo. O ganho estimado do estudo continua sem confirmação.
+
+## VU0 em registradores: revisão de 04/11/2026
+
+A revisão XDK da entrega `82ca99f7` aprovou os bits e a ausência de fusão, mas encontrou os 16 produtos
+na pilha entre `Vn_ProdutosMatriz` e `Vn_MtxApply`, além da saída intermediária copiada por `memcpy`.
+Essa fronteira foi retirada no branch `vu0-registradores`. As seções anteriores descrevem a entrega
+anterior; a exigência de manter os produtos fora de linha deixa de valer nesta revisão.
+
+`Vn_Op4` calcula produtos e somas na mesma função. `Vn_MtxApply` carrega os quatro componentes do
+vetor em escalares e faz, por coluna, `a = r[c]*v0 + r[4+c]*v1`, depois `a = a + r[8+c]*v2` e
+`d = a + r[12+c]*v3`. Os quatro resultados escalares são calculados antes de qualquer escrita,
+conservando inclusive alias parcial entre saída e entradas. Cada componente da matriz é lido uma
+vez como float no cálculo; a classificação anterior continua lendo os bits para decidir a guarda.
+A saída é escrita diretamente por `(float *)out`, com quatro stores, sem array de produtos,
+array de saída ou `memcpy` de float para inteiro. Isso depende de `-fno-strict-aliasing` no GCC e
+do modelo de alias do cl usado pelo projeto. A faixa, a recusa sem escrita e os recuos não mudaram.
+Os recuos excepcionais dos vetores continuam sem inlining.
+
+No cl, `#pragma fp_contract(off)` cerca os três núcleos e `on` restaura a opção depois deles;
+conservar `/fp:precise`, sem `/GL`/LTCG. No GCC permanece `-ffp-contract=off`. A guarda nova
+`guarda_vu0_fusao.py`, chamada pelo `build_f2.sh` depois do link e antes do `.xex`, lê o `.map` e
+cobre todas as funções dos objetos `vu0_nativo`, `float360`, `pc_vu0_a` e `pc_vu0_b`, inclusive
+estáticas, além de qualquer `Vn_*`. Isso inclui quem recebe os núcleos inline dentro dessas unidades.
+Sem LTCG não há inlining entre objetos. Se essa política mudar, a cobertura precisa mudar junto.
+A guarda junta faixas contíguas e chama `link.exe /dump /disasm /range:INICIO,FIM`, guardando os
+`.dis` ao lado do `.exe`. Recusa ferramenta com falha, dump sem o endereço inicial, objeto ausente,
+e opcodes das quatro famílias `fmadd`, `fmsub`, `fnmadd`, `fnmsub`, simples ou duplas, com ou sem Rc.
+A decisão usa também os bytes PPC do PE, sem depender da grafia do mnemônico no dump.
+
+`teste_guarda_vu0_fusao.py` passou o PE sintético íntegro e recusou cópias alteradas com `fmsubs`,
+`fmadds`, `fnmsubs` e `fnmadds`, uma em cada objeto, mais as quatro variantes duplas com Rc.
+Também recusou objeto ausente no mapa e dump vazio. Não há bytes do jogo nas entradas de teste.
+A ferramenta de dump é simulada nesse teste; a execução real do Wine/XDK cabe à revisão no Linux.
+
+`teste_vu0_nativo.py --casos 2000000 --mutantes` inclui agora o mutante `fusao`, que usa `fmaf`
+explicitamente na mesma conta, além dos controles de arredondamento, ordem e denormal. Toda
+substituição do mutante exige encontrar o texto alvo, para não aprovar silenciosamente uma cópia
+intacta. O driver também verifica alias parcial diretamente nos núcleos e conserva a semente da
+prova principal. Na PPC, o comando compila também `nucleo_anterior.o` de `82ca99f7` com as mesmas
+opções, sem ligá-lo, para gerar a contagem antes/depois no log da própria rodada.
+
+### Contagem PPC sem troca de arredondamento de teste
+
+GCC `-O2 -ffp-contract=off -frounding-math -fno-strict-aliasing`, sem vetorização nem protetor de pilha,
+como o teste isolado. Contagens estáticas, incluindo nops, sem expandir os laços nem somar chamadas.
+
+| Símbolo | Instruções antes/depois | stfs antes/depois | lfs antes/depois | stfsu antes/depois | lfsu antes/depois | lfsx antes/depois |
+|---|---:|---:|---:|---:|---:|---:|
+| `Vn_MtxApply` | 67 / 86 | 0 / 4 | 3 / 20 | 1 / 0 | 1 / 0 | 0 / 0 |
+| `Vn_ProdutosMatriz` | 16 / removida | 0 / 0 | 0 / 0 | 1 / 0 | 1 / 0 | 1 / 0 |
+
+O auxiliar antigo executa o seu `stfsu` 16 vezes e o chamador grava mais quatro resultados na pilha.
+Os `lfs*` do chamador antigo relêem os 16 produtos. O núcleo novo tem 16 `fmuls`, 12 `fadds`,
+20 leituras float das entradas e quatro `stfs` no destino; nenhum temporário de cálculo na pilha,
+nenhuma chamada ao auxiliar e nenhuma fusão. Há um `stfd`/`lfd` de f31 para conservar o registrador
+exigido pela ABI, separado dos produtos e das saídas. `stfsx` é zero nesses dois símbolos. A contagem estática
+maior vem da expansão dos quatro componentes, antes em laços; não é medida de tempo no Xenon.
+`Vn_Op4` passa de 126 para 108 instruções estáticas; os 12 `stfs` no novo pertencem aos três caminhos
+alternativos, com quatro escritas executadas em cada um. `Vn_Bc4` continua com 14 instruções.
+
+### Certificação e limites desta revisão
+
+A rodada final fica identificada pelo HEAD no relatório externo `~/entrega-vu0-registradores.md`.
+O serviço `bt3-vu0-registradores-oficial` executa `~/vu0-registradores-oficial.sh` sob `~/vez.sh`:
+quatro variantes de 2 milhões de casos, fastvec, quatro mutantes e controles de um bit, guarda de
+fusão com cópias estragadas, reconstrução da base x86 e comparação dos objetos sem depuração e da
+`.text`, C89 e as três builds, seguidas de `SEMMAPA=1 roteiros.sh f5_duelo` sem reuso de logs.
+O resultado só vale depois de julgado com saída 0 e “tudo certo”. Documentação congelada antes da
+execução para que os carimbos sejam do commit final. Logs em `~/vu0-registradores/`.
+
+A primeira execução de `0f5a2249` aprovou os testes isolados e os quatro mutantes nas quatro
+variantes, mas parou ao reconstruir a base x86: `port/build/gen` inteiro apontava para os dados
+compartilhados de leitura, e `portsrc.prepare` precisa gravar `gen/src/`. A preparação da worktree
+foi corrigida com `src/` local gravável e links de leitura apenas para os insumos compartilhados.
+Nenhum fonte de produção mudou. A certificação integral será repetida depois deste registro;
+o relatório externo identifica o novo commit, os caminhos dos logs e seu julgamento.
+
+A repetição em `a6566248` também aprovou os testes isolados, mas a base x86 encontrou um
+segundo problema de preparação: o `.incbin` do `vu1_micro.data.s` compartilhado apontava para
+`/home/lucas/bt3xbx/assets/`, inacessível. O diretório `gen/data` agora é local e foi regenerado
+com `gen_data.py --asm "$PWD/asm"`: 72 arquivos iguais aos compartilhados, salvo o caminho,
+e 72 objetos montados. `gen/gs` continua sendo somente leitura. A certificação será repetida
+integralmente no commit deste registro; o relatório externo guarda o resultado final.
+
+Não há XDK ou console nesta tarefa. No Linux, conferir a execução real da guarda e seus `.dis`,
+os 16 `fmuls` e 12 `fadds` da matriz na ordem original, quatro stores no destino e a ausência dos
+16 produtos e da saída intermediária na pilha. Repetir a guarda com uma cópia compilada que funde.
+O desempenho no Xenon continua dependendo de medição no console.
+
+## Console de 05/11/2026 e investigação no branch vu0-amostra
+
+A build `de4e5c94` passou a guarda XDK (161 funções, nenhuma fusão). No
+`Vn_MtxApply`, o cl produziu 16 `fmuls`, 12 `fadds`, 20 `lfs` e quatro `stfs`
+no destino, na ordem das somas original. O gancho chama esse núcleo.
+
+| Duelo fixo, 2.334 passos, BT3_TEMPOS=0 | 1.0.2, 963e690f | VU0, de4e5c94 |
+|---|---:|---:|
+| trabalho p50 | 25,53 ms | 25,66 ms |
+| p95 / p99 / máximo | 30,35 / 31,23 / 33,32 ms | 30,51 / 31,42 / 33,33 ms |
+| passos acima de 30 ms | 146 | 191 |
+
+Vencedor, vida 27160 e quadro final 8378 iguais no console: a correção passou,
+mas o ganho estimado de 8 a 9 ms não apareceu. Os tempos foram fornecidos pelo
+Lucas; não há execução nova de console no WSL.
+
+### Releitura dos dados preservados
+
+`vu0_reler_perfil.py ~/vu0-amostra/sessao_amostra` usa o resolvedor original de
+`troca/claude/f8-amostra`. O mapa fornecido é de `0757ec25`: as âncoras e o
+carimbo do ligador conferem para a `coleta2`. A `coleta` é de `6b09afe1` e é
+recusada: três âncoras diferem em 0xA0 e o ligador também difere. Falta o mapa
+correspondente para atribuir suas amostras com a mesma garantia. Não se deslocam
+endereços nem se ignoram essas guardas para aproveitar o mapa errado.
+
+A diferença d6 a d10 reproduz 3.520 quadros normais (29,334 ms/quadro,
+50.093 amostras úteis) e 83 lentos (53,417 ms/quadro, 1.891 úteis).
+Há 19.930 amostras VU0 visíveis na união das tabelas normais e 640 nas lentas.
+A soma antiga de 19.931 ignorava uma entrada que desapareceu do topo entre os
+despejos. A porcentagem arredondada continua 39,8%/33,8%.
+
+| Função, tempo próprio estimado no normal | Amostras | % úteis | ms/quadro |
+|---|---:|---:|---:|
+| mtx_apply | 4417 | 8,818 | 2,587 |
+| op_vmaddabc | 2937 | 5,863 | 1,720 |
+| op_vmaddbc | 1458 | 2,911 | 0,854 |
+| dot3 | 1082 | 2,160 | 0,634 |
+| op_vmulabc | 964 | 1,924 | 0,565 |
+| Vec4_Add | 887 | 1,771 | 0,519 |
+| setFlags | 798 | 1,593 | 0,467 |
+| Vu0_SinCos | 763 | 1,523 | 0,447 |
+| Vec4_Scale | 750 | 1,497 | 0,439 |
+| Mtx_Mul | 578 | 1,154 | 0,338 |
+
+O script lista todas as funções visíveis, inclusive as restantes de float360,
+e separa alteração direta, indireta e nenhuma. As funções diretamente alteradas
+somam 11.616 amostras, 6,802 ms no normal e 10,565 ms no lento. Isso é um teto
+ideal sobre esses baldes visíveis, antes de descontar recuos, guardas, chamadas,
+publicação, flags e o custo da conta nova. `Mtx_Mul` e `Vu0_SinCos` conservam
+as sequências e somam mais 0,785 ms próprios no normal; não se pode tratar todo
+esse custo como eliminado. O restante visível soma 4,083 ms.
+
+O topo é truncado: faltam 61 e 4.455 amostras úteis nas folhas normais de d6/d10,
+e 0 e 72 nas lentas. Sem atribuir arbitrariamente essas amostras, a fração VU0
+normal pode ficar entre 39,66% e 48,68%, e a lenta entre 33,84% e 37,65%.
+A diferença de histogramas truncados não fornece cada função exata no trecho.
+O cabeçalho d10 mede suspensão média de 57,8 us e máxima de 531,6 us; o intervalo
+pedido de 1.000 us não garante coleta sem interferência ou sem viés.
+Esses quadros históricos também não são uma identificação do Duelo fixo atual.
+A hipótese de viés continua sem resposta até comparar os quatro ambientes.
+
+### Contagem sem janela e certificação final
+
+A contagem usa cópias geradas dos fontes, incluindo funções inline e funções que
+retornam estruturas. `BT3_VU0_CONTA=1 BT3_TESTE_VU0_NATIVO=1 headless.py --alvo
+x86|ppc` produz `x86vc` e `ppcvc`. A build normal não contém esses incrementos.
+`vu0_contar.sh PASTA LIDOS` executa os dois lados da chave nas duas arquiteturas,
+um emulador por vez sob `~/vez.sh`. `vu0_conta_resumo.py` conserva os números
+por passo e exige que chamadas, retornos nativos e motivos de recuo fechem.
+As linhas contam o intervalo anterior entre leituras do controle, só quando
+aquele intervalo começou no combate ativo, com a mesma regra de `passos.c`.
+Não são tempos nem custos exclusivos: `Vn_Bc4` delega a `Vn_Op4` e não se somam
+as duas como operações independentes. O primeiro operando recusado define o
+motivo, na ordem das entradas: desligado, NaN/Inf, denormal, normal pequeno ou grande.
+
+`teste_vu0_conta.py` verifica retornos reais e motivos conhecidos e recusa cópias
+com passo ausente, retorno a menos, duplicata, linha truncada e sem dados.
+`teste_vu0_chave.py` prova as duas posições no mesmo binário, com o gancho real
+de `float360.c`, e recusa núcleos que ignoram a chave e configuração que ignora zero.
+A rodada preliminar `~/vu0-amostra/previa2` completou as quatro lutas no commit
+`dad16f6c`: todos os rastros têm 69 linhas iguais, vencedor 0x2, vida 27160 e
+fim no quadro 8378. A comparação final recusou a igualdade integral dos contadores.
+A reavaliação preservou as diferenças e confirmou as chamadas por passo das funções
+principais, a passagem de toda `mtx_apply` pelo gancho e as duas posições da chave.
+Não se exige igualdade de auxiliares escalares e de recuo: há chamadas que dependem
+do compilador e motivos que diferem entre arquiteturas. Os JSON preservam cada uma.
+Os resumos de luta e seus vblanks coincidem nas 12.570 linhas entre ligado e
+desligado em cada arquitetura. Os hashes de todas as globais diferem, inclusive
+antes da luta na x86: eles abrangem ponteiros e campos não iniciados. A causa exata
+dessas diferenças não foi localizada; a comparação bruta não prova identidade. A memória do commit final continua
+sendo um critério independente, com o normalizador oficial.
+
+O roteiro tem **duas janelas**, 684 passos antes da pausa e 2.334 depois dela,
+3.018 no total. A medida fornecida do console é da segunda. O resumo agora separa
+as janelas pelo número de passos e vblank de fechamento do próprio rastro; recusa
+fechamentos incompatíveis. Os números abaixo são da janela 2, com nativo ligado.
+As chamadas principais coincidem nas duas arquiteturas, nas duas posições.
+
+| Função | Chamadas | Por passo |
+|---|---:|---:|
+| mtx_apply / Port_FastMtxApply / Vn_MtxApply | 7.862.872 cada | 3.368,840 |
+| op_vmaddabc | 19.741.093 | 8.458,052 |
+| op_vmaddbc | 10.538.385 | 4.515,161 |
+| op_vmulabc | 9.919.125 | 4.249,839 |
+| Vec4_Add | 2.530.211 | 1.084,066 |
+| Vec4_Scale | 2.403.094 | 1.029,603 |
+| Mtx_Mul | 1.520.244 | 651,347 |
+| Vu0_SinCos | 478.094 | 204,839 |
+
+| Núcleo | Chamadas por arquitetura | Nativas x86 / PPC | Aceitação x86 / PPC |
+|---|---:|---:|---:|
+| Vn_MtxApply e gancho | 7.862.872 | 7.850.522 / 7.850.522 | 99,843% / 99,843% |
+| Vn_Op4 | 56.183.997 | 55.585.510 / 55.434.391 | 98,935% / 98,666% |
+| Vn_Bc4, incluído em Op4 | 51.916.688 | 51.409.039 / 51.338.535 | 99,022% / 98,886% |
+
+Na matriz, os 12.350 recuos são todos por normal pequeno. Em Op4, x86/PPC:
+NaN/Inf 65.981/54.306, denormal 56.613/42.013, normal pequeno
+464.178/653.247, normal grande 11.715/40. Em Bc4: NaN/Inf 11.675/0,
+denormal 56.022/42.012, pequeno 428.242/536.101, grande 11.710/40.
+Com a chave em zero, cada chamada dos três núcleos e do gancho recua por
+`desligado`, sem retorno nativo. Não somar Bc4 a Op4, nem gancho a matriz.
+Os recuos diretos de Vec4_Add são 36.532/117.147 e os de Vec4_Scale
+18.567/42.391, x86/PPC; os corpos escalares continuam sendo contados.
+
+**Hipótese 1: recusada nesta luta sem janela.** O nativo roda na grande maioria
+das chamadas. Isto não é contagem de console, onde float360 tem implementação
+escalar própria. **Hipótese 2: parcialmente medida, causa do empate ainda sem
+resposta.** A matriz passa sempre pelo gancho; as instruções citadas delegam
+aos núcleos, mas conservam interpretação, estado e flags. O restante do perfil
+visível sem alteração soma 4,083 ms históricos. A contagem não mede quanto custam
+as guardas e o trabalho restante no Xenon. **Hipótese 3: sem resposta**, pelos
+limites da coleta histórica descritos acima.
+
+Cruzamento apenas ilustrativo entre cenas diferentes: aplicar a aceitação da
+matriz ao balde antigo de 2,587 ms deixa teto ideal de 2,583 ms. Usar a faixa de
+aceitação dos núcleos como aproximação para os 6,802 ms diretamente alterados
+deixa cerca de 6,7 a 6,8 ms antes de todo custo remanescente. Se ainda se supuser
+a aceleração de três a cinco vezes do estudo, o ganho seria de cerca de 4,5 a
+5,4 ms, não oito a nove. Nenhuma dessas contas é previsão validada: faltam o
+perfil da luta atual e o tempo do núcleo, incluindo guardas, no mesmo executável.
+
+A certificação integral será executada depois de congelar este commit. O relatório
+externo registra o resultado da rodada final e não declara aceite antecipado.
+
+### Preparação da nova sessão de console
+
+O amostrador foi trazido pelos sete arquivos próprios de `troca/claude/f8-amostra`,
+sem restaurar o restante daquela base antiga. A main atual só recebe as chamadas
+de ciclo de vida e a configuração do nativo antes da thread do jogo. A coleta
+continua desligada por ausência da chave. `BT3_AMOSTRA=0` liga a 100 us no código
+herdado; os ambientes sem coleta usam `-BT3_AMOSTRA`.
+
+Os quatro modelos em `port/x360/ambientes/vu0/` mantêm `BT3_TEMPOS=0` e o resto
+nos padrões da 1.0.2, com a permissão de desbloqueio exigida pelo boot do roteiro.
+Cada execução exige pasta de save vazia. O LEIA-ME descreve a ordem dos pares,
+os logs, o mapa, o que conferir no XDK e as limitações da instrumentação sem janela.
+`BT3_VU0_NATIVO=0` recusa todos os núcleos, não só a matriz. Seu desvio tem custo
+residual nas duas posições; não se afirma identidade temporal com o binário 1.0.2.

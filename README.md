@@ -1,4 +1,4 @@
-# bt3xbx: Budokai Tenkaichi 3 for Xbox 360
+# BT3 Xbox 360 1.1.0
 
 An Xbox 360 port of **Dragon Ball Z: Budokai Tenkaichi 3** (PlayStation 2, USA release, SLUS-21678). It runs as a
 homebrew `.xex` on a modded console (RGH or JTAG) and is the game's own code compiled for the Xbox 360's PowerPC
@@ -8,8 +8,12 @@ It is a fork of [Tenkaichi3Decomp](https://github.com/z3xox/Tenkaichi3Decomp), t
 BT3-Decompiled decompilation. Everything the Xbox 360 needs lives in `port/x360/`, `docs/x360/` and in
 `#ifdef PORT_X360` blocks; the rest is the PC port's, described below.
 
-**Status:** version 1.0.0 is out. Download it from the [Releases](https://github.com/Lucas-Tito/bt3xbx/releases)
+**Status:** version 1.1.0 is out. Download it from the [Releases](https://github.com/Lucas-Tito/bt3xbx/releases)
 page and follow `README.txt` inside the zip.
+
+Version 1.1.0 adds mipmaps to reduce shimmering on scenery, reduces distance blur,
+and uses native VU0 arithmetic in safe ranges. A battle can take a moment longer to load while
+mipmaps are generated. Split screen can still slow down.
 
 This repository contains **no game data**, and neither does the release. You need your own disc
 image of the USA release. The game converts it once, on the console or on a PC, into a copy laid out for the

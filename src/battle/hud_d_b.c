@@ -44,7 +44,12 @@ extern void HudSprite_Scale(HudDSprite *spr, f32 sx, f32 sy);                 /*
 extern void HudSprite_Center(HudDSprite *spr);                                 /* centres the rectangle on the node */
 extern void HudSprite_InitTex(HudDSprite *spr, void *res, s32 tex, s32 sub);    /* sprite of a sheet's texture */
 extern void HudGfx_ClearAlpha(void);
+#ifdef PORT_X360
+/* A CRT do XDK recebe o tamanho sem sinal, como o prelúdio C89. */
+extern void *memset(void *dst, int c, unsigned int n);
+#else
 extern void *memset(void *dst, s32 c, s32 n); /* not the built-in: the original calls it for 8 bytes */
+#endif
 extern f32 powf(f32 x, f32 y);
 extern void Mtx_StoreIdentity(HudDMtx m);
 extern void Mtx_RotateZ(HudDMtx dst, HudDMtx src, f32 angle);

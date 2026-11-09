@@ -1,4 +1,4 @@
-Dragon Ball Z: Budokai Tenkaichi 3 for Xbox 360
+BT3 Xbox 360 {{VERSION}}
 Version {{VERSION}}
 ================================================
 
@@ -206,5 +206,6 @@ the "Bug report" form. Please read the known issues below first.
   you can read them, and the game returns to the dashboard. Since 1.0.1 the ISO conversion
   question is drawn by the game and is not affected, but the boxes for a missing or
   unreadable ISO and the crash box still use the system's.
+* A battle can take a moment longer to load while mipmaps are generated.
 * The planet explosion animation runs slowly (about 3 seconds at around 15 frames per
   second), and split-screen battles can slow down.

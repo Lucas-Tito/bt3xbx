@@ -50,7 +50,7 @@ CLFLAGS="-c -Ox -Oi -fp:precise -fp:except- -GS- -Gy -GF -MT -W3 -Zi"
 # (F5, seção 35) BT3_PERFIL_CADEIA=1: a build de perfil, com as marcas do diagnóstico da CPU (gs/cadeia_cpu.h) e, desde a
 # seção 38, o relógio da gravação por desenho (gs_draw.c pelo c89.py); a normal fica sem elas, porque mesmo desligadas
 # custavam tempo no fim do quadro
-PERFIL=""; [ "${BT3_PERFIL_CADEIA:-0}" = 1 ] && PERFIL="-D BT3_PERFIL_CADEIA" && echo "   build de perfil: BT3_PERFIL_CADEIA"
+PERFIL="-D BT3_TESTE_FALHAS=${BT3_TESTE_FALHAS:-0}"; [ "${BT3_PERFIL_CADEIA:-0}" = 1 ] && PERFIL="$PERFIL -D BT3_PERFIL_CADEIA" && echo "   build de perfil: BT3_PERFIL_CADEIA"
 port/x360/tools/cl_jogo.sh $OUT/c89 $OUT/obj $CLFLAGS -Fd$OUT/obj/ >/dev/null
 python3 port/x360/tools/cl_resumo.py $OUT/obj | head -1
 python3 port/x360/tools/cl_resumo.py $OUT/obj | grep -q "^$(ls $OUT/c89/*.c | wc -l) de" || { python3 port/x360/tools/cl_resumo.py $OUT/obj --arquivos | tail -20; exit 1; }
@@ -60,7 +60,7 @@ docker run --rm -v "$RAIZ":/app -v "$XDK_DIR/lib/xbox":/xdk/lib/xbox:ro -w /app 
   ok=0
   # os shaders: compilados aqui, nunca no boot
   H=port/x360/src/gs/gs_d3d.hlsl
-  for e in vs_gs:vs_3_0:kGsVs:gs_vs ps_gs:ps_3_0:kGsPs:gs_ps ps_gsz:ps_3_0:kGsZPs:gsz_ps ps_tabela:ps_3_0:kTabelaPs:tabela_ps ps_contorno:ps_3_0:kContornoPs:contorno_ps ps_filme:ps_3_0:kFilmePs:filme_ps vs_copia:vs_3_0:kCopiaVs:copia_vs ps_copia:ps_3_0:kCopiaPs:copia_ps ps_zcor:ps_3_0:kZCorPs:zcor_ps ps_zprof:ps_3_0:kZProfPs:zprof_ps vs_vu0:vs_3_0:kVu0Vs:vu0_vs vs_vu4:vs_3_0:kVu4Vs:vu4_vs vs_vu6:vs_3_0:kVu6Vs:vu6_vs ps_gs_triv:ps_3_0:kGsTrivPs:gs_triv_ps ps_gsz_triv:ps_3_0:kGsZTrivPs:gsz_triv_ps ps_gs_tex:ps_3_0:kGsTexPs:gs_tex_ps ps_gs_sem:ps_3_0:kGsSemPs:gs_sem_ps ps_gsz_tex:ps_3_0:kGsZTexPs:gsz_tex_ps ps_gsz_sem:ps_3_0:kGsZSemPs:gsz_sem_ps ps_gs_semt:ps_3_0:kGsSemTPs:gs_semt_ps ps_gsz_semt:ps_3_0:kGsZSemTPs:gsz_semt_ps ps_tabela_z:ps_3_0:kTabelaZPs:tabela_z_ps ps_tabela_ids:ps_3_0:kTabelaIdsPs:tabela_ids_ps ps_gs_af:ps_3_0:kGsAfPs:gs_af_ps vs_gs_af:vs_3_0:kGsAfVs:gs_af_vs ps_copia_af:ps_3_0:kCopiaAfPs:copia_af_ps ps_fxaa:ps_3_0:kFxaaPs:fxaa_ps; do
+  for e in vs_gs:vs_3_0:kGsVs:gs_vs ps_gs:ps_3_0:kGsPs:gs_ps ps_gs_bloco:ps_3_0:kGsBlocoPs:gs_bloco_ps vs_gs_baixo:vs_3_0:kGsBaixoVs:gs_baixo_vs ps_gsz:ps_3_0:kGsZPs:gsz_ps ps_tabela:ps_3_0:kTabelaPs:tabela_ps ps_contorno:ps_3_0:kContornoPs:contorno_ps ps_filme:ps_3_0:kFilmePs:filme_ps vs_copia:vs_3_0:kCopiaVs:copia_vs ps_copia:ps_3_0:kCopiaPs:copia_ps ps_zcor:ps_3_0:kZCorPs:zcor_ps ps_zprof:ps_3_0:kZProfPs:zprof_ps vs_vu0:vs_3_0:kVu0Vs:vu0_vs vs_vu4:vs_3_0:kVu4Vs:vu4_vs vs_vu6:vs_3_0:kVu6Vs:vu6_vs ps_gs_triv:ps_3_0:kGsTrivPs:gs_triv_ps ps_gsz_triv:ps_3_0:kGsZTrivPs:gsz_triv_ps ps_gs_tex:ps_3_0:kGsTexPs:gs_tex_ps ps_gs_sem:ps_3_0:kGsSemPs:gs_sem_ps ps_gsz_tex:ps_3_0:kGsZTexPs:gsz_tex_ps ps_gsz_sem:ps_3_0:kGsZSemPs:gsz_sem_ps ps_gs_semt:ps_3_0:kGsSemTPs:gs_semt_ps ps_gsz_semt:ps_3_0:kGsZSemTPs:gsz_semt_ps ps_tabela_z:ps_3_0:kTabelaZPs:tabela_z_ps ps_tabela_ids:ps_3_0:kTabelaIdsPs:tabela_ids_ps ps_gs_af:ps_3_0:kGsAfPs:gs_af_ps vs_gs_af:vs_3_0:kGsAfVs:gs_af_vs ps_copia_af:ps_3_0:kCopiaAfPs:copia_af_ps ps_fxaa:ps_3_0:kFxaaPs:fxaa_ps; do
     IFS=: read n t v a <<< "$e"
     wine /xdk/bin/win32/fxc.exe /nologo /T $t /E $n /Fh '"$OUT"'/shaders/$a.h /Vn $v $H > '"$OUT"'/shaders/$a.txt 2>&1 || { cat '"$OUT"'/shaders/$a.txt; ok=1; }
   done
@@ -112,6 +112,12 @@ if [ ! -s $OUT/default.exe ] || grep -q "error LNK" $OUT/link.txt; then
   grep -E "error|warning LNK4" $OUT/link.txt | head -20
   exit 1
 fi
+
+# Sem LTCG, a VU0 só pode entrar inline nos próprios objetos. A guarda cobre
+# todos os símbolos deles e os Vn_ presentes no mapa, antes de gerar o .xex.
+python3 port/x360/tools/guarda_vu0_fusao.py $OUT/default.exe $OUT/default.map --comando-dump \
+  docker run --rm -v "$RAIZ":/app -w /app -e WINEDEBUG=-all "$IMAGEM" \
+  wine /xdk/bin/win32/link.exe
 
 # a guarda do Sprite_Unpack nomeia quem chamou pela tabela CHAMADORES (conv_jogo.c): toda chamada no binário tem de
 # cair numa função da tabela (o inlining do cl podia mudar o nome sem aviso)

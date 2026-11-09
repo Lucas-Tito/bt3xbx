@@ -126,7 +126,12 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     essa lógica agora): os floats andam como bits `uint32_t` e cada conta vai e volta pela memória (load-hit-store); na luta
     comum isso é uns 11,7 ms por quadro da thread do jogo, e o conserto estimado ganharia 8 a 9 ms. Exige provar o mesmo
     resultado na x86, na PPC e no 360 pelos roteiros. Estudo em [11-cpu-vu0](11-cpu-vu0.md), item A; o item B (a projeção
-    por vértice na explosão do planeta) foi feito antes da release.
+    por vértice na explosão do planeta) foi feito antes da release. Implementação do item A preparada em
+    `vu0-nativo` em 04/11: **aceite sem console concluído**, 2 milhões de casos por função e fastvec em cada
+    variante x86/PPC, modelos inteiro/360; mutantes recusados e roteiro oficial `f5_duelo` com “tudo certo”,
+    hashes e sete pontos de memória aprovados. Objetos e `.text` x86 preservados. A seção nova do estudo
+    lista a guarda e as contagens GCC. **Continua pendente no XDK e no console**: desmontagem do cl sem
+    fusões e medida do amostrador. Não considerar o ganho estimado como medido.
 18. **A luta de tela dividida mais rápida** (31/10/2026, pedido do Lucas): roda a 25,4 quadros por segundo, com o jogo a
     85% da velocidade; a gravação do GS (39,6 ms), o jogo (33,8) e o desenho (30,1) estão todos perto do limite. Os pontos
     de melhoria, com ganho e custo, estão em [13-tela-dividida](13-tela-dividida.md). O recorte justo do estágio (C1) e o
@@ -164,3 +169,10 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     **Falta:** o teste no console (FATX, `MoveFile`, `FindFirstFile`, a tela na TV, o controle), com um `.psu` de verdade
     exportado de um PS2 ou do PCSX2; ver uma exportação no console abrir no PCSX2 pelo mymc++; aprovar os textos da tela e
     o README; decidir se a importação vai na 1.0.2 (a lista de problemas conhecidos diz hoje que importar não existe).
+20. **A caixa de erro não aparece quando o vídeo é recusado** (console, 09/11/2026, rodada 5 da conferência da 1.1.0,
+    ambiente falha_video): o jogo saiu direto para a FreeStyle, sem a caixa Unable to continue. O diário mostra o
+    porquê: `vídeo: inicialização recusada` (código 7), e na desmontagem a thread de desenho do GS não parou no teto
+    de 2000 ms (`saída: GS desenho: espera=00000102`, WAIT_TIMEOUT); com produtor pendente, a saída segue direto ao
+    dashboard sem retomar o D3D, que é o recuo previsto. O Lucas aceitou a saída limpa para a 1.1.0 e pediu para
+    resolver depois: fazer a thread de desenho parar quando o renderer nunca chegou a iniciar. Log em
+    `bt3xbx-console/rel110/logs/r5_bt3xbx.log` (fora do git).

@@ -1638,6 +1638,21 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   uns 19 GB e o arquivo cresceu 36 GB (a hipótese é o ext4 ocupar blocos novos antes de reusar os liberados; não medida). Apagar 193 GB de rodadas
   superadas devolveu na hora só uns 24 GB ao C:; o resto pede a compactação. Meça o C:, não o `df` de dentro.
 
+- **Cintilado no cenário só com a câmera em movimento é serrilhado de textura sem mipmap** (05/11). O sintoma que separa:
+  dentro das superfícies, não nas bordas, nunca nos lutadores (textura ampliada), parado não cintila. Seis rodadas de
+  console foram gastas descartando efeitos (distância, panorâmico, nitidez, antitremulação, profundidade, 16:9) antes de
+  perguntar onde e quando ele aparecia: pergunte isso primeiro. O BT3 nunca pede mipmap (sonda no `gs_core.c`: MXL 0 em
+  toda a luta); o PS2 escondia na saída entrelaçada e analógica, e a 720p digital mostra. O `BT3_MIPMAP` gera os níveis.
+- **Mipmap gerado só em textura que é imagem, nunca em tabela** (06/11). O lutador do BT3 é desenhado duas vezes: o
+  material e, por cima, a rampa do sombreado lida em (0,5 + 0,5 N.L, 0) e subtraída da cor (programa 0 da VU1,
+  `ALPHA_2 0x62`). Numa tabela o nível sai da variação de N.L na tela e muda por triângulo: listras na sombra que mudam com
+  o ângulo. Antes de gerar níveis para todas, separar as texturas pelo uso (no BT3, pelo bloco: `BtlObjMdl_BindFiles` fixa
+  os lutadores em 0x3480, paletas em 0x3C00, rampa e fade em 0x3D40) e lembrar que textura com paleta que muda na luta é
+  textura nova a cada troca, com a geração dos níveis junto.
+- **Uma worktree nova no WSL precisa preparar os dados antes da build sem janela**: `port/tools/gen_data.py --asm "$PWD/asm"`
+  e o `portsrc.prepare` de cada fonte, como os scripts das tarefas fazem; sem isso a x86 sai com 326 objetos e 450 stubs e
+  cai. E os links `asm`, `assets`, `disc` e `gamedata` vão no `info/exclude`, senão o carimbo tenta ler a pasta como arquivo.
+
 ## 7. Lista de passos para um port novo
 
 1. Fork da decomp (ou do port de PC dela, se existir), `upstream` como remote, merge só de
@@ -2016,8 +2031,12 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Antes de cortar uma cópia, divida o tempo pelas vezes, não pelos bytes.** O `Unpack` parecia "2 MB a 0,6 GB/s, preso à
   banda"; dividido pelas chamadas (uns 9 mil por quadro, 264 bytes cada) dá uns 440 ns por chamada, perto de uma falta de memória
   com página de 4 KB (345 ns): o custo é a primeira linha de cada cópia, e o remédio é pedir adiante, não copiar menos.
+- **O `/range` do `link /dump` do XDK só aceita endereço com `0x`** (`/range:0x822468A8,0x82255154`); sem ele, `LNK1147:
+  invalid number` e saída 1. A guarda de fusão da VU0 (`guarda_vu0_fusao.py`) nasceu sem o `0x`, com o dump simulado no
+  autoteste, e reprovou a primeira build no XDK em 05/11; o dump simulado agora recusa endereço sem `0x`, como o real.
+  Ferramenta que chama o XDK e foi testada sem ele: o simulado tem de copiar as recusas do real.
 - **O código que o `cl` gerou se lê sem console:** monte o `bin/win32` do XDK no contêiner (`-v $XDK/bin/win32:/xbin:ro`) e rode
-  `wine /xbin/dumpbin.exe /disasm /range:INICIO,FIM build/x360/f2/default.exe`, com os endereços do `default.map` da mesma build
+  `wine /xbin/dumpbin.exe /disasm /range:0xINICIO,0xFIM build/x360/f2/default.exe`, com os endereços do `default.map` da mesma build
   (os de outra build não servem). Assim se viu que o `memcpy` do CRT escolhe o caminho pelo alinhamento (8 bytes, 4 bytes ou
   byte a byte), já faz `dcbt` até 8 linhas adiante só dentro da própria cópia, e que a `vu.mem` está em 4 módulo 8 (o endereço
   da estrutura sai do `lis`/`addi` do começo da função; variáveis `static` não aparecem no `.map`).
@@ -3343,3 +3362,246 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
   devolve sempre 0: esperar uma rodada com `until ... && echo PRONTO | grep -q PRONTO`, e um marcador novo por rodada
   (o `FIM` antigo no mesmo arquivo encerra a espera na hora). A primeira compilação do `headless.py` numa árvore nova
   falhou duas vezes com "unable to rename temporary" nos objetos; repetir a compilação completa passou.
+
+### Diagnóstico do desfoque (F8, 14)
+
+- O texto inicial das etapas de escala e MSAA registra padrões históricos. Na 1.0.2, `area_init`, `msaa_init`,
+  `fxaa_init` e `afiado_init` dão escala 1,4, MSAA 2, FXAA 0 e afiado 1. Fixe esses valores nos ambientes da rodada.
+- Copiar `gen/data` de outra máquina pode trazer `.incbin` absoluto para `/home/lucas/...`. No clone de teste,
+  ajuste somente a cópia gerada ao caminho dos assets locais antes de montar `vu1_micro.data.s`; os assets
+  compartilhados continuam somente leitura. A primeira build do desfoque falhou justamente nesse arquivo.
+- `BT3_SHOT_FINAL=1` acrescenta `filtro` depois do FXAA e `tela` depois da cópia, nos mesmos números do GS da
+  captura normal. A segunda vê o filtro final, mas nenhuma captura interna vê o escalonador HDMI ou a TV.
+- Ao desligar uma distorção, preserve também os sorteios dela: `StgHaze_Step` consome o gerador do jogo. Cortar
+  `StgHaze_DrawAll` mudaria a luta, e a diferença deixaria de isolar o filtro. Corte só `StgHaze_Draw`, depois do
+  UpdateClut e do Step. Clima (`EftWeather`) e distorção de calor (`StgHaze`) são candidatos separados.
+- A cópia atual do PC exige API de PNG que a SDL 3.2.24 do WSL não possui. A compilação falha em `ui.cpp` e
+  `mods_ui.cpp`; uma ligação que crie stubs desses leitores não é prova da build completa. Para diagnóstico
+  dos alvos, uma cópia isolada pode desativar explicitamente só as cargas da interface, declarando esse limite.
+
+- Na coleta de desfoque, não duplique `conv_tool --mapa` exigindo zero bruto depois de `roteiros.sh` passar.
+  O critério aceita certas larguras somente após `roteiros.py larguras` conferir posições e leitores reais.
+  Reutilize a pasta `dados` que o critério acabou de converter e aprovar, sem ampliar exceções.
+- A âncora de `BT3_IMAGENS` não inclui `roteiro: arquivo:linha`: `Imagens_Evento` retira esse prefixo.
+  Valide as âncoras contra `eventos_rastro`/`quadro_esperado` antes de gastar a rodada. No ensaio do desfoque,
+  os GS 2969/3362/4590/4977/5357/5418 foram medidos; vblank e quadro do roteiro não são substitutos.
+- Na 1.0.2, `tex2Dgrad` não implica mipmaps no 360: `tex_create` ignora levels, o cabeçalho XG tem um nível,
+  `tex_upload` recusa level diferente de zero e o sampler desliga o filtro de mip. Investigue o bilinear
+  do nível base e os efeitos do cenário antes de atribuir a maciez a K/L ou viés de LOD.
+- Na coleta autorizada com três vagas, use `~/vez.sh` e não acrescente guarda global contra outro qemu:
+  ela anula as outras vagas. Cada ciclo continua serial dentro da vaga, com dados e saídas próprios.
+
+- Sem `BT3_LOG=1`, o filtro de diagnóstico do 360 ignora `BT3_SHOT*`. Incluir LOG em todo gerador
+  de ambientes de captura e conferir a existência dos arquivos na primeira abertura. A primeira base
+  do desfoque não gravou nada, impedindo uma diferença quantitativa contra o corte da distância.
+- O GL do PC abre `port/build/shots/gpu_*.ppm` com fopen e pode terminar com código 0 sem gravar
+  se a pasta não existir. Crie a pasta antes da coleta e exija o conjunto inteiro de PPM depois.
+  Na rodada de 4310e558, as 48 capturas x86/PPC passaram, mas o PC terminou sem nenhuma imagem.
+- O `Sharp stage blur` do PC só protege os passes fora das cadeias marcadas. As correções recentes
+  de distância recuperam força perdida ao aumentar a resolução e podem borrar mais. Não prometer
+  maior nitidez só por portar esse conjunto, nem usar números GS iguais como prova de pose/câmera iguais.
+- No 360, `gsScale` fica em 1 mesmo quando a resolução física é 1,4. A redução nativa precisa viajar
+  como estado de cada desenho e ser aplicada na reprodução D3D. Não mudar a página inteira por quadro:
+  a página 0x150 também recebe sombras, calor e lente fora das cadeias. Resolver e marcar sujo em pixels físicos.
+- Na build sem janela com backend falso, `--vu1` só vale na x86. A PPC já usa a otimização pelo
+  `PORT_BIG_ENDIAN`, e seus executáveis de diagnóstico são `ppcbg`, contra `x86bgv` na x86.
+  Compile todas as variantes antes do critério longo: a coleta de f2a1a7c5 passou no oficial e só
+  depois parou ao passar a opção incompatível para a PPC.
+- O PC atual usa `save_quick=1` por padrão. Reproduzir nele a gravação de um boot da 1.0.2 com cartão
+  vazio sem fixar `save_quick=0` abre outras telas: no ensaio, História substituiu Duelo.
+  Esse ajuste vem de `Port_Setting`, portanto use um `BT3_SETTINGS` exclusivo com `save_quick=0`.
+  Além de presença e tamanho dos PPM, registre modo e sequência da luta em cada captura e recuse
+  cenas incompatíveis antes de multiplicar as variantes. Isso ainda não prova pose, câmera ou HUD iguais.
+- Ao separar as opções de uma cadeia na cópia do PC, não condicione seus marcadores
+  à opção de resolução nativa: Sharp também consulta a presença da cadeia. A coleta
+  de fcf9986a deu c02 idêntica à base por retirar esses marcadores. Preserve-os sempre,
+  distinga brilho/distância e condicione somente `lowres_now`; teste as combinações
+  Sharp ligado com ambos os alvos nativos desligados antes de rodar a referência.
+- Sequência, GS e vblank iguais não garantem a mesma câmera na apresentação entre
+  versões: no desfoque, GS 4590/vblank 5142 tinha close de Kuririn no PC e câmera atrás
+  de Goku na x86. Inspecione as imagens e recuse esse par, mesmo após o preflight passar.
+  Meça variantes contra a própria base, mantendo recortes e resolução iguais.
+
+- Ao portar os marcadores para uma referência PC mais nova, confira o despacho
+  inteiro de `GsGpu_Native`, inclusive os retornos anteriores. No ensaio de Sharp,
+  `0x22/0x23` colidiram com as âncoras dos menus 16:9 (`0x22..0x2C`): o teste do
+  bloco isolado passou sem executar a cadeia de distância. A cópia descartável
+  usa `0x80/0x81`; o frontend antigo do 360 não tem essa colisão. Testar a função
+  real inteira, com o caso antigo visto falhando, e repetir também distância
+  nativa/média e conjunto completo; não aceitar a mudança do controle sem causa.
+
+- Na integração da decisão 42, os padrões aprovados no console são exclusivos de
+  `PORT_X360`. O diagnóstico `BT3_TESTE_DESFOQUE=1` abre também a chamada da força
+  em `StgFog_BuildClut`, mas mantém 100% e os tratamentos desligados por padrão.
+  Repetir a build e as capturas dessa variante, além da build plana: só a igualdade
+  da `.text` plana não exercita a chamada nova. O mipmap gerado após essa decisão
+  não existia na 1.0.2 analisada nos itens anteriores.
+
+
+### A VU0 nativa do 360 (F8, item 17, 04/11/2026)
+
+- **O diretório de fontes gerados precisa ser local e gravável.** Na certificação de
+  `vu0-registradores`, o link de todo `port/build/gen` para `/srv/bt3/dados/port_build/gen`
+  deixou passar os testes isolados, mas a reconstrução da base x86 parou com `PermissionError`
+  em `gen/src/src/sys/gfx_ot.c`: `portsrc.prepare` reescreve as cópias dos fontes.
+  Substituir somente o link da worktree por um diretório local, com `src/` gravável;
+  `gs/` pode continuar como link de leitura para os dados compartilhados.
+  Não mudar permissões nem escrever no destino compartilhado. Preparar todos os fontes
+  antes da rodada longa confirma essa condição sem iniciar o emulador.
+
+- **Os dados gerados também dependem do caminho da worktree.** A segunda rodada de
+  `vu0-registradores` chegou à base x86, mas o `vu1_micro.data.s` compartilhado continha
+  `.incbin "/home/lucas/bt3xbx/assets/..."`, inacessível ao usuário da tarefa. Como no Deck
+  (seção 1.2b), substituir somente o link `port/build/gen/data` por diretório local e rodar
+  `python3 port/tools/gen_data.py --asm "$PWD/asm"`. Os 72 arquivos regenerados ficaram
+  idênticos aos compartilhados, salvo esse caminho absoluto. O gerador montou os 72 objetos;
+  essa preparação deve preceder os testes longos. Não editar os insumos compartilhados nem
+  criar atalhos para a pasta privada de outro usuário.
+
+- **O recuo IEEE também precisa de prova de bits.** Acrescentar um ramo rápido ao corpo de `Vec4_Scale` mudou
+  a alocação de registradores do GCC x86 e a escolha de payload quando dois NaNs diferentes eram multiplicados
+  (caso 223680: `ffc57bb7` contra `ffd568fb`). Copiar os operandos antes do ramo não resolveu. Conservar o corpo
+  anterior inteiro em uma função `noinline` separada resolveu nos 2 milhões de casos dos modelos inteiro e 360.
+  Não normalizar NaNs no comparador para esconder a diferença. A escolha no XDK ainda exige a conferência dele.
+- **Ligar hardware na PPC não pode trocar a ABI do jogo.** A build sem janela chama a VU0 com a ABI soft-float;
+  recompilar o arquivo inteiro com hardware muda a passagem dos argumentos float. O teste
+  `BT3_TESTE_VU0_NATIVO=1` mantém os chamadores soft-float e usa núcleos de hardware com ponteiros/inteiros.
+  Só dentro desses núcleos muda e restaura o arredondamento. No 360 a thread já trunca e essa troca não entra.
+- **Mutante de denormal precisa conferir a desistência.** O header atual do 360 também usa a FPU: aceitar denormal
+  por engano pode produzir os mesmos bits nele e passar um comparador só de resultados. O teste da VU0 compara
+  também o retorno da guarda e exige saída intacta na recusa, além do oráculo inteiro.
+- **A contagem GCC não substitui a desmontagem do cl.** O GCC já elimina muitas conversões de bits do original,
+  e a guarda pode aumentar o código estático. Separar invólucros, recuos e núcleos chamados, declarar se os laços
+  foram expandidos e não somar tudo como se fosse o caminho aceito. A medida do Xenon continua no console.
+
+- **O fonte preparado não conserva `noinline` GCC.** O `c89.py` remove `__attribute__`; para os recuos da
+  VU0, os pares `#pragma auto_inline(off/on)` preservados no `.c` preparado impedem que o cl os reintegre.
+  Os núcleos compilados diretamente usam `__declspec(noinline)`. Headers de fontes diretos também precisam
+  do `__inline` e dos tipos locais, pois a CRT do XDK não tem `stdint.h`; não confundir com o shim do c89.
+
+- **Commit só de documentação também invalida os logs da F5.** Depois do aceite da VU0 em `2bcd1c05`,
+  as três builds de `936b632b` tiveram objetos sem depuração e `.text` iguais, exceto o carimbo de teste.
+  Mesmo assim `REUSA=1` falhou em `roteiros.py f5` e `passos.py`: os logs guardavam `2bcd1c05`, mas
+  o HEAD era `936b632b`. A igualdade de objetos não substitui a regra de origem dos logs. Congelar os
+  registros no Git antes da rodada oficial; reconstruir e executar o roteiro completo no commit final.
+  Depois do aceite, pôr o resultado final no relatório externo, sem criar outro commit documental
+  que obrigue uma terceira execução. Nunca reescrever o carimbo dos logs para fazê-los passar.
+
+- **A fronteira sem inlining pode conservar exatamente o custo que se quer tirar.** Na revisão XDK da
+  VU0 de `82ca99f7`, separar produtos e somas evitava fusão, mas forçava 16 produtos na pilha e a
+  releitura imediata deles. A revisão `vu0-registradores` reúne as contas com `fp_contract(off)` e
+  `/fp:precise`, publica escalares diretamente e verifica as quatro famílias fundidas no PE após o
+  link. A cobertura inclui todos os símbolos dos objetos receptores do inlining; não usar LTCG.
+- **Um mutante de arredondamento não pode contaminar o oráculo de hardware.** Mudar a FPU para
+  `FE_TONEAREST` sem restaurar fez o controle de 10 mil casos sobreviver no modelo 360: o oráculo
+  passou a calcular com o mesmo erro. O mutante agora muda o modo só dentro de um produto isolado,
+  conserva o arredondamento em float e restaura o modo antes de devolver. A recusa do controle
+  continua obrigatória nos dois modelos e nas duas arquiteturas.
+- **Contar só `stfs` e `lfs` esconde os laços PPC.** O auxiliar antigo da matriz usa `stfsu`, `lfsu`
+  e `lfsx`. O contador da VU0 agora mostra também as formas indexadas e com atualização; separar
+  contagem estática de operações executadas e distinguir stores no destino de temporários na pilha.
+
+### Relendo a coleta da VU0 (05/11/2026)
+
+- Um mapa preservado ao lado de duas coletas pode corresponder só a uma delas.
+  Nas entradas de `vu0-amostra`, o mapa de `0757ec25` confere para `coleta2` e
+  recusa `coleta` de `6b09afe1`. Não corrigir âncoras por deslocamento presumido.
+- Despejos cumulativos limitados ao topo não dão uma subtração exata por função.
+  Usar a união das entradas dos dois despejos, registrar o que ficou omitido e
+  não transformar soma de tempo próprio das funções alteradas em ganho garantido.
+- O amostrador antigo verifica a presença de `BT3_AMOSTRA`: valor `0` vira 100 us.
+  Remover a chave com `-BT3_AMOSTRA` para medir sem coleta. O boot do `f5_duelo`
+  também exige `BT3_DESBLOQUEIO=1`, mesmo usando as demais opções padrão do console.
+- Instrumentar só tipos escalares perde `mtx_apply`, que devolve `RefVec4f`.
+  O contador de teste precisa cobrir retorno de estrutura e funções inline;
+  conferir motivos pelo retorno efetivo e não apenas prever a guarda na entrada.
+- Testar isoladamente `float360.c` exige descartar seções não usadas ou ligar
+  também `Port_atan2f`. `teste_vu0_chave.py` usa `--gc-sections`, mantendo o gancho
+  real da matriz e sem substituir o código testado por uma reimplementação.
+
+- A PPC com contadores também precisa da build x86 normal antes dela. A primeira
+  rodada de `vu0-amostra` ligou x86vc e ppcvc, mas parou ao gerar o mapa das
+  tabelas: `elftipos.py` procura `port/build/x86/obj/*.i`, não os de x86vc.
+  `vu0_contar.sh` agora constrói primeiro a x86 sem as duas opções de teste,
+  depois x86vc e ppcvc. Os logs das builds também passam pelo log geral com
+  `tee`, para que a falha não deixe `contar.log` vazio. Nenhuma luta foi
+  executada na tentativa que revelou essa dependência.
+
+- Comparar todos os contadores x86/PPC por igualdade recusou a rodada `previa2`
+  só depois das quatro lutas. Os auxiliares escalares têm chamadas dependentes
+  do compilador/ABI, e os motivos de recuo excepcional também diferem. Exigir
+  as chamadas comuns por passo, as fronteiras e a passagem da matriz pelo gancho;
+  conservar todas as diferenças no JSON, sem substituir a prova de memória.
+  O hash bruto de todas as globais também difere entre as duas posições;
+  comparar vblank e resumo da luta, e exigir o normalizador de memória oficial.
+  Separar as janelas do rastro: o Duelo tem 684 passos antes da pausa e 2.334
+  depois; usar 3.018 como denominador da segunda janela mistura as medições.
+- `~/vez.sh` dá prioridade ao arquivo `~/vagas` sobre `BT3_VAGAS`. Se a tarefa
+  limita a três e o arquivo permite quatro, só definir a variável não basta.
+  Sem alterar o escalonador compartilhado, o lançador próprio deve recusar uma
+  vaga superior a três antes de executar qualquer build/emulador e tentar de novo
+  como serviço. Nunca acumular lançadores em segundo plano.
+
+### Integração da 1.1.0: política de falha e limites da base
+
+- A quarta rodada passou pelos quatro roteiros e parou no despacho de
+  `release110_confere.py imagens`: a função ainda se chamava `arquivos`.
+  Os negativos chamavam a função diretamente e não enxergavam esse erro.
+  Positivos e negativos de imagens, estado e referência dividida passam agora
+  pela linha de comando usada no serviço. Exigir código 1 com `FALHA:` nas
+  entradas estragadas; um traceback de despacho não prova que o comparador
+  examinou os dados. Ensaiar também os passos posteriores antes de repetir
+  os roteiros, sem reaproveitar seus carimbos na rodada do novo commit.
+- As imagens oficiais da blur-analise em decisao42-final foram capturadas em
+  4:3, enquanto seu diagnóstico usa BT3_WIDE=1. Na integração em 16:9, cinco
+  imagens do combate diferiram, com as mesmas âncoras e ações. Repetir a captura
+  da x86 com BT3_WIDE=0 reproduziu integralmente as 13 imagens aprovadas, sem
+  mudar fontes ou referências. Manter a regressão principal em 16:9 e comparar
+  capturas adicionais em 4:3 com aquela base. O diagnóstico precisa de BT3_GS=1,
+  BT3_GS_FROM=1000000000 e janela 8 como a referência, além de BT3_WIDE=1;
+  BT3_GS=none no lançador não exercita a imagem pelo rasterizador.
+- A terceira rodada passou por memória, som e 16 imagens da tela dividida, mas
+  recusou a referência de telas copiada de gravacao-atalhos: ela tinha sido feita
+  sem BT3_DOIS=1. A base aprovada 07bdf95b, reconstruída com os mesmos dados e
+  executada com a opção ligada, reproduziu as 193 linhas da integração. As 77
+  antigas continuam idênticas, na mesma ordem e com os mesmos vblanks; só entram
+  106 observações de pares e 10 de seletores. Antes de gastar outra rodada, gerar
+  a referência privada dessa base, nunca da candidata, e conferir a ampliação
+  com release110_confere.py referencia-dividido. Os negativos recusam vblank
+  alterado, evento ausente ou extra e falta de cada classe de observação.
+  O roteiro oficial continua comparando as 193 linhas integralmente; não filtrar
+  observadores para obter aprovação nem regravar a referência compartilhada.
+- A segunda rodada parou em História: o mapa acusou 00460 s2, 0xA95E2, como
+  leitura de quatro bytes sobre byte. Era FlashDraw_PutSprite lendo um FlashQuad
+  local na pilha. O anel do rastreio adiava o uso e consultava a origem só ao
+  retirar a leitura; nesse intervalo outra função já reutilizara o endereço.
+  O diagnóstico mostrou origem 0xC82F0 de outro conteúdo no instante da leitura
+  e 00460 s2 na retirada. Guardar a origem junto da leitura corrige a atribuição
+  na retirada, reescrita e descarga final. Não alargar a exceção de deslocamentos
+  ímpares nem trocar bytes do arquivo para acomodar esse falso positivo.
+  teste_rastreio_origem.py simula a reutilização com dados sintéticos e recusa
+  nas três saídas uma cópia que volta a consultar a origem tardia.
+- Preparar todos os fontes com c89.py não prova que o C gerado compila. A primeira
+  rodada parou no confere_limites_xdk: btl_act_h_b.c e hud_d_b.c declaravam memset
+  com tamanho s32, incompatível com unsigned int do prelúdio e da CRT do XDK.
+  Nas duas declarações, PORT_X360 usa o protótipo da CRT; o #else conserva o
+  original. Conferir a pasta inteira com o verificador, além de preparar os fontes,
+  antes de armar os roteiros. Não ignorar o conflito nem retirar o protótipo do prelúdio.
+- GsDraw desta base tem 128 bytes. Os 132 do Tag Team incluem um campo que não
+  entra nesta release. Ao trazer confere_limites_xdk.py, adaptar também os negativos
+  ao tipo Vtx que existe nesta base; não aceitar uma falha por tipo desconhecido
+  como prova de inicializador C89 recusado.
+- A base usa Port_powf pela newlib e pow duplo pela CRT no 360, sem Port_pow.
+  O negativo desta integração retira Port_FastMtxApply e depois Vn_MtxApply;
+  a conferência combina float360 e o núcleo nativo, nunca plat_libm como provedor.
+- Os ensaios da main precisam das APIs do amostrador, Vn_Configurar e ImportaTela_Executar
+  mesmo com esses recursos desarmados. Adaptadores de fases anteriores estavam
+  incompletos depois dos merges e não ligavam; esses stubs simulam apenas a plataforma.
+- BT3_LOG é uma chave de execução, não identifica build de teste. Usar só ela para
+  escolher vermelho permite cor ao público que ligou um log. BT3_TESTE_FALHAS é uma
+  opção de compilação, pública em 0. teste_falha_publica.py executa a main real nas
+  duas variantes, exige caixa com Present na pública e vermelho na de teste,
+  e recusa cópias sem cor, sem aviso, sem motivo e sem apresentação.
+- Não confundir GsGpu_Init recusado com CreateDevice recusado. No primeiro ainda
+  existe o dispositivo da main para apresentar o aviso. No segundo não há como
+  tornar visível uma caixa do sistema; sair diretamente evita o laço sem Present.

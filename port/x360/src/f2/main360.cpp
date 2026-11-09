@@ -31,6 +31,8 @@
 #include "som/som360.h"
 #include "queda360.h"
 #include "queda_teste360.h"
+#include "f2/amostra360.h"
+extern "C" void Vn_Configurar(const char *valor);
 
 extern "C" {
 void Port_MapMemory(void);              /* port/src/plat_mem.c, ramo PORT_X360 */
@@ -102,6 +104,8 @@ static volatile DWORD gThreadDesenho;        /* a thread de desenho do gs_draw.c
 static volatile DWORD gCor = 0xFFE0C000;     /* amarelo */
 static volatile LONG gTerminou = 0;
 static volatile LONG gCodigo = 0;
+#include "falha360.h"
+
 static DWORD gThreadJogo, gThreadPrincipal;
 static DWORD WINAPI VoltarAoDashboard(LPVOID arg);
 
@@ -150,6 +154,8 @@ extern "C" void Port_GsDesenhoPartida(void) {
 /* exit() e abort() do jogo e do port (c89.py os renomeia): grava o que falta e encerra só a thread do jogo. */
 extern "C" void Port_Sair(int codigo) {
     Diario_Escrever("saída do jogo com código %d (%s)", codigo, gPortStage);
+    if (codigo != 0) Falha_Registrar(codigo, gPortStage);
+    Amostra_Parar();
     Estado_Resumo();
     gPortStage = "game shutdown";
     /* A main usa a mesma desmontagem com teto para a saída normal e para a queda. */
@@ -158,6 +164,13 @@ extern "C" void Port_Sair(int codigo) {
     InterlockedExchange((volatile LONG *)&gCor, codigo == 0 ? 0xFF20A040 : 0xFFC02020);
     InterlockedExchange(&gTerminou, 1);
     ExitThread((DWORD)codigo);
+}
+
+/* O backend já registrou o motivo preciso. A main desmonta tudo e sai sem esperar botão. */
+extern "C" void Port_FalhaVideo360(void) {
+    Diario_Escrever("vídeo: inicialização recusada; encerrando o jogo e voltando ao dashboard");
+    Diario_Descarregar();
+    Port_Sair(7);
 }
 
 /* Checkpoint sem trava: uma queda do desenho não deixa o jogo alimentando um GS já parado. */
@@ -269,6 +282,7 @@ static DWORD WINAPI Jogo(LPVOID arg) {
     int r;
     (void)arg;
     _controlfp(_RC_CHOP, _MCW_RC); /* soma e multiplicação truncadas, como no PS2 (decisões 4 e 5) */
+    sPreparando = false;
     gPortStage = "game initialization";
     Diario_Escrever("jogo começando (%s)", gPortStage);
     gCor = 0xFF2040C0; /* azul */
@@ -282,7 +296,7 @@ static DWORD WINAPI Jogo(LPVOID arg) {
 
 /* A memória do jogo (endereços fixos) e as tabelas do disco, antes do D3D e da pilha grande do jogo: no 360 os
    endereços baixos saem de baixo para cima, e o que for alocado antes pode ocupar a faixa do heap do jogo. Numa
-   thread própria porque uma falha aqui sai por Port_Sair (ExitThread), e a main tem de seguir para a tela vermelha. */
+   thread própria porque uma falha aqui sai por Port_Sair (ExitThread), e a main tem de seguir para o aviso da falha. */
 static DWORD WINAPI Preparar(LPVOID arg) {
     (void)arg;
     Diario_Escrever("preparando a memória e as tabelas do disco");
@@ -305,7 +319,7 @@ static bool MostrarRecusa(D3DDevice *dev, int motivo) {
     DWORD r, inicio = GetTickCount(), fim = 0;
     Iso_Aviso(motivo, &kTitulo, &kTexto);
     for (;;) {
-        dev->Clear(0, NULL, D3DCLEAR_TARGET, gX360Log ? gCor : 0xFF010101, 1.0f, 0);
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, Falha_Cor(gCor), 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
         ZeroMemory(&sOv, sizeof(sOv));
         r = XShowMessageBoxUI(XUSER_INDEX_ANY, kTitulo, kTexto, 1, kBotoes, 0, XMB_ERRORICON, &sResultado, &sOv);
@@ -320,7 +334,7 @@ static bool MostrarRecusa(D3DDevice *dev, int motivo) {
     }
     Diario_Escrever("recusa: caixa do sistema aberta (motivo %d)", motivo);
     while (!XHasOverlappedIoCompleted(&sOv)) {
-        dev->Clear(0, NULL, D3DCLEAR_TARGET, gX360Log ? gCor : 0xFF010101, 1.0f, 0);
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, Falha_Cor(gCor), 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
     }
     r = XGetOverlappedResult(&sOv, &fim, FALSE);
@@ -338,7 +352,7 @@ static void Saida_Apresentar(void) {
         sTelaSaida->SetVerticalBlankCallback(NULL);
     }
     if (sTelaSaida->QueryThreadOwnership() == GetCurrentThreadId()) {
-        sTelaSaida->Clear(0, NULL, D3DCLEAR_TARGET, gX360Log ? gCor : 0xFF010101, 1.0f, 0);
+        sTelaSaida->Clear(0, NULL, D3DCLEAR_TARGET, Falha_Cor(gCor), 1.0f, 0);
         sTelaSaida->Present(NULL, NULL, NULL, NULL);
     }
 }
@@ -382,6 +396,11 @@ void __cdecl main() {
     t = NULL;
 
     d3d = Direct3DCreate9(D3D_SDK_VERSION);
+    if (d3d == NULL) {
+        Diario_Descarregar();
+        Saida_Finalizar(&video, 0);
+        for (;;) Sleep(1000);
+    }
     ZeroMemory(&pp, sizeof(pp));
     pp.BackBufferWidth = 1280;
     pp.BackBufferHeight = 720;
@@ -391,8 +410,8 @@ void __cdecl main() {
     pp.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
     if (FAILED(d3d->CreateDevice(0, D3DDEVTYPE_HAL, NULL, D3DCREATE_HARDWARE_VERTEXPROCESSING, &pp, &dev))) {
         Diario_Escrever("ERRO: CreateDevice");
-        for (;;) {
-        }
+        Saida_Finalizar(&video, 0);
+        for (;;) Sleep(1000);
     }
 
     /* BT3_GS=gpu: quem desenha é o jogo (gs_d3d.cpp pega o dispositivo no começo do desenho) */
@@ -412,7 +431,7 @@ void __cdecl main() {
     }
     /* Saves do PS2 em game:\import: a tela SAVE IMPORT, depois das conferências da ISO e antes de o jogo ler o cartão.
        Sem nenhum .psu solto não aparece nada (uma procura de arquivo). */
-    if (!recusada)
+    if (!recusada && !gTerminou)
         ImportaTela_Executar(dev);
     if (gpu) {
         dev->Clear(0, NULL, D3DCLEAR_TARGET, 0xFF000000, 1.0f, 0);
@@ -424,13 +443,18 @@ void __cdecl main() {
     /* o jogo no núcleo 1 (thread de hardware 2), sozinho; pilha de 16 MB como a build de PC de 64 bits */
     if (!gTerminou) {
         Som360_Iniciar(); /* (F6, etapa 3) com BT3_SOM=1 ou BT3_SOM_TESTE=1: o XAudio2 nas threads 4 e 5 e o vigia na 1 */
+        Vn_Configurar(getenv("BT3_VU0_NATIVO"));
+        Diario_Escrever("vu0: nativo %s", getenv("BT3_VU0_NATIVO") && strcmp(getenv("BT3_VU0_NATIVO"), "0") == 0 ? "desligado" : "ligado");
+        Amostra_Preparar();
         t = CreateThread(NULL, 16 * 1024 * 1024, Jogo, NULL, CREATE_SUSPENDED, &gThreadJogo);
         XSetThreadProcessor(t, 2);
         ResumeThread(t);
+        Amostra_Comecar(t, gThreadJogo);
     }
 
     for (;;) {
         if (gTerminou && !desmontado) {
+            Amostra_Parar();
             gPortStage = "shutdown threads";
             auxiliar = CreateThread(NULL, 256 * 1024, sQuedaTomada ? Saida_Graficos : Saida_Threads, t, 0, NULL);
             bool acabou = Saida_Aguardar(auxiliar, 15000, Saida_Apresentar) != 0;
@@ -475,7 +499,14 @@ void __cdecl main() {
             saidaDireta = Queda_Mostrar(Saida_Apresentar);
             if (saidaDireta) break;
         }
-        dev->Clear(0, NULL, D3DCLEAR_TARGET, gX360Log ? gCor : 0xFF010101, 1.0f, 0);
+        if (gTerminou && !BT3_TESTE_FALHAS) {
+            if (sQuedaTomada) {
+                Falha_Registrar(5, sQueda.fase);
+            }
+            if (gCodigo != 0 || sQuedaTomada) Falha_Mostrar(Saida_Apresentar);
+            break; /* mesmo se a UI do sistema recusar: nunca prende o público numa tela muda */
+        }
+        dev->Clear(0, NULL, D3DCLEAR_TARGET, Falha_Cor(gCor), 1.0f, 0);
         dev->Present(NULL, NULL, NULL, NULL);
         if (gTerminou) {
             bool apertou = false;
