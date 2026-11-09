@@ -95,9 +95,7 @@ Título: **BT3 Xbox 360 1.1.0**
 > Version 1.1.0 improves the picture and performance. Generated mipmaps reduce
 > shimmering on scenery, distance blur is reduced, and character shading tables
 > keep their original texture level. Native VU0 arithmetic is enabled in safe ranges, with the original
-> calculation used for other inputs. Fatal errors display a system message and
-> return to the dashboard after OK whenever the graphics device is available.
-> Logs, self tests and profiling remain off during normal play.
+> calculation used for other inputs.
 >
 > Known issues: battles can pause briefly while mipmaps are generated. Split screen
 > and planet explosions can still slow down. The existing dark night stages and

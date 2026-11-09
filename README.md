@@ -13,8 +13,7 @@ Published builds are on the [Releases](https://github.com/Lucas-Tito/bt3xbx/rele
 follow `README.txt` inside the zip.
 
 The 1.1.0 draft adds mipmaps to reduce shimmer on scenery, adjusts distance blur,
-and uses native VU0 arithmetic in safe ranges. Fatal errors show a system message
-before returning to the dashboard. Generating mipmaps can delay a few pictures
+and uses native VU0 arithmetic in safe ranges. Generating mipmaps can delay a few pictures
 when a battle starts, and split screen can still slow down. Stripes in fighter
 shadows were corrected by keeping the shading and fade tables at their original texture level.
 
