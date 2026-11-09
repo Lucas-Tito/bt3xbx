@@ -169,3 +169,10 @@ Defeitos conhecidos que o Lucas mandou deixar para o fim do plano, para não tra
     **Falta:** o teste no console (FATX, `MoveFile`, `FindFirstFile`, a tela na TV, o controle), com um `.psu` de verdade
     exportado de um PS2 ou do PCSX2; ver uma exportação no console abrir no PCSX2 pelo mymc++; aprovar os textos da tela e
     o README; decidir se a importação vai na 1.0.2 (a lista de problemas conhecidos diz hoje que importar não existe).
+20. **A caixa de erro não aparece quando o vídeo é recusado** (console, 09/11/2026, rodada 5 da conferência da 1.1.0,
+    ambiente falha_video): o jogo saiu direto para a FreeStyle, sem a caixa Unable to continue. O diário mostra o
+    porquê: `vídeo: inicialização recusada` (código 7), e na desmontagem a thread de desenho do GS não parou no teto
+    de 2000 ms (`saída: GS desenho: espera=00000102`, WAIT_TIMEOUT); com produtor pendente, a saída segue direto ao
+    dashboard sem retomar o D3D, que é o recuo previsto. O Lucas aceitou a saída limpa para a 1.1.0 e pediu para
+    resolver depois: fazer a thread de desenho parar quando o renderer nunca chegou a iniciar. Log em
+    `bt3xbx-console/rel110/logs/r5_bt3xbx.log` (fora do git).
