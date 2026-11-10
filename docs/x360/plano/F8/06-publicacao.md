@@ -94,12 +94,12 @@ checagem final (escopo 4.4, passo 1).
 
 ## 4. A prova (29/10/2026)
 
-[Medido] Build de ensaio: `/home/lucas-tito/Documentos/bt3xbx-teste/build/x360/f2` (commit `968bc501`, o
+[Medido] Build de ensaio: `~/Documentos/bt3xbx-teste/build/x360/f2` (commit `968bc501`, o
 `teste/queda-console` com a conversão no console e a ISO versão 3), com o conversor da mesma árvore e os textos
 deste branch. Nada da ISO entrou: só o `.xex`, o `.dat` e o `.swap` da build.
 
 ```sh
-S=/tmp/claude-1000/-home-lucas-tito-Documentos-bt3xbx/8701d9b1-1a29-4a30-a44b-7a3d2a1a9551/scratchpad
+S=<pasta de trabalho temporária>
 python3 port/x360/tools/pacote.py --build ~/Documentos/bt3xbx-teste/build/x360/f2 --saida $S/pacote1
 python3 port/x360/tools/pacote.py --build ~/Documentos/bt3xbx-teste/build/x360/f2 --saida $S/pacote2
 cmp $S/pacote1/bt3-x360-1.0.0.zip $S/pacote2/bt3-x360-1.0.0.zip

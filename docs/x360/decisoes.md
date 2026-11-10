@@ -130,11 +130,11 @@ Conclusão para a F1: FPU de hardware em truncamento. Falta decidir quanto da ex
 a soma com máscara (44 ns contra 2,4 ns), a divisão ao mais próximo, os denormais e o estouro. Sem
 eles o jogo roda, mas o replay de validação deixa de bater bit a bit com o PCSX2.
 
-## 6. A F1 roda no Windows do Lucas, pelo WSL, comandada daqui por SSH (10/10/2026)
+## 6. A F1 roda num PC Windows, pelo WSL, comandada daqui por SSH (10/10/2026)
 
-Este computador não pode receber o ISO nem rodar os testes com os dados do jogo. O Windows dele
-(`192.168.0.5`) tem o OpenSSH Server (porta 22 liberada só para `192.168.0.0/24`) e o Ubuntu 24.04
-no WSL. Daqui: `ssh bt3win "wsl -d Ubuntu-24.04 -u lucas -- bash -lc '...'"` (alias em
+Este computador não pode receber o ISO nem rodar os testes com os dados do jogo. O PC Windows
+(`<IP do PC>`) tem o OpenSSH Server (porta 22 liberada só para a rede local) e o Ubuntu 24.04
+no WSL. Daqui: `ssh <host do WSL> "wsl -d Ubuntu-24.04 -u <usuário do WSL> -- bash -lc '...'"` (alias em
 `~/.ssh/config`, chave só para isso). O ISO, os dados extraídos e os builds ficam lá; para cá só
 voltam texto e logs.
 

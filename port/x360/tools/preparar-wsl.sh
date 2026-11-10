@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Prepara o Ubuntu 24.04 do WSL (no Windows do Lucas) para a F1: o port de PC de referência
+# Prepara o Ubuntu 24.04 do WSL (num PC Windows) para a F1: o port de PC de referência
 # (x86, 64 bits) e a build PowerPC big-endian rodando no qemu. O ISO e os dados do jogo ficam só lá.
 # Sem gcc-multilib: ele conflita com o gcc-powerpc-linux-gnu no Ubuntu (e entra como recomendação do
 # lib32gcc: por isso o --no-install-recommends). A referência x86 de 32 bits compila com clang -m32,
 # que só precisa da libc e da libgcc de 32 bits.
 #
 # Roda como root dentro do WSL. Daqui do Linux de trabalho, pelo SSH:
-#   ssh bt3win "wsl -d Ubuntu-24.04 -u root -- bash -s" < port/x360/tools/preparar-wsl.sh
+#   ssh <host do WSL> "wsl -d Ubuntu-24.04 -u root -- bash -s" < port/x360/tools/preparar-wsl.sh
 # Idempotente: pode rodar de novo.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
-USUARIO=${USUARIO:-lucas}
+USUARIO=${USUARIO:?defina USUARIO com o usuário do WSL que vai usar o ambiente (ex.: USUARIO=meuusuario)}
 
 # Usuário comum com sudo sem senha (o SSH não tem terminal para digitar senha).
 if ! id "$USUARIO" >/dev/null 2>&1; then

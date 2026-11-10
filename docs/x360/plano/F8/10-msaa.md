@@ -496,7 +496,7 @@ com as subchaves e `BT3_SAVES=game:\sv_ms2_NOME`), o `ordem.txt` e o `LEIA-ME.tx
 
 ### 9.9 A rodada de 30/10 do completo [medido] e a decisão do Lucas
 
-Rodadas no console (192.168.0.7), build `1c4f3d95` (xex `6930682e`), duelo do `f5_duelo.txt`. Folga da GPU até o prazo na
+Rodadas no console, build `1c4f3d95` (xex `6930682e`), duelo do `f5_duelo.txt`. Folga da GPU até o prazo na
 janela da luta, em ms (mediana, p10, p1):
 
 | Abertura | Subchaves (VOLTA, VAGAS, CONTORNO) | Mediana | p10 | p1 | Nota |

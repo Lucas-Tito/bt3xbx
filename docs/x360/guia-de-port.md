@@ -28,7 +28,7 @@ Três máquinas, cada uma com um papel. Ninguém edita código fora da máquina 
 | Máquina | Papel | O que tem |
 | --- | --- | --- |
 | Linux de trabalho | edita, compila o `.xex`, sobe no console, analisa texto | repositório, Docker com o XDK, `gh`, Python |
-| Windows do Lucas (192.168.0.5) | roda os testes com os dados do jogo | OpenSSH Server, WSL Ubuntu 24.04, o ISO, os builds de teste |
+| PC Windows com o WSL (`<IP do PC>`) | roda os testes com os dados do jogo | OpenSSH Server, WSL Ubuntu 24.04, o ISO, os builds de teste |
 | Xbox 360 E RGH | o alvo | kernel 2.0.17150, FreeStyle 3.0.780, DashLaunch (hiddriver, usbsecpatch), **sem xbdm**, rede por cabo |
 
 ### 1.1 Linux de trabalho
@@ -45,8 +45,9 @@ Três máquinas, cada uma com um papel. Ninguém edita código fora da máquina 
 ### 1.2 Windows + WSL (decisão 6)
 
 Este Linux não pode receber o ISO nem rodar o jogo. O Windows tem o OpenSSH Server (porta 22 só
-para a rede local), e o comando chega daqui por SSH (`Host bt3win` em `~/.ssh/config`, chave
-própria só para isso). Para cá só volta texto.
+para a rede local), e o comando chega daqui por SSH (`Host <host do WSL>` em `~/.ssh/config`, chave
+própria só para isso). Para cá só volta texto. Os scripts `wsl.sh` e `status_wsl.sh` leem o host de
+`BT3_WSL_HOST` e `wsl.sh` o usuário do WSL de `BT3_WSL_USER`; nenhum dos dois tem valor padrão.
 
 - Preparo versionado e idempotente: `port/x360/tools/preparar-wsl.sh`. Ele instala o cross
   `gcc-powerpc-linux-gnu`, o `qemu-user`, o clang/LLVM 22 do apt.llvm.org e o SDL3 compilado do
@@ -64,10 +65,10 @@ própria só para isso). Para cá só volta texto.
   Nem um serviço do systemd (`systemd-run`) escapa: o WSL desliga a distribuição inteira uns segundos depois de fechar
   a última sessão aberta pelo Windows (o journal mostra "The system will power off now!"). Na 9c-1, o Codex disparado
   num serviço morreu em 26 s, quando o `!` que o disparou terminou. Para um processo que não fica preso a uma sessão,
-  deixe uma sessão aberta só para segurar o WSL (`ssh bt3win "wsl -d Ubuntu-24.04 -u lucas -- sleep 43200"` em segundo
+  deixe uma sessão aberta só para segurar o WSL (`ssh <host do WSL> "wsl -d Ubuntu-24.04 -u <usuário do WSL> -- sleep 43200"` em segundo
   plano daqui) e confira pelo `uptime -s` que o boot não mudou.
 - **Agente no WSL (Codex):** roda como o usuário `codex` (sem sudo, dados só leitura em `/srv/bt3/dados`, sem ver
-  `/home/lucas` nem `/mnt/c`, que o `wsl.conf` monta com `umask=077`), sem o isolamento dele, que bloqueia a x86 de
+  `/home/<usuário do WSL>` nem `/mnt/c`, que o `wsl.conf` monta com `umask=077`), sem o isolamento dele, que bloqueia a x86 de
   32 bits (SIGSYS), o `ptrace` do gdb e os sockets. A troca de código é pelo repositório local `/srv/bt3/bt3xbx.git`
   (remoto `troca`); o GitHub só recebe o que passou pela revisão. Regras dele no `AGENTS.md`.
 - **Cursor CLI no mesmo usuário** (`cursor-agent`, desde 17/10/2026, substituto do Codex quando a cota semanal dele
@@ -99,7 +100,7 @@ própria só para isso). Para cá só volta texto.
 ### 1.2b Steam Deck: a segunda fila de emulador (16/10/2026)
 
 Dois emuladores juntos travam o WSL, então uma segunda máquina é a única forma de rodar dois roteiros ao mesmo tempo.
-O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/config` daqui (chave própria):
+Um Steam Deck (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/config` daqui (chave própria):
 
 - **Contêiner, não o sistema:** o SteamOS tem a raiz só leitura e as atualizações apagam o que se instala nela. O
   `distrobox` (já vem no SteamOS) cria `bt3`, um Ubuntu 24.04, e o mesmo `preparar-wsl.sh` o prepara (sem a linha do
@@ -110,7 +111,7 @@ O Deck do Lucas (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/c
 - **Dados copiados direto do WSL** por `tar` entre dois `ssh` (WSL → aqui → Deck), conferidos por um manifesto de
   sha1 dos dois lados (68.611 arquivos do `gamedata` iguais; o manifesto estragado foi recusado).
 - **O `port/build/gen` não se copia:** os `.s` gerados pelo `port/tools/gen_data.py` guardam o caminho absoluto dos
-  dados (`.incbin "/home/lucas/..."`), e a build x86 do Deck caiu no `vu1_micro.data.s`. Gere de novo lá
+  dados (`.incbin "/home/<usuário do WSL>/..."`), e a build x86 do Deck caiu no `vu1_micro.data.s`. Gere de novo lá
   (`gen_data.py --asm ~/bt3xbx/asm`); os 72 arquivos saíram iguais aos do WSL, fora o caminho.
 - **A prova antes de valer:** no commit da rodada da F4, a `.text` da x86 do Deck saiu igual à do WSL
   (`e0af7e67…`), e o `SEMMAPA=1 IMG=1 roteiros.sh duelo` deu "tudo certo", com as 16 imagens idênticas byte a byte às
@@ -712,7 +713,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
     assim no quarto roteiro. Numa rodada de horas, confira antes que nenhuma das duas máquinas vai dormir, e depois de
     uma queda refaça do começo (as builds do HEAD e todos os roteiros), não a partir do meio.
 - **IP por DHCP:** o Windows e o console mudam de IP entre um dia e outro. Ache o Windows pela porta 22 e o console
-  pela porta 21 (`subir.py --achar`). No `~/.ssh/config`, o `HostKeyAlias bt3win` deixa a chave do host presa ao
+  pela porta 21 (`subir.py --achar`). No `~/.ssh/config`, um `HostKeyAlias` fixo deixa a chave do host presa ao
   nome, e uma troca de IP só muda o `HostName`.
 - **XInput com o hiddriver:** zere o `XINPUT_STATE` antes de cada `XInputGetState`. Com a Guide aberta, o hiddriver
   devolve sucesso sem preencher o estado dos controles que ele emula (decisão 21).
@@ -2060,7 +2061,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   da referência do WSL** (`roteiro: janela K passos N`, `roteiro: resultado`) provam que o console jogou a mesma luta; os vblanks
   não precisam bater.
 - **Um bundle para o WSL vai dentro do script, em base64** (`base64 -d > ~/x.bundle <<'FIM'` ... `FIM`, e o script pelo stdin do
-  `wsl -- bash -s`): no `ssh bt3win "wsl ... bash -c 'cat > ~/x.bundle'"` o `>` é do `cmd` do Windows, que responde "The system cannot
+  `wsl -- bash -s`): no `ssh <host do WSL> "wsl ... bash -c 'cat > ~/x.bundle'"` o `>` é do `cmd` do Windows, que responde "The system cannot
   find the path specified".
 
 ### O estado e o fecho da VU1 (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 15)
@@ -3367,7 +3368,7 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 
 - O texto inicial das etapas de escala e MSAA registra padrões históricos. Na 1.0.2, `area_init`, `msaa_init`,
   `fxaa_init` e `afiado_init` dão escala 1,4, MSAA 2, FXAA 0 e afiado 1. Fixe esses valores nos ambientes da rodada.
-- Copiar `gen/data` de outra máquina pode trazer `.incbin` absoluto para `/home/lucas/...`. No clone de teste,
+- Copiar `gen/data` de outra máquina pode trazer `.incbin` absoluto para `/home/<usuário do WSL>/...`. No clone de teste,
   ajuste somente a cópia gerada ao caminho dos assets locais antes de montar `vu1_micro.data.s`; os assets
   compartilhados continuam somente leitura. A primeira build do desfoque falhou justamente nesse arquivo.
 - `BT3_SHOT_FINAL=1` acrescenta `filtro` depois do FXAA e `tela` depois da cópia, nos mesmos números do GS da
@@ -3451,7 +3452,7 @@ e ordem das chamadas; a chamada com contagem adulterada continua sendo recusada.
 
 - **Os dados gerados também dependem do caminho da worktree.** A segunda rodada de
   `vu0-registradores` chegou à base x86, mas o `vu1_micro.data.s` compartilhado continha
-  `.incbin "/home/lucas/bt3xbx/assets/..."`, inacessível ao usuário da tarefa. Como no Deck
+  `.incbin "/home/<usuário do WSL>/bt3xbx/assets/..."`, inacessível ao usuário da tarefa. Como no Deck
   (seção 1.2b), substituir somente o link `port/build/gen/data` por diretório local e rodar
   `python3 port/tools/gen_data.py --asm "$PWD/asm"`. Os 72 arquivos regenerados ficaram
   idênticos aos compartilhados, salvo esse caminho absoluto. O gerador montou os 72 objetos;

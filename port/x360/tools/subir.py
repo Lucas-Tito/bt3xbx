@@ -31,7 +31,7 @@ def porta_aberta(ip, porta=21, espera=2.0):
 
 
 def redes_locais():
-    """Prefixos /24 das interfaces IPv4 da máquina (ex.: 192.168.0)."""
+    """Prefixos /24 das interfaces IPv4 da máquina (ex.: 10.0.0)."""
     saida = subprocess.run(["ip", "-4", "-o", "addr"], capture_output=True, text=True).stdout
     prefixos = []
     for linha in saida.splitlines():

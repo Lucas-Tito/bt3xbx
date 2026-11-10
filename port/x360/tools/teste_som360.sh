@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # F6, etapa 3: o teste do núcleo portátil da camada de áudio do 360 (port/x360/src/som/som_nucleo.c), sem emulador nem
 # console, num diretório temporário (não mexe no clone nem nas builds):
-#   port/x360/tools/teste_som360.sh            (aqui ou no WSL: cat ... | ssh bt3win "wsl ... bash -s" com RAIZ=)
+#   port/x360/tools/teste_som360.sh            (aqui ou no WSL: cat ... | ssh <host do WSL> "wsl ... bash -s" com RAIZ=)
 # 1. o núcleo em C89 estrito (-std=c89 -pedantic -Werror, o que o cl.exe do XDK aceita) e o teste
 #    (port/x360/src/som/teste/teste_nucleo.c) com gcc; o teste tem de passar;
 # 2. os mutantes: cópias do núcleo estragadas de oito jeitos (corte, interpolação, canal direito, arredondamento do

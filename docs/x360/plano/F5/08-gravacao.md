@@ -5157,7 +5157,7 @@ controle do relógio; `~/f5-lotes/wsl2/provas.resumo`): o mesmo resultado, a mes
 Geradas por `lotes_console.py relogio|imagem SAIDA --rodada R`, que confere os ambientes (oito estragos do relógio e
 quatro da imagem recusados, e as rodadas já usadas). Builds do commit `dc2785f` (carimbo `dc2785f diff:da39a3ee5e`; os
 commits seguintes só mexem em documentos),
-na máquina do XDK, em `/home/lucas-tito/Documentos/bt3xbx-lotes/build/x360/console-<rodada>/` com `builds/<build>/`
+na máquina do XDK, em `~/Documentos/bt3xbx-lotes/build/x360/console-<rodada>/` com `builds/<build>/`
 (`default.xex` e `.map`), `ordem.txt`, `manifesto.json`, os `ambiente_<abertura>.txt` e `LEIA.txt`:
 
 | Rodada | Aberturas, em ordem | Builds (md5 do `.xex`) | O que dá |

@@ -295,7 +295,7 @@ o relatório externo identifica o novo commit, os caminhos dos logs e seu julgam
 
 A repetição em `a6566248` também aprovou os testes isolados, mas a base x86 encontrou um
 segundo problema de preparação: o `.incbin` do `vu1_micro.data.s` compartilhado apontava para
-`/home/lucas/bt3xbx/assets/`, inacessível. O diretório `gen/data` agora é local e foi regenerado
+`/home/<usuário do WSL>/bt3xbx/assets/`, inacessível. O diretório `gen/data` agora é local e foi regenerado
 com `gen_data.py --asm "$PWD/asm"`: 72 arquivos iguais aos compartilhados, salvo o caminho,
 e 72 objetos montados. `gen/gs` continua sendo somente leitura. A certificação será repetida
 integralmente no commit deste registro; o relatório externo guarda o resultado final.

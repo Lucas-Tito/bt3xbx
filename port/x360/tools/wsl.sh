@@ -7,8 +7,9 @@
 #                        passarem pelo cmd do Windows
 set -euo pipefail
 RAIZ=$(cd "$(dirname "$0")/../../.." && pwd)
-HOST=${BT3_WSL_HOST:-bt3win}
-WSL="wsl -d Ubuntu-24.04 -u lucas --"
+HOST=${BT3_WSL_HOST:?defina BT3_WSL_HOST com o host SSH do PC Windows com o WSL (entrada do ~/.ssh/config)}
+USUARIO_WSL=${BT3_WSL_USER:?defina BT3_WSL_USER com o usuário do WSL que tem o clone do repositório}
+WSL="wsl -d Ubuntu-24.04 -u $USUARIO_WSL --"
 
 case "${1:-}" in
     enviar)

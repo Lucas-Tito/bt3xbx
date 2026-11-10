@@ -15,7 +15,7 @@ Fontes lidas:
 | `~/Documentos/gh2dxu` | README, logs de build (é mod de dados do GH2, não port de código) |
 | `~/Documentos/xbx` | `CLAUDE.md`, README (só o que toca o console) |
 | `~/Documentos/xbox-rgh-pipeline` | README, `instrucoes_mover_hd.md` (layout do HD e limites do FATX) |
-| `~/.claude/projects/-home-lucas-tito-Documentos-{CollectionUI,hiddriver,xbx}/memory/` | as notas de memória das sessões anteriores (regras de trabalho do Lucas, dados do console) |
+| `<pasta de memória do agente de cada um desses projetos>` | as notas de memória das sessões anteriores (regras de trabalho, dados do console) |
 
 ---
 
@@ -32,7 +32,7 @@ Juntando `hiddriver/docs/*.md`, `port/17150/info.txt` e as memórias das sessõe
 | Kernel | **2.0.17150.0** retail (lido de `XboxKrnlVersion` pelo `tools/testeplugin`). O dono **recusou** atualizar o kernel (26/09/2026) |
 | Dashboard | **FreeStyle 3.0.780** (pasta `Freestyle.780`), com **DashLaunch** |
 | Plugins no `launch.ini` | `hiddriver` v0.6-17150 em `Hdd:\plugins\hiddriver.xex`, `usbsecpatch` (UsbdSecPatch, para controles XInput não licenciados). Sem `xbdm.xex` instalado, até onde os registros mostram |
-| Rede | **Wi-Fi interno**, IP por DHCP na faixa `192.168.0.x` (já foi `.2`, `.3`, `.4`) |
+| Rede | **Wi-Fi interno**, IP por DHCP numa faixa privada da rede local |
 | Relógio | **Zerado**: arquivos e logs saem datados de `2005-11-22` |
 | HD | Interno, com 416 a 418 itens na biblioteca da FreeStyle no HD novo |
 | Memória livre medida | `GlobalMemoryStatus().dwAvailPhys` entre **~400 e ~480 MB** com o CollectionUI rodando (D3D 720p + 120 a 160 texturas DXT5 + XAudio2) |
@@ -177,7 +177,7 @@ nossas + sqlite de 9,5 MB). Cada execução paga a criação do prefixo do wine.
 |---|---|
 | Ligar em FreeStyle → Configurações → rede → "Enable FTP server" | o IP aparece na mesma tela |
 | Login `xbox` / `xbox` (o campo de senha aparece vazio, mas a senha existe) | senha vazia dá `530 Incorrect Password` |
-| **IP muda por DHCP** | achar pela porta 21: `for i in $(seq 1 254); do (timeout 1 bash -c "</dev/tcp/192.168.0.$i/21" 2>/dev/null && echo 192.168.0.$i) & done; wait` e `ip neigh \| grep -i 4c:0b:be` (MAC Microsoft) |
+| **IP muda por DHCP** | achar pela porta 21: `for i in $(seq 1 254); do (timeout 1 bash -c "</dev/tcp/<prefixo da rede>.$i/21" 2>/dev/null && echo <prefixo da rede>.$i) & done; wait` e `ip neigh \| grep -i 4c:0b:be` (MAC Microsoft) |
 | Console **não responde ping** | testar a porta: `bash -c "</dev/tcp/IP/21"`. Portas 80 e 9999 (HTTP da FreeStyle) também abertas |
 | **Só funciona com o console parado na FreeStyle.** Com jogo/app rodando, ou travado, não há FTP | o ciclo é: sair para a FreeStyle, subir, abrir de novo |
 | Uma conexão por vez; sessão pendurada bloqueia a próxima | tentar em laço com 10 s de espera, poucas vezes; se demorar, parar e perguntar ao Lucas (regra da memória `subir-no-console-sem-pedir`) |
@@ -560,7 +560,7 @@ Linux dentro de container (`/w` nos logs). Lições pequenas:
 - Commits atômicos, mensagem em português com o porquê, **sem `Co-Authored-By` nem
   `Claude-Session`** (ele reescreveu a história do hiddriver para tirar).
 - `gh` e `push` pela conta pessoal: `GH_TOKEN=$(gh auth token --user Lucas-Tito) git push ...`;
-  a conta ativa da máquina é a de trabalho (`lucastito-v360`) e deve continuar sendo.
+  a conta ativa do `gh` na máquina é outra e deve continuar sendo.
 - Pode subir build no console por FTP **sem pedir**; se demorar, parar e perguntar.
 - Antes de apagar algo no console, **listar e identificar o conteúdo** (5 GB de DLC quase foram
   apagados por engano).
