@@ -8,12 +8,12 @@ acelerar outros ports. Todo aprendizado que custou uma rodada entra lá no mesmo
 O que vem do upstream (`src/`, `include/`, `port/` fora de `port/x360/`, `docs/` fora de `docs/x360/`)
 segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
 
-## Regras do mantenedor
+## Regras do projeto
 
 - Tudo em português, sem travessão em texto público e nos documentos do projeto.
 - Commits atômicos, mensagem em português com o porquê, **sem nenhuma atribuição ao Claude**
   (nada de `Co-Authored-By` nem `Claude-Session`). Identidade local do repo: conta pessoal Lucas-Tito.
-- Repositório **privado**. `gh`/push só pela conta pessoal:
+- Repositório **público** (desde 30/10/2026): nada pessoal (IPs, caminhos, nomes de máquinas) entra em commit nem em release. `gh`/push só pela conta pessoal:
   `GH_TOKEN=$(gh auth token --user Lucas-Tito) git push ...`, sem trocar a conta ativa do `gh`.
 - **Nenhum byte do jogo no repositório nem no release** (ISO, ELF, AFS, dados extraídos). O usuário
   fornece a própria ISO USA SLUS-21678.
@@ -97,9 +97,9 @@ Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddr
   em 06/11; o número vale de `/home/codex/vagas`, e `echo 3` nele volta a 3 se a memória do WSL passar de ~7 GB).
   Nada de `qemu` ou `roteiros.sh` solto fora da vez: dois juntos sem controle já travaram o WSL. Nada de
   `wsl.sh enviar` com um `roteiros.sh` rodando.
-- **Rodada do tamanho da mudança** (regra no `AGENTS.md`, o mantenedor 07/11): roteiros repartidos entre as vagas, o lado
+- **Rodada do tamanho da mudança** (regra no `AGENTS.md`, 07/11): roteiros repartidos entre as vagas, o lado
   provado igual pela comparação dos objetos não se refaz (`REUSA=x86`), correção localizada pede rodada localizada.
-- **Disco do WSL: cada agente limpa as próprias rodadas julgadas sem pedir** (regra no `AGENTS.md`, o mantenedor 06/11);
+- **Disco do WSL: cada agente limpa as próprias rodadas julgadas sem pedir** (regra no `AGENTS.md`, 06/11);
   a compactação do `ext4.vhdx` (desliga o WSL) é de quem orquestra, num intervalo sem rodada. No Windows, nada se
   apaga sem listar e o mantenedor aprovar.
 - **Todo verificador tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer: na F4
