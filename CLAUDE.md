@@ -10,7 +10,7 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
 
 ## Regras do Lucas
 
-- Tudo em português, sem travessão em texto que ele lê.
+- Tudo em português, sem travessão em texto público e nos documentos do projeto.
 - Commits atômicos, mensagem em português com o porquê, **sem nenhuma atribuição ao Claude**
   (nada de `Co-Authored-By` nem `Claude-Session`). Identidade local do repo: conta pessoal Lucas-Tito.
 - Repositório **privado**. `gh`/push só pela conta pessoal:

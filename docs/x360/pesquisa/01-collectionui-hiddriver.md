@@ -28,8 +28,8 @@ Juntando `hiddriver/docs/*.md`, `port/17150/info.txt` e as memórias das sessõe
 | | |
 |---|---|
 | Modelo | **Xbox 360 E** |
-| Exploit | RGH (o dono não sabe se é RGH 1.2 ou RGH3) |
-| Kernel | **2.0.17150.0** retail (lido de `XboxKrnlVersion` pelo `tools/testeplugin`). O dono **recusou** atualizar o kernel (26/09/2026) |
+| Exploit | RGH (não se sabe se é RGH 1.2 ou RGH3) |
+| Kernel | **2.0.17150.0** retail (lido de `XboxKrnlVersion` pelo `tools/testeplugin`). A atualização do kernel foi **recusada** (26/09/2026) |
 | Dashboard | **FreeStyle 3.0.780** (pasta `Freestyle.780`), com **DashLaunch** |
 | Plugins no `launch.ini` | `hiddriver` v0.6-17150 em `Hdd:\plugins\hiddriver.xex`, `usbsecpatch` (UsbdSecPatch, para controles XInput não licenciados). Sem `xbdm.xex` instalado, até onde os registros mostram |
 | Rede | **Wi-Fi interno**, IP por DHCP numa faixa privada da rede local |
@@ -553,12 +553,12 @@ Linux dentro de container (`/w` nos logs). Lições pequenas:
 - O `superfreq png2tex --platform x360` existe como conversor Linux de textura para o formato
   Milo do 360; não serve diretamente ao BT3.
 
-### 2.15 Regras de trabalho do Lucas (das memórias e do `xbx/CLAUDE.md`)
+### 2.15 Regras de trabalho do projeto (das memórias e do `xbx/CLAUDE.md`)
 
 - Tudo em **português**, inclusive descrição de comando e relatório de subagente.
-- **Sem travessão** em texto que ele lê.
+- **Sem travessão** em texto público e nos documentos do projeto.
 - Commits atômicos, mensagem em português com o porquê, **sem `Co-Authored-By` nem
-  `Claude-Session`** (ele reescreveu a história do hiddriver para tirar).
+  `Claude-Session`**.
 - `gh` e `push` pela conta pessoal: `GH_TOKEN=$(gh auth token --user Lucas-Tito) git push ...`;
   a conta ativa do `gh` na máquina é outra e deve continuar sendo.
 - Pode subir build no console por FTP **sem pedir**; se demorar, parar e perguntar.

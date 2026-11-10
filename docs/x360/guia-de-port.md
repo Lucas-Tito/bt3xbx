@@ -1610,9 +1610,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **Sem `BT3_LOG=1`, nenhuma chave de diagnóstico vale** (`diagnostico360.h`): nem `BT3_SHOT*`, nem o log, nem as medidas.
   Os ambientes da rodada do desfoque não tinham a chave, e a primeira sessão no console não gravou nada. Todo
   `environment_*.txt` de rodada de console leva `BT3_LOG=1`, e o pedido diz como conferir que as capturas saíram.
-- **Teste visual no console: o Lucas prefere jogar a assistir o roteiro.** O modo livre é o mesmo ambiente sem
+- **Teste visual no console: jogar costuma render mais que assistir o roteiro.** O modo livre é o mesmo ambiente sem
   `BT3_ROTEIRO`, com `BT3_SHOT=300` (uma captura a cada 300 quadros do GS, uns 10 s) no lugar da lista; as capturas não
-  se alinham entre sessões, então cada variante roda no mesmo estágio, e a palavra dele vale como resultado. Foi assim
+  se alinham entre sessões, então cada variante roda no mesmo estágio, e o veredito de quem joga vale como resultado. Foi assim
   que o embaçado do cenário apareceu como o desfoque da distância (`StgFog_Draw`).
 - **O `link /dump /disasm /range` percorre o executável inteiro a cada faixa** (2 a 3 min por faixa no `default.exe` de
   1,5 MB): junte as faixas numa chamada só, com tempo limite longo, ou desmonte o `.obj` da função.
@@ -1658,7 +1658,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 
 1. Fork da decomp (ou do port de PC dela, se existir), `upstream` como remote, merge só de
    propósito.
-2. `CLAUDE.md` com as regras do dono (idioma, commits sem atribuição, repositório privado, nada do
+2. `CLAUDE.md` com as regras do projeto (idioma, commits sem atribuição, visibilidade do repositório, nada do
    jogo no repositório), o console, a toolchain e o deploy. Use o deste repositório como modelo.
 3. Três agentes de estudo (seção 4) e `docs/<alvo>/pesquisa/`.
 4. F0: sonda no console (toolchain, log em arquivo, filtro de exceção com `Iar`/`Lr`, FPU,
