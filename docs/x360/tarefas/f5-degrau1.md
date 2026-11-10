@@ -5,7 +5,7 @@
 Branch: `cursor/f5-degrau1` (a partir de `troca/main`). Relatório: `~/entrega-f5-degrau1.md`. Orçamento: 6 a 10 h.
 
 Leia antes, inteiro, `docs/x360/plano/F5/08-threads.md` (o estudo; você o escreveu) e a seção "Rodada no console
-(18/10/2026)" do `docs/x360/plano/F5/08.md`. O Lucas aprovou a recomendação do estudo, com as respostas conservadoras
+(18/10/2026)" do `docs/x360/plano/F5/08.md`. O mantenedor aprovou a recomendação do estudo, com as respostas conservadoras
 da seção 9 (as capacidades das listas não encolhem agora; o gatilho da decisão 24, resposta 5, vale só para o degrau
 1, desligável pelo `environment.txt`; a thread de desenho dona do dispositivo com a main só vigiando; gravação na thread
 de hardware 0, desenho na 1, nunca na 3 até medir). Faça, nesta ordem, cada parte com commit próprio:

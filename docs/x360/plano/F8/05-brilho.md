@@ -9,9 +9,9 @@ o brilho do 360 igual ao do port de PC com `GLOW_DEFAULT 60`, sem subir para os 
 
 ## 1. Resultado
 
-**Encerrado como problema conhecido (29/10/2026, decisão do Lucas):** a prova da seção 4 foi desarmada antes de rodar e a
+**Encerrado como problema conhecido (29/10/2026, decisão do mantenedor):** a prova da seção 4 foi desarmada antes de rodar e a
 rodada de console da seção 5 não será feita. O escuro à noite vai para os problemas conhecidos do README, com a dúvida
-aberta entre o jogo e a TV do Lucas (os níveis de referência de vídeo). As seções abaixo ficam como registro, para quem
+aberta entre o jogo e a TV do mantenedor (os níveis de referência de vídeo). As seções abaixo ficam como registro, para quem
 quiser retomar.
 
 **A H9 não mostrou um defeito do 360: a referência dela é que não é a do PC.** Nenhuma mudança no código do 360 até aqui; a
@@ -115,9 +115,9 @@ abrir o `.xex`; no fim, voltar à FreeStyle, `subir.py --baixar bt3xbx.log` (par
 |---|---|---|---|
 | `brilho_rel60` | Shenlong, a configuração de release (648 x 456, escala 1,33, EDRAM residente, afiado, FXAA), brilho padrão (60) | roteiro `shenlong.txt` | 3360 a 3600 |
 | `brilho_rel0` | a mesma com `BT3_GLOW=0` | roteiro | 3360 a 3600 |
-| `deserto_60` | luta no deserto à noite, configuração de release, brilho padrão | o Lucas: Duelo, o mesmo par e o mesmo estágio nas três, uns 90 s de luta | a cada 60 quadros do GS |
-| `deserto_0` | a mesma com `BT3_GLOW=0` | o Lucas | a cada 60 |
-| `deserto_100` | a mesma com `BT3_GLOW=100` (só para ver; não é o alvo) | o Lucas | a cada 60 |
+| `deserto_60` | luta no deserto à noite, configuração de release, brilho padrão | o mantenedor: Duelo, o mesmo par e o mesmo estágio nas três, uns 90 s de luta | a cada 60 quadros do GS |
+| `deserto_0` | a mesma com `BT3_GLOW=0` | o mantenedor | a cada 60 |
+| `deserto_100` | a mesma com `BT3_GLOW=100` (só para ver; não é o alvo) | o mantenedor | a cada 60 |
 | `brilho_e1_60`, `brilho_e1_0` (opcionais) | o Shenlong na escala 1 sem residência (o caminho da H9), 60 e 0 | roteiro | 3360 a 3600 |
 
 **No log de cada uma:** a origem (`passos: origem`), `BT3_GLOW` quando posto, nenhum `FALHA`, `CRASH`, `vigia:` ou
@@ -144,7 +144,7 @@ for n in deserto_0 deserto_60 deserto_100; do for f in $C/$n/gpu_*.ppm; do echo 
 | `alvo lido sem Resolve` acima de 0 | o defeito de 23/10 de volta; corrigir antes de medir o resto |
 | no deserto, `deserto_60` quase igual a `deserto_0` | o brilho quase não age no deserto: o escuro não é o brilho; seguir pelos outros efeitos de tela (`BT3_FX_OFF`) |
 
-**Para o Lucas olhar:** o deserto nas três aberturas, e se o `deserto_60` lhe parece igual ao PC que ele conhece. A saída
+**Para o mantenedor olhar:** o deserto nas três aberturas, e se o `deserto_60` lhe parece igual ao PC que ele conhece. A saída
 de vídeo do console também escurece os escuros se a TV espera faixa limitada e o console manda a cheia (Configurações do
 sistema, Tela, "Níveis de referência"); vale conferir antes de julgar.
 

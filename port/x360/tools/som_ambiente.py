@@ -117,7 +117,7 @@ def caminhos(amb, gpu, p):
 # As divergências 360 contra WSL que se esperam, com o porquê. Qualquer outra é falha.
 ESPERADAS = {
     ("360 com desenho", "plat_movie.c o filme toca"):
-        "no console o filme de abertura toca (o Lucas pula com START); os roteiros do WSL rodam com BT3_NOMOVIE=1 "
+        "no console o filme de abertura toca (quem joga pula com START); os roteiros do WSL rodam com BT3_NOMOVIE=1 "
         "e sem janela. Sem som tocando de verdade; o ADX do filme também é contado em vblanks",
     ("360 com desenho", "plat_stub.c Port_VBlank espera o vblank real"):
         "o console com desenho anda em tempo real; só o ritmo, o jogo conta vblanks",

@@ -28,7 +28,7 @@ O Xenon não move dado entre registrador inteiro e de float sem passar pela mem�
 de float e uns 26 pares `stw`/`lfs` no mesmo endereço da pilha (load-hit-store, dezenas de ciclos cada); `op_vmaddabc`, 100
 para 8; `Vec4_Add`, 61 para 4.
 
-## O que fazer, se o Lucas aprovar [estimado]
+## O que fazer, se o mantenedor aprovar [estimado]
 
 - **A. A biblioteca da VU0 em float nativo no 360**, na mesma ordem das contas (o `Sf_AddBits` do 360 já soma em float
   nativo; o custo é só a ida e volta pela memória). `Port_FastMtxApply`, que no 360 sempre devolve 0, passa a fazer a conta.
@@ -164,7 +164,7 @@ alterado foi recusada por `cmp` (saída 1). A preparação C89 dos dois fontes t
 ### Resultado oficial e origem das provas
 
 O serviço `bt3-vu0-nativo-oficial` executou `~/vu0-nativo-oficial-2.sh` de 14:27:45 a 14:57:40
-(04/11, UTC-3), na segunda vaga autorizada pelo Lucas. Resultado 0, commit de implementação
+(04/11, UTC-3), na segunda vaga autorizada pelo mantenedor. Resultado 0, commit de implementação
 `2bcd1c05`, árvore limpa e carimbos iguais nas três builds. Logs e resultados fora do Git em
 `~/vu0-nativo-final/`; log geral `~/vu0-nativo-oficial.log`.
 
@@ -209,7 +209,7 @@ Núcleos novos, também com zero pares stw/lfs: `Vn_MtxApply` 67 instruções e
 O GCC já conserva muitos floats em registradores no código anterior, ao contrário do `cl` medido no estudo;
 esta tabela não demonstra redução do total de instruções nem ganho de tempo. As chamadas e guardas têm custo.
 
-### Aceite que ainda cabe ao Lucas
+### Aceite que ainda cabe ao mantenedor
 
 No XDK: compilar o objeto novo (o `build_f2.sh` já enumera `src/f2/*.c`), conferir `pc_vu0_a`, `pc_vu0_b`,
 `float360` e `vu0_nativo` com os dois núcleos de produto fora de linha; zero `fmadds`, `fmadd`, `fmsubs`,
@@ -319,7 +319,7 @@ no destino, na ordem das somas original. O gancho chama esse núcleo.
 
 Vencedor, vida 27160 e quadro final 8378 iguais no console: a correção passou,
 mas o ganho estimado de 8 a 9 ms não apareceu. Os tempos foram fornecidos pelo
-Lucas; não há execução nova de console no WSL.
+o mantenedor; não há execução nova de console no WSL.
 
 ### Releitura dos dados preservados
 

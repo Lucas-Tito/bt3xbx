@@ -44,7 +44,7 @@ Leia antes:
    ou teste no console).
 2. **Etapas**, na ordem, cada uma com onde roda (WSL ou console), o que faz, o critério e uma estimativa de tamanho.
    Comece pelo teto de memória do backend, que a F3 já marcou como primeiro item.
-3. **Decisões para o Lucas**, numeradas, cada uma com as opções, o custo de cada uma e a sua recomendação. Ele decide
+3. **Decisões para o mantenedor**, numeradas, cada uma com as opções, o custo de cada uma e a sua recomendação. Ele decide
    a arquitetura; não decida por ele.
 4. **Riscos e incertezas**, com o que mediria cada um cedo.
 5. **O que pode ser dividido entre agentes** (como a 9c foi dividida) e o que pede o console.

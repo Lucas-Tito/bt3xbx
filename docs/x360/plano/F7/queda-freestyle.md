@@ -95,7 +95,7 @@ fora da RAM. O mapa deve apontar `Port_QuedaTeste360`. O caminho do desenho requ
 ## Roteiro de aceite no console
 
 1. Compilar Release no Linux, guardando `.map`, `.xex`, `.dat` e `.swap` da mesma build. Usar ISO convertida
-   versão 3. Guardar cópia do save e começar com boot limpo na configuração habitual do Lucas.
+   versão 3. Guardar cópia do save e começar com boot limpo na configuração habitual do mantenedor.
 2. Sem as duas chaves de teste, abrir uma luta, conferir a Guide, sair normalmente, chegar à home da
    FreeStyle e reabrir o título. Guardar o log antes de outra execução, pois o arranque o trunca.
 3. Armar `BT3_QUEDA_TESTE=180` e `BT3_QUEDA_TESTE_THREAD=jogo`. Abrir Duelo, Goku contra Vegeta,

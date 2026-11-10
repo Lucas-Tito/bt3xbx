@@ -13,7 +13,7 @@ BT3, 04 é onde ficam os ícones dos botões e o custo de trocá-los, 05 é o es
 Mantido vivo: cada aprendizado que custou uma rodada entra aqui (seção 6) no mesmo commit da
 correção.
 
-Em **29/10/2026**, por decisão do Lucas, os arquivos de configuração e de saída do projeto passaram a
+Em **29/10/2026**, por decisão do mantenedor, os arquivos de configuração e de saída do projeto passaram a
 se chamar `environment.txt` e `output.txt`; `bt3xbx.log` continua com o mesmo nome. Não há leitura
 alternativa. Modelos para copiar ao console usam `environment_*.txt`. Referências aos nomes anteriores
 nos registros de rodadas descrevem os artefatos daquela época; os exemplos reutilizáveis usam os nomes
@@ -502,18 +502,18 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
 
 - **Passagem de chat (04/11/2026).** Um chat longo perde o começo quando o contexto é resumido, e um chat novo só sabe o
   que está escrito. O que só existe no contexto (o estado das filas do Codex, o que está no console, as perguntas em
-  aberto, uma decisão dita de passagem) some se não for escrito antes. Quando o contexto estiver grande, ou o Lucas
+  aberto, uma decisão dita de passagem) some se não for escrito antes. Quando o contexto estiver grande, ou o mantenedor
   pedir, ou antes de parar por muito tempo:
-  1. **Decisões** do Lucas vão para o `docs/x360/decisoes.md` (ou para a tarefa do Codex que vai escrevê-las, dito
+  1. **Decisões** do mantenedor vão para o `docs/x360/decisoes.md` (ou para a tarefa do Codex que vai escrevê-las, dito
      na passagem). **Aprendizados** que custaram rodada vão para a seção 6 deste guia. Os dois no mesmo commit da
-     passagem, com push pelo Lucas.
+     passagem, com push pelo mantenedor.
   2. **Estado** vai para a memória `passagem` (um arquivo só, sobrescrito a cada passagem, com a data no topo): as
      frentes do Codex numa tabela (unidade, branch e tarefa, estado, o próximo passo meu), as entregas recebidas e
-     ainda não revisadas, o que está no console e o que sobrou de teste lá, as pendências e perguntas com o Lucas, e os
+     ainda não revisadas, o que está no console e o que sobrou de teste lá, as pendências e perguntas com o mantenedor, e os
      ambientes ainda não conferidos. O que vale para sempre vai para a memória própria do assunto, não para a passagem.
   3. **Conferir antes de escrever**: rodar `port/x360/tools/status_wsl.sh` e escrever o que ele mostra, não o que eu
      lembro. Ao começar um chat novo, ler a memória `passagem` e rodar o mesmo script antes de agir.
-  4. Dizer ao Lucas, numa lista curta, o que foi escrito e onde, e o que ficou fora (por exemplo, um teste em
+  4. Dizer ao mantenedor, numa lista curta, o que foi escrito e onde, e o que ficou fora (por exemplo, um teste em
      andamento no console).
   A passagem não substitui o relatório das tarefas: a verdade de cada frente continua no `~/entrega-*.md` dela.
 
@@ -1279,7 +1279,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   números da etapa 7 da F4: o `TEX1` pedido é 0x60 (bilinear); nitidez do fundo 35,6 no PC e 30,9 no console, o resto
   13,4 nos dois. Um protótipo do rasterizador que filtra como o GS (branch `investiga-filtro-gs`, commits `be5d764` e
   `1df9c3b`, fora da main) leva o fundo de 71,2% para 98,4% e as 36 imagens de 92,0% para 99,2% de média (mínimo
-  98,6%): a diferença era toda o filtro. O Lucas decidiu não ligar esse modo nas comparações; a regra é aceitar a tela
+  98,6%): a diferença era toda o filtro. O mantenedor decidiu não ligar esse modo nas comparações; a regra é aceitar a tela
   com textura reduzida por volta de 82% e medir a nitidez separada antes de procurar erro. A arte dos personagens vem
   sem o meio texel e pela fórmula estrita do GS sairia um pouco macia (anotado, sem decisão).
 - **Num efeito de alvo em alvo, o ponto do rasterizador não é só nitidez: ele muda o lugar do efeito** (F8, pendência 5,
@@ -1599,7 +1599,7 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - **O WSL desliga quando ninguém está conectado, e as filas do Codex morrem junto.** O que o mantinha ligado eram duas
   tarefas agendadas do Windows de prazo fixo (`sleep` de 16 h e de 3 dias); expiraram em 03/11, e a fila do VU0 lançada
   às 06:00 de 04/11 parou em 42 s sem ninguém ver. Agora a tarefa `bt3-wsl-sempre` (`sleep infinity`, no logon e a
-  cada 15 min, sem limite) faz isso; quem cria tarefa agendada no Windows é o Lucas (o modo automático recusa). Depois
+  cada 15 min, sem limite) faz isso; quem cria tarefa agendada no Windows é o mantenedor (o modo automático recusa). Depois
   de lançar uma fila, confira numa conexão seguinte que ela segue rodando (`status_wsl.sh`); o `uptime -s` do WSL
   escorrega com o acerto do relógio e não serve para isso.
 - **A `fila_espera.sh` encerrava a tarefa no meio** quando a sessão do Codex batia o teto de 4 h, e desistia depois de

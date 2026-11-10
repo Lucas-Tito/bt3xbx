@@ -756,7 +756,7 @@ codificados. Nenhum número de 2, 4 ou 8 bytes lá dentro.
 Regra para a conversão: só rawSize e packSize são u32 invertíveis. **Inverter qualquer coisa dentro do
 fluxo comprimido corrompe a animação**, e os números da animação só existem depois de `Bpe_Decode`. Logo
 a conversão in-place do arquivo não alcança o conteúdo das animações. Caminhos possíveis (decisão do
-Lucas, não tomada aqui):
+o mantenedor, não tomada aqui):
 1. converter o buffer decodificado logo depois de `Bpe_Decode` em `BtlObjAnim_Load`
    (src/battle/bobj_a.c:360); é o que a build de teste da F1 já faz, em `__wrap_Bpe_Decode`
    (port/x360/headless/inverter.c:151), aplicando o mapa ao `#bpe`. Cada decodificação gera um buffer

@@ -86,7 +86,7 @@ gravações de controle e rastros exigem chaves de diagnóstico. Não se cria `e
 
 Com diagnóstico, usam-se os nomes de projeto `bt3xbx.log`, `output.txt` e o arquivo de entrada
 `environment.txt`, com conteúdo em português permitido. Capturas usam a pasta configurada ou `shots`,
-e outros rastros usam os caminhos configurados. A tradução dos nomes foi aprovada pelo Lucas.
+e outros rastros usam os caminhos configurados. A tradução dos nomes foi aprovada pelo mantenedor.
 As cores de fase só são apresentadas com `BT3_LOG=1`; sem ele, o fundo dos avisos e da saída é preto.
 
 ## Provas locais e sabotagens

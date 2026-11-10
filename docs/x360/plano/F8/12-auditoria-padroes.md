@@ -55,7 +55,7 @@ do `gs_d3d.cpp`, que não são chaves (não há chave que os desligue) e que dec
   captura (`BT3_SHOT*`) e `BT3_SOM_DERIVA` sem `BT3_LOG=1`, o que as deixaria ignoradas pelo `posix360.c`. Ganharam
   `BT3_LOG=1`; o `audita_logs360.py` voltou a passar, com os mutantes acusados.
 
-## Decisão do Lucas (31/10): os autotestes de boot ficam atrás de `BT3_AUTOTESTES`
+## Decisão do mantenedor (31/10): os autotestes de boot ficam atrás de `BT3_AUTOTESTES`
 
 Implementada no `gs_d3d.cpp`: a chave `BT3_AUTOTESTES` (padrão 0, em `diagnostico360.h`, só vale com `BT3_LOG=1`) liga os três
 autotestes (profundidade, amostras do MSAA, nativas). Sem ela valem os valores fixos da proposta abaixo (profundidade como
@@ -86,7 +86,7 @@ um carimbo por fase.
 
 **Risco a decidir:** os valores foram medidos num Xbox 360 E (Corona) com kernel 2.0.17150; o autotest é a rede para um
 modelo ou GPU em que o restauro como cor ou a máscara do fragmento se comportem diferente (Xenon, Falcon, Jasper), que
-ainda não foi testado. Opções: (a) fixar já e testar só nos modelos que o Lucas tiver; (b) manter o autoteste da profundidade
+ainda não foi testado. Opções: (a) fixar já e testar só nos modelos que o mantenedor tiver; (b) manter o autoteste da profundidade
 (o que escolhe entre dois modos exatos) e fixar só as máscaras e as nativas; (c) manter tudo na primeira release e fixar
 depois de testar em outro console. O ganho máximo é o tempo de boot acima; o risco é MSAA com imagem errada, sem log
 para acusar, num modelo não testado.

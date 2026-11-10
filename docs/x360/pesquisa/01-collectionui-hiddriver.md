@@ -11,7 +11,7 @@ Fontes lidas:
 |---|---|
 | `~/Documentos/CollectionUI` | `README.md`, `docs/viabilidade.md`, `docs/decisoes.md` (143 decisões numeradas, 1.426 linhas), `docs/interface.md`, `toolchain/*` (Dockerfile, build.sh, Makefile, dockerignore, vendor-atg.sh, patches/atg.patch), `app/Makefile`, `app/main.cpp`, todos os módulos de `app/src/`, `previa/`, `prototipo/`, `ferramentas/`, `sdk/` (estrutura do XDK extraído, `xdk-docker/`, `hello/`), `git log` (82 commits) |
 | `~/Documentos/CollectionUI-dados` | `LEIA-ME.md` e estrutura (cópia dos dados da FreeStyle, sem interesse direto para o BT3) |
-| `~/Documentos/hiddriver` | `README.md`, `Makefile`, `hiddriver.sln`, `hiddriver/hiddriver.vcxproj`, `hiddriver/xex.xml`, `hiddriver/xkelib/`, trechos de `hiddriver/main.cpp` e `Detours.cpp`, `docs/build.md`, `docs/ftp-no-xbox.md`, `docs/threads-e-contextos.md`, `tools/*` (build.sh, testeplugin, kerneldump, diag-master.patch), `port/xbx.py`, `port/17150/info.txt`, `git log` (46 commits, 24 do Lucas) |
+| `~/Documentos/hiddriver` | `README.md`, `Makefile`, `hiddriver.sln`, `hiddriver/hiddriver.vcxproj`, `hiddriver/xex.xml`, `hiddriver/xkelib/`, trechos de `hiddriver/main.cpp` e `Detours.cpp`, `docs/build.md`, `docs/ftp-no-xbox.md`, `docs/threads-e-contextos.md`, `tools/*` (build.sh, testeplugin, kerneldump, diag-master.patch), `port/xbx.py`, `port/17150/info.txt`, `git log` (46 commits, 24 do mantenedor) |
 | `~/Documentos/gh2dxu` | README, logs de build (é mod de dados do GH2, não port de código) |
 | `~/Documentos/xbx` | `CLAUDE.md`, README (só o que toca o console) |
 | `~/Documentos/xbox-rgh-pipeline` | README, `instrucoes_mover_hd.md` (layout do HD e limites do FATX) |
@@ -180,7 +180,7 @@ nossas + sqlite de 9,5 MB). Cada execução paga a criação do prefixo do wine.
 | **IP muda por DHCP** | achar pela porta 21: `for i in $(seq 1 254); do (timeout 1 bash -c "</dev/tcp/<prefixo da rede>.$i/21" 2>/dev/null && echo <prefixo da rede>.$i) & done; wait` e `ip neigh \| grep -i 4c:0b:be` (MAC Microsoft) |
 | Console **não responde ping** | testar a porta: `bash -c "</dev/tcp/IP/21"`. Portas 80 e 9999 (HTTP da FreeStyle) também abertas |
 | **Só funciona com o console parado na FreeStyle.** Com jogo/app rodando, ou travado, não há FTP | o ciclo é: sair para a FreeStyle, subir, abrir de novo |
-| Uma conexão por vez; sessão pendurada bloqueia a próxima | tentar em laço com 10 s de espera, poucas vezes; se demorar, parar e perguntar ao Lucas (regra da memória `subir-no-console-sem-pedir`) |
+| Uma conexão por vez; sessão pendurada bloqueia a próxima | tentar em laço com 10 s de espera, poucas vezes; se demorar, parar e perguntar ao mantenedor (regra da memória `subir-no-console-sem-pedir`) |
 | Não responde ao `QUIT` | `ftp.close()`, nunca `ftp.quit()` |
 | `RETR` com caminho absoluto dá `550 Invalid argument` | `CWD /Hdd1` e depois `RETR nome`. `curl ftp://IP/Hdd1/arq` funciona porque faz o `CWD` sozinho |
 | **Sem `REST`** (retomada) | baixar inteiro; um `STOR` interrompido deixa arquivo pela metade |
@@ -593,7 +593,7 @@ Linux dentro de container (`/w` nos logs). Lições pequenas:
 | Disciplina de FTP | `hiddriver/docs/ftp-no-xbox.md`, decisão 73 | escrever **`tools/subir.py` versionado** (descobrir IP, nome temporário, renomear, md5, `close()` sem `QUIT`, timeout curto) e `tools/log.py` (renomear e baixar o log) |
 | Organização do repositório | CollectionUI | `docs/decisoes.md` numerado, `toolchain/` com receita e não conteúdo, `.gitignore` para `sdk/` e tudo que for do XDK ou da Sony/Bandai |
 
-Layout sugerido para começar (inferência, a validar com o Lucas):
+Layout sugerido para começar (inferência, a validar com o mantenedor):
 
 ```
 bt3xbx/
@@ -666,7 +666,7 @@ bt3xbx/
     redistribuí-los. Se algum código da FreeStyle (GPLv3) ou de terceiros entrar, decidir
     conscientemente (17).
 
-### 4.2 Perguntas para o Lucas
+### 4.2 Perguntas para o mantenedor
 
 1. O console tem **cabo de rede** disponível, ou será sempre Wi-Fi?
 2. Aceita instalar **`xbdm.xex`** (e talvez JRPC2/XRPC) no DashLaunch para depuração remota e

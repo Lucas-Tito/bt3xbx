@@ -157,7 +157,7 @@ SELECT. O ícone novo deve mostrar o botão do 360 que **fisicamente** produz aq
 1. **"Voltar" é o triângulo, não o círculo.** `src/menu` usa o X (`CROSS`) 66 vezes para confirmar e o triângulo 45
    vezes para cancelar; o círculo só uma vez (`menu_z_d.c:1237`, teclado do DcPass); quadrado 3, START 4, SELECT 0,
    L1 e R1 2 cada, L2 e R2 1 cada. Então nos menus o 360 volta com **Y**. Opção conservadora: manter o físico e
-   documentar. Se o Lucas quiser B voltando, é mudança de entrada (um alias de B para cancelar nos menus), fora
+   documentar. Se o mantenedor quiser B voltando, é mudança de entrada (um alias de B para cancelar nos menus), fora
    deste estudo. Os textos com ícone são da luta, do Treino e da lista de golpes.
 2. **Os ícones do texto assumem o controle padrão da luta.** As 8 ações passam por `gSaveData->keyConfig` (padrão
    `{2,1,0,3,4,5,6,7}` sobre `{CIRCLE,CROSS,SQUARE,TRIANGLE,L1,L2,R1,R2}`, `btl_input.c:492`). O texto traz o
@@ -230,7 +230,7 @@ só buffer vale para texto, HUD e lista de golpes.
   visual que (b); não vale.
 - **Desenhar pelas fontes:** inviável, os glifos da fonte são geométricos simples e sem cor.
 
-**Recomendação:** (b) com uma opção de menu para voltar aos ícones do PS2. A (a) só vale se o Lucas quiser o
+**Recomendação:** (b) com uma opção de menu para voltar aos ícones do PS2. A (a) só vale se o mantenedor quiser o
 resultado fixado na ISO.
 
 ## 5. Riscos

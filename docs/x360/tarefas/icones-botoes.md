@@ -4,10 +4,10 @@
 
 Branch: `cursor/icones-botoes` (a partir de `troca/main`). Relatório: `~/entrega-icones-botoes.md`. Orçamento: 1 a 2 h.
 
-## Pedido do Lucas
+## Pedido do mantenedor
 
 O jogo mostra os botões do PS2 (triângulo, círculo, xis, quadrado, L1/R1/L2/R2, START, SELECT, os direcionais e os
-analógicos) nos menus, nas telas de ajuda, na lista de golpes, nos tutoriais e no HUD. O Lucas quer saber se dá para
+analógicos) nos menus, nas telas de ajuda, na lista de golpes, nos tutoriais e no HUD. O mantenedor quer saber se dá para
 trocar pelos do 360 (A, B, X, Y, LB/RB, LT/RT, Start, Back) e quanto custa. **É só investigação**: nada de implementar.
 
 ## Limite

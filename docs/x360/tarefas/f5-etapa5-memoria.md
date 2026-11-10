@@ -22,7 +22,7 @@ Onde houver tipo, o teto genérico da classe sai. Nenhuma exceção nova para en
 erro de port a corrigir (no upstream só dentro de `#ifdef PORT_BIG_ENDIAN`, com o original no `#else`), e um campo sem
 conteúdo vivo só se exclui com o contexto provado.
 
-Também desta tarefa (resposta 2 do Lucas na etapa 3): as três posições que o `conv_tool --mapa` acusa nos roteiros
+Também desta tarefa (resposta 2 do mantenedor na etapa 3): as três posições que o `conv_tool --mapa` acusa nos roteiros
 `f5_*` (`docs/x360/plano/F5/03.md`): duas no `00005.bin` (0x7AC42 e 0x8CF02, o `Font_ReadChar` lendo 2 bytes no meio
 de um u32 que o conversor troca inteiro) e uma no `01432.bin` (0x18954, sem leitor anotado). Ache a largura certa de
 cada uma pelo leitor e corrija o conversor (ou prove que a leitura é de largura conhecida, com o leitor), até os

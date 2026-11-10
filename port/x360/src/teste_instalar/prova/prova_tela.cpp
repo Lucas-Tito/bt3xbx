@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
             if (gA.px[i] != gB.px[i])
                 exigir(i / 1280 >= TELA_Y + 8 * TELA_PASSO && i / 1280 < TELA_Y + 9 * TELA_PASSO,
                        "o giro desenhou fora da linha da categoria atual");
-        /* Todas as categorias prontas e a passagem ainda copiando o fim da ISO (o que o Lucas viu parado em
+        /* Todas as categorias prontas e a passagem ainda copiando o fim da ISO (o que se viu parado em
            1/11): o giro vai para a linha da cópia (linha 5) e anda por lote gravado, não por batida. */
         e = estado(IC_CONVERTER, 55, tudo, -1, 3366, 1000);
         e.c.passe_blocos = 10;

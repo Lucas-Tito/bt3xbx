@@ -187,7 +187,7 @@ muda). O XG não roda lá: o falso não tem dispositivo. As provas também não 
 hashes da base já batiam antes da mudança, ou seja, nos dois roteiros o jogo não chegou a escrever o `gGsMainFbp` do quadro
 seguinte enquanto a gravação ainda o lia. A captura fecha a janela; que ela existia é leitura do código.
 
-**O que só o console prova** (a rodada é do Lucas): no `bt3xbx.log`,
+**O que só o console prova** (a rodada é do mantenedor): no `bt3xbx.log`,
 
 1. as duas linhas `gs_d3d: calibração:` com "contadas" igual (ou muito perto) de "medidas": 64 de 8x8, 256 KB; 16 de
    256x256, 4096 KB;

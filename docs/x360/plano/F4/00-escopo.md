@@ -24,7 +24,7 @@ quatro redes de cobertura:
 | 7 | console | Caminho essencial no console, pelos roteiros (`BT3_ROTEIRO`) | mesmas telas da x86; capturas no patamar da F3; nenhuma queda |
 | 8 | WSL e console | Save entre builds (PPC e 360) | os dois sentidos carregam; save de PC cai no fluxo de "dados danificados" do jogo, sem queda |
 | 9 | WSL | Os outros modos pela mesma linha de produção (9a História e 9b Ultimate Battle, feitas; 9c o resto) | `unpacks.py` sem pendência; `--disco` 100% em todas as faixas de menu |
-| 10 | console | Sessão de 30 min com o Lucas pelos modos | o critério da F4 sem queda |
+| 10 | console | Sessão de 30 min com o mantenedor pelos modos | o critério da F4 sem queda |
 
 Critério da F4: no console, com o controle, do boot ao começo da luta pelo Duelo e pelo Treino, Opções com salvar e
 carregar, e os outros modos navegáveis; a sequência de telas igual à x86. Antes da etapa 5, um revisor independente

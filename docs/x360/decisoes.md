@@ -370,7 +370,7 @@ lutadores por lado ao mesmo tempo, com tela dividida para até 4 jogadores e um 
 port como está: é um programa em Python ao lado do PCSX2 que lê e escreve a RAM do PS2 pela PINE e engancha o código
 MIPS original, que o port não tem.
 
-Decisão do Lucas: portar depois que o BT3 estiver rodando bem no Xbox, reimplementando em C dentro do port, e só a
+Decisão do mantenedor: portar depois que o BT3 estiver rodando bem no Xbox, reimplementando em C dentro do port, e só a
 parte da tela dividida para 4 jogadores locais. O online fica de fora.
 
 Para quando chegar a hora: usar o mod como referência de comportamento e escrever a partir da decomp (traduzir o
@@ -413,7 +413,7 @@ convertida na hora em que o jogo a abre; as outras (fluxos de som e filmes) pass
 
 - **Por quê:** os conversores trocam no lugar, sem mudar tamanho nem posição, então converter na carga custa uma
   passada sobre os bytes de cada arquivo aberto. Sem instalador não há etapa de minutos no primeiro uso, nem 3 GB a
-  mais no HD, nem as pastas de milhares de entradas que o FATX não aguenta. Decisão do Lucas, entre as duas opções.
+  mais no HD, nem as pastas de milhares de entradas que o FATX não aguenta. Decisão do mantenedor, entre as duas opções.
 - **Onde:** `port/x360/src/iso360.c` (ISO 9660 e AFS) atrás do `fopen` do shim: o código do jogo e do port não
   muda. Arquivo em `mods/` continua valendo, como no PC, no formato do PS2: o que tem conversor se converte ao
   abrir, como a entrada da ISO (e também os dados soltos, sem ISO).
@@ -433,7 +433,7 @@ pelo código do jogo, que grava `u64` nativo (no 360 a metade alta fica primeiro
 convertidos palavra a palavra pela decisão 12 (a metade baixa primeiro, como no PS2). O leitor de pacotes
 (`port/src/gs/gs_core.c`, `gs_vu1.c`) não sabe de onde cada um veio.
 
-Decisão do Lucas, entre as duas saídas: **tudo o que vai para a GPU fica como a imagem do PS2 em palavras de 32 bits
+Decisão do mantenedor, entre as duas saídas: **tudo o que vai para a GPU fica como a imagem do PS2 em palavras de 32 bits
 nativas, a metade baixa primeiro**, na memória principal e na da VU.
 
 - **No código do jogo:** toda gravação de 64 bits num pacote passa por uma macro que, em `PORT_BIG_ENDIAN`, troca as
@@ -482,11 +482,11 @@ escolha do backend em `#ifdef PORT_X360`); o backend novo é `port/x360/src/gs/g
 `gs_d3d.hlsl` (tradução de `gs.vert` e `gs.frag`) compilados pelo `fxc` do XDK no `build_f2.sh`. A mesma build roda
 sem janela (padrão) ou desenhando (`BT3_GS=gpu` no `environment.txt`).
 
-Padrões que o Lucas deixou e que podem ser revertidos:
+Padrões que o mantenedor deixou e que podem ser revertidos:
 
 - **SCALE = 1.** Um alvo do GS de 1024 x 1024 com profundidade ocupa 832 + 832 dos 2.048 tiles da EDRAM. Escala maior
   exige tiling predicado.
-  **Revisto em 21/10/2026:** o Lucas decidiu trazer a resolução interna maior (720p em 4:3: escala 2, 1280 x 896 reduzida a
+  **Revisto em 21/10/2026:** o mantenedor decidiu trazer a resolução interna maior (720p em 4:3: escala 2, 1280 x 896 reduzida a
   960 x 720, ou uma escala perto de 1,6) para dentro da F5, etapa 8, no fim dela, depois de a luta chegar aos 30 fps. Sem
   tiling predicado, cabe na EDRAM se cada alvo tiver o tamanho da área usada (1280 x 896 com profundidade: 1.792 dos 2.048
   tiles), não os 1024 x 1024 fixos de hoje. A GPU da luta estava em 11 a 13 ms; a estimativa a 720p é de 25 a 35 ms (escala 2)
@@ -494,7 +494,7 @@ Padrões que o Lucas deixou e que podem ser revertidos:
   **Decidido em 23/10/2026:** a escala padrão é **1,33** (área de 648 x 456, 864 x 608 na EDRAM), uniforme, com o afiado
   da arte 2D (`BT3_AFIADO=1`) e os alvos residentes na EDRAM (`BT3_EDRAM_RESIDENTE=1`), todos ligados por padrão. Medida no
   console pelo roteiro `f5_duelo` em 16:9: a GPU da pausa em 26,6 ms sem as marcas, a luta com 0,30% das imagens em 3
-  vblanks e nenhuma em 4. A 1,5 e a 1,6 não cabem (35,6 e 40,5 ms com as otimizações) e o Lucas desistiu delas: o próximo
+  vblanks e nenhuma em 4. A 1,5 e a 1,6 não cabem (35,6 e 40,5 ms com as otimizações) e o mantenedor desistiu delas: o próximo
   passo de imagem é o FXAA com a interface protegida ([F5/08-720p](plano/F5/08-720p.md), seções 9 a 11).
 - **Saída 1280 x 720**, a imagem 4:3 (512 x 448 do GS) em 960 x 720 no meio da tela, filtro linear.
 - **O desenho na thread do jogo,** com present a cada quadro do GS. A main cria o dispositivo e o solta
@@ -553,7 +553,7 @@ carga da demo 98,9%. Três problemas, corrigidos na segunda versão:
 do título (2200, arte ampliada) é filtrado no console e pixelado na referência: a diferença é da referência, que nunca
 filtra. Os menus ficaram em 16,2 ms por quadro sem as capturas (a lentidão era delas). A luta não trava mais logo no
 começo, mas esgota a memória: 128 MB de texturas, 24 alvos e 3 MB livres; alvos e texturas recusados, a thread do
-jogo parada de 8 a 80 s e, sem memória livre, a Guide sem abrir até o console travar. Escolha do Lucas: fechar a
+jogo parada de 8 a 80 s e, sem memória livre, a Guide sem abrir até o console travar. Escolha do mantenedor: fechar a
 etapa aqui, parar os testes antes da luta (`BT3_ATE=4400`) e começar a F5 por um teto de memória no backend
 (`plano/F3.md`, riscos anotados para a F5).
 
@@ -562,7 +562,7 @@ etapa aqui, parar os testes antes da luta (`BT3_ATE=4400`) e começar a F5 por u
 
 Etapa 8 da F3. O XInput (`port/x360/src/f2/pad360.c`) responde aos dois controles do PS2 que o jogo lê
 (`scePad2GetState` e `scePad2Read`, `port/src/plat_stub.c`; `scePad2GetState` só consulta o controle em
-`PORT_X360`). Escolha do Lucas:
+`PORT_X360`). Escolha do mantenedor:
 
 - **O jogador 1 é o primeiro controle ligado, em qualquer quadrante do anel; o jogador 2 é o seguinte.** O índice do
   XInput é o quadrante, que o título não escolhe, e o jogo espera o controle 1 no boot (`FirstRun_WaitPad`, laço
@@ -595,7 +595,7 @@ Detalhes que a revisão crítica trouxe:
 
 ## 22. F4: todos os menus, o essencial antes; save nativo em `game:\saves` (13/10/2026)
 
-Escolhas do Lucas para a F4 (`plano/F4/00-escopo.md`):
+Escolhas do mantenedor para a F4 (`plano/F4/00-escopo.md`):
 
 - **Escopo: todos os pacotes de menu, o caminho essencial antes.** O essencial é o menu principal, o submenu dos
   modos, o Duelo, o Treino até a luta começar, as Opções e o save. Os outros modos vêm na etapa 9, pela mesma linha
@@ -635,9 +635,9 @@ Escolhas do Lucas para a F4 (`plano/F4/00-escopo.md`):
   - Dragon Net Battle escondido no 360, com o mesmo valor em x86, PPC e console, para os roteiros não se
     desalinharem no menu.
 
-## 23. ISO convertida antes do jogo (14/10/2026; revista pelo Lucas em 29/10/2026)
+## 23. ISO convertida antes do jogo (14/10/2026; revista em 29/10/2026)
 
-A escolha de 14/10 tirou a conversão da carga e criou uma ISO preparada no PC. O Lucas reviu **somente onde a
+A escolha de 14/10 tirou a conversão da carga e criou uma ISO preparada no PC. O mantenedor reviu **somente onde a
 conversão roda**: ao encontrar a USA original na raiz, o próprio console oferece prepará-la, com progresso e
 preservação da original. O PC continua disponível com `convert_iso.py`. Implementação e provas locais em
 [plano/F8/03-conversao-console.md](plano/F8/03-conversao-console.md); XDK e console aguardam revisão.
@@ -660,7 +660,7 @@ preservação da original. O PC continua disponível com `convert_iso.py`. Imple
 
 ## 24. F5: a luta de teste e as escolhas de arquitetura (16/10/2026)
 
-As nove perguntas do plano da F5 ([plano/F5/00-escopo.md](plano/F5/00-escopo.md), seção 5), respondidas pelo Lucas
+As nove perguntas do plano da F5 ([plano/F5/00-escopo.md](plano/F5/00-escopo.md), seção 5), respondidas pelo mantenedor
 com as recomendações do estudo:
 
 1. **A luta:** um Duelo fixo jogável, mais uma janela de 90 s no Treino; escala 1 e 4:3 atuais. Goku (Early) contra
@@ -684,7 +684,7 @@ com as recomendações do estudo:
 
 ## 25. F6: as escolhas de áudio e filmes (17/10/2026)
 
-As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md), seção 5), respondidas pelo Lucas:
+As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md), seção 5), respondidas pelo mantenedor:
 
 1. **O estado do som que o jogo vê:** contado em vblanks pela duração do arquivo (a), como nos roteiros, com a
    deriva entre o fim contado e o fim ouvido medida no console; o estado lido do mixer real, mais fiel ao PS2, ficou
@@ -697,7 +697,7 @@ As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md)
 5. **Filmes:** decodificados na thread do jogo (a); outra opção só se aparecer problema. **Confirmada no console em
    22/10/2026** ([F6/06](plano/F6/06.md), seção 5.8): com a leitura em blocos e a imagem direto à textura, a decodificação
    fica em p50 16,7 ms e p99 18,8 ms, o período entre imagens em p50 32,9 e p99 34,9 ms; a thread própria não é precisa.
-6. **A imagem do filme:** pela cadeia do jogo, medida (a). **Revista para (b) na etapa 6** (aprovada pelo Lucas, 22/10/2026):
+6. **A imagem do filme:** pela cadeia do jogo, medida (a). **Revista para (b) na etapa 6** (aprovada pelo mantenedor, 22/10/2026):
    a imagem decodificada vai direto a uma textura do backend (`BT3_FILME`, ligada por padrão desde a rodada do console de
    22/10/2026); a cadeia do jogo custava quatro cópias por imagem.
 7. **Sincronismo do filme:** livre como no PS2 (a), com a deriva medida.
@@ -714,11 +714,11 @@ As nove perguntas do plano da F6 ([plano/F6/00-escopo.md](plano/F6/00-escopo.md)
 
 ## 26. 16:9 ligado já, na etapa de desempenho da F5 (22/10/2026)
 
-O Lucas decidiu ligar a imagem 16:9 (o `BT3_WIDE` do port de PC, estudo em `plano/F8/16x9.md`) agora, durante a etapa 8 da
+O mantenedor decidiu ligar a imagem 16:9 (o `BT3_WIDE` do port de PC, estudo em `plano/F8/16x9.md`) agora, durante a etapa 8 da
 F5, em vez de deixá-la para a F8: as otimizações de desempenho passam a ser medidas com a carga do 16:9 (a câmera mais aberta
 mostra mais objetos), e a resolução maior (o 720p adiado) vem depois. Escolhas:
 
-1. **Filmes:** esticados para 16:9, sem barras (preferência do Lucas).
+1. **Filmes:** esticados para 16:9, sem barras (preferência do mantenedor).
 2. **Menus:** esticados, como no PC.
 3. **HUD:** estreitado como no PC; na escala 1 ele perde definição (uma coluna em quatro ou borrado), aceito por enquanto;
    a cura (uma escala horizontal de 1,5) vem com a resolução maior.
@@ -730,22 +730,22 @@ mostra mais objetos), e a resolução maior (o 720p adiado) vem depois. Escolhas
 
 O critério antigo de trabalho por passo (p99 até 30 ms) media o intervalo entre leituras do controle, que fica perto de
 33,37 ms por construção, e passava mesmo com engasgo na tela. A preparação da rodada final (`plano/F5/10.md`, seção 2)
-propôs medir pela tela e aceitar até 1% de imagens com três vblanks. O Lucas escolheu:
+propôs medir pela tela e aceitar até 1% de imagens com três vblanks. O mantenedor escolheu:
 
 1. **Apresentação:** zero imagens com três vblanks ou mais no combate, em cada uma das três janelas longas (fria e duas
    aquecidas), sem vblank de folga nem atraso de entrada somado. O 1% aceitaria até 28 engasgos por janela de 1,5 min,
    catorze vezes o que a rodada o1 de 23/10 mostrou (2 de 2.334).
 2. **Trabalho por passo:** só informativo, publicado em percentis.
-3. **Se o zero se mostrar inviável** (os picos da GPU na troca de cena sem corte possível), o plano muda com o Lucas,
+3. **Se o zero se mostrar inviável** (os picos da GPU na troca de cena sem corte possível), o plano muda com o mantenedor,
    sem afrouxar o critério sozinho.
 
 ## 28. F7: as escolhas do escopo (28/10/2026)
 
-O escopo da F7 (`plano/F7/00-escopo.md`, seção 5) pediu quatro escolhas. O Lucas ficou com as recomendações:
+O escopo da F7 (`plano/F7/00-escopo.md`, seção 5) pediu quatro escolhas. O mantenedor ficou com as recomendações:
 
 1. **Tela dividida:** o mesmo aceite da decisão 27, 30 fps e zero imagens com três vblanks ou mais nas três janelas, sem
    perda de imagem nem atraso de entrada. A medida vem cedo (etapa 3 e a sonda da 7); se não couber, os números voltam ao
-   Lucas antes de qualquer limite próprio ou corte de escala e efeitos só no dividido.
+   o mantenedor antes de qualquer limite próprio ou corte de escala e efeitos só no dividido.
 2. **Modos:** todo o jogo base nesta fase, com campanhas completas, as 100 missões, os cursos, a loja, os replays e o
    Torneio entre dois humanos. Só os gaps já adiados (Namek, deserto escuro) seguem para o fechamento no fim do plano.
 3. **Desbloqueios:** a progressão original. Cartões avançados só para teste, gerados fora do repositório, e casos de
@@ -757,7 +757,7 @@ O escopo da F7 (`plano/F7/00-escopo.md`, seção 5) pediu quatro escolhas. O Luc
 
 O perfil fino de 28/10 (`plano/F5/08-gravacao.md`, seção 31) mostrou que nenhum corte pequeno fecha os 10,9 ms que o
 zero da decisão 27 pede nas trocas de cena (quadros 6929 e 6959): a soma otimista dos candidatos dá 5,9 ms. Das cinco
-opções da seção 31, o Lucas escolheu:
+opções da seção 31, o mantenedor escolheu:
 
 1. **Reprojetar a cadeia** (gravação no Xenon, `frame_end` e a cauda da GPU) mantendo o zero, a imagem e a entrada:
    sem vblank de folga, sem atraso de entrada, sem baixar resolução nem cortar efeitos.
@@ -768,24 +768,24 @@ opções da seção 31, o Lucas escolheu:
    (decisão 26), sem que isso vire requisito desta etapa.
 4. **Se o reprojeto não fechar** sem regressão, aceitar a exceção (opção E da seção 31): imagens de três vblanks só
    nas trocas de cena dentro da luta, nenhuma de quatro ou mais, conferidas nas três janelas longas. Os termos exatos
-   voltam ao Lucas com os números antes de valer, e a mesma regra se aplica à tela dividida da F7 (decisão 28).
+   voltam ao mantenedor com os números antes de valer, e a mesma regra se aplica à tela dividida da F7 (decisão 28).
 
 ## 30. Os ícones dos botões do 360 entram na conversão da ISO (28/10/2026)
 
 O estudo `pesquisa/04-icones-botoes.md` achou os 28 ícones numa folha só do arquivo de boot (`00004.bin`, entrada 8),
-que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
+que serve o texto, o HUD, as lições e a lista de golpes. O mantenedor escolheu:
 
 1. **A troca é um passo da conversão da ISO** (opção a do estudo), no código de conversão comum, para valer na conversão
    pelo PC (`convert_iso.py`) e na conversão pelo próprio console quando ela vier (F8, pendência 2: o console detecta
    a ISO não convertida e faz a conversão). Reconverter não pesa: o repositório é privado, e a conversão que for
    publicada já sai com os ícones. A marca da ISO convertida muda de versão, e uma convertida sem os ícones é recusada com a mesma caixa
-   da original, sem caixa própria de versão (o Lucas não quer: só a conversão publicada vai existir).
+   da original, sem caixa própria de versão (o mantenedor não quer: só a conversão publicada vai existir).
 2. **Só os ícones do 360 no console.** Os do PS2 continuam nas builds de teste do WSL, que leem os dados originais.
 3. **O "voltar" dos menus continua no Y**, fiel ao físico (o jogo volta com o triângulo): só a arte muda, nenhuma
    mudança de entrada.
 4. **A arte é a do Kenney** ([Input Prompts](https://opengameart.org/node/159839), versão 1.5A, de Kenney,
-   www.kenney.nl, domínio público CC0), escolhida pelo Lucas numa comparação com uma arte gerada pelo projeto e com
-   a do Xelu, todas reduzidas a 32x32 e 16 cores. A licença não exige crédito, mas o Lucas quer o crédito ao autor
+   www.kenney.nl, domínio público CC0), escolhida numa comparação com uma arte gerada pelo projeto e com
+   a do Xelu, todas reduzidas a 32x32 e 16 cores. A licença não exige crédito, mas o mantenedor quer o crédito ao autor
    no repositório. Nunca a arte da Microsoft, nenhum byte do jogo no repositório. O passo da conversão recebe a arte
    como entrada, para trocar de fonte sem mexer no resto.
 5. **SELECT fica como está:** o 360 também tem o botão de selecionar, então nem o ícone 8 nem o texto "SELECT button"
@@ -794,14 +794,14 @@ que serve o texto, o HUD, as lições e a lista de golpes. O Lucas escolheu:
 ## 31. F6: a igualdade x86 = PPC basta como referência do decodificador de filme (28/10/2026)
 
 A rodada final da F6 (etapa 9) exigia comparar o decodificador de filme do port com o programa de referência do
-libmpeg2 (`mpeg2test`), que não existe no clone do upstream. O Lucas escolheu aceitar a prova que já existe: os 7.010
+libmpeg2 (`mpeg2test`), que não existe no clone do upstream. O mantenedor escolheu aceitar a prova que já existe: os 7.010
 quadros dos filmes com hash RGBA idêntico entre x86 e PPC, mais os filmes vistos certos no console (22/10 e 28/10).
 O caso `filme-referencia-upstream` deixa de reprovar a rodada e passa a constar como dispensado por esta decisão;
 não se busca nem se compila o `mpeg2test`.
 
 ## 32. F5: o alfa exato vira padrão quando provado, e os prefixos vão para o D3D (28/10/2026)
 
-Com o reprojeto da decisão 29 em andamento, o Lucas respondeu às duas perguntas da seção 36 do `08-gravacao.md`:
+Com o reprojeto da decisão 29 em andamento, o mantenedor respondeu às duas perguntas da seção 36 do `08-gravacao.md`:
 
 1. **O alfa exato vira o padrão da build** (a chave de compilação `BT3_ALFA_ORIGEM` passa a ser a da build normal)
    quando o console confirmar o ganho nas repetições da rodada ap35a2810 e as provas da seção 28 mostrarem a mesma
@@ -809,11 +809,11 @@ Com o reprojeto da decisão 29 em andamento, o Lucas respondeu às duas pergunta
 2. **Os prefixos vão para o D3D** (`BT3_GS_LOTES`, desligado por padrão), começando pela medida do relógio da
    gravação por faixa no Xenon. As duas consultas que mudam de lugar (o plano do quadro anterior e o limite do DATE)
    exigem a prova de imagem igual antes de qualquer ganho valer. O teto do modelo no 6960 é de 13,0 a 15,9 ms contra
-   os 10,6 que faltam; se a medida no console mostrar que não fecha, os números voltam ao Lucas para a exceção E.
+   os 10,6 que faltam; se a medida no console mostrar que não fecha, os números voltam ao mantenedor para a exceção E.
 
 ## 33. F8: as escolhas do escopo da primeira release (29/10/2026)
 
-O escopo da F8 (`plano/F8/00-escopo.md`, seção 6) pediu onze escolhas. O Lucas respondeu:
+O escopo da F8 (`plano/F8/00-escopo.md`, seção 6) pediu onze escolhas. O mantenedor respondeu:
 
 1. **Sem prévia antes da F7 completa:** uma release só, a `1.0.0`.
 2. **Sem opções do port nem remapeamento** na primeira release: padrões fixos e a configuração de controle do próprio jogo.
@@ -835,7 +835,7 @@ O escopo da F8 (`plano/F8/00-escopo.md`, seção 6) pediu onze escolhas. O Lucas
 
 Na pendência 5 da F8 (o deserto à noite escuro demais no console), a H9 da F5 (`plano/F5/09.md`) apontava o brilho
 somado do 360 mais fraco e deslocado que o do rasterizador x86. O port de PC soma o brilho e o clarão a 60% do que as
-passadas do jogo dão (`GLOW_DEFAULT 60`, `port/src/gs/gs_draw.h`, escolha do upstream de 06/10). O Lucas decidiu:
+passadas do jogo dão (`GLOW_DEFAULT 60`, `port/src/gs/gs_draw.h`, escolha do upstream de 06/10). O mantenedor decidiu:
 
 1. **O brilho do 360 fica igual ao do port de PC com 60%**: forma, posição e força do halo como as do caminho de GPU do
    PC. **Não sobe para os 100% do PS2** (a preferência é não ficar muito brilhoso).
@@ -848,7 +848,7 @@ passadas do jogo dão (`GLOW_DEFAULT 60`, `port/src/gs/gs_draw.h`, escolha do up
 A etapa 4 da F7 (elenco, trajes, transformações, fusões, estágios) foi estimada em 256 a 316 h de máquina no ritmo do
 Deck (`plano/F7/04.md`, seção 2), e as etapas 4, 5 e 6 juntas em 360 a 500 h: de uma a três semanas com o WSL e o Deck
 ligados. Quase todo esse custo é a PPC no qemu, que só prova que o código big-endian se comporta como o x86, coisa já
-provada nas F4 e F6 e nos pilotos da F7 (e aceita como referência na decisão 31). O Lucas decidiu:
+provada nas F4 e F6 e nos pilotos da F7 (e aceita como referência na decisão 31). O mantenedor decidiu:
 
 1. **As etapas 4, 5 e 6 da F7 não rodam para a primeira release.** O lote do elenco, pronto e provado na x86 em
    laboratório, foi desarmado antes de rodar. A primeira release não espera a F7 inteira; o critério de conteúdo da F8
@@ -865,7 +865,7 @@ conversor não cobre (a transição de destruição do cenário, o modelo extra 
 da carga: com a conversão na carga, o mesmo conversor deixaria os mesmos arquivos crus. Medido no console: converter os
 3.325 arquivos leva 71,5 s de CPU (uns 21 ms por arquivo), e na F4 a conversão na carga somava 772 ms em 28 arquivos do
 boot; na luta, as cargas de transformação, troca de membro, modelo de golpe e cenário pagariam de 1 a 9 quadros longos
-cada (estimado), contra o zero da decisão 27. O Lucas decidiu:
+cada (estimado), contra o zero da decisão 27. O mantenedor decidiu:
 
 1. **A conversão segue antecipada** (na ISO, pelo console ou pelo PC). A cobertura do conversor é que se fecha, pelo
    banco de carga estendido a tudo que o jogo carrega (`plano/F7/05-banco-de-carga.md`).
@@ -876,9 +876,9 @@ cada (estimado), contra o zero da decisão 27. O Lucas decidiu:
 
 ## 37. F8: a imagem da primeira release é a 1,4 com o MSAA 2x, sem o FXAA (30/10/2026)
 
-O Lucas não ficou satisfeito com a nitidez da 1,33 com o FXAA nem da 1,5; o protótipo do MSAA resolveu o incômodo dele, e
+O mantenedor não ficou satisfeito com a nitidez da 1,33 com o FXAA nem da 1,5; o protótipo do MSAA resolveu o incômodo dele, e
 o FXAA por cima não acrescentou (`plano/F8/10-msaa.md`, seção 8). A rodada do MSAA completo (seção 9.9) mediu na luta da
-1,4 uma folga da GPU com mediana de 8,9 ms e 1% piores em 3,1 ms. O Lucas decidiu:
+1,4 uma folga da GPU com mediana de 8,9 ms e 1% piores em 3,1 ms. O mantenedor decidiu:
 
 1. **A escala padrão passa a 1,4** (área de 640 x 480, alvo de 896 x 672), no lugar da 1,33 de 23/10. A 1,5 fica de fora:
    com o MSAA ela encosta no prazo (pausa com mínimo de 0,0 ms).
@@ -893,14 +893,14 @@ o FXAA por cima não acrescentou (`plano/F8/10-msaa.md`, seção 8). A rodada do
 O reprojeto da decisão 29 não fechou o zero: os prefixos (`BT3_GS_LOTES`) pioraram o ritmo até desligados e saíram da
 primeira release (`plano/F5/08-gravacao.md`, seção 41), e o alfa exato entrou como padrão (decisão 32). No duelo do
 `f5_duelo.txt` a build normal ficou com 3 imagens de três vblanks em 2.334 no combate e nenhuma de quatro ou mais
-(`nor1`, rodada `le40a2910` de 30/10). O Lucas aceitou a exceção E do item 4 da decisão 29 para a primeira release:
+(`nor1`, rodada `le40a2910` de 30/10). O mantenedor aceitou a exceção E do item 4 da decisão 29 para a primeira release:
 imagens de três vblanks só nas trocas de cena dentro da luta, nenhuma de quatro ou mais, conferidas na sessão final com
 a build da release; a mesma regra vale para a tela dividida da F7 (decisão 28). O zero continua como meta depois da
 release.
 
 ## 39. F8: a tela dividida da primeira release sai com o recorte do estágio e o desenho no núcleo do áudio (31/10/2026)
 
-O Lucas achou lenta a luta dividida e quis a melhora nesta release (`plano/F8/13-tela-dividida.md`). No roteiro
+O mantenedor achou lenta a luta dividida e quis a melhora nesta release (`plano/F8/13-tela-dividida.md`). No roteiro
 `f7_perfil_dividido.txt` (só defesa, três janelas de 600 passos), o trabalho por passo e as imagens de três vblanks ou
 mais ficaram assim:
 
@@ -925,9 +925,9 @@ jogador (`f5_duelo.txt`, `dh5duelo` contra a `i1` do mesmo dia) ficou igual: com
 
 ## 40. F9: BT4 e tela dividida pela base do Tag Team, com licença AGPL-3.0 (04/11/2026)
 
-O Lucas aprovou incorporar deliberadamente a v0.1.37 do Tenkaichi3Decomp e aceitar
+O mantenedor aprovou incorporar deliberadamente a v0.1.37 do Tenkaichi3Decomp e aceitar
 sua licença AGPL-3.0. O LICENSE passa a ser o do upstream, conservando LICENSE-MIT.
-As menções públicas de licença do fork e do pacote ficam para a auditoria do Lucas;
+As menções públicas de licença do fork e do pacote ficam para a auditoria do mantenedor;
 a lista de propostas acompanha a entrega da etapa 1.
 
 A frente passa a abranger o Budokai Tenkaichi 4 B14 Rev2 e a tela dividida local
@@ -972,7 +972,7 @@ Aplicação da tarefa `conversor-mods`, com a opção conservadora nela autoriza
    file[0] com duas entradas não atendem aos leitores da USA e recebem recusa explícita, sem publicação. Não se
    inventa uma conversão nem se embutem dados originais para repará-los. A prova positiva com essa PT-BR fica
    pendente. Um controle privado com oito entradas restauradas da ISO do usuário não conta como essa prova.
-5. Por decisão do Lucas em 4/11, a sonda e o leitor exFAT saem do escopo. Os commits da sonda são revertidos
+5. Por decisão do mantenedor em 4/11, a sonda e o leitor exFAT saem do escopo. Os commits da sonda são revertidos
    com `git revert`. Não há transferência da ISO pela rede. Origens acima de 4 GiB são convertidas somente
    no PC e levadas ao 360 em partes; o BT3 que cabe no armazenamento continua convertendo no console.
 6. Haverá um `default.xex` único para BT3 e BT4, escolhido pelos dados. As assinaturas `BT3X360-ISO` e
@@ -980,15 +980,15 @@ Aplicação da tarefa `conversor-mods`, com a opção conservadora nela autoriza
    A E/S com 64 bits e o inventário separado do cabeçalho AFS permitem ampliar pacotes e formatos nessa outra tarefa.
 
 Detalhes e critérios em [F8/03](plano/F8/03-conversao-console.md). Os novos textos ingleses em `iso_avisos.h` são
-propostas em uso, a revisar pelo Lucas; não bloqueiam o desenvolvimento. A rodada WSL foi aprovada e a compilação
+propostas em uso, a revisar pelo mantenedor; não bloqueiam o desenvolvimento. A rodada WSL foi aprovada e a compilação
 cruzada Windows passou; execução Windows, XDK e console continuam provas separadas da simulação Linux.
 
-Atualização pela tarefa `conversor-ptbr` (4/11/2026): Lucas pediu superar as oito recusas mediante prova da PT-BR
+Atualização pela tarefa `conversor-ptbr` (4/11/2026): o mantenedor pediu superar as oito recusas mediante prova da PT-BR
 intacta, substituindo o encerramento conservador da tarefa anterior. A investigação encontrou queda na x86 crua
 antes da conversão, durante `Option_Init`, e corrigiu a identificação dos sete arquivos finais: são modelos extras,
 não vagas do elenco. O leitor real devolve um ponteiro ao fim de cada um ao pedir o modelo. Isso ainda não explica
 o comportamento do PS2 nem cumpre o pedido de aceitação. A recusa continua no código enquanto essa divergência
-estiver sem solução; não constitui aprovação de novo escopo pelo Lucas. Evidências e limites em
+estiver sem solução; não constitui aprovação de novo escopo pelo mantenedor. Evidências e limites em
 [F8/03, investigação da PT-BR intacta](plano/F8/03-conversao-console.md#investigação-da-pt-br-intacta-tarefa-conversor-ptbr-4112026).
 
 Julgamento da rodada final: Opções reprovada na x86 crua; instaladores host e PPC recusam 00453 com saída 4.
@@ -1000,7 +1000,7 @@ mas mantém pendente o aceite pedido; o resultado global do serviço não aprova
 
 (Os números 40 e 41 são o BT4 com o Tag Team, do `bt4-base`, e as modificadas do `conversor-dublagens`, que entram por merge.)
 
-O Lucas achou a imagem do cenário macia demais e, jogando, apontou dois incômodos: o desfoque da distância (`StgFog_Draw`,
+O mantenedor achou a imagem do cenário macia demais e, jogando, apontou dois incômodos: o desfoque da distância (`StgFog_Draw`,
 confirmado em 04/11 com o corte) e um cintilado no cenário. Sessão de console de 05/11, à mão, com o estágio que ele usa:
 
 1. **Os cinco tratamentos de desfoque do port de PC ficam ligados por padrão no 360** (`BT3_SHARP_BLUR`,
@@ -1019,7 +1019,7 @@ confirmado em 04/11 com o corte) e um cintilado no cenário. Sessão de console 
    Na mesma sessão: a cadeia para em 32 x 32 (na forma não compactada os níveis menores custavam um bloco de 4 KB cada e a
    memória das texturas tinha subido 51%) e, nos desenhos com teste de alfa, o alfa vem do nível 0 (com a média a folhagem
    sumia de perto; uma conservação da cobertura com limite chutado desmatou o cenário e ficou desligada, `BT3_MIPMAP_REF`).
-   O Lucas aprovou: plantas "ótimas" e o cintilado resolvido. No roteiro do Duelo (mesma luta): texturas 107,2 MB contra
+   O mantenedor aprovou: plantas "ótimas" e o cintilado resolvido. No roteiro do Duelo (mesma luta): texturas 107,2 MB contra
    81,9 sem mipmap (teto 128, 111 MB livres), folga da GPU no combate mediana 8,4 ms contra 8,6 e p1 2,6 contra 2,8, e 7
    imagens atrasadas no começo da luta contra nenhuma (a geração dos níveis na carga; a tirar do caminho crítico).
 4. Ficam opcionais e desligados: o alfa para cobertura (`BT3_MSAA_A2C`, não ajudou as árvores o bastante) e o filtro
@@ -1035,14 +1035,14 @@ confirmado em 04/11 com o corte) e um cintilado no cenário. Sessão de console 
    metade dos gradientes da cor, um nível mais nítido que ela. Com 0 (só o nível 0) as plantas ficavam nítidas em
    qualquer distância; com 50 "mais naturais"; 25 não teve diferença visível de 50.
    Efeito conhecido do mipmap, aceito por enquanto: **listras na sombra dos lutadores** em alguns ângulos (somem com
-   `BT3_MIPMAP=0`; provavelmente a textura em degraus do sombreado lida num nível reduzido). O Lucas confere no jogo
+   `BT3_MIPMAP=0`; provavelmente a textura em degraus do sombreado lida num nível reduzido). O mantenedor confere no jogo
    original se algo parecido existe; se for preciso, tira-se o mipmap só dessas texturas.
-6. **Sessão de 06/11 à tarde (build 3782f8fd): lutadores e folhagem.** No jogo livre o Lucas achou o lutador estranho.
+6. **Sessão de 06/11 à tarde (build 3782f8fd): lutadores e folhagem.** No jogo livre o mantenedor achou o lutador estranho.
    A causa: a segunda passada do lutador (programa 0 da VU1) lê a rampa do sombreado como tabela, em (0,5 + 0,5 N.L, 0),
    e a subtrai da cor; o jogo a declara com 256 x 256 (PSMT8, bloco 0x3D40) para 2 linhas reais, e os níveis gerados
    misturavam faixas e o que vinha depois na memória do GS. **Padrão novo `BT3_MIPMAP_LUTADOR=1`:** a rampa e o fade
    (0x3D40..0x3E80) só com o nível 0; os materiais do lutador (0x3480 com paleta em 0x3C00) com níveis, porque de longe
-   guardam o detalhe que o Lucas viu sumir sem eles (0 tira de tudo do lutador; 2 é o antigo). Listras e o aspecto
+   guardam o detalhe que o mantenedor viu sumir sem eles (0 tira de tudo do lutador; 2 é o antigo). Listras e o aspecto
    estranho sumiram. No roteiro do Duelo o combate ficou igual com e sem níveis nos materiais (p50 25,61 e 25,60 ms,
    0,13% de imagens de três vblanks); no começo da luta, 2 imagens de três vblanks com eles e 0 sem, pelas ~160 texturas
    a mais na carga. **O alfa da folhagem volta a 0** (`BT3_MIPMAP_ALFA`): no cenário do Duelo o 50 deixava as árvores
@@ -1057,12 +1057,12 @@ As decisões 40 e 41 registram os ramos próprios, cujas implementações ficam 
 
 A tela vermelha do `main360.cpp` (laço com a cor da fase depois de uma falha, o motivo só no `bt3xbx.log` e no
 `output.txt`) serve às nossas rodadas: diz que falhou e onde procurar. Em 06/11 ela apareceu no console por um
-caminho de roteiro errado no `environment.txt`, e o Lucas reafirmou o que já valia desde a preparação da 1.0.x,
+caminho de roteiro errado no `environment.txt`, e o mantenedor reafirmou o que já valia desde a preparação da 1.0.x,
 junto com o log e os diagnósticos desligados na versão pública:
 
 1. **Na versão pública o usuário final não vê a tela vermelha.** Ela continua nas builds de teste.
 2. Fechamento na preparação da 1.1.0: caixa do sistema com motivo em inglês, apresentações vivas até o OK e
-   volta ao dashboard. Textos novos são propostas para auditoria do Lucas em [release-1.1.0](release-1.1.0.md).
+   volta ao dashboard. Textos novos são propostas para auditoria do mantenedor em [release-1.1.0](release-1.1.0.md).
    A cor exige compilação BT3_TESTE_FALHAS=1; log ligado não habilita cor na build pública.
 3. Falha no início do renderer conserva o dispositivo da main para o aviso e sai pelo caminho comum. Sem
    dispositivo, não há Present para a caixa ou Guide: volta diretamente ao dashboard. Também sai diretamente se

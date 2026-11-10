@@ -6,7 +6,7 @@ filme.py log bt3xbx.log [--tipo op|ed]
 filme.py controles
 
 Capturas: escala 1, antes do fade e do FXAA; filtro no ponto, igual ao decodificador. Todos os arquivos são
-obrigatórios. Aceite por imagem: >=98% até 8 por canal E PSNR >=30 dB. A aprovação visual ainda cabe ao Lucas.
+obrigatórios. Aceite por imagem: >=98% até 8 por canal E PSNR >=30 dB. A aprovação visual ainda cabe ao mantenedor.
 Log: usa o vblank que mostrou a imagem e PCM consumido, incluindo o atraso inicial e o intervalo até a próxima
 imagem. Não transforma a primeira amostra em zero. Falha em lacunas, silêncio sem relógio e rodada incompleta.
 """

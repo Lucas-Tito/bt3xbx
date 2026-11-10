@@ -6,7 +6,7 @@
 #include "save_importa_360.h"
 #include "diario.h"
 
-/* As pastas da importação ficam dentro da pasta de saves (pedido do Lucas, 3/11/2026), para a pasta do jogo continuar
+/* As pastas da importação ficam dentro da pasta de saves (pedido do mantenedor, 3/11/2026), para a pasta do jogo continuar
    só com os arquivos do jogo, a ISO e saves: <saves>\import (com done, skipped e failed), <saves>\export e
    <saves>\backup\NNN, ao lado de <saves>\card1, onde o jogo grava. */
 

@@ -52,7 +52,7 @@ e recusa se um dia ele importar outra coisa (teria de entrar no pacote).
 
 [Lido] Fica fora: qualquer ISO, AFS ou dado extraído, `environment.txt`, `saves`, logs, `crash.txt`, capturas,
 `.map`, `.pdb`, `.exe`, o `conv_tool` compilado (o usuário compila; a decisão 33 não pediu binário pronto). O `.map`
-e o `.pdb` da build da release ficam com o Lucas para resolver os `crash.txt` (escopo, 4.1).
+e o `.pdb` da build da release ficam com o mantenedor para resolver os `crash.txt` (escopo, 4.1).
 
 ## 2. Como gerar e verificar
 
@@ -70,7 +70,7 @@ python3 port/x360/tools/teste_pacote.py build/x360/pacote/bt3-x360-1.0.0.zip --t
   zip são iguais aos da árvore (é o que o `--estrito` também roda depois de gravar).
 - Reprodutível: entradas em ordem, data fixa (01/01/2026), permissões fixas, compressão 9. Dois empacotamentos do
   mesmo commit dão o mesmo zip byte a byte (seção 4).
-- Para conferir a pasta já aberta (por exemplo a que o Lucas vai copiar ao console), o verificador aceita a pasta
+- Para conferir a pasta já aberta (por exemplo a que o mantenedor vai copiar ao console), o verificador aceita a pasta
   `bt3-x360-1.0.0` no lugar do zip.
 
 ## 3. As regras do verificador
@@ -158,10 +158,10 @@ bater): sempre sai com 0; não confere os hashes; sem os nomes proibidos; sem as
 
 O log está em `$S/teste_pacote.log` (scratchpad desta sessão, fora do git).
 
-## 5. Escolhas feitas sem base, para o Lucas decidir
+## 5. Escolhas feitas sem base, para o mantenedor decidir
 
-**Respostas do Lucas (29/10/2026):** 1, sem resposta específica (fica como está); 2, as mensagens do `convert_iso.py`
-traduzidas para o inglês (o README diz "all done"); 3, Linux e WSL bastam; 5 e 6, a linha "Copyright (c) 2026 Lucas
+**Respostas do mantenedor (29/10/2026):** 1, sem resposta específica (fica como está); 2, as mensagens do `convert_iso.py`
+traduzidas para o inglês (o README diz "all done"); 3, Linux e WSL bastam; 5 e 6, a linha "Copyright (c) 2026 o mantenedor
 Tito (Xbox 360 port)" no `LICENSE`; 8, pediu explicação antes de decidir; 9, ok.
 
 1. **O leiaute `pc-tools/port/x360/...`** no zip, para o `convert_iso.py` ir sem mudança. A outra saída é mudar o
@@ -189,9 +189,9 @@ Tito (Xbox 360 port)" no `LICENSE`; 8, pediu explicação antes de decidir; 9, o
 10. **O que o `crash.txt` leva:** o README diz que não há dado pessoal (é o carimbo, os registradores e a pilha,
     `04-queda-e-logs.md`); conferir num `crash.txt` real.
 
-## 5a. A triagem automática das issues (29/10/2026, pedido do Lucas)
+## 5a. A triagem automática das issues (29/10/2026, pedido do mantenedor)
 
-O Lucas não quis fechar nada por prazo (os 14 dias saíram das regras e dos rótulos) e pediu duas automações:
+O mantenedor não quis fechar nada por prazo (os 14 dias saíram das regras e dos rótulos) e pediu duas automações:
 
 1. **Queda sem `crash.txt` fecha na hora.** O formulário "Crash report" põe o rótulo `crash`; a ação
    (`.github/workflows/issues-x360.yml`, lógica em `.github/scripts/triagem.js`) procura no texto o cabeçalho que o
@@ -203,7 +203,7 @@ O Lucas não quis fechar nada por prazo (os 14 dias saíram das regras e dos ró
    `feature-request` (rótulo novo) e `wontfix` comentam e fecham; `piracy` comenta, fecha e tranca (apagar a issue e
    bloquear a conta continuam à mão, o token da ação não pode); `needs-crash-txt` e `needs-info` só comentam. A mesma
    resposta não sai duas vezes (marca escondida no comentário).
-3. **Moderação** (31/10/2026; a preocupação do Lucas é spam, palavrão e baixaria): issue ou comentário de quem não é
+3. **Moderação** (31/10/2026; a preocupação do mantenedor é spam, palavrão e baixaria): issue ou comentário de quem não é
    dono, membro nem colaborador passa por uma lista de palavrões e ofensas em inglês e português (`OFENSAS`), outra de
    propaganda (`PROPAGANDA`) e um teto de 4 links que não sejam anexos do GitHub. O texto se compara sem acento, em
    minúsculas, com as trocas de letra comuns (`sh1t`, `p0rra`) e por palavra inteira (`Scunthorpe`, `computador` e
@@ -218,9 +218,9 @@ de qualquer nome (1), não fechar a queda sem arquivo (1), não trancar a pirata
 qualquer pessoa (2), comentar a mesma resposta de novo (2). Não roda no GitHub de verdade até o repositório subir;
 na primeira issue real, conferir a execução na aba Actions.
 
-**Fechado em 31/10/2026** (pendência 16): o Lucas manteve os formulários e a triagem e pediu a moderação (item 3).
+**Fechado em 31/10/2026** (pendência 16): o mantenedor manteve os formulários e a triagem e pediu a moderação (item 3).
 
-## 6. O que o Lucas deve auditar
+## 6. O que o mantenedor deve auditar
 
 | Arquivo | O que conferir |
 |---|---|
@@ -244,8 +244,8 @@ aberto para o teste do README ao pé da letra (escopo 1.1, Documentação).
 
 ## 7. A publicação da 1.0.0 (1/11/2026)
 
-Publicada em https://github.com/Lucas-Tito/bt3xbx/releases/tag/bt3-x360-v1.0.0 pelo Lucas, primeiro como rascunho e
-depois aberta. A tag ficou `bt3-x360-v1.0.0` (o Lucas quis o "bt3" no nome, igual ao do zip; continua fora do padrão
+Publicada em https://github.com/Lucas-Tito/bt3xbx/releases/tag/bt3-x360-v1.0.0 pelo mantenedor, primeiro como rascunho e
+depois aberta. A tag ficou `bt3-x360-v1.0.0` (o mantenedor quis o "bt3" no nome, igual ao do zip; continua fora do padrão
 `v*` do workflow do upstream, que está desligado no fork), sobre o commit 37ae9db7, o da build do zip (carimbo
 `37ae9db7 diff:da39a3ee5e`). O README do repositório passou a apontar para a página de releases (a6fed116).
 
@@ -260,18 +260,18 @@ Conferência depois de publicada: o zip baixado da página pública, sem login, 
 do `SHA256SUMS.txt` conferiram. Os 15 rótulos do `labels.yml` foram criados no GitHub antes (o formulário de queda
 dependia do `crash`).
 
-Checagem final no console com essa build (1/11/2026, todas aprovadas pelo Lucas): instalação numa pasta nova a
+Checagem final no console com essa build (1/11/2026, todas aprovadas pelo mantenedor): instalação numa pasta nova a
 partir do zip, conversão no console em 9 min 21 s no HD interno com a tela nova, caixas de ISO ausente e ilegível
 (textos revistos), queda de teste (caixa, `crash.txt` com versão, build e cadeia, volta à FreeStyle sem laço) e a
 sessão longa com tela dividida e saída pela Guide. Sem ISO PAL para testar a caixa de versão não suportada.
 
-**Problemas conhecidos em dois lugares** (1/11/2026, pedido do Lucas): a seção 6 do `README.txt` do pacote e a seção
+**Problemas conhecidos em dois lugares** (1/11/2026, pedido do mantenedor): a seção 6 do `README.txt` do pacote e a seção
 "Known issues" do `.github/CONTRIBUTING.md`, que pede para não reportar o que já está lá. Toda mudança numa vale para
 a outra no mesmo commit; o item "nem todo conteúdo foi jogado no console" fica fora da lista do CONTRIBUTING, porque
 uma queda nesse conteúdo deve ser reportada.
 
 **O README.txt de dentro do zip 1.0.0** ficou com a frase antiga da lentidão ("the planet explosion after a Final Flash
-on Broly's stage... split-screen battles when many effects are on screen at once"), corrigida pelo Lucas no repositório
+on Broly's stage... split-screen battles when many effects are on screen at once"), corrigida pelo mantenedor no repositório
 e nas notas da release em 1/11/2026 (a4296757). Ele decidiu não trocar o zip publicado: a frase nova entra no pacote da
 próxima versão.
 
@@ -285,7 +285,7 @@ os controles soltarem antes da caixa não resolveu (build de teste revertida, ra
 
 - A pergunta de conversão e as mensagens de sucesso e falha passaram a ser desenhadas pelo jogo na tela de terminal
   ([03-conversao-console](03-conversao-console.md)), com o controle lido direto e só botão solto e apertado de novo
-  valendo; conferida pelo Lucas no console dele. Ainda não testada no Bad Avatar.
+  valendo; conferida pelo mantenedor no console dele. Ainda não testada no Bad Avatar.
 - O problema conhecido novo (README do pacote e CONTRIBUTING): no Bad Avatar as caixas do sistema que sobraram (ISO
   ausente ou ilegível, queda) podem fechar sozinhas.
 - O `.dat`, o `.swap` e os conversores não mudaram: a ISO convertida pela 1.0.0 serve, sem reconversão.
@@ -309,7 +309,7 @@ Publicada em https://github.com/Lucas-Tito/bt3xbx/releases/tag/bt3-x360-v1.0.2, 
   diagnóstico (ramo `diag-save`, não publicado) e testado no console no pendrive e no HD interno.
 - **Quem tentou salvar no externo antes** fica com a pasta do save vazia e vê "Load failed" uma vez; confirma, faz o New
   Game e salva (visto no console). Uma limpeza automática dessas pastas chegou a entrar (e2c6c5a1) e foi desfeita
-  (ea439bb5): o Lucas a achou destrutiva demais para um caso que acontece uma vez.
+  (ea439bb5): o mantenedor a achou destrutiva demais para um caso que acontece uma vez.
 - **Importação e exportação de saves do PS2 em `.psu`**, em `saves\import` (com `done`, `skipped`, `failed` e o backup
   em `saves\backup\NNN`) e `saves\export`. Testadas no console com o save 100% do JKLX (GameFAQs): tudo liberado no
   jogo; o `.psu` exportado bateu com o original no WSL, fora o som (0x16A4), a soma (0x0004) e o relógio do jogo

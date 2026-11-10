@@ -213,7 +213,7 @@ com a outra voz passam. **A PPC não rodou** (a trava estava com o alfa e com os
    0xD3E..0xD44 e já contados os 5 do ShenScene; conferir com `conv_tool --lista-conversores | wc -l`),
    `teste_iso_avisos.py` (recusar 3), `teste_iso_convertida.py` (versões antigas 1, 2, 3),
    `preparar_iso_console.py`/`build_f2.sh` (o texto do selo), `docs/x360/formatos/iso-convertida.md` (seção da
-   versão 4). O Lucas terá de **reconverter a ISO USA original** (no console ou no PC) com o instalador novo.
+   versão 4). O mantenedor terá de **reconverter a ISO USA original** (no console ou no PC) com o instalador novo.
 2. Provar a correção no banco: `CONV=~/bt3xbx-convobj/port/x360/conv RASTREIO=1 NEGATIVOS=1 banco.sh LISTA SAIDA`
    com uma lista que comece por um personagem e tenha os objetos e as trocas (por exemplo `personagem 6 0 0`,
    `objeto 256 0 0`, `objeto 267 0 0`, `troca 3`, `troca 0`, o resto de `~/banco/obj/objetos.txt`). Esperado: rede sem

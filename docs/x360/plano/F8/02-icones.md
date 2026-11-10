@@ -31,7 +31,7 @@ A arte nova cabe nessas caixas. O mapeamento continua físico: círculo B, quadr
 triângulo Y, xis A, L1/L2/L3 LB/LT/clique esquerdo e R1/R2/R3 RB/RT/clique direito.
 Voltar continua Y e remapeamentos da luta mantêm a limitação já existente no PS2.
 Nas variantes de segurar do L3 e do R3 (26 e 27) a arte é o analógico do Kenney **sem** a seta de clique
-(`xbox_stick_l`/`r`), porque o ▼ amarelo do jogo já faz esse papel: escolha do Lucas em 28/10/2026, numa
+(`xbox_stick_l`/`r`), porque o ▼ amarelo do jogo já faz esse papel: escolha do mantenedor em 28/10/2026, numa
 comparação com o analógico com clique e com os do Xelu.
 A folha completa fica **fora do git**, em `~/icones/contato_kenney.png`.
 
@@ -39,7 +39,7 @@ A folha completa fica **fora do git**, em `~/icones/contato_kenney.png`.
 
 Textos ingleses estáticos em `iso_avisos.h`, usados por `MostrarRecusa`, sem caminho
 variável, `BT3_ISO` ou `environment.txt`. Dizem `convert_iso.py`, raiz do jogo e
-`bt3-x360.iso`. Não há caixa própria de versão da conversão (pedido do Lucas, 28/10): a convertida por outra
+`bt3-x360.iso`. Não há caixa própria de versão da conversão (pedido do mantenedor, 28/10): a convertida por outra
 versão recebe a mesma caixa da original, "ISO conversion required".
 A caixa de imagem ilegível orienta nova cópia ou nova conversão da original.
 
@@ -81,7 +81,7 @@ Não se rodou `save_mc.sh`, que também usa qemu. Não há XDK nem sessão de co
 Seis ambientes e instruções estão em
 [icones-iso/LEIA-ME.md](../../../../port/x360/ambientes/icones-iso/LEIA-ME.md), com
 saves vazios e destinos de captura novos e separados em `~/icones/console/`.
-O Lucas compila e sobe a build e a ISO nova. A antiga permanece só para a recusa.
+O mantenedor compila e sobe a build e a ISO nova. A antiga permanece só para a recusa.
 Ficam pendentes a aparência das cinco caixas, os quatro usos visuais e a inspeção
-da folha pelo Lucas. Não há prova de ausência de outros ícones em CT32/CT16 ou
+da folha pelo mantenedor. Não há prova de ausência de outros ícones em CT32/CT16 ou
 Flash, nem mudança de fonte, texto, entrada ou remapeamento fora deste escopo.

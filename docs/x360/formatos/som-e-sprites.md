@@ -252,7 +252,7 @@ dois: o cabeçalho de 5 palavras (jogo nativo, port `le32` em `bank_parts`) e `V
 Recusado: deixar o arquivo como está e trocar as leituras do jogo por uma macro little-endian. São campos de
 struct lidos por código casado do jogo, e o resto da conversão segue a regra contrária.
 
-Decisão do Lucas. Este documento descreve as duas; o rastreio não distingue (só viu as leituras do jogo, 1.11).
+Decisão do mantenedor. Este documento descreve as duas; o rastreio não distingue (só viu as leituras do jogo, 1.11).
 
 ### 1.9 Escritas e quando converter
 

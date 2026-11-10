@@ -5,7 +5,7 @@
 Estudo de 17/10/2026, sobre a base `4ffaaaa`. **Plano proposto, sem implementação ou execução nesta tarefa.** O WSL
 estava ocupado com as conferências da F5, então o estudo só leu documentos e código e rodou uma leitura de
 cabeçalhos do disco (poucos segundos). As etapas abaixo estão por fazer. As decisões numeradas da seção 5 são
-perguntas para o Lucas, não decisões novas do projeto. Antes de implementar, registrar as respostas em `decisoes.md`
+perguntas para o mantenedor, não decisões novas do projeto. Antes de implementar, registrar as respostas em `decisoes.md`
 (a próxima é a 25) e fechar o roteiro e os limites de aceite.
 
 ## 1. Escopo e ponto de partida
@@ -110,7 +110,7 @@ Cada resultado diz commit, ambiente, roteiro, arquivos lidos e limites; uma rede
    - O arredondamento dos coeficientes do ADX é a dúvida registrada em `snd_adx.c` (`adx_coefs`: truncado, como o
      vgmstream; o ffmpeg arredonda, e a diferença chegou a 91 de 32.768). A referência independente confere a
      **fórmula do formato**, não prova que o decodificador da CRI arredonda assim; o limite fica escrito, e a
-     escuta com o Lucas (rede 5) e a comparação com o PCSX2 (decisão 9) são o que fecha a dúvida.
+     escuta com o mantenedor (rede 5) e a comparação com o PCSX2 (decisão 9) são o que fecha a dúvida.
    - Laço: o PCM em torno do ponto de laço (uma janela de 4 quadros de cada lado) igual ao da referência, nas 20
      músicas. O `snd_adx.c` arredonda o começo do laço para baixo ao quadro de 32 amostras; conferir que as
      músicas do disco têm o laço alinhado (a observação do arquivo diz que sim, o censo não foi feito).
@@ -122,12 +122,12 @@ Cada resultado diz commit, ambiente, roteiro, arquivos lidos e limites; uma rede
    trocado) e ver a rede acusar.
 5. **Filmes (WSL).** O decodificador sobre os dois `.PSS` (lidos da ISO só leitura, sem copiar para o repositório):
    um hash por imagem do RGBA, **x86 igual a PPC nas 7.010**; e o `mpeg2test` do upstream como referência da x86
-   (o ffmpeg do upstream não existe no WSL; se o Lucas o tiver no Linux, uma comparação nas 7.010 ao fim). Em
+   (o ffmpeg do upstream não existe no WSL; se o mantenedor o tiver no Linux, uma comparação nas 7.010 ao fim). Em
    qemu uma passada inteira leva minutos, não horas: pode rodar uma vez na rodada final, com amostragem nas outras.
 6. **Console (rodada própria).** Contadores, não imagens: faltas de dado do XAudio2 (`BuffersQueued` zero com o
    fluxo ativo), latência do evento ao primeiro buffer entregue, tempo do pior bloco mixado, bytes e tempo de cada
    leitura por thread, tempo de som por passo na thread do jogo, mínimo de `dwAvailPhys`, imagens do filme
-   apresentadas contra as esperadas e a deriva de áudio e vídeo. Mais **uma sessão de escuta com o Lucas** com uma
+   apresentadas contra as esperadas e a deriva de áudio e vídeo. Mais **uma sessão de escuta com o mantenedor** com uma
    lista fechada (seção 3). O qemu prova ordem de bytes e estado, não latência, falta de dado nem o som que sai.
 
 No WSL, um ciclo de emulador por vez; conferir `pgrep -af "qemu|roteiros"` antes. `SEMMAPA=1`, nunca `PPC=1`. As
@@ -138,7 +138,7 @@ e capturas do usuário ficam fora do git.
 
 ## 3. Critério de fim proposto
 
-Os números abaixo são uma proposta verificável para aprovação do Lucas (decisões 8 e 9). Nenhuma medição nova deste
+Os números abaixo são uma proposta verificável para aprovação do mantenedor (decisões 8 e 9). Nenhuma medição nova deste
 estudo sustenta que já sejam atingíveis.
 
 ### Som
@@ -164,14 +164,14 @@ estudo sustenta que já sejam atingíveis.
 | Custo do som na thread do jogo | p99 até 1,5 ms por passo da luta, máximo até 3 ms, **somando** as chamadas de som e qualquer espera de E/S de áudio; os limites de fps da F5 (p99 de 30 ms, nenhum passo acima de 33,37 ms) valem de novo **com o som ligado** | O vigia da F5 com a soma separada do trabalho do passo; três janelas de pelo menos 2.700 passos |
 | Mixer | O pior bloco de 10 ms mixado em até 5 ms, nas threads 4 e 5, sem E/S nem espera por trava da thread do jogo acima de 1 ms | Tempo por bloco e o maior tempo esperando a trava do fluxo |
 | Memória | Áudio em regime até 8 MiB (hoje 10 MiB só do `sSpu`, 8 deles a retirar), filme até 12 MiB durante o filme (4,4 MiB do heap do jogo mais os buffers do port); dentro do piso de 32 MiB livres da F5 | Bytes reais, mínimo de `dwAvailPhys` com a música, a voz e o filme ativos |
-| Estabilidade | Sessão de 30 min, com ao menos dez ciclos de luta e menus, a Guide aberta três vezes na luta e uma na carga, dez saídas ao dashboard, sem queda, sem espera sem limite e sem som preso depois de parar | Sessão com o Lucas; log do diário; `StopEngine` na queda |
-| Escuta | Lista fechada (abaixo) sem "ruim": cada item aprovado ou anotado | Sessão com o Lucas, ao final |
+| Estabilidade | Sessão de 30 min, com ao menos dez ciclos de luta e menus, a Guide aberta três vezes na luta e uma na carga, dez saídas ao dashboard, sem queda, sem espera sem limite e sem som preso depois de parar | Sessão com o mantenedor; log do diário; `StopEngine` na queda |
+| Escuta | Lista fechada (abaixo) sem "ruim": cada item aprovado ou anotado | Sessão com o mantenedor, ao final |
 
 Lista de escuta: música do título e dos menus, o clique e o cancelar dos menus, a contagem da luta e o locutor, a
 música da luta, um golpe com voz, um ki, a pausa (a música segue, a voz e os efeitos param), a fala do guia, a tela
 de resultado, a abertura e o final com som, e o volume das Opções em dois extremos. Os níveis relativos (música,
 efeitos, voz) ainda estão **de ouvido** (`SE_GAIN_DEFAULT` 0,25 foi escolhido "por ouvido" no PC); a escuta do
-Lucas é a primeira comparação com o PS2 (decisão 9).
+o mantenedor é a primeira comparação com o PS2 (decisão 9).
 
 ### Filmes
 
@@ -189,7 +189,7 @@ Lucas é a primeira comparação com o PS2 (decisão 9).
 - **Memória**: até 12 MiB durante o filme, medida; sem leitura dupla da ISO.
 - **Captura**: imagens 0, 1.000, 2.000 e a última do filme, no console, comparadas à imagem do decodificador da x86
   reduzida pelo mesmo filtro: pelo menos 98% dos pixels até 8 e PSNR de 30 dB (os limiares da F5, seção 3), mais
-  aprovação visual do Lucas. Os limiares fecham antes da rodada.
+  aprovação visual do mantenedor. Os limiares fecham antes da rodada.
 
 ### Fim da F6
 
@@ -212,8 +212,8 @@ Linux; no WSL só código e testes locais.
 | 5 | WSL e console | Fluxos ADX: leitura em blocos fora da thread do jogo (decisão 4), duração sem leitura na thread do jogo, estado por vblank (etapa 1), laço, pausa, fade, pan; as seis vozes | Música dos menus e da luta com laço limpo; vozes de luta, locutor e fala do guia; as duas séries de vozes; leitura de ISO fora da thread do jogo (bloqueio de E/S de áudio dentro do aceite); rede 3 igual | 3 a 4 dias | feita no WSL, falta o console (22/10/2026), [05](05.md): leitura em blocos numa thread (hardware 1), nenhuma leitura no início de fluxo na thread do jogo, a vista conta os vblanks até o cabeçalho; rede 3 pelo caminho do 360 no serviço `bt3-f6e45`; rodada do console preparada |
 | 6 | Console, apoio no WSL | Filme, decodificador: **medir primeiro** o custo por imagem no Xenon (p50, p99, máximo, 600 imagens de cada filme lidas da ISO), depois escolher a thread (decisão 5); desenho da imagem (decisão 6); retirar a leitura dupla do `.PSS` | O custo medido e publicado antes de escolher; as 7.010 imagens iguais na x86 e na PPC; filme na tela no ritmo (seção 3) sem som | 2 a 4 dias | medição feita no console em 22/10 ([06](06.md), seções 1 a 4); segunda parte em código ([06](06.md), seção 5): leitura em blocos adiantados, sem a leitura dupla do `.PSS`, e a imagem direto à textura (decisão 6b, `BT3_FILME=1`, desligada por padrão); rodada do console em 22/10 ([06](06.md), seção 5.8): no ritmo, sem a thread própria; `BT3_FILME` ligada por padrão; o som do filme e as capturas na etapa 7 |
 | 7 | Console | Filme com som: ADX do filme pelos fluxos da etapa 5, sincronismo, START e fade, abertura no boot e pelo modo 2, final da História, memória do filme | Os dois filmes de ponta a ponta com som; deriva dentro de 100 ms; memória e ritmo no aceite; volta ao fluxo do jogo; captura de quatro imagens | 2 a 3 dias | preparada no WSL em 27/10/2026, [07](07.md): posição PCM por imagem apresentada, quatro capturas por índice e referências x86; falta a rodada do console, decisão 7 |
-| 8 | Console, com Lucas | Som na luta e na vida do console: custo na thread do jogo, o vigia da F5 com a soma do som, Guide e pausa, perda e volta do controle, saída ao dashboard e queda, 30 min | Seção 3, todas as linhas da tabela do som; lista de escuta | 2 a 3 dias | WSL preparado em [08](08.md): Guide no misturador, medição da deriva e ambientes; build e rodada do console pendentes; decisão 8 |
-| 9 | WSL e console com Lucas | Rodada final do commit de entrega: redes completas, filmes, escuta, relatório; guia atualizado | Todos os critérios cumpridos com builds do commit final; tabela por roteiro e por rede; falhas provocadas; objetos e SHA1 x86 | 1 a 2 dias | por fazer |
+| 8 | Console, com o mantenedor | Som na luta e na vida do console: custo na thread do jogo, o vigia da F5 com a soma do som, Guide e pausa, perda e volta do controle, saída ao dashboard e queda, 30 min | Seção 3, todas as linhas da tabela do som; lista de escuta | 2 a 3 dias | WSL preparado em [08](08.md): Guide no misturador, medição da deriva e ambientes; build e rodada do console pendentes; decisão 8 |
+| 9 | WSL e console com o mantenedor | Rodada final do commit de entrega: redes completas, filmes, escuta, relatório; guia atualizado | Todos os critérios cumpridos com builds do commit final; tabela por roteiro e por rede; falhas provocadas; objetos e SHA1 x86 | 1 a 2 dias | por fazer |
 
 Total indicativo: **16 a 26 dias úteis (96 a 156 h)**, sem filas do console. Maior incerteza: o custo do
 decodificador no Xenon (etapa 6) e as leituras aleatórias da ISO durante a luta (etapa 5). Rever a previsão
@@ -271,7 +271,7 @@ desenho do filme (decisão 6) conflita com o backend da F5 (etapas 6 e 7): fazer
   primeiro quadro; a música da abertura é do mesmo player que a do menu. O estado por vblanks vale aqui também, e
   `Movie_WaitRead` (pausa o som se o disco atrasa) usa `ADXT_GetStat` 3 e 4.
 
-## 5. Decisões para o Lucas
+## 5. Decisões para o mantenedor
 
 Os custos abaixo são incrementos relativos à linha proposta, sujeitos às medições. As recomendações não foram
 aplicadas ao jogo. Sem resposta, manter a questão aberta e não implementar a arquitetura dependente.
@@ -337,8 +337,8 @@ aplicadas ao jogo. Sem resposta, manter a questão aberta e não implementar a a
    escuta com lista fechada: exige o trabalho da etapa 2; é o que o WSL pode provar. (c) Acrescentar a gravação
    de áudio do PCSX2 das mesmas cenas (título, uma luta, a abertura) e a comparação dos níveis (RMS por segundo) e
    do espectro com a do console: calibra `SE_GAIN` e os níveis relativos fora do ouvido; custa a gravação
-   (precisa do PCSX2 e do disco numa máquina do Lucas, a conferir) e uma ferramenta de comparação. **Recomendação: b; c
-   como ajuste fino dos níveis depois da etapa 8, se o Lucas quiser.** A igualdade de amostras com o PS2 não é um
+   (precisa do PCSX2 e do disco numa máquina do mantenedor, a conferir) e uma ferramenta de comparação. **Recomendação: b; c
+   como ajuste fino dos níveis depois da etapa 8, se o mantenedor quiser.** A igualdade de amostras com o PS2 não é um
    critério (o chip de som tem interpolação e envelope que o port não reproduz, `snd_se.c`).
 
 ## 6. Riscos e medições que os revelam cedo
@@ -346,18 +346,18 @@ aplicadas ao jogo. Sem resposta, manter a questão aberta e não implementar a a
 | Risco ou incerteza | Medição antecipada | O que fazer com o resultado |
 |---|---|---|
 | O estado de som é a causa da boca e da tela de resultado (seção 1.1) e não um tempo real | Etapa 1: log do estado dos seis players e da função que espera, na tela que parou, no console, com o roteiro `historia` sem desenho | Se for outra causa, abrir o achado do `F4/10.md` de novo com o log na mão; não implementar o resto achando que fechou |
-| O decodificador de MPEG-2 não cabe nos 33,37 ms do Xenon | Etapa 6, antes de tudo do filme: p50, p99 e máximo por imagem de 600 imagens de cada filme, lidas da ISO, sem desenho e depois com | Escolher a thread (decisão 5) pelo número; se nem a thread bastar, levar ao Lucas as opções c e d com a medida |
+| O decodificador de MPEG-2 não cabe nos 33,37 ms do Xenon | Etapa 6, antes de tudo do filme: p50, p99 e máximo por imagem de 600 imagens de cada filme, lidas da ISO, sem desenho e depois com | Escolher a thread (decisão 5) pelo número; se nem a thread bastar, levar ao mantenedor as opções c e d com a medida |
 | As quatro cópias por pixel do filme passam do orçamento | Etapa 6: o tempo de `transfer_data`, de `GsGpu_FbUpload` e da subida da textura, cada um sozinho | Decisão 6b com o número; não otimizar às cegas |
-| Leitura aleatória da ISO na luta passa da margem de 3,37 ms | Etapa 2 conta os inícios de fluxo por luta no WSL (rastro); etapa 5 mede o tempo de cada início no console, por thread, em disco rígido e em USB | Decisão 4c com a contagem; se o USB for lento, dizer ao Lucas |
+| Leitura aleatória da ISO na luta passa da margem de 3,37 ms | Etapa 2 conta os inícios de fluxo por luta no WSL (rastro); etapa 5 mede o tempo de cada início no console, por thread, em disco rígido e em USB | Decisão 4c com a contagem; se o USB for lento, dizer ao mantenedor |
 | Falta de dado do XAudio2 por disputa com o jogo ou o sistema | Etapa 3: o contador de `BuffersQueued` com a thread do jogo sob carga e a Guide aberta; registrar a thread e o instante | Aumentar a fila (latência) até o aceite; nunca pôr E/S na 4 ou na 5 |
 | A corrida de dados do `p->stat` e dos campos do `Player` (a thread do mixer escreve, a do jogo lê) | A decisão 1a a elimina; com 1b, trava ou variável atômica | Não aceitar "funcionou nos testes" como prova |
 | Um `getenv` do som devolver NULL e mudar o comportamento em silêncio, como em 1.1 | Etapa 1, rede 1: lista de todo `getenv` e de todo ramo de `GsGpu_Enabled` em `snd_*.c` e `plat_*` que o 360 vê, com o valor no console | Cada um com decisão escrita (valor fixo sob `PORT_X360`, ou `#ifdef`), nunca herdado |
-| O coeficiente do ADX arredondado diferente da CRI (`adx_coefs`) | Rede 3: a fórmula contra a referência independente; escuta do Lucas; a comparação com o PCSX2 se a decisão 9c valer | Se soar diferente, trocar o arredondamento é uma linha; o limite fica no relatório |
+| O coeficiente do ADX arredondado diferente da CRI (`adx_coefs`) | Rede 3: a fórmula contra a referência independente; escuta do mantenedor; a comparação com o PCSX2 se a decisão 9c valer | Se soar diferente, trocar o arredondamento é uma linha; o limite fica no relatório |
 | A conversão de taxa do shim soar pior que a da SDL | Escuta com a música a 24 kHz (a maioria dos fluxos) e as vozes | Filtro melhor na camada; só aí |
 | O laço da música tem estalo (`loopStart & ~31u`, o histórico do filtro não é zerado) | Rede 3: PCM em torno do laço contra a referência nas 20 músicas; o censo de laços alinhados | Corrigir o arredondamento do laço se a referência o pedir; documentar |
 | Memória: áudio e filme somados passam do piso da F5 | Etapa 4 e etapa 6: bytes reais; mínimo de `dwAvailPhys` com música, voz e filme | Retirar os 8 MiB de `OWN_SLOT` antes de qualquer corte; reduzir anéis só depois |
 | A Guide, o controle desconectado ou a saída ao dashboard prendem ou estouram o som | Etapa 8: três Guides na luta, uma na carga, dez saídas, a queda provocada | `StopEngine` e a ordem de desmontagem; o que fizer pendurar vira a primeira linha do diário |
-| O filme de abertura rodar a cada boot e atrasar ou travar o início | Etapa 1: ler o diário de uma rodada de boot e ver se `Movie_PlayOpening` rodou; etapa 6 mede | Se rodar lento, é a primeira coisa que o Lucas vê: prioridade da etapa 6 |
+| O filme de abertura rodar a cada boot e atrasar ou travar o início | Etapa 1: ler o diário de uma rodada de boot e ver se `Movie_PlayOpening` rodou; etapa 6 mede | Se rodar lento, é a primeira coisa que o mantenedor vê: prioridade da etapa 6 |
 | A leitura dupla do `.PSS` (jogo e decodificador) | Etapa 6: bytes lidos da ISO por thread durante o filme | Sob `PORT_X360`, no-op no `ADXF_ReadNw` do `.PSS`; conferir que o jogo não depende dos bytes |
 | Roteiros sem desenho passarem pelo filme na hora (`movie_start`) e esconderem um erro do filme | Etapa 2: um roteiro que toca o filme com `BT3_PAD_PLAY` | Sem esse roteiro, a rede 5 não cobre o filme no jogo |
 | O som de `songs/` ou `mods/` | Fora do escopo: o 360 recusa `mods/` (decisão 24, resposta 3) | Documentar como limite declarado, sem alegar cobertura |
@@ -374,7 +374,7 @@ com contrato, critério e integração por responsável, em vez de vários ciclo
 | Camada de áudio do console | `port/x360/src/` (shim das 14 chamadas, mixer portátil, XAudio2) | O núcleo portátil, sim; o XAudio2 só no console | Responsável único até o tom de teste; depois 4 e 5 podem ser de outros autores |
 | Efeitos e fluxos | `snd_se.c` e `snd_adx.c` sob `PORT_X360`, carregador de blocos | O carregador e os testes, sim; as medidas, não | Depende da camada e do orçamento de memória da F5 |
 | Filmes | `plat_movie.c`, `plat_mpeg2.c`, `ADXF_ReadNw` do `.PSS`, o desenho no backend | O decodificador na PPC e o hash por imagem, sim; a medida de custo e o desenho, não | O desenho conflita com o backend da F5 (etapas 6 e 7); fazer depois da integração delas |
-| Provas do console | Diário, contadores, lista de escuta | Preparar sim; rodar não | Sessão com o Lucas |
+| Provas do console | Diário, contadores, lista de escuta | Preparar sim; rodar não | Sessão com o mantenedor |
 
 Se houver vários autores, usar branches separados. No WSL, um ciclo de emulador por vez, com `pgrep` antes. O estudo
 independente antes das etapas 3 e 6 pode ser só leitura, como pede o guia.
@@ -388,7 +388,7 @@ por rede: contagem de eventos, falta de dado, latências (p50, p95, p99, máximo
 e deriva dos filmes, imagens comparadas, falhas provocadas. Se uma etapa exceder o dobro do tempo previsto, parar com
 estado e hipóteses documentados e apenas o trabalho provado em commit, conforme o processo do projeto.
 
-## Respostas do Lucas (17/10/2026, decisão 25)
+## Respostas do mantenedor (17/10/2026, decisão 25)
 
 1a, 2a, 3b, 4b (c só com a medida; d não), 5a (outra opção só se aparecer problema), 6a, 7a, 8a, 9b (sem o ajuste
 fino contra o PCSX2). Texto em [decisoes.md](../../decisoes.md), decisão 25.

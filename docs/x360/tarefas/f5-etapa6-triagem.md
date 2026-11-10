@@ -9,7 +9,7 @@ Orçamento: 1 a 2 h.
 
 A segunda parte da etapa 6 ligou no 360 as famílias vu4 (estágio) e vu6 (sombra no chão) da VU1, em HLSL traduzido
 do port de PC (leia o `docs/x360/plano/F5/06.md` inteiro). Na rodada no console (Duelo, Goku (Early) contra Kuririn,
-estágio 5, o mirante do Kami), o Lucas viu:
+estágio 5, o mirante do Kami), o mantenedor viu:
 
 1. o cenário brilhante demais, lavado;
 2. o cenário em baixa resolução e borrado em alguns lugares;

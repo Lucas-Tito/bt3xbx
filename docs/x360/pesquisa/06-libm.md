@@ -11,7 +11,7 @@ duas. O que diverge é a **dobra de contas de float na compilação**: o clang d
 que só ficam constantes depois de propagar variáveis ou desenrolar laços, e assim pula o `softfloat_ps2.c`; o GCC da
 PPC dobra menos, e o executável do PS2 faz essas contas em tempo de execução. A chave nova `BT3_SEM_DOBRA=1`
 (`headless.py`, `-frounding-math`) tira essa dobra: com ela a x86 calcula o perfil do brilho igual à PPC, palavra
-por palavra. Ela fica desligada até a prova com emulador e a decisão do Lucas (seção 6).
+por palavra. Ela fica desligada até a prova com emulador e a decisão do mantenedor (seção 6).
 
 ## 1. De onde vêm as funções matemáticas
 
@@ -143,7 +143,7 @@ imagens dele.**
    referências numa cópia (`REF=1`), `SEMMAPA=1 IMG=1 roteiros.sh f7_transformacao f5_duelo f5_treino duelo` e o
    `save_mc.sh`. Aceite: x86 igual à PPC em tudo, `libm-host` 0 em toda memória, imagens iguais; e a lista das telas
    da x86 com a chave contra as referências atuais, que diz se o comportamento da x86 mudou.
-3. **Decisão do Lucas:** ligar a chave por padrão. Custo: a `.text` da x86 e da PPC muda (a referência da `.text` no
+3. **Decisão do mantenedor:** ligar a chave por padrão. Custo: a `.text` da x86 e da PPC muda (a referência da `.text` no
    índice do plano também), as referências dos roteiros se regravam se a x86 mudar, e saem as duas concessões da libm
    do `memoria_luta.py` (o perfil e as partes do brilho): a partir daí, uma diferença ali é recusada como qualquer
    outra. Risco: a x86 deixa de ser a referência histórica; ganho: x86 e PPC iguais entre si e às contas do executável

@@ -65,7 +65,7 @@ console pode chamar a mesma API, fornecendo o mesmo pacote. A API valida as
 incompatíveis. Não existe troca em tempo de desenho nem mudança dos controles.
 
 O console agora exige versão 4, marca de 512 bytes e tamanho de origem correto.
-Outra versão da conversão é recusada com a mesma caixa da original, que pede a conversão (o Lucas
+Outra versão da conversão é recusada com a mesma caixa da original, que pede a conversão (o mantenedor
 não quer caixa própria de versão: só a conversão publicada vai existir fora do projeto);
 imagem de outra região continua recebendo a caixa de versão do jogo.
 
@@ -191,7 +191,7 @@ como origem. O teste completo provoca a recusa das marcas 1 e 2; o teste do leit
 
 ## Conversão no console com o mesmo contrato (F8)
 
-A decisão 23 foi revista pelo Lucas somente quanto ao local da instalação. O console agora oferece a conversão
+A decisão 23 foi revista pelo mantenedor somente quanto ao local da instalação. O console agora oferece a conversão
 inicial da USA original, com `conv/iso_conv.c` e os mesmos conversores e ícones do PC. A carga continua exigindo
 a ISO pronta. Segurança, interface provisória, tempo e provas estão em
 [03-conversao-console](../plano/F8/03-conversao-console.md).
@@ -203,7 +203,7 @@ usada como referência, inclusive quando o console aplica o núcleo C comum. Uma
 outro compilador pode ter procedência diferente na marca; não é divergência dos bytes convertidos.
 
 
-Na otimização do console pedida pelo Lucas em 29/10/2026, a origem é autenticada no fim da passagem única,
+Na otimização do console pedida em 29/10/2026, a origem é autenticada no fim da passagem única,
 antes de publicar. Índices antecipados ficam em cache e não são relidos da origem. A saída tem SHA256 calculado
 ao gravar; a reabertura compara índices completos, entradas convertidas, marca e amostras preservadas. A cobertura
 de persistência é menor que a conferência integral do PC descrita acima; o miolo não amostrado pode ocultar

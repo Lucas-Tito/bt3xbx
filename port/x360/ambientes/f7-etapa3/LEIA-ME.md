@@ -38,4 +38,4 @@ bruto de cada janela, sem somar a pausa ao combate. A comparação 1P/COM contra
 fria/aquecidas das decisões 27/28 nem a sessão livre. `passos.py --console` conserva esse mínimo e deve recusar esta
 sonda como aceite. Publicar toda imagem longa encontrada, as três janelas separadas e os dois lados da captura.
 O WSL não mede Xenos/Xenon, apresentação, XAudio2 ou latência física. Se não couber no prazo, levar os números ao
-Lucas sob as decisões 28/29, sem aprovar exceção ou alterar a imagem por conta própria.
+o mantenedor sob as decisões 28/29, sem aprovar exceção ou alterar a imagem por conta própria.

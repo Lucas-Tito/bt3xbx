@@ -1,7 +1,7 @@
 /* Desenho da tela SAVE IMPORT: o mesmo terminal preto, a mesma fonte, margem e passo da conversão da ISO
    (iso_tela_desenho.h, que este arquivo inclui: a fonte não se duplica). Separado de importa_tela.cpp para a prova
    host (port/x360/tools/prova_importa.py) compilar este mesmo desenho com o D3D falso. Não apresenta: quem chama faz o
-   Present. Textos em iso_avisos.h (pendentes de aprovação do Lucas). */
+   Present. Textos em iso_avisos.h (pendentes de aprovação do mantenedor). */
 #ifndef IMPORTA_TELA_DESENHO_H
 #define IMPORTA_TELA_DESENHO_H
 #include <string.h>

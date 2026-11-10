@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Estado das filas do Codex no WSL, num relance (passagem de chat, guia seção 4; "status e eta" do Lucas).
+# Estado das filas do Codex no WSL, num relance (passagem de chat, guia seção 4; "status e eta" do mantenedor).
 #   port/x360/tools/status_wsl.sh            (BT3_WSL_HOST=<host do WSL> obrigatório; BT3_WSL_IP=<IP do PC> se o IP do Windows mudou; achar pela porta 22)
 # Mostra: quando o WSL subiu, as unidades codex-fila-*, os serviços bt3-* do usuário codex, as esperas armadas, as
 # sessões do Codex vivas, as vagas do emulador (~/vez.sh), o fim do log das filas, os últimos commits de cada

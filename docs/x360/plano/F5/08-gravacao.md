@@ -564,7 +564,7 @@ Faltam uns 1,5 ms para os 33,37.
 
 ### Pendente (para depois do desempenho): o embaçado no voo
 
-O Lucas nota, desde antes da etapa 8, as texturas embaçadas em movimento (o voo para frente com o A). Provavelmente é o efeito do
+O mantenedor nota, desde antes da etapa 8, as texturas embaçadas em movimento (o voo para frente com o A). Provavelmente é o efeito do
 próprio jogo, o desfoque de movimento do cenário (`StgPanBlur`, `src/sys/gfxm_a.c`, ligado em `src/battle/stg_c.c:629`), que mistura
 o quadro anterior quando a câmera anda rápido. A dúvida é a intensidade contra o PS2: a imagem de 640x448 ampliada para 960x720
 suaviza, e há uma passada de borrão pelo alfa do destino (`BT3_FX_OFF=16`) parecida com o "borrado" que a etapa 7 investigou. Para
@@ -913,7 +913,7 @@ Atacar a gravação ataca a média e os picos juntos; as texturas novas são um 
 A de 4 KB tira do cache o que a VU1 usa. A de 1 KB ficou ligada por padrão (`62da7ba`, `.xex` `0048b67d3a1b086adca787a043cbc7a2`);
 a abertura final, sem medição, deu 33,9 ms de mediana numa luta de 2,5 min até o KO, contra 33,8 numa de 31 s: o ganho de uns 0,5 ms
 fica abaixo da variação entre lutas jogadas à mão. **Daqui em diante as rodadas de desempenho no console usam o roteiro de controle
-(`BT3_ROTEIRO`, o `f5_duelo`), a mesma luta toda vez** (decisão do Lucas, 22/10).
+(`BT3_ROTEIRO`, o `f5_duelo`), a mesma luta toda vez** (decisão do mantenedor, 22/10).
 
 
 ## 14. Os cortes (d1) e (d2), a VU1 por dentro e a rodada pelo roteiro (22/10/2026)
@@ -1249,7 +1249,7 @@ python3 port/x360/tools/subir.py --nome environment.txt build/x360/f2/environmen
 ## 17. As texturas novas fora do caminho da gravação: o estudo, a medida e a decodificação por linha (22/10/2026)
 
 Branch `f5-texturas`, sobre a main `193821f`. Os picos da seção 13: uns 13% dos quadros lentos da luta tinham mais de 5 ms de
-texturas novas decodificadas, nos especiais e nas trocas de câmera. Pedido do Lucas: tirar esses engasgos sem nenhum quadro a mais
+texturas novas decodificadas, nos especiais e nas trocas de câmera. Pedido do mantenedor: tirar esses engasgos sem nenhum quadro a mais
 de atraso entre o controle e a tela. Convenção: **[medido]**, **[lido]** e **[estimado]**.
 
 ### O caminho da textura nova [lido]
@@ -1520,7 +1520,7 @@ função), múltiplo de 128.
 
 ## 19. A espera de vblank medida certo e a espera pelo vblank de hardware (22/10/2026)
 
-Branch `f5-vblank`, sobre a main `64353a4`. Pedido do Lucas: os passos (a) e (b) da investigação feita sobre os logs do console do
+Branch `f5-vblank`, sobre a main `64353a4`. Pedido do mantenedor: os passos (a) e (b) da investigação feita sobre os logs do console do
 `f5_duelo` (só leitura, o relatório abaixo), cada um com commit próprio, sem nenhum quadro a mais de atraso entre o controle e a
 tela. Convenção: **[medido]**, **[lido]** e **[estimado]**.
 
@@ -1582,7 +1582,7 @@ até 30 ms; nenhum passo acima de um período de luta, aproximadamente 33,37 ms,
 passos | CPU e conclusão da GPU, sem a espera deliberada de vblank; ..."**, e a linha **"Apresentação | Em cada janela, pelo menos
 99% dos intervalos entre imagens novas dentro de um período mais 1 ms; nenhum acima de três vblanks, aproximadamente 50,05 ms |
 ..."**. O número que as rodadas leram como trabalho era o intervalo inteiro (item 1 acima), e o intervalo entre imagens era o da
-CPU depois do `Present`, não o da tela. Texto proposto, para o Lucas decidir:
+CPU depois do `Present`, não o da tela. Texto proposto, para o mantenedor decidir:
 
 | Medida | Aceite proposto | Como medir |
 |---|---|---|
@@ -1682,7 +1682,7 @@ python3 port/x360/tools/passos.py bt3xbx_vb1.log --console --janelas 2 --minimo 
 
 **Recomendação.** O padrão do branch já é `BT3_VBLANK_HW=1`. Se a abertura 2 mostrar menos imagens de 3 vblanks e o atraso ao
 acordar abaixo de 1 ms, sem nada novo, fica assim; se não, o padrão volta a 0 num commit e o `Sleep` segue como era. Depois, o
-critério do escopo pela tela (a proposta acima) é decisão do Lucas.
+critério do escopo pela tela (a proposta acima) é decisão do mantenedor.
 
 ## 20. A rodada do console (22/10/2026) [medido]
 
@@ -1741,7 +1741,7 @@ provas" da seção 18 é a do agente que a rodou.
 na janela 2 (10,33% e 2,87%) por um engasgo que a tela não mostrou. O "trabalho" como informativo se confirma: na janela 1 do vb1
 ele virou o intervalo inteiro sem que nada estivesse errado na tela. A ressalva: o vb0 passa a 0,86%, perto do limite, e o
 critério não vê as imagens de 1 vblank (13 no vb0), que também são um tranco na luta; "no máximo 1% das imagens fora de 2
-vblanks" separaria as duas aberturas (vb0 1,41%, falha; vb1 0,43%, passa). Fica para o Lucas.
+vblanks" separaria as duas aberturas (vb0 1,41%, falha; vb1 0,43%, passa). Fica para o mantenedor.
 
 **Recomendação.** Levar à main com `BT3_VBLANK_HW=1` por padrão: a tela melhora, o atraso ao acordar some, nada novo no log, o
 resultado da luta é o mesmo. Antes ou junto: a correção da dívida do item 4 (com uma rodada curta do console), e a conferência da
@@ -2159,7 +2159,7 @@ próximo corte de tempo tem de vir da gravação ou do jogo (`ocupada` e a esper
 
 ## 25. Rumo a nenhuma imagem longa na luta: o que os logs dizem e a tela por imagem (23/10/2026)
 
-Branch `f5-zero`, sobre a main `5021312`. A meta do Lucas: **nenhum pico na luta** (fora dela não importa). Pedido: ligar cada
+Branch `f5-zero`, sobre a main `5021312`. A meta do mantenedor: **nenhum pico na luta** (fora dela não importa). Pedido: ligar cada
 imagem que ficou 3 vblanks no combate ao quadro e à causa, com as aberturas de 23/10, e propor o caminho para zero; se o log não
 bastar, uma chave barata que registre isso. Convenção: **[medido]**, **[lido]** e **[estimado]**.
 
@@ -2247,7 +2247,7 @@ do prazo dela
 | 1 | **A medida**: a linha `tela` do passos somando as repetições à imagem que repetem (o desenho passa à DPC o número das trocas repetidas) e, na luta, sem `GsD3d_Repete` enquanto a gravação trabalha num quadro | nada na tela; o critério passa a ver a imagem de 4 do Blast 2 | pequeno, só no 360 |
 | 2 | **As texturas novas fora da gravação**: o cache pela origem (seção 17, (a): na luta, 81% dos pixels decodificados são conteúdo já visto) e, para a primeira vez (o Blast 2), a decodificação numa thread auxiliar (seção 17, (b)) | a imagem de 4 da janela 1 e a de 3 do 7017 (umas 1 + 1) | médio; a lista do WSL prova a imagem |
 | 3a | **A folga de fase pela cadeia**: cortar a gravação, o desenho e a GPU do quadro (a GPU a 1,33 é a maior parcela) | as de 3 que passam do prazo por poucos ms (de 0 a 5) | depende do que a chave mostrar |
-| 3b | **Um vblank de folga na luta**: `D3DRS_PRESENTINTERVAL` em `D3DPRESENT_INTERVAL_TWO` só na luta (o 360 muda por quadro; a amostra `MultiRateRender` do XDK faz isso) e o primeiro quadro da luta um vblank mais tarde | as de fase (6960 e as variáveis): todas as que atrasam menos de 16,6 ms | **16,6 ms a mais do controle à tela na luta**, contra o "nenhum quadro a mais de atraso" da seção 19: decisão do Lucas |
+| 3b | **Um vblank de folga na luta**: `D3DRS_PRESENTINTERVAL` em `D3DPRESENT_INTERVAL_TWO` só na luta (o 360 muda por quadro; a amostra `MultiRateRender` do XDK faz isso) e o primeiro quadro da luta um vblank mais tarde | as de fase (6960 e as variáveis): todas as que atrasam menos de 16,6 ms | **16,6 ms a mais do controle à tela na luta**, contra o "nenhum quadro a mais de atraso" da seção 19: decisão do mantenedor |
 
 Com 1 e 2 sobram as de fase (de 1 a 5 por abertura); 3a ou 3b decide-se pela folga que a chave medir: se o p1 da folga da GPU for
 de poucos ms e as imagens longas passarem do prazo por poucos ms, cortar a cadeia rende; se as longas passarem por 6 a 16 ms
@@ -2577,7 +2577,7 @@ Build `c86082b diff:da39a3ee5e`, anterior ao cache pela origem e à chave da tel
 `BT3_PICOS` ausente. **`BT3_TEMPOS=1` está ligado por padrão e o init confirma**: esta sessão tem o custo das marcas
 por passada, ao contrário de z1/z2/o1. Não comparar seus p99 como efeito exclusivo da maneira de jogar.
 Não há nomes ou ids explícitos de personagens e estágios no rastro; as leituras aparecem só como números de arquivo.
-As observações do Lucas em `observacoes.txt` descrevem o Shenlong (h8/glow), sem observação sobre estas lutas.
+As observações do mantenedor em `observacoes.txt` descrevem o Shenlong (h8/glow), sem observação sobre estas lutas.
 
 As 19 janelas somam **62.705 passos, 2.093,6 s (34,9 min) de combate medido**, em sete sequências que terminam em
 `fim combate`, intercaladas por pausas. A tabela agrupa as janelas até cada fim de combate; não inclui o tempo parado
@@ -2839,7 +2839,7 @@ WSL cair, conforme o guia. A tarefa pede dispará-lo e parar; a certificação l
 
 ## 29. A rodada dos cortes de 27/10: duas imagens longas e a cadeia até o prazo
 
-Branch `codex/f5-cortes2`, base `troca/main` `ccdd3b01`. **[Medido]** Análise dos cinco logs do Lucas em
+Branch `codex/f5-cortes2`, base `troca/main` `ccdd3b01`. **[Medido]** Análise dos cinco logs do mantenedor em
 `~/sessao_2710/cortes/{base,ambos,gpu6930,gpu6960,gravacao}/bt3xbx.log`, uma abertura de cada, saves novos
 `sv_ct2710_NOME`. Todos os cálculos param na primeira linha `roteiro: f5_duelo.txt:99 fim`; sobretudo, os quadros
 até 24059 da continuação de `gpu6930` não entram. Sem acesso ao console, alteração de código ou execução do jogo.
@@ -3093,7 +3093,7 @@ extração”, **não** “zero aprovado”. Os arquivos originais foram preserv
 | `passos.py NOME/ate-fim.log --console --janelas 2 --minimo 600` nas cinco | saída 1 em todas: j2 com 2/2/2/2/3 imagens longas; apenas j1 passa |
 | GPU, seis quadros | classes completas; somas bruta, líquida, custo e marcas conservadas |
 | Gravação, 126 quadros | faixa completa, parcelas exclusivas conservam o total |
-| Roteiros, resultado e associação da rodada do Lucas | fim nas cinco, resultado e passos iguais; nenhum erro/associação perdida |
+| Roteiros, resultado e associação da rodada do mantenedor | fim nas cinco, resultado e passos iguais; nenhum erro/associação perdida |
 
 O `passos.py` do commit atual aplica a decisão 27, não o antigo 1%. O parâmetro 600 só deixa examinar estas duas
 janelas curtas; não substitui três de 2.700. Seu “estrutura ok” imprime o aviso genérico sobre emulador mesmo ao
@@ -3276,7 +3276,7 @@ continuam pendentes da revisão e do console. Não houve console nesta tarefa.
 
 Branch `codex/f5-gpu-fina`, base `af015da4`. **Veredito:** os candidatos pequenos da seção 30 não têm ganho
 medido que recupere os **10,6 ms na cadeia**. Mesmo sua soma otimista, ainda estimada e com sobreposição, não chega.
-A decisão 27 continua reprovada; a decisão 28 exige a mesma disciplina para a tela dividida. Cabe ao Lucas escolher
+A decisão 27 continua reprovada; a decisão 28 exige a mesma disciplina para a tela dividida. Cabe ao mantenedor escolher
 entre um trabalho maior na cadeia e uma mudança explícita de imagem, latência ou aceite. Nenhuma dessas mudanças
 foi aplicada. Isto delimita o que estes cortes permitem afirmar, não prova a impossibilidade de qualquer reprojeto.
 
@@ -3290,12 +3290,12 @@ em ambos, 0,0/0,0. Isso precede a atribuição do ganho: os três pares alternad
 É um efeito da combinação constantes 2/fecho 1, sem isolar constantes, fecho, memória ou identidade.
 Não é intervalo de confiança nem autorização para ligar as chaves por padrão.
 
-Logs originais em `~/sessao_2810/gpu/NOME/bt3xbx.log`. O Lucas informou main `201ba92`; o carimbo literal nas dez
+Logs originais em `~/sessao_2810/gpu/NOME/bt3xbx.log`. O mantenedor informou main `201ba92`; o carimbo literal nas dez
 aberturas é **`c57e807 diff:da39a3ee5e`**, sem diferenças locais, coerente com o mesmo código 360 informado.
 A análise termina no primeiro `roteiro: f5_duelo.txt:99 fim`, quadro 8378. Há continuação nos arquivos originais;
 ela não é amostra adicional da luta. Os ambientes conferem os dez saves únicos `sv_gc2810a_NOME`, constantes/fecho
 0/0 ou 2/1, som, duas threads, 16:9, escala 1,33, FXAA, envio rápido, VU1 direto, cache pela origem e tempos 0.
-A ordem fornecida pelo Lucas é base1/ambos1, base2/ambos2, base3/ambos3, g6930_1/g6960_1, g6930_2/g6960_2.
+A ordem fornecida pelo mantenedor é base1/ambos1, base2/ambos2, base3/ambos3, g6930_1/g6960_1, g6930_2/g6960_2.
 
 Nos seis controles, j1 tem 684 passos e 684 imagens de dois vblanks, incluindo o Blast 2. J2 tem 2.334 passos;
 todas as longas são **6929 → 6930** e **6959 → 6960**, com três vblanks cada. São 12 longas nos seis controles,
@@ -3527,14 +3527,14 @@ Não há soma realista demonstrada que feche a cadeia. Nem a eliminação fictí
 resolveria sozinha o orçamento; apagaria grande parte da imagem. O perfil localiza onde investigar, mas não
 sustenta um corte pequeno concreto com imagem idêntica. Por isso não se implementou protótipo nesta entrega.
 
-### As escolhas que voltam ao Lucas, decisões 27.3 e 28.1
+### As escolhas que voltam ao mantenedor, decisões 27.3 e 28.1
 
 A opção conservadora aplicada foi manter zero, imagem e latência, com F5 pendente e sem aprovar F7.
 A análise não escolhe uma concessão por ele. Estas são alternativas para uma decisão explícita, com seus limites:
 
 | Opção para o plano | Números e consequência |
 |---|---|
-| Manter todos os requisitos e reservar uma etapa maior para reprojetar a cadeia | Recuperar **10,9 ms na base ou 10,5 com ambos**, não apenas shader: gravação atual ~20,2 ms, `frame_end` ~5,9 e cauda ~16,7. Só CPU, mantendo o restante, exigiria adiantar ~10,9 ms, cerca de 54% da gravação ocupada; só GPU exigiria tirar ~65% da cauda. São metas, não ganhos possíveis já provados. A prioridade e o alcance maior voltam ao Lucas; os cortes pequenos desta nota não fecham F5 |
+| Manter todos os requisitos e reservar uma etapa maior para reprojetar a cadeia | Recuperar **10,9 ms na base ou 10,5 com ambos**, não apenas shader: gravação atual ~20,2 ms, `frame_end` ~5,9 e cauda ~16,7. Só CPU, mantendo o restante, exigiria adiantar ~10,9 ms, cerca de 54% da gravação ocupada; só GPU exigiria tirar ~65% da cauda. São metas, não ganhos possíveis já provados. A prioridade e o alcance maior voltam ao mantenedor; os cortes pequenos desta nota não fecham F5 |
 | Autorizar menos resolução interna | De 4/3 para 1 há **43,75% menos pixels**, conta geométrica. Se todo o comum escalasse com pixels, hipótese otimista daria ~5,38 ms; se toda a GPU líquida escalasse, ~9,98 ms. Não cobre sozinho os 10,9 e não prevê a cauda: há custos fixos/CPU. Muda imagem e exige nova medida; não foi aplicado |
 | Autorizar menos efeitos | Omitir a segunda cadeia apagaria conteúdo e retiraria no máximo ~1,19 ms dos trechos comuns medidos; FXAA inteiro pesa ~0,785. Somados ficticiamente, ~1,98 ms, longe de 10,9; Resolve associado e efeito na cadeia não foram isolados. Desligar afiado também muda imagem, e seus ~1,18 ms inteiros não são ganho atribuível à troca de filtro. Não foi aplicado |
 | Autorizar um vblank adicional de fila/prazo | **+16,68 ms** excede o atraso observado de 9,9 mais 1 de margem em ~5,8 ms, na aritmética desta amostra. Acrescenta latência, vedada nas decisões atuais; precisa decisão e prova da entrada/fase, não certifica o resto do jogo |
@@ -3542,7 +3542,7 @@ A análise não escolhe uma concessão por ele. Estas são alternativas para uma
 
 **[Lido]** A decisão 28.1 leva o mesmo zero para duas vistas, sem perda de imagem ou atraso de entrada.
 **[Não medido]** Nenhum log desta tarefa é de tela dividida; não dobrar os 22,8 ms como previsão da F7 nem dizer
-que ela passou ou é impossível. O resultado que vale para ambas é que as concessões acima exigem a decisão do Lucas,
+que ela passou ou é impossível. O resultado que vale para ambas é que as concessões acima exigem a decisão do mantenedor,
 e que um orçamento só de shader/brilho não demonstrou fechar nem a vista única atual.
 
 Se ele mantiver todos os requisitos, a tarefa seguinte deve localizar as chamadas/esperas de `outros`/VU0 da CPU
@@ -3754,7 +3754,7 @@ Proposta de limite: uma rodada diagnóstica, dois dias do ensaio e dois da prime
 mais do dobro desses limites, registrar estado/hipóteses e parar conforme AGENTS. Não transformar esses limites
 em promessa de prazo, nem declarar inviabilidade universal de reprojeto por falha de uma partição.
 
-Ao parar, devolver ao Lucas os atrasos por quadro, folgas, longas/4+, latência, limites de memória e ganho
+Ao parar, devolver ao mantenedor os atrasos por quadro, folgas, longas/4+, latência, limites de memória e ganho
 máximo restante, para os termos da exceção E. A decisão 29 não autoriza ativá-la automaticamente; mantêm-se
 zero e a F7 pendentes. Os logs curtos com zero de quatro não provam as três janelas nem a tela dividida.
 
@@ -3861,14 +3861,14 @@ Branch `codex/f5-rp-analise`, base `ba34d540`. Sem console, emulador, build ou a
 
 ### Proveniência e conferência das dez aberturas
 
-**[Lido, informação do Lucas]** Aberturas em 28/10, na ordem publicada abaixo, build main `8c1ec1d`,
+**[Lido, informação do mantenedor]** Aberturas em 28/10, na ordem publicada abaixo, build main `8c1ec1d`,
 `default.xex` MD5 `af2a4861d74a3c2fc9401231fa779a29`, `.dat` `4fe9d049` e `.swap` `2e97a3e5`.
 Essas identidades de binários foram fornecidas, não recalculadas aqui. **[Medido nos logs]** O carimbo literal
 é **`8c1ec1d diff:da39a3ee5e` em todas as dez**. Os ambientes coincidem integralmente com
 `~/f5-reprojeto/console/ambiente_NOME.txt`, inclusive hardware 3, som, 16:9, escala 1,33, FXAA, origem,
 VU1 direto, envio rápido, tempos 0 e saves `sv_rp32a2810_NOME`. Constantes/fecho 0/0 na base e CPU,
 2/1 em ambos; CPU só Q,Q nos quatro cpu*, todos os demais diagnósticos 0.
-A inexistência prévia dos saves foi informada pelo Lucas; não foi consultada no console nesta tarefa.
+A inexistência prévia dos saves foi informada pelo mantenedor; não foi consultada no console nesta tarefa.
 
 Originais: `~/sessao_2810b/rp/rp_NOME/bt3xbx.log`, preservados. SHA256 calculado sobre os bytes originais,
 incluindo toda a continuação; análise somente até o primeiro `f5_duelo.txt:99 fim`, vblank 12570/quadro 8378.
@@ -4179,7 +4179,7 @@ Não é reconstrução da GPU desta rodada: não houve perfil GPU novo. Medir `r
 descontar custo da fila/cópias e validar sem marcas. Ganhos C/E/F só entram uma vez nesse cronograma.
 O alfa pode resolver o 6930, mas não torna o 6960 viável automaticamente.
 
-**Ponto de parada para voltar ao Lucas, decisão 29:** antes do D3D, parar esta partição se o modelo medido
+**Ponto de parada para voltar ao mantenedor, decisão 29:** antes do D3D, parar esta partição se o modelo medido
 não puder recuperar **10,6/10,2 ms** líquidos nos controles novos (usar **10,9/10,5** enquanto a comparação
 entre sessões não estiver fechada), ou se as consultas ao sufixo impedirem o início até J+9,0 sem outro ganho
 independente. Após a primeira integração, no máximo dois ajustes de lote sem folga >=1 ms repetível: recalcular
@@ -4191,7 +4191,7 @@ A devolução deve incluir **2 a 3 longas/2.334**, 0 de quatro ou mais nos contr
 atrasos de 2,2 a 2,6 no 6930 e 9,2 a 9,6 no 6960, nova longa no 7170 até 0,2 ms nas bases,
 folga de j2 mediana 7,7 a 7,9, latência/memória e teto restante já medidos no protótipo.
 A longa do 7170 **não está demonstrada como troca de cena**, e não cabe automaticamente na exceção E.
-Os termos voltam ao Lucas antes de valer; zero, imagem, entrada e F7 continuam exigidos.
+Os termos voltam ao mantenedor antes de valer; zero, imagem, entrada e F7 continuam exigidos.
 
 ### Rodada final da análise e limites
 
@@ -4222,7 +4222,7 @@ Branch `codex/f5-rp-analise2`, base `4575152d`. Sem console, emulador ou compila
 
 ### Proveniência, recorte e conferência
 
-**[Lido, informação do Lucas]** As oito aberturas foram executadas na ordem da tabela, na mesma sessão de
+**[Lido, informação do mantenedor]** As oito aberturas foram executadas na ordem da tabela, na mesma sessão de
 28/10 e build main `8c1ec1d`, `default.xex` MD5 `af2a4861d74a3c2fc9401231fa779a29`, com os ambientes de
 `~/f5-reprojeto/console/` e saves novos `sv_rp32a2810_NOME`. A identidade do binário e a inexistência prévia dos
 saves são informações recebidas; não houve consulta ao console. `grav6930_b` tem uma única execução:
@@ -4464,11 +4464,11 @@ sem outro ganho independente. Após a primeira integração, no máximo dois aju
 repetível nos alvos: recalcular o teto e parar sem candidato para o resto. Limites da seção 32 mantidos:
 uma rodada diagnóstica, dois dias de ensaio e dois de integração; bloqueio além do dobro exige registrar e parar.
 
-A volta ao Lucas deve levar o déficit/teto restante do protótipo, ocorrência/quadro de cada longa,
+A volta ao mantenedor deve levar o déficit/teto restante do protótipo, ocorrência/quadro de cada longa,
 J/G/P/U, mínimo/p1/p10/p50, entrada e memória, mais os controles cruzados. Referência atual sem marcas:
 **2 a 3 longas/2.334**, nenhuma 4+, atrasos **2,2 a 2,6/9,2 a 9,6 ms** nos alvos; 7170 marginal
 até -0,2 nas bases da seção 33, agora até -0,3 nas aberturas marcadas. A exceção E só pode admitir três vblanks
-em trocas de cena, nenhuma 4+, após três janelas longas e termos exatos voltarem ao Lucas, também para F7.
+em trocas de cena, nenhuma 4+, após três janelas longas e termos exatos voltarem ao mantenedor, também para F7.
 **7170 não está provado como troca de cena**: corrigir/localizar, não incluí-lo automaticamente na exceção.
 As janelas curtas e os zeros de recursos não provam imagem/entrada iguais nem autorizam relaxar o aceite.
 
@@ -4504,7 +4504,7 @@ Análise em `codex/f5-7170`, base efetiva `2dc531b7` (já era `troca/main` ao co
 
 ### Proveniência e conferência dos oito originais
 
-**[Lido, informação do Lucas]** Aberturas na ordem da tabela, em 28/10, depois da rp32a2810.
+**[Lido, informação do mantenedor]** Aberturas na ordem da tabela, em 28/10, depois da rp32a2810.
 Antiga: `c57e807`, `default.xex` MD5 `60eb18cfa9e4cb56545bac7002e962a8`.
 Nova e cpu7170: `8c1ec1d`, MD5 `af2a4861d74a3c2fc9401231fa779a29`.
 `.dat`/`.swap` iguais (`4fe9d049`/`2e97a3e5`); só `.xex` e ambiente foram trocados.
@@ -4736,7 +4736,7 @@ um consumidor, fila de oito, hashes dos dados referidos e versões lógicas de e
 carregava as cinco consultas integrais da seção 32 (`ed_plano`, `usa_z`, `date_area`, `vu_plano`, versões da
 entrega), e por isso **0 desenhos saíam antes de G: teto 0 ms**. Isso media a barreira escolhida, não a cadeia.
 `a5843701` preparou a rodada de console `ap35a2810` (`~/f5-alfa-prefixos/console-ap35a2810`, 19 aberturas, saves
-`sv_ap35a2810_*`), com `BT3_ALFA_FORA` no ambiente: vale para as builds dessa primeira parte, que o Lucas mede hoje.
+`sv_ap35a2810_*`), com `BT3_ALFA_FORA` no ambiente: vale para as builds dessa primeira parte, que o mantenedor mede hoje.
 
 ### O alfa só na compilação: a chave saiu do caminho quente
 
@@ -4761,7 +4761,7 @@ do bloco, `#ifndef` trocado, predicado `>=`), e o ramo da primeira parte também
 `sAlfaCpu`, `sAlfaVu` e `gGsAlfaOrigem`. As builds PPC `ppcg`/`ppcgl` ligam. A comparação com os objetos da main e a
 matriz inteira estão na rodada abaixo.
 
-**Para o Lucas compilar no XDK** (a prova que o WSL não dá, a mesma da seção 35): `build_f2.sh` na main `c3dcc4d` e
+**Para o mantenedor compilar no XDK** (a prova que o WSL não dá, a mesma da seção 35): `build_f2.sh` na main `c3dcc4d` e
 neste branch, sem chave; `gs_d3d.obj` e o objeto do `gs_draw` desmontados por `link /dump /disasm` com os rótulos
 normalizados têm de ser iguais função a função (as linhas do fonte mudaram, o código não pode). Depois
 `BT3_ALFA_ORIGEM=1 build_f2.sh` para a build com o alfa e `BT3_PERFIL_CADEIA=1` com e sem ela para os perfis. O
@@ -4837,7 +4837,7 @@ DATE curto, longo e último: resultado conhecido conferido; mutantes `regra_z` e
 modos, além dos quatro antigos; o leitor recusa dezesseis cópias estragadas (oito de cada modo); o teto recusa lista
 sem desenho, trecho perdido (GPU não conservada), curva fora de ordem ou sem fim e U medido impossível.
 
-### Conferência completa e o que volta ao Lucas
+### Conferência completa e o que volta ao mantenedor
 
 `alfa_prefixos_rodada.sh BASE SAIDA` (no commit final do branch, worktree `~/bt3xbx-alfa2`, base `~/f5-alfa-prefixos2/base` na main
 `c3dcc4d`): fontes iguais à main; objetos sem depuração da build normal iguais aos da main em x86, x86gv e PPCg salvo
@@ -4846,9 +4846,9 @@ matriz da seção 28 na build com o alfa (Duelo/Treino, sem threads/gravação/d
 base em `divergencias.py --normal`; prefixos 1 e 2 nas duas builds e atrasos 1/5/20 ms; 48 pares x86/PPC com os dois
 contadores iguais; o teto com as curvas medidas; `REF=1 SEMMAPA=1 IMG=1 roteiros.sh f5_duelo f5_treino`,
 `roteiros.sh duelo` e `save_mc.sh`. A rodada da primeira parte (`bt3-alfa-rodada2`, `f9ed4da` contra `80fd1358`)
-continua valendo para as builds que o Lucas mede hoje.
+continua valendo para as builds que o mantenedor mede hoje.
 
-Perguntas que voltam ao Lucas: (1) se o console de hoje confirmar o alfa no 6930/7170, adotar a build com
+Perguntas que voltam ao mantenedor: (1) se o console de hoje confirmar o alfa no 6930/7170, adotar a build com
 `BT3_ALFA_ORIGEM` como padrão (depois da prova do XDK e de uma rodada `alfa_console.py` com as builds alternadas);
 (2) autorizar a integração `BT3_GS_LOTES` com o desenho acima, sabendo que é a única rota medida que chega ao 6960
 sem mudar imagem, entrada ou aceite, e que antes dela vale uma medida barata: o relógio da gravação por faixa de
@@ -4869,12 +4869,12 @@ Evidências, extrator adaptado da seção 35 e comandos em `~/f5-ap35-analise/`.
 
 ### Proveniência e conferência habitual
 
-**[Informado pelo Lucas]** Duas builds alternadas, mesma sessão, `.dat` `4fe9d049` e `.swap` `2e97a3e5`.
+**[Informado pelo mantenedor]** Duas builds alternadas, mesma sessão, `.dat` `4fe9d049` e `.swap` `2e97a3e5`.
 Main: árvore `c3dcc4d`, `.xex` MD5 `3a9ca7bb`, compilada antes do commit, carimbo literal
 `1287ec9 diff:31093ef053`. Alfa: teste `86aaca1`, main corrigida mais alfa de `f9ed4da`, `.xex` MD5 `e2a6caf9`.
 É a versão com `BT3_ALFA_FORA` de ambiente, anterior a `BT3_ALFA_ORIGEM` de compilação. Carimbo literal
 `86aaca1 diff:da39a3ee5e` tanto na base como no alfa. Os MD5 abreviados e a composição das árvores são informação
-da sessão, não uma inspeção dos binários nesta análise. Main3/base3 foram dispensadas pelo Lucas; não são falhas
+da sessão, não uma inspeção dos binários nesta análise. Main3/base3 foram dispensadas pelo mantenedor; não são falhas
 nem repetições implícitas. Não houve abertura de oráculo.
 
 **[Medido]** Ordem real abaixo. Ambientes conferidos integralmente contra
@@ -4971,7 +4971,7 @@ para nenhum deles; mesmo 1,0 impresso no controle é arredondado. Não substitui
 **[Conclusão para a decisão 32]** Sim, está cumprida a condição específica de o console confirmar o ganho nas
 repetições. A aprovação completa do alfa padrão também exige as provas de mesma imagem/jogo da seção 28 e a
 conferência da variante de compilação: esta sessão mediu a versão de ambiente, com oráculo desligado e sem capturas.
-Nenhum padrão ou código foi alterado nesta análise. Mantidas as condições já autorizadas, sem nova pergunta ao Lucas.
+Nenhum padrão ou código foi alterado nesta análise. Mantidas as condições já autorizadas, sem nova pergunta ao mantenedor.
 
 **[Medido, alfa desligado contra main]** Não é custo zero nesta versão de ambiente. Folga j2 mediana cai
 8,4 → 8,2, p10 6,3 → 6,0/5,9; no 6960, U cai -9,9 → -10,3/-10,2, com gravação ocupada
@@ -5011,7 +5011,7 @@ DATE longo, versões e cercas. Não somar novamente os ~5,4 do 6930 ou ~4,7 do 7
 O resultado sustenta a próxima etapa já autorizada na decisão 32: relógio da gravação por faixa na build de perfil,
 depois integração `BT3_GS_LOTES` desligada por padrão, plano previsto com fallback e DATE limitado, com imagem,
 entrada e latência iguais. A barreira integral e o DATE integral continuam sem fechar a conta do modelo.
-Não antecipa aceite do zero nem os termos da exceção E; se os números reais não fecharem, voltam ao Lucas como previsto.
+Não antecipa aceite do zero nem os termos da exceção E; se os números reais não fecharem, voltam ao mantenedor como previsto.
 
 ### Rodada final, verificadores e limites
 
@@ -5047,7 +5047,7 @@ as duas consultas que mudam de lugar (o plano da EDRAM pelo quadro anterior e o 
 o envio ainda na entrega, para a prova de imagem igual vir sozinha (`li37a2810`, seis aberturas). Nada rodou no console:
 **nenhum ganho medido**, o teto da seção 36 continua modelo e o zero continua reprovado. No XDK, a build normal deste
 branch tem a mesma desmontagem da main `c3dcc4d` nos 348 objetos (fecha também a prova do XDK que a seção 36 deixou ao
-Lucas). Branch `claude/f5-lotes`, base `d3b96c07` (`codex/f5-alfa-prefixos`).
+o mantenedor). Branch `claude/f5-lotes`, base `d3b96c07` (`codex/f5-alfa-prefixos`).
 
 ### O relógio da gravação (só na build de perfil)
 
@@ -5095,7 +5095,7 @@ não vale): treze mutantes novos, dezoito no total.
 **Como ler.** A sensibilidade da seção 36 diz o que procurar: no 6960, com o desenho 1152 (começo da segunda cadeia
 de brilho) pronto a 50/60/70/80/90% de G, a folga do teto fica em 7,8/7,2/6,5/4,8/3,0 ms. O modelo C dá o número com
 o progresso real. Com o alfa, a seção 37 pôs a meta do 6960 em 11,5 ms (U 10,5 ms depois do prazo, mais 1 de margem),
-contra o teto de 13,0 a 15,9 do modelo: se o teto C não passar dos 11,5, os números voltam ao Lucas para a exceção E
+contra o teto de 13,0 a 15,9 do modelo: se o teto C não passar dos 11,5, os números voltam ao mantenedor para a exceção E
 (decisão 32), antes da segunda parte. O controle (ctl contra rel) diz quanto os carimbos movem G; o que mover tem de
 sair do G antes de usar a fração.
 
@@ -5207,7 +5207,7 @@ Scripts, comandos, recortes, tabelas numéricas e negativos em `~/f5-lotes-anali
 
 ### Proveniência e conferência dos catorze logs
 
-**[Informado pelo Lucas]** Rodadas executadas uma abertura por vez, na ordem preparada na seção 38, saves novos,
+**[Informado pelo mantenedor]** Rodadas executadas uma abertura por vez, na ordem preparada na seção 38, saves novos,
 builds de `dc2785f`: perfil MD5 `759be0af5a97b41df00c83ce5ffd1da3`, perfil+alfa
 `ce6cda5cc75ebc8008763f058b034d60`, normal `5d2e4c29a0c3691fc2bd0eabe757a1af` e lotes
 `36b9c15421c1058bb23c7cacd60178ca`. A ctla2 foi aberta em 29/10; as demais do relógio na noite de 28/10.
@@ -5393,7 +5393,7 @@ cercas da VU1 e despacho real dos lotes. A folga de 2,82 ms além de 1 ms no pio
 custos ainda ausentes, não garantia de que caibam: fila, SMT/memória, snapshots/recursos e plano errado na troca
 podem consumi-la. Repetir as provas da seção 28 e medir prazo/imagem no console, inclusive 7170. Não mexer no aceite,
 no padrão do alfa ou na entrada. A condição que pediria números para a exceção E (teto não passar 11,5) **não ocorreu**;
-continuam sem aceite as três janelas longas finais e a exceção só volta ao Lucas se a integração não fechar.
+continuam sem aceite as três janelas longas finais e a exceção só volta ao mantenedor se a integração não fechar.
 
 **[Medido, conferência final]** O extrator adaptado `confere.py` recusou **22 cópias corrompidas, cada uma com saída 1**:
 fim, associação, imagem, duração, resultado, save, carimbo, textura, descarte no resumo e no pico, resumo de recursos,
@@ -5491,7 +5491,7 @@ o XDK 2.0.21256 não tem (só o `D3DXps`): o despacho da faixa passou a `InsertF
 à GPU os comandos pendentes sem esperar. Ele só vale na thread dona do dispositivo e fora de tiling, Z-prepass e XPS;
 a faixa sai do `frame_end`, a mesma função que já chamava `InsertFence` no fecho.
 
-### Rodadas preparadas para o Lucas
+### Rodadas preparadas para o mantenedor
 
 `lotes_envio_console.py tempo|imagem|longas SAIDA --rodada ID` prepara ambientes, ordem, manifesto e instruções;
 `--mutantes` recusa doze alterações também quando o manifesto é adulterado junto. Antes de abrir, conferir no console
@@ -5524,7 +5524,7 @@ O zero de longas continua reprovado; a exceção E não foi aprovada.
 ## 41. Rodadas le40a2910 e im40a2910: o alfa entra, os lotes saem da primeira release (30/10/2026)
 
 No console, 30/10, builds de perfil do `6365624e`, duelo do `f5_duelo.txt` na 1,33 com FXAA. Só a primeira repetição da
-`le40a2910` rodou (a segunda e a `jl40a2910` foram dispensadas pelo Lucas) e, da `im40a2910`, só a `nor1` e a `nora1`.
+`le40a2910` rodou (a segunda e a `jl40a2910` foram dispensadas pelo mantenedor) e, da `im40a2910`, só a `nor1` e a `nora1`.
 
 | Abertura | Build | Imagens de 3 vblanks (pausa, luta) | Folga da GPU na luta, mediana e p1 (ms) |
 |---|---|---|---|
@@ -5552,7 +5552,7 @@ essa sobreposição acaba no 64º desenho. Na luta: passos do jogo acima de 33,3
 ms (27 da gravação da `nor1` mais 17 do desenho sozinho), cada imagem em 2 ou 3 vblanks. A GPU não é o gargalo (U desde J
 56,1 contra 58,9 da `nor1` no 6900): a folga negativa vem do J atrasado.
 
-**Decisão do Lucas (30/10):** os lotes ficam fora da primeira release; o código continua atrás do `BT3_GS_LOTES` (desligado
+**Decisão do mantenedor (30/10):** os lotes ficam fora da primeira release; o código continua atrás do `BT3_GS_LOTES` (desligado
 na compilação, a build normal não tem a espera: `GS_LOTES` só existe com ele, `gs_draw.h`). Se voltarem: sair do
 `gs_lotes_passo` antes da trava com o envio desligado e nunca esperar ali (uns 10 linhas, deve devolver a `ctl` ao nível da
 `nor`); o envio em si precisa publicar sem esperar o consumo, preparar na thread do desenho e faixas bem maiores (centenas

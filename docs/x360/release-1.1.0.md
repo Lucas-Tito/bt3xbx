@@ -88,7 +88,7 @@ A igualdade da .text plana com as duas bases é
 conferida junto dos objetos sem depuração; uma igualdade de hash sozinha não
 substitui os roteiros oficiais. Os verificadores novos exigem cópias sabotadas.
 
-## Rascunho público em inglês, sujeito à auditoria do Lucas
+## Rascunho público em inglês, sujeito à auditoria do mantenedor
 
 Título: **BT3 Xbox 360 1.1.0**
 
@@ -105,7 +105,7 @@ Título: **BT3 Xbox 360 1.1.0**
 Veredito de 06/11 incorporado: as listras e o aspecto estranho dos personagens
 sumiram no console com a rampa e o fade sem níveis. O registro e as medidas
 estão na decisão 42, item 6. A aprovação visual anterior foi substituída por
-esse aceite do Lucas; a conferência de software não mede o D3D nem o VMX128.
+esse aceite do mantenedor; a conferência de software não mede o D3D nem o VMX128.
 A receita de imagem será repetida no commit final sem regravar as referências
 compartilhadas. Não há problema de sombra confirmado a acrescentar ao README.
 

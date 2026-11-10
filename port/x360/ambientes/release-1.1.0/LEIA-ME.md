@@ -1,6 +1,6 @@
 # Conferência da 1.1.0 no console
 
-Propostas para a auditoria do Lucas. Esta tarefa não compila XDK nem acessa o console.
+Propostas para a auditoria do mantenedor. Esta tarefa não compila XDK nem acessa o console.
 Copiar um modelo como `environment.txt` na pasta de `default.xex`, `default.dat` e
 `default.swap`, todos da mesma build. A ISO convertida é `game:\bt3-x360.iso`, encontrada
 sem chave BT3_ISO. Preservar saves antes dos roteiros; usar uma pasta de teste separada.

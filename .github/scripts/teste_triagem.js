@@ -32,7 +32,7 @@ const casos = [
     'reaberta', (f) => f.some((x) => x[0] === 'estado' && x[1] === 'open') && f.some((x) => x[0] === 'rótulo-')],
   ['comentário do autor com o arquivo reabre', ctx('issue_comment', { action: 'created', comment: { body: CRASH, user: { login: 'autor' } }, issue: issue(['crash', 'needs-crash-txt'], 'x', 'closed') }), 'reaberta', null],
   ['comentário de outro não reabre', ctx('issue_comment', { action: 'created', comment: { body: CRASH, user: { login: 'outro' } }, issue: issue(['crash', 'needs-crash-txt'], 'x', 'closed') }), 'comentário sem efeito', (f) => f.length === 0],
-  ['reaberta à mão por quem cuida fica aberta', ctx('issues', { action: 'reopened', sender: { login: 'lucas' }, issue: issue(['crash'], 'x') }), 'reaberta à mão', (f) => f.length === 0],
+  ['reaberta à mão por quem cuida fica aberta', ctx('issues', { action: 'reopened', sender: { login: 'mantenedor' }, issue: issue(['crash'], 'x') }), 'reaberta à mão', (f) => f.length === 0],
   ['defeito sem queda não exige crash.txt', ctx('issues', { action: 'opened', issue: issue(['bug', 'needs-triage'], 'texture wrong') }), 'não é queda', (f) => f.length === 0],
   ['rótulo duplicate comenta e fecha', ctx('issues', { action: 'labeled', label: { name: 'duplicate' }, issue: issue(['bug', 'duplicate'], 'x') }),
     'resposta duplicate', (f) => f.some((x) => x[0] === 'comenta') && f.some((x) => x[1] === 'closed')],

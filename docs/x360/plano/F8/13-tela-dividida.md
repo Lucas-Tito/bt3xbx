@@ -4,7 +4,7 @@
 
 Legenda: **[medido]** no console, **[lido]** no código, **[estimado]** conta.
 
-## 1. O que o Lucas viu (31/10/2026)
+## 1. O que o mantenedor viu (31/10/2026)
 
 Na luta dividida (dois jogadores), a build da release funciona mas fica lenta, e a imagem parece mais nítida que a do
 jogo de um jogador. A vibração e o resto da etapa 3 da F7 passaram na mesma sessão.
@@ -116,7 +116,7 @@ duas do núcleo do áudio: faltas 0, BuffersQueued mínimo 3, pior bloco 0. O du
 
 ## 7. Quatro vistas: cortes a retomar depois do Tag Team [estimado, 08/11/2026]
 
-Conversa com o Lucas para reabrir nas otimizações, depois de medir no console os custos do BT4 e do Tag Team (as
+Conversa com o mantenedor para reabrir nas otimizações, depois de medir no console os custos do BT4 e do Tag Team (as
 otimizações D3, H e D5 ficaram adiadas até essa medida).
 
 **Onde cortar.** Com 2 vistas a gravação (cerca de 40 ms) é a thread mais lenta, e cresce com cada lote de estágio e

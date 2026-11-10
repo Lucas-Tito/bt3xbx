@@ -29,7 +29,7 @@ int Port_DesfoqueOff(int efeito) {
 }
 
 /* BT3_DISTANCIA_FORCA: o peso do desfoque da distância (StgFog_BuildClut), em porcento de 0 a 100. Padrão no 360: 25
-   (decisão 42, escolhida pelo Lucas no console); nas builds de teste, 100, o original. Só a mistura muda: o passe é
+   (decisão 42, escolhida no console); nas builds de teste, 100, o original. Só a mistura muda: o passe é
    desenhado igual, e o custo na GPU não muda. */
 #ifdef PORT_X360
 #define FORCA_PADRAO 25

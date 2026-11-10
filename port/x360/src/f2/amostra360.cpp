@@ -516,7 +516,7 @@ static DWORD WINAPI Amostrador(LPVOID arg) {
             travas = 0;
         } else if ((t.QuadPart - tQuadro.QuadPart) * 1000 / f.QuadPart >= TRAVA_MS && travas < 3) {
             /* (29/10) O quadro não acaba: a thread do jogo travou. Sem isto as amostras ficariam esperando o fim do quadro
-               e nenhum despejo as mostraria (o Father-Son do Gohan SSJ2 congelou e o Lucas saiu pela Guide). Fecha o
+               e nenhum despejo as mostraria (o Father-Son do Gohan SSJ2 congelou e a rodada saiu pela Guide). Fecha o
                quadro como longo e despeja, três vezes no máximo por trava (a cada 3 s), para ver se o lugar muda. */
             travas++;
             AmostraHist_FimDoQuadro(0, (double)(t.QuadPart - tQuadro.QuadPart) * 1000.0 / f.QuadPart);

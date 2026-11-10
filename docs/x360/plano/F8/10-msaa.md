@@ -3,7 +3,7 @@
 [Índice do plano](../../plano.md) · [pendências da F8](pendencias.md) · [F5/08-720p](../F5/08-720p.md) (seções 10 a 12)
 
 Branch `claude/f8-msaa` (base `main` `cf6e8aa2`). O pedido: o serrilhado incomoda; hoje há o FXAA de console (ligado por
-padrão, uns 0,9 ms) na escala 1,33, e o Lucas quer ver o MSAA 2x lado a lado com a escala 1,4 (preparada noutro branch,
+padrão, uns 0,9 ms) na escala 1,33, e o mantenedor quer ver o MSAA 2x lado a lado com a escala 1,4 (preparada noutro branch,
 `claude/f8-escala`, que este não toca). Em 23/10 a escolha foi FXAA e nada de MSAA ([08-720p, seção 12](../F5/08-720p.md));
 este estudo dá o custo do MSAA para a escolha ser feita com números.
 
@@ -11,7 +11,7 @@ Convenção: **[medido]** (logs do console, a rodada `gc_base1` de 28/10 em `bui
 documentação do XDK 2.0.21256 extraída do `xbox360sdk.chm`) e **[estimado]**.
 
 
-**Decisão do Lucas (30/10/2026, de manhã):** o MSAA só vai ao console se a escala maior (1,4, `plano/F8/09-escala.md`) com o
+**Decisão do mantenedor (30/10/2026, de manhã):** o MSAA só vai ao console se a escala maior (1,4, `plano/F8/09-escala.md`) com o
 FXAA ainda incomodar. **Depois da rodada de 30/10 (seção 8):** o MSAA "ajudou muito" no serrilhado que incomodava; ele quer
 **só o MSAA, sem FXAA**, e **não quer ficar na 1,33**. A escala (1,4 ou 1,5) não foi fixada: o MSAA completo tem de servir às
 duas. O modo de 60 quadros fica fora por enquanto. Tudo continua atrás de `BT3_MSAA=2`, desligado por padrão, até o console
@@ -227,13 +227,13 @@ por classe` separa `resolves de cor`, `volta da cor`, `entradas na EDRAM`, `prof
 linha `MSAA 2x, por quadro` diz quantas entradas, voltas e despejos o alvo com MSAA teve e se o DATE ou a cópia dos ids
 aconteceram depois de uma volta; o plano e a trilha da EDRAM residente mostram a vaga M.
 
-**Na tela** (o Lucas, de perto, na luta do roteiro e na pausa): as bordas do estágio contra o céu e entre prédios e pedras, a
+**Na tela** (o mantenedor, de perto, na luta do roteiro e na pausa): as bordas do estágio contra o céu e entre prédios e pedras, a
 sombra no chão e as bordas internas dos lutadores (braços, pernas) devem sair lisas na b; **o contorno preto dos lutadores
 continua serrilhado na b** (seção 5) e fica liso só na c; a c deve ser a mais lisa. Procurar defeitos: franjas ou pontos de
 outra cor nas bordas dos lutadores (os ids médios, seção 4), um halo diferente no brilho, a barra do HUD cortada diferente (o
 DATE), o texto e os ícones (devem ficar iguais à a sem o amaciamento do FXAA na b).
 
-## 8. A rodada de 30/10 e as decisões do Lucas [medido]
+## 8. A rodada de 30/10 e as decisões do mantenedor [medido]
 
 Logs em `build/sessao_escala/coleta/{a133,b14,c14s,d15s,bt14,e14,e14s}`, `build/sessao_msaa/coleta/{c_com_fxaa,msaa_b_sem_fxaa}`
 e `build/sessao_msaaesc/coleta/{m14,m15}` da cópia principal (fora do git). O roteiro `f5_duelo` com a ISO versão 2, as
@@ -287,7 +287,7 @@ tiles e a profundidade de 2 amostras na base 1008 com 1008`, `as pequenas de 201
 modo 1 (como cor) pelos dois fragmentos nas duas; a cor de 2 amostras: Resolve 0,179 ms e volta 0,177 ms na 1,4, 0,191 e
 0,190 na 1,5 (o alvo inteiro). O mesmo plano de vagas serve às duas escalas.
 
-**O que o Lucas viu:** o MSAA "ajudou muito" no serrilhado que o incomodava. Decisões: só o MSAA, sem FXAA; nada de ficar na
+**O que o mantenedor viu:** o MSAA "ajudou muito" no serrilhado que o incomodava. Decisões: só o MSAA, sem FXAA; nada de ficar na
 1,33; a escala entre 1,4 e 1,5 fica para depois do MSAA completo (seção 9); o modo de 60 quadros fora por enquanto.
 
 ## 9. O MSAA completo (branch `claude/f8-msaa-escala`, 30/10)
@@ -415,14 +415,14 @@ uma, de 5/8 em diante as duas. Só nos desenhos 3D no alvo com MSAA com teste de
 16), sem mistura e sem FBA: todo pixel que passa no teste cobre ao menos uma amostra. **Desligado porque o risco é alto:** o
 alfa gravado no BT3 é dado (os ids do contorno, o bit 7 do DATE) e o opaco do PS2 é 0x80; um texel de alfa 0x40 (meio) num
 desenho com teste de alfa e sem mistura, que hoje sai opaco, sai com meia cobertura na peça inteira, não só na borda. Para o
-console: uma abertura com a chave, para o Lucas olhar cabelos e recortes, e o contador `desenhos com o alfa para cobertura`.
+console: uma abertura com a chave, para o mantenedor olhar cabelos e recortes, e o contador `desenhos com o alfa para cobertura`.
 
 ### 9.5 A arte 2D sem MSAA (`BT3_MSAA_2D`) e o centroide
 
 Em volta de cada desenho de arte 2D (`misc.w`) no alvo com MSAA, `D3DRS_MULTISAMPLEANTIALIAS` falso: as amostras pelo
 centro do pixel, a cobertura e a leitura como sem MSAA. Na 1,4 e na 1,5 as bordas das peças caem no meio do pixel; o afiado e
 o texto ficam como sem o MSAA. **Desligada por padrão (30/10/2026):** nas rodadas de 30/10 (o protótipo, que desenhava o 2D
-com o MSAA) o Lucas gostou do HUD e da arte 2D com o MSAA; a chave fica para comparar, com `BT3_MSAA_2D=1`. **O centroide no uv não foi feito:** pede uma variante dos shaders do 3D (mudaria os headers
+com o MSAA) o mantenedor gostou do HUD e da arte 2D com o MSAA; a chave fica para comparar, com `BT3_MSAA_2D=1`. **O centroide no uv não foi feito:** pede uma variante dos shaders do 3D (mudaria os headers
 da build sem a chave, ou mais variantes) e só serve se houver franja nas bordas 3D, que a rodada mostra.
 
 ### 9.6 O custo do completo [estimado, 1,4 e 1,5, luta, contra o protótipo]
@@ -494,7 +494,7 @@ com as subchaves e `BT3_SAVES=game:\sv_ms2_NOME`), o `ordem.txt` e o `LEIA-ME.tx
 | `s1` | 1,4 | tudo, `BT3_MSAA_SABOTA=1`, roteiro `boot.txt` | o autoteste acusa a volta crua estragada e o MSAA se desliga |
 | `s2` | 1,4 | tudo, `BT3_MSAA_SABOTA=2`, roteiro `boot.txt` | o autoteste acusa as máscaras iguais e o contorno fica por pixel |
 
-### 9.9 A rodada de 30/10 do completo [medido] e a decisão do Lucas
+### 9.9 A rodada de 30/10 do completo [medido] e a decisão do mantenedor
 
 Rodadas no console, build `1c4f3d95` (xex `6930682e`), duelo do `f5_duelo.txt`. Folga da GPU até o prazo na
 janela da luta, em ms (mediana, p10, p1):
@@ -516,5 +516,5 @@ janela da luta, em ms (mediana, p10, p1):
 - O aviso do vigia (3 s parado no `autoteste das amostras do MSAA`, antes do primeiro quadro) aparece em todas as aberturas
   desta build e não na `m15`; é só o tempo do autoteste, que não vai na versão pública.
 
-**Decisão do Lucas (30/10):** a volta exata fica desligada (`BT3_MSAA_VOLTA=0` por padrão); as vagas e o contorno ficam
+**Decisão do mantenedor (30/10):** a volta exata fica desligada (`BT3_MSAA_VOLTA=0` por padrão); as vagas e o contorno ficam
 ligados (não custaram nada medível na `x14`).

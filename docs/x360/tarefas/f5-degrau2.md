@@ -25,7 +25,7 @@ thread desenha o N. Estimativa: de 48 para uns 38 a 42 ms. Não fecha os 30 fps 
 ## Faça, nesta ordem, cada parte com commit próprio
 
 1. **A entrega da gravação para o desenho, portável e provada no WSL.** O `frameEnd` do backend passa a consumir uma lista
-   entregue, não a que a gravação está montando. Escolha conservadora (o Lucas não encolhe as capacidades agora; decisão 24,
+   entregue, não a que a gravação está montando. Escolha conservadora (o mantenedor não encolhe as capacidades agora; decisão 24,
    resposta 2): as listas de gravação ficam como estão (66,4 MiB) e **a entrega copia só a parte usada** para uma área do
    desenho com o dobro dos máximos medidos; um quadro que não couber é desenhado na própria thread de gravação, como no
    degrau 1 (nunca perder um quadro, nunca truncar). Máximos medidos: nos roteiros da etapa 6, 13.182 vértices de CPU, 53.618

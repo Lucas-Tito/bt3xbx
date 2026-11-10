@@ -21,7 +21,7 @@ e só se prova lá. Não mude `port/x360/src/`.
    eles só se convertem no console, depois de descomprimidos (decisão 23). As tabelas ISO 9660 e AFS não mudam.
 2. **A marca:** prove, pelos dados e pelo formato da ISO e do AFS, uma região que o jogo e o leitor do port nunca
    leem, e grave nela a marca e a versão (o que a converteu e de qual origem). Se não achar região provadamente livre,
-   PARE nesse ponto e entregue as opções como pergunta ao Lucas (a decisão 24 manda não escolher um deslocamento sem
+   PARE nesse ponto e entregue as opções como pergunta ao mantenedor (a decisão 24 manda não escolher um deslocamento sem
    prova); o resto da ferramenta segue sem a marca.
 3. **As recusas:** a ferramenta recusa, com mensagem clara e sem gravar nada, uma ISO que não seja a original
    americana (os hashes conhecidos), uma truncada, uma já convertida (a marca) e uma saída que já exista. A original
@@ -42,7 +42,7 @@ e só se prova lá. Não mude `port/x360/src/`.
 
 ## Dados
 
-A ISO original do Lucas está em `/srv/bt3/dados/iso/bt3.iso` (só leitura; md5 `350404a81de912347c8b262542fed970`,
+A ISO original está em `/srv/bt3/dados/iso/bt3.iso` (só leitura; md5 `350404a81de912347c8b262542fed970`,
 3.020.816.384 bytes). As saídas (3 GB cada) ficam no seu `~/`, nunca no repositório; apague as que não precisar mais.
 Nenhum emulador é necessário nesta tarefa; se rodar algum, um por vez.
 

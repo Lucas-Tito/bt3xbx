@@ -21,7 +21,7 @@ propõe os formatos (`menu_evo_topo`, 452 s1; `menu_loja`, 452 s2; `menu_evoz`, 
 diz quais seções não têm leitor achado. A seção 11 do 452 s1 é o diálogo do DcSave (veja o item 2 de "Perguntas" em
 `menus-modos.md`): o `menu_mcflow` já tem gancho, confira se o DcSave passa por ele.
 
-Também desta tarefa (resposta 5 do Lucas na 9b, em `docs/x360/plano/F4/09b.md`): o `conv_tool` passa a não contar como
+Também desta tarefa (resposta 5 do mantenedor na 9b, em `docs/x360/plano/F4/09b.md`): o `conv_tool` passa a não contar como
 divergente a leitura de 4 bytes num deslocamento ímpar sobre um byte (impossível no PS2, artefato do rastreio), e as
 entradas desse tipo saem da `LARGURA_CONHECIDA`. Veja o verificador falhar de propósito.
 

@@ -232,7 +232,7 @@ static int sMsVoltaMedia;                 /* ... e alguma delas foi pela média 
      BT3_MSAA_CONTORNO=1 o contorno por amostra: a cópia dos ids do fragmento 1 (sIds1) ao lado da do 0 e a passada do
                          contorno uma vez por amostra, cada uma com a máscara da sua (D3DRS_MULTISAMPLEMASK) e os ids dela
      BT3_MSAA_2D=0       1: a arte 2D (misc.w) sem MSAA (D3DRS_MULTISAMPLEANTIALIAS falso: as duas amostras pelo centro do
-                         pixel, como sem o MSAA). Desligada: o Lucas preferiu o HUD com o MSAA nas rodadas de 30/10
+                         pixel, como sem o MSAA). Desligada: o mantenedor preferiu o HUD com o MSAA nas rodadas de 30/10
      BT3_MSAA_A2C=0      alfa para cobertura (D3DRS_ALPHATOMASKENABLE) nos desenhos 3D com teste de alfa que só passam com o
                          alfa a 1/8 ou mais (GEQUAL com AREF de 17 ou mais, GREATER de 16), sem mistura e sem FBA; desligada por
                          padrão: o alfa de 1/8 a 5/8 cobre uma amostra só também fora da borda (10-msaa.md, seção 9)
@@ -2318,7 +2318,7 @@ static const D3DVERTEXELEMENT9 kElemGsAf[] = { /* o elemGs do d3d_init e a caixa
 
 static void afiado_init(void) {
     /* o bit 1 (a arte 2D) ligado por padrão desde a rodada do console de 23/10 (08-720p.md, seção 10): na escala 1 não
-       muda nada (as capturas iguais) e na 1,33 o Lucas aprovou; o bit 2 (a cópia para a tela) ele recusou */
+       muda nada (as capturas iguais) e na 1,33 o mantenedor aprovou; o bit 2 (a cópia para a tela) ele recusou */
     sAfiado = env_num("BT3_AFIADO", 1) & 3;
     if (sAfiado == 0) {
         return;
@@ -2951,7 +2951,7 @@ static unsigned sFxaaN;  /* as passadas no trecho (fxaa_log) */
 static Ret sFxaaRet;     /* a parte usada, em pixels de saída (fxaa_init) */
 
 static void fxaa_init(void) {
-    sFxaa = env_num("BT3_FXAA", 0) & 1; /* (de 23/10 a 30/10 ligado por padrão; desde 30/10 o MSAA 2x no lugar dele: o Lucas
+    sFxaa = env_num("BT3_FXAA", 0) & 1; /* (de 23/10 a 30/10 ligado por padrão; desde 30/10 o MSAA 2x no lugar dele: o mantenedor
                                            preferiu só o MSAA, 10-msaa.md seção 8) */
     if (sFxaa == 0) {
         return;
@@ -4586,7 +4586,7 @@ static void area_init(void) {
     const char *a = getenv("BT3_ALVO_AREA"), *e = getenv("BT3_ESCALA"), *erroA = NULL, *erroE = NULL;
     int w = GS_W, h = GS_H, num = 1, den = 1;
     EscArea ar;
-    /* o padrão desde 30/10 (09-escala.md e 10-msaa.md, decisão do Lucas): a 1,4 na área de 640 x 480 (896 x 672 na EDRAM),
+    /* o padrão desde 30/10 (09-escala.md e 10-msaa.md, decisão do mantenedor): a 1,4 na área de 640 x 480 (896 x 672 na EDRAM),
        com o MSAA 2x, que cabe junto com a profundidade de 2 amostras (1.008 + 1.008 tiles); de 23/10 a 30/10 foi a 1,33 em
        648 x 456. BT3_ESCALA=1 e BT3_ALVO_AREA=1024x1024 voltam ao de antes da F5 */
     if (a == NULL) {
@@ -4878,7 +4878,7 @@ static void tempo_init(void) {
 /* (F8, BT3_MSAA=2) a conta da EDRAM, antes de criar a profundidade de 1 amostra: a cor de 2 amostras na base 0 e a
    profundidade de 2 amostras logo depois têm de caber nos 2.048 tiles; cabendo, a de 1 amostra muda para a mesma base da
    de 2 (as duas nunca valem ao mesmo tempo: a posse é uma só, sZDono). Devolve a base da profundidade de 1 amostra.
-   Ligado por padrão desde 30/10 (decisão do Lucas, 10-msaa.md seções 8 e 9.9); BT3_MSAA=0 desliga. */
+   Ligado por padrão desde 30/10 (decisão do mantenedor, 10-msaa.md seções 8 e 9.9); BT3_MSAA=0 desliga. */
 static UINT msaa_base(UINT tilesCor) {
     unsigned pedido = env_num("BT3_MSAA", 2);
     if (pedido == 0) {

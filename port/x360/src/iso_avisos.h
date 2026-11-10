@@ -5,7 +5,7 @@
 #include "iso360.h"
 #define ISO_LARGO_(s) L##s
 #define ISO_LARGO(s) ISO_LARGO_(s)
-/* Textos aprovados pelo Lucas em 29/10/2026. Toda frase da instalação fica aqui. */
+/* Textos aprovados em 29/10/2026. Toda frase da instalação fica aqui. */
 static const wchar_t *const ISO_CONV_TITULO = L"Convert ISO";
 static const wchar_t *const ISO_CONV_PERGUNTA = L"Convert your original USA ISO for Xbox 360? It needs 3 GB of free space. Your original will be kept.";
 static const wchar_t *const ISO_CONV_SIM = L"Convert";
@@ -21,7 +21,7 @@ static const wchar_t *const ISO_CONV_DESTINO = L"Rename your original ISO to bt3
 static const char *const ISO_CONV_PROGRESSO[] = { "Checking ISO...", "Copying ISO...", "Converting ISO...", "Verifying ISO...", "Finishing..." };
 static const char *const ISO_CONV_AGUARDE = "Please wait. Do not turn off the console.";
 /* Tela de progresso em estilo de terminal (só maiúsculas: a fonte 5x7 do port não tem minúsculas).
-   Aprovadas pelo Lucas no console em 1/11/2026. A versão entra no %s do título. */
+   Aprovadas no console em 1/11/2026. A versão entra no %s do título. */
 static const char *const ISO_CONV_T_TITULO = "BT3 X360 %s  ISO CONVERSION";
 /* A conversão inteira levou 9 min 21 s no HD interno do console (1/11/2026); 15 dá folga para mídia lenta. */
 static const char *const ISO_CONV_T_PRAZO = "THIS CAN TAKE UP TO 15 MINUTES.";
@@ -35,11 +35,11 @@ static const char *const ISO_CONV_T_VERIFICANDO = "VERIFYING CONVERTED ISO";
 static const char *const ISO_CONV_T_DECORRIDO = "ELAPSED";
 static const char *const ISO_CONV_T_OK = "OK";
 static const char *const ISO_CONV_T_FALHOU = "FAILED";
-/* Linha de ajuda da pergunta própria (substitui as caixas do sistema), aprovada pelo Lucas no console em 1/11/2026. */
+/* Linha de ajuda da pergunta própria (substitui as caixas do sistema), aprovada no console em 1/11/2026. */
 static const char *const ISO_CONV_T_AJUDA_DOIS = "A: SELECT    LEFT/RIGHT: CHOOSE    B: CANCEL";
 static const char *const ISO_CONV_T_AJUDA_UM = "A: OK";
 /* Tela SAVE IMPORT (importação de saves do PS2 pela pasta import): TODOS os textos abaixo estão pendentes de aprovação
-   do Lucas. Só maiúsculas (a fonte 5x7 não tem minúsculas). O %s do título é a versão. */
+   do mantenedor. Só maiúsculas (a fonte 5x7 não tem minúsculas). O %s do título é a versão. */
 static const char *const ISO_IMP_T_TITULO = "BT3 X360 %s  SAVE IMPORT";
 static const char *const ISO_IMP_T_ACHADOS = "FOUND IN IMPORT FOLDER:";
 static const char *const ISO_IMP_T_AVISO = "IF YOU IMPORT, YOUR CURRENT SAVE GOES TO SAVES\\BACKUP.";
@@ -73,7 +73,7 @@ static const char *const ISO_IMP_T_FEITO_PULADOS = "%d FILE(S) NOT IMPORTED WENT
 static const char *const ISO_IMP_T_FEITO_RECUSADOS = "%d REFUSED FILE(S) WENT TO SAVES\\IMPORT\\FAILED.";
 static void Iso_Aviso(int motivo, const wchar_t **titulo, const wchar_t **texto) {
     *titulo = L"Cannot read ISO";
-    /* Textos da ausente e da ilegível revistos pelo Lucas em 1/11/2026: sem citar o nome reservado da convertida,
+    /* Textos da ausente e da ilegível revistos em 1/11/2026: sem citar o nome reservado da convertida,
        que levava quem tem só a original a dar a ela o nome bt3-x360.iso. */
     *texto = L"The ISO in the game folder is unreadable, incomplete or damaged.";
     if (motivo == ISO_ORIGINAL) {

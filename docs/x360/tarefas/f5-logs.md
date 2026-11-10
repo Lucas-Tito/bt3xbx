@@ -4,12 +4,12 @@
 
 Branch: `cursor/f5-logs` (a partir de `troca/main`). Relatório: `~/entrega-f5-logs.md`. Orçamento: 1 a 2 h.
 
-## A suspeita do Lucas
+## A suspeita do mantenedor
 
 O jogo no console engasga desde sempre: nos menus, a média é de 19 a 20 ms por quadro (acima dos 16,7 de 60 fps)
 com picos de 170 a 430 ms a cada um ou dois segundos (`docs/x360/plano/F5/01.md` e as rodadas em
 `/srv/bt3/dados/capturas/etapa6_r1.log` e `etapa6_r2.log`). A suspeita é que o nosso jeito de gravar os logs trave o
-jogo. Dois projetos do Lucas para o mesmo console fazem log de outro jeito; as fontes estão em
+jogo. Dois projetos do mantenedor para o mesmo console fazem log de outro jeito; as fontes estão em
 `/srv/bt3/dados/referencias_log/` (só leitura): o **hiddriver** (`hiddriver/hiddriver/main.cpp`: um anel em memória
 formatado depois por outra thread, descarregado só em momentos seguros) e o **CollectionUI**
 (`CollectionUI/app/src/diario.cpp` e `.h`).

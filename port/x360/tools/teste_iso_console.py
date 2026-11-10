@@ -160,7 +160,7 @@ def main():
     invalida.unlink()
     print("ok: índices estragados recusados antes de escrever", flush=True)
     antes = hashes(args.origem)
-    exigir(antes == (pc.MD5, pc.SHA256), "a ISO não é a original do Lucas")
+    exigir(antes == (pc.MD5, pc.SHA256), "a ISO não é a original de referência")
     convertido = d / "bt3-x360.iso"
     for falha, codigo in (("espaco",2),("leitura",1),("escrever",3),("sincronizar",3),
                            ("alocar",3),("evento1",3),("evento2",3),("evento3",3),("evento4",3),

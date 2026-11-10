@@ -146,7 +146,7 @@ for a in x86gve ppcge; do
 done
 pa 'matriz: 28 execuções completas, 24 pares contra normal e 14 entre arquiteturas iguais às da normal (três sabotagens recusadas); quatro sabotagens de execução recusadas'
 # A imagem aqui é o raster de software dos roteiros. O falso não rasteriza D3D;
-# imagem do novo envio no D3D exige as capturas da rodada preparada para o Lucas.
+# imagem do novo envio no D3D exige as capturas da rodada preparada para o mantenedor.
 export O=$I/roteiros REFS=$I/referencias REF=1 SEMMAPA=1 IMG=1
 cp -a "$HOME/referencias" "$REFS"
 bash port/x360/tools/roteiros.sh f5_duelo f5_treino 2>&1 | tee "$I/roteiros-f5.log"

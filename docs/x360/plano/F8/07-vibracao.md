@@ -106,6 +106,6 @@ aberta)` se vibrava; `motores parados (o jogo parou de mandar)` só em carga lon
 Nenhuma linha de vibração no passo 4.
 
 **Se falhar:** força fraca demais ou forte demais é a escala (127 no máximo do 360; o PS2 tinha 127 de 255 no motor
-grande): ajustar só com o Lucas. O ouvinte recusado (`ouvinte do sistema recusado`) quer dizer que o 360 não deu um
+grande): ajustar só com o mantenedor. O ouvinte recusado (`ouvinte do sistema recusado`) quer dizer que o 360 não deu um
 segundo ouvinte: aí a Guide passa a valer só pela vigia de 250 ms se o jogo parar, e é preciso ler a Guide do
 `som360.cpp`.

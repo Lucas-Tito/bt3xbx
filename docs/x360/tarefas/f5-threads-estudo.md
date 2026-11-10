@@ -8,7 +8,7 @@ Orçamento: 1,5 a 2,5 h.
 ## Limite
 
 Só leitura e escrita de documento, mais scripts de leitura de poucos segundos. Nada de build, emulador nem mudança de
-código: o entregável é o estudo, para o Lucas decidir a arquitetura.
+código: o entregável é o estudo, para o mantenedor decidir a arquitetura.
 
 ## O ponto de partida (medido no console)
 
@@ -33,7 +33,7 @@ em série numa thread é. O Xenon tem 3 núcleos e 6 threads de hardware; hoje o
    `port/x360/headless/gpu_falso.c`, que compara a lista de desenhos quadro a quadro): por exemplo (a) só o fim do
    quadro numa thread de desenho; (b) a gravação da VU1 e o fim do quadro numa thread, a lógica e o resto na do jogo;
    (c) a gravação inteira do GS numa thread, com a VRAM em dois buffers; (d) dividir a VU1 entre threads por lote.
-   Diga a sua recomendação e por quê, sem decidir pelo Lucas.
+   Diga a sua recomendação e por quê, sem decidir pelo mantenedor.
 4. **O que fica no código do 360** (precisa do compilador do Xbox, outra máquina) e o que é portável e se prova no WSL.
 
 ## Entregável

@@ -31,8 +31,8 @@ LACUNAS = ['build-base', 'build-final', 'objetos', 'text', 'negativos', 'iso', '
            'filme-build', 'referencias-regravadas'] + ['roteiro-' + n for n in
                                                        ('discfusion', 'datacenter', 'f6_final', 'f6_final_start')] + [
            'limpeza']
-# Não refeito: nada mudou nele, e a decisão é do Lucas (09.md, seção 7). Continua reprovando a rodada integral.
-PENDENTES = {'filme-referencia-upstream': 'mpeg2test do upstream ausente; pergunta ao Lucas'}
+# Não refeito: nada mudou nele, e a decisão é do mantenedor (09.md, seção 7). Continua reprovando a rodada integral.
+PENDENTES = {'filme-referencia-upstream': 'mpeg2test do upstream ausente; pergunta ao mantenedor'}
 
 
 def exigir(c, m):

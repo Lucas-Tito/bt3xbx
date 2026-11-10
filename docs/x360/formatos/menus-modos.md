@@ -195,18 +195,18 @@ retratos 760..923, os estágios 924..959 e as páginas do Treino como `menu_bpe`
 cai antes do gancho (`MPACK_AT` sobre uma tabela crua, ou `Bpe_Decode` sobre um cabeçalho cru; a guarda recusa este
 último com o nome de quem chamou, seção 7.2).
 
-## 5. Achados que mudam o plano (para o Lucas)
+## 5. Achados que mudam o plano (para o mantenedor)
 
 1. **O "submenu dos modos" não é o `ModeMenu`.** `ModeMenu_Run` só roda no modo 7 de `Hist_Main` (src/menu/menu_b_c.c:861):
    é a lista de episódios de uma saga da História, e o `subMenu` vem da seleção de saga (`HistSel`). O submenu do
    Duelo é o `DuelMenu` (modo 38), e ele está no essencial aqui. Se a decisão 22 queria o `ModeMenu`, entram também
-   `HistSel` (único caminho até ele), `menu_hist_lista`, `menu_saga` e as imagens 973..1020. **O Lucas confirmou o
+   `HistSel` (único caminho até ele), `menu_hist_lista`, `menu_saga` e as imagens 973..1020. **O mantenedor confirmou o
    `DuelMenu` no essencial; o `ModeMenu` fica para a etapa 9.**
 2. **O DcSave não está no caminho essencial.** `DcSave_Init` (src/menu/menu_za_e.c:19) não descomprime nada: recebe o
    arquivo de diálogo de `EvoTop_Init` (452 s1, seção 11) ou de `DcMenu_Init` (459 s1, seção 12), os dois fora do
    essencial. As Opções salvam e carregam pelo `McFlow` direto (`McFlow_Init(1)`, menu_x_c.c:139; `McFlow_Start(0)`,
    `(1)` e `(4)`), sobre o diálogo da seção 35 delas, e o `menu_mcflow` já tem gancho. Para o DcSave funcionar no 360
-   é preciso converter o Data Center (`menu_dc_topo`) ou o Evolution Z (`menu_evo_topo`). **O Lucas escolheu o save das
+   é preciso converter o Data Center (`menu_dc_topo`) ou o Evolution Z (`menu_evo_topo`). **O mantenedor escolheu o save das
    Opções como o essencial; o DcSave fica para a etapa 9.**
 3. **Chamadas em sequência:** `ModeMenu_Init` (:126, :128), `HistOutro_Init` (:79, :107), `HistResult_Init` (:180,
    :182, :191) e os laços de retrato do `CharSel_Init` e do `TeamSel_Init` (dois retratos e um estágio seguidos). Cada

@@ -38,7 +38,7 @@ instaladores diferentes. O ensaio nativo usa o mesmo selo e a mesma ferramenta d
   A main só apresenta, lê os dois contadores por operações interlocked e usa caixas assíncronas com buffers
   estáticos. A tela de progresso tem texto e barra, sem arquivo de fonte nem shader novo.
 - A caixa pergunta se deve converter e seleciona Cancel por padrão. As frases em inglês foram **aprovadas pelo
-  Lucas em 29/10/2026** e ficam num único arquivo `iso_avisos.h`. Não há nomes de chaves ou `ambiente.txt`.
+  o mantenedor em 29/10/2026** e ficam num único arquivo `iso_avisos.h`. Não há nomes de chaves ou `ambiente.txt`.
 - Antes da pergunta, uma thread apaga apenas `game:\bt3-x360.tmp`, o nome reservado para a instalação interrompida.
   Não há retomada parcial. Falha em removê-lo recusa a operação; cancelamento também descarta o parcial anterior.
 - A origem abre somente para leitura, compartilhando somente leitura. Exige 3 GiB livres no volume de destino,
@@ -58,7 +58,7 @@ instaladores diferentes. O ensaio nativo usa o mesmo selo e a mesma ferramenta d
   Isso preserva a ordem do arranque: o heap fixo do PS2 precisa ser reservado antes das alocações do D3D.
   Cancelamento ou falha levam ao dashboard. A abertura seguinte prefere a convertida publicada.
 
-## Textos aprovados pelo Lucas (29/10/2026)
+## Textos aprovados pelo mantenedor (29/10/2026)
 
 | Uso | Texto literal |
 |---|---|
@@ -77,10 +77,10 @@ instaladores diferentes. O ensaio nativo usa o mesmo selo e a mesma ferramenta d
 | Botão dos avisos | `OK` |
 
 Só mudaram o título e o corpo da pergunta, o corpo da falha e a orientação para nome ocupado. Os demais textos
-e Cancel como padrão foram mantidos. Em 29/10 à noite o Lucas tirou o prazo da pergunta: ela só pede 3 GB
+e Cancel como padrão foram mantidos. Em 29/10 à noite o mantenedor tirou o prazo da pergunta: ela só pede 3 GB
 livres e garante a original.
 
-## Otimização pedida pelo Lucas em 29/10/2026
+## Otimização pedida em 29/10/2026
 
 O caminho anterior lia `5T + S` e escrevia `T + S`, com T = 3.020.816.384 e S = 1.395.101.552 bytes.
 O novo caminho lê T da original e escreve T da saída, sem remendar entradas após a cópia. O inventário antecipa
@@ -161,7 +161,7 @@ O diário registra, por conversão:
 - `conversão: etapa identificar|converter|verificar|publicar em N ms`: tempo de parede de cada etapa;
 - `conversão: leitura da original B bytes em N ms, X MB/s`, `gravação ... , X MB/s, hash saída N ms` e
   `releitura ... , X MB/s`: bytes e tempo acumulado dentro de `ReadFile`/`WriteFile`, sem os hashes, isto é, a
-  taxa medida do disco do Lucas (MB de 10^6 bytes);
+  taxa medida do disco do mantenedor (MB de 10^6 bytes);
 - `hash origem`, `conversores` e `hash releitura` em ms, o SHA256 da saída, bytes relidos e o total.
 
 Leitura e gravação da passagem estão sobrepostas: as duas taxas não se somam ao tempo da etapa `converter`.
@@ -232,7 +232,7 @@ adaptador usam agora o cabeçalho sem a constante; logs e escopo da rodada ficam
 
 A tabela da rodada final, os hashes, commits e o SHA1 da `.text` ficam no relatório externo
 `~/entrega-conv-console.md`. Build XDK, contratos efetivos das APIs FATX, aparência das caixas/barra, reinício,
-interrupção elétrica, desempenho Xenon e Guide real continuam para a revisão do Lucas. As simulações não os aprovam.
+interrupção elétrica, desempenho Xenon e Guide real continuam para a revisão do mantenedor. As simulações não os aprovam.
 
 ## Tela de conversão em estilo de terminal (31/10/2026)
 
@@ -251,7 +251,7 @@ verde; na falha, a linha da etapa em andamento termina em `FAILED` vermelho e a 
 - **Barra pesada pelo trabalho**: unidades em KiB como antes (3 x ISO) mais `IC_PESO_MENU` (12, provisório até a
   calibração pela medida no console de 31/10) por KiB de cada entrada `menu_*`. O progresso é publicado a cada peça
   convertida, não só a cada lote, e continua monótono de 0 a 100 com a fase final de publicação.
-- Textos novos em `iso_avisos.h` (`ISO_CONV_T_*`), **pendentes de aprovação do Lucas**; o prazo de 30 minutos é
+- Textos novos em `iso_avisos.h` (`ISO_CONV_T_*`), **pendentes de aprovação do mantenedor**; o prazo de 30 minutos é
   provisório até a medida. A versão vem de `package/versao.env` (o `build_f2.sh` passa `-D BT3_VERSAO_NUM`).
 - O desenho mora em `src/f2/iso_tela_desenho.h`, para a prova host compilar o mesmo código.
 
@@ -282,7 +282,7 @@ Duas mudanças em `menus_iso.c`, com a saída idêntica:
 2. A programação dinâmica de `preservar` testava os 256 códigos em cada posição; agora testa só os códigos cujo
    primeiro byte casa, na mesma ordem crescente, de modo que os empates saem iguais.
 
-**Prova** (WSL, `~/menus_rapido`, os 690 pacotes tirados da ISO do Lucas, só md5 e tempos voltam): `conv_tool --saida`
+**Prova** (WSL, `~/menus_rapido`, os 690 pacotes tirados da ISO do mantenedor, só md5 e tempos voltam): `conv_tool --saida`
 com o código antigo e o novo, md5 de cada arquivo gravado.
 
 | Build | Arquivos | Tempo | Diferentes do antigo |

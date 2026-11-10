@@ -1,17 +1,17 @@
-// Triagem automática das issues do port do 360 (decisão do Lucas, 29/10/2026). Chamado pelo
+// Triagem automática das issues do port do 360 (decisão do mantenedor, 29/10/2026). Chamado pelo
 // .github/workflows/issues-x360.yml com o github e o context do actions/github-script.
 //
 // 1. Relatório de queda sem crash.txt (anexo ou o conteúdo colado) fecha na hora, com o rótulo needs-crash-txt.
 //    Se o autor editar a issue ou comentar com o crash.txt, ela reabre sozinha.
 // 2. Quando quem cuida do repositório põe um rótulo de motivo, sai a resposta pronta dele e, conforme o
 //    rótulo, a issue fecha (e tranca, na pirataria). Nada fecha por prazo.
-// 3. Moderação (Lucas, 31/10/2026): issue ou comentário de quem não é do repositório com palavrão, ofensa ou cara de
+// 3. Moderação (mantenedor, 31/10/2026): issue ou comentário de quem não é do repositório com palavrão, ofensa ou cara de
 //    spam (propaganda, muitos links) some sem resposta: a issue fecha, ganha o rótulo spam e tranca; o comentário fica
 //    oculto. Quem cuida do repositório revê pelo rótulo e pelos ocultos e desfaz à mão quando errar.
 // Teste: node .github/scripts/teste_triagem.js
 
 const MARCA = (nome) => `<!-- bt3-triagem:${nome} -->`;
-// Toda resposta da triagem diz que é automática (Lucas, 06/11/2026).
+// Toda resposta da triagem diz que é automática (mantenedor, 06/11/2026).
 const RODAPE = '\n\n<sub>This is an automated reply.</sub>';
 const README = 'https://github.com/Lucas-Tito/bt3xbx/blob/main/port/x360/package/README.txt';
 const REGRAS = 'https://github.com/Lucas-Tito/bt3xbx/blob/main/.github/CONTRIBUTING.md';

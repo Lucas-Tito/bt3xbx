@@ -1,4 +1,4 @@
-/* Política da decisão 43. Textos públicos propostos para auditoria do Lucas. */
+/* Política da decisão 43. Textos públicos propostos para auditoria do mantenedor. */
 #ifndef FALHA360_H
 #define FALHA360_H
 #ifndef BT3_TESTE_FALHAS

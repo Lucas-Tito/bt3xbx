@@ -1,7 +1,7 @@
 # F8: diagnóstico da imagem macia no console
 
 Branch `blur-analise`, base 1.0.2 `9c69c4ba`. Referência de PC: `troca/ref/upstream-main`, `48d66c1f`.
-A sessão de console de 05/11 fechou a escolha de imagem do Lucas, registrada na
+A sessão de console de 05/11 fechou a escolha de imagem do mantenedor, registrada na
 [decisão 42](../../decisoes.md). Os seis commits recebidos até `c5b319c5` foram integrados
 sem conflitos, preservando seu conteúdo. A coleta PC de `f76049bc` terminou e foi aprovada;
 a conferência local do código integrado terminou e foi aprovada, conforme a última seção.
@@ -170,11 +170,11 @@ Quando chegarem capturas válidas, comparar base e repetição primeiro; depois 
    estava ativo, e que a simulação não mudou, antes de atribuir causa.
 2. `gpu` igual e `filtro` diferente só com FXAA ligado localizam esse filtro.
 3. `gpu` e `filtro` iguais, mas `tela` mais definida com ponto/afiado, localizam a cópia. Proposta: avaliar com o
-   Lucas o bit 2 ou outro filtro de ampliação, mantendo a mudança desligada até aprovação visual.
+   o mantenedor o bit 2 ou outro filtro de ampliação, mantendo a mudança desligada até aprovação visual.
 4. PPM `tela` definida e saída HDMI/TV macia localizam etapa posterior; não mexer no brilho para compensar.
 5. Halo duplicado ou largura incorreta do brilho pedem portar os marcadores, a resolução temporária e a
    amostragem de blocos do upstream, cuidando de escala, DATE, residência e Resolve. Preparar variante separada
-   para Lucas comparar, pois muda a imagem. Não subir a força nem trocar o meio pixel globalmente.
+   para o mantenedor comparar, pois muda a imagem. Não subir a força nem trocar o meio pixel globalmente.
 6. Distância aplicada perto demais pede conferir o byte/CLUT e o z de entrada por regiões. Corrigir só a
    transformação comprovadamente errada, sem desligar o efeito inteiro como solução.
 
@@ -185,7 +185,7 @@ não tiver resultado depois disso, o marcador solicitado é `test ! -d /home/cod
 
 ## Retomada de 04/11: primeira rodada julgada e coleta corrigida
 
-A pista do Lucas restringe primeiro a investigação aos elementos da arena, mantendo os lutadores nítidos.
+A pista do mantenedor restringe primeiro a investigação aos elementos da arena, mantendo os lutadores nítidos.
 A rodada do console deve começar pela base e repetição, distância, névoa, bruma/clima, MSAA e escala,
 com recortes separados do chão próximo, cenário distante e lutadores. Os filtros gerais continuam cobertos
 pelos controles, mas não há prova para promovê-los à explicação principal.
@@ -265,11 +265,11 @@ visual foi declarada e nenhuma correção de imagem foi ativada por padrão.
 
 ## Fase 2: retorno do console e tratamentos do PC (04/11, segunda retomada)
 
-O `LEIA-ME.md` recebido em `~/blur-resultado/` registra o teste do Lucas com `4310e558`:
+O `LEIA-ME.md` recebido em `~/blur-resultado/` registra o teste do mantenedor com `4310e558`:
 sem `StgFog_Draw`, o incômodo desapareceu. Ele quer conservar algum desfoque e comparar o tratamento do PC.
 O log confirma o corte alcançado. Foram inspecionados os quatorze quadros `gpu` em contato visual:
 o treino é em uma arena gramada, diferente da cidade do roteiro local. Não existe captura da base
-nessa sessão, porque faltou `BT3_LOG=1`. Portanto a identificação vem da observação do Lucas;
+nessa sessão, porque faltou `BT3_LOG=1`. Portanto a identificação vem da observação do mantenedor;
 não existe ainda uma diferença quantitativa base/corte no mesmo estágio, pose, câmera e tempo.
 Não atribuir os interiores do cenário ao fragmento de profundidade do MSAA sem essa prova.
 
@@ -493,7 +493,7 @@ Na árvore, erro absoluto médio RGB contra a base: c03 0,3020; c04 0,1860;
 c06 0,5625. As correções de distância atuam na região distante, sem trocar o chão
 próximo nesses recortes. Inspeção ampliada em `longe-base-nativa-media-corte.png`,
 colunas base, nativa, média, corte. A diferença é pequena neste estágio, não prova
-eliminação de quadrados em todo cenário nem melhora aprovada na arena do Lucas.
+eliminação de quadrados em todo cenário nem melhora aprovada na arena do mantenedor.
 O conjunto completo também muda o brilho e não isola a distância.
 
 Na escala 1, c01 a c05 são idênticas à base nos seis quadros, como esperado para
@@ -537,7 +537,7 @@ O serviço e o marcador estão no relatório; não repetir as doze horas inteira
 
 ### Decisão e próximo resultado
 
-O culpado continua sendo a distância conforme a observação do Lucas, apoiada pelo
+O culpado continua sendo a distância conforme a observação do mantenedor, apoiada pelo
 log do corte. Os recortes do PC mostram a atuação seletiva esperada, mas o console
 anterior não tem base capturada e não permite atribuir um erro à profundidade ou ao MSAA.
 As correções opcionais continuam propostas de comparação. Nenhuma delas foi promovida
@@ -547,7 +547,7 @@ O pedido livre permanece em `~/blur-pedido-console-2.md`, com oito ambientes em
 `~/blur-console-2/`, todos LOG=1 e SHOT=300. `~/blur-resultado-2/` ainda está ausente.
 Depois da repetição local e de seu julgamento, se só faltar o console, substituir o
 marcador pelo comando `test ! -d /home/codex/blur-resultado-2` e encerrar a sessão.
-Compilação XDK, imagem D3D, DATE/EDRAM/Resolve reais, custo de GPU e escolha do Lucas
+Compilação XDK, imagem D3D, DATE/EDRAM/Resolve reais, custo de GPU e escolha do mantenedor
 continuam fora das provas locais. Não se acessou console, XDK, outra worktree ou serviço alheio.
 
 
@@ -649,10 +649,10 @@ Cálculo e contatos reproduzíveis em `~/blur-analise/julgar-despacho.py`, medid
 `fase2-despacho/medidas-regioes.json`. Continua recusado o alinhamento entre versões
 na apresentação GS 4590; as variantes PC são comparadas contra a própria base.
 
-### Escolha do Lucas e padrões integrados
+### Escolha do mantenedor e padrões integrados
 
 O culpado da maciez era `StgFog_Draw`, confirmado pelo corte jogado em 04/11. Na
-sessão livre de 05/11, o Lucas aprovou os cinco tratamentos do PC e escolheu distância
+sessão livre de 05/11, o mantenedor aprovou os cinco tratamentos do PC e escolheu distância
 a 25%, depois de experimentar 100% e 55%. A alteração multiplica somente os alfas da
 CLUT em `StgFog_BuildClut`; com 100%, conserva a conta original. Não houve prova de
 um defeito de profundidade ou Resolve que justificasse alterar esses caminhos.
@@ -667,7 +667,7 @@ um defeito de profundidade ou Resolve que justificasse alterar esses caminhos.
 
 O cintilado era outro sintoma: serrilhado dentro das texturas do cenário em movimento.
 O mipmap praticamente o eliminou; com alfa do nível 0 nos desenhos com teste de alfa,
-o Lucas aprovou também a folhagem. O jogo não pede níveis de mipmap, portanto esta é
+o mantenedor aprovou também a folhagem. O jogo não pede níveis de mipmap, portanto esta é
 uma melhoria adicional ao tratamento do PC. A cadeia para em 32x32 para evitar os
 blocos de 4 KB dos níveis menores. Não confundir essa decisão com a análise da 1.0.2,
 que tinha somente nível zero e não podia selecionar mipmap excessivamente borrado.
@@ -730,4 +730,4 @@ As provas locais preservam o comportamento do diagnóstico, mas não medem shade
 D3D, DATE, EDRAM ou GPU Xenos. A aprovação visual e os custos do mipmap continuam
 sendo os da sessão de console registrada na decisão 42. A geração de mipmaps na
 carga e suas sete imagens atrasadas permanecem como custo conhecido, sem impedir
-esta entrega da escolha já aprovada pelo Lucas.
+esta entrega da escolha já aprovada pelo mantenedor.

@@ -4,7 +4,7 @@
 
 Estudo de 16/10/2026, sobre a base `a14baf7`. **Plano proposto, sem implementação ou execução nesta tarefa.** A
 rodada completa da F4 estava em andamento no WSL; este estudo só leu documentos e código. As etapas abaixo estão
-por fazer. As decisões numeradas na seção 5 são perguntas para o Lucas, não decisões novas do projeto. Antes de
+por fazer. As decisões numeradas na seção 5 são perguntas para o mantenedor, não decisões novas do projeto. Antes de
 implementar, registrar as respostas em `decisoes.md` e fechar o roteiro e os limites de aceite.
 
 ## 1. Escopo e ponto de partida
@@ -13,14 +13,14 @@ A entrega é uma luta jogável no Xbox 360, do Duelo 1P contra COM até o result
 dois lutadores, HUD, sombras, contorno e efeitos presentes, a 30 fps. Saída 1280 x 720, lógica original em passo
 fixo e menus a 60, conforme a [decisão 15](../../decisoes.md). A proposta conserva a escala interna 1 e a imagem
 4:3 centralizada da decisão 20; 720p de saída não significa renderizar internamente toda a cena em 1280 x 720.
-Confirmar esse recorte com o Lucas (pergunta 1).
+Confirmar esse recorte com o mantenedor (pergunta 1).
 
 O caso principal deve ser uma combinação fixa de personagens, trajes, estágio, dificuldade e opções, versionada
 num roteiro. A demo da F2 serve de diagnóstico com histórico; o `duelo.txt` da F4 fornece o caminho jogável.
 Nenhum deles sozinho cobre todos os efeitos. A proposta acrescenta trechos controlados de combate e uma janela
 de Treino para medir pelo menos 90 segundos de luta contínua, mesmo se o KO do Duelo vier antes. Não se promete
 todo personagem ou estágio: isso é F7. A etapa 3 identifica os ids realmente escolhidos, congela a combinação e
-lista os recursos e efeitos alcançados. O Lucas escolhe a combinação, sem deduzir nomes só dos passos do cursor.
+lista os recursos e efeitos alcançados. O mantenedor escolhe a combinação, sem deduzir nomes só dos passos do cursor.
 
 Também entram as pendências visuais que a F4 deixou explicitamente para a F5: modelo no `ChrView`, cena 3D e
 imagens compostas do Shenlong. São regressões do mesmo motor; não substituem a luta como prova de desempenho.
@@ -85,7 +85,7 @@ executável em uso. Referência documental mais recente: [F5, etapa 5](05.md), S
 
 ## 3. Critério de fim proposto
 
-Os números abaixo são uma proposta verificável para aprovação do Lucas (perguntas 1, 2 e 8). Nenhuma medição
+Os números abaixo são uma proposta verificável para aprovação do mantenedor (perguntas 1, 2 e 8). Nenhuma medição
 nova neste estudo sustenta que já sejam atingíveis.
 
 ### Caminho e conteúdo
@@ -120,7 +120,7 @@ nova neste estudo sustenta que já sejam atingíveis.
 | Cache frio e cargas | Boot, seleção, introdução e carga inicial fora do percentil de combate, cada duração publicada; cargas durante o combate entram no critério | Uma rodada fria e duas aquecidas, sem omitir o primeiro uso das técnicas; log por fase, com o vigia |
 | Memória | Uso dentro dos tetos aprovados, incluindo recursos pendentes de liberação; proposta de piso de 32 MiB livres; zero falhas de criação | Bytes reais/alinhados de D3D, buffers, temporários e jogo, mínimo de `dwAvailPhys`; amostrar também entre quadros, nas alocações |
 | Estabilidade | Sessão de 30 min com ao menos dez ciclos de entrar na luta e voltar, incluindo revanche e alternância com menus; sem crescimento persistente após a GPU liberar os recursos | Comparar bytes vivos e pendentes no mesmo estado após cada ciclo; teto estável e nenhuma queda, espera sem limite ou corrupção |
-| Guide e controle | Abrir e fechar três vezes na luta e uma na carga; resposta visível em até 1 s; nenhuma ação de botão residual ao voltar | Sessão com o Lucas; confirmar a política de pausa e o comportamento ao desconectar/reconectar o controle (pergunta 5) |
+| Guide e controle | Abrir e fechar três vezes na luta e uma na carga; resposta visível em até 1 s; nenhuma ação de botão residual ao voltar | Sessão com o mantenedor; confirmar a política de pausa e o comportamento ao desconectar/reconectar o controle (pergunta 5) |
 
 Capturas e escrita pesada do log ficam numa rodada própria de imagem, com o mesmo binário e configuração de
 desenho. A rodada de fps não usa capturas; recolhe medidas em buffer limitado e descarrega fora do trecho medido.
@@ -142,7 +142,7 @@ Não reaproveitar o número do quadro do GS de uma luta x86 longa como se fosse 
 
 Publicar por captura pixels iguais, diferença até 2 e até 8, PSNR, retângulos de diferença e inspeção lado a lado.
 Proposta inicial: no mínimo 98% dos pixels até 8 e PSNR de 30 dB nos casos controlados com amostragem equivalente,
-mais aprovação visual do Lucas em todas as peças exigidas. Fechar a lista e os limiares antes de implementar os
+mais aprovação visual do mantenedor em todas as peças exigidas. Fechar a lista e os limiares antes de implementar os
 shaders (pergunta 8). Comparações de cena com recorte ou filtro deliberadamente diferente exigem regiões definidas
 antes e uma referência adequada, sem mascarar personagem, efeito, UI ou profundidade para passar.
 
@@ -168,8 +168,8 @@ revisão do 360 são no Linux. Nenhuma dessas execuções foi feita no estudo.
 | 6 | WSL e console | Habilitar VU1 no 360 com caminho de desenho completo; portar as três famílias de shaders já usadas no PC e suas camadas, constantes, índices e recorte | Programas/camadas alcançados mapeados, saída comparada com entrada fixa; lutadores, estágio e sombras presentes; zero descarte VU1, fallback medido e sem instrução desconhecida; shaders compilados offline | 2 a 4 dias | feita, [06](06.md): as três famílias da VU1 pela GPU no console (os lutadores corretos); os defeitos do cenário são da etapa 7 (triagem no 06.md) |
 | 7 | WSL e console | Profundidade persistente, byte exato de alfa e efeitos nativos de contorno, chave, tabela de profundidade e cópia de ids; DATE, FBA, névoa e brilho | Trocar alvo e apresentar preservam o conteúdo necessário; imagens com oclusão/transparência e efeitos conferidas; nenhum marcador requerido só contado e ignorado; orçamento de memória da etapa 1 revalidado | 3 a 5 dias | concluída, [07](07.md) (as duas partes; o byte exato de alfa ficou de fora, um desenho em 1.310 o pede) |
 | 8 | Console, apoio no WSL | Perfil completo: lógica, gravação e decodificação em `gs_draw.c`, VU1 residual, uploads, trocas/Resolve, vértices, GPU e Present; otimizar o maior custo medido | Três janelas contínuas passam nos limites aprovados, frias e aquecidas; imagens e estado continuam corretos após cada otimização | 2 a 4 dias | parte da VU1 na CPU feita no WSL, [08](08.md) (perfil, uma otimização de 7% na x86 e uns 13% das instruções na PPC, o que medir no console); o resto por fazer; pergunta 7 se faltar margem |
-| 9 | WSL e console | Fechar dívida 3D da F4: abrir `ChrView`, executar Shenlong e comparar lista/recompensa sobre a cena; regressão dos menus e save | Modelo real carregado e visível, memória viva tipada; duas composições antes recusadas agora conferidas; regressões da F4 sem ampliar tolerâncias; boca documentada como dependência da F6 | 1 a 2 dias | parte do WSL feita, [09](09.md); no console (23/10) o Shenlong passa e o pulso do brilho foi corrigido (o cache das tabelas); o preto intermitente de Namek foi para o fechamento de gaps no fim do plano ([F8/pendencias](../F8/pendencias.md)), decisão do Lucas em 27/10 |
-| 10 | WSL e console com Lucas | Rodada final do commit de entrega: redes completas, mídia, imagens, fps, sessão de 30 min e relatório | Todos os critérios aprovados cumpridos com builds do commit final; tabela de resultados, falhas provocadas, objetos e SHA1 x86; nenhuma pendência do escopo tratada como aprovada | 1 a 2 dias | por fazer |
+| 9 | WSL e console | Fechar dívida 3D da F4: abrir `ChrView`, executar Shenlong e comparar lista/recompensa sobre a cena; regressão dos menus e save | Modelo real carregado e visível, memória viva tipada; duas composições antes recusadas agora conferidas; regressões da F4 sem ampliar tolerâncias; boca documentada como dependência da F6 | 1 a 2 dias | parte do WSL feita, [09](09.md); no console (23/10) o Shenlong passa e o pulso do brilho foi corrigido (o cache das tabelas); o preto intermitente de Namek foi para o fechamento de gaps no fim do plano ([F8/pendencias](../F8/pendencias.md)), decisão do mantenedor em 27/10 |
+| 10 | WSL e console com o mantenedor | Rodada final do commit de entrega: redes completas, mídia, imagens, fps, sessão de 30 min e relatório | Todos os critérios aprovados cumpridos com builds do commit final; tabela de resultados, falhas provocadas, objetos e SHA1 x86; nenhuma pendência do escopo tratada como aprovada | 1 a 2 dias | por fazer |
 
 Total indicativo: **17 a 32 dias úteis (102 a 192 h)**, sem filas do console ou expansão para conteúdo completo.
 Maior incerteza: etapa 7, por EDRAM/profundidade/alfa, seguida da vida útil de recursos da etapa 1. Rever a previsão
@@ -218,7 +218,7 @@ completo. Não fechar fps omitindo as passagens de 7. A etapa 9 compartilha as c
   que o jogo alterou dados ainda referidos pela lista, com câmera saltando. Qualquer separação exige posse do
   dispositivo e cópias/vida útil dos dados explícitas, além de medir sincronização e custo de memória.
 
-## 5. Decisões para o Lucas
+## 5. Decisões para o mantenedor
 
 Os custos abaixo são incrementos relativos à linha proposta, sujeitos às medições. As recomendações não foram
 aplicadas ao jogo. Sem resposta, manter a questão aberta e não implementar a arquitetura dependente.
@@ -243,7 +243,7 @@ aplicadas ao jogo. Sem resposta, manter a questão aberta e não implementar a a
    converter no PC e exigir manifesto/versão também para eles: preserva mods, mas exige ferramenta e provas extras.
    Custo de a ou b: aproximadamente 0,5 a 1 dia dentro da etapa 2, com a prova da região em a ainda incerta;
    c custa a guarda e o diagnóstico, d pode acrescentar 1 a 2 dias para ferramenta e casos negativos de mods.
-   **Recomendação: a apenas depois de provar a região; c para o primeiro aceite, se o Lucas permitir.** Não
+   **Recomendação: a apenas depois de provar a região; c para o primeiro aceite, se o mantenedor permitir.** Não
    escolher um offset nem desativar mods sem resposta. Em qualquer contrato: validar origem/versão, rejeitar
    dupla conversão, não modificar a ISO original e só publicar saída completa após conferência. BPE continua
    convertido após descompressão; não existe compressor novo neste escopo.
@@ -297,11 +297,11 @@ aplicadas ao jogo. Sem resposta, manter a questão aberta e não implementar a a
 | `rgba[4]` esquecido em cópia, índice variável ou macro | Auditoria de todas as structs listadas em `gpu.md` seção 6; pacote com R/G/B/A distintos e técnicas que o emitem | Corrigir cada gravação por sua representação, com ramo original preservado e imagens exatas |
 | Comparador aceitar união errada, tarefa viva ou arena como opaca | Etapa 5: snapshots dos dois `kind`, câmera ativa, alocar/resetar slots do pool; estragar número vivo e contexto/dono separadamente | Tipar o estado ativo e limitar exceções pelo contexto; não zerar campos do jogo para satisfazer comparação |
 | Shader numericamente diferente, variante não reconhecida ou fallback caro | Etapa 6: matrizes, vértices, índices, camadas, programa/entrada e custo residual por quadro, em caso controlado | Separar erro de bytes, diferença de recorte e float; corrigir o caminho e publicar a cobertura |
-| Z perdido, ids de alfa saturados ou auxiliares estourarem orçamento | Antes da etapa 7 completa: alternar alvos com oclusão viva e ids acima de 0x80; medir tiles, bytes e Resolve | Levar ao Lucas custo das alternativas da pergunta 6, com evidência de imagem |
+| Z perdido, ids de alfa saturados ou auxiliares estourarem orçamento | Antes da etapa 7 completa: alternar alvos com oclusão viva e ids acima de 0x80; medir tiles, bytes e Resolve | Levar ao mantenedor custo das alternativas da pergunta 6, com evidência de imagem |
 | `gs_draw.c` consumir a folga da F2 ou descarte causar recodificação constante | Etapas 1 e 8: acertos/falhas por textura, pixels decodificados, hash de páginas, tempo de decodificação, upload e máximos dos vetores | Otimizar o maior custo real; não partir direto para pacote de texturas convertido ou VMX sem perfil |
 | GPU assíncrona parecer rápida no cronômetro de CPU | Comparar submissão, conclusão GPU e apresentação; conferir quantos passos/imagens realmente avançam | Impedir que uma fila crescente passe por 30 fps, sem forçar sincronismo por desenho na build final |
 | Janelas de rasterização perderem histórico de brilho, alvo ou sombra | Comparar uma sequência curta contínua com janelas progressivamente maiores na x86 | Fixar a janela mínima por caso antes de gastar a rodada PPC |
-| FPU do console impedir casar capturas e ações por quadro | Testar introdução e caso de entradas fixas primeiro; confrontar estado e marca antes da captura | Não confundir divergência física já conhecida com endianness; se faltar referência, estimar gêmeo numérico ao Lucas |
+| FPU do console impedir casar capturas e ações por quadro | Testar introdução e caso de entradas fixas primeiro; confrontar estado e marca antes da captura | Não confundir divergência física já conhecida com endianness; se faltar referência, estimar gêmeo numérico ao mantenedor |
 | Nova luta chamar um dos stubs que a F2 não chamou | Contagem com nome e ponto da primeira chamada desde a etapa 3 | Falha explícita e inventário do escopo afetado; reestimar implementação, sem chamar o stub de função aprovada |
 | Custo futuro do áudio ou boca divergente | Publicar margem real; catalogar as capturas afetadas por fase de voz, inclusive fala de personagem fora do quadro | F6 mede o custo e o sincronismo; a F5 não garante ambos por rodar muda |
 
@@ -313,11 +313,11 @@ Este estudo foi feito por uma pessoa, sem agentes auxiliares. Para a implementa�
 | Frente possível | Arquivos/contrato principal | Pode adiantar sem console? | Integração necessária |
 |---|---|---|---|
 | Memória e posse dos recursos | Backend D3D e pontos protegidos do cache em `gs_draw.c` | Inventário e proposta, sim; segurança física, não | Responsável único por 1, 6 e 7, ou passagem explícita dos contratos entre autores |
-| ISO convertida | Ferramenta de PC, `conv/`, leitor ISO e mensagem de recusa | Especificação, saída e casos negativos no PC, depois da etapa 1 | Lucas decide marca/mods; console prova boot e ausência da conversão de arquivo na carga |
+| ISO convertida | Ferramenta de PC, `conv/`, leitor ISO e mensagem de recusa | Especificação, saída e casos negativos no PC, depois da etapa 1 | o mantenedor decide marca/mods; console prova boot e ausência da conversão de arquivo na carga |
 | Cores dos efeitos | Structs de pacote e gravações de `src/battle/`, inventário estático | Sim, após contrato da etapa 3 | Integração com memória e imagens; upstream só em ramos protegidos |
 | Memória da luta | Ferramentas de campos/donos, subalocações e união ativa | Sim; pode ser autor distinto do das cores | Compartilhar pontos de snapshot, sem aceitar exceções novas para encobrir falhas da outra frente |
 | VU1 e efeitos HLSL | Três famílias de vértice, constantes/índices, alfa/Z e efeitos nativos | Tradução/especificação e referências, sim | Escrever em sequência se alterarem os mesmos alvos, declaração de vértices ou orçamento |
-| Roteiros e regressão 3D | Roteiros, âncoras, `ChrView`, Shenlong e critérios de imagem | Preparar e conferir x86, sim | Builds integradas para PPC, revisão visual e controle no console com Lucas |
+| Roteiros e regressão 3D | Roteiros, âncoras, `ChrView`, Shenlong e critérios de imagem | Preparar e conferir x86, sim | Builds integradas para PPC, revisão visual e controle no console com o mantenedor |
 
 Se houver vários autores, usar branches separados para código/documentação independente. No WSL, executar
 roteiros/PPC em fila única e coordenar qualquer leitura pesada; nenhum agente inicia outro emulador porque está
@@ -334,7 +334,7 @@ por rede, com duração, contagem de quadros, p50/p95/p99/máximo, intervalos de
 descarte pendente, capturas, memória comparada e falhas provocadas. Se uma etapa exceder o dobro do tempo previsto,
 parar com estado e hipóteses documentados e apenas o trabalho provado em commit, conforme o processo do projeto.
 
-## Respostas do Lucas (decisão 24)
+## Respostas do mantenedor (decisão 24)
 
 1. **A luta (16/10/2026):** Goku (Early) contra Kuririn, os dois no traje padrão (0). O Vegeta (Scouter) ficou de
    fora pelo Ozaru, e o Raditz e o Nappa também, porque os dados dão a eles o Great Ape com lua no cenário

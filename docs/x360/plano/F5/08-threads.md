@@ -2,7 +2,7 @@
 
 Feito no branch `cursor/f5-threads-estudo`, a partir de `troca/main` (`9a922a9`, a tarefa em
 [`tarefas/f5-threads-estudo.md`](../../tarefas/f5-threads-estudo.md)). Só leitura de código e de documento: nenhuma
-build, nenhum emulador, nenhuma mudança de código. Serve para o Lucas decidir a arquitetura; **nada aqui está decidido
+build, nenhum emulador, nenhuma mudança de código. Serve para o mantenedor decidir a arquitetura; **nada aqui está decidido
 nem implementado**. A decisão 24, resposta 5, deixou a thread de desenho separada "só se isso não bastar, reestimada
 antes": este é o "reestimada".
 
@@ -31,7 +31,7 @@ Convenção: **[código]** é o que se lê nos fontes (com o arquivo), **[medido
    precisam, já está quase todo escrito, e tira da thread do jogo as esperas da Guide e das cargas.
 5. **A memória é o limite duro:** o mínimo livre visto nas rodadas é 30 MB contra um piso de 32 [medido]. Qualquer
    opção que dobre as listas (66,4 MiB cada) não cabe sem encolher as capacidades, que são fixas e usadas em menos de
-   um décimo (seção 4.2). Encolher é decisão do Lucas (pergunta 1 da seção 9).
+   um décimo (seção 4.2). Encolher é decisão do mantenedor (pergunta 1 da seção 9).
 
 ## 2. A thread do jogo, quadro a quadro
 
@@ -257,7 +257,7 @@ ordem, os 3 núcleos dividem 1 MB de L2, e duas threads no mesmo núcleo (SMT) r
 5. **A latência não piora:** o `Gfx_EndFrame` do jogo já mostra "um quadro depois de montado" (comentário do `gfx.c`), e o
    quadro leva hoje 75,7 ms de ponta a ponta; no pipeline a lista N sai mais cedo e a de N+1 já está pronta.
 
-### Recomendação (sem decidir pelo Lucas)
+### Recomendação (sem decidir pelo mantenedor)
 
 **Ir em degraus, cada um provado antes do seguinte:**
 
@@ -273,7 +273,7 @@ ordem, os 3 núcleos dividem 1 MB de L2, e duas threads no mesmo núcleo (SMT) r
    chega a 33,37 com a margem que o aceite pede sem isso.
 4. **O (e) e o (d) só se faltar**, e com a F6 no mesmo quadro (núcleo do áudio).
 
-Se o Lucas quiser **uma só mudança grande**, o (e) é o único que passa no papel, mas com 1,3 ms de folga, o mais caro e o
+Se o mantenedor quiser **uma só mudança grande**, o (e) é o único que passa no papel, mas com 1,3 ms de folga, o mais caro e o
 mais arriscado; não recomendo começar por ele.
 
 ## 6. O que fica no código do 360 e o que é portável
@@ -341,7 +341,7 @@ então os dois têm que ser iguais entre si).
 4. **No console**: a ocupação das threads de hardware 0, 1 e 3 com o jogo rodando (um contador de tempo ocupado por
    thread de teste), para escolher entre 0, 1 e 3 sem chute.
 
-## 9. Perguntas para o Lucas (com a opção conservadora)
+## 9. Perguntas para o mantenedor (com a opção conservadora)
 
 1. **Encolher as capacidades das listas** (66,375 MiB fixos para um uso máximo de uns 4,4 MiB nas rodadas medidas)? Sem
    isso o (a), o (c + a) e o (e) não cabem. *Conservadora:* **não encolher agora**; o degrau 1 não precisa. Decidir quando
@@ -372,7 +372,7 @@ então os dois têm que ser iguais entre si).
 ## Degrau 1
 
 Feito no branch `cursor/f5-degrau1`, a partir de `troca/main` (`2da745d`, a tarefa em
-[`tarefas/f5-degrau1.md`](../../tarefas/f5-degrau1.md)). O Lucas aprovou a recomendação deste estudo com as respostas
+[`tarefas/f5-degrau1.md`](../../tarefas/f5-degrau1.md)). O mantenedor aprovou a recomendação deste estudo com as respostas
 conservadoras da seção 9. As partes, na ordem da tarefa, cada uma com commit próprio: as medições baratas (1), o corte do
 hash de página (2), a gravação numa thread (3). Convenção: **[medido]** é o que uma rodada deste branch deu.
 

@@ -11,7 +11,7 @@ Os números de linha abaixo são dessa base; as propostas de correção não for
 precisam de correção. Os 392 pontos são sintáticos, incluindo corpos que o port habilita a partir de `#if 0` e
 uma definição de macro, não uma contagem de primitivas em execução. Goku (Early), id 0, não tem transformação
 nem fusão. Raditz, id 77, e Nappa, id 80, têm transformação condicionada à lua do cenário. Portanto, os dados
-não permitem fechar um adversário sem transformação entre os dois candidatos da decisão 24. A pergunta ao Lucas
+não permitem fechar um adversário sem transformação entre os dois candidatos da decisão 24. A pergunta ao mantenedor
 está na seção 2.4; nenhum personagem, traje ou estágio novo foi escolhido aqui.
 
 ## 1. Cores dos efeitos e do desenho
@@ -384,17 +384,17 @@ chamadas arbitrárias às filas. `BtlAct_CheckStoryForced` (`btl_act_j.c:1104` e
 chamar `QueueTransform/QueueFusion` sem consultar `CanTransform/CanFuse`. História, flags injetadas e alterações
 de tabelas ficam fora da alegação. Nenhuma disponibilidade em execução foi medida aqui.
 
-### 2.4 Perguntas para o Lucas e limite aplicado
+### 2.4 Perguntas para o mantenedor e limite aplicado
 
-1. **Raditz e Nappa têm transformação para Ozaru nos dados.** O Lucas prefere manter Raditz e restringir o caso
+1. **Raditz e Nappa têm transformação para Ozaru nos dados.** O mantenedor prefere manter Raditz e restringir o caso
    a um cenário comprovadamente sem lua, ou escolher outro adversário sem alvo de transformação? Se quiser
    Nappa por outro motivo, ele exige a mesma restrição de lua. Não há escolha aplicada: o adversário/cenário da
    etapa 3 fica pendente, sem apresentar a decisão 24 como já satisfeita.
 2. **Quais ids de traje usar?** Goku permite 0..3, Raditz e Nappa 0..1. A aparência não foi identificada nesta
-   tarefa sem jogo; a escolha e sua conferência visual ficam para o Lucas/etapa 3. Nenhum traje foi fixado por
+   tarefa sem jogo; a escolha e sua conferência visual ficam para o mantenedor/etapa 3. Nenhum traje foi fixado por
    conveniência do script de leitura.
 
-Se o Lucas autorizar um cenário sem lua, a etapa 3 precisa fixar seu id, provar nos dados que o bit `0x10` é
+Se o mantenedor autorizar um cenário sem lua, a etapa 3 precisa fixar seu id, provar nos dados que o bit `0x10` é
 zero e conferir que nenhuma mudança de cenário da sequência o habilita. Essa é uma possibilidade a decidir,
 não uma restrição imposta por este documento. Se escolher outro personagem, repetir nome, contagem de trajes,
 modelos e as duas tabelas antes de congelar o roteiro.
@@ -516,4 +516,4 @@ Confirmar a referência entregue pela rodada completa da F4 antes de implementar
 
 A etapa 4 tem agora 35 grupos pendentes (13 A, 22 B), as 11 declarações adicionais para B, 68 gravações já
 tratadas e as exclusões de CPU/IMAGE/cópia. A etapa 3 tem ids e trajes comprovados, mas depende da resposta do
-Lucas para fechar o adversário e o cenário sem transformação disponível, além dos trajes e das ações do roteiro.
+o mantenedor para fechar o adversário e o cenário sem transformação disponível, além dos trajes e das ações do roteiro.

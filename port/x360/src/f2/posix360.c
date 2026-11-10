@@ -76,7 +76,7 @@ static void diario_ambiente(void) {
 void Ambiente_Carregar(const char *caminho) {
     FILE *f;
     char linha[256];
-    /* o jogo como ele roda (23/10/2026, pedido do Lucas): sem a luta de demonstração, desenhando pela GPU com a VU1 em
+    /* o jogo como ele roda (23/10/2026, pedido do mantenedor): sem a luta de demonstração, desenhando pela GPU com a VU1 em
        HLSL, a gravação e o desenho em threads próprias (F5, etapa 8), o som do jogo (F6) e o 16:9 (decisão 26); a 1,33,
        o afiado, o FXAA, os alvos residentes, o envio por linhas e a VU1 direto já são padrão no backend. Os testes que
        queriam o de antes dizem no environment.txt (BT3_DEMO=1, BT3_GS=none, -BT3_SOM, -BT3_WIDE...) */

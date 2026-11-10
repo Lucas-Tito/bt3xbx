@@ -38,7 +38,7 @@
 #      compara_imagens; a diferença diz a tela, o quadro e quantos pixels). As imagens ficam em $O/NOME/img (no WSL,
 #      nunca no repositório). JANELA=8: quadros pintados antes de cada imagem (port/x360/headless/imagens.c).
 #      A luta entra também, desde a F5, etapa 4 (idêntica desde a correção das cores dos efeitos, plano/F5/04.md;
-#      decisão do Lucas, 16/10/2026); IMG=menus deixa a luta de fora, como até a F4 (IMG=luta continua aceito)
+#      decisão do mantenedor, 16/10/2026); IMG=menus deixa a luta de fora, como até a F4 (IMG=luta continua aceito)
 #   7. (F5, etapa 3) nos roteiros f5_*: roteiros.py f5 (o que a F5 exige: a luta montada, cada ação confirmada no
 #      estado do jogo e na matriz, o resultado e a volta ao menu, a janela contínua, os pontos) e passos.py (a medida de
 #      tempo por passo) no log da x86 e no da PPC sem mapa, os dois do commit de agora

@@ -6,11 +6,11 @@ decisões 20 e 27
 Branch `claude/f8-escala` (base `main` `cf6e8aa2`), 30/10/2026. Convenção: **[medido]**, **[lido]** e **[estimado]**.
 **A rodada da seção 6 rodou em 30/10** (`build/sessao_escala/coleta/`): na luta, a mediana da folga da GPU foi 8,5 ms na 1,33,
 7,6 na 1,4, 10,2 na 1,4 com a `BT3_OTIM_SEMTEX` e 7,8 na 1,5 com ela; as capturas da `e14` e da `e14s` têm os 15 FNV comuns
-iguais. A tabela completa, com o MSAA nas mesmas escalas, e as decisões do Lucas estão em `10-msaa.md`, seção 8.
+iguais. A tabela completa, com o MSAA nas mesmas escalas, e as decisões do mantenedor estão em `10-msaa.md`, seção 8.
 
 ## 1. O pedido e o resultado
 
-O Lucas acha o serrilhado incômodo (o FXAA de console está ligado por padrão desde 23/10, 0,8 a 0,9 ms) e quer subir a
+O mantenedor acha o serrilhado incômodo (o FXAA de console está ligado por padrão desde 23/10, 0,8 a 0,9 ms) e quer subir a
 resolução interna "nem que seja um pouco" acima da 1,33 do release (648 x 456 do GS em 864 x 608). A 1,5 e a 1,6 não
 couberam em 23/10 (35,6 e 40,5 ms de GPU na pausa com as otimizações); a 1,33 mediu 26,6 ms na pausa e tem uns 2 ms de
 folga nos quadros pesados do Duelo de teste (item 14 das pendências).
@@ -264,6 +264,6 @@ versão 3 trazida para o branch e uma build nova).
 - **O alvo como textura especializado** (a classe `alvo`, 3,44 ms no 6960): o mesmo argumento do especializado de 23/10
   (`tex2D` no lugar do `tex2Dgrad`, um nível, sem filtro de mip), mas a leitura continua; o ganho é menor e mais incerto.
 - **O `BT3_ESCALA_FX`**, se a 1,4 couber e a 1,5 ficar perto: até 1,3 ms, com a imagem do brilho mudando e uma decisão do
-  Lucas sobre a escala uniforme.
+  o mantenedor sobre a escala uniforme.
 - **A escala padrão:** só com a rodada. Se a c passar, a 1,4 com a chave pode virar o padrão (as duas linhas no
   `area_init` e o padrão da chave), com o FNV das capturas iguais e uma decisão nova.

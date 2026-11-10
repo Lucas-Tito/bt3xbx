@@ -18,7 +18,7 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 
 - Tudo em português. **Nunca use travessão** (o caractere U+2014) em texto, comentário ou mensagem de commit.
 - **Nenhuma atribuição** em commit: nada de `Co-authored-by`, nada que cite Codex, ChatGPT, OpenAI, Cursor, Claude ou
-  qualquer ferramenta. A identidade do commit é a do repositório (Lucas Tito Sampaio).
+  qualquer ferramenta. A identidade do commit é a do repositório.
 - **Nenhum byte do jogo no repositório** (ISO, ELF, AFS, dados extraídos, imagens capturadas). Os dados ficam fora
   do git (`gamedata/`, `disc/`, `port/build/`, `~/`).
 - O código vindo do upstream (`src/`, `include/`, `port/` fora de `port/x360/`) só muda **dentro de
@@ -32,7 +32,7 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
   espera uma vaga livre (a vaga 1 é a antiga `~/wsl.lock`) e devolve o código do comando. Nada de `qemu-ppc` ou
   `roteiros.sh` solto fora dele: dois sem controle já travaram o WSL. Script de rodada não pode recusar outro `qemu`
   rodando nem recusar uma vaga que o `vez.sh` deu (nada de `BT3_VAGAS=3` ou guarda "só vagas 1 a 3").
-- **Rodada do tamanho da mudança, repartida entre as vagas** (Lucas, 07/11):
+- **Rodada do tamanho da mudança, repartida entre as vagas** (mantenedor, 07/11):
   - **reparta:** roteiros independentes vão em grupos, uma chamada do `~/vez.sh` por grupo, em paralelo (cada grupo
     com a sua pasta de saída). Nada de uma fila única de horas numa vaga com as outras livres;
   - **não refaça o lado provado igual:** se a comparação dos objetos sem depuração mostrar a x86 idêntica à da última
@@ -45,7 +45,7 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 - **Todo verificador novo tem de ser visto falhando de propósito** (entrada estragada numa cópia) antes de valer.
 - Todo aprendizado que custou uma rodada entra no guia, no mesmo commit da correção.
 - Processo longo: rode com `tee` para um log em `~/` (o `/tmp` do WSL some quando a distribuição para).
-- **Disco: limpe as suas rodadas sem esperar ninguém** (Lucas, 06/11). O disco do WSL mora no C: do Windows; as filas
+- **Disco: limpe as suas rodadas sem esperar ninguém** (mantenedor, 06/11). O disco do WSL mora no C: do Windows; as filas
   param abaixo de 40 GB livres no C:. Ao armar uma rodada nova, e sempre que o C: passar abaixo de 60 GB:
   - **pode apagar** as saídas das **suas** rodadas já julgadas e superadas por uma posterior, guardando antes os
     pequenos (logs, tabelas, resumos, carimbos) e apagando os pesados (ISOs, imagens, bancos, dumps, builds);

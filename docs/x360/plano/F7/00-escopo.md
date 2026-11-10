@@ -204,7 +204,7 @@ resolves, GPU, fim da cadeia e histograma da tela; comparar simples/dividido na 
 [Lido] A seção 30 da F5 abriu a classe comum por shader/alvo e contou cobertura nas listas x86gv, inclusive
 duas cadeias de brilho. Área sobreposta não é escrita descartável, e reconstrução x86gv não é tempo no Xenos.
 Essas ferramentas ajudam a localizar custo, mas não há ganho novo de tela dividida medido. Manter 720p de saída,
-escala 1,33, 16:9 e efeitos dos padrões atuais (decisões 20/26), até decisão específica do Lucas.
+escala 1,33, 16:9 e efeitos dos padrões atuais (decisões 20/26), até decisão específica do mantenedor.
 
 ### 1.4 Dependências herdadas
 
@@ -213,7 +213,7 @@ escala 1,33, 16:9 e efeitos dos padrões atuais (decisões 20/26), até decisão
 | [Lido] F5: teto de memória, ISO convertida, GPU/VU1/efeitos e cache corretos | Base das correções de conteúdo e do desenho dividido | [Estimado] Inventário, receitas de save e roteiros podem adiantar; integrar sobre base comum antes das provas. |
 | [Lido] F5, etapas 8/10: decisão 27, três janelas e sessão livre, mínimo de 32 MiB físicos livres | Aceite de desempenho F7 e comparação simples/dividido | [Estimado] Medir cedo o dividido sem chamá-lo aprovado; não somar otimização concorrente ao orçamento sem repetir a base. |
 | [Lido] F6, etapas 7/8/9: filme com som, deriva, Guide, escuta e rodada final | Aceite completo de modos, cenas e estabilidade | [Estimado] Rastro lógico e dados avançados podem adiantar. Aceite do som no dividido e final da campanha exige a F6 integrada e conferida. |
-| [Lido] F8/pendencias, itens 4/5: preto intermitente de Namek e deserto noturno escuro | Continuam no fechamento de gaps no fim do plano por ordem do Lucas | [Estimado] Registrá-los nas capturas e tabela, sem travar a F7 nem declará-los corrigidos. Defeito novo de conteúdo ou metade faltando não herda essa dispensa. |
+| [Lido] F8/pendencias, itens 4/5: preto intermitente de Namek e deserto noturno escuro | Continuam no fechamento de gaps no fim do plano por ordem do mantenedor | [Estimado] Registrá-los nas capturas e tabela, sem travar a F7 nem declará-los corrigidos. Defeito novo de conteúdo ou metade faltando não herda essa dispensa. |
 | [Lido] Importar/exportar saves, acabamento de vídeo/remapeamento, avisos e abertura do repositório | F8; quatro jogadores, F9 | [Estimado] Não são pré-requisitos para montar cartões de teste nativos nem para dois controles com o mapeamento atual. |
 
 ## 2. Redes de cobertura
@@ -245,7 +245,7 @@ deve fechar o inventário de caminhos; não tentar o produto cartesiano de perso
    de divergência nas otimizações, com `BT3_SCALE=1` ao reconstruir área para o backend falso. No dividido, exigir
    conteúdo nas duas metades, duas câmeras distintas e retorno correto de uma vista cheia. Zero diferença viva
    inexplicada, tolerância numérica herdada só nos casos nomeados do verificador.
-5. [Estimado] **Console e sessão com Lucas.** Build XDK e revisão no Linux, mídia convertida e cartão de teste
+5. [Estimado] **Console e sessão com o mantenedor.** Build XDK e revisão no Linux, mídia convertida e cartão de teste
    isolado. Capturas por vista/cena, input real de dois controles, mistura/vozes, Guide, desconexão, troca de
    quadrante, gravação/retomada, memória e tempo. Só o console prova Xenon/Xenos, latência física, falta de dado
    do XAudio2, apresentação a 30 fps e percepção das metades/HUD. O float de hardware pode divergir do replay
@@ -280,7 +280,7 @@ e 20 só na coleção; 34 aulas e 374 páginas selecionáveis, 347 imagens carre
 cinco tipos de torneio em três níveis; 14 registros, sete replays e 15 desejos em três listas.
 Os critérios abaixo passam a usar esses denominadores, sem afirmar que todas essas ações já foram executadas.
 O estado corrente da campanha Sim só persiste na sessão: `SimTop_Init` o zera; após reinício conferir os
-campos originais salvos (ranking, conclusão, páginas, prêmios). Retomada nova da campanha exigiria decisão do Lucas.
+campos originais salvos (ranking, conclusão, páginas, prêmios). Retomada nova da campanha exigiria decisão do mantenedor.
 
 | Item | Critério mensurável proposto [estimado] |
 |---|---|
@@ -355,7 +355,7 @@ censos/negativos enquanto o WSL roda outra metade ou prepara entrada. Gerar `por
 commit e ferramentas, um emulador por vez no Deck, dados e cartões próprios. Não usar Deck como medidor do 360.
 Não se acessou ou reservou o Deck nesta tarefa, nem se alteraram outras worktrees ou serviços do WSL.
 
-## 5. Decisões para o Lucas
+## 5. Decisões para o mantenedor
 
 [Estimado] Só perguntas que mudam trabalho. Recomendações ainda abertas; o escopo usa a opção conservadora
 descrita, sem introduzir mudança no jogo nem afrouxamento de decisão vigente.
@@ -370,7 +370,7 @@ descrita, sem introduzir mudança no jogo nem afrouxamento de decisão vigente.
    cursos, loja, replays e dois humanos no Torneio. (b) Entregar primeiro Duelo/conteúdo de luta, movendo modos
    avançados para uma fase explicitamente nova antes do release. **Recomendação: a**, porque o nome da F7 e a
    decisão 22 já apontam conteúdo completo; b encurta a primeira entrega, mas não elimina o trabalho nem fecha
-   o jogo base. Sem resposta, não excluir nenhum desses modos; manter só os gaps já adiados pelo Lucas na F8.
+   o jogo base. Sem resposta, não excluir nenhum desses modos; manter só os gaps já adiados pelo mantenedor na F8.
 3. [Estimado] **Desbloqueios no produto e nas provas.** (a) Progressão original, cartões avançados gerados só
    para teste e casos de ganho real sem desbloqueio. (b) Acrescentar também uma opção visível de liberar tudo,
    sem substituir a progressão. (c) Liberar tudo por padrão e dispensar a campanha de desbloqueio no aceite.
@@ -380,7 +380,7 @@ descrita, sem introduzir mudança no jogo nem afrouxamento de decisão vigente.
    console inspeção por família, todos os casos problemáticos e os piores cenários de desempenho, mais sessão
    livre. (b) Repetir manualmente no console cada traje/variante, relação e missão/episódio. **Recomendação: a**,
    com lista fechada na etapa 1 e estados avançados também no 360; b aumenta muito as sessões e o custo depende
-   da disponibilidade do Lucas. Sem resposta, planejar a, sem alegar inspeção manual exaustiva ou equivalência
+   da disponibilidade do mantenedor. Sem resposta, planejar a, sem alegar inspeção manual exaustiva ou equivalência
    de todas as combinações. Os critérios de estado em lote não são reduzidos por essa escolha.
 
 ## 6. Riscos e medições que os revelam cedo
@@ -413,7 +413,7 @@ contrato como a 9a/9b, com responsáveis futuros e integração serial do backen
 | História e Ultimate/Torneio | Receitas por pré-condição, eventos/recompensas e conclusão | Partilhar contratos de cartão, não arquivos de saída; unir manifestos e conferir ausentes na integração. |
 | Loja/Data Center/Referência/desejos | Customização, registros e sete arquivos de replay, recompensas restantes | Independente do lote de modelos depois dos cartões; novos consumidores opacos exigem tipagem antes do merge. |
 | GPU, desempenho e console | `gs_draw.c` protegido, backend 360 e ferramentas de perfil | Uma linha de integração com F5/F6; sonda cedo, aceitar só no commit integrado e sem marcas de diagnóstico. |
-| Rodada final | Verificadores, logs e relatório por caso | Um executor por máquina, origem única; revisar lista completa e negativos antes da sessão final com Lucas. |
+| Rodada final | Verificadores, logs e relatório por caso | Um executor por máquina, origem única; revisar lista completa e negativos antes da sessão final com o mantenedor. |
 
 [Estimado] Exigem console: mapeamento e reconexão reais do segundo controle, Guide, vibração conforme o suporte
 vigente, latência física, divisão/HUD em 720p/16:9, memória física/EDRAM, persistência de profundidade/alfa,
@@ -430,6 +430,6 @@ save/reabertura, imagens por metade, som, percentis/máximos, memória, erros e 
 vistos falhando e SHA1/objetos da x86. Não fechar F7 com a rodada F6 incompleta, com desempenho só médio ou com
 os únicos dados avançados gerados pelo desbloqueio total de teste.
 
-## Respostas do Lucas (28/10/2026, decisão 28)
+## Respostas do mantenedor (28/10/2026, decisão 28)
 
 1a, 2a, 3a, 4a: as recomendações da seção 5. Texto em [decisoes.md](../../decisoes.md), decisão 28.

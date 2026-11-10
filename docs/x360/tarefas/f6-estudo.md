@@ -15,7 +15,7 @@ de código: o entregável é texto.
 
 A F6 é "áudio (ADX e efeitos) e filmes" no console (tabela de fases em `docs/x360/plano.md`). Hoje ela não tem plano.
 Escreva-o no formato do plano da F5 (`docs/x360/plano/F5/00-escopo.md` como modelo: escopo e ponto de partida,
-redes de cobertura, critério de fim, etapas com onde roda, o que faz, critério e tamanho, decisões para o Lucas,
+redes de cobertura, critério de fim, etapas com onde roda, o que faz, critério e tamanho, decisões para o mantenedor,
 riscos com a medição que os revela cedo, divisão entre agentes e o que pede o console).
 
 Leia antes:
@@ -37,7 +37,7 @@ Leia antes:
 ## Entregável
 
 `docs/x360/plano/F6/00-escopo.md`, com o escopo e o critério de fim verificáveis, as etapas na ordem com estimativa,
-as **decisões para o Lucas** numeradas (cada uma com as opções, o custo de cada e a sua recomendação; ele decide a
+as **decisões para o mantenedor** numeradas (cada uma com as opções, o custo de cada e a sua recomendação; ele decide a
 arquitetura), os riscos e o que pode ser dividido entre agentes. Atualize a linha da F6 no índice
 `docs/x360/plano.md` para apontar para o arquivo novo. Português, sem travessão.
 
