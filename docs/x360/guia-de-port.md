@@ -47,7 +47,10 @@ Três máquinas, cada uma com um papel. Ninguém edita código fora da máquina 
 Este Linux não pode receber o ISO nem rodar o jogo. O Windows tem o OpenSSH Server (porta 22 só
 para a rede local), e o comando chega daqui por SSH (`Host <host do WSL>` em `~/.ssh/config`, chave
 própria só para isso). Para cá só volta texto. Os scripts `wsl.sh` e `status_wsl.sh` leem o host de
-`BT3_WSL_HOST` e `wsl.sh` o usuário do WSL de `BT3_WSL_USER`; nenhum dos dois tem valor padrão.
+`BT3_WSL_HOST` e `wsl.sh` o usuário do WSL de `BT3_WSL_USER`, sem valor padrão no código: os valores de cada
+máquina ficam fora do git, em `~/.config/bt3xbx/maquinas.env` (modelo em `port/x360/maquinas.env.example`, lido por
+`port/x360/tools/maquinas.sh`; variável já definida no ambiente vence). Ali também se anotam IPs, apelidos e pastas
+da rede de quem desenvolve, que não entram no repositório público.
 
 - Preparo versionado e idempotente: `port/x360/tools/preparar-wsl.sh`. Ele instala o cross
   `gcc-powerpc-linux-gnu`, o `qemu-user`, o clang/LLVM 22 do apt.llvm.org e o SDL3 compilado do

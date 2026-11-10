@@ -36,3 +36,6 @@ port/build_release/
 /stages/
 /songs/
 /textures/
+
+# Máquinas e rede de quem desenvolve (modelo em port/x360/maquinas.env.example)
+port/x360/maquinas.env

@@ -5,7 +5,8 @@
 # sessões do Codex vivas, as vagas do emulador (~/vez.sh), o fim do log das filas, os últimos commits de cada
 # worktree, as entregas recentes e o disco/memória. Só lê; não mexe em nada.
 set -euo pipefail
-HOST=${BT3_WSL_HOST:?defina BT3_WSL_HOST com o host SSH do PC Windows com o WSL (entrada do ~/.ssh/config)}
+. "$(dirname "$0")/maquinas.sh"
+HOST=${BT3_WSL_HOST:?defina BT3_WSL_HOST com o host SSH do PC Windows com o WSL (entrada do ~/.ssh/config), no ambiente ou em ~/.config/bt3xbx/maquinas.env (modelo em port/x360/maquinas.env.example)}
 OPC=(-o LogLevel=ERROR -o ConnectTimeout=15)
 [ -n "${BT3_WSL_IP:-}" ] && OPC+=(-o HostName="$BT3_WSL_IP")
 ssh "${OPC[@]}" "$HOST" "wsl -d Ubuntu-24.04 -u root bash -s" <<'FIM' | tr -d '\0\r'

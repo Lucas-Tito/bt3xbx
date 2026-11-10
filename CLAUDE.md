@@ -13,7 +13,8 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
 - Tudo em português, sem travessão em texto público e nos documentos do projeto.
 - Commits atômicos, mensagem em português com o porquê, **sem nenhuma atribuição ao Claude**
   (nada de `Co-Authored-By` nem `Claude-Session`). Identidade local do repo: conta pessoal Lucas-Tito.
-- Repositório **público** (desde 30/10/2026): nada pessoal (IPs, caminhos, nomes de máquinas) entra em commit nem em release. `gh`/push só pela conta pessoal:
+- Repositório **público** (desde 30/10/2026): nada pessoal (IPs, caminhos, nomes de máquinas) entra em commit nem em release; isso fica em
+  `~/.config/bt3xbx/maquinas.env` (não versionado, modelo em `port/x360/maquinas.env.example`). `gh`/push só pela conta pessoal:
   `GH_TOKEN=$(gh auth token --user Lucas-Tito) git push ...`, sem trocar a conta ativa do `gh`.
 - **Nenhum byte do jogo no repositório nem no release** (ISO, ELF, AFS, dados extraídos). O usuário
   fornece a própria ISO USA SLUS-21678.
