@@ -73,6 +73,11 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
 - Arquivos de diagnóstico do projeto: `environment.txt` (entrada), `output.txt` (saída) e `bt3xbx.log`.
   Modelos para copiar ao console usam `environment_*.txt`; não há leitura alternativa dos nomes anteriores.
 - **Modelos de ambiente para o console** (erros que já custaram rodadas no console, o último em 06/11):
+  - **Roteiro só quando a prova precisa dele** (mantenedor, 11/11): medir, comparar aberturas entre si ou chegar a um
+    ponto que a mão não alcança. Tela, aviso, recusa ou caixa do sistema se confere à mão, sem `BT3_ROTEIRO`: o
+    roteiro só alonga a abertura e ainda exige cartão vazio (o `opcoes.txt` dos ambientes de mods não servia para as
+    telas e travou a 2ª abertura do pacote no título, com o save da 1ª no cartão). Diga no LEIA-ME por que cada
+    ambiente leva roteiro.
   - A ISO convertida no console é `game:\bt3-x360.iso`. O nome `bt3_convertida.iso` dos modelos antigos (F5, F6, F8)
     não existe mais: não copie a linha `BT3_ISO` deles (sem ela, o título acha a ISO sozinho).
   - Os roteiros ficam na raiz da pasta do jogo: `BT3_ROTEIRO=game:\f5_duelo.txt`, não `game:\roteiros\...` (essa

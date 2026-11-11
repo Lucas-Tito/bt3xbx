@@ -15,7 +15,10 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
   (nada de `Co-Authored-By` nem `Claude-Session`). Identidade local do repo: conta pessoal Lucas-Tito.
 - Repositório **público** (desde 30/10/2026): nada pessoal (IPs, caminhos, nomes de máquinas) entra em commit nem em release; isso fica em
   `~/.config/bt3xbx/maquinas.env` (não versionado, modelo em `port/x360/maquinas.env.example`). `gh`/push só pela conta pessoal:
-  `GH_TOKEN=$(gh auth token --user Lucas-Tito) git push ...`, sem trocar a conta ativa do `gh`.
+  `GH_TOKEN=$(gh auth token --user Lucas-Tito) git push ...`, sem trocar a conta ativa do `gh`. Quem faz o push ao
+  GitHub é quem orquestra, depois de revisar e reconferir (nada pessoal, nada do jogo, árvore limpa); agente lançado não
+  faz push ao GitHub (o `troca` do WSL continua como está). O que o usuário final lê (README, pacote, textos de issue)
+  segue esperando a auditoria do mantenedor antes de subir.
 - **Nenhum byte do jogo no repositório nem no release** (ISO, ELF, AFS, dados extraídos). O usuário
   fornece a própria ISO USA SLUS-21678.
 - Pode subir build no console por FTP sem pedir; se demorar, parar e perguntar. Antes de apagar algo
@@ -89,7 +92,8 @@ Xbox 360 E, RGH, kernel 2.0.17150, FreeStyle 3.0.780 + DashLaunch (plugins hiddr
   Conteúdo e chaves continuam em português. O título só lê o nome atual da configuração.
 - Ambientes de console (regra no `AGENTS.md`): ISO `game:\bt3-x360.iso` (nunca `bt3_convertida.iso`), roteiro na raiz
   (`game:\f5_duelo.txt`), `BT3_NOMOVIE=1` em roteiro que não mede a abertura e `BT3_DESBLOQUEIO=1` em roteiro que
-  inclui o `boot.txt`. Conferir isso antes de subir ambiente feito pelo Codex.
+  inclui o `boot.txt`. Conferir isso antes de subir ambiente feito pelo Codex. **Roteiro só quando a prova precisa
+  dele** (medir, comparar aberturas, alcançar o que a mão não alcança); tela e aviso se conferem à mão.
 
 - **Roteiros na PPC: `SEMMAPA=1`, nunca `PPC=1`.** A PPC com o mapa passa do menu principal e trava no Flash da tela
   seguinte, que o mapa por posição não inverte: uma hora por roteiro sem resultado (a etapa 5a da F4 perdeu quatro).
