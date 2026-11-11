@@ -179,3 +179,5 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     dashboard sem retomar o D3D, que é o recuo previsto. O mantenedor aceitou a saída limpa para a 1.1.0 e pediu para
     resolver depois: fazer a thread de desenho parar quando o renderer nunca chegou a iniciar. Log em
     `bt3xbx-console/rel110/logs/r5_bt3xbx.log` (fora do git).
+21. **O replay com bug desde a primeira release até a última** (informado ao mantenedor, 11/11/2026): só anotado, para
+    investigar depois.
