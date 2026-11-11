@@ -79,6 +79,9 @@ existe no WSL; ela é feita e conferida no Linux, na revisão).
     pasta não existe no console). Os incluídos (`boot.txt`, `f7_dois_inicio.txt`...) vão junto, na raiz; liste-os.
   - **Roteiro que não mede a abertura não espera por ela**: `BT3_NOMOVIE=1` em todo ambiente de roteiro (nunca
     `-BT3_NOMOVIE`), salvo quando a pergunta é o próprio vídeo de abertura.
+  - **Roteiro que inclui o `boot.txt` passa pelo `desbloqueia`**: o ambiente leva `BT3_DESBLOQUEIO=1` e uma pasta de
+    saves vazia. Sem a variável, o roteiro para na tela vermelha de falha (`boot.txt:19`; custou a rodada do pacote de
+    mods em 09/11).
 
 ## Como entregar
 
