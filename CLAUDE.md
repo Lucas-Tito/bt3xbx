@@ -30,6 +30,10 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
   verificador), dizendo por quê.
 - O gancho em `.claude/settings.json` recusa qualquer chamada de agente sem `model` (menos o `fork`, que herda o
   modelo de quem lança).
+- Esperar é com o shell (a regra do `AGENTS.md` vale também para os agentes que quem orquestra lança): rodada longa é
+  um comando só, em segundo plano quando a ferramenta avisa no fim, ou bloqueante com o maior tempo limite. Nada de
+  vigia armada de tempo em tempo, `sleep` em laço, log espiado no meio nem segunda cópia do que já roda. Todo brief
+  de agente repete isso; quem orquestra segue a mesma e reconfere com uma rodada só.
 
 ## Passagem de chat
 
