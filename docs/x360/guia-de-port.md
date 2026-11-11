@@ -150,6 +150,10 @@ Um Steam Deck (SteamOS, 8 threads, 16 GB) serve, como `Host deck` no `~/.ssh/con
   (`port/x360/src/f2/posix360.c`): o `getenv` do 360 é aquela tabela mais o `environment.txt`, não o da CRT nem o
   `port/x360/src/ambiente.c` da F1. O estudo da F6 deu o `BT3_SOUND_TICKS` como ausente, a primeira rodada da VU1 da
   F5 o pôs no `ambiente.txt` para provar, e ele já era padrão desde a F2: a rodada não separou nada.
+- **O valor de uma chave do `environment.txt` corta em 159 caracteres, sem aviso** (`sValor[...][160]` com
+  `strncpy` no `posix360.c`; o nome corta em 47). Lista longa de quadros, caminho fundo ou várias imagens numa
+  chave só chegam truncados ao `getenv` e o título segue como se estivesse tudo certo. Conferir o tamanho antes de
+  subir o ambiente e, no diário, a linha `ambiente: CHAVE=valor` que o título grava ao carregar.
 
 ---
 
@@ -2457,6 +2461,9 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
 - O rateio de `BT3_CORTES=A,B` usa uma pilha de etapas exclusivas. A VU1 também chama o GIF; subtrair de tempos
   inclusivos sem considerar esse aninhamento conta envio duas vezes. A soma das etapas deve conservar o total.
   Os tempos incluem o relógio e a instrumentação por chamada; comparar ganhos com o perfil desligado também.
+- **Escrever sempre os dois números em `BT3_CORTES=A,B`.** Com um número só, o `sscanf` de `cortes_impl.h` troca o
+  A e deixa o B no padrão 7025 (e `1` volta o A a 6900): `BT3_CORTES=7100` dá uma janela vazia, sem erro, e a
+  abertura sai sem nenhuma parcela.
 - A comparação binária dos uniformes admite agrupar quatro palavras com XOR/OR sem mudar a igualdade. Não usar
   comparação numérica de floats: sinais de zero e NaNs precisam manter os bits. Os uniformes só garantem quatro
   bytes de alinhamento, portanto uma leitura de 64 bits seria uma hipótese adicional sobre o Xenon.
