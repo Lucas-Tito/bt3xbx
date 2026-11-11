@@ -97,7 +97,8 @@ do jogo que usa `0x70000000` como constante precisa ser traduzido.
 120 ns com 64 KB (2,9x, falta de TLB). A RAM do PS2 em identidade fica na faixa de 4 KB. Antes de
 fixar o mapeamento é preciso ver quanto o jogo depende do endereço exato (tabelas do ELF com
 ponteiros absolutos, comparação com o PCSX2) e se a heap pode ir para `0x40000000+` com páginas de
-64 KB.
+64 KB. (11/11/2026: a pergunta nunca foi respondida e o BT3 rodou sempre na faixa de 4 KB; virou a candidata G de
+otimização em [F8/13, tela dividida](plano/F8/13-tela-dividida.md), com inventário e medida antes de implementar.)
 
 **Leitura invertida é barata:** `lwbrx` 1,38 ns contra `lwz` 0,63 ns por palavra na cache. Trocar
 bytes na leitura não é o problema. **int -> float é caro:** 12 ns (load-hit-store).
