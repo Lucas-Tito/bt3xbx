@@ -21,9 +21,8 @@ Custo: horas, mais a rodada dos roteiros `f9_equipe*` e a conferência do C89 (o
 
 ## BT4decomp
 
-**A URL e a revisão usadas como `troca/ref/bt4decomp` não estão registradas** (a decisão 40 só diz "base v0.1.39.5").
-O candidato é `NauTaro/DBZ-BT4-Tag-Team-Decomp` (README "BT4decomp"), provavelmente na R2 (`f103106`, 03/11) ou antes;
-conferir no `troca` do WSL e registrar na decisão 40 antes de usar. Desde a R2: 69 commits e as releases R3 a R5.5
+O `troca/ref/bt4decomp` é `NauTaro/DBZ-BT4-Tag-Team-Decomp` na tag `v0.1.39.5-R2` (`f1031069`, 03/11), conferido no
+`troca` em 11/11 e registrado na decisão 40. Desde a R2: 69 commits e as releases R3 a R5.5
 (ponta `0206e3b`, 11/11), uns 55 deles online (ranked, relays, Supabase). O que vale para o 360:
 
 | Commit | O que traz |

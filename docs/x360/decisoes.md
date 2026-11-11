@@ -937,6 +937,9 @@ para dois a quatro jogadores. A fonte principal será o Tag Team nativo,
 executável por perfil (`PortGame_IsBT4()`). As lacunas do BT4 e a leitura dos
 quatro pacotes virão do BT4decomp, `troca/ref/bt4decomp`, base v0.1.39.5,
 AGPL-3.0. Isso substitui a orientação da decisão 16 de reescrever a tela dividida.
+(Conferido no `troca` em 11/11/2026: `ref/tagteam-nativo` é `tehmufti/Budokai-Tenkaichi-3-Tag-Team-Mod-PC_Recomp-`
+na tag `v0.1.0-beta.4`, `9b02e8c3`; `ref/bt4decomp` é `NauTaro/DBZ-BT4-Tag-Team-Decomp` na tag `v0.1.39.5-R2`,
+`f1031069`. O que as duas andaram depois está na [pesquisa 08](pesquisa/08-upstream-tag-team.md).)
 Online e voz de rede ficam fora do 360. A etapa 1 incorpora só a v0.1.37,
 sem código dessas duas referências.
 
