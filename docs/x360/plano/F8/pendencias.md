@@ -181,3 +181,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     `bt3xbx-console/rel110/logs/r5_bt3xbx.log` (fora do git).
 21. **O replay com bug desde a primeira release até a última** (informado ao mantenedor, 11/11/2026): só anotado, para
     investigar depois.
+22. **Mods no console, rodada de 11/11/2026 (build `mods-telas`, `ee205cdb`)**: controle e pacote aprovados (o pacote
+    não avisa na reabertura; o pacote novo avisa uma vez e segue). **Defeito:** com arquivos soltos em subpastas
+    (`mods\pzs3us1\...`) o boot registra `mods: nenhum` e `mods: preparação recusada (-1)` e mostra a caixa "Cannot
+    load mods"; com um arquivo solto na raiz de `mods` a tela dos soltos abre. A varredura do Xbox (`mods_pasta.c`,
+    `FindFirstFile`) nunca tinha rodado no console (o WSL usa o ramo POSIX); a separação pela subpasta está no
+    diário da rodada. **Pedidos do mantenedor para as telas:** a tela dos soltos no mesmo estilo da "Unsupported",
+    com OK e Cancel (não segurar A e B); só a mensagem principal em vermelho, não todas as letras.
