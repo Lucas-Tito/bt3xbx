@@ -34,6 +34,9 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
   um comando só, em segundo plano quando a ferramenta avisa no fim, ou bloqueante com o maior tempo limite. Nada de
   vigia armada de tempo em tempo, `sleep` em laço, log espiado no meio nem segunda cópia do que já roda. Todo brief
   de agente repete isso; quem orquestra segue a mesma e reconfere com uma rodada só.
+- Fase nova de uma etapa (depois de ponto de parada, decisão do mantenedor ou corte) vai para **agente novo**, com
+  brief que aponta o relatório, as decisões e o estado do git. Retomar o agente antigo arrasta todo o contexto dele a
+  cada chamada; só se retoma quando o estado está apenas na cabeça do agente, e nunca quando está no disco.
 
 ## Passagem de chat
 
