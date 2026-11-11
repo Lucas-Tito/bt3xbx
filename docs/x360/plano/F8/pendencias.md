@@ -191,3 +191,5 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     `mods-telas` (build do XDK pronta, falta o console); o texto novo foi **aprovado** pelo mantenedor em 11/11: o
     destaque "WARNING: unconverted mod files detected." em vermelho e o resto do aviso aprovado antes, sem o "Press A to
     continue.".
+23. **A troca de corpo do Ginyu no BT4** (`bt4_body_change.c`, do BT4decomp R3, `83e3bd9`; meio dia a um dia): fora da
+    primeira release com BT4 por decisão do mantenedor (11/11/2026), anotada para depois (decisão 40, nota de 11/11).
