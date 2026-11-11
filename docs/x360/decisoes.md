@@ -957,6 +957,17 @@ roteiros. As cinco etapas e os limites desta integração estão em
 [plano/F9/01-base.md](plano/F9/01-base.md).
 
 
+**Decisões do mantenedor em 11/11/2026, para a primeira release com BT4 e Tag Team:**
+- As cinco recusas (arenas 11 e 46, normais e divididas, `pzs4us1/01533`, `01568`, `01632`, `01667`, e a câmera da técnica 4,
+  `pzs4us2/02209`): as receitas de teste que hoje as aceitam (o reparo do cenário antecipado na conversão) passam a
+  receitas normais **depois do teste do mantenedor no console** com a imagem de teste. Até esse teste, a imagem de
+  release continua recusando.
+- As mudanças do Tag Team nativo e do BT4decomp levantadas na [pesquisa 08](pesquisa/08-upstream-tag-team.md) entram
+  **antes** da primeira release com BT4: o `ef016d6` inteiro (Solar Flare com vários lutadores, reviver aliado, pausas
+  cinemáticas, clash do BT4 com Círculo), a guarda do `stageFx` (`eft_k.c`), o recorte de itens e da habilidade 0x7B
+  do `battle_load.c`, o `CS_CELL.id` do seletor e a pista dos blocos coloridos (`275275a`), conferida contra o nosso
+  caminho de desenho. As esteiras de água não (já temos). A troca de corpo do Ginyu fica fora salvo pedido.
+
 ## 41. F8: modificadas pelo executável USA, partes fora dos AFS e recusa de formatos incompatíveis (4/11/2026)
 
 Aplicação da tarefa `conversor-mods`, com a opção conservadora nela autorizada:

@@ -187,4 +187,7 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     load mods"; com um arquivo solto na raiz de `mods` a tela dos soltos abre. A varredura do Xbox (`mods_pasta.c`,
     `FindFirstFile`) nunca tinha rodado no console (o WSL usa o ramo POSIX); a separação pela subpasta está no
     diário da rodada. **Pedidos do mantenedor para as telas:** a tela dos soltos no mesmo estilo da "Unsupported",
-    com OK e Cancel (não segurar A e B); só a mensagem principal em vermelho, não todas as letras.
+    com OK e Cancel (não segurar A e B); só a mensagem principal em vermelho, não todas as letras. Feito na
+    `mods-telas` (build do XDK pronta, falta o console); o texto novo foi **aprovado** pelo mantenedor em 11/11: o
+    destaque "WARNING: unconverted mod files detected." em vermelho e o resto do aviso aprovado antes, sem o "Press A to
+    continue.".
