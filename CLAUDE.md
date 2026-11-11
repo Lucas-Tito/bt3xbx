@@ -19,8 +19,8 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
   GitHub é quem orquestra, depois de revisar e reconferir (nada pessoal, nada do jogo, árvore limpa); agente lançado não
   faz push ao GitHub (o `troca` do WSL continua como está). O que o usuário final lê (README, pacote, textos de issue)
   segue esperando a auditoria do mantenedor antes de subir. **Quem orquestra não trabalha direto na `main`** (11/11):
-  cada frente ou registro vai num branch próprio, sem prefixo de agente, e é esse branch que sobe; a `main` avança pelo
-  mantenedor. (A configuração de modo automático da máquina recusa push na `main`, e o mantenedor preferiu manter.)
+  tudo vai no branch `dev`, que é o que sobe; branch separado só quando a frente precisar (por exemplo uma build que vai
+  ao console isolada), sem prefixo de agente; a `main` avança pelo mantenedor. (A configuração de modo automático da máquina recusa push na `main`, e o mantenedor preferiu manter.)
 - **Nenhum byte do jogo no repositório nem no release** (ISO, ELF, AFS, dados extraídos). O usuário
   fornece a própria ISO USA SLUS-21678.
 - Pode subir build no console por FTP sem pedir; se demorar, parar e perguntar. Antes de apagar algo
