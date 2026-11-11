@@ -110,7 +110,8 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
 
 ## Depois da primeira release (29/10/2026)
 
-14. **Otimizar a GPU para subir a resolução** (pedido do mantenedor): hoje a resolução é limitada pela GPU, não pela CPU. Na
+14. **Otimizar a GPU para subir a resolução** (pedido do mantenedor). **Desistido em 11/11/2026:** a resolução fica como
+    está; o que segue abaixo é o registro de quando o item estava aberto. Hoje a resolução é limitada pela GPU, não pela CPU. Na
     escala 1,33 a GPU tem uns 8 ms de folga na mediana e uns 2 ms nos quadros pesados do Duelo de teste; a escala 1,5
     mediu 32 ms de GPU na mediana e 45 nos trechos pesados (22/10, `plano/F5/08-720p.md`). Caminhos já levantados: o
     desenho comum sem textura, as leituras de alvos e a cadeia do brilho (perfil fino de 28/10, seção 31 do
@@ -169,6 +170,8 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     **Falta:** o teste no console (FATX, `MoveFile`, `FindFirstFile`, a tela na TV, o controle), com um `.psu` de verdade
     exportado de um PS2 ou do PCSX2; ver uma exportação no console abrir no PCSX2 pelo mymc++; aprovar os textos da tela e
     o README; decidir se a importação vai na 1.0.2 (a lista de problemas conhecidos diz hoje que importar não existe).
+    **11/11/2026:** o mantenedor não vai fazer o teste com um `.psu` de PS2 ou PCSX2; a prova com save real fica aberta
+    para a comunidade.
 20. **A caixa de erro não aparece quando o vídeo é recusado** (console, 09/11/2026, rodada 5 da conferência da 1.1.0,
     ambiente falha_video): o jogo saiu direto para a FreeStyle, sem a caixa Unable to continue. O diário mostra o
     porquê: `vídeo: inicialização recusada` (código 7), e na desmontagem a thread de desenho do GS não parou no teto
