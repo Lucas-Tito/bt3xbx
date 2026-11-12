@@ -231,3 +231,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     `c89.py`, `rastreio.c`, `stg_c.c` e ferramentas de teste). Por pedido do mantenedor, começa já, num branch novo
     `bt4-integracao`, para os próximos testes de console serem sobre a base certa; a sessão de console do BT4 de 12/11
     roda sobre o `bt4-etapas34` como está.
+27. **Menu "MODDED MODES" do Tag Team deixa a entrada passar para o menu do jogo** (console, 12/11/2026, build do
+    `bt4-etapas34` `2ec1e4ea`, ambiente `bt3controle`): com a lista de modos do mod aberta (o botão que a abre e fecha
+    pelo menu principal; textos em `port/src/gs/tag_text_*.inc`), mexer nela também mexe o menu principal do jogo por
+    baixo. O menu do mod tem de ficar com a entrada só para ele enquanto estiver aberto. Anotado pelo mantenedor como
+    importante; corrigir antes da release com BT4 (e conferir se o mesmo vale no BT4, não só no BT3).
+28. **Gravação de origem: opção 2** (decisão do mantenedor, 12/11/2026, depois da gravorig2): adotar com a cópia das
+    páginas de textura feita no envio (lado da gravação, que ficou com folga) em vez de na primeira leitura do desenho.
+    Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
+    junto da linha dos cortes, C10 e C11 de novo, e a correlação com a diferença da classe `vu0`. Se confirmar, a mudança
+    e depois B (c, o, o, c), C10/C11 e um A rápido. Análise em `local/console/gravorig2/LEIA-ME.md` (fora do git).
