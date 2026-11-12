@@ -330,3 +330,12 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     20 ms, até 114 ms). Custo: a entrada na seleção passou de 366 para 749 ms, uma vez, na transição. Os quadros lentos que
     sobram são das transições (depois de escolher, os modelos e a arena; o começo da luta), fora do cursor. Falta a
     rodada dos roteiros no WSL (x86 contra PPC) e levar ao BT4 (outros caminhos de arquivo, `pzs4us`).
+36. **O "2D filtering" do upstream (v0.1.37) no 360** (12/11/2026; decisão do mantenedor: fica para depois desta release).
+    A configuração `smooth_2d` (`sSmooth2d` em `port/src/gs/gs_draw.c`), ligada por padrão no upstream, manda toda peça 2D
+    pelo caminho do retângulo da peça (`misc[3]` negativo), que antes só servia às texturas substituídas. O desenho da 1.1.0
+    (`gs_d3d.cpp`) trata esse sinal como substituição: o afiado (`BT3_AFIADO`) amostrava fora do lugar e o estreitamento do
+    16:9 só vale no caminho por pixel do GS, então a integração do BT4 saiu com a arte 2D torta, roxa, as logos brancas e os
+    menus em 4:3. Achado no console por bisseção (o desenho da build do BT4 corrigia; mipmap, VU0 nativa e tela larga
+    descartados; `BT3_AFIADO=0` tirava as cores erradas e deixava os menus em 4:3; `BT3_2D_SMOOTH=0` deixou tudo certo).
+    Na `bt4-integracao` (`991e7932`) o padrão no 360 é desligado e `BT3_2D_SMOOTH=1` liga. Falta, no futuro: fazer o
+    desenho do 360 entender o caminho novo (o afiado e o 16:9 com `misc[3]` negativo sem substituição) e testar no console.

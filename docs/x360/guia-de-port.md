@@ -87,6 +87,15 @@ da rede de quem desenvolve, que não entram no repositório público.
   matou o serviço inteiro. Dispare com `--property=MemoryMax=5G` no `systemd-run` e peça processamento arquivo por
   arquivo. A retomada é `cursor-agent --resume <uuid>`, com o UUID da pasta em `~/.cursor/chats/<hash>/` (o hash
   sozinho é recusado).
+- **Uma fusão de duas frentes tem de ir ao console antes de virar base** (12/11/2026): a integração do `dev` (1.1.0) no
+  BT4 passou em tudo no WSL (controles do BT3, ensaios do BT4 na x86 e na PPC, a `.text` da x86 idêntica) e saiu no console
+  com a arte 2D torta, roxa e os menus em 4:3. O WSL não cobre o desenho Direct3D do 360: a PPC sem janela usa o
+  rasterizador de software, e a comparação da `.text` só olha a x86, que não tem os trechos `PORT_BIG_ENDIAN`/`PORT_X360`.
+  O encaixe que quebrou só existia no 360: o desenho da 1.1.0 (o afiado e o 16:9) com a configuração nova do upstream
+  (`smooth_2d`, pendência 36). Bisseção que achou em poucas aberturas: (1) capturas por `BT3_SHOT_LISTA` nos primeiros
+  quadros, para ver o defeito em vez de descrevê-lo; (2) uma build de teste com uma pasta trazida do lado que funcionava
+  (aqui `port/x360/src/gs` da build do BT4, com o que faltasse dado como stub e os shaders novos fora da lista); (3) as
+  chaves de ambiente de cada recurso suspeito, uma por abertura, na build original.
 - **O agente não espera processo com `pgrep -f` sobre um texto da tarefa** (12/11/2026): a linha de comando do
   `cursor-agent` leva a tarefa inteira, então `while pgrep -f "roteiros.sh replay"; do sleep 60; done` achava o próprio
   agente e nunca acabava. A rodada tinha terminado às 10h02, e o agente ficou parado até 12h15, quando o laço foi
