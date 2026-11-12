@@ -256,6 +256,8 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     que reproduziu. **Vibração descartada** (12/11, terceira abertura): com a vibração desligada nas opções, o mesmo
     agarrão em equipe travou igual, sem nenhuma linha de vibração e sem pressão de memória. O agarrão em equipe trava
     sempre que tentado (2 de 2); a falta de memória do primeiro caso pode ser outro defeito no mesmo golpe.
+    O mantenedor duvida da hipótese da memória: o golpe final do Gogeta Blue passou sem travar na `bt4complemento`,
+    e o agarrão, que trava, não é um golpe pesado. A thread do jogo presa na lógica do golpe é mais provável.
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
@@ -263,3 +265,12 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
 31. **HUD da luta em equipe com tela dividida** (console, 12/11/2026, `bt4equipe`): cada vista desenha um HUD diferente,
     quatro barras de vida no total. O mantenedor achou estranho; conferir contra o Tag Team de PC se é o desenho
     pretendido (cada metade com as barras da sua luta) ou duplicação.
+32. **Complemento do BT4 no console: a caixa não apareceu, e o diário não mostra leitura nem gravação** (12/11/2026,
+    `bt4complemento`, build `2ec1e4ea`): com um `native-bt4-custom.bin` truncado de propósito (o cabeçalho e 100 bytes
+    zerados, sem dados do jogo) na raiz de `game:\sv_b4e4bt4menu`, o mantenedor jogou com o Gogeta Blue (personagem do
+    BT4) e nada aconteceu; em nenhuma abertura do BT4 o diário registra o complemento lido, e nenhum save do BT4 tem o
+    arquivo gravado. Duas hipóteses: o `PortGame_CustomSlot` não foi chamado para um personagem acima de 96, ou o
+    `fopen` do 360 não acha o caminho com barras misturadas (`game:\sv_b4e4bt4menu/native-bt4-custom.bin`, de
+    `custom_path` em `plat_game.c`) e o trata como ausente (então ele também nunca seria gravado no console, e o
+    `3e986921` só vale no emulador). Próximo passo junto com o da pendência 29: uma build com o diário dizendo o caminho, o
+    resultado do `fopen` e a gravação do complemento.
