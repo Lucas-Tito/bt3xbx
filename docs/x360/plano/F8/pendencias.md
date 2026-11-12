@@ -195,8 +195,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     luta` com o Kuririn; sem a correção, a PPC carrega a luta do setup zerado, lê arquivos que a x86 nunca leu e para
     na guarda (a guarda da PPC sem mapa corta antes do segundo `confere luta`, então ele não foi visto falhando). Build
     do XDK do `dev` pronta (`1c042253`). Falta: o console, com a falha vista na build velha e o mesmo replay carregado
-    na nova (`local/console/replay/`). Da mesma classe, a conferir: `src/battle/eft_g.c:499` testa o bit `0x100` de
-    um `*(u64 *)` sem macro.
+    na nova (`local/console/replay/`). **Aprovado no console em 12/11/2026:** na build gravorig (sem o conserto) o replay
+    assistido no fim da partida funciona (vem da memória) e o carregado pelo Data Center falha; na build do `dev`
+    (`1c042253`, com o conserto) o mesmo replay, do mesmo cartão, carrega certo. Da mesma classe, a conferir:
+    `src/battle/eft_g.c:499` testa o bit `0x100` de um `*(u64 *)` sem macro.
 22. **Mods no console, rodada de 11/11/2026 (build `mods-telas`, `ee205cdb`)**: controle e pacote aprovados (o pacote
     não avisa na reabertura; o pacote novo avisa uma vez e segue). **Defeito:** com arquivos soltos em subpastas
     (`mods\pzs3us1\...`) o boot registra `mods: nenhum` e `mods: preparação recusada (-1)` e mostra a caixa "Cannot
@@ -207,6 +209,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     `mods-telas` (build do XDK pronta, falta o console); o texto novo foi **aprovado** pelo mantenedor em 11/11: o
     destaque "WARNING: unconverted mod files detected." em vermelho e o resto do aviso aprovado antes, sem o "Press A to
     continue.".
+    **Aprovado no console em 12/11/2026** (build `cd7b30fe`): os soltos em subpastas achados (o "Cannot load mods" de
+    11/11 sumiu), Cancel cancela, OK segue e grava o `mods-vistos.bin`, reabrir não avisa, um arquivo novo avisa uma
+    vez. Falta só o texto da tela (pendência 25).
 23. **A troca de corpo do Ginyu no BT4** (`bt4_body_change.c`, do BT4decomp R3, `83e3bd9`; meio dia a um dia): fora da
     primeira release com BT4 por decisão do mantenedor (11/11/2026), anotada para depois (decisão 40, nota de 11/11).
 24. **Sessão de console seguinte (ordem aprovada em 11/11/2026):** terminar a gravorig2 (C6 a C9; a C6 já está no
