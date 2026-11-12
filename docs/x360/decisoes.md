@@ -967,6 +967,11 @@ roteiros. As cinco etapas e os limites desta integração estão em
   cinemáticas, clash do BT4 com Círculo), a guarda do `stageFx` (`eft_k.c`), o recorte de itens e da habilidade 0x7B
   do `battle_load.c`, o `CS_CELL.id` do seletor e a pista dos blocos coloridos (`275275a`), conferida contra o nosso
   caminho de desenho. As esteiras de água não (já temos). A troca de corpo do Ginyu fica fora salvo pedido.
+- (11/11, à noite) Complemento de equipamentos do BT4 (`native-bt4-custom.bin`) corrompido no 360: no lugar do
+  `exit(2)` do upstream, a caixa de erro do sistema e a volta ao dashboard, como na recusa dos mods. A gravação do
+  complemento na PPC e no 360, que não acontecia, foi corrigida na `bt4-etapas34` (`3e986921`).
+- (11/11, à noite) A imagem do BT4 no console se chama `bt4-x360.000`, `bt4-x360.001` e `bt4-x360.idx`, e o leitor procura
+  os dois nomes (o do BT3 e o do BT4), sem o jogador do BT4 ter arquivo com "bt3" no nome.
 
 ## 41. F8: modificadas pelo executável USA, partes fora dos AFS e recusa de formatos incompatíveis (4/11/2026)
 

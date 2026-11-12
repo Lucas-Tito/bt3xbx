@@ -193,3 +193,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     continue.".
 23. **A troca de corpo do Ginyu no BT4** (`bt4_body_change.c`, do BT4decomp R3, `83e3bd9`; meio dia a um dia): fora da
     primeira release com BT4 por decisão do mantenedor (11/11/2026), anotada para depois (decisão 40, nota de 11/11).
+24. **Sessão de console seguinte (ordem aprovada em 11/11/2026):** terminar a gravorig2 (C6 a C9; a C6 já está no
+    `environment.txt` do console), depois as 4 aberturas curtas dos mods com a build corrigida da `mods-telas`
+    (`cd7b30fe`; soltos em subpasta com Cancel, com OK, reabrir sem aviso, um arquivo novo avisa), depois a sessão do BT4
+    (build do XDK da `bt4-etapas34`, a imagem de teste de 5,5 GB e os ambientes `bt4-etapa4`, inclusive o teste das
+    recusas: arenas 11 e 46 e a técnica 4 do Broly Super Saiyan 3). Antes da sessão do BT4: a caixa de erro do
+    complemento corrompido e o nome `bt4-x360.*` (decisão 40, notas de 11/11).
