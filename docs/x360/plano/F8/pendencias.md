@@ -253,7 +253,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     impacto pesado); a chamada da vibração voltou normal (`XInputSetState 0`, a linha é escrita depois dela), e no BT3
     (`bt3controle`) o primeiro impacto passou. O vigia diz que a thread do jogo parou, mas não onde: próximo passo, o
     vigia registrar o `Iar` e o `Lr` da thread do jogo parada (resolvidos pelo `.map`), e repetir o agarrão em equipe,
-    que reproduziu. Um teste barato no meio: a mesma luta com a vibração desligada nas opções do jogo.
+    que reproduziu. **Vibração descartada** (12/11, terceira abertura): com a vibração desligada nas opções, o mesmo
+    agarrão em equipe travou igual, sem nenhuma linha de vibração e sem pressão de memória. O agarrão em equipe trava
+    sempre que tentado (2 de 2); a falta de memória do primeiro caso pode ser outro defeito no mesmo golpe.
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
