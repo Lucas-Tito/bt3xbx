@@ -26,6 +26,10 @@ segue as regras dele (`docs/agent_rules.md`, `docs/port/`).
 - Pode subir build no console por FTP sem pedir; se demorar, parar e perguntar. Antes de apagar algo
   no console, listar e identificar o conteúdo.
 - Merge do upstream só de propósito (`git merge upstream/main`), nunca automático.
+- **Tudo do projeto mora dentro do repo** (12/11): worktree novo em `.worktrees/<frente>` (nunca irmão em
+  `~/Documentos`), e o que não se versiona (logs, capturas e ambientes do console, builds de console, o que vem do
+  WSL) em `local/`, os dois no `.gitignore`. Worktree cujo branch já entrou no `dev` e está limpo se remove
+  (`git worktree remove`, o branch fica). `local/` tem imagens do jogo: nunca `git add -f` ali.
 
 ## Agentes
 

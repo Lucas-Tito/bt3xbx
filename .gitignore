@@ -39,3 +39,7 @@ port/build_release/
 
 # Máquinas e rede de quem desenvolve (modelo em port/x360/maquinas.env.example)
 port/x360/maquinas.env
+
+# Local, nunca versionado: artefatos do console e do WSL (logs, capturas, ambientes, imagens do jogo) e worktrees
+/local/
+/.worktrees/

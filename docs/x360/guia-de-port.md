@@ -33,6 +33,11 @@ Três máquinas, cada uma com um papel. Ninguém edita código fora da máquina 
 
 ### 1.1 Linux de trabalho
 
+- **Pastas: tudo dentro do repo.** Cada frente ganhava um worktree irmão (`~/Documentos/bt3xbx-<frente>`) e nenhum
+  saía depois do merge: em 12/11/2026 eram 96 (7,3 GB), mais uma pasta solta de artefatos do console. Agora os
+  worktrees ficam em `.worktrees/<frente>` e os artefatos fora do git em `local/` (`local/console/<rodada>/` com
+  ambientes, logs e capturas), os dois ignorados. Worktree cujo branch já está no `dev` e sem alteração se remove
+  com `git worktree remove` (sem `--force`: ele recusa o que tiver algo por salvar).
 - XDK 2.0.21256 extraído em `~/Documentos/CollectionUI/sdk/XDK`. Nunca vai para o repositório.
 - Imagem Docker `collectionui-xdk:light`: wine 11.18 e o `cl.exe` 16.00.11886 (PowerPC). A receita
   está em `~/Documentos/CollectionUI/toolchain`. O wine veio do master sem tag, então faça backup

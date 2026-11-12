@@ -178,7 +178,7 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     de 2000 ms (`saída: GS desenho: espera=00000102`, WAIT_TIMEOUT); com produtor pendente, a saída segue direto ao
     dashboard sem retomar o D3D, que é o recuo previsto. O mantenedor aceitou a saída limpa para a 1.1.0 e pediu para
     resolver depois: fazer a thread de desenho parar quando o renderer nunca chegou a iniciar. Log em
-    `bt3xbx-console/rel110/logs/r5_bt3xbx.log` (fora do git).
+    `local/console/rel110/logs/r5_bt3xbx.log` (fora do git).
 21. **O replay com bug desde a primeira release até a última** (informado ao mantenedor, 11/11/2026; sintoma de
     segunda mão: "sempre trocava para o Goku e travava"). **Causa provável achada no código em 12/11/2026, sem
     reproduzir:** `BattleReplay_Load` (`src/battle/battle_load.c:1714`) confere o cabeçalho com `*(u64 *)buf` contra
