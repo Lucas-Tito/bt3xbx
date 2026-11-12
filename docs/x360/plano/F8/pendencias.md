@@ -250,6 +250,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     thread de gravação. Opções ao mantenedor: adotar o candidato (−27% de CPU na gravação, ~36 imagens a mais fora do ritmo
     por duelo), não adotar, ou a variante que só copia quando o destino ainda não tem a identidade. Resultados em
     `local/console/gravorig3/LEIA-ME.md` (fora do git).
+    **Decisão do mantenedor (12/11): não adotar ainda; entender o problema antes de tentar outra variante (o ganho de CPU é
+    indispensável, principalmente para o Tag Team).** Diagnóstico pelas linhas `picos: tela` dos três ritmos (medianas nos
+    quadros fora do ritmo): a GPU acaba no mesmo ponto nos três (0,2 a 0,6 ms depois do prazo); o que muda é quando o quadro
+    começa. No controle a gravação é lenta (30,8 ms ocupada), o jogo espera por ela (14,5 ms) e entrega o quadro 49,3 ms antes
+    do prazo; no candidato a gravação cai a 17,9 ms, o jogo passa a esperar o vblank (15,8 ms) e entrega 32,8 ms antes, um
+    vblank mais tarde. O controle tinha folga por acidente; o candidato tira a folga e os quadros mais pesados da GPU passam do
+    prazo. Caminho: dar à cadeia uma antecedência fixa (o jogo começar o quadro com folga garantida, ou o desenho apresentar um
+    vblank depois), para a CPU economizada virar margem da GPU. Nada mexido ainda.
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
