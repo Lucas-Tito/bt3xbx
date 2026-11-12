@@ -339,3 +339,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     descartados; `BT3_AFIADO=0` tirava as cores erradas e deixava os menus em 4:3; `BT3_2D_SMOOTH=0` deixou tudo certo).
     Na `bt4-integracao` (`991e7932`) o padrão no 360 é desligado e `BT3_2D_SMOOTH=1` liga. Falta, no futuro: fazer o
     desenho do 360 entender o caminho novo (o afiado e o 16:9 com `misc[3]` negativo sem substituição) e testar no console.
+37. **A base do BT4 (e a integração) começa com 97 MB a menos livres que o `dev`** (console, 12/11/2026): na linha
+    `gs_d3d: pronto`, o `dev` (build da pré-carga) tem 314 MB livres e a build do BT4 (`2ec1e4ea`) 217 MB, antes de qualquer
+    menu. Os buffers do `gs_draw.c` explicam 15 MB (63 contra 78 MB: o `MAX_VU_UNIFORMS` do upstream passou de 8192 a 32768);
+    os outros ~82 MB vêm de reservas da partida da base do BT4/upstream que o diário não separa. Efeito: na luta do BT3, o
+    `dev` não teve pressão nenhuma (mínimo 110 MB livres) e a build do BT4 teve 256 pressões e texturas brancas (mínimo 31 MB);
+    na integração, com a pré-carga ocupada a luta inteira (a luta roda ainda na tela 39), 551 pressões, 60 texturas brancas
+    e 4 alvos sem textura, e o mantenedor viu texturas piscando. A pré-carga agora sai quando a seleção termina (`4f716819`),
+    mas a base continua no limite. Próximo passo: o diário registrar a memória livre depois de cada reserva grande da partida
+    (a memória do jogo, os buffers do GS, o Tag Team, o som, o leitor), achar os 82 MB e decidir o que encolher no 360 (por
+    exemplo o `MAX_VU_UNIFORMS` de volta a 8192 fora das quatro vistas). Pode ter relação com a pendência 29 (o primeiro
+    travamento do BT4 foi por falta de memória de textura) e com a 35 (texturas que somem).
