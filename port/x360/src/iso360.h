@@ -17,6 +17,10 @@ enum {
 void Iso_Iniciar(void);
 int Iso_Recusada(void);
 const char *Iso_Pedida(void); /* caminho escolhido, inclusive nas recusas da busca automática */
+/* (pendência 34) lê de uma vez para a memória as entradas primeiro..ultimo do AFS `parte` que o Iso_Abrir leria
+   inteiras, e o Iso_Abrir passa a copiar dali; Iso_PrecargaLiberar devolve a memória */
+void Iso_Precarregar(int parte, int primeiro, int ultimo);
+void Iso_PrecargaLiberar(void);
 
 #ifdef __cplusplus
 }

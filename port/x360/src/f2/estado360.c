@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "diario.h"
+#include "iso360.h"
 
 FILE *Port_X360Fopen(const char *caminho, const char *modo);
 
@@ -34,6 +35,15 @@ static LARGE_INTEGER sAntes, sFreq;
 #define VBLANK_MS 16.683
 static double sTotal, sTotalTrecho, sPiorPar, sPiorParTrecho, sPar, sLutaTotal;
 static unsigned sVblanks, sVblanksTrecho, sPares, sParesAcima, sLuta, sLutaParesAcima;
+
+static int precarga_ligada(void) {
+    static int v = -1;
+    if (v < 0) {
+        const char *e = getenv("BT3_PRECARGA");
+        v = !(e != NULL && e[0] == '0');
+    }
+    return v;
+}
 
 static void resumo(const char *quando, double total, unsigned n, double piorPar) {
     if (n == 0) {
@@ -141,8 +151,18 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
         fputc('\n', sArq);
     }
     if (gProgress != NULL && gProgress[0x18 / 4] != modo) {
+        int antes = modo;
         modo = gProgress[0x18 / 4];
         Diario_Escrever("vblank %u: tela %d", vblank, modo);
+        /* (pendência 34) a seleção de personagens e de arenas (tela 39) lê os retratos (0x2F9 + personagem) e as
+           prévias das arenas (0x39D a 0x3C0) do pzs3us1 a cada movimento do cursor (include/menu/menu_d.h,
+           CHARSEL_FACE_FILE e CHARSEL_STAGE_FILE): o bloco inteiro vai para a memória na entrada e sai na saída.
+           BT3_PRECARGA=0 volta ao disco a cada movimento (para comparar no console). */
+        if (modo == 39 && precarga_ligada()) {
+            Iso_Precarregar(1, 0x2F9, 0x3C0);
+        } else if (antes == 39) {
+            Iso_PrecargaLiberar();
+        }
     }
     if ((fight != NULL) != luta) {
         luta = fight != NULL;

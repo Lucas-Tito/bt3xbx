@@ -585,12 +585,97 @@ int Iso_FilmeEspera(double *ms, unsigned *esperas) {
     return 1;
 }
 
+/* (Pendência 34) A pré-carga da seleção de personagens e de arenas. Cada movimento do cursor abria um arquivo novo
+   (retrato, prévia), lido inteiro na thread do jogo; às vezes o disco demorava 60 a 114 ms (a música lê do mesmo HD) e o
+   quadro esperava junto. Ao entrar na tela, o bloco de entradas é lido de uma vez para a memória (Iso_Precarregar), o
+   Iso_Abrir copia dali, e na saída tudo volta (Iso_PrecargaLiberar). Só as entradas que o Iso_Abrir já leria inteiras
+   (as que têm conversor); um teto de memória para o bloco. */
+#define PRECARGA_TETO (24L * 1024 * 1024)
+static unsigned char **sPre;
+static long *sPreTam;
+static int sPreParte = -1, sPrePrimeiro, sPreN;
+
+void Iso_PrecargaLiberar(void) {
+    int i;
+    if (sPre == NULL) {
+        return;
+    }
+    for (i = 0; i < sPreN; i++) {
+        free(sPre[i]);
+    }
+    free(sPre);
+    free(sPreTam);
+    sPre = NULL;
+    sPreTam = NULL;
+    sPreParte = -1;
+    sPreN = 0;
+}
+
+void Iso_Precarregar(int parte, int primeiro, int ultimo) {
+    LARGE_INTEGER t0;
+    Afs *a;
+    char rel[32];
+    long total = 0;
+    int i, n, lidos = 0;
+
+    Iso_PrecargaLiberar();
+    if (!sIniciado) {
+        Iso_Iniciar();
+    }
+    if (sRecusada || sIso == INVALID_HANDLE_VALUE || parte < 0 || parte > 2 || ultimo < primeiro) {
+        return;
+    }
+    a = afs(parte);
+    if (a == NULL) {
+        return;
+    }
+    if ((unsigned)ultimo >= a->n) {
+        ultimo = (int)a->n - 1;
+    }
+    n = ultimo - primeiro + 1;
+    if (n <= 0) {
+        return;
+    }
+    sPre = (unsigned char **)calloc((size_t)n, sizeof(*sPre));
+    sPreTam = (long *)calloc((size_t)n, sizeof(*sPreTam));
+    if (sPre == NULL || sPreTam == NULL) {
+        free(sPre);
+        free(sPreTam);
+        sPre = NULL;
+        sPreTam = NULL;
+        return;
+    }
+    sPreParte = parte;
+    sPrePrimeiro = primeiro;
+    sPreN = n;
+    QueryPerformanceCounter(&t0);
+    for (i = 0; i < n; i++) {
+        long tam = (long)a->tab[(primeiro + i) * 2 + 1];
+        _snprintf(rel, sizeof(rel) - 1, "pzs3us%d/%05d.bin", parte, primeiro + i);
+        rel[sizeof(rel) - 1] = 0;
+        if (tam <= 0 || Conv_FormatoDe(rel) == NULL || total + tam > PRECARGA_TETO) {
+            continue;
+        }
+        sPre[i] = (unsigned char *)malloc((size_t)tam);
+        if (sPre[i] == NULL || !ler(a->ini + a->tab[(primeiro + i) * 2], sPre[i], (unsigned long)tam)) {
+            free(sPre[i]);
+            sPre[i] = NULL;
+            continue;
+        }
+        sPreTam[i] = tam;
+        total += tam;
+        lidos++;
+    }
+    Diario_Escrever("iso: pré-carga de pzs3us%d/%05d a %05d: %d arquivos, %ld KB em %.1f ms", parte, primeiro, ultimo,
+                    lidos, total >> 10, ms_desde(t0));
+}
+
 /* rel: o caminho sob a raiz de dados, com '/' ("pzs3us1/00042.bin", "disc/SLUS_216.78"). NULL se não há, e
    ISO_SEM se não há ISO (aí o chamador abre o arquivo de verdade). */
 void *Iso_Abrir(const char *rel) {
     __int64 ini;
     long tam;
-    int part, ent;
+    int part = -1, ent = -1;
     char resto[8];
     IsoArq *r;
 
@@ -626,6 +711,12 @@ void *Iso_Abrir(const char *rel) {
         LARGE_INTEGER t0;
         QueryPerformanceCounter(&t0);
         r->dados = (unsigned char *)malloc((size_t)tam + 1);
+        if (r->dados != NULL && sPre != NULL && part == sPreParte && ent >= sPrePrimeiro && ent < sPrePrimeiro + sPreN &&
+            sPre[ent - sPrePrimeiro] != NULL && sPreTam[ent - sPrePrimeiro] == tam) {
+            memcpy(r->dados, sPre[ent - sPrePrimeiro], (size_t)tam); /* (pendência 34: sem disco) */
+            Diario_Escrever("iso: %s, %ld bytes: da pré-carga", rel, tam);
+            return r;
+        }
         if (r->dados == NULL || !ler(ini, r->dados, (unsigned long)tam)) {
             Diario_Escrever("iso: %s (%ld bytes): sem memória ou leitura falhou", rel, tam);
             Port_Abortar();
