@@ -976,6 +976,11 @@ roteiros. As cinco etapas e os limites desta integração estão em
   native-bt4-custom.bin in your saves folder is damaged. Restore a good copy or delete it, then start the game again.").
   Com as duas imagens boas na pasta e sem `BT3_ISO`, **abre o BT4** (quem instala o BT4 por cima de uma pasta do BT3 cai
   no BT4); a primeira boa na nova ordem vence e o `BT3_ISO` explícito vale sempre. O "ISO not found" não muda.
+- (12/11, à noite) Das cinco recusas, **três aprovadas no console** com a imagem de teste: as arenas 11 e 46 normais
+  (`pzs4us1/01533`, `01568`, no Duelo e na luta em equipe do Tag Team) e a câmera da técnica 4 do Broly SSJ3
+  (`pzs4us2/02209`, depois do conserto do `Conv_Camera`, pendência 33). As receitas de teste dessas três passam a receitas
+  normais. As variantes divididas (`01632`, `01667`) continuam recusadas até o teste: o jogo só as carrega com a regra da
+  luta em tela dividida (`Battle_IsSplitScreen`, `screenMode == 1`, `battle_load.c:210`), que o Tag Team não usa.
 
 ## 41. F8: modificadas pelo executável USA, partes fora dos AFS e recusa de formatos incompatíveis (4/11/2026)
 
