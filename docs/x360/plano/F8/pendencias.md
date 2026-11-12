@@ -248,3 +248,16 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     esperou a GPU e nunca voltou (o vigia registra a thread do jogo parada a partir dali; saída pela Guide). Dois
     defeitos: a demanda das técnicas do BT4 passa do teto de textura do 360, e o backend trava em vez de seguir quando a
     memória acaba. Log em `local/console/bt4e34/logs/bt4menu_bt3xbx.log` (fora do git). Bloqueia a release com BT4.
+    **Segundo travamento** (ambiente `bt4equipe`, luta em equipe com tela dividida, no agarrão): a thread do jogo parou
+    sem nenhuma pressão de memória. Nos dois casos ela parou logo depois da primeira vibração da luta (o primeiro
+    impacto pesado); a chamada da vibração voltou normal (`XInputSetState 0`, a linha é escrita depois dela), e no BT3
+    (`bt3controle`) o primeiro impacto passou. O vigia diz que a thread do jogo parou, mas não onde: próximo passo, o
+    vigia registrar o `Iar` e o `Lr` da thread do jogo parada (resolvidos pelo `.map`), e repetir o agarrão em equipe,
+    que reproduziu. Um teste barato no meio: a mesma luta com a vibração desligada nas opções do jogo.
+30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
+    dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
+    controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
+    triângulo = Y, Select = Back).
+31. **HUD da luta em equipe com tela dividida** (console, 12/11/2026, `bt4equipe`): cada vista desenha um HUD diferente,
+    quatro barras de vida no total. O mantenedor achou estranho; conferir contra o Tag Team de PC se é o desenho
+    pretendido (cada metade com as barras da sua luta) ou duplicação.
