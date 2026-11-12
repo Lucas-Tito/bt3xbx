@@ -224,3 +224,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     a tela funcionou como esperado com os soltos em subpastas (aviso, Cancel cancela). Mudar o texto: tirar o "load mods"
     e começar direto pelo aviso ("WARNING: unconverted mod files detected."); a linha de cima, "BT3 X360 <versão> ISO
     conversion", fica. Não fazer agora; entra antes da release que levar os mods.
+26. **Integrar a `main` e o `dev` no branch do BT4 antes da primeira release com BT4** (12/11/2026): o `bt4-etapas34`
+    saiu de `9c69c4ba` (época da 1.0.2) e não tem a release 1.1.0 nem o que entrou no `dev` depois (o conserto do replay,
+    entre outros). Ensaio de fusão de 12/11 (`git merge-tree` do `dev`, 91 commits, contra o BT4, 408): 16 arquivos em
+    conflito, 4 de documentos e 12 de código (`main360.cpp`, `gs_d3d.cpp`, `gs_draw.c`, `float360.c`, `headless.py`,
+    `c89.py`, `rastreio.c`, `stg_c.c` e ferramentas de teste). Por pedido do mantenedor, começa já, num branch novo
+    `bt4-integracao`, para os próximos testes de console serem sobre a base certa; a sessão de console do BT4 de 12/11
+    roda sobre o `bt4-etapas34` como está.
