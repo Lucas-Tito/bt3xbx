@@ -972,6 +972,10 @@ roteiros. As cinco etapas e os limites desta integração estão em
   complemento na PPC e no 360, que não acontecia, foi corrigida na `bt4-etapas34` (`3e986921`).
 - (11/11, à noite) A imagem do BT4 no console se chama `bt4-x360.000`, `bt4-x360.001` e `bt4-x360.idx`, e o leitor procura
   os dois nomes (o do BT3 e o do BT4), sem o jogador do BT4 ter arquivo com "bt3" no nome.
+- (12/11) O texto da caixa do complemento corrompido fica como o Cursor propôs ("Equipment save damaged" / "The file
+  native-bt4-custom.bin in your saves folder is damaged. Restore a good copy or delete it, then start the game again.").
+  Com as duas imagens boas na pasta e sem `BT3_ISO`, **abre o BT4** (quem instala o BT4 por cima de uma pasta do BT3 cai
+  no BT4); a primeira boa na nova ordem vence e o `BT3_ISO` explícito vale sempre. O "ISO not found" não muda.
 
 ## 41. F8: modificadas pelo executável USA, partes fora dos AFS e recusa de formatos incompatíveis (4/11/2026)
 
