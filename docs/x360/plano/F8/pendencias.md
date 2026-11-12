@@ -179,8 +179,17 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     dashboard sem retomar o D3D, que é o recuo previsto. O mantenedor aceitou a saída limpa para a 1.1.0 e pediu para
     resolver depois: fazer a thread de desenho parar quando o renderer nunca chegou a iniciar. Log em
     `bt3xbx-console/rel110/logs/r5_bt3xbx.log` (fora do git).
-21. **O replay com bug desde a primeira release até a última** (informado ao mantenedor, 11/11/2026): só anotado, para
-    investigar depois.
+21. **O replay com bug desde a primeira release até a última** (informado ao mantenedor, 11/11/2026; sintoma de
+    segunda mão: "sempre trocava para o Goku e travava"). **Causa provável achada no código em 12/11/2026, sem
+    reproduzir:** `BattleReplay_Load` (`src/battle/battle_load.c:1714`) confere o cabeçalho com `*(u64 *)buf` contra
+    `(BTL_SETUP_VERSION << 32) | BTL_SETUP_MAGIC`, constante montada para little-endian. No 360 os bytes
+    `62 74 6C 73 00 00 00 07` dão `0x62746C7300000007` e a comparação nunca passa. O `McFlow_UpdateReplayLoad`
+    (`src/sys/mcflow_a.c:2379`) ignora o retorno: a luta começa com o setup do `Battle_ClearWork` (personagens 0, o
+    Goku) e sem as entradas gravadas. A varredura do `47a4097d` (`PS2_LOW`/`PS2_LD64`) não pegou este caso porque a luta
+    de demonstração não passa por ele, e nenhum roteiro grava nem carrega replay (o `datacenter` só abre a tela 56 com
+    a lista vazia). `PS2_LD64` sozinho não conserta: a comparação tem de ser pelos bytes do `magic` e pela `version`.
+    Falta: confirmar (o retorno e os 8 bytes no diário, ou um roteiro que lute, salve o replay e o carregue, com
+    `SEMMAPA=1`), corrigir e procurar outros `*(u64 *)` de cabeçalho sem macro.
 22. **Mods no console, rodada de 11/11/2026 (build `mods-telas`, `ee205cdb`)**: controle e pacote aprovados (o pacote
     não avisa na reabertura; o pacote novo avisa uma vez e segue). **Defeito:** com arquivos soltos em subpastas
     (`mods\pzs3us1\...`) o boot registra `mods: nenhum` e `mods: preparação recusada (-1)` e mostra a caixa "Cannot
