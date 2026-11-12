@@ -307,6 +307,12 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     `1622 + id`): falta achar o modo que as carrega (o catálogo `plano/F9/05-arenas.md` só dá o endereço do mapeamento,
     SLUS `0x127340..0x127384`) e testá-las. Proposta ao mantenedor: aprovar as três que passaram (`01533`, `01568`,
     `02209`) e manter as duas divididas recusadas até o teste.
+    **Duelo 1P contra 2P com a tela dividida** (12/11 à noite, o mantenedor confirmou a tela em duas metades): as lutas
+    nas arenas 46 e 11 foram até o fim, e o BT4 abriu de novo os arquivos normais (`01568`, `01533`), não as variantes
+    `01632` e `01667`. Nos três modos que usam essas arenas (Duelo, Duelo dividido, equipe do Tag Team) elas nunca foram
+    carregadas. As normais são `1522 + id` (46 e 11); as duas "divididas" da lista dão `1622 + id` com 45 e 10, um a menos:
+    não se sabe o que são. Ficam recusadas (se um modo ainda não visto as abrir, a recusa aparece clara). A dúvida vai para
+    a leitura do executável do BT4 no WSL (o mapeamento em SLUS `0x127340..0x127384`, `plano/F9/05-arenas.md`), sem console.
 35. **Texturas que somem e ficam transparentes às vezes** (mantenedor, console, 12/11/2026): visto desde o começo do port,
     em todos os modos, não só no Tag Team. Fica para depois.
 34. **Engasgos na seleção de personagens e de arenas: leitura de disco na thread do jogo** (console, 12/11/2026,
