@@ -296,3 +296,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     da lentidão ocasional: a disputa pelo HD com a leitura da música. **Decisão do mantenedor (12/11): opção 1**, ler de
     uma vez os arquivos da grade ao entrar na seleção (uns 8 MB de personagens e 2 a 3 MB de arenas, ~0,3 s na transição de
     tela, nada na abertura do jogo), e o cursor não toca mais o disco. Log em `local/console/picos-menu/` (fora do git).
+    **Feito e aprovado no console em 12/11/2026** (`efb7e8c1`, só código do 360: `iso360.c` e `estado360.c`; `BT3_PRECARGA=0`
+    volta ao jeito antigo): a entrada na tela 39 lê o bloco 761 a 960 do `pzs3us1` (200 arquivos, 16,6 MB, 324 ms); ao
+    mover o cursor, 29 de 29 arquivos vieram da memória e nenhum quadro passou de 40 ms (antes, 8 de 24 leituras acima de
+    20 ms, até 114 ms). Custo: a entrada na seleção passou de 366 para 749 ms, uma vez, na transição. Os quadros lentos que
+    sobram são das transições (depois de escolher, os modelos e a arena; o começo da luta), fora do cursor. Falta a
+    rodada dos roteiros no WSL (x86 contra PPC) e levar ao BT4 (outros caminhos de arquivo, `pzs4us`).
