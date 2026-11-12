@@ -68,6 +68,21 @@ export BT3_GS=none BT3_SETTINGS= BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=
 NOMES=("$@"); [ ${#NOMES[@]} -gt 0 ] || NOMES=(duelo duelo_time treino opcoes)
 [ "${NOMES[0]}" != todos ] || NOMES=(duelo duelo_time treino opcoes historia historia_novo historia_perde ultimate missao sobrevivencia simdragon discfusion torneio evolution datacenter \
     referencia shenlong)
+# Com SOM=1 e SEMMAPA=1 a rede 4 compara a gravação da x86a com a da ppca (som.py mixer). Com REUSA a x86a não roda, e a
+# gravação dela só existe se a rodada que a fez guardou (GUARDA_SOM=1): sem isso o mixer falhava no meio da rodada, depois
+# de uma hora de PPC. Recusa antes de rodar qualquer coisa (com REUSA=1 a da ppca também tem de estar guardada).
+if [ -n "${REUSA:-}" ] && [ -n "${SOM:-}" ] && [ -n "${SEMMAPA:-}" ]; then
+    FALTA=()
+    for n in "${NOMES[@]}"; do
+        [ -s $O/$n/grav_x.bin ] || FALTA+=("$O/$n/grav_x.bin")
+        [ "$REUSA" != 1 ] || [ -s $O/$n/grav_p.bin ] || FALTA+=("$O/$n/grav_p.bin")
+    done
+    if [ ${#FALTA[@]} -gt 0 ]; then
+        printf '   >> falta: %s\n' "${FALTA[@]}"
+        echo "== REUSA=$REUSA com SOM=1 precisa das gravações da rodada anterior (feita com GUARDA_SOM=1): rode sem REUSA, ou sem SOM"
+        exit 1
+    fi
+fi
 mkdir -p $O $REFS
 gcc -std=c89 -O2 -w -o $O/conv_tool $(ls port/x360/conv/*.c | grep -v conv_jogo) || exit 1
 cat > $O/unpack.gdb <<'G'
