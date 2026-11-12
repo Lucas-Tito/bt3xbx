@@ -298,6 +298,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     idêntica entre a x86 e a PPC (704 linhas), zona 0 nunca mais chamada; mutantes acusados. Falta o console (imagem de
     teste regerada, a técnica 4 na arena 46) e levar o branch à integração. Uma guarda no jogo para malha de zona no
     deslocamento 0 não foi aplicada (o PS2 lê igual; esconderia o próximo defeito de dados).
+    **Aprovado no console em 12/11/2026, à noite:** com a imagem de teste regerada pelo conversor corrigido e a mesma build
+    da queda (`2ec1e4ea`, só a imagem mudou), a técnica 4 do Broly SSJ3 saiu e as lutas foram até o fim nas arenas 46
+    (`01568`) e 11 (`01533`), sem queda nem travamento. As arenas 11 e 46 divididas (`01632`, `01667`) não foram jogadas no
+    console. A decisão 40 (as receitas de teste viram normais depois do teste do mantenedor) fica com o mantenedor.
 34. **Engasgos na seleção de personagens e de arenas: leitura de disco na thread do jogo** (console, 12/11/2026,
     `BT3_PICOS=20`, build `2ec1e4ea`, BT3): cada movimento do cursor lê do disco um arquivo novo de 27 a 60 KB
     (retrato, prévia), e a thread do jogo para esperando. Normalmente a leitura sai em 1 a 2 ms (91 MB/s), mas às vezes
