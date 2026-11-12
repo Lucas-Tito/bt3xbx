@@ -215,3 +215,7 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     (build do XDK da `bt4-etapas34`, a imagem de teste de 5,5 GB e os ambientes `bt4-etapa4`, inclusive o teste das
     recusas: arenas 11 e 46 e a técnica 4 do Broly Super Saiyan 3). Antes da sessão do BT4: a caixa de erro do
     complemento corrompido e o nome `bt4-x360.*` (decisão 40, notas de 11/11).
+25. **Tela dos mods soltos, antes da release** (pedido do mantenedor no console, 12/11/2026, build `mods-telas` `cd7b30fe`):
+    a tela funcionou como esperado com os soltos em subpastas (aviso, Cancel cancela). Mudar o texto: tirar o "load mods"
+    e começar direto pelo aviso ("WARNING: unconverted mod files detected."); a linha de cima, "BT3 X360 <versão> ISO
+    conversion", fica. Não fazer agora; entra antes da release que levar os mods.
