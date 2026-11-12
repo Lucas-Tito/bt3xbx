@@ -1711,7 +1711,7 @@ BtlReplay *BattleReplay_GetBuffer(s32 *size) {
 s32 BattleReplay_Load(BtlReplay *buf, s32 size) {
     if (buf != NULL) {
         if (size == sizeof(BtlReplay)) {
-            if (*(u64 *)buf == (((u64)BTL_SETUP_VERSION << 32) | BTL_SETUP_MAGIC)) {
+            if (PS2_LD64(*buf) == (((u64)BTL_SETUP_VERSION << 32) | BTL_SETUP_MAGIC)) {
                 *SETUP() = buf->setup;
                 memset(&gBattleReplay, 0, sizeof(BtlReplay));
                 gBattleReplay.setup = buf->setup;

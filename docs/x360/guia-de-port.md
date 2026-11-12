@@ -545,7 +545,12 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
    lida por metades. Correção no código, de dois jeitos:
    - quando é a leitura que muda: as macros `PS2_LOW(T, x)` e `PS2_LD64(x)` de `include/types.h`
      (na build de matching expandem para a expressão original; o port as redefine em
-     `port/include/port_compat.h`);
+     `port/include/port_compat.h`). Uma etiqueta de quatro letras comparada com uma palavra lida
+     (o `"btls"` do setup da luta contra o `*(u64 *)` do `BattleReplay_Load`) leva `PS2_TAG32(a, b, c, d)`:
+     o `PS2_LD64` mantém cada palavra na ordem do host, então a constante também tem de vir nela. Esse
+     caso deixou o replay sem funcionar no 360 em todas as releases até 12/11/2026 (pendência 21): a
+     comparação sempre falhava, quem chama ignora o retorno e a luta saía com o personagem 0. A
+     varredura dos casts só olhou o que a luta de demonstração executa, e nenhum roteiro passava pelo replay;
    - quando é o layout que muda: `#ifdef PORT_BIG_ENDIAN` trocando a ordem dos campos dentro da
      mesma palavra. Toda struct assim tem de constar em `layout.PERMUTADAS`, com o motivo;
    - pacotes da GPU (decisão 19): o valor de 64 bits fica como duas palavras, a baixa primeiro, com `PS2_PKT64` em

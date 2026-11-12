@@ -188,8 +188,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     Goku) e sem as entradas gravadas. A varredura do `47a4097d` (`PS2_LOW`/`PS2_LD64`) não pegou este caso porque a luta
     de demonstração não passa por ele, e nenhum roteiro grava nem carrega replay (o `datacenter` só abre a tela 56 com
     a lista vazia). `PS2_LD64` sozinho não conserta: a comparação tem de ser pelos bytes do `magic` e pela `version`.
-    Falta: confirmar (o retorno e os 8 bytes no diário, ou um roteiro que lute, salve o replay e o carregue, com
-    `SEMMAPA=1`), corrigir e procurar outros `*(u64 *)` de cabeçalho sem macro.
+    **Corrigido no código em 12/11/2026** com `PS2_TAG32` (a constante na ordem do host) e `PS2_LD64` na leitura; a
+    build de matching expande para a expressão original. Compilado nos dois modos do port e conferido numa conta com
+    os bytes do cabeçalho, sem rodar o jogo. Falta: a primeira rodada do roteiro `replay` no WSL (`SEMMAPA=1`) com
+    e sem a correção, a build do XDK e o console. Da mesma classe, a conferir: `src/battle/eft_g.c:499` testa
+    o bit `0x100` de um `*(u64 *)` sem macro.
 22. **Mods no console, rodada de 11/11/2026 (build `mods-telas`, `ee205cdb`)**: controle e pacote aprovados (o pacote
     não avisa na reabertura; o pacote novo avisa uma vez e segue). **Defeito:** com arquivos soltos em subpastas
     (`mods\pzs3us1\...`) o boot registra `mods: nenhum` e `mods: preparação recusada (-1)` e mostra a caixa "Cannot

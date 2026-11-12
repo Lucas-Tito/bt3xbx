@@ -25,9 +25,13 @@ typedef float f32;
 #ifdef PORT_BIG_ENDIAN
 #define PS2_LOW(T, x) (*(T *)((u8 *)&(x) + sizeof(x) - sizeof(T)))
 #define PS2_LD64(x) ((u64)((u32 *)&(x))[1] << 32 | ((u32 *)&(x))[0])
+/* include/types.h: four bytes of a tag in memory, read by a big-endian host as a 32-bit word (the first byte is the
+   high one). PS2_LD64 keeps each word in host order, so a tag compared through it needs this order too. */
+#define PS2_TAG32(a, b, c, d) ((u32)(a) << 24 | (u32)(b) << 16 | (u32)(c) << 8 | (u32)(d))
 #else
 #define PS2_LOW(T, x) (*(T *)&(x))
 #define PS2_LD64(x) (*(u64 *)&(x))
+#define PS2_TAG32(a, b, c, d) ((u32)(a) | (u32)(b) << 8 | (u32)(c) << 16 | (u32)(d) << 24)
 #endif
 
 /* include/types.h: a 64-bit value in a GS packet is two 32-bit words, the low one first (docs/x360/decisoes.md,

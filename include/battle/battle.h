@@ -90,7 +90,7 @@ enum {
 #define BTL_CONTROL_PAD 0
 #define BTL_CONTROL_CPU 2 /* 1 was not seen */
 
-#define BTL_SETUP_MAGIC 0x736C7462 /* "btls" */
+#define BTL_SETUP_MAGIC PS2_TAG32('b', 't', 'l', 's') /* 0x736C7462 on the PS2 */
 #define BTL_SETUP_VERSION 7
 #define BTL_MEMBER_MAX 5
 #define BTL_POOL_MAX 50

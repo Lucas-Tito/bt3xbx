@@ -15,6 +15,10 @@ typedef float f32;
    the 64-bit word that starts at x. The port bridges these for big-endian hosts (port/include/port_compat.h). */
 #define PS2_LOW(T, x) (*(T *)&(x))
 #define PS2_LD64(x) (*(u64 *)&(x))
+/* A tag spelled by four bytes in memory (such as the "btls" of the battle setup), as the PS2 reads it in a 32-bit
+   word: the first byte is the low one. Compared with the word PS2_LD64 or a u32 read gives; the port gives the
+   big-endian value. */
+#define PS2_TAG32(a, b, c, d) ((u32)(a) | (u32)(b) << 8 | (u32)(c) << 16 | (u32)(d) << 24)
 
 /* A 64-bit value in a packet for the GS (GIF tag, register data, a DMA tag written as one number), as the PS2 holds
    it: two 32-bit words, the low one first. Wraps the value stored into a packet and a value read back from one.
