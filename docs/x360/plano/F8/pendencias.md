@@ -287,3 +287,12 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     receita do cenário não converte (o andar dos lutadores não usa esse caminho, e a câmera da técnica sim). Pela decisão
     40, as receitas de teste **não** viram normais: a imagem de release continua recusando as cinco. Próximo passo:
     reproduzir na PPC (a técnica 4 do Broly SSJ3 na arena da `01568`, com um roteiro) e achar o campo.
+34. **Engasgos na seleção de personagens e de arenas: leitura de disco na thread do jogo** (console, 12/11/2026,
+    `BT3_PICOS=20`, build `2ec1e4ea`, BT3): cada movimento do cursor lê do disco um arquivo novo de 27 a 60 KB
+    (retrato, prévia), e a thread do jogo para esperando. Normalmente a leitura sai em 1 a 2 ms (91 MB/s), mas às vezes
+    passa de 60 ms (8 de 24 leituras acima de 20 ms, pior 113,8 ms) e o quadro inteiro espera junto: quadro 2306 com o
+    jogo em 116 ms e o `00816.bin` (48 KB) lido em 113,8 ms; 2275 e `00761` em 96 ms; 2437 e `00921` em 90 ms. A gravação
+    e a GPU ficaram ociosas nesses quadros. No BT4 os picos são maiores (66 a 196 ms) pelo mesmo caminho. Causa provável
+    da lentidão ocasional: a disputa pelo HD com a leitura da música. **Decisão do mantenedor (12/11): opção 1**, ler de
+    uma vez os arquivos da grade ao entrar na seleção (uns 8 MB de personagens e 2 a 3 MB de arenas, ~0,3 s na transição de
+    tela, nada na abertura do jogo), e o cursor não toca mais o disco. Log em `local/console/picos-menu/` (fora do git).
