@@ -87,6 +87,12 @@ da rede de quem desenvolve, que não entram no repositório público.
   matou o serviço inteiro. Dispare com `--property=MemoryMax=5G` no `systemd-run` e peça processamento arquivo por
   arquivo. A retomada é `cursor-agent --resume <uuid>`, com o UUID da pasta em `~/.cursor/chats/<hash>/` (o hash
   sozinho é recusado).
+- **O agente não espera processo com `pgrep -f` sobre um texto da tarefa** (12/11/2026): a linha de comando do
+  `cursor-agent` leva a tarefa inteira, então `while pgrep -f "roteiros.sh replay"; do sleep 60; done` achava o próprio
+  agente e nunca acabava. A rodada tinha terminado às 10h02, e o agente ficou parado até 12h15, quando o laço foi
+  encerrado de fora. A tarefa diz para esperar em primeiro plano ou pelo PID guardado (`wait $!`, `kill -0`). Quem
+  vigia: o agente parado com o serviço ativo e nenhum emulador por muitos minutos é o sinal; o último comando dele
+  se lê no `store.db` da conversa (`~/.cursor/chats/<hash>/<uuid>/`, tabela `blobs`).
 - **O disco do WSL mora no C: do Windows e só cresce** (`ext4.vhdx`): em 17/10/2026 o C: encheu (456 MB livres), o
   WSL passou a dar erro de E/S (até o `getpwnam` falhava, "User not found") e o Cursor caiu no meio da etapa 8. As
   saídas das rodadas (`port/build/roteiros`, os dumps de memória por tela) e as pastas de trabalho dos agentes tinham

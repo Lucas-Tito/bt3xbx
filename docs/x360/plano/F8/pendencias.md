@@ -190,9 +190,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     a lista vazia). `PS2_LD64` sozinho não conserta: a comparação tem de ser pelos bytes do `magic` e pela `version`.
     **Corrigido no código em 12/11/2026** com `PS2_TAG32` (a constante na ordem do host) e `PS2_LD64` na leitura; a
     build de matching expande para a expressão original. Compilado nos dois modos do port e conferido numa conta com
-    os bytes do cabeçalho, sem rodar o jogo. Falta: a primeira rodada do roteiro `replay` no WSL (`SEMMAPA=1`) com
-    e sem a correção, a build do XDK e o console. Da mesma classe, a conferir: `src/battle/eft_g.c:499` testa
-    o bit `0x100` de um `*(u64 *)` sem macro.
+    os bytes do cabeçalho, sem rodar o jogo. **Provado na PPC em 12/11/2026** pelo roteiro `replay` (`09da6fd3`,
+    `SEMMAPA=1`): com a correção, "tudo certo", a luta carregada do cartão igual na x86 e na PPC e os dois `confere
+    luta` com o Kuririn; sem a correção, a PPC carrega a luta do setup zerado, lê arquivos que a x86 nunca leu e para
+    na guarda (a guarda da PPC sem mapa corta antes do segundo `confere luta`, então ele não foi visto falhando). Build
+    do XDK do `dev` pronta (`1c042253`). Falta: o console, com a falha vista na build velha e o mesmo replay carregado
+    na nova (`local/console/replay/`). Da mesma classe, a conferir: `src/battle/eft_g.c:499` testa o bit `0x100` de
+    um `*(u64 *)` sem macro.
 22. **Mods no console, rodada de 11/11/2026 (build `mods-telas`, `ee205cdb`)**: controle e pacote aprovados (o pacote
     não avisa na reabertura; o pacote novo avisa uma vez e segue). **Defeito:** com arquivos soltos em subpastas
     (`mods\pzs3us1\...`) o boot registra `mods: nenhum` e `mods: preparação recusada (-1)` e mostra a caixa "Cannot
