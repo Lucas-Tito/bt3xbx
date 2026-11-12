@@ -287,6 +287,17 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     receita do cenário não converte (o andar dos lutadores não usa esse caminho, e a câmera da técnica sim). Pela decisão
     40, as receitas de teste **não** viram normais: a imagem de release continua recusando as cinco. Próximo passo:
     reproduzir na PPC (a técnica 4 do Broly SSJ3 na arena da `01568`, com um roteiro) e achar o campo.
+    **Causa achada em 12/11/2026 (branch `bt4-colisao`, `f516c1e2`, no troca):** não era a árvore de colisão (conferida
+    nó a nó, toda trocada), e sim a câmera da técnica, `pzs4us2/02209`: o `Conv_Camera` pulava o array de chaves de um
+    canal quando o primeiro byte já estava marcado, e os arrays de canais vizinhos se sobrepõem; os canais 2 e 4 ficavam
+    em little-endian e, na PPC, a câmera ia a z = -4,6e19. Fora das zonas, o `BtlStage_FindZoneNear` devolve a zona 0; na
+    01568 (a arena 46, normal) a zona 0 tem malha no deslocamento 0 (o cabeçalho lido como malha), e a raiz `base - 4` em
+    64 bits dá o `r3` do crash (hipótese coerente com os registros; o qemu não cai, a conta dele é de 32 bits). **A receita
+    normal tinha o mesmo defeito na `02149`**: as imagens do BT4 geradas antes têm de ser refeitas. Correção: converter
+    toda chave declarada; censo das 116678 entradas: só 02149 e 02209 mudam, sem recusa nova; BT3 igual; câmera da técnica
+    idêntica entre a x86 e a PPC (704 linhas), zona 0 nunca mais chamada; mutantes acusados. Falta o console (imagem de
+    teste regerada, a técnica 4 na arena 46) e levar o branch à integração. Uma guarda no jogo para malha de zona no
+    deslocamento 0 não foi aplicada (o PS2 lê igual; esconderia o próximo defeito de dados).
 34. **Engasgos na seleção de personagens e de arenas: leitura de disco na thread do jogo** (console, 12/11/2026,
     `BT3_PICOS=20`, build `2ec1e4ea`, BT3): cada movimento do cursor lê do disco um arquivo novo de 27 a 60 KB
     (retrato, prévia), e a thread do jogo para esperando. Normalmente a leitura sai em 1 a 2 ms (91 MB/s), mas às vezes
