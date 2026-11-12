@@ -302,6 +302,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     da queda (`2ec1e4ea`, só a imagem mudou), a técnica 4 do Broly SSJ3 saiu e as lutas foram até o fim nas arenas 46
     (`01568`) e 11 (`01533`), sem queda nem travamento. As arenas 11 e 46 divididas (`01632`, `01667`) não foram jogadas no
     console. A decisão 40 (as receitas de teste viram normais depois do teste do mantenedor) fica com o mantenedor.
+    **Luta em equipe dividida (Tag Team, dois controles), 12/11 à noite:** as duas arenas carregaram e as lutas foram até
+    o fim, mas o jogo abriu os arquivos normais (`01568`, `01533`), não as variantes divididas (`01632`, `01667`, que são
+    `1622 + id`): falta achar o modo que as carrega (o catálogo `plano/F9/05-arenas.md` só dá o endereço do mapeamento,
+    SLUS `0x127340..0x127384`) e testá-las. Proposta ao mantenedor: aprovar as três que passaram (`01533`, `01568`,
+    `02209`) e manter as duas divididas recusadas até o teste.
+35. **Texturas que somem e ficam transparentes às vezes** (mantenedor, console, 12/11/2026): visto desde o começo do port,
+    em todos os modos, não só no Tag Team. Fica para depois.
 34. **Engasgos na seleção de personagens e de arenas: leitura de disco na thread do jogo** (console, 12/11/2026,
     `BT3_PICOS=20`, build `2ec1e4ea`, BT3): cada movimento do cursor lê do disco um arquivo novo de 27 a 60 KB
     (retrato, prévia), e a thread do jogo para esperando. Normalmente a leitura sai em 1 a 2 ms (91 MB/s), mas às vezes
