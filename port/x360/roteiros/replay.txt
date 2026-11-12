@@ -8,9 +8,9 @@
 # 0x10 razão 0x40000, btl_seq.c:1301); sem o replay ativo e carregado a luta correria os 240 s e o "espera seq 6"
 # esgotaria.
 # Rodar com SEMMAPA=1 (a PPC sem mapa, como o 360), cartão vazio e BT3_DESBLOQUEIO=1 (o roteiros.sh exporta).
-# As linhas marcadas com "(incerto)" dependem de dados do jogo que só a primeira rodada confirma: a ordem dos itens do
-# menu do resultado (os dados do menu, 0x2C52B8 e seguintes, não estão no repositório) e o traje do COM quando os
-# dois escolhem o mesmo personagem.
+# Os itens dos menus do resultado foram lidos na x86 com o gdb (itens de 0x30 bytes: id em +4, desabilitado em +0x1C;
+# o cursor começa no primeiro item habilitado, o índice 1), e o traje do COM com o mesmo personagem saiu 0 (o
+# "confere luta" abaixo confere). A rodada de 12/11 passou na x86 do começo ao fim.
 inclui boot.txt
 quadros 90                        # o menu principal aceita entrada depois do fade e da animação
 aperta BAIXO 3                    # Duelo
@@ -31,7 +31,7 @@ aperta X
 quadros 60
 aperta X
 quadros 60
-# o COM: três à direita, o mesmo Kuririn (incerto: o traje dele com o mesmo personagem; o "confere luta" abaixo diz)
+# o COM: três à direita, o mesmo Kuririn (o traje dele com o mesmo personagem é o 0, como o do lado 1: o "confere luta" abaixo confere)
 aperta DIREITA 3
 quadros 40
 aperta X
@@ -46,7 +46,7 @@ quadros 30
 aperta X
 espera luta max 3000              # a tela de carregamento vem antes
 espera seq 3 max 1200             # o combate controlável
-confere luta 25 0 25 0 5 0 4 13   # (incerto: o traje do lado 1) o que o jogo montou, antes de gravar
+confere luta 25 0 25 0 5 0 4 13   # o que o jogo montou, antes de gravar
 # alguns segundos de luta parada: é isso que o replay grava (uma entrada por quadro e por lutador), e a luta
 # reproduzida tem de durar o bastante para o "espera seq 3" dela enxergá-la
 quadros 150
@@ -54,7 +54,7 @@ termina luta vence max 1800
 espera seq 6 max 1200             # o menu do resultado do Duelo (BtlSeqEnd_Update)
 quadros 60
 # "Replay" (refaz a luta pela gravação, BattleReplay_SetActive(1)): o 5º item selecionável do menu do resultado, depois
-# da revanche, do CharSel, do DuelMenu e do menu principal (incerto: a posição; id 0x18 ou 0x19, razão 0x10000)
+# da revanche, do CharSel, do DuelMenu e do menu principal (gPauseMenuResultVersus: ids 0x13, 0xD, 0xE, 0xF e 0x18, o "Replay", razão 0x10000)
 aperta BAIXO 4
 quadros 20
 aperta X
@@ -67,8 +67,10 @@ espera seq 6 max 3000             # termina sozinha, pelo fim dos dados do repla
 quadros 60
 marca replay_assistido
 # o menu do resultado do replay (gPauseMenuResultReplayRec): "Salvar replay" (id 0x17, razão 0x1000, que o
-# Progress_Main leva ao modo 56 em modo de gravação). Incerto: a posição, o 2º item selecionável
-aperta BAIXO
+# Progress_Main leva ao modo 56 em modo de gravação) é o 6º item e o último selecionável: o cursor começa no
+# "Replay" (id 0x19, índice 1; o 0 é o "voltar" desabilitado), então são cinco BAIXO (os itens, lidos na x86 com
+# o gdb: 0x19, 0x13, 0xd, 0xe, 0xf, 0x17). Com um BAIXO só caía na revanche (0x13) e a luta recomeçava
+aperta BAIXO 5
 quadros 20
 aperta X
 quadros 60
@@ -122,8 +124,12 @@ confere luta 25 0 25 0 5 0 4 13   # os personagens gravados, não o Goku (id 0) 
 marca replay_carregado
 espera seq 6 max 3000             # o replay acaba sozinho: só acontece com o replay ativo e carregado
 quadros 60
-# o menu do resultado do replay carregado (gPauseMenuResultReplayPlay): o item de sair (id 0x14, razão 0x20 com o
-# pad 0); o Progress_Main não trata essa razão e o modo continua 56 (incerto: a posição do item e esse retorno)
+# o menu do resultado do replay carregado (gPauseMenuResultReplayPlay, lido na x86 com o gdb): o 0 é o "voltar"
+# desabilitado, o 1 o "Replay" de novo (id 0x19, refaz o replay) e o 2 o de sair (id 0x1A, razão 0x20, com a
+# confirmação): um BAIXO a partir do primeiro. O Progress_Main não trata essa razão e o modo continua 56 (a rodada
+# confirma: a tela 56 volta, o ReplayMenu de leitura)
+aperta BAIXO
+quadros 20
 aperta X
 quadros 60
 aperta CIMA

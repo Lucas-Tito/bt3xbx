@@ -405,6 +405,17 @@ linha de todo log é "passos: origem COMMIT diff:HASH", o carimbo da build (`hea
 `roteiros.py f5` e `passos.py` recusam o log de outra build (pelo commit e pelo hash da diferença; o sufixo
 "(N alterados, M apagados)" do `wsl.sh enviar` só passa com zero e zero: `passos.py mesma_origem`). O aceite do console é `passos.py LOG... --console`.
 
+**Achar a posição de um item de menu de luta sem chutar** (roteiro `replay`, 12/11): os menus da pausa e do resultado
+são dados (`gPauseMenu*`, `BtlMenu` em `include/battle/hud_0.h`: itens de 0x30 bytes, `id` em +4, `type` em +0x14,
+`disabled` em +0x1C), e na x86 o endereço sai do `nm`. Um gdb com `break PauseMenu_GetMenu` e um bloco `python` que
+lê `items` (+0) e `count` (+4) de cada menu lista tudo numa rodada de segundos (o roteiro corre até a primeira
+pausa ou resultado): o item 0 é o "voltar" desabilitado, o cursor começa no primeiro habilitado (índice 1) e o
+número de BAIXO é o índice do item menos 1. O palpite do roteiro escrito sem rodar (um BAIXO para "Salvar replay")
+caía na revanche (id 0x13), porque o menu do replay gravado tem seis itens e o "Salvar replay" (id 0x17) é o último.
+Para só a x86, sem o `roteiros.sh` (cada volta em uns 10 s): o mesmo ambiente (`BT3_GS=none BT3_SETTINGS=
+BT3_SOUND_TICKS=1 BT3_NOMOVIE=1 BT3_MENU_ITEM4=0 BT3_DESBLOQUEIO=1`), `BT3_ROTEIRO=roteiro.txt`, `BT3_SAVES=` uma
+pasta nova e vazia e `port/build/x86/bt3_x86`.
+
 ### Achar o que depende da ordem dos bytes
 
 | Ferramenta | O que faz |
