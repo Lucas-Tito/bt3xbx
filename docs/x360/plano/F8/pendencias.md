@@ -235,9 +235,16 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     `bt4-etapas34` `2ec1e4ea`, ambiente `bt3controle`): com a lista de modos do mod aberta (o botão que a abre e fecha
     pelo menu principal; textos em `port/src/gs/tag_text_*.inc`), mexer nela também mexe o menu principal do jogo por
     baixo. O menu do mod tem de ficar com a entrada só para ele enquanto estiver aberto. Anotado pelo mantenedor como
-    importante; corrigir antes da release com BT4 (e conferir se o mesmo vale no BT4, não só no BT3).
+    importante; corrigir antes da release com BT4. Confirmado também no BT4 (ambiente `bt4menu`, 12/11).
 28. **Gravação de origem: opção 2** (decisão do mantenedor, 12/11/2026, depois da gravorig2): adotar com a cópia das
     páginas de textura feita no envio (lado da gravação, que ficou com folga) em vez de na primeira leitura do desenho.
     Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
     junto da linha dos cortes, C10 e C11 de novo, e a correlação com a diferença da classe `vu0`. Se confirmar, a mudança
     e depois B (c, o, o, c), C10/C11 e um A rápido. Análise em `local/console/gravorig2/LEIA-ME.md` (fora do git).
+29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
+    `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
+    pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
+    livres (piso 32), 90 MB pendentes e 118 protegidas, devolveu 20 texturas brancas e, no pedido de um alvo de 896x672,
+    esperou a GPU e nunca voltou (o vigia registra a thread do jogo parada a partir dali; saída pela Guide). Dois
+    defeitos: a demanda das técnicas do BT4 passa do teto de textura do 360, e o backend trava em vez de seguir quando a
+    memória acaba. Log em `local/console/bt4e34/logs/bt4menu_bt3xbx.log` (fora do git). Bloqueia a release com BT4.
