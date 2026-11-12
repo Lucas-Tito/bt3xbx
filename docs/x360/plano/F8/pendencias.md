@@ -197,8 +197,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     do XDK do `dev` pronta (`1c042253`). Falta: o console, com a falha vista na build velha e o mesmo replay carregado
     na nova (`local/console/replay/`). **Aprovado no console em 12/11/2026:** na build gravorig (sem o conserto) o replay
     assistido no fim da partida funciona (vem da memória) e o carregado pelo Data Center falha; na build do `dev`
-    (`1c042253`, com o conserto) o mesmo replay, do mesmo cartão, carrega certo. Da mesma classe, a conferir:
-    `src/battle/eft_g.c:499` testa o bit `0x100` de um `*(u64 *)` sem macro.
+    (`1c042253`, com o conserto) o mesmo replay, do mesmo cartão, carrega certo. O `src/battle/eft_g.c:499`, anotado
+    como da mesma classe, foi conferido em 12/11 e não é defeito: o campo em `0x19F0` é `u64 flags`
+    (`include/battle/battle.h:257`) e todo acesso a ele usa a mesma largura (`eft_g.c:499`, `eft_r.c:497`,
+    `gfxm_b.c:934`, `gfxm_e_b.c:702`), então a ordem dos bytes não muda o bit.
 22. **Mods no console, rodada de 11/11/2026 (build `mods-telas`, `ee205cdb`)**: controle e pacote aprovados (o pacote
     não avisa na reabertura; o pacote novo avisa uma vez e segue). **Defeito:** com arquivos soltos em subpastas
     (`mods\pzs3us1\...`) o boot registra `mods: nenhum` e `mods: preparação recusada (-1)` e mostra a caixa "Cannot
