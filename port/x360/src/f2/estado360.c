@@ -36,6 +36,9 @@ static LARGE_INTEGER sAntes, sFreq;
 static double sTotal, sTotalTrecho, sPiorPar, sPiorParTrecho, sPar, sLutaTotal;
 static unsigned sVblanks, sVblanksTrecho, sPares, sParesAcima, sLuta, sLutaParesAcima;
 
+extern struct CharSel *gCharSel; /* src/menu/menu_c_e.c: a seleção de personagens, NULL fora dela */
+static int sPreAtiva, sPreViuSel;
+
 static int precarga_ligada(void) {
     static int v = -1;
     if (v < 0) {
@@ -160,8 +163,23 @@ void Port_StateLog(unsigned vblank, const void *fight, unsigned fightSize) {
            BT3_PRECARGA=0 volta ao disco a cada movimento (para comparar no console). */
         if (modo == 39 && precarga_ligada()) {
             Iso_Precarregar(1, 0x2F9, 0x3C0);
-        } else if (antes == 39) {
+            sPreViuSel = 0;
+            sPreAtiva = 1;
+        } else if (antes == 39 && sPreAtiva) {
             Iso_PrecargaLiberar();
+            sPreAtiva = 0;
+        }
+    }
+    /* (pendência 34) a luta carrega ainda na tela 39: a pré-carga (uns 16 MB) sai quando a seleção termina, no
+       CharSel_Term, que zera o gCharSel (src/menu/menu_c_e.c), e não espera o jogo trocar de tela. Na integração do BT4,
+       com os buffers maiores do upstream, ela ocupada durante a carga deixava alvos sem textura (12/11/2026). */
+    if (sPreAtiva) {
+        if (gCharSel != NULL) {
+            sPreViuSel = 1;
+        } else if (sPreViuSel) {
+            Iso_PrecargaLiberar();
+            sPreAtiva = 0;
+            Diario_Escrever("vblank %u: pré-carga da seleção liberada (a seleção terminou)", vblank);
         }
     }
     if ((fight != NULL) != luta) {
