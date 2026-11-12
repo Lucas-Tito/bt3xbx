@@ -243,6 +243,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
     junto da linha dos cortes, C10 e C11 de novo, e a correlação com a diferença da classe `vu0`. Se confirmar, a mudança
     e depois B (c, o, o, c), C10/C11 e um A rápido. Análise em `local/console/gravorig2/LEIA-ME.md` (fora do git).
+    **Feito e medido no console em 12/11/2026, à noite** (branch `gravacao-origem2`, `4bc1cd9e`: o contador por quadro e a
+    variante `BT3_ORIGEM_ENVIO=1`, provada igual em imagem no WSL): a materialização **não** explica o atraso (o candidato e a
+    variante gastam menos GPU na classe `vu0` que o controle; correlação fraca e de sinal contrário), e a variante **piora** o
+    ritmo: imagens fora de 2 vblanks no duelo, controle 57, candidato 93, variante 114. O custo está no trabalho posto na
+    thread de gravação. Opções ao mantenedor: adotar o candidato (−27% de CPU na gravação, ~36 imagens a mais fora do ritmo
+    por duelo), não adotar, ou a variante que só copia quando o destino ainda não tem a identidade. Resultados em
+    `local/console/gravorig3/LEIA-ME.md` (fora do git).
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
