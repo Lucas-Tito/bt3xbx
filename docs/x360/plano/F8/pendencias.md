@@ -265,6 +265,7 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
 31. **HUD da luta em equipe com tela dividida** (console, 12/11/2026, `bt4equipe`): cada vista desenha um HUD diferente,
     quatro barras de vida no total. O mantenedor achou estranho; conferir contra o Tag Team de PC se é o desenho
     pretendido (cada metade com as barras da sua luta) ou duplicação.
+    **Resolvida sem mudança (mantenedor, 12/11):** os HUDs a mais fazem sentido no Tag Team com mais lutadores; nada a fazer.
 32. **Complemento do BT4 no console: a caixa não apareceu, e o diário não mostra leitura nem gravação** (12/11/2026,
     `bt4complemento`, build `2ec1e4ea`): com um `native-bt4-custom.bin` truncado de propósito (o cabeçalho e 100 bytes
     zerados, sem dados do jogo) na raiz de `game:\sv_b4e4bt4menu`, o mantenedor jogou com o Gogeta Blue (personagem do
@@ -274,3 +275,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     `custom_path` em `plat_game.c`) e o trata como ausente (então ele também nunca seria gravado no console, e o
     `3e986921` só vale no emulador). Próximo passo junto com o da pendência 29: uma build com o diário dizendo o caminho, o
     resultado do `fopen` e a gravação do complemento.
+33. **As cinco recusas do BT4: as receitas de teste não passaram no console** (12/11/2026, `bt4recusas`, build
+    `2ec1e4ea`): as arenas carregam, os lutadores pisam e os modelos aparecem normais, mas a técnica 4 do Broly SSJ3 caiu
+    com a caixa de queda (`crash.txt`: `C0000005`, leitura de `6B91BA08`). Cadeia pelo `.map`: `DemoCam_Update` (a câmera
+    da técnica) → `BtlCam_TraceStage` → `StgCol_TraceSphere` → `StgCol_QueryZone` → `ColMesh_WalkBox` →
+    `ColMesh_WalkNode` → `ColNode_TestBox+0x8`, lendo um nó da árvore de colisão do cenário num endereço com lixo na
+    metade de cima (`r3`, `r30`, `r31` = `00000001_6B91B9FC`). Logo antes, a imagem abriu `pzs4us2/02209` (a câmera) e
+    `pzs4us1/01568` (a arena), os dois por receita de teste. Hipótese: um campo da árvore de colisão da arena que a
+    receita do cenário não converte (o andar dos lutadores não usa esse caminho, e a câmera da técnica sim). Pela decisão
+    40, as receitas de teste **não** viram normais: a imagem de release continua recusando as cinco. Próximo passo:
+    reproduzir na PPC (a técnica 4 do Broly SSJ3 na arena da `01568`, com um roteiro) e achar o campo.
