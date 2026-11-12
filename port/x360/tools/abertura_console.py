@@ -134,26 +134,39 @@ def poe(s, local, como=None):
     nome = como or os.path.basename(local)
     if len(nome) > 42:
         raise SystemExit(f"ERRO: {nome}: o FATX aceita nome de até 42 caracteres")
+    # Em blocos, sem o arquivo inteiro na memória: as partes da imagem do BT4 chegam a 4 GB, e o WSL tem uns 7 GB.
+    h = hashlib.md5()
+    tamanho = 0
     with open(local, "rb") as a:
-        dados = a.read()
-    esperado = md5(dados)
+        for bloco in iter(lambda: a.read(1 << 20), b""):
+            h.update(bloco)
+            tamanho += len(bloco)
+    esperado = h.hexdigest()
 
     def op(f):
         # nome único por tentativa: um envio abortado tranca o temporário até a sessão cair
         temporario = f"{nome[:15]}.{os.getpid() % 100000}.{int(time.time() * 1000) % 10**9}.tmp"
-        f.storbinary(f"STOR {temporario}", io.BytesIO(dados), blocksize=1 << 16)
+        t0 = time.time()
+        with open(local, "rb") as a:
+            f.storbinary(f"STOR {temporario}", a, blocksize=1 << 16)
         existentes = {n.lower() for n, _ in entradas(f)}
         if nome.lower() in existentes:
             f.sendcmd(f"DELE {nome}")
         f.sendcmd(f"RNFR {temporario}")
         f.sendcmd(f"RNTO {nome}")
-        return md5(baixa_bytes(f, nome))
+        t1 = time.time()
+        volta = hashlib.md5()
+        f.retrbinary(f"RETR {nome}", volta.update, blocksize=1 << 16)
+        if tamanho > 1 << 26:
+            avisar(f"{nome}: envio {tamanho / max(t1 - t0, 1e-3) / 1e6:.1f} MB/s, releitura "
+                   f"{tamanho / max(time.time() - t1, 1e-3) / 1e6:.1f} MB/s")
+        return volta.hexdigest()
 
     volta = s.tenta(f"poe {nome}", op)
     if volta != esperado:
         avisar(f"ERRO: {nome} chegou diferente no console (local {esperado}, de volta {volta})")
         return 1
-    avisar(f"ok  {nome}  {len(dados)} bytes  md5 {esperado}")
+    avisar(f"ok  {nome}  {tamanho} bytes  md5 {esperado}")
     return 0
 
 
