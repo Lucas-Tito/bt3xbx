@@ -1,0 +1,141 @@
+# Replay (pendência 21): o fluxo inteiro, do Duelo gravado ao replay carregado do cartão. Duelo 1P contra COM com o
+# Kuririn (id 25) nos dois lados (nunca o Goku, id 0: sem a correção do BattleReplay_Load o replay carregado vira
+# Goku contra Goku e sem as entradas, porque o McFlow_UpdateReplayLoad ignora o retorno e o Battle_ClearWork zerou o
+# setup). Do boot ao menu principal, luta curta, "Replay" no menu do resultado, "Salvar replay" no menu do resultado
+# do replay (tela 56 em modo de gravação, slot 0), de volta ao menu principal, Data Center > Replay, o replay do
+# slot 0 carregado, e a luta reproduzida conferida: os dois lados são o Kuririn (o jogo montou o setup gravado) e
+# ela termina sozinha, sem "termina luta", porque o replay acaba com os dados gravados (BTL_REPLAY_END, resultado
+# 0x10 razão 0x40000, btl_seq.c:1301); sem o replay ativo e carregado a luta correria os 240 s e o "espera seq 6"
+# esgotaria.
+# Rodar com SEMMAPA=1 (a PPC sem mapa, como o 360), cartão vazio e BT3_DESBLOQUEIO=1 (o roteiros.sh exporta).
+# As linhas marcadas com "(incerto)" dependem de dados do jogo que só a primeira rodada confirma: a ordem dos itens do
+# menu do resultado (os dados do menu, 0x2C52B8 e seguintes, não estão no repositório) e o traje do COM quando os
+# dois escolhem o mesmo personagem.
+inclui boot.txt
+quadros 90                        # o menu principal aceita entrada depois do fade e da animação
+aperta BAIXO 3                    # Duelo
+aperta X ate tela 38              # DuelMenu
+quadros 120
+aperta X                          # 1P contra COM
+quadros 40
+aperta X                          # luta simples
+espera tela 39 max 600            # CharSel
+quadros 150
+# jogador 1: o cursor começa na primeira célula (Goku); quatro à direita é a quinta, o Kuririn (id 25, a mesma que o
+# COM alcança com três: o cursor dele começa na segunda). X no personagem, X nos itens, X na cor (traje 0)
+aperta DIREITA 4
+quadros 40
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+# o COM: três à direita, o mesmo Kuririn (incerto: o traje dele com o mesmo personagem; o "confere luta" abaixo diz)
+aperta DIREITA 3
+quadros 40
+aperta X
+quadros 60
+aperta X
+quadros 60
+aperta X
+quadros 60
+# estágio: quatro para baixo na primeira coluna da grade de estágios, o estágio 5 (como o f5_duelo)
+aperta BAIXO 4
+quadros 30
+aperta X
+espera luta max 3000              # a tela de carregamento vem antes
+espera seq 3 max 1200             # o combate controlável
+confere luta 25 0 25 0 5 0 4 13   # (incerto: o traje do lado 1) o que o jogo montou, antes de gravar
+# alguns segundos de luta parada: é isso que o replay grava (uma entrada por quadro e por lutador), e a luta
+# reproduzida tem de durar o bastante para o "espera seq 3" dela enxergá-la
+quadros 150
+termina luta vence max 1800
+espera seq 6 max 1200             # o menu do resultado do Duelo (BtlSeqEnd_Update)
+quadros 60
+# "Replay" (refaz a luta pela gravação, BattleReplay_SetActive(1)): o 5º item selecionável do menu do resultado, depois
+# da revanche, do CharSel, do DuelMenu e do menu principal (incerto: a posição; id 0x18 ou 0x19, razão 0x10000)
+aperta BAIXO 4
+quadros 20
+aperta X
+quadros 60
+aperta CIMA                       # a confirmação começa no "não" e muda com CIMA
+quadros 20
+aperta X
+espera seq 3 max 3000             # a luta reproduzida (os dados gravados dão as entradas)
+espera seq 6 max 3000             # termina sozinha, pelo fim dos dados do replay
+quadros 60
+marca replay_assistido
+# o menu do resultado do replay (gPauseMenuResultReplayRec): "Salvar replay" (id 0x17, razão 0x1000, que o
+# Progress_Main leva ao modo 56 em modo de gravação). Incerto: a posição, o 2º item selecionável
+aperta BAIXO
+quadros 20
+aperta X
+quadros 60
+aperta CIMA
+quadros 20
+aperta X
+espera tela 56 max 3000           # ReplayMenu em modo de gravação (menu_za_d.c)
+# a varredura do cartão (McFlow 7): o estado 4 é a leitura de cada arquivo; o 0 só vale depois dele, porque o
+# McFlow nasce com o estado 0 e a primeira leitura do roteiro vem antes do primeiro Update
+espera mcflow 4 max 600
+espera mcflow 0 max 1200
+quadros 60                        # a tela aceita entrada com a animação pronta
+aperta X                          # salva no slot 0 (McFlow_Start(5))
+espera mcflow 12 max 600          # "salvar o replay?" (0xC)
+quadros 60
+aperta ESQUERDA                   # a pergunta começa no "não"
+quadros 10
+aperta X
+espera mcflow 15 max 600          # gravando o arquivo do replay no cartão (0xF)
+espera mcflow 0 max 600
+marca replay_salvo
+espera tela 39 max 3000           # volta ao CharSel de onde a luta saiu (ReplayMenu_OnSaveDone, REPLAY_RESULT_SINGLE)
+quadros 120
+repete ate tela 4 max 3000        # CharSel e DuelMenu voltam com TRIANGULO até o menu principal
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 120
+# o menu principal lembra o item de onde saiu (Duelo, menu_a.c:166 e 550): o Data Center fica três abaixo
+aperta BAIXO 3
+quadros 20
+aperta X ate tela 53 max 600      # Data Center
+quadros 200
+aperta BAIXO 2                    # senha, lista e Replay (como o datacenter.txt: três itens, o terceiro é o 56)
+quadros 30
+aperta X ate tela 56 max 600      # ReplayMenu em modo de leitura
+espera mcflow 4 max 600
+espera mcflow 0 max 1200
+quadros 60
+aperta X                          # o slot 0 (ZAPROG->replayCursor), com o replay salvo: McFlow_Start(6)
+espera mcflow 2 max 600           # "carregar o replay?"
+quadros 60
+aperta ESQUERDA
+quadros 10
+aperta X
+# daqui o McFlow lê o arquivo (0x13), o Battle_ClearWork zera a luta e o BattleReplay_Load instala o bloco gravado
+# (a comparação do cabeçalho em big-endian é o conserto); o ReplayMenu sai pelo REPLAY_RESULT_PLAY e a luta começa
+espera luta max 6000
+espera seq 3 max 1200
+confere luta 25 0 25 0 5 0 4 13   # os personagens gravados, não o Goku (id 0) da luta zerada
+marca replay_carregado
+espera seq 6 max 3000             # o replay acaba sozinho: só acontece com o replay ativo e carregado
+quadros 60
+# o menu do resultado do replay carregado (gPauseMenuResultReplayPlay): o item de sair (id 0x14, razão 0x20 com o
+# pad 0); o Progress_Main não trata essa razão e o modo continua 56 (incerto: a posição do item e esse retorno)
+aperta X
+quadros 60
+aperta CIMA
+quadros 20
+aperta X
+espera tela 56 max 3000
+quadros 120
+repete ate tela 4 max 3000        # ReplayMenu e Data Center voltam com TRIANGULO até o menu principal
+    aperta TRIANGULO
+    quadros 60
+volta
+quadros 120
+marca replay_final
+quadros 30
+fim
