@@ -447,6 +447,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     num destino reescrito desde a vez anterior (o jogo reveza texturas no mesmo lugar da VRAM a cada vista), então o
     ganho é nulo. Próximo candidato para os ~24 ms do envio: reconhecer a textura pela origem na memória do jogo, sem
     refazer o hash da página (candidato 3 de 08-gravacao.md).
+    **Arena pesada no 1x1 do BT4 (console, 13/11, rodada livre, `livre1`):** o quadro da luta ficou entre 35 e 51 ms
+    (picos até 114) com a gravação ~40 ms ocupada; a arena (a mesma da rodada do meteoro: números idênticos) manda ~5.700
+    lotes da VU1 de cenário por quadro e até 48 mil vértices, contra ~2.300 a 2.700 lotes e 19 mil vértices da arena do
+    duelo do BT3. Candidato: estender o reaproveitamento dos vértices (hoje dentro do quadro) entre quadros, para a
+    geometria do cenário que não mudou.
 32. **Complemento do BT4 no console: a caixa não apareceu, e o diário não mostra leitura nem gravação** (12/11/2026,
     `bt4complemento`, build `2ec1e4ea`): com um `native-bt4-custom.bin` truncado de propósito (o cabeçalho e 100 bytes
     zerados, sem dados do jogo) na raiz de `game:\sv_b4e4bt4menu`, o mantenedor jogou com o Gogeta Blue (personagem do
@@ -500,6 +505,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     carregadas. As normais são `1522 + id` (46 e 11); as duas "divididas" da lista dão `1622 + id` com 45 e 10, um a menos:
     não se sabe o que são. Ficam recusadas (se um modo ainda não visto as abrir, a recusa aparece clara). A dúvida vai para
     a leitura do executável do BT4 no WSL (o mapeamento em SLUS `0x127340..0x127384`, `plano/F9/05-arenas.md`), sem console.
+    **Decisão do mantenedor (13/11):** para a imagem de release do BT4 (hoje só existe a de teste: o imagem_bt4.py recusa
+    terminar sem --teste enquanto houver entradas só de teste), as variantes `01632` e `01667` ficam como não usadas
+    (copiadas sem conversão); as três aprovadas no console (`01533`, `01568`, `02209`) passam a receitas normais. O
+    mantenedor acha que as duas variantes são da campanha: investigar depois.
 35. **Texturas que somem e ficam transparentes às vezes** (mantenedor, console, 12/11/2026): visto desde o começo do port,
     em todos os modos, não só no Tag Team. Fica para depois.
 34. **Engasgos na seleção de personagens e de arenas: leitura de disco na thread do jogo** (console, 12/11/2026,
