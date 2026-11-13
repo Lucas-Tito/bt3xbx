@@ -258,6 +258,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     vblank mais tarde. O controle tinha folga por acidente; o candidato tira a folga e os quadros mais pesados da GPU passam do
     prazo. Caminho: dar à cadeia uma antecedência fixa (o jogo começar o quadro com folga garantida, ou o desenho apresentar um
     vblank depois), para a CPU economizada virar margem da GPU. Nada mexido ainda.
+    **Sem acrescentar latência (pedido do mantenedor, 12/11):** a cadeia é em série (jogo, gravação, desenho, GPU) e soma
+    33,2 ms para 32,8 de orçamento. Opções levantadas (análise só de leitura): (1) medir antes: quanto dos 7,6 ms de CPU do
+    desenho da classe `vu0` (75% do `frame_end`; a GPU fica 2,4 ms esperando a CPU nessa classe) é o D3D bloqueado, e se a
+    gravação lendo cedo veria dado instável (`BT3_GS_RACE`); (2) refazer os lotes (`BT3_GS_LOTES`, plano F5/08, seções 38 a
+    41: falharam em 30/10 por serializar as duas threads, correção escrita e nunca testada), 4 a 8 ms; (3) baratear o envio
+    dos lutadores (buffers de comando do XDK, `BeginCommandBuffer`), 1 a 3 ms e cresce com o Tag Team; (4) a gravação
+    começar durante a montagem do quadro pelo jogo, 5 a 8 ms, o mais invasivo.
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
