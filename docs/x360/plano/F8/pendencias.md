@@ -320,6 +320,12 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     passam por ele (literais em `tag_setup.c`, `tag_tournament.c`, `tag_lobby_menu.c`). Os nomes de botão do PS2
     ("Cross", "Triangle", "Square", "Circle", "Select") são literais nessas mesmas linhas e nas opções do `tag_hud.cpp`.
     Caminho proposto: uma troca dos nomes de botão no 360 num ponto só (no desenho do texto do mod), pela tabela do port.
+    **Decisão do mantenedor (13/11): o mod fica todo em inglês.** Feito no `bt4-integracao`: os nomes de botão do PS2
+    trocados pelos do controle do Xbox no `Port_LocalText` e nos valores das opções (`d261d517`; "Select" só vira Back
+    quando é o botão de um par), e os textos que o 360 tinha em português trocados pelos do PC (`ed7c0539`). Junto saíram
+    dois defeitos: a entrada "CPU Only" mostrava "Voltar" (o `TAG_LABEL_CPU` é o 9, o mesmo do último "Back" da lista
+    base) e as entradas dos desafios e dos torneios mostravam todas "Selecionar". Build em `local/console/bt4diag`;
+    falta conferir no console.
 31. **HUD da luta em equipe com tela dividida** (console, 12/11/2026, `bt4equipe`): cada vista desenha um HUD diferente,
     quatro barras de vida no total. O mantenedor achou estranho; conferir contra o Tag Team de PC se é o desenho
     pretendido (cada metade com as barras da sua luta) ou duplicação.
