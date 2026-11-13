@@ -225,6 +225,38 @@ def resolver(a):
     return 0
 
 
+def trava(a):
+    """As linhas "amostra: trava crua" (a thread do jogo parada há 3 s ou mais): cada endereço pela função do .map. O
+    .map tem de ser o desta build (o cabeçalho do último despejo confere, quando houver)."""
+    mapa = Mapa(a.mapa)
+    despejos = ler_despejos(a.log)
+    if despejos:
+        erros = conferir_build(despejos[max(despejos)], mapa)
+        if erros:
+            print(f"amostra_perfil: o .map {a.mapa} não é da build que gerou o log; recusado:")
+            for e in erros:
+                print(f"  {e}")
+            return 1
+    n = 0
+    for l in open(a.log, errors="replace"):
+        m = re.search(r"amostra: trava crua (\d+) parou (-?\d+) tipo (\d+) iar ([0-9A-F]{8}) lr ([0-9A-F]{8}) "
+                      r"r1 ([0-9A-F]{8}) armadilha ([0-9A-F]{8}) ret (\d+):(.*)$", l)
+        if not m:
+            continue
+        n += 1
+        print(f"trava {m.group(1)}: parou {m.group(2)}, tipo {m.group(3)}, r1 {m.group(6)}, armadilha {m.group(7)}")
+        if m.group(3) in ("1", "2"):
+            print(f"  Iar {m.group(4)} {mapa.funcao(int(m.group(4), 16))}")
+            print(f"  Lr  {m.group(5)} {mapa.funcao(int(m.group(5), 16))}")
+        print(f"  {m.group(8)} retornos (como o amostrador os guarda):")
+        for r in m.group(9).split():
+            print(f"    {r} {mapa.funcao(int(r, 16))}")
+    if n == 0:
+        print(f"amostra_perfil: nenhuma linha de trava crua em {a.log}")
+        return 1
+    return 0
+
+
 def sintetico(a):
     """Um roteiro com contagens conhecidas: endereços dentro de funções reais do .map (cru, como a folha sem .pdata),
     duas classes de quadro, as amostras sem Iar e no núcleo; o esperado somado por função."""
@@ -328,6 +360,9 @@ def main():
     r.add_argument("--despejo", type=int)
     r.add_argument("--topo", type=int, default=40)
     r.add_argument("--json")
+    t = sub.add_parser("trava")
+    t.add_argument("log")
+    t.add_argument("mapa")
     s = sub.add_parser("sintetico")
     s.add_argument("mapa")
     s.add_argument("pasta")
@@ -336,7 +371,7 @@ def main():
     c.add_argument("obtido")
     c.add_argument("esperado")
     a = ap.parse_args()
-    return {"resolver": resolver, "sintetico": sintetico, "conferir": conferir}[a.cmd](a)
+    return {"resolver": resolver, "trava": trava, "sintetico": sintetico, "conferir": conferir}[a.cmd](a)
 
 
 if __name__ == "__main__":

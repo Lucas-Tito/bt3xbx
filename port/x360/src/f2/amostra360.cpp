@@ -484,6 +484,30 @@ static void Esperar(unsigned us) {
 }
 
 #define TRAVA_MS 3000 /* um quadro parado há tanto tempo é uma trava: despeja sem esperar o fim dele */
+
+/* (pendência 29, 13/11/2026) Na trava, além do histograma (que junta por função), uma amostra crua: o Iar, o Lr, o r1 e
+   todos os retornos da pilha, para resolver endereço a endereço com o .map desta build
+   (port/x360/tools/amostra_perfil.py trava). O agarrão em equipe do BT4 prende a thread do jogo sem pressão de memória;
+   a amostra crua diz em que função e por qual caminho. Fora da suspensão (o diário tem trava). */
+static void TravaCrua(unsigned vez) {
+    AmostraCrua c;
+    char b[900];
+    int n, i, r;
+    c.tipo = AMOSTRA_NADA;
+    c.iar = c.lr = c.r1 = c.armadilha = 0;
+    c.nRet = 0;
+    r = Amostrar(&sJogo, &c);
+    if (r < 0) {
+        return;
+    }
+    n = _snprintf(b, sizeof(b) - 1, "amostra: trava crua %u parou %d tipo %u iar %08X lr %08X r1 %08X armadilha %08X ret %u:",
+                  vez, r, c.tipo, c.iar, c.lr, c.r1, c.armadilha, c.nRet);
+    for (i = 0; i < (int)c.nRet && n > 0 && n < (int)sizeof(b) - 10; i++) {
+        n += _snprintf(b + n, sizeof(b) - 1 - n, " %08X", c.ret[i]);
+    }
+    b[sizeof(b) - 1] = 0;
+    Diario_Escrever("%s", b);
+}
 static DWORD WINAPI Amostrador(LPVOID arg) {
     LARGE_INTEGER t, f, tQuadro, tDespejo;
     unsigned quadro, quadroAnt, normaisSeguidos = 0, lentosAntes = 0, lentos;
@@ -521,6 +545,7 @@ static DWORD WINAPI Amostrador(LPVOID arg) {
             travas++;
             AmostraHist_FimDoQuadro(0, (double)(t.QuadPart - tQuadro.QuadPart) * 1000.0 / f.QuadPart);
             Despejar("trava: o quadro do jogo não acaba");
+            TravaCrua(travas);
             tDespejo = tQuadro = t; /* o resto do quadro conta a partir daqui, sem somar duas vezes */
         }
         if (WaitForSingleObject(sJogo.h, 0) == WAIT_OBJECT_0 || Amostrar(&sJogo, &c) < 0) {
