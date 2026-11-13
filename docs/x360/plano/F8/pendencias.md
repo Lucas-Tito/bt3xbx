@@ -265,6 +265,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     41: falharam em 30/10 por serializar as duas threads, correção escrita e nunca testada), 4 a 8 ms; (3) baratear o envio
     dos lutadores (buffers de comando do XDK, `BeginCommandBuffer`), 1 a 3 ms e cresce com o Tag Team; (4) a gravação
     começar durante a montagem do quadro pelo jogo, 5 a 8 ms, o mais invasivo.
+    **Medida no console (12/11, build de perfil `BT3_PERFIL_CADEIA`, `BT3_CADEIA_CPU=7055,7175`, candidato):** a CPU do
+    desenho dos lutadores (classe `vu0`) são **2.093 desenhos por quadro**, num duelo de dois; nenhuma etapa domina (preparo
+    3,2 ms, a chamada que desenha 1,75 ms a 0,8 µs cada, estado 1,64 ms em 17.607 chamadas, constantes 1,0 ms em 4.083), e a
+    chamada que desenha não mostra bloqueio do D3D. O custo é a quantidade de desenhos. Os buffers de comando (opção 3) rendem
+    pouco; a alavanca maior é **juntar desenhos seguidos dos lutadores com o mesmo estado** (cada vértice com o índice das suas
+    constantes, o shader buscando por ele), que escala com o Tag Team, seguida dos lotes refeitos. Log em
+    `local/console/gravorig3-perfil/` (fora do git).
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
