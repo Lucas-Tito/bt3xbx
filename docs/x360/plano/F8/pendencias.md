@@ -410,6 +410,17 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     modelos não, nem o do próprio jogador; nenhuma pressão de memória nem desenho pulado. Nunca testado antes (só duas
     vistas). E o ritmo com quatro vistas: ~73 ms por quadro (jogo e gravação ~52, desenho ~21), igual com e sem o
     filtro e a fusão: o gargalo é a gravação (a VU1 de cada vista na CPU), não o desenho.
+    **Causa achada no código (13/11, `bt4-vistas` `f40a8d0c`):** o buffer de vértices da VU1 do modo direto
+    (`BT3_VU_VERTS` = 98304) enche, e `GsGpu_DrawVu0`/`Vu4`/`Vu6` (`port/src/gs/gs_draw.c`) voltam calados sem desenhar,
+    antes do backend (por isso o "0 pulados" do `gs_d3d`); o estágio das quatro vistas vem primeiro e os lutadores vista
+    por vista, então as de baixo perdem os lutadores. O commit conta esses cortes no diário; o ambiente
+    `local/console/bt4memvistas/environment_q4_memvistas.txt` dobra o buffer para a prova. **A gravação em quatro
+    vistas (13/11, `bt4-grav` `fd6a66e0`, só leitura dos logs):** gravação ocupada ~70 ms por quadro (o gargalo), o jogo
+    ~50 ms de trabalho próprio, o desenho ~20; toda a VU1 já roda no shader (a hipótese da VU emulada na CPU caiu); o
+    peso é o volume (~5 mil desenhos, 13 mil lotes, a cópia dos vértices, 1069 envios ao GS por quadro). Meta realista
+    sem cortes visuais: 20 a 25 quadros por segundo. Build de medida com o amostrador nas duas threads em
+    `local/console/bt4grav/`. **Em curso (decisão do mantenedor):** os vértices de cada lote uma vez por quadro,
+    reaproveitados entre as vistas (`bt4-vertuni`, chave `BT3_VISTAS_UNICO`), que também tira o estouro do buffer.
 32. **Complemento do BT4 no console: a caixa não apareceu, e o diário não mostra leitura nem gravação** (12/11/2026,
     `bt4complemento`, build `2ec1e4ea`): com um `native-bt4-custom.bin` truncado de propósito (o cabeçalho e 100 bytes
     zerados, sem dados do jogo) na raiz de `game:\sv_b4e4bt4menu`, o mantenedor jogou com o Gogeta Blue (personagem do
