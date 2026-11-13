@@ -2315,6 +2315,14 @@ Os do console estão resumidos no `CLAUDE.md` (seção "Lições do 360") e deta
   tela. Foi o que separou a gauge de ki do bit 2 (a suspeita) do bit 1 (a causa).
 
 
+- **Arte 2D reduzida pelo próprio port vaza a peça vizinha da folha (13/11/2026, Tag Team).** O mod reduz o HUD de cada
+  vista a 0,5 (`tagHudViewport`, `port/src/gs/gs_draw.c`): cada pixel cobre dois texels, e o bilinear do jogo (TEX1
+  linear) passa a ler a primeira linha da peça de baixo na folha do HUD, uma linha embaixo da barra de vida e do
+  retrato. A correção da peça do BT3 vivia só no afiado, e a linha continuou com `BT3_AFIADO=0`, o que provou que não era
+  ele: os dois caminhos vazavam, cada um pela sua conta. Hoje a arte reduzida (marcada no `orig[2]`) lê presa à caixa
+  de texels da peça nos dois caminhos (`ps_gs_red`, `ps_gs_red_af`; `BT3_VISTA_PECA=0` volta ao antigo). Antes de
+  culpar um filtro, desligue-o no console: uma ida com a chave em 0 separa as hipóteses.
+
 ### As texturas novas (F5, etapa 8, `plano/F5/08-gravacao.md`, seção 17)
 
 - **Antes de montar um cache para não redecodificar, classifique as redecodificações pelo conteúdo decodificado.** Um hash dos
