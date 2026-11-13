@@ -429,6 +429,16 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     sem cortes visuais: 20 a 25 quadros por segundo. Build de medida com o amostrador nas duas threads em
     `local/console/bt4grav/`. **Em curso (decisão do mantenedor):** os vértices de cada lote uma vez por quadro,
     reaproveitados entre as vistas (`bt4-vertuni`, chave `BT3_VISTAS_UNICO`), que também tira o estouro do buffer.
+    **Sessão com o roteiro tag_q4 (13/11, `bt4-consolidado` d81dc8a3; logs em `local/console/bt4cons/logs`):** com o
+    buffer da VU1 sem corte (262144) os lutadores aparecem nas quatro vistas (o quadro mais pesado pede 209.496
+    vértices). Com `BT3_VISTAS_UNICO=1` no buffer de 98304: o maior quadro grava 35.643 vértices (-83%), nenhum corte,
+    ~15 mil de ~18,7 mil lotes reaproveitados por quadro; as 60 capturas idênticas byte a byte às da referência sem
+    corte (59 distintas); a conferência total, 909.597 reaproveitamentos e 0 divergências. Os desenhos (12.288) e as
+    constantes (12.246) bateram no teto do primeiro corte de memória e voltaram ao tamanho de antes (d81dc8a3).
+    Perfil do `q4_grav` (78,8 ms por quadro): o jogo, 35 ms em `Battle_DrawSplit` e 26 esperando; a gravação, 72 ms
+    ocupada, com ~24 ms no envio de texturas (`envio_faixa32`, `memcpy`, `Gs_PageHash`), 33 ms nos lotes da VU1 e
+    2,75 ms no `Port_GetEnv` (corrigido em 12d6492d). Decisão do mantenedor: atualizar as vistas em turnos (em curso,
+    `bt4-turnos`, chave `BT3_VISTAS_TURNO`).
 32. **Complemento do BT4 no console: a caixa não apareceu, e o diário não mostra leitura nem gravação** (12/11/2026,
     `bt4complemento`, build `2ec1e4ea`): com um `native-bt4-custom.bin` truncado de propósito (o cabeçalho e 100 bytes
     zerados, sem dados do jogo) na raiz de `game:\sv_b4e4bt4menu`, o mantenedor jogou com o Gogeta Blue (personagem do
