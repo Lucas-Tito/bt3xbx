@@ -371,6 +371,15 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     **Aprovado no console (13/11, imagem nova do BT4 com o conversor `2508778a`, build `d955876f`):** o agarrão em
     equipe não trava nem leva as vistas ao cinza; as escalas do retarget no diário saem 0,8 e nenhuma linha de colisão
     fora da escala.
+    **O primeiro travamento (o meteoro) revisto pelo código (13/11):** o backend não trava quando a memória acaba. No
+    log `bt4menu` a gravação estava ociosa (`gGsThreadEstado` 1), a espera da pressão (teto de 100 ms) tinha terminado e
+    o quadro 13794 foi entregue e apresentado; a GPU só é esperada pela dona do dispositivo e por trabalho já enviado.
+    As brancas são o caminho degradado previsto (o descartado só vira memória livre depois que o retrato do quadro passa
+    pela GPU); o `bt3controle` teve a mesma crise num quadro e se recuperou no seguinte. Quem parou foi a thread do jogo,
+    com a mesma assinatura do agarrão: muito provavelmente o mesmo retarget (o meteoro é um 1x1 entre personagens
+    diferentes do BT4), já corrigido. A frase "o backend trava em vez de seguir" não vale. Para o console:
+    `local/console/bt4hud/environment_meteoro.txt` (o golpe, com o amostrador) e `environment_pressao.txt`
+    (`BT3_MEM_PISO_MB=48`, a falta forçada: tem de seguir com brancas e sem vigia).
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
