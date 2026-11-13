@@ -416,3 +416,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     (a memória do jogo, os buffers do GS, o Tag Team, o som, o leitor), achar os 82 MB e decidir o que encolher no 360 (por
     exemplo o `MAX_VU_UNIFORMS` de volta a 8192 fora das quatro vistas). Pode ter relação com a pendência 29 (o primeiro
     travamento do BT4 foi por falta de memória de textura) e com a 35 (texturas que somem).
+
+    **De onde vêm os 97 MB (13/11, leitura dos diários, dos `.map` e do código, sem console):** a diferença já existe
+    antes do init do `gs_d3d` (337 contra 241 MB livres; do init ao `pronto` os dois perdem 23 a 24 MB), e as imagens BT3
+    e BT4 da mesma build dão o mesmo número, então é a build. (1) o heap do jogo do BT4 vai até `0x06000000` em vez de
+    `0x02000000` (`port/src/plat_mem.c`, `src/sys/heap.c`), 64 MB reservados e comitados de uma vez pelo
+    `Port_X360Reserve` (conta pelo código); (2) a RAM de som `SPU_SIZE` de 2 para 16 MB (`port/src/gs/snd_se.c`,
+    `include/sys/spu_heap.h`), ~14 MB de .bss; (3) os buffers do `gs_draw.c`, 14,4 MB (medido no diário); (4) outros
+    estáticos (`gs_core`, `gs_draw`, `snd_adx`) ~3,3 MB e código ~0,7 MB. Soma ~97 MB. Candidatos a encolher no 360,
+    todos dependendo de medir o pico de uso numa luta cheia do BT4 (equipe, quatro vistas) antes de cortar: o heap
+    (até 32 a 64 MB, risco alto: lutadores, objetos e os dois DMA de 16 MB moram nele), a RAM de som (8 a 12 MB, risco
+    médio: bancos de voz por lutador) e o `MAX_VU_UNIFORMS` fora das quatro vistas (~11 MB, risco médio).
