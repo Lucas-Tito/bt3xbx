@@ -272,6 +272,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     pouco; a alavanca maior é **juntar desenhos seguidos dos lutadores com o mesmo estado** (cada vértice com o índice das suas
     constantes, o shader buscando por ele), que escala com o Tag Team, seguida dos lotes refeitos. Log em
     `local/console/gravorig3-perfil/` (fora do git).
+    **Análise de leitura do juntar desenhos (12/11):** a gravação já funde desenhos seguidos idênticos (`vu_fecho`,
+    `same_state_vu`); os 2.093 restantes trocam de textura em ~95% dos casos (2.044 `SetTexture`, 2.012 samplers, ~2.050
+    uniformes por quadro), então juntar por estado rende pouco sem trocar a textura por vértice (atlas, vários samplers ou
+    reordenar, todos com risco de imagem). Opções em ordem: (1) filtro por campo do sampler e do blend e tirar as constantes
+    c14/c15 do tamanho de textura dos desenhos que não usam o afiado, ~1 ms, risco baixo; (2) medir se as texturas se
+    alternam numa janela curta; (3) os lotes refeitos, 4 a 8 ms; (4) juntar com `vfetch` (exemplos no XDK) e textura por
+    vértice, só se a medida (2) mostrar alternância.
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
