@@ -248,6 +248,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     **Decisão do mantenedor (13/11): esconder as placas**, não portar o desenhista do PC (dias de trabalho). Feito no
     `bt4-integracao` (`3c9b7370`, build em `local/console/bt4diag`): no 360, toda página do mod esconde as placas e as
     setas, como a página 3. Falta conferir no console.
+    **Conferido no console (13/11):** as placas somem, os botões saem como os do Xbox (o mantenedor aprovou). A lista do
+    mod passou a se chamar TAG TEAM (`d559a026`). Achado novo: uma linha embaixo do HUD de vida e do retrato do
+    personagem no Tag Team, como a do BT3 corrigida no começo do port (`docs/x360/plano/F5/08-720p.md`, a peça do HUD
+    lida meio texel deslocada); falta ver por que caminho o HUD do Tag Team desenha.
 28. **Gravação de origem: opção 2** (decisão do mantenedor, 12/11/2026, depois da gravorig2): adotar com a cópia das
     páginas de textura feita no envio (lado da gravação, que ficou com folga) em vez de na primeira leitura do desenho.
     Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
@@ -289,6 +293,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     c14/c15 do tamanho de textura dos desenhos que não usam o afiado, ~1 ms, risco baixo; (2) medir se as texturas se
     alternam numa janela curta; (3) os lotes refeitos, 4 a 8 ms; (4) juntar com `vfetch` (exemplos no XDK) e textura por
     vértice, só se a medida (2) mostrar alternância.
+    **Filtro de estado medido no console (13/11, `a82dcf38`, `local/console/estado-perfil` e `estado-normal`):** a imagem
+    não muda (as 30 capturas da rodada A idênticas byte a byte às da build sem o filtro, `4bc1cd9e`; as 30 distintas entre
+    si e com conteúdo); o quadro da luta cai 0,48 ms (15,03 para 14,55 ms de CPU da cadeia, média de 121 quadros), quase
+    todo nas chamadas de estado (17,6 mil para 11,8 mil por quadro, 1,64 para 1,08 ms). **A alternância das texturas dos
+    lutadores:** dos 2093 desenhos por quadro, a textura é a mesma do anterior em 5,2%, a do penúltimo em 78,3%, entre as
+    4 últimas em 8,6%, entre as 8 em 5,9%, nova em 2,0%: os lutadores alternam entre duas texturas (A, B, A, B). Juntar
+    desenhos por textura numa janela curta volta a ser candidato; falta saber o que são A e B e se a ordem entre eles
+    pode mudar.
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
@@ -311,6 +323,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     uma linha "amostra: trava crua" com o `Iar`, o `Lr` e os retornos, e `amostra_perfil.py trava LOG MAPA` resolve cada
     endereço pelo `.map` (o commit também no `dev`). Ambiente `environment_bt4trava.txt`: o da `bt4equipe` com
     `BT3_AMOSTRA=1000`; repetir o agarrão em equipe.
+    **Achado no console (13/11, `bt4-integracao`):** o amostrador pegou a thread do jogo três vezes no mesmo ponto,
+    `BtlStage_FindZone` pelo `StgCol_MoveFighter`. O `StgCol_SplitStep` converte distância / (raio / 2) para inteiro, e
+    fora da escala o x86 dá 0x80000000 (um passo) e o PowerPC satura em 0x7FFFFFFF (2 bilhões de passos). Corrigido
+    seguindo o PC (`7d0d55d0`); com ele o agarrão não prende mais ali, mas as duas vistas ficam cinzas e o jogo trava
+    adiante, no `Mathf_WrapAngle` (um ângulo enorme que somar 2π não muda). **A causa de verdade:** o diário registrou o
+    salto do lutador com distância 1,84467e19, que é 2^64 (um inteiro de 64 bits valendo -1 convertido para float), e
+    outro de 3,08e15. Próximo passo: achar no agarrão em equipe de onde vem esse valor no 360 (no PC ele não aparece).
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
@@ -344,6 +363,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     não é lido, e a gravação do save sai sem ele (`PortGame_SaveCustom` volta sem gravar se nada foi lido). A build
     `205dd734` diz no diário o primeiro pedido de vaga, o caminho, se abriu, e cada gravação. Ambiente
     `environment_bt4complemento2.txt` (o save com o arquivo estragado): entrar na personalização de um personagem do BT4.
+    **Resolvida no console (13/11, `bt4complemento2`):** a caixa do complemento corrompido apareceu na seleção da tela
+    de personalização (tela 49), no primeiro pedido de uma vaga do BT4 (147), e o jogo voltou ao dashboard. Confirmado
+    que só os menus de equipamento leem o complemento.
 33. **As cinco recusas do BT4: as receitas de teste não passaram no console** (12/11/2026, `bt4recusas`, build
     `2ec1e4ea`): as arenas carregam, os lutadores pisam e os modelos aparecem normais, mas a técnica 4 do Broly SSJ3 caiu
     com a caixa de queda (`crash.txt`: `C0000005`, leitura de `6B91BA08`). Cadeia pelo `.map`: `DemoCam_Update` (a câmera
@@ -402,6 +424,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     a 60 KB cada; o 02069 é um arquivo de 4 MB que não é retrato) e as arenas 1721 em diante (`CHARSEL_STAGE_FILE`
     0x6B9). O mantenedor não sentiu engasgo na build do BT4; antes de levar a pré-carga, medir: a abertura
     `bt4complemento2` vai com `BT3_PICOS=20` e `BT3_PRECARGA=0`, passando pelos personagens e pelas arenas.
+    **Medido no BT4 sem pré-carga (13/11, `bt4complemento2`, `BT3_PICOS=20`, `BT3_PRECARGA=0`):** na tela 39, 16 quadros
+    acima de 40 ms e 7 acima de 60 ms, até 140 ms (fora a entrada); na seleção da personalização (tela 49), até 169 ms.
+    É o mesmo quadro do BT3 antes da pré-carga; o mantenedor sentiu nas trocas de arena.
 36. **O "2D filtering" do upstream (v0.1.37) no 360** (12/11/2026; decisão do mantenedor: fica para depois desta release).
     A configuração `smooth_2d` (`sSmooth2d` em `port/src/gs/gs_draw.c`), ligada por padrão no upstream, manda toda peça 2D
     pelo caminho do retângulo da peça (`misc[3]` negativo), que antes só servia às texturas substituídas. O desenho da 1.1.0
