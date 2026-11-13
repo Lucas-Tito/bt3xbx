@@ -261,6 +261,8 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     vida, fora da peça: com o HUD da vista reduzido a 0,5 (`tagHudViewport`), cada pixel cobre dois texels e o da borda
     lê a primeira linha da peça vizinha na folha do HUD. Próximo passo: prender a leitura à caixa de uv da peça também no
     caminho comum (hoje só o afiado prende, `chamadas_af`) para as peças 2D reduzidas, e repetir as duas aberturas.
+    **Linha do HUD aprovada no console (13/11, `4150e4d0`, `hudc_af1`):** a linha sumiu; até 78 peças de arte 2D
+    reduzida por quadro pelo `ps_gs_red_af`. O mantenedor dispensou a abertura com o afiado desligado.
 28. **Gravação de origem: opção 2** (decisão do mantenedor, 12/11/2026, depois da gravorig2): adotar com a cópia das
     páginas de textura feita no envio (lado da gravação, que ficou com folga) em vez de na primeira leitura do desenho.
     Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
@@ -380,6 +382,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     diferentes do BT4), já corrigido. A frase "o backend trava em vez de seguir" não vale. Para o console:
     `local/console/bt4hud/environment_meteoro.txt` (o golpe, com o amostrador) e `environment_pressao.txt`
     (`BT3_MEM_PISO_MB=48`, a falta forçada: tem de seguir com brancas e sem vigia).
+    **Meteoro e pressão aprovados no console (13/11, `4150e4d0`):** o meteoro do Gogeta Blue contra o Goku Black passou
+    sem vigia (retarget 1,02), com 17 pressões e 16 brancas de um quadro que o mantenedor não notou; com
+    `BT3_MEM_PISO_MB=48`, 195 pressões e 40 brancas, sem trava. O mantenedor achou a rodada do meteoro lenta e o mapa
+    pesado: teste depois de juntar as correções e as otimizações.
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
@@ -523,3 +529,7 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     originais em inglês direto (o BT4 já os tem no código). Estimativa: 3 a 5 dias e duas ou três sessões de console,
     começando por um protótipo no BT3 medindo memória e tempo de troca de página. **O `menu_translation` (tradução dos
     menus) talvez entre, mas provavelmente depois da primeira release** (mantenedor).
+
+    **Decisão do mantenedor (13/11): atacar.** Primeiro medir o pico de uso de cada reserva (heap do jogo, RAM de som,
+    DMA, buffers do desenho, memória livre mínima) numa luta cheia do BT4 (Tag Team em quatro vistas e um 1x1 pesado),
+    depois encolher cada uma para o pico mais uma folga, com o risco de cada corte decidido com ele.
