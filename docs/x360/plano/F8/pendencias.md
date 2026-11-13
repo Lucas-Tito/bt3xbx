@@ -363,6 +363,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     bytes no B14, em `registro2`). O contorno do `bobj_a.c` saiu (a leitura volta a ser a do PC). Vale para o
     `convert_iso` e para os mods no console; pede gerar a imagem do BT4 de novo. Fora da varredura: rede e menus do mod,
     acessibilidade, painéis, `stage_scale.cpp` além de uma amostra, e acesso por campo de struct mal declarado.
+    **Aprovado no console (13/11, imagem nova do BT4 com o conversor `2508778a`, build `d955876f`):** o agarrão em
+    equipe não trava nem leva as vistas ao cinza; as escalas do retarget no diário saem 0,8 e nenhuma linha de colisão
+    fora da escala.
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
@@ -460,6 +463,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     **Medido no BT4 sem pré-carga (13/11, `bt4complemento2`, `BT3_PICOS=20`, `BT3_PRECARGA=0`):** na tela 39, 16 quadros
     acima de 40 ms e 7 acima de 60 ms, até 140 ms (fora a entrada); na seleção da personalização (tela 49), até 169 ms.
     É o mesmo quadro do BT3 antes da pré-carga; o mantenedor sentiu nas trocas de arena.
+    **BT4 aprovado no console (13/11, `bt4-integracao` `a6196dfb`, imagem nova):** a entrada na seleção do modo normal
+    pré-carrega `pzs4us1/01721` a `02069` (348 arquivos, 27 MB, 634 ms; a entrada leva 1,3 s uma vez), as 46 leituras
+    do cursor vêm da memória e nenhuma do disco; na seleção, 2 quadros acima de 40 ms (antes 16), o pior com o cursor
+    70 ms (antes 140). A pré-carga também começa quando a seleção aparece fora da tela 39 (o Tag Team abre a dele na tela
+    40, onde ela não rodava); esse caminho ainda não passou pelo console.
 36. **O "2D filtering" do upstream (v0.1.37) no 360** (12/11/2026; decisão do mantenedor: fica para depois desta release).
     A configuração `smooth_2d` (`sSmooth2d` em `port/src/gs/gs_draw.c`), ligada por padrão no upstream, manda toda peça 2D
     pelo caminho do retângulo da peça (`misc[3]` negativo), que antes só servia às texturas substituídas. O desenho da 1.1.0
