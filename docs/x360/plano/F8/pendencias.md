@@ -405,6 +405,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     quatro barras de vida no total. O mantenedor achou estranho; conferir contra o Tag Team de PC se é o desenho
     pretendido (cada metade com as barras da sua luta) ou duplicação.
     **Resolvida sem mudança (mantenedor, 12/11):** os HUDs a mais fazem sentido no Tag Team com mais lutadores; nada a fazer.
+39. **Tag Team em quatro vistas: as duas vistas de baixo sem nenhum lutador** (console, 13/11/2026, `cpu_base_equipe` e
+    `cpu_otim_equipe`, capturas em `local/console/bt4otim-normal/logs/capturas/shq4otim`): a arena e o HUD aparecem, os
+    modelos não, nem o do próprio jogador; nenhuma pressão de memória nem desenho pulado. Nunca testado antes (só duas
+    vistas). E o ritmo com quatro vistas: ~73 ms por quadro (jogo e gravação ~52, desenho ~21), igual com e sem o
+    filtro e a fusão: o gargalo é a gravação (a VU1 de cada vista na CPU), não o desenho.
 32. **Complemento do BT4 no console: a caixa não apareceu, e o diário não mostra leitura nem gravação** (12/11/2026,
     `bt4complemento`, build `2ec1e4ea`): com um `native-bt4-custom.bin` truncado de propósito (o cabeçalho e 100 bytes
     zerados, sem dados do jogo) na raiz de `game:\sv_b4e4bt4menu`, o mantenedor jogou com o Gogeta Blue (personagem do
@@ -533,3 +538,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     **Decisão do mantenedor (13/11): atacar.** Primeiro medir o pico de uso de cada reserva (heap do jogo, RAM de som,
     DMA, buffers do desenho, memória livre mínima) numa luta cheia do BT4 (Tag Team em quatro vistas e um 1x1 pesado),
     depois encolher cada uma para o pico mais uma folga, com o risco de cada corte decidido com ele.
+    **Picos medidos no console (13/11, `bt4memmed` e `bt4otim-normal`, linhas "memoria: pico"):** Tag Team em quatro
+    vistas e 1x1 pesado do BT4. Heap do jogo 68 MB de 93 (maior bloco livre 25 a 48 MB); RAM de som escrita até 2,8 MB
+    de 16 (heap de som 3 de 16); DMA 0,9 MB de 16 em cada um dos dois; buffers do desenho ~8 MB de ~39 (vértices 0,4 de
+    12,8, VU 4,6 de 12,2, índices 1 de 2, constantes 1,6 de 9,7, desenhos 0,8 de 2,1); livres do sistema no mínimo 36 MB,
+    e o 1x1 teve 681 pressões e 20 brancas com esse mínimo. Proposta (2 a 4 vezes o pico): DMA 4 MB cada (+24), RAM
+    de som 8 MB (+8), buffers do desenho em ~2 vezes o pico (+~18), heap 85 MB (+8): ~58 MB de volta às texturas.
