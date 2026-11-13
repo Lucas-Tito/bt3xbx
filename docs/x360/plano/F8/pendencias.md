@@ -348,6 +348,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     little-endian sob `PORT_BIG_ENDIAN` (a outra forma, trocar no conversor, pede ISO nova; as duas juntas se anulam).
     As primeiras 20 escalas do retarget vão ao diário ("retarget:"). Previsão a conferir: sem a correção, o agarrão
     também quebraria no 1x1 entre personagens diferentes do BT4.
+    **Correção levada ao conversor (13/11, `2508778a`, decisão do mantenedor: dados certos na fonte):** uma varredura
+    das leituras de dados do disco no código só do BT4 e do mod contra as marcas do conversor achou dois campos: a
+    altura do esqueleto (+0x74 do modelo B14, agora `Conv_U32` em `modelo_versao`) e o destino da troca de cenário (um
+    byte em +0xD do registro env da entrada 2 do cenário B14, que era trocado como parte da palavra de +0xC; agora
+    bytes no B14, em `registro2`). O contorno do `bobj_a.c` saiu (a leitura volta a ser a do PC). Vale para o
+    `convert_iso` e para os mods no console; pede gerar a imagem do BT4 de novo. Fora da varredura: rede e menus do mod,
+    acessibilidade, painéis, `stage_scale.cpp` além de uma amostra, e acesso por campo de struct mal declarado.
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
