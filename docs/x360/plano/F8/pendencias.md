@@ -432,4 +432,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     estáticos (`gs_core`, `gs_draw`, `snd_adx`) ~3,3 MB e código ~0,7 MB. Soma ~97 MB. Candidatos a encolher no 360,
     todos dependendo de medir o pico de uso numa luta cheia do BT4 (equipe, quatro vistas) antes de cortar: o heap
     (até 32 a 64 MB, risco alto: lutadores, objetos e os dois DMA de 16 MB moram nele), a RAM de som (8 a 12 MB, risco
-    médio: bancos de voz por lutador) e o `MAX_VU_UNIFORMS` fora das quatro vistas (~11 MB, risco médio).
+    médio: bancos de voz por lutador) e o `MAX_VU_UNIFORMS` fora das quatro vistas (~11 MB, risco médio).38. **O menu do mod como no PC e a tradução dos menus do upstream no 360** (conversa com o mantenedor, 13/11/2026):
+    o PC escreve os nomes do Tag Team nas placas do menu principal com a fonte pintada do disco (`port/src/gs/menu_labels.c`:
+    lê os arquivos 448 e 449 uma vez, numa thread, recorta as letras e compõe cada nome). No 360 o menu do mod é um painel
+    por cima (pendência 27). Trazer o caminho do PC: o `menu_labels.c` na build do 360 (threads do Xbox no lugar de
+    `pthread`/`usleep`), a leitura dos dois arquivos pela ISO numa thread de baixa prioridade na abertura, a composição só
+    da página aberta (o PC compõe tudo, ~27 MB, que o BT4 não tem: pendência 37), o aviso ao cache de texturas do
+    `gs_d3d` quando a placa muda, o `TagMenu_SetPage` do PC e a diferença de 11 linhas no 360 contra 12 no PC. Os textos do
+    menu principal que o recorte usa vêm do `menu_translation.c`, que o 360 também não tem: sem ele, o BT3 passa os textos
+    originais em inglês direto (o BT4 já os tem no código). Estimativa: 3 a 5 dias e duas ou três sessões de console,
+    começando por um protótipo no BT3 medindo memória e tempo de troca de página. **O `menu_translation` (tradução dos
+    menus) talvez entre, mas provavelmente depois da primeira release** (mantenedor).
