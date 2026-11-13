@@ -735,6 +735,15 @@ o que foi recusado. Hipótese que se provou errada não se apaga: ganha uma nota
   bloco feche exatamente no tamanho declarado. É essa conferência que pega um passo de leitura errado, porque um
   campo medido errado desalinha tudo o que vem depois.
 
+- **Faixa marcada como bytes precisa ser revista quando código novo lê ali (13/11/2026, BT4).** O conversor do modelo
+  marcou como bytes a faixa do cabeçalho que o código do BT3 não lia (`modelo_versao`, de `+0x74` às malhas). O mod
+  Tag Team do upstream passou a ler um float nessa faixa no BT4 (`retarget_height`, `src/battle/bobj_a.c`), dentro de
+  um `#ifdef PORT`: no PC, que lê na ordem do PS2, nada aponta o campo. No 360 a altura saiu com os bytes trocados, e o
+  agarrão em equipe levou o par ao infinito e travou a luta; custou uma sessão de console. Quando entrar código novo
+  do upstream (merge, BT4), procure leituras diretas de dados do disco (`*(const f32 *)(p + N)`, `*(u32 *)`) e
+  confira cada uma contra as marcas do conversor; a correção pode ser no conversor (pede imagem nova) ou na leitura
+  (`PORT_BIG_ENDIAN`), nunca nas duas.
+
 ### 5.6 Ligar leitura a tipo (`tipos.py`)
 
 A coluna que o clang grava no DWARF para um acesso é o "local da expressão": o nome do membro em
