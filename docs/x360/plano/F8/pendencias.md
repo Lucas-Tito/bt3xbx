@@ -311,6 +311,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     matrizes de cada parte. Candidato novo: A e B da mesma parte num desenho só, com um shader de duas texturas que faz
     a subtração (mesma geometria e mesmas matrizes); cortaria ~metade dos 2093 desenhos (~4 a 5 ms). Riscos: B cobrir
     pixels diferentes de A (costuras, a cabeça, os ramos de profundidade); prova pelas 30 capturas idênticas.
+    **Fusão A+B no console (13/11, `gravacao-origem2` `89d18563`, chave `BT3_TOON_UNICO`):** o autoteste da GPU passou
+    (65536 pares, nenhum byte diferente); 560 pares fundidos por quadro, nenhum recusado; a CPU da cadeia caiu de 14,55
+    para 7,91 ms por quadro (desenhos dos lutadores de 2093 para 1117). Imagem: 24 das 30 capturas idênticas às do
+    filtro de estado; as 6 outras diferem em 14 pixels isolados no total (1 a 7 por captura, diferença de 5 a 42),
+    o empate exato de profundidade entre dois triângulos da mesma parte (a sequência escurece duas vezes, a fusão uma).
+    **Decisão do mantenedor: aceita por enquanto, com a anotação de tentar eliminar sem perder o ganho** (ideias: tratar
+    o empate no shader com a profundidade de A, ou fundir só os pares sem triângulos sobrepostos na mesma parte).
+    Falta medir no Tag Team e na tela dividida, onde está o ganho que importa.
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
