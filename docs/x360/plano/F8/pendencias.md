@@ -439,6 +439,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     ocupada, com ~24 ms no envio de texturas (`envio_faixa32`, `memcpy`, `Gs_PageHash`), 33 ms nos lotes da VU1 e
     2,75 ms no `Port_GetEnv` (corrigido em 12d6492d). Decisão do mantenedor: atualizar as vistas em turnos (em curso,
     `bt4-turnos`, chave `BT3_VISTAS_TURNO`).
+    **Vistas por turno aprovadas e envio igual sem ganho (console, 13/11 noite, `bt4-consolidado` d2a65b09, roteiro
+    tag_q4):** com `BT3_VISTAS_TURNO=1`, 2 de 4 vistas desenhadas por quadro, 60 de 60 quadros revezados, 0 repostas sem
+    imagem; o quadro da luta (mediana do "jogo" nos picos) caiu de 87,7 ms para 50,2 ms (de ~11 para ~20 quadros por
+    segundo). O mantenedor achou as vistas mais cortadas, mas o jogo mais fluido, e aprovou o corte. Com
+    `BT3_ENVIO_IGUAL=1` as capturas saíram idênticas, mas só 18 de ~1.300 envios por quadro foram pulados: 1.269 caem
+    num destino reescrito desde a vez anterior (o jogo reveza texturas no mesmo lugar da VRAM a cada vista), então o
+    ganho é nulo. Próximo candidato para os ~24 ms do envio: reconhecer a textura pela origem na memória do jogo, sem
+    refazer o hash da página (candidato 3 de 08-gravacao.md).
 32. **Complemento do BT4 no console: a caixa não apareceu, e o diário não mostra leitura nem gravação** (12/11/2026,
     `bt4complemento`, build `2ec1e4ea`): com um `native-bt4-custom.bin` truncado de propósito (o cabeçalho e 100 bytes
     zerados, sem dados do jogo) na raiz de `game:\sv_b4e4bt4menu`, o mantenedor jogou com o Gogeta Blue (personagem do
