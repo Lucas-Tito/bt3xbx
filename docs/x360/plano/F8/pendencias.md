@@ -326,6 +326,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     **Decisão do mantenedor: aceita por enquanto, com a anotação de tentar eliminar sem perder o ganho** (ideias: tratar
     o empate no shader com a profundidade de A, ou fundir só os pares sem triângulos sobrepostos na mesma parte).
     Falta medir no Tag Team e na tela dividida, onde está o ganho que importa.
+    **Os 14 pixels da fusão estudados (13/11, só leitura):** todos mais claros com a fusão (+1 a +42), em bordas de
+    contraste forte; em 9 deles o valor da fusão é o de um vizinho na referência (a referência tem um pontinho escuro).
+    Causa confirmada: empate exato do z quantizado em 24 bits entre dois triângulos da mesma parte (culling desligado),
+    onde a sequência subtrai a rampa uma vez por triângulo empatado. Nenhuma saída exata numa passada: o shader não lê o
+    alvo (EDRAM sem resolve); detectar o empate na CPU pede transformar e rasterizar os vértices com pele (mais caro que
+    o ganho); e nenhum estado de profundidade, stencil ou mistura separa "passou por empate" de "passou por z maior"
+    numa passada só (isso exige dois testes, ou seja, as duas passadas originais). Os empates vêm da quantização do
+    Xenos, não do jogo: o GS do PS2 interpola z em ponto fixo e empata em outros pixels. Recomendação: aceitar.
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
