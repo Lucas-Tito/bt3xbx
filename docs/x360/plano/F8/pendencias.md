@@ -256,6 +256,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     (`port/src/gs/gs_draw.c`, `tagHudViewport`). Com a escala 0,5 o afiado cai no ramo `lin` do shader
     (`port/x360/src/gs/gs_d3d.hlsl`, `afiado_eixo`), que não prende à caixa da peça e lê meio texel deslocado: o mesmo
     defeito do BT3 em outro ramo. Antes de mexer no shader, capturas da luta em equipe com `BT3_AFIADO=1` e `=0`.
+    **A linha do HUD no console (13/11, `hud_af1` e `hud_af0`, capturas em `local/console/bt4diag/logs/capturas`):** a
+    linha continua com `BT3_AFIADO=0`, então não é o afiado. Na captura ampliada é um trecho roxo logo abaixo da barra de
+    vida, fora da peça: com o HUD da vista reduzido a 0,5 (`tagHudViewport`), cada pixel cobre dois texels e o da borda
+    lê a primeira linha da peça vizinha na folha do HUD. Próximo passo: prender a leitura à caixa de uv da peça também no
+    caminho comum (hoje só o afiado prende, `chamadas_af`) para as peças 2D reduzidas, e repetir as duas aberturas.
 28. **Gravação de origem: opção 2** (decisão do mantenedor, 12/11/2026, depois da gravorig2): adotar com a cópia das
     páginas de textura feita no envio (lado da gravação, que ficou com folga) em vez de na primeira leitura do desenho.
     Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
