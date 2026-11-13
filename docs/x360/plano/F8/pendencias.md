@@ -252,6 +252,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     mod passou a se chamar TAG TEAM (`d559a026`). Achado novo: uma linha embaixo do HUD de vida e do retrato do
     personagem no Tag Team, como a do BT3 corrigida no começo do port (`docs/x360/plano/F5/08-720p.md`, a peça do HUD
     lida meio texel deslocada); falta ver por que caminho o HUD do Tag Team desenha.
+    **A linha do HUD (13/11, leitura):** o HUD de cada vista é o do jogo, reescalado pela metade para a vista
+    (`port/src/gs/gs_draw.c`, `tagHudViewport`). Com a escala 0,5 o afiado cai no ramo `lin` do shader
+    (`port/x360/src/gs/gs_d3d.hlsl`, `afiado_eixo`), que não prende à caixa da peça e lê meio texel deslocado: o mesmo
+    defeito do BT3 em outro ramo. Antes de mexer no shader, capturas da luta em equipe com `BT3_AFIADO=1` e `=0`.
 28. **Gravação de origem: opção 2** (decisão do mantenedor, 12/11/2026, depois da gravorig2): adotar com a cópia das
     páginas de textura feita no envio (lado da gravação, que ficou com folga) em vez de na primeira leitura do desenho.
     Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
@@ -301,6 +305,12 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     4 últimas em 8,6%, entre as 8 em 5,9%, nova em 2,0%: os lutadores alternam entre duas texturas (A, B, A, B). Juntar
     desenhos por textura numa janela curta volta a ser candidato; falta saber o que são A e B e se a ordem entre eles
     pode mudar.
+    **O par A/B (13/11, leitura):** A é a textura de cada parte do lutador e B a rampa do toon da mesma parte, desenhada
+    em seguida subtraindo do que A pintou (contexto 2 do GS). A ordem A, B da mesma parte importa, então reordenar todos
+    os A antes dos B muda a imagem; os desenhos iguais seguidos já se juntam (`vu_fecho`), e o que impede o resto são as
+    matrizes de cada parte. Candidato novo: A e B da mesma parte num desenho só, com um shader de duas texturas que faz
+    a subtração (mesma geometria e mesmas matrizes); cortaria ~metade dos 2093 desenhos (~4 a 5 ms). Riscos: B cobrir
+    pixels diferentes de A (costuras, a cabeça, os ramos de profundidade); prova pelas 30 capturas idênticas.
 29. **BT4: a luta trava numa técnica por falta de memória de textura** (console, 12/11/2026, build `bt4-etapas34`
     `2ec1e4ea`, ambiente `bt4menu`, Gogeta Blue contra Goku Black SSJ, no golpe do meteoro): no quadro 13794 o golpe
     pediu de uma vez texturas e alvos grandes; o `gs_d3d` descartou mais de 700 texturas (uns 63 MB), ficou com 29 MB
@@ -330,6 +340,14 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     adiante, no `Mathf_WrapAngle` (um ângulo enorme que somar 2π não muda). **A causa de verdade:** o diário registrou o
     salto do lutador com distância 1,84467e19, que é 2^64 (um inteiro de 64 bits valendo -1 convertido para float), e
     outro de 3,08e15. Próximo passo: achar no agarrão em equipe de onde vem esse valor no 360 (no PC ele não aparece).
+    **Causa achada no código (13/11, `d58fe3c4`):** não é inteiro de 64 bits. O `retarget_height` (`src/battle/bobj_a.c`)
+    lê no BT4 a altura do esqueleto como float em +0x74 da parte 3 do modelo, e o conversor do 360 deixa essa faixa como
+    bytes (`port/x360/conv/personagem.c`, `modelo_versao`): lida direto, a altura sai absurda (1,05 vira 2,7e23), e a
+    escala do retarget da vítima, que toca a animação do atacante no agarrão (`BtlObjAnim_PlayFrom`), leva o par a
+    posições que saturam em FLT_MAX (o 1,84467e19 do diário é a raiz de FLT_MAX). Corrigido lendo os bytes
+    little-endian sob `PORT_BIG_ENDIAN` (a outra forma, trocar no conversor, pede ISO nova; as duas juntas se anulam).
+    As primeiras 20 escalas do retarget vão ao diário ("retarget:"). Previsão a conferir: sem a correção, o agarrão
+    também quebraria no 1x1 entre personagens diferentes do BT4.
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
