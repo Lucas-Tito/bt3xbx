@@ -245,6 +245,9 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     entrada vazando, é o mesmo menu com dois desenhos. Correção proposta: no 360, esconder as placas e as setas em toda
     página do mod (hoje só a página 3, a do `TagSetup`, esconde), o que deixa só o painel; a outra saída, regravar as
     texturas como no PC, é maior.
+    **Decisão do mantenedor (13/11): esconder as placas**, não portar o desenhista do PC (dias de trabalho). Feito no
+    `bt4-integracao` (`3c9b7370`, build em `local/console/bt4diag`): no 360, toda página do mod esconde as placas e as
+    setas, como a página 3. Falta conferir no console.
 28. **Gravação de origem: opção 2** (decisão do mantenedor, 12/11/2026, depois da gravorig2): adotar com a cópia das
     páginas de textura feita no envio (lado da gravação, que ficou com folga) em vez de na primeira leitura do desenho.
     Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
@@ -388,6 +391,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     20 ms, até 114 ms). Custo: a entrada na seleção passou de 366 para 749 ms, uma vez, na transição. Os quadros lentos que
     sobram são das transições (depois de escolher, os modelos e a arena; o começo da luta), fora do cursor. Falta a
     rodada dos roteiros no WSL (x86 contra PPC) e levar ao BT4 (outros caminhos de arquivo, `pzs4us`).
+    **BT4 (13/11):** a integração (`75580902`) pré-carregou no BT4 os números do BT3 (`pzs3us1/00761` a `00960`, 1,5 MB,
+    nenhuma leitura do cursor servida). No BT4 os retratos são `pzs4us1` 1820 em diante (`CHARSEL_FACE_FILE` 0x71C, 35
+    a 60 KB cada; o 02069 é um arquivo de 4 MB que não é retrato) e as arenas 1721 em diante (`CHARSEL_STAGE_FILE`
+    0x6B9). O mantenedor não sentiu engasgo na build do BT4; antes de levar a pré-carga, medir: a abertura
+    `bt4complemento2` vai com `BT3_PICOS=20` e `BT3_PRECARGA=0`, passando pelos personagens e pelas arenas.
 36. **O "2D filtering" do upstream (v0.1.37) no 360** (12/11/2026; decisão do mantenedor: fica para depois desta release).
     A configuração `smooth_2d` (`sSmooth2d` em `port/src/gs/gs_draw.c`), ligada por padrão no upstream, manda toda peça 2D
     pelo caminho do retângulo da peça (`misc[3]` negativo), que antes só servia às texturas substituídas. O desenho da 1.1.0
