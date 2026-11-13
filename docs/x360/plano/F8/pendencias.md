@@ -238,6 +238,13 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     pelo menu principal; textos em `port/src/gs/tag_text_*.inc`), mexer nela também mexe o menu principal do jogo por
     baixo. O menu do mod tem de ficar com a entrada só para ele enquanto estiver aberto. Anotado pelo mantenedor como
     importante; corrigir antes da release com BT4. Confirmado também no BT4 (ambiente `bt4menu`, 12/11).
+    **Causa achada no código (13/11):** no PC, o `TagMenu_SetPage` (`src/menu/menu_a.c`) regrava as texturas das placas
+    do menu principal com os nomes do mod: o menu do mod é o próprio menu principal renomeado. No 360 (`ec999e0c`) essa
+    regravação ficou de fora e o menu do mod é um painel de texto (`Ps_Rect` e `Ps_Text`) desenhado por cima, mas o
+    cursor continua sendo o do `gMainMenu`: as placas do jogo por baixo giram com ele, com os nomes de sempre. Não é
+    entrada vazando, é o mesmo menu com dois desenhos. Correção proposta: no 360, esconder as placas e as setas em toda
+    página do mod (hoje só a página 3, a do `TagSetup`, esconde), o que deixa só o painel; a outra saída, regravar as
+    texturas como no PC, é maior.
 28. **Gravação de origem: opção 2** (decisão do mantenedor, 12/11/2026, depois da gravorig2): adotar com a cópia das
     páginas de textura feita no envio (lado da gravação, que ficou com folga) em vez de na primeira leitura do desenho.
     Antes de mexer, confirmar a causa: build com um contador por quadro de páginas materializadas e de `Gs_PageHash`
@@ -296,10 +303,20 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     sempre que tentado (2 de 2); a falta de memória do primeiro caso pode ser outro defeito no mesmo golpe.
     O mantenedor duvida da hipótese da memória: o golpe final do Gogeta Blue passou sem travar na `bt4complemento`,
     e o agarrão, que trava, não é um golpe pesado. A thread do jogo presa na lógica do golpe é mais provável.
+    **Diagnóstico pronto (13/11, `bt4-integracao` `205dd734`, `local/console/bt4diag`):** o amostrador (`BT3_AMOSTRA`)
+    já lia o `Iar` e o `Lr` da thread do jogo pelo KTHREAD e despejava o histograma numa trava; agora ele escreve também
+    uma linha "amostra: trava crua" com o `Iar`, o `Lr` e os retornos, e `amostra_perfil.py trava LOG MAPA` resolve cada
+    endereço pelo `.map` (o commit também no `dev`). Ambiente `environment_bt4trava.txt`: o da `bt4equipe` com
+    `BT3_AMOSTRA=1000`; repetir o agarrão em equipe.
 30. **Menu do Tag Team no 360: tradução incompleta e nome de botão do PS2** (console, 12/11/2026, `bt4equipe`): parte
     dos textos do menu do mod não está traduzida, e a página pede "Cross" (nome do botão do PS2) em vez do botão do
     controle do Xbox. Os nomes de botão no 360 seguem a tabela do port (X do jogo = A, círculo = B, quadrado = X,
     triângulo = Y, Select = Back).
+    **Leitura do código (13/11):** os textos do mod passam pelo `Port_TagText` (`port/src/gs/tag_text.c`), que só tem a
+    tabela em espanhol (`tag_text_es.inc`); com o menu do jogo em outra língua, o mod fica em inglês, e várias linhas nem
+    passam por ele (literais em `tag_setup.c`, `tag_tournament.c`, `tag_lobby_menu.c`). Os nomes de botão do PS2
+    ("Cross", "Triangle", "Square", "Circle", "Select") são literais nessas mesmas linhas e nas opções do `tag_hud.cpp`.
+    Caminho proposto: uma troca dos nomes de botão no 360 num ponto só (no desenho do texto do mod), pela tabela do port.
 31. **HUD da luta em equipe com tela dividida** (console, 12/11/2026, `bt4equipe`): cada vista desenha um HUD diferente,
     quatro barras de vida no total. O mantenedor achou estranho; conferir contra o Tag Team de PC se é o desenho
     pretendido (cada metade com as barras da sua luta) ou duplicação.
@@ -313,6 +330,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     `custom_path` em `plat_game.c`) e o trata como ausente (então ele também nunca seria gravado no console, e o
     `3e986921` só vale no emulador). Próximo passo junto com o da pendência 29: uma build com o diário dizendo o caminho, o
     resultado do `fopen` e a gravação do complemento.
+    **Leitura do código (13/11):** o `fopen` do 360 (`Port_X360Fopen`) troca as barras, então o caminho não explica. Só
+    os menus de equipamento pedem vaga acima de 96 (`src/menu/menu_*.c`, `view_b_b.c`): numa luta comum o complemento
+    não é lido, e a gravação do save sai sem ele (`PortGame_SaveCustom` volta sem gravar se nada foi lido). A build
+    `205dd734` diz no diário o primeiro pedido de vaga, o caminho, se abriu, e cada gravação. Ambiente
+    `environment_bt4complemento2.txt` (o save com o arquivo estragado): entrar na personalização de um personagem do BT4.
 33. **As cinco recusas do BT4: as receitas de teste não passaram no console** (12/11/2026, `bt4recusas`, build
     `2ec1e4ea`): as arenas carregam, os lutadores pisam e os modelos aparecem normais, mas a técnica 4 do Broly SSJ3 caiu
     com a caixa de queda (`crash.txt`: `C0000005`, leitura de `6B91BA08`). Cadeia pelo `.map`: `DemoCam_Update` (a câmera
