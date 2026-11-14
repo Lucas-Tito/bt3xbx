@@ -613,4 +613,10 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     0x0E0E0E0E x 4 = 39AB9868). A x86 e a PPC do WSL caem no mesmo ponto: o PC do upstream tem o mesmo defeito.
     Correção sob `PORT_BIG_ENDIAN`: `SEL_RES(PortGame_IsBT4() ? 33 : 33 + i)` (teste_histsel_bt4.py, três mutantes);
     estender ao upstream fica com o mantenedor. Falta o console: a seleção de saga e a primeira saga.
+41. **BT4: a tomada do planeta destruído em South City sem os efeitos de explosão** (mantenedor, console, 13/11/2026):
+    em todas as rodadas em South City, na destruição do cenário (o quadro ~10350 do roteiro bt4_duelo_pesado) o planeta
+    aparece parado no espaço por ~150 quadros sem nenhum efeito por cima; depois vêm o clarão, a explosão alaranjada e a
+    arena com lava. Igual com a fusão do toon, o reaproveitamento dos vértices e os turnos desligados (capturas em
+    `local/console/bt4cenario/logs/capturas/shplan2off`): não é das otimizações de 13/11. Próximo passo: o renderizador de
+    referência do PC no WSL nos mesmos quadros (se lá aparece, é o backend do 360; se não, o jogo ou a conversão).
 
