@@ -606,4 +606,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     arquivo relocado errado. Provável dado do modo história do BT4 que o conversor não trata (ou trata mal); o mantenedor
     suspeita que as variantes `01632`/`01667` (pendência 33) são da campanha. Investigar depois: qual arquivo o
     HistSel_Init lê e como o conversor o marca.
+    **Causa e correção (13/11, `bt4-dragon-history` 7a635001, junto em `bt4-cenario-n2` 5ca4b0f0):** não é o conversor.
+    A tela de seleção de saga (`pzs4us1/00460`, seção 1) tem 40 seções; no B14 as 34 a 40 vêm vazias (apontam para o fim
+    do conteúdo) e o executável do BT4 lê só a 33 para as oito sagas (`DBZP.BIN`, 0x33D9E4: `addu $3,$zero,$6`, no BT3
+    `addu $3,$16,$6`); o `HistSel_Init` do port seguia o BT3 (`SEL_RES(33 + i)`) e relocava lixo `0E0E0E0E` (base +
+    0x0E0E0E0E x 4 = 39AB9868). A x86 e a PPC do WSL caem no mesmo ponto: o PC do upstream tem o mesmo defeito.
+    Correção sob `PORT_BIG_ENDIAN`: `SEL_RES(PortGame_IsBT4() ? 33 : 33 + i)` (teste_histsel_bt4.py, três mutantes);
+    estender ao upstream fica com o mantenedor. Falta o console: a seleção de saga e a primeira saga.
 
