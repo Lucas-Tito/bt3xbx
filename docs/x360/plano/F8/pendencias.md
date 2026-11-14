@@ -590,3 +590,11 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     12,8, VU 4,6 de 12,2, índices 1 de 2, constantes 1,6 de 9,7, desenhos 0,8 de 2,1); livres do sistema no mínimo 36 MB,
     e o 1x1 teve 681 pressões e 20 brancas com esse mínimo. Proposta (2 a 4 vezes o pico): DMA 4 MB cada (+24), RAM
     de som 8 MB (+8), buffers do desenho em ~2 vezes o pico (+~18), heap 85 MB (+8): ~58 MB de volta às texturas.
+40. **BT4: o Dragon History cai ao abrir a seleção** (console, 13/11/2026, build `bt4-consolidado` 849b6879, imagem
+    nova do BT4, `local/console/bt4cons/logs/sc_grav2_crash.txt`): o roteiro do duelo entrou por engano no Dragon History
+    (tela 6; o save reaproveitado deixou o cursor do menu em outro lugar) e o jogo caiu em `Res_RelocateOffsets`
+    (`sys_gfxm_b_b`, +0x5c), chamado por `HistSel_Init` (`menu_b_d`, +0x580): leitura em 39AB9868, um ponteiro de
+    arquivo relocado errado. Provável dado do modo história do BT4 que o conversor não trata (ou trata mal); o mantenedor
+    suspeita que as variantes `01632`/`01667` (pendência 33) são da campanha. Investigar depois: qual arquivo o
+    HistSel_Init lê e como o conversor o marca.
+
