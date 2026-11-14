@@ -452,6 +452,15 @@ Defeitos conhecidos que o mantenedor mandou deixar para o fim do plano, para nã
     lotes da VU1 de cenário por quadro e até 48 mil vértices, contra ~2.300 a 2.700 lotes e 19 mil vértices da arena do
     duelo do BT3. Candidato: estender o reaproveitamento dos vértices (hoje dentro do quadro) entre quadros, para a
     geometria do cenário que não mudou.
+    **Envio pela origem aprovado no console e o perfil de South City (13/11 noite, `bt4-consolidado` 849b6879):** com
+    `BT3_ENVIO_ORIGEM=1` (tag_q4), 1.229 de 1.263 hashes de página evitados por quadro, o quadro de 52,3 para 48,3 ms e
+    a gravação de 50,1 para 45,7 (a soma da identidade custa ~7 ms: uma mais barata rende mais); as 60 capturas
+    idênticas e a conferência total com 74.110 hashes de página e 20.161 de paleta, 0 divergências; a cópia adiada
+    pularia ~9,7 MB por quadro (não feita: segurança não provada). No 1x1 em South City (roteiro bt4_duelo_pesado com a
+    condição `arena 24`; quadro 48,7 ms), a gravação de ~44 ms: lotes da VU1 23,2 (o cenário, hle_program4, 10,6; os
+    lutadores 6,8), `Gs_Gif` 10,6 (primitivas fora da VU1), unpack 5,8 e a decisão do `BT3_VISTAS_UNICO` 3,1 (no 1x1 ele
+    reaproveita um terço dos lotes, a medir se compensa). Candidatos: pular inteiro o lote de cenário igual ao do quadro
+    anterior (o "nível 2"); o `Gs_Gif` no 1x1; o `BT3_VISTAS_UNICO` só com duas vistas ou mais se perder no 1x1.
 32. **Complemento do BT4 no console: a caixa não apareceu, e o diário não mostra leitura nem gravação** (12/11/2026,
     `bt4complemento`, build `2ec1e4ea`): com um `native-bt4-custom.bin` truncado de propósito (o cabeçalho e 100 bytes
     zerados, sem dados do jogo) na raiz de `game:\sv_b4e4bt4menu`, o mantenedor jogou com o Gogeta Blue (personagem do
